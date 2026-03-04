@@ -1,0 +1,59 @@
+# ============================================================
+# Curriculum Learning Pipeline
+# Huấn luyện từng bước từ dễ → khó
+# ============================================================
+
+curriculum:
+  # Điều kiện chuyển stage: success_rate > threshold liên tục n episodes
+  promotion_threshold: 0.8 # tỷ lệ thành công > 80%
+  promotion_window: 100 # đánh giá trên 100 episode gần nhất
+  demotion_threshold: 0.3 # nếu < 30% thì quay lại stage trước
+  max_stage_steps: 5_000_000 # tối đa bước mỗi stage
+
+  stages:
+    - name: "balance"
+      description: "Đứng vững trên mặt phẳng"
+      config: "configs/training/balance.yaml"
+      terrain: "flat"
+      success_metric: "upright_time"
+      success_value: 10.0 # đứng vững >= 10s
+
+    - name: "wheeled_locomotion"
+      description: "Di chuyển bằng bánh xe (tiến/lùi/rẽ)"
+      config: "configs/training/wheeled_locomotion.yaml"
+      terrain: "flat"
+      success_metric: "distance_traveled"
+      success_value: 5.0 # di chuyển >= 5m
+      pretrained_from: "balance"
+
+    - name: "walking"
+      description: "Bước chân đi bộ"
+      config: "configs/training/walking.yaml"
+      terrain: "flat"
+      success_metric: "steps_taken"
+      success_value: 20 # >= 20 bước chân ổn định
+      pretrained_from: "wheeled_locomotion"
+
+    - name: "stair_climbing"
+      description: "Leo lên xuống cầu thang"
+      config: "configs/training/stair_climbing.yaml"
+      terrain: "stairs"
+      success_metric: "stairs_cleared"
+      success_value: 5 # leo >= 5 bậc thang
+      pretrained_from: "walking"
+
+    - name: "rough_terrain"
+      description: "Đi trên địa hình gồ ghề"
+      config: "configs/training/rough_terrain.yaml"
+      terrain: "rough"
+      success_metric: "distance_traveled"
+      success_value: 10.0 # >= 10m trên địa hình gồ ghề
+
+    - name: "stand_up"
+      description: "Đứng dậy từ tư thế ngã (nằm ngửa/sấp/nghiêng)"
+      config: "configs/training/stand_up.yaml"
+      terrain: "flat"
+      success_metric: "stand_up_time"
+      success_value: 5.0 # đứng dậy trong vòng 5s
+      pretrained_from: "balance" # warm-start từ balance
+      pretrained_from: "stair_climbing"

@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wheeled-biped-sim"
+version = "0.1.0"
+description = "Mô phỏng và huấn luyện Wheeled Bipedal Robot bằng MuJoCo MJX + JAX"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "2CHAN"}
+]
+
+dependencies = [
+    "mujoco>=3.1.0",
+    "mujoco-mjx>=3.1.0",
+    "jax[cuda12]>=0.4.25",
+    "jaxlib>=0.4.25",
+    "flax>=0.8.0",
+    "optax>=0.2.0",
+    "chex>=0.1.86",
+    "distrax>=0.1.5",
+    "numpy>=1.26.0",
+    "pyyaml>=6.0",
+    "tensorboardX>=2.6",
+    "wandb>=0.16.0",
+    "matplotlib>=3.8.0",
+    "tqdm>=4.66.0",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "mediapy>=1.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-xdist>=3.5.0",
+    "ruff>=0.3.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0",
+]
+
+[project.scripts]
+wb-train = "scripts.train:app"
+wb-eval = "scripts.evaluate:app"
+wb-viz = "scripts.visualize:app"
+
+[tool.setuptools.packages.find]
+include = ["wheeled_biped*", "scripts*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"

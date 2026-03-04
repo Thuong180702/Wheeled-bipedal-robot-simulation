@@ -1,0 +1,41 @@
+# Bỏ qua byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logging & checkpoints
+logs/
+wandb/
+checkpoints/
+outputs/
+runs/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data
+*.hdf5
+*.pkl
+*.onnx

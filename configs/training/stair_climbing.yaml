@@ -1,0 +1,56 @@
+# ============================================================
+# Training config: Stair Climbing (Leo cầu thang)
+# ============================================================
+
+task:
+  name: "stair_climbing"
+  env: "StairEnv"
+  episode_length: 2000
+  num_envs: 2048 # ít hơn vì terrain phức tạp hơn
+
+ppo:
+  learning_rate: 1.5e-4
+  num_epochs: 5
+  num_minibatches: 32
+  gamma: 0.995
+  gae_lambda: 0.95
+  clip_epsilon: 0.2
+  entropy_coeff: 0.005
+  value_loss_coeff: 0.5
+  max_grad_norm: 0.5
+  normalize_advantages: true
+
+network:
+  policy_hidden: [512, 256, 128]
+  value_hidden: [512, 256, 128]
+  activation: "elu"
+  init_std: 0.6
+
+rewards:
+  forward_progress: 2.0 # thưởng tiến lên
+  height_progress: 1.5 # thưởng leo cao
+  upright: 0.8
+  foot_contact: 0.5
+  joint_torque: -0.0002
+  action_rate: -0.002
+  alive: 0.2
+  stair_clearance: 0.5 # thưởng vượt bậc thang
+
+# Cấu hình cầu thang
+stairs:
+  step_height: 0.15 # chiều cao bậc thang (m)
+  step_depth: 0.30 # chiều rộng bậc thang (m)
+  num_steps: 8 # số bậc
+  randomize_height: [0.10, 0.20] # random chiều cao khi DR
+
+termination:
+  max_tilt_rad: 0.8
+  min_height: 0.2
+
+domain_randomization:
+  enabled: true
+  mass_range: [0.9, 1.1]
+  friction_range: [0.6, 1.4]
+  joint_damping_range: [0.8, 1.2]
+  push_interval: 500
+  push_magnitude: 20.0

@@ -1,0 +1,71 @@
+# ============================================================
+# Thông số vật lý robot Wheeled Bipedal
+# ============================================================
+
+robot:
+  name: "wheeled_biped"
+  total_mass_kg: 7.0
+
+  # --- Kích thước cơ bản (m) ---
+  dimensions:
+    thigh_length: 0.35
+    shin_length: 0.35
+    wheel_radius: 0.06
+    wheel_width: 0.04
+    hip_width: 0.15 # khoảng cách 2 hip
+    torso_size: [0.10, 0.08, 0.06] # half-size [x, y, z]
+
+  # --- Khối lượng (kg) ---
+  masses:
+    torso: 2.0 # thân + pin + mạch
+    hip_roll_motor: 0.4
+    hip_pitch_motor: 0.4
+    thigh: 0.55 # khung nhôm + motor gối
+    shin: 0.55 # khung nhôm + motor cổ chân
+    wheel_assembly: 0.55 # bánh + motor bánh
+
+  # --- Giới hạn khớp (rad) ---
+  joint_limits:
+    hip_roll: [-0.5, 0.5]
+    hip_pitch: [-1.5, 1.5]
+    knee: [0.05, 2.8]
+    ankle: [-1.0, 1.0]
+    wheel: null # không giới hạn (quay tự do)
+
+  # --- Mô-men xoắn tối đa (Nm) ---
+  torque_limits:
+    hip_roll: 15.0
+    hip_pitch: 15.0
+    knee: 15.0
+    ankle: 10.0
+    wheel: 5.0
+
+  # --- Tư thế đứng mặc định (rad) ---
+  default_standing_pose:
+    hip_roll: 0.0
+    hip_pitch: 0.4
+    knee: 0.8
+    ankle: -0.4
+    wheel: 0.0
+
+# --- Cảm biến ---
+sensors:
+  imu:
+    accelerometer: true
+    gyroscope: true
+    orientation_quat: true
+    noise_accel_std: 0.01 # m/s²
+    noise_gyro_std: 0.005 # rad/s
+  encoders:
+    position: true
+    velocity: true
+    noise_pos_std: 0.001 # rad
+    noise_vel_std: 0.01 # rad/s
+
+# --- MuJoCo simulation ---
+simulation:
+  timestep: 0.002 # 500 Hz physics
+  policy_dt: 0.02 # 50 Hz control (mỗi 10 bước)
+  integrator: "implicitfast"
+  solver_iterations: 4
+  solver_ls_iterations: 8

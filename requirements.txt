@@ -1,0 +1,33 @@
+# ==============================================================
+# Wheeled Bipedal Robot Simulation - Requirements
+# Framework: MuJoCo MJX + JAX (GPU Training)
+# ==============================================================
+
+# --- Physics Engine ---
+mujoco>=3.1.0
+mujoco-mjx>=3.1.0
+
+# --- JAX Ecosystem (CUDA 12) ---
+jax[cuda12]>=0.4.25
+jaxlib>=0.4.25
+flax>=0.8.0
+optax>=0.2.0
+chex>=0.1.86
+distrax>=0.1.5
+
+# --- Utilities ---
+numpy>=1.26.0
+pyyaml>=6.0
+tqdm>=4.66.0
+typer>=0.9.0
+rich>=13.0.0
+
+# --- Logging & Visualization ---
+tensorboardX>=2.6
+wandb>=0.16.0
+matplotlib>=3.8.0
+mediapy>=1.2.0
+
+# --- Dev (optional) ---
+# pytest>=7.4.0
+# ruff>=0.3.0
