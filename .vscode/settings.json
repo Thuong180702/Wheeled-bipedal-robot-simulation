@@ -1,0 +1,4 @@
+{
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "cmake.sourceDirectory": "D:/2CHAN/Wheeled-bipedal-robot-simulation/.venv/Lib/site-packages/flaxlib_src"
+}

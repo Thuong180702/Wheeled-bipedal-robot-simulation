@@ -7,9 +7,9 @@
 task:
   name: "stand_up"
   env: "StandUpEnv"
-  episode_length: 1500    # 1500 steps × 0.02s = 30s (dài hơn vì đứng dậy cần thời gian)
+  episode_length: 1500 # 1500 steps × 0.02s = 30s (dài hơn vì đứng dậy cần thời gian)
   num_envs: 4096
-  target_height: 0.65     # chiều cao đứng mục tiêu (m)
+  target_height: 0.65 # chiều cao đứng mục tiêu (m)
 
 # --- PPO Hyperparameters ---
 ppo:
@@ -19,7 +19,7 @@ ppo:
   gamma: 0.99
   gae_lambda: 0.95
   clip_epsilon: 0.2
-  entropy_coeff: 0.015    # cao hơn chút — khuyến khích khám phá
+  entropy_coeff: 0.015 # cao hơn chút — khuyến khích khám phá
   value_loss_coeff: 0.5
   max_grad_norm: 0.5
   normalize_advantages: true
@@ -33,20 +33,20 @@ network:
 
 # --- Reward weights ---
 rewards:
-  height_progress: 2.0        # thưởng nâng cao (delta height)
-  stand_up_phase: 1.5         # thưởng tổng hợp (height × upright)
-  upright: 1.0                # thưởng đứng thẳng
-  height_target: 0.8          # bonus đạt chiều cao mục tiêu
-  joint_torque: -0.00005      # phạt mô-men lớn (nhẹ hơn balance)
-  joint_velocity: -0.00005    # phạt tốc độ khớp
-  action_rate: -0.0005        # phạt thay đổi action
-  angular_velocity: -0.001    # phạt rung lắc
-  alive: 0.1                  # thưởng sống sót
+  height_progress: 2.0 # thưởng nâng cao (delta height)
+  stand_up_phase: 1.5 # thưởng tổng hợp (height × upright)
+  upright: 1.0 # thưởng đứng thẳng
+  height_target: 0.8 # bonus đạt chiều cao mục tiêu
+  joint_torque: -0.00005 # phạt mô-men lớn (nhẹ hơn balance)
+  joint_velocity: -0.00005 # phạt tốc độ khớp
+  action_rate: -0.0005 # phạt thay đổi action
+  angular_velocity: -0.001 # phạt rung lắc
+  alive: 0.1 # thưởng sống sót
 
 # --- Termination ---
 termination:
-  max_tilt_rad: 3.14    # gần không giới hạn (robot bắt đầu ngã rồi)
-  min_height: 0.05      # chỉ kết thúc khi rơi khỏi map
+  max_tilt_rad: 3.14 # gần không giới hạn (robot bắt đầu ngã rồi)
+  min_height: 0.05 # chỉ kết thúc khi rơi khỏi map
 
 # --- Domain Randomization ---
 domain_randomization:

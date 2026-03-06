@@ -1,51 +1,54 @@
 # ============================================================
-# Thông số vật lý robot Wheeled Bipedal
+# Thông số vật lý robot Wheeled Bipedal (Real)
+# Nguồn: URDF SolidWorks HOANTHIEN_TEST
 # ============================================================
 
 robot:
-  name: "wheeled_biped"
+  name: "wheeled_biped_real"
   total_mass_kg: 7.0
 
   # --- Kích thước cơ bản (m) ---
   dimensions:
-    thigh_length: 0.35
-    shin_length: 0.35
+    thigh_length: 0.26
+    shin_length: 0.28
     wheel_radius: 0.06
-    wheel_width: 0.04
-    hip_width: 0.15 # khoảng cách 2 hip
-    torso_size: [0.10, 0.08, 0.06] # half-size [x, y, z]
+    wheel_width: 0.05
+    hip_width: 0.23 # khoảng cách 2 hip (0.115 * 2)
+    torso_size: [0.13, 0.07, 0.04] # half-size [x, y, z]
 
-  # --- Khối lượng (kg) ---
+  # --- Khối lượng (kg) từ URDF ---
   masses:
-    torso: 2.0 # thân + pin + mạch
-    hip_roll_motor: 0.4
-    hip_pitch_motor: 0.4
-    thigh: 0.55 # khung nhôm + motor gối
-    shin: 0.55 # khung nhôm + motor cổ chân
-    wheel_assembly: 0.55 # bánh + motor bánh
+    torso: 2.5 # thân + pin + mạch
+    hip_roll_motor: 0.5 # eo
+    hip_yaw_motor: 0.5 # xoay chân
+    thigh: 0.8 # đùi
+    shin: 0.6 # ống chân
+    wheel_assembly: 0.1 # bánh xe
 
   # --- Giới hạn khớp (rad) ---
   joint_limits:
-    hip_roll: [-0.5, 0.5]
-    hip_pitch: [-1.5, 1.5]
-    knee: [0.05, 2.8]
-    ankle: [-1.0, 1.0]
+    hip_roll: [-0.7, 0.7]
+    hip_yaw: [-0.4, 0.4]
+    hip_pitch: [-0.5, 1.8]
+    knee: [-0.5, 2.7]
     wheel: null # không giới hạn (quay tự do)
 
   # --- Mô-men xoắn tối đa (Nm) ---
   torque_limits:
-    hip_roll: 15.0
-    hip_pitch: 15.0
-    knee: 15.0
-    ankle: 10.0
-    wheel: 5.0
+    hip_roll: 22.0
+    hip_yaw: 22.0
+    hip_pitch: 22.0
+    knee: 44.0
+    wheel: 22.0
 
   # --- Tư thế đứng mặc định (rad) ---
+  # Cả hai chân cùng dấu âm: gối gập về phía trước (Y+)
+  # (trục hip_pitch/knee trái đảo ngược trong MJCF nhưng qpos cùng dấu)
   default_standing_pose:
     hip_roll: 0.0
-    hip_pitch: 0.4
-    knee: 0.8
-    ankle: -0.4
+    hip_yaw: 0.0
+    hip_pitch: -0.3
+    knee: -0.5
     wheel: 0.0
 
 # --- Cảm biến ---

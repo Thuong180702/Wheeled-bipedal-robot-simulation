@@ -25,7 +25,7 @@ def generate_stair_terrain(
 ) -> str:
     """Tạo XML snippet cho cầu thang.
 
-    Cầu thang bắt đầu từ x=platform_length, leo lên rồi xuống.
+    Cầu thang bắt đầu từ y=platform_length (robot hướng Y+), leo lên rồi xuống.
 
     Args:
         num_steps: số bậc thang.
@@ -39,46 +39,46 @@ def generate_stair_terrain(
     """
     geoms = []
 
-    # Sàn phẳng đầu
+    # Sàn phẳng đầu (dọc trục Y)
     geoms.append(
         f'<geom name="platform_start" type="box" '
-        f'pos="{platform_length / 2} 0 {-step_height / 2}" '
-        f'size="{platform_length / 2} {step_width / 2} {step_height / 2}" '
+        f'pos="0 {platform_length / 2} {-step_height / 2}" '
+        f'size="{step_width / 2} {platform_length / 2} {step_height / 2}" '
         f'rgba="0.6 0.6 0.6 1" condim="3" contype="1" conaffinity="1"/>'
     )
 
-    # Bậc thang đi lên
+    # Bậc thang đi lên (dọc trục Y)
     for i in range(num_steps):
-        x = platform_length + (i + 0.5) * step_depth
+        y = platform_length + (i + 0.5) * step_depth
         z = (i + 1) * step_height - step_height / 2
         h = (i + 1) * step_height / 2
         geoms.append(
             f'<geom name="stair_up_{i}" type="box" '
-            f'pos="{x:.4f} 0 {z:.4f}" '
-            f'size="{step_depth / 2} {step_width / 2} {h:.4f}" '
+            f'pos="0 {y:.4f} {z:.4f}" '
+            f'size="{step_width / 2} {step_depth / 2} {h:.4f}" '
             f'rgba="0.55 0.55 0.58 1" condim="3" contype="1" conaffinity="1"/>'
         )
 
     # Sàn trên cùng
-    top_x = platform_length + num_steps * step_depth + platform_length / 2
+    top_y = platform_length + num_steps * step_depth + platform_length / 2
     top_z = num_steps * step_height - step_height / 2
     geoms.append(
         f'<geom name="platform_top" type="box" '
-        f'pos="{top_x:.4f} 0 {top_z:.4f}" '
-        f'size="{platform_length / 2} {step_width / 2} {step_height / 2}" '
+        f'pos="0 {top_y:.4f} {top_z:.4f}" '
+        f'size="{step_width / 2} {platform_length / 2} {step_height / 2}" '
         f'rgba="0.6 0.6 0.6 1" condim="3" contype="1" conaffinity="1"/>'
     )
 
-    # Bậc thang đi xuống
+    # Bậc thang đi xuống (dọc trục Y)
     for i in range(num_steps):
-        x = top_x + platform_length / 2 + (i + 0.5) * step_depth
+        y = top_y + platform_length / 2 + (i + 0.5) * step_depth
         remaining = num_steps - i
         z = remaining * step_height - step_height / 2
         h = remaining * step_height / 2
         geoms.append(
             f'<geom name="stair_down_{i}" type="box" '
-            f'pos="{x:.4f} 0 {z:.4f}" '
-            f'size="{step_depth / 2} {step_width / 2} {h:.4f}" '
+            f'pos="0 {y:.4f} {z:.4f}" '
+            f'size="{step_width / 2} {step_depth / 2} {h:.4f}" '
             f'rgba="0.55 0.55 0.58 1" condim="3" contype="1" conaffinity="1"/>'
         )
 

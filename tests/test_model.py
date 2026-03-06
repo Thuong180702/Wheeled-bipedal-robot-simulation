@@ -81,14 +81,14 @@ class TestModelStructure:
 
         expected_joints = [
             "l_hip_roll",
+            "l_hip_yaw",
             "l_hip_pitch",
             "l_knee",
-            "l_ankle",
             "l_wheel",
             "r_hip_roll",
+            "r_hip_yaw",
             "r_hip_pitch",
             "r_knee",
-            "r_ankle",
             "r_wheel",
         ]
         for name in expected_joints:
@@ -101,14 +101,14 @@ class TestModelStructure:
 
         expected_motors = [
             "l_hip_roll_motor",
+            "l_hip_yaw_motor",
             "l_hip_pitch_motor",
             "l_knee_motor",
-            "l_ankle_motor",
             "l_wheel_motor",
             "r_hip_roll_motor",
+            "r_hip_yaw_motor",
             "r_hip_pitch_motor",
             "r_knee_motor",
-            "r_ankle_motor",
             "r_wheel_motor",
         ]
         for name in expected_motors:
@@ -173,18 +173,16 @@ class TestSymmetry:
 
         left_bodies = [
             "l_hip_roll_link",
-            "l_hip_pitch_link",
+            "l_hip_yaw_link",
             "l_thigh",
             "l_knee_link",
-            "l_ankle_link",
             "l_wheel_link",
         ]
         right_bodies = [
             "r_hip_roll_link",
-            "r_hip_pitch_link",
+            "r_hip_yaw_link",
             "r_thigh",
             "r_knee_link",
-            "r_ankle_link",
             "r_wheel_link",
         ]
 

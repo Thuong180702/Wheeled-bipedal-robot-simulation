@@ -87,85 +87,84 @@ class StandUpEnv(WheeledBipedEnv):
         # Obs thêm 2 chiều: target_height + height_error
         self.obs_size += 2
 
+        # Pre-compute fallen poses cho JIT-compatible selection
+        self._fallen_qpos = self._precompute_fallen_qpos()
+        self._base_mjx_data = self._create_base_mjx_data()
+
     def _compute_obs_size(self) -> int:
         """Base obs = 39, sẽ cộng thêm 2 trong __init__."""
         return super()._compute_obs_size()
 
-    def _get_fallen_mjx_data(self, rng: jax.Array) -> mjx.Data:
-        """Tạo MJX data ở tư thế ngã ngẫu nhiên.
+    def _precompute_fallen_qpos(self) -> jnp.ndarray:
+        """Pre-compute qpos cho các tư thế ngã.
 
-        Có 5 chế độ: nằm ngửa, nằm sấp, nghiêng trái/phải, nghiêng ngẫu nhiên.
+        Returns (N, nq) array — JIT-compatible qua indexing.
         """
-        mj_data = mujoco.MjData(self.mj_model)
+        import numpy as np
 
-        # Lấy tư thế đứng mặc định trước
+        nq = self.mj_model.nq
+        poses = []
+
+        # 0: supine — nằm ngửa
+        q = np.zeros(nq)
+        q[:3] = [0, 0, 0.15]
+        q[3:7] = [0.7071, -0.7071, 0, 0]
+        q[7:] = [0, 0, -0.5, -1.0, 0, 0, 0, -0.5, -1.0, 0]
+        poses.append(q.copy())
+
+        # 1: prone — nằm sấp
+        q[:3] = [0, 0, 0.15]
+        q[3:7] = [0.7071, 0.7071, 0, 0]
+        q[7:] = [0, 0, -0.8, -0.5, 0, 0, 0, -0.8, -0.5, 0]
+        poses.append(q.copy())
+
+        # 2: left side
+        q[:3] = [0, 0, 0.15]
+        q[3:7] = [0.7071, 0, 0.7071, 0]
+        q[7:] = [0.3, 0, -0.3, -0.5, 0, -0.3, 0, -0.3, -0.5, 0]
+        poses.append(q.copy())
+
+        # 3: right side
+        q[:3] = [0, 0, 0.15]
+        q[3:7] = [0.7071, 0, -0.7071, 0]
+        q[7:] = [-0.3, 0, -0.3, -0.5, 0, 0.3, 0, -0.3, -0.5, 0]
+        poses.append(q.copy())
+
+        # 4: random tilt — pitch axis (~70°)
+        angle = 1.2
+        q[:3] = [0, 0, 0.20]
+        q[3:7] = [np.cos(angle / 2), np.sin(angle / 2), 0, 0]
+        q[7:] = [0, 0, -0.3, -1.0, 0, 0, 0, -0.3, -1.0, 0]
+        poses.append(q.copy())
+
+        # 5: random tilt — roll axis
+        q[3:7] = [np.cos(angle / 2), 0, np.sin(angle / 2), 0]
+        poses.append(q.copy())
+
+        # 6: random tilt — combined axis
+        sa = np.sin(angle / 2) * 0.7071
+        q[3:7] = [np.cos(angle / 2), sa, sa, 0]
+        poses.append(q.copy())
+
+        return jnp.array(poses)
+
+    def _create_base_mjx_data(self) -> mjx.Data:
+        """Tạo base MJX data (velocity = 0) để clone trong reset."""
+        mj_data = mujoco.MjData(self.mj_model)
         if self.mj_model.nkey > 0:
             mujoco.mj_resetDataKeyframe(self.mj_model, mj_data, 0)
-        else:
-            mj_data.qpos[:3] = [0, 0, 0.68]
-            mj_data.qpos[3:7] = [1, 0, 0, 0]
-            mj_data.qpos[7:] = [0, 0.4, 0.8, -0.4, 0, 0, 0.4, 0.8, -0.4, 0]
-
-        # Thả robot nằm trên mặt đất — chiều cao thấp
-        # Quaternion [w, x, y, z] theo MuJoCo convention
-        # Nằm ngửa = xoay 90° quanh trục X (pitch = -π/2)
-        # Nằm sấp = xoay 90° quanh trục X (pitch = +π/2)
-
-        # Chuyển RNG sang numpy seed (vì MuJoCo CPU)
-        rng_int = int(jax.random.randint(rng, (), 0, len(self.FALL_MODES)))
-
-        # Chọn ngẫu nhiên trong 5 chế độ (cần deterministic với rng)
-        # Dùng modulo đơn giản
-        mode_idx = rng_int % len(self.FALL_MODES)
-
-        if mode_idx == 0:  # supine — nằm ngửa
-            mj_data.qpos[:3] = [0, 0, 0.15]
-            # Quaternion cho pitch = -π/2 (nằm ngửa, bụng hướng lên)
-            mj_data.qpos[3:7] = [0.7071, -0.7071, 0, 0]
-            # Các khớp gập lại
-            mj_data.qpos[7:] = [0, -0.5, 1.5, -0.3, 0, 0, -0.5, 1.5, -0.3, 0]
-        elif mode_idx == 1:  # prone — nằm sấp
-            mj_data.qpos[:3] = [0, 0, 0.15]
-            # pitch = +π/2 (nằm sấp, mặt hướng xuống)
-            mj_data.qpos[3:7] = [0.7071, 0.7071, 0, 0]
-            mj_data.qpos[7:] = [0, 0.8, 0.5, -0.2, 0, 0, 0.8, 0.5, -0.2, 0]
-        elif mode_idx == 2:  # left side — nghiêng trái
-            mj_data.qpos[:3] = [0, 0, 0.15]
-            # roll = +π/2 (nghiêng sang trái)
-            mj_data.qpos[3:7] = [0.7071, 0, 0.7071, 0]
-            mj_data.qpos[7:] = [0.3, 0.4, 0.8, -0.4, 0, -0.3, 0.4, 0.8, -0.4, 0]
-        elif mode_idx == 3:  # right side — nghiêng phải
-            mj_data.qpos[:3] = [0, 0, 0.15]
-            # roll = -π/2 (nghiêng sang phải)
-            mj_data.qpos[3:7] = [0.7071, 0, -0.7071, 0]
-            mj_data.qpos[7:] = [-0.3, 0.4, 0.8, -0.4, 0, 0.3, 0.4, 0.8, -0.4, 0]
-        else:  # random tilt — nghiêng ngẫu nhiên
-            mj_data.qpos[:3] = [0, 0, 0.20]
-            # Nghiêng ngẫu nhiên ~60-90 độ
-            angle = 1.0 + (rng_int % 100) / 100.0 * 0.57  # 1.0 ~ 1.57 rad
-            axis_choice = rng_int % 3
-            if axis_choice == 0:
-                mj_data.qpos[3:7] = [
-                    float(jnp.cos(angle / 2)),
-                    float(jnp.sin(angle / 2)),
-                    0, 0,
-                ]
-            elif axis_choice == 1:
-                mj_data.qpos[3:7] = [
-                    float(jnp.cos(angle / 2)),
-                    0,
-                    float(jnp.sin(angle / 2)),
-                    0,
-                ]
-            else:
-                sa = float(jnp.sin(angle / 2)) * 0.7071
-                mj_data.qpos[3:7] = [float(jnp.cos(angle / 2)), sa, sa, 0]
-            mj_data.qpos[7:] = [0, 0.3, 1.0, -0.3, 0, 0, 0.3, 1.0, -0.3, 0]
-
-        # Forward kinematics để cập nhật contact
         mujoco.mj_forward(self.mj_model, mj_data)
-
         return mjx.put_data(self.mj_model, mj_data)
+
+    def _get_fallen_mjx_data(self, rng: jax.Array) -> mjx.Data:
+        """Chọn tư thế ngã ngẫu nhiên (JIT-compatible).
+
+        Dùng pre-computed qpos array + JAX random indexing.
+        """
+        n_poses = self._fallen_qpos.shape[0]
+        mode_idx = jax.random.randint(rng, (), 0, n_poses)
+        selected_qpos = self._fallen_qpos[mode_idx]
+        return self._base_mjx_data.replace(qpos=selected_qpos)
 
     def _extract_obs(
         self,

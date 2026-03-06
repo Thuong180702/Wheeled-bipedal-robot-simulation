@@ -63,7 +63,7 @@ def get_project_root() -> Path:
 
 def get_model_path() -> Path:
     """Trả về đường dẫn tới file MJCF robot."""
-    return get_project_root() / "assets" / "robot" / "wheeled_biped.xml"
+    return get_project_root() / "assets" / "robot" / "wheeled_biped_real.xml"
 
 
 class Config:

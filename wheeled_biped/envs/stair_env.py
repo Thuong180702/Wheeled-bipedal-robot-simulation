@@ -61,7 +61,7 @@ class StairEnv(WheeledBipedEnv):
         step_height = self._stair_config.get("step_height", 0.15)
         step_depth = self._stair_config.get("step_depth", 0.30)
         platform_length = 1.0
-        self._goal_x = platform_length + num_steps * step_depth
+        self._goal_y = platform_length + num_steps * step_depth
         self._goal_z = num_steps * step_height
 
         # Reward weights
@@ -152,7 +152,7 @@ class StairEnv(WheeledBipedEnv):
     def reset(self, rng: jax.Array) -> EnvState:
         """Reset kèm goal mới."""
         state = super().reset(rng)
-        goal = jnp.array([self._goal_x, self._goal_z])
+        goal = jnp.array([self._goal_y, self._goal_z])
         progress = jnp.zeros(1)
         obs = self._extract_obs(state.mjx_data, state.prev_action, goal, progress)
         return state._replace(
@@ -168,11 +168,11 @@ class StairEnv(WheeledBipedEnv):
     @functools.partial(jax.jit, static_argnums=(0,))
     def step(self, state: EnvState, action: jnp.ndarray) -> EnvState:
         """Step kèm progress tracking."""
-        goal = state.info.get("goal", jnp.array([self._goal_x, self._goal_z]))
+        goal = state.info.get("goal", jnp.array([self._goal_y, self._goal_z]))
         new_state = super().step(state, action)
-        # Tính tiến bộ: tỷ lệ khoảng cách x đến goal
-        torso_x = new_state.mjx_data.qpos[0]
-        progress = jnp.clip(torso_x / self._goal_x, 0.0, 1.0).reshape(1)
+        # Tính tiến bộ: tỷ lệ khoảng cách y đến goal (Y = forward)
+        torso_y = new_state.mjx_data.qpos[1]
+        progress = jnp.clip(torso_y / self._goal_y, 0.0, 1.0).reshape(1)
         obs = self._extract_obs(new_state.mjx_data, action, goal, progress)
         return new_state._replace(
             obs=obs,

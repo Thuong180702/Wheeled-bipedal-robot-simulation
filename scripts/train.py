@@ -116,9 +116,107 @@ def single(
     from wheeled_biped.utils.config import load_training_config
     from wheeled_biped.utils.logger import TrainingLogger
 
-    # Tối ưu XLA CPU multi-threading
+    # Chống Windows Power Throttling + CPU downclocking khi alt-tab
+    import atexit
+    import ctypes
     import os as _os
+    import re
+    import subprocess
 
+    if sys.platform == "win32":
+        try:
+            # 1. HIGH_PRIORITY_CLASS
+            ctypes.windll.kernel32.SetPriorityClass(
+                ctypes.windll.kernel32.GetCurrentProcess(), 0x00000080
+            )
+        except Exception:
+            pass
+
+        try:
+            # 2. Tăng timer resolution lên 1ms (winmm.dll)
+            #    Ngăn Windows coalesce timer → giữ CPU scheduling ổn định khi background
+            ctypes.windll.winmm.timeBeginPeriod(1)
+            atexit.register(lambda: ctypes.windll.winmm.timeEndPeriod(1))
+        except Exception:
+            pass
+
+        try:
+            # 3. Tắt Power Throttling đúng cách qua SetProcessInformation
+            #    Cần khai báo restype + argtypes đúng để ctypes không hiểu sai kết quả
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            hProcess = kernel32.GetCurrentProcess()
+
+            class _PTS(ctypes.Structure):
+                _fields_ = [
+                    ("Version", ctypes.c_ulong),
+                    ("ControlMask", ctypes.c_ulong),
+                    ("StateMask", ctypes.c_ulong),
+                ]
+
+            kernel32.SetProcessInformation.restype = ctypes.c_bool
+            kernel32.SetProcessInformation.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_int,
+                ctypes.c_void_p,
+                ctypes.c_ulong,
+            ]
+
+            state = _PTS()
+            state.Version = 1  # PROCESS_POWER_THROTTLING_CURRENT_VERSION
+            state.ControlMask = 0x1  # PROCESS_POWER_THROTTLING_EXECUTION_SPEED
+            state.StateMask = 0x0  # 0 = disable throttling
+
+            ok = kernel32.SetProcessInformation(
+                hProcess,
+                4,  # ProcessPowerThrottling
+                ctypes.byref(state),
+                ctypes.sizeof(state),
+            )
+            if not ok:
+                raise OSError(ctypes.get_last_error())
+            console.print("  [cyan]🔒 Power Throttling: DISABLED[/cyan]", end="  ")
+        except Exception:
+            # 4. Fallback: đổi Power Plan sang High Performance
+            #    Đây là cách đảm bảo nhất — CPU không bị downclocking khi background
+            try:
+                # Lưu plan hiện tại để khôi phục khi kết thúc
+                r = subprocess.run(
+                    ["powercfg", "/getactivescheme"], capture_output=True, text=True
+                )
+                m = re.search(
+                    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                    r.stdout,
+                    re.I,
+                )
+                _original_plan = m.group(0) if m else None
+
+                # High Performance GUID (built-in Windows)
+                _HIGH_PERF = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+                result = subprocess.run(
+                    ["powercfg", "/setactive", _HIGH_PERF], capture_output=True
+                )
+
+                if result.returncode == 0:
+                    console.print(
+                        "  [cyan]🔋 Power Plan → High Performance (CPU full khi alt-tab)[/cyan]",
+                        end="  ",
+                    )
+                    if _original_plan and _original_plan.lower() != _HIGH_PERF:
+                        atexit.register(
+                            lambda g=_original_plan: subprocess.run(
+                                ["powercfg", "/setactive", g], capture_output=True
+                            )
+                        )
+                else:
+                    console.print(
+                        "  [yellow]⚠ Không đổi Power Plan — cần chạy VSCode as Admin để fix lỗi alt-tab throttle[/yellow]"
+                    )
+            except Exception:
+                pass
+
+    console.print("")  # newline sau status line
+
+    # Tối ưu XLA CPU multi-threading
     cpu_count = _os.cpu_count() or 4
     if "XLA_FLAGS" not in _os.environ:
         _os.environ["XLA_FLAGS"] = (
@@ -126,20 +224,34 @@ def single(
             f"--xla_force_host_platform_device_count=1"
         )
 
-    # Auto-detect CPU/GPU → chọn num_envs phù hợp
+    # Auto-detect CPU/GPU
     backend = jax.default_backend()
-    if backend == "cpu" and num_envs > 512:
-        # Tính num_envs dựa trên số cores: ~16 envs per core
-        suggested = min(512, max(32, cpu_count * 16))
-        old_num = num_envs
-        num_envs = suggested
-        console.print(
-            f"  [yellow]⚠️  JAX backend = CPU ({cpu_count} cores) → num_envs {old_num} → {num_envs}[/yellow]"
-        )
-        console.print(
-            f"  [yellow]   (GPU cần cài WSL2 + jax[cuda12] trên Linux)[/yellow]"
-        )
-        console.print(f"  [yellow]   Để override: --num-envs N[/yellow]\n")
+    if backend == "cpu":
+        # CPU: num_envs lớn = JIT compile rất lâu + mỗi update chậm tỉ lệ thuận
+        # → không nhanh hơn, chỉ tốn RAM và thời gian compile
+        # GPU mới song song thật sự (SIMD) → 4096 envs hiệu quả
+        if num_envs > 256:
+            old_num = num_envs
+            num_envs = 128
+            console.print(
+                f"  [yellow]⚠️  JAX backend = CPU ({cpu_count} cores)[/yellow]"
+            )
+            console.print(
+                f"  [yellow]   num_envs {old_num} → {num_envs} (CPU không song song thật, nhiều envs = chậm hơn)[/yellow]"
+            )
+            console.print(
+                f"  [yellow]   Tăng envs trên CPU: JIT compile lâu hơn + mỗi update chậm hơn → không nhanh hơn[/yellow]"
+            )
+            console.print(
+                f"  [yellow]   Muốn nhanh thật sự: cần GPU (WSL2 + jax[cuda12])[/yellow]"
+            )
+            console.print(
+                f"  [yellow]   Override: --num-envs N (nhưng JIT sẽ rất lâu với >256)[/yellow]\n"
+            )
+        else:
+            console.print(
+                f"  [yellow]⚠️  JAX backend = CPU ({cpu_count} cores), num_envs = {num_envs}[/yellow]\n"
+            )
     elif backend == "gpu":
         console.print(f"  [green]✅ GPU detected: {jax.devices()}[/green]")
 

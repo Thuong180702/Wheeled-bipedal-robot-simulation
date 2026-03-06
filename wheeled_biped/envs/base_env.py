@@ -23,7 +23,12 @@ import mujoco
 from mujoco import mjx
 
 from wheeled_biped.utils.config import get_model_path
-from wheeled_biped.utils.math_utils import get_gravity_in_body_frame, quat_to_euler
+from wheeled_biped.utils.math_utils import (
+    get_gravity_in_body_frame,
+    quat_conjugate,
+    quat_rotate,
+    quat_to_euler,
+)
 
 
 class EnvState(NamedTuple):
@@ -59,14 +64,14 @@ class WheeledBipedEnv:
     # Tên khớp theo thứ tự
     JOINT_NAMES: list[str] = [
         "l_hip_roll",
+        "l_hip_yaw",
         "l_hip_pitch",
         "l_knee",
-        "l_ankle",
         "l_wheel",
         "r_hip_roll",
+        "r_hip_yaw",
         "r_hip_pitch",
         "r_knee",
-        "r_ankle",
         "r_wheel",
     ]
 
@@ -147,11 +152,11 @@ class WheeledBipedEnv:
             mujoco.mj_resetDataKeyframe(self.mj_model, mj_data, key_id)
         else:
             # Tư thế mặc định
-            mj_data.qpos[:3] = [0, 0, 0.68]  # vị trí thân
+            mj_data.qpos[:3] = [0, 0, 0.71]  # vị trí thân
             mj_data.qpos[3:7] = [1, 0, 0, 0]  # quaternion (đứng thẳng)
-            # Các khớp: [l_hip_roll, l_hip_pitch, l_knee, l_ankle, l_wheel,
-            #            r_hip_roll, r_hip_pitch, r_knee, r_ankle, r_wheel]
-            mj_data.qpos[7:] = [0, 0.4, 0.8, -0.4, 0, 0, 0.4, 0.8, -0.4, 0]
+            # Các khớp: [l_hip_roll, l_hip_yaw, l_hip_pitch, l_knee, l_wheel,
+            #            r_hip_roll, r_hip_yaw, r_hip_pitch, r_knee, r_wheel]
+            mj_data.qpos[7:] = [0, 0, -0.3, -0.5, 0, 0, 0, -0.3, -0.5, 0]
 
         # Forward kinematics
         mujoco.mj_forward(self.mj_model, mj_data)
@@ -175,9 +180,11 @@ class WheeledBipedEnv:
         # Trọng lực trong body frame (3,) - cảm biến quan trọng nhất
         gravity_body = get_gravity_in_body_frame(torso_quat)
 
-        # Vận tốc thân trong world frame
-        base_lin_vel = mjx_data.qvel[:3]  # (3,) linear velocity
-        base_ang_vel = mjx_data.qvel[3:6]  # (3,) angular velocity
+        # Vận tốc thân chuyển từ world frame sang body frame
+        # (cần thiết cho sim-to-real: IMU đo trong body frame)
+        quat_inv = quat_conjugate(torso_quat)
+        base_lin_vel = quat_rotate(quat_inv, mjx_data.qvel[:3])  # (3,)
+        base_ang_vel = quat_rotate(quat_inv, mjx_data.qvel[3:6])  # (3,)
 
         # Vị trí + vận tốc các khớp (trừ freejoint)
         joint_pos = mjx_data.qpos[7:]  # (10,)

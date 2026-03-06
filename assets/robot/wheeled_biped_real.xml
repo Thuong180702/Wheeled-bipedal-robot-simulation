@@ -1,0 +1,393 @@
+<!--
+  ============================================================
+  Wheeled Bipedal Robot - Real Robot MuJoCo MJCF Model
+  ============================================================
+  Chuyển đổi từ URDF SolidWorks: HOANTHIEN_TEST
+  Kinematics từ URDF, collision primitives cho MJX training
+
+  Thông số thực tế:
+    - Đùi: 26cm, Ống chân: 28cm, Bánh xe: Ø12cm
+    - Tổng khối lượng: ~7kg
+    - 10 động cơ: Hip Roll, Hip Yaw, Hip Pitch, Knee, Wheel (×2)
+    - Cảm biến: IMU (accel + gyro) + 10 encoder
+
+  Cấu hình khớp (mỗi chân):
+    hip_roll  → Nghiêng hông ngang (eo)
+    hip_yaw   → Xoay chân quanh trục đứng (xoaychan)
+    hip_pitch → Gập đùi trước/sau (dui)
+    knee      → Gập gối (ongchan)
+    wheel     → Bánh xe (banhxe)
+
+  Lưu ý: Trục khớp chân trái (hip_pitch, knee) đảo ngược
+  so với chân phải do đối xứng URDF từ SolidWorks.
+
+  Hệ tọa độ:
+    - X: trái (+) / phải (-)
+    - Y: tiến (+) / lùi (-)
+    - Z: lên (+) / xuống (-)
+  ============================================================
+-->
+<mujoco model="wheeled_biped_real">
+
+  <!-- ==================== COMPILER ==================== -->
+  <compiler angle="radian" meshdir="../robot-urdf/meshes/" autolimits="true"/>
+
+  <!-- ==================== OPTIONS ==================== -->
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast"
+          iterations="4" ls_iterations="8" cone="pyramidal">
+    <flag contact="enable"/>
+  </option>
+
+  <!-- ==================== SIZE ==================== -->
+  <size nconmax="200" njmax="500"/>
+
+  <!-- ==================== DEFAULTS ==================== -->
+  <default>
+    <default class="robot">
+      <joint damping="1.0" armature="0.01" frictionloss="0.1"/>
+      <!-- Nhôm 6061-T6: ma sát trung bình, tiếp xúc cứng -->
+      <geom condim="3" contype="1" conaffinity="1"
+            friction="0.5 0.02 0.01"
+            solref="0.002 1" solimp="0.95 0.99 0.001 0.5 2"
+            rgba="0.7 0.72 0.74 1"/>
+      <motor ctrllimited="true"/>
+    </default>
+
+    <!-- Mesh visual (không va chạm) -->
+    <default class="visual">
+      <geom contype="0" conaffinity="0" group="1"
+            rgba="0.75 0.76 0.78 1"/>
+    </default>
+
+    <!-- Collision nhôm cho khung chân -->
+    <default class="leg_collision">
+      <geom type="capsule" size="0.022" group="0"
+            rgba="0.7 0.72 0.74 0.6" condim="3" contype="1" conaffinity="1"
+            friction="0.5 0.02 0.01"
+            solref="0.002 1" solimp="0.95 0.99 0.001 0.5 2"/>
+    </default>
+
+    <!-- Khớp motor (visual) -->
+    <default class="motor_visual">
+      <geom type="cylinder" size="0.030 0.016" contype="0" conaffinity="0"
+            group="1" rgba="0.15 0.15 0.8 0.8"/>
+    </default>
+
+    <!-- Bánh xe: lốp cao su - ma sát cao, tiếp xúc mềm hơn nhôm -->
+    <default class="wheel">
+      <geom type="cylinder" condim="6"
+            friction="1.2 0.005 0.0003"
+            solref="0.005 0.7" solimp="0.9 0.95 0.001 0.5 2"
+            rgba="0.08 0.08 0.08 1" priority="1"/>
+    </default>
+  </default>
+
+  <!-- ==================== ASSETS ==================== -->
+  <asset>
+    <!-- STL meshes từ URDF SolidWorks -->
+    <mesh name="than" file="than.STL"/>
+    <mesh name="eophai" file="eophai.STL"/>
+    <mesh name="xoaychanphai" file="xoaychanphai.STL"/>
+    <mesh name="duiphai" file="duiphai.STL"/>
+    <mesh name="ongchanphai" file="ongchanphai.STL"/>
+    <mesh name="banhxephai" file="banhxephai.STL"/>
+    <mesh name="eotrai" file="eotrai.STL"/>
+    <mesh name="xoaychantrai" file="xoaychantrai.STL"/>
+    <mesh name="duitrai" file="duitrai.STL"/>
+    <mesh name="ongchantrai" file="ongchantrai.STL"/>
+    <mesh name="banhxetrai" file="banhxetrai.STL"/>
+
+    <!-- Texture mặt đất -->
+    <texture name="grid_tex" type="2d" builtin="checker" width="512" height="512"
+             rgb1="0.12 0.18 0.25" rgb2="0.22 0.28 0.35"/>
+    <material name="grid_mat" texture="grid_tex" texrepeat="10 10"
+              reflectance="0.1"/>
+
+    <!-- Material robot (nhôm 6061-T6: bạc sáng, bóng kim loại) -->
+    <material name="body_mat"  rgba="0.75 0.76 0.78 1" specular="0.7" shininess="0.6"/>
+    <material name="leg_mat"   rgba="0.72 0.73 0.75 1" specular="0.6" shininess="0.5"/>
+    <!-- Lốp cao su: đen mờ -->
+    <material name="wheel_mat" rgba="0.08 0.08 0.08 1" specular="0.05" shininess="0.05"/>
+    <material name="motor_mat" rgba="0.15 0.15 0.70 0.9"/>
+  </asset>
+
+  <!-- ==================== WORLDBODY ==================== -->
+  <worldbody>
+    <!-- Ánh sáng -->
+    <light name="top_light"    pos="0 0 3" dir="0 0 -1" diffuse="0.8 0.8 0.8"
+           specular="0.3 0.3 0.3" castshadow="true"/>
+    <light name="front_light"  pos="2 -2 2" dir="-1 1 -0.5" diffuse="0.4 0.4 0.4"/>
+
+    <!-- Mặt đất (bê tông) -->
+    <geom name="floor" type="plane" size="50 50 0.1" material="grid_mat"
+          condim="6" contype="1" conaffinity="1"
+          friction="0.8 0.005 0.0001"
+          solref="0.002 1" solimp="0.95 0.99 0.001 0.5 2"/>
+
+    <!-- ==================== ROBOT BODY ==================== -->
+    <body name="torso" pos="0 0 0.71">
+      <freejoint name="root"/>
+
+      <!-- Visual: mesh thân từ URDF -->
+      <geom name="torso_visual" type="mesh" mesh="than" class="visual"/>
+      <!-- Collision: box thân (nhôm) -->
+      <geom name="torso_collision" type="box" size="0.13 0.08 0.055"
+            pos="0 0 0.02" material="body_mat" contype="1" conaffinity="1"
+            friction="0.5 0.02 0.01"
+            solref="0.002 1" solimp="0.95 0.99 0.001 0.5 2"/>
+      <inertial mass="2.5" pos="0 0 0.040584"
+                diaginertia="0.015241 0.017751 0.005598"/>
+
+      <!-- Điểm gắn cảm biến IMU -->
+      <site name="imu_site" pos="0 0 0" size="0.005" rgba="1 0 0 0.5"/>
+      <!-- Điểm theo dõi trọng tâm -->
+      <site name="torso_com" pos="0 0 0" size="0.01" rgba="0 1 0 0.3"/>
+
+      <!-- =====================================================
+           CHÂN TRÁI (eotrai)
+           ===================================================== -->
+      <body name="l_hip_roll_link" pos="0.115 0 -0.0295"
+            quat="0.499998 0.5 0.500002 0.5">
+        <inertial pos="0.088462 -0.047569 2.1318e-06"
+                  quat="0.707779 0.706433 -0.000794732 -0.00081211"
+                  mass="0.5" diaginertia="0.00036543 0.00032404 0.00031624"/>
+        <joint name="l_hip_roll" type="hinge" axis="0 1 0"
+               range="-0.7 0.7" damping="1.5" armature="0.02"/>
+        <geom name="l_hip_roll_visual" type="mesh" mesh="eotrai" class="visual"/>
+        <geom name="l_hip_roll_collision" class="leg_collision"
+              fromto="0 0 0  0.08 -0.05 0" size="0.028" material="leg_mat"/>
+        <geom name="l_hip_roll_motor" class="motor_visual"
+              pos="0 -0.02 0" rgba="0.15 0.75 0.15 0.8"/>
+
+        <body name="l_hip_yaw_link" pos="0 -0.07 0"
+              quat="-0.500553 0.499448 0.500552 0.499446">
+          <inertial pos="-0.05199 0.027638 -0.026248"
+                    quat="0.707249 0.705946 0.0270686 -0.0265876"
+                    mass="0.5" diaginertia="0.000353804 0.000227846 0.000209"/>
+          <joint name="l_hip_yaw" type="hinge" axis="0 0.999998 -0.00221419"
+                 range="-0.4 0.4" damping="1.2" armature="0.02"/>
+          <geom name="l_hip_yaw_visual" type="mesh" mesh="xoaychantrai" class="visual"/>
+          <geom name="l_hip_yaw_collision" class="leg_collision"
+                fromto="-0.01 0 0.005  -0.05 0.02 -0.03" size="0.025" material="leg_mat"/>
+          <geom name="l_hip_yaw_motor" class="motor_visual" pos="0 0 -0.01"/>
+
+          <body name="l_thigh" pos="0 -0.010824 -0.030024"
+                quat="0.000780242 0.707105 0.707108 -0.000785434">
+            <inertial pos="-8.5149e-07 0.006764 0.096793"
+                      quat="0.707108 8.29078e-06 -1.1111e-05 0.707106"
+                      mass="0.8" diaginertia="0.0044915 0.0041434 0.00041762"/>
+            <joint name="l_hip_pitch" type="hinge" axis="0 -1 0"
+                   range="-0.5 1.8" damping="1.5" armature="0.02"/>
+            <geom name="l_thigh_visual" type="mesh" mesh="duitrai" class="visual"/>
+            <geom name="l_thigh_collision" class="leg_collision"
+                  fromto="0 0 0  0 0 0.26" material="leg_mat"/>
+            <site name="l_thigh_center" pos="0 0 0.13" size="0.005"/>
+
+            <body name="l_knee_link" pos="0 0 0.26"
+                  quat="-3.67321e-06 0 0 1">
+              <inertial pos="1.5549e-06 -0.010551 0.186"
+                        quat="0.707105 -2.42277e-05 1.79504e-05 0.707108"
+                        mass="0.6" diaginertia="0.0020924 0.0018923 0.00021843"/>
+              <joint name="l_knee" type="hinge" axis="0 -1 0"
+                     range="-0.5 2.7" damping="1.5" armature="0.02"/>
+              <geom name="l_knee_motor" class="motor_visual" pos="0 0 0.005"/>
+              <geom name="l_shin_visual" type="mesh" mesh="ongchantrai" class="visual"/>
+              <geom name="l_shin_collision" class="leg_collision"
+                    fromto="0 0 0  0 -0.02 0.28" material="leg_mat"/>
+              <site name="l_shin_center" pos="0 -0.01 0.14" size="0.005"/>
+
+              <body name="l_wheel_link" pos="0 -0.0205 0.28"
+                    quat="0.40315 -0.580922 -0.580922 0.40315">
+                <inertial pos="-0.038074 0 1.7979e-12"
+                          mass="0.1" diaginertia="0.00018832 0.00012247 0.00012247"/>
+                <joint name="l_wheel" type="hinge" axis="1 0 0"
+                       limited="false" damping="0.02" armature="0.008"/>
+                <geom name="l_wheel_visual" type="mesh" mesh="banhxetrai" class="visual"/>
+                <geom name="l_wheel_collision" class="wheel"
+                      size="0.06 0.025" euler="0 1.5708 0"
+                      pos="-0.038 0 0" material="wheel_mat"/>
+                <site name="l_wheel_contact" pos="0 0 -0.06"
+                      size="0.01" rgba="1 0.5 0 0.3"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <!-- =====================================================
+           CHÂN PHẢI (eophai)
+           ===================================================== -->
+      <body name="r_hip_roll_link" pos="-0.115 0 -0.0295"
+            quat="0.499998 0.5 0.500002 0.5">
+        <inertial pos="0.088462 -0.047569 2.1318e-06"
+                  quat="0.707779 0.706433 -0.000794732 -0.00081211"
+                  mass="0.5" diaginertia="0.00036543 0.00032404 0.00031624"/>
+        <joint name="r_hip_roll" type="hinge" axis="0 1 0"
+               range="-0.7 0.7" damping="1.5" armature="0.02"/>
+        <geom name="r_hip_roll_visual" type="mesh" mesh="eophai" class="visual"/>
+        <geom name="r_hip_roll_collision" class="leg_collision"
+              fromto="0 0 0  0.08 -0.05 0" size="0.028" material="leg_mat"/>
+        <geom name="r_hip_roll_motor" class="motor_visual"
+              pos="0 -0.02 0" rgba="0.15 0.75 0.15 0.8"/>
+
+        <body name="r_hip_yaw_link" pos="0 -0.07 0"
+              quat="0.499998 -0.5 -0.500002 0.5">
+          <inertial pos="-0.026182 -0.05199 -0.027696"
+                    quat="0.679775 0.000141754 0.0007132 0.73342"
+                    mass="0.5" diaginertia="0.000353804 0.000227846 0.000209"/>
+          <joint name="r_hip_yaw" type="hinge" axis="0 0 1"
+                 range="-0.4 0.4" damping="1.2" armature="0.02"/>
+          <geom name="r_hip_yaw_visual" type="mesh" mesh="xoaychanphai" class="visual"/>
+          <geom name="r_hip_yaw_collision" class="leg_collision"
+                fromto="-0.005 0 0.005  -0.025 -0.045 -0.03" size="0.025" material="leg_mat"/>
+          <geom name="r_hip_yaw_motor" class="motor_visual" pos="0 0 -0.01"/>
+
+          <body name="r_thigh" pos="-0.03 0 -0.01089"
+                quat="0.707105 0 -0.707108 0">
+            <inertial pos="-8.5149e-07 0.006764 0.096793"
+                      quat="0.707108 8.29078e-06 -1.1111e-05 0.707106"
+                      mass="0.8" diaginertia="0.0044915 0.0041434 0.00041762"/>
+            <joint name="r_hip_pitch" type="hinge" axis="0 1 0"
+                   range="-0.5 1.8" damping="1.5" armature="0.02"/>
+            <geom name="r_thigh_visual" type="mesh" mesh="duiphai" class="visual"/>
+            <geom name="r_thigh_collision" class="leg_collision"
+                  fromto="0 0 0  0 0 0.26" material="leg_mat"/>
+            <site name="r_thigh_center" pos="0 0 0.13" size="0.005"/>
+
+            <body name="r_knee_link" pos="0 0 0.26"
+                  quat="-3.67321e-06 0 0 1">
+              <inertial pos="1.5549e-06 -0.010551 0.186"
+                        quat="0.707105 -2.42277e-05 1.79504e-05 0.707108"
+                        mass="0.6" diaginertia="0.0020924 0.0018923 0.00021843"/>
+              <joint name="r_knee" type="hinge" axis="0 1 0"
+                     range="-0.5 2.7" damping="1.5" armature="0.02"/>
+              <geom name="r_knee_motor" class="motor_visual" pos="0 0 0.005"/>
+              <geom name="r_shin_visual" type="mesh" mesh="ongchanphai" class="visual"/>
+              <geom name="r_shin_collision" class="leg_collision"
+                    fromto="0 0 0  0 -0.02 0.28" material="leg_mat"/>
+              <site name="r_shin_center" pos="0 -0.01 0.14" size="0.005"/>
+
+              <body name="r_wheel_link" pos="0 -0.0205 0.28"
+                    quat="0.501122 -0.498874 -0.498876 0.501124">
+                <inertial pos="-0.038074 0 1.8114e-12"
+                          mass="0.1" diaginertia="0.00018832 0.00012247 0.00012247"/>
+                <joint name="r_wheel" type="hinge" axis="1 0 0"
+                       limited="false" damping="0.02" armature="0.008"/>
+                <geom name="r_wheel_visual" type="mesh" mesh="banhxephai" class="visual"/>
+                <geom name="r_wheel_collision" class="wheel"
+                      size="0.06 0.025" euler="0 1.5708 0"
+                      pos="-0.038 0 0" material="wheel_mat"/>
+                <site name="r_wheel_contact" pos="0 0 -0.06"
+                      size="0.01" rgba="1 0.5 0 0.3"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+
+    </body>  <!-- end torso -->
+  </worldbody>
+
+  <!-- ==================== CONTACT ==================== -->
+  <contact>
+    <exclude body1="torso"           body2="l_hip_roll_link"/>
+    <exclude body1="torso"           body2="r_hip_roll_link"/>
+    <exclude body1="l_hip_roll_link" body2="l_hip_yaw_link"/>
+    <exclude body1="r_hip_roll_link" body2="r_hip_yaw_link"/>
+    <exclude body1="l_hip_yaw_link"  body2="l_thigh"/>
+    <exclude body1="r_hip_yaw_link"  body2="r_thigh"/>
+    <exclude body1="l_thigh"         body2="l_knee_link"/>
+    <exclude body1="r_thigh"         body2="r_knee_link"/>
+    <exclude body1="l_knee_link"     body2="l_wheel_link"/>
+    <exclude body1="r_knee_link"     body2="r_wheel_link"/>
+    <exclude body1="torso"           body2="l_hip_yaw_link"/>
+    <exclude body1="torso"           body2="r_hip_yaw_link"/>
+    <exclude body1="l_hip_roll_link" body2="l_thigh"/>
+    <exclude body1="r_hip_roll_link" body2="r_thigh"/>
+    <exclude body1="l_hip_yaw_link"  body2="l_knee_link"/>
+    <exclude body1="r_hip_yaw_link"  body2="r_knee_link"/>
+    <exclude body1="l_thigh"         body2="l_wheel_link"/>
+    <exclude body1="r_thigh"         body2="r_wheel_link"/>
+    <exclude body1="torso"           body2="l_thigh"/>
+    <exclude body1="torso"           body2="r_thigh"/>
+    <exclude body1="torso"           body2="l_knee_link"/>
+    <exclude body1="torso"           body2="r_knee_link"/>
+    <exclude body1="torso"           body2="l_wheel_link"/>
+    <exclude body1="torso"           body2="r_wheel_link"/>
+    <exclude body1="l_hip_roll_link" body2="r_hip_roll_link"/>
+  </contact>
+
+  <!-- ==================== ACTUATORS (10 động cơ) ==================== -->
+  <actuator>
+    <!-- Chân trái -->
+    <motor name="l_hip_roll_motor"  joint="l_hip_roll"  gear="1"
+           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+    <motor name="l_hip_yaw_motor"   joint="l_hip_yaw"   gear="1"
+           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+    <motor name="l_hip_pitch_motor" joint="l_hip_pitch" gear="1"
+           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+    <motor name="l_knee_motor"      joint="l_knee"      gear="1"
+           ctrlrange="-30 30"  forcelimited="true" forcerange="-44 44"/>
+    <motor name="l_wheel_motor"     joint="l_wheel"     gear="1"
+           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+
+    <!-- Chân phải -->
+    <motor name="r_hip_roll_motor"  joint="r_hip_roll"  gear="1"
+           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+    <motor name="r_hip_yaw_motor"   joint="r_hip_yaw"   gear="1"
+           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+    <motor name="r_hip_pitch_motor" joint="r_hip_pitch" gear="1"
+           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+    <motor name="r_knee_motor"      joint="r_knee"      gear="1"
+           ctrlrange="-30 30"  forcelimited="true" forcerange="-44 44"/>
+    <motor name="r_wheel_motor"     joint="r_wheel"     gear="1"
+           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+  </actuator>
+
+  <!-- ==================== SENSORS ==================== -->
+  <sensor>
+    <accelerometer name="imu_accel"  site="imu_site"/>
+    <gyro          name="imu_gyro"   site="imu_site"/>
+    <framequat     name="imu_quat"   objtype="site" objname="imu_site"/>
+
+    <jointpos name="l_hip_roll_pos"  joint="l_hip_roll"/>
+    <jointpos name="l_hip_yaw_pos"   joint="l_hip_yaw"/>
+    <jointpos name="l_hip_pitch_pos" joint="l_hip_pitch"/>
+    <jointpos name="l_knee_pos"      joint="l_knee"/>
+    <jointpos name="l_wheel_pos"     joint="l_wheel"/>
+    <jointpos name="r_hip_roll_pos"  joint="r_hip_roll"/>
+    <jointpos name="r_hip_yaw_pos"   joint="r_hip_yaw"/>
+    <jointpos name="r_hip_pitch_pos" joint="r_hip_pitch"/>
+    <jointpos name="r_knee_pos"      joint="r_knee"/>
+    <jointpos name="r_wheel_pos"     joint="r_wheel"/>
+
+    <jointvel name="l_hip_roll_vel"  joint="l_hip_roll"/>
+    <jointvel name="l_hip_yaw_vel"   joint="l_hip_yaw"/>
+    <jointvel name="l_hip_pitch_vel" joint="l_hip_pitch"/>
+    <jointvel name="l_knee_vel"      joint="l_knee"/>
+    <jointvel name="l_wheel_vel"     joint="l_wheel"/>
+    <jointvel name="r_hip_roll_vel"  joint="r_hip_roll"/>
+    <jointvel name="r_hip_yaw_vel"   joint="r_hip_yaw"/>
+    <jointvel name="r_hip_pitch_vel" joint="r_hip_pitch"/>
+    <jointvel name="r_knee_vel"      joint="r_knee"/>
+    <jointvel name="r_wheel_vel"     joint="r_wheel"/>
+
+    <torque name="l_wheel_torque" site="l_wheel_contact"/>
+    <torque name="r_wheel_torque" site="r_wheel_contact"/>
+  </sensor>
+
+  <!-- ==================== KEYFRAME ==================== -->
+  <!-- qpos: [root_pos(3) root_quat(4) |
+       l_hip_roll l_hip_yaw l_hip_pitch l_knee l_wheel |
+       r_hip_roll r_hip_yaw r_hip_pitch r_knee r_wheel] -->
+  <keyframe>
+    <key name="standing"
+         qpos="0 0 0.71
+               1 0 0 0
+               0 0 -0.3 -0.5 0
+               0 0 -0.3 -0.5 0"
+         ctrl="0 0 0 0 0
+               0 0 0 0 0"/>
+  </keyframe>
+
+</mujoco>

@@ -17,6 +17,7 @@ import jax.numpy as jnp
 from mujoco import mjx
 
 from wheeled_biped.envs.base_env import EnvState, WheeledBipedEnv
+from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate
 from wheeled_biped.rewards.reward_functions import (
     compute_total_reward,
     penalty_action_rate,
@@ -178,18 +179,21 @@ class WalkingEnv(WheeledBipedEnv):
         joint_vel = mjx_data.qvel[6:]
         torques = mjx_data.ctrl
 
-        # Vận tốc
-        base_vel_x = mjx_data.qvel[0]
-        base_vel_y = mjx_data.qvel[1]
-        base_ang_vel_z = mjx_data.qvel[5]
+        # Body-frame velocity (Y = forward, X = lateral)
+        quat_inv = quat_conjugate(torso_quat)
+        body_vel = quat_rotate(quat_inv, mjx_data.qvel[:3])
+        body_ang_vel = quat_rotate(quat_inv, mjx_data.qvel[3:6])
+        body_vel_forward = body_vel[1]
+        body_vel_lateral = body_vel[0]
+        body_ang_vel_z = body_ang_vel[2]
 
         # Command
         command = prev_state.info.get("command", jnp.zeros(2))
-        cmd_vel_x = command[0]
+        cmd_vel_fwd = command[0]
         cmd_ang_vel_z = command[1]
 
         # Vị trí khớp chân trái vs phải
-        # [l_hip_roll, l_hip_pitch, l_knee, l_ankle, l_wheel]
+        # [l_hip_roll, l_hip_yaw, l_hip_pitch, l_knee, l_wheel]
         left_joint_pos = mjx_data.qpos[7:12]
         right_joint_pos = mjx_data.qpos[12:17]
 
@@ -210,10 +214,10 @@ class WalkingEnv(WheeledBipedEnv):
 
         components = {
             "tracking_velocity": reward_tracking_velocity(
-                base_vel_x,
-                base_vel_y,
-                base_ang_vel_z,
-                cmd_vel_x,
+                body_vel_forward,
+                body_vel_lateral,
+                body_ang_vel_z,
+                cmd_vel_fwd,
                 jnp.float32(0.0),
                 cmd_ang_vel_z,
             ),
@@ -231,7 +235,10 @@ class WalkingEnv(WheeledBipedEnv):
             "joint_velocity": penalty_joint_velocity(joint_vel),
             "action_rate": penalty_action_rate(action, prev_state.prev_action),
             "foot_contact": reward_foot_contact(
-                left_desired, right_desired, left_desired, right_desired
+                l_wheel_height < 0.02,  # actual left contact (wheel near ground)
+                r_wheel_height < 0.02,  # actual right contact
+                left_desired,
+                right_desired,
             ),
             "alive": reward_alive(is_alive),
         }

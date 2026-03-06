@@ -304,31 +304,40 @@ class PPOTrainer:
             env_state, rng = carry
             rng, action_key, reset_key = jax.random.split(rng, 3)
 
+            # Lưu raw obs cho obs_rms update
+            raw_obs = env_state.obs
+
             # Normalize observation
-            obs = normalize_obs(env_state.obs, obs_rms)
+            obs = normalize_obs(raw_obs, obs_rms)
 
             # Lấy action từ policy
-            action, log_prob, _, value = self.model.apply(
+            raw_action, log_prob, _, value = self.model.apply(
                 params,
                 obs,
                 rng=action_key,
                 method=self.model.get_action_and_value,
             )
 
-            # Clip action
-            action = jnp.clip(action, -1.0, 1.0)
+            # Clip action cho environment (nhưng giữ raw_action cho PPO ratio)
+            action = jnp.clip(raw_action, -1.0, 1.0)
 
             # Step environment
             next_state = self.env.v_step(env_state, action)
+
+            # Lưu done và reward TRƯỚC auto-reset
+            # (reset_if_done thay thế toàn bộ state khi done=True,
+            #  bao gồm done→False và reward→0, mất tín hiệu terminal)
+            transition_done = next_state.done
+            transition_reward = next_state.reward
 
             # Auto-reset done envs
             next_state = self.env.v_reset_if_done(next_state, reset_key)
 
             transition = Transition(
                 obs=obs,
-                action=action,
-                reward=next_state.reward,
-                done=env_state.done,
+                action=raw_action,  # Unclipped action: PPO ratio consistent
+                reward=transition_reward,
+                done=transition_done,
                 value=value,
                 log_prob=log_prob,
             )
@@ -474,9 +483,14 @@ class PPOTrainer:
         backend = jax.default_backend()
         is_cpu = backend == "cpu"
         if is_cpu and self.num_envs > 256:
-            print(f"  ⚠️  JAX backend = CPU, num_envs = {self.num_envs} quá lớn!")
-            print(f"      Trên CPU nên dùng --num-envs 32~128 để tránh chậm.")
-            print(f"      (GPU cần thiết để chạy 4096 envs hiệu quả)")
+            print(
+                f"  ⚠️  CPU + num_envs={self.num_envs}: JIT compile sẽ rất lâu (10-20 phút)!"
+            )
+            print(f"      Trên CPU nên dùng --num-envs 64~128 (JIT ~1-2 phút)")
+            print(
+                f"      Tăng num_envs trên CPU không nhanh hơn: mỗi update lâu hơn tỉ lệ thuận"
+            )
+            print(f"      GPU (jax[cuda12]) mới thật sự song song 4096 envs")
             print()
 
         # Reset environments
@@ -522,8 +536,13 @@ class PPOTrainer:
         # Force JAX to finish compilation
         jax.block_until_ready(warmup_transitions.reward)
 
-        # Warmup update
-        all_obs = warmup_transitions.obs.reshape(-1, self.env.obs_size)
+        # Warmup update — un-normalize để lấy raw obs cho obs_rms
+        # (transitions.obs đã normalized trong _rollout, cần raw data cho Welford)
+        raw_obs = (
+            warmup_transitions.obs * jnp.sqrt(self.obs_rms.var + 1e-8)
+            + self.obs_rms.mean
+        )
+        all_obs = raw_obs.reshape(-1, self.env.obs_size)
         self.obs_rms = update_running_mean_std(self.obs_rms, all_obs)
         last_obs = normalize_obs(env_state.obs, self.obs_rms)
         _, last_value = self.model.apply(self.params, last_obs)
@@ -600,8 +619,13 @@ class PPOTrainer:
                 # Force kết quả về CPU để đo thời gian chính xác
                 jax.block_until_ready(transitions.reward)
 
-                # Cập nhật observation normalization
-                all_obs = transitions.obs.reshape(-1, self.env.obs_size)
+                # Cập nhật observation normalization bằng RAW obs
+                # (transitions.obs đã normalized, un-normalize trước khi update)
+                raw_obs = (
+                    transitions.obs * jnp.sqrt(self.obs_rms.var + 1e-8)
+                    + self.obs_rms.mean
+                )
+                all_obs = raw_obs.reshape(-1, self.env.obs_size)
                 self.obs_rms = update_running_mean_std(self.obs_rms, all_obs)
 
                 # Tính last value cho GAE

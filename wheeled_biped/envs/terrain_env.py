@@ -17,6 +17,7 @@ import jax.numpy as jnp
 from mujoco import mjx
 
 from wheeled_biped.envs.base_env import EnvState, WheeledBipedEnv
+from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate
 from wheeled_biped.rewards.reward_functions import (
     compute_total_reward,
     penalty_action_rate,
@@ -152,12 +153,16 @@ class TerrainEnv(WheeledBipedEnv):
         torso_quat = mjx_data.qpos[3:7]
         torso_height = mjx_data.qpos[2]
         torques = mjx_data.ctrl
-        ang_vel = mjx_data.qvel[3:6]
 
-        # Vận tốc
-        base_vel_x = mjx_data.qvel[0]
-        base_vel_y = mjx_data.qvel[1]
-        base_ang_vel_z = mjx_data.qvel[5]
+        # Body-frame velocity (Y = forward, X = lateral)
+        quat_inv = quat_conjugate(torso_quat)
+        body_vel = quat_rotate(quat_inv, mjx_data.qvel[:3])
+        body_ang_vel = quat_rotate(quat_inv, mjx_data.qvel[3:6])
+        body_vel_forward = body_vel[1]
+        body_vel_lateral = body_vel[0]
+        body_ang_vel_z = body_ang_vel[2]
+
+        ang_vel_body = quat_rotate(quat_inv, mjx_data.qvel[3:6])
 
         # Command
         command = prev_state.info.get("command", jnp.zeros(2))
@@ -167,17 +172,17 @@ class TerrainEnv(WheeledBipedEnv):
 
         components = {
             "tracking_velocity": reward_tracking_velocity(
-                base_vel_x,
-                base_vel_y,
-                base_ang_vel_z,
+                body_vel_forward,
+                body_vel_lateral,
+                body_ang_vel_z,
                 command[0],
                 jnp.float32(0.0),
                 command[1],
             ),
             "upright": reward_upright(torso_quat),
-            "height": reward_height(torso_height, 0.55),  # thấp hơn do terrain
+            "height": reward_height(torso_height, 0.55),
             "foot_contact": jnp.float32(1.0),  # placeholder
-            "body_stability": -penalty_body_angular_velocity(ang_vel) * 0.01 + 1.0,
+            "body_stability": 1.0 - penalty_body_angular_velocity(ang_vel_body) * 0.01,
             "joint_torque": jnp.sum(jnp.square(torques)),
             "action_rate": jnp.sum(jnp.square(action - prev_state.prev_action)),
             "alive": jnp.where(is_alive, 1.0, 0.0),

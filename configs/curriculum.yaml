@@ -48,6 +48,7 @@ curriculum:
       terrain: "rough"
       success_metric: "distance_traveled"
       success_value: 10.0 # >= 10m trên địa hình gồ ghề
+      pretrained_from: "stair_climbing"
 
     - name: "stand_up"
       description: "Đứng dậy từ tư thế ngã (nằm ngửa/sấp/nghiêng)"
@@ -55,5 +56,4 @@ curriculum:
       terrain: "flat"
       success_metric: "stand_up_time"
       success_value: 5.0 # đứng dậy trong vòng 5s
-      pretrained_from: "balance" # warm-start từ balance
-      pretrained_from: "stair_climbing"
+      pretrained_from: "balance" # warm-start từ balance policy

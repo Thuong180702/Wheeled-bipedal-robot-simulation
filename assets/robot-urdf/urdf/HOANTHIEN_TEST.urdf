@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="HOANTHIEN_TEST">
+  <link
+    name="than">
+    <inertial>
+      <origin
+        xyz="-1.9106E-17 1.8362E-17 0.040584"
+        rpy="0 0 0" />
+      <mass
+        value="2.5" />
+      <inertia
+        ixx="0.005598"
+        ixy="2.9719E-08"
+        ixz="7.4689E-19"
+        iyy="0.015241"
+        iyz="1.5647E-19"
+        izz="0.017751" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/than.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/than.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="eophai">
+    <inertial>
+      <origin
+        xyz="0.088462 -0.047569 2.1318E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.5" />
+      <inertia
+        ixx="0.00036543"
+        ixy="-1.1178E-07"
+        ixz="-8.9385E-10"
+        iyy="0.00031624"
+        iyz="1.486E-08"
+        izz="0.00032404" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/eophai.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/eophai.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="eophai"
+    type="continuous">
+    <origin
+      xyz="-0.115 0 -0.0295"
+      rpy="1.5708 0 1.5708" />
+    <parent
+      link="than" />
+    <child
+      link="eophai" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.7"
+      upper="0.7"
+      effort="22"
+      velocity="11.52" />
+  </joint>
+  <link
+    name="xoaychanphai">
+    <inertial>
+      <origin
+        xyz="-0.026182 -0.05199 -0.027696"
+        rpy="0 0 0" />
+      <mass
+        value="0.5" />
+      <inertia
+        ixx="0.00022857"
+        ixy="-9.5216E-06"
+        ixz="-1.4919E-08"
+        iyy="0.00035308"
+        iyz="-1.1175E-07"
+        izz="0.000209" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/xoaychanphai.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/xoaychanphai.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="xoaychanphai"
+    type="continuous">
+    <origin
+      xyz="0 -0.07 0"
+      rpy="-1.5708 0 1.5708" />
+    <parent
+      link="eophai" />
+    <child
+      link="xoaychanphai" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.4"
+      upper="0.4"
+      effort="22"
+      velocity="11.52" />
+  </joint>
+  <link
+    name="duiphai">
+    <inertial>
+      <origin
+        xyz="-8.5149E-07 0.006764 0.096793"
+        rpy="0 0 0" />
+      <mass
+        value="0.8" />
+      <inertia
+        ixx="0.0041434"
+        ixy="8.9385E-10"
+        ixz="1.486E-08"
+        iyy="0.0044915"
+        iyz="1.1178E-07"
+        izz="0.00041762" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/duiphai.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/duiphai.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="duiphai"
+    type="continuous">
+    <origin
+      xyz="-0.03 0 -0.01089"
+      rpy="0 -1.5708 0" />
+    <parent
+      link="xoaychanphai" />
+    <child
+      link="duiphai" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.5"
+      upper="1.8"
+      effort="22"
+      velocity="11.52" />
+  </joint>
+  <link
+    name="ongchanphai">
+    <inertial>
+      <origin
+        xyz="1.5549E-06 -0.010551 0.186"
+        rpy="0 0 0" />
+      <mass
+        value="0.6" />
+      <inertia
+        ixx="0.0018923"
+        ixy="-8.9385E-10"
+        ixz="1.486E-08"
+        iyy="0.0020924"
+        iyz="-1.1178E-07"
+        izz="0.00021843" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/ongchanphai.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/ongchanphai.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="ongchanphai"
+    type="continuous">
+    <origin
+      xyz="0 0 0.26"
+      rpy="0 0 3.1416" />
+    <parent
+      link="duiphai" />
+    <child
+      link="ongchanphai" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.5"
+      upper="2.7"
+      effort="44"
+      velocity="5.75" />
+  </joint>
+  <link
+    name="banhxephai">
+    <inertial>
+      <origin
+        xyz="-0.038074 6.3283E-14 1.8114E-12"
+        rpy="0 0 0" />
+      <mass
+        value="0.1" />
+      <inertia
+        ixx="0.00018832"
+        ixy="-6.9547E-16"
+        ixz="-1.458E-15"
+        iyy="0.00012247"
+        iyz="-5.5503E-16"
+        izz="0.00012247" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/banhxephai.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/banhxephai.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="banhxephai"
+    type="continuous">
+    <origin
+      xyz="0 -0.0205 0.28"
+      rpy="-1.5663 0 1.5708" />
+    <parent
+      link="ongchanphai" />
+    <child
+      link="banhxephai" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      effort="22"
+      velocity="11.52" />
+  </joint>
+  <link
+    name="eotrai">
+    <inertial>
+      <origin
+        xyz="0.088462 -0.047569 2.1318E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.5" />
+      <inertia
+        ixx="0.00036543"
+        ixy="-1.1178E-07"
+        ixz="-8.9385E-10"
+        iyy="0.00031624"
+        iyz="1.486E-08"
+        izz="0.00032404" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/eotrai.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/eotrai.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="eotrai"
+    type="continuous">
+    <origin
+      xyz="0.115 0 -0.0295"
+      rpy="1.5708 0 1.5708" />
+    <parent
+      link="than" />
+    <child
+      link="eotrai" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.7"
+      upper="0.7"
+      effort="22"
+      velocity="11.52" />
+  </joint>
+  <link
+    name="xoaychantrai">
+    <inertial>
+      <origin
+        xyz="-0.05199 0.027638 -0.026248"
+        rpy="0 0 0" />
+      <mass
+        value="0.5" />
+      <inertia
+        ixx="0.00035308"
+        ixy="9.0724E-08"
+        ixz="-9.5236E-06"
+        iyy="0.000209"
+        iyz="2.8397E-08"
+        izz="0.00022857" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/xoaychantrai.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/xoaychantrai.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="xoaychantrai"
+    type="continuous">
+    <origin
+      xyz="0 -0.07 0"
+      rpy="1.573 -1.5708 3.1416" />
+    <parent
+      link="eotrai" />
+    <child
+      link="xoaychantrai" />
+    <axis
+      xyz="0 1 -0.0022142" />
+    <limit
+      lower="-0.4"
+      upper="0.4"
+      effort="22"
+      velocity="11.52" />
+  </joint>
+  <link
+    name="duitrai">
+    <inertial>
+      <origin
+        xyz="-8.5149E-07 0.006764 0.096793"
+        rpy="0 0 0" />
+      <mass
+        value="0.8" />
+      <inertia
+        ixx="0.0041434"
+        ixy="8.9385E-10"
+        ixz="1.486E-08"
+        iyy="0.0044915"
+        iyz="1.1178E-07"
+        izz="0.00041762" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/duitrai.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/duitrai.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="duitrai"
+    type="continuous">
+    <origin
+      xyz="0 -0.010824 -0.030024"
+      rpy="3.1416 0.0022142 1.5708" />
+    <parent
+      link="xoaychantrai" />
+    <child
+      link="duitrai" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="-0.5"
+      upper="1.8"
+      effort="22"
+      velocity="11.52" />
+  </joint>
+  <link
+    name="ongchantrai">
+    <inertial>
+      <origin
+        xyz="1.5549E-06 -0.010551 0.186"
+        rpy="0 0 0" />
+      <mass
+        value="0.6" />
+      <inertia
+        ixx="0.0018923"
+        ixy="-8.9385E-10"
+        ixz="1.486E-08"
+        iyy="0.0020924"
+        iyz="-1.1178E-07"
+        izz="0.00021843" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/ongchantrai.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/ongchantrai.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="ongchantrai"
+    type="continuous">
+    <origin
+      xyz="0 0 0.26"
+      rpy="0 0 3.1416" />
+    <parent
+      link="duitrai" />
+    <child
+      link="ongchantrai" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="-0.5"
+      upper="2.7"
+      effort="44"
+      velocity="5.75" />
+  </joint>
+  <link
+    name="banhxetrai">
+    <inertial>
+      <origin
+        xyz="-0.038074 5.4401E-14 1.7979E-12"
+        rpy="0 0 0" />
+      <mass
+        value="0.1" />
+      <inertia
+        ixx="0.00018832"
+        ixy="-6.911E-16"
+        ixz="-1.4297E-15"
+        iyy="0.00012247"
+        iyz="-5.9687E-16"
+        izz="0.00012247" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/banhxetrai.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://HOANTHIEN_TEST/meshes/banhxetrai.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="banhxetrai"
+    type="continuous">
+    <origin
+      xyz="0 -0.0205000000000005 0.279999999999999"
+      rpy="-1.92824122148289 0 1.5707963267949" />
+    <parent
+      link="ongchantrai" />
+    <child
+      link="banhxetrai" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      effort="22"
+      velocity="11.52" />
+  </joint>
+</robot>

@@ -42,6 +42,36 @@ def reward_upright(torso_quat: jnp.ndarray) -> jnp.ndarray:
 
 
 # ============================================================
+# Reward: Thân nằm ngang (body level - phạt roll/pitch riêng)
+# ============================================================
+
+
+@jax.jit
+def reward_body_level(
+    torso_quat: jnp.ndarray,
+    sigma_roll: float = 0.1,
+    sigma_pitch: float = 0.1,
+) -> jnp.ndarray:
+    """Thưởng khi thân robot nằm ngang song song mặt đất.
+
+    Phạt riêng roll và pitch qua exp_kernel — nhạy hơn reward_upright
+    vì cos(10°) ≈ 0.985 (gần 1.0) nhưng exp(-(10°)²/σ²) giảm mạnh.
+
+    Args:
+        torso_quat: quaternion hướng thân [w, x, y, z].
+        sigma_roll: sigma cho roll (nhỏ = phạt mạnh hơn).
+        sigma_pitch: sigma cho pitch.
+
+    Returns:
+        Reward trong khoảng [0, 1]. 1.0 khi hoàn toàn nằm ngang.
+    """
+    euler = quat_to_euler(torso_quat)
+    roll = euler[..., 0]
+    pitch = euler[..., 1]
+    return exp_kernel(roll, sigma_roll) * exp_kernel(pitch, sigma_pitch)
+
+
+# ============================================================
 # Reward: Duy trì chiều cao
 # ============================================================
 
@@ -202,6 +232,126 @@ def reward_alive(is_alive: jnp.ndarray) -> jnp.ndarray:
 
 
 # ============================================================
+# Reward: Đứng yên (no linear motion)
+# ============================================================
+
+
+@jax.jit
+def reward_no_motion(base_lin_vel: jnp.ndarray, sigma: float = 0.1) -> jnp.ndarray:
+    """Thưởng khi robot đứng yên, không di chuyển.
+
+    Args:
+        base_lin_vel: vận tốc tuyến tính body frame (3,).
+        sigma: độ rộng kernel.
+
+    Returns:
+        Reward trong khoảng [0, 1]. 1.0 khi đứng yên hoàn toàn.
+    """
+    vel_norm = jnp.sqrt(jnp.sum(jnp.square(base_lin_vel)))
+    return exp_kernel(vel_norm, sigma)
+
+
+# ============================================================
+# Reward: Giữ tư thế mặc định (default pose)
+# ============================================================
+
+
+@jax.jit
+def reward_default_pose(
+    joint_pos: jnp.ndarray,
+    default_pos: jnp.ndarray,
+    mask: jnp.ndarray,
+    sigma: float = 0.5,
+) -> jnp.ndarray:
+    """Thưởng khi tư thế khớp gần với tư thế đứng mặc định.
+
+    Args:
+        joint_pos: vị trí khớp hiện tại (10,).
+        default_pos: vị trí khớp mặc định (10,).
+        mask: mask loại trừ bánh xe (10,). 1.0 cho khớp cần so sánh, 0.0 cho bánh xe.
+        sigma: độ rộng kernel.
+
+    Returns:
+        Reward trong khoảng [0, 1]. 1.0 khi đúng tư thế mặc định.
+    """
+    diff = (joint_pos - default_pos) * mask
+    error = jnp.sqrt(jnp.sum(jnp.square(diff)))
+    return exp_kernel(error, sigma)
+
+
+# ============================================================
+# Reward: Chân hướng thẳng về phía trước (hip_yaw ≈ 0)
+# ============================================================
+
+
+@jax.jit
+def reward_legs_forward(
+    joint_pos: jnp.ndarray,
+    sigma: float = 0.15,
+) -> jnp.ndarray:
+    """Thưởng khi 2 chân hướng thẳng về phía trước (hip_yaw ≈ 0).
+
+    Hip yaw ≠ 0 nghĩa là chân xoay sang bên → bánh xe không thẳng.
+
+    Args:
+        joint_pos: vị trí 10 khớp. Index 1=l_hip_yaw, 6=r_hip_yaw.
+        sigma: độ rộng kernel.
+
+    Returns:
+        Reward [0, 1]. 1.0 khi cả 2 chân hướng thẳng trước.
+    """
+    yaw_left = joint_pos[..., 1]
+    yaw_right = joint_pos[..., 6]
+    return exp_kernel(yaw_left, sigma) * exp_kernel(yaw_right, sigma)
+
+
+# ============================================================
+# Reward: Chân vuông góc với mặt đất (hip_roll ≈ 0)
+# ============================================================
+
+
+@jax.jit
+def reward_legs_vertical(
+    joint_pos: jnp.ndarray,
+    sigma: float = 0.15,
+) -> jnp.ndarray:
+    """Thưởng khi 2 chân vuông góc với mặt đất (hip_roll ≈ 0).
+
+    Hip roll ≠ 0 nghĩa là chân nghiêng sang bên.
+
+    Args:
+        joint_pos: vị trí 10 khớp. Index 0=l_hip_roll, 5=r_hip_roll.
+        sigma: độ rộng kernel.
+
+    Returns:
+        Reward [0, 1]. 1.0 khi cả 2 chân thẳng đứng.
+    """
+    roll_left = joint_pos[..., 0]
+    roll_right = joint_pos[..., 5]
+    return exp_kernel(roll_left, sigma) * exp_kernel(roll_right, sigma)
+
+
+# ============================================================
+# Phạt: Bánh xe quay (wheel velocity penalty)
+# ============================================================
+
+
+@jax.jit
+def penalty_wheel_velocity(
+    joint_vel: jnp.ndarray,
+) -> jnp.ndarray:
+    """Phạt bánh xe quay — giữ robot đứng yên tại chỗ.
+
+    Args:
+        joint_vel: vận tốc 10 khớp. Index 4=l_wheel, 9=r_wheel.
+
+    Returns:
+        Penalty (giá trị dương). Tổng bình phương vận tốc 2 bánh.
+    """
+    return jnp.square(joint_vel[..., 4]) + jnp.square(joint_vel[..., 9])
+
+
+# ============================================================
 # Reward: Tiếp xúc chân (foot contact)
 # ============================================================
 
@@ -281,7 +431,38 @@ def reward_gait_symmetry(
         Reward [0, 1].
     """
     diff = jnp.sum(jnp.square(left_joint_pos - right_joint_pos), axis=-1)
-    return exp_kernel(diff, sigma=0.5)
+    sim = exp_kernel(diff, sigma=0.5)
+    # phase_offset=0: reward same position (standing/balance)
+    # phase_offset=π: reward different positions (anti-phase walking)
+    return jnp.where(phase_offset > jnp.pi / 2, 1.0 - sim, sim)
+
+
+# ============================================================
+# Reward: Đối xứng 2 chân (cho balance — 2 chân giống nhau)
+# ============================================================
+
+
+@jax.jit
+def reward_leg_symmetry(
+    joint_pos: jnp.ndarray,
+    sigma: float = 0.5,
+) -> jnp.ndarray:
+    """Thưởng khi 2 chân có tư thế đối xứng (giống nhau).
+
+    So sánh các khớp tương ứng trái-phải: hip_roll, hip_yaw, hip_pitch, knee.
+    Không so sánh bánh xe (index 4, 9).
+
+    Args:
+        joint_pos: vị trí 10 khớp [l_hr, l_hy, l_hp, l_kn, l_wh, r_hr, r_hy, r_hp, r_kn, r_wh].
+        sigma: độ rộng kernel.
+
+    Returns:
+        Reward trong khoảng [0, 1]. 1.0 khi 2 chân hoàn toàn giống nhau.
+    """
+    left = joint_pos[..., :4]  # l_hip_roll, l_hip_yaw, l_hip_pitch, l_knee
+    right = joint_pos[..., 5:9]  # r_hip_roll, r_hip_yaw, r_hip_pitch, r_knee
+    diff = jnp.sum(jnp.square(left - right), axis=-1)
+    return exp_kernel(jnp.sqrt(diff), sigma)
 
 
 # ============================================================
@@ -327,9 +508,10 @@ def reward_stair_progress(
     Returns:
         Reward.
     """
-    dx = current_pos[..., 0] - previous_pos[..., 0]
+    # Y axis = forward direction for this robot
+    dy = current_pos[..., 1] - previous_pos[..., 1]
     dz = current_pos[..., 2] - previous_pos[..., 2]
-    return forward_weight * dx + height_weight * jnp.clip(dz, 0.0, None)
+    return forward_weight * dy + height_weight * jnp.clip(dz, 0.0, None)
 
 
 # ============================================================
