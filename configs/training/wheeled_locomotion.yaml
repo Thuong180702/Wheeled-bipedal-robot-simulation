@@ -31,12 +31,10 @@ rewards:
   tracking_velocity: 1.5 # bám theo vận tốc mong muốn
   upright: 0.5
   height: 0.3
-  heading: 0.3 # thưởng hướng đúng
   joint_torque: -0.0001
   joint_velocity: -0.0001
   action_rate: -0.001
   alive: 0.1
-  wheel_velocity: 0.2 # thưởng bánh quay đúng tốc độ
 
 # Lệnh điều khiển (vận tốc mong muốn)
 command:

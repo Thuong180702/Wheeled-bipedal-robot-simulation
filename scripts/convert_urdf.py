@@ -71,8 +71,8 @@ for hp in [0.0, 0.3, 0.5, 0.7, 1.0]:
         d.qpos[:] = 0
         d.qpos[2] = hp  # duiphai (r_hip_pitch)
         d.qpos[3] = kn  # ongchanphai (r_knee)
-        d.qpos[7] = -hp  # duitrai (l_hip_pitch, negative axis)
-        d.qpos[8] = -kn  # ongchantrai (l_knee, negative axis)
+        d.qpos[7] = hp  # duitrai (l_hip_pitch, cùng dấu dương = forward)
+        d.qpos[8] = kn  # ongchantrai (l_knee, cùng dấu dương = forward)
         mujoco.mj_forward(m, d)
         rw = d.xpos[m.body("banhxephai").id]
         lw = d.xpos[m.body("banhxetrai").id]

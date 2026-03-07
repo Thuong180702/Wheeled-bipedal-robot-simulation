@@ -142,11 +142,11 @@ class LocomotionEnv(WheeledBipedEnv):
         joint_vel = mjx_data.qvel[6:]
         torques = mjx_data.ctrl
 
-        # Body-frame velocity (Y = forward, X = lateral)
+        # Body-frame velocity (-Y = forward, X = lateral)
         quat_inv = quat_conjugate(torso_quat)
         body_vel = quat_rotate(quat_inv, mjx_data.qvel[:3])
         body_ang_vel = quat_rotate(quat_inv, mjx_data.qvel[3:6])
-        body_vel_forward = body_vel[1]
+        body_vel_forward = -body_vel[1]  # robot faces -Y
         body_vel_lateral = body_vel[0]
         body_ang_vel_z = body_ang_vel[2]
 

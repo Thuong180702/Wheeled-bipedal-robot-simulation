@@ -154,15 +154,13 @@ class TerrainEnv(WheeledBipedEnv):
         torso_height = mjx_data.qpos[2]
         torques = mjx_data.ctrl
 
-        # Body-frame velocity (Y = forward, X = lateral)
+        # Body-frame velocity (-Y = forward, X = lateral)
         quat_inv = quat_conjugate(torso_quat)
         body_vel = quat_rotate(quat_inv, mjx_data.qvel[:3])
         body_ang_vel = quat_rotate(quat_inv, mjx_data.qvel[3:6])
-        body_vel_forward = body_vel[1]
+        body_vel_forward = -body_vel[1]  # robot faces -Y
         body_vel_lateral = body_vel[0]
         body_ang_vel_z = body_ang_vel[2]
-
-        ang_vel_body = quat_rotate(quat_inv, mjx_data.qvel[3:6])
 
         # Command
         command = prev_state.info.get("command", jnp.zeros(2))
@@ -182,7 +180,9 @@ class TerrainEnv(WheeledBipedEnv):
             "upright": reward_upright(torso_quat),
             "height": reward_height(torso_height, 0.55),
             "foot_contact": jnp.float32(1.0),  # placeholder
-            "body_stability": 1.0 - penalty_body_angular_velocity(ang_vel_body) * 0.01,
+            "body_stability": jnp.clip(
+                1.0 - penalty_body_angular_velocity(body_ang_vel) * 0.01, 0.0, 1.0
+            ),
             "joint_torque": jnp.sum(jnp.square(torques)),
             "action_rate": jnp.sum(jnp.square(action - prev_state.prev_action)),
             "alive": jnp.where(is_alive, 1.0, 0.0),

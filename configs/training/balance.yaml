@@ -26,19 +26,22 @@ network:
   policy_hidden: [256, 256, 128]
   value_hidden: [256, 256, 128]
   activation: "elu"
-  init_std: 0.3 # std ban đầu cho action distribution
+  init_std: 0.15 # std ban đầu cho action distribution (nhỏ hơn vì ctrlrange rộng)
 
 # --- Reward weights ---
-# 12 thành phần: 8 thưởng + 4 phạt
+# 15 thành phần: 11 thưởng + 4 phạt || tổng thưởng 8.6, tổng phạt -0.011
 rewards:
   body_level: 1.5 # thưởng thân nằm ngang (exp kernel σ=0.15)
-  height: 1.0 # thưởng giữ chiều cao theo height_command (exp kernel σ=0.1)
-  symmetry: 0.5 # thưởng 2 chân đối xứng (exp kernel σ=0.5)
+  height: 2.5 # thưởng giữ chiều cao theo height_command (exp kernel σ=0.1)
+  natural_pose: 0.8 # thưởng hp/kn phù hợp chiều cao mục tiêu (exp kernel σ=0.5)
+  symmetry: 0.5 # thưởng 2 chân đối xứng (exp kernel σ=0.3)
   no_motion: 0.3 # thưởng đứng yên (exp kernel σ=0.2)
   orientation: 0.5 # thưởng hướng body ổn định (phạt ang_vel)
   alive: 0.2 # thưởng sống sót mỗi step
   legs_forward: 0.5 # thưởng 2 chân hướng thẳng về trước (hip_yaw≈0)
   legs_vertical: 0.5 # thưởng 2 chân vuông góc mặt đất (hip_roll≈0)
+  position_drift: 0.8 # thưởng giữ vị trí XY gần điểm reset (exp kernel σ=0.3)
+  heading: 0.5 # thưởng giữ hướng yaw ban đầu (exp kernel σ=0.2)
   joint_torque: -0.0001 # phạt dùng mô-men lớn
   joint_velocity: -0.0001 # phạt tốc độ khớp lớn
   action_rate: -0.01 # phạt thay đổi action đột ngột

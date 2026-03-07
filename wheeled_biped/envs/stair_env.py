@@ -56,12 +56,12 @@ class StairEnv(WheeledBipedEnv):
             self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso"
         )
 
-        # Tính vị trí đích (đỉnh cầu thang)
+        # Tính vị trí đích (đỉnh cầu thang, phía -Y = forward)
         num_steps = self._stair_config.get("num_steps", 8)
         step_height = self._stair_config.get("step_height", 0.15)
         step_depth = self._stair_config.get("step_depth", 0.30)
         platform_length = 1.0
-        self._goal_y = platform_length + num_steps * step_depth
+        self._goal_y = -(platform_length + num_steps * step_depth)
         self._goal_z = num_steps * step_height
 
         # Reward weights
@@ -170,7 +170,7 @@ class StairEnv(WheeledBipedEnv):
         """Step kèm progress tracking."""
         goal = state.info.get("goal", jnp.array([self._goal_y, self._goal_z]))
         new_state = super().step(state, action)
-        # Tính tiến bộ: tỷ lệ khoảng cách y đến goal (Y = forward)
+        # Tính tiến bộ: tỷ lệ khoảng cách y đến goal (-Y = forward)
         torso_y = new_state.mjx_data.qpos[1]
         progress = jnp.clip(torso_y / self._goal_y, 0.0, 1.0).reshape(1)
         obs = self._extract_obs(new_state.mjx_data, action, goal, progress)

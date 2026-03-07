@@ -18,12 +18,14 @@
     knee      → Gập gối (ongchan)
     wheel     → Bánh xe (banhxe)
 
-  Lưu ý: Trục khớp chân trái (hip_pitch, knee) đảo ngược
-  so với chân phải do đối xứng URDF từ SolidWorks.
+  Quy ước trục khớp (đã chuẩn hóa theo mặt trước thực tế):
+    hip_pitch, knee: góc dương = gập về phía trước (mặt trước robot)
+    hip_yaw:         góc dương = cùng hướng xoay cho cả 2 chân
+    wheel:           góc dương = lăn tiến cho cả 2 bánh
 
-  Hệ tọa độ:
+  Hệ tọa độ MuJoCo (robot quay mặt về -Y):
     - X: trái (+) / phải (-)
-    - Y: tiến (+) / lùi (-)
+    - Y: lùi (+) / tiến (-)   ← MẶT TRƯỚC robot hướng -Y
     - Z: lên (+) / xuống (-)
   ============================================================
 -->
@@ -163,7 +165,7 @@
               quat="-0.500553 0.499448 0.500552 0.499446">
           <inertial pos="-0.05199 0.027638 -0.026248"
                     quat="0.707249 0.705946 0.0270686 -0.0265876"
-                    mass="0.5" diaginertia="0.000353804 0.000227846 0.000209"/>
+                    mass="0.8" diaginertia="0.000353804 0.000227846 0.000209"/>
           <joint name="l_hip_yaw" type="hinge" axis="0 0.999998 -0.00221419"
                  range="-0.4 0.4" damping="1.2" armature="0.02"/>
           <geom name="l_hip_yaw_visual" type="mesh" mesh="xoaychantrai" class="visual"/>
@@ -200,7 +202,7 @@
                     quat="0.40315 -0.580922 -0.580922 0.40315">
                 <inertial pos="-0.038074 0 1.7979e-12"
                           mass="0.1" diaginertia="0.00018832 0.00012247 0.00012247"/>
-                <joint name="l_wheel" type="hinge" axis="1 0 0"
+                <joint name="l_wheel" type="hinge" axis="-1 0 0"
                        limited="false" damping="0.02" armature="0.008"/>
                 <geom name="l_wheel_visual" type="mesh" mesh="banhxetrai" class="visual"/>
                 <geom name="l_wheel_collision" class="wheel"
@@ -234,8 +236,8 @@
               quat="0.499998 -0.5 -0.500002 0.5">
           <inertial pos="-0.026182 -0.05199 -0.027696"
                     quat="0.679775 0.000141754 0.0007132 0.73342"
-                    mass="0.5" diaginertia="0.000353804 0.000227846 0.000209"/>
-          <joint name="r_hip_yaw" type="hinge" axis="0 0 1"
+                    mass="0.8" diaginertia="0.000353804 0.000227846 0.000209"/>
+          <joint name="r_hip_yaw" type="hinge" axis="0 0 -1"
                  range="-0.4 0.4" damping="1.2" armature="0.02"/>
           <geom name="r_hip_yaw_visual" type="mesh" mesh="xoaychanphai" class="visual"/>
           <geom name="r_hip_yaw_collision" class="leg_collision"
@@ -325,7 +327,7 @@
     <motor name="l_hip_yaw_motor"   joint="l_hip_yaw"   gear="1"
            ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
     <motor name="l_hip_pitch_motor" joint="l_hip_pitch" gear="1"
-           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+           ctrlrange="-30 30"  forcelimited="true" forcerange="-44 44"/>
     <motor name="l_knee_motor"      joint="l_knee"      gear="1"
            ctrlrange="-30 30"  forcelimited="true" forcerange="-44 44"/>
     <motor name="l_wheel_motor"     joint="l_wheel"     gear="1"
@@ -337,7 +339,7 @@
     <motor name="r_hip_yaw_motor"   joint="r_hip_yaw"   gear="1"
            ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
     <motor name="r_hip_pitch_motor" joint="r_hip_pitch" gear="1"
-           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+           ctrlrange="-30 30"  forcelimited="true" forcerange="-44 44"/>
     <motor name="r_knee_motor"      joint="r_knee"      gear="1"
            ctrlrange="-30 30"  forcelimited="true" forcerange="-44 44"/>
     <motor name="r_wheel_motor"     joint="r_wheel"     gear="1"
@@ -384,8 +386,8 @@
     <key name="standing"
          qpos="0 0 0.71
                1 0 0 0
-               0 0 -0.3 -0.5 0
-               0 0 -0.3 -0.5 0"
+               0 0 0.3 0.5 0
+               0 0 0.3 0.5 0"
          ctrl="0 0 0 0 0
                0 0 0 0 0"/>
   </keyframe>

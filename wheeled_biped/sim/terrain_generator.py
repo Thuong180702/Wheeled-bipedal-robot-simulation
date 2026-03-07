@@ -25,7 +25,7 @@ def generate_stair_terrain(
 ) -> str:
     """Tạo XML snippet cho cầu thang.
 
-    Cầu thang bắt đầu từ y=platform_length (robot hướng Y+), leo lên rồi xuống.
+    Cầu thang bắt đầu từ y=-platform_length (robot hướng -Y), leo lên rồi xuống.
 
     Args:
         num_steps: số bậc thang.
@@ -39,17 +39,17 @@ def generate_stair_terrain(
     """
     geoms = []
 
-    # Sàn phẳng đầu (dọc trục Y)
+    # Sàn phẳng đầu (dọc trục -Y = phía trước robot)
     geoms.append(
         f'<geom name="platform_start" type="box" '
-        f'pos="0 {platform_length / 2} {-step_height / 2}" '
+        f'pos="0 {-platform_length / 2} {-step_height / 2}" '
         f'size="{step_width / 2} {platform_length / 2} {step_height / 2}" '
         f'rgba="0.6 0.6 0.6 1" condim="3" contype="1" conaffinity="1"/>'
     )
 
-    # Bậc thang đi lên (dọc trục Y)
+    # Bậc thang đi lên (dọc trục -Y)
     for i in range(num_steps):
-        y = platform_length + (i + 0.5) * step_depth
+        y = -(platform_length + (i + 0.5) * step_depth)
         z = (i + 1) * step_height - step_height / 2
         h = (i + 1) * step_height / 2
         geoms.append(
@@ -60,7 +60,7 @@ def generate_stair_terrain(
         )
 
     # Sàn trên cùng
-    top_y = platform_length + num_steps * step_depth + platform_length / 2
+    top_y = -(platform_length + num_steps * step_depth + platform_length / 2)
     top_z = num_steps * step_height - step_height / 2
     geoms.append(
         f'<geom name="platform_top" type="box" '
@@ -69,9 +69,9 @@ def generate_stair_terrain(
         f'rgba="0.6 0.6 0.6 1" condim="3" contype="1" conaffinity="1"/>'
     )
 
-    # Bậc thang đi xuống (dọc trục Y)
+    # Bậc thang đi xuống (dọc trục -Y)
     for i in range(num_steps):
-        y = top_y + platform_length / 2 + (i + 0.5) * step_depth
+        y = top_y - platform_length / 2 - (i + 0.5) * step_depth
         remaining = num_steps - i
         z = remaining * step_height - step_height / 2
         h = remaining * step_height / 2

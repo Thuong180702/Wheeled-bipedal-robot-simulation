@@ -26,13 +26,16 @@ from wheeled_biped.rewards.reward_functions import (
     penalty_body_angular_velocity,
     penalty_joint_torque,
     penalty_joint_velocity,
+    penalty_position_drift,
     penalty_wheel_velocity,
     reward_alive,
     reward_body_level,
+    reward_heading,
     reward_height,
     reward_leg_symmetry,
     reward_legs_forward,
     reward_legs_vertical,
+    reward_natural_pose,
     reward_no_motion,
 )
 from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate, quat_to_euler
@@ -72,6 +75,9 @@ class BalanceEnv(WheeledBipedEnv):
             "no_motion": reward_cfg.get("no_motion", 0.3),
             "symmetry": reward_cfg.get("symmetry", 0.5),
             "wheel_velocity": reward_cfg.get("wheel_velocity", -0.001),
+            "position_drift": reward_cfg.get("position_drift", 0.8),
+            "heading": reward_cfg.get("heading", 0.5),
+            "natural_pose": reward_cfg.get("natural_pose", 0.8),
         }
 
     def _compute_obs_size(self) -> int:
@@ -107,6 +113,10 @@ class BalanceEnv(WheeledBipedEnv):
         )
         obs = jnp.concatenate([base_obs, jnp.array([height_norm])])
 
+        # Lưu vị trí XY neo và yaw ban đầu để tính reward
+        anchor_xy = mjx_data.qpos[:2]
+        initial_yaw = quat_to_euler(mjx_data.qpos[3:7])[2]
+
         return EnvState(
             mjx_data=mjx_data,
             obs=obs,
@@ -118,6 +128,8 @@ class BalanceEnv(WheeledBipedEnv):
                 "is_fallen": jnp.bool_(False),
                 "time_limit": jnp.bool_(False),
                 "height_command": height_command,
+                "anchor_xy": anchor_xy,
+                "initial_yaw": initial_yaw,
             },
         )
 
@@ -172,6 +184,8 @@ class BalanceEnv(WheeledBipedEnv):
                 "is_fallen": is_fallen,
                 "time_limit": time_limit,
                 "height_command": height_command,  # giữ nguyên trong episode
+                "anchor_xy": state.info["anchor_xy"],  # giữ nguyên
+                "initial_yaw": state.info["initial_yaw"],  # giữ nguyên
             },
         )
 
@@ -202,6 +216,11 @@ class BalanceEnv(WheeledBipedEnv):
         # Height command từ state
         height_command = prev_state.info["height_command"]
 
+        # Vị trí XY hiện tại và neo
+        current_xy = mjx_data.qpos[:2]
+        anchor_xy = prev_state.info["anchor_xy"]
+        initial_yaw = prev_state.info["initial_yaw"]
+
         components = {
             # Thân nằm ngang song song mặt đất (phạt roll + pitch riêng)
             "body_level": reward_body_level(
@@ -231,6 +250,12 @@ class BalanceEnv(WheeledBipedEnv):
             "action_rate": penalty_action_rate(action, prev_state.prev_action),
             # Phạt bánh xe quay (giữ robot đứng yên tại chỗ)
             "wheel_velocity": penalty_wheel_velocity(joint_vel),
+            # Giữ vị trí neo — phạt trôi xa khỏi vị trí ban đầu
+            "position_drift": penalty_position_drift(current_xy, anchor_xy, sigma=0.3),
+            # Giữ hướng ban đầu — phạt xoay yaw khỏi hướng reset
+            "heading": reward_heading(torso_quat, initial_yaw),
+            # Tư thế khớp tự nhiên — hp/kn phù hợp với chiều cao mục tiêu
+            "natural_pose": reward_natural_pose(joint_pos, height_command, sigma=0.5),
         }
 
         return compute_total_reward(components, self._reward_weights)

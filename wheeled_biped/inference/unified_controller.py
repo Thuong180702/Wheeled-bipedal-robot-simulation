@@ -29,7 +29,11 @@ import numpy as np
 
 from wheeled_biped.training.networks import create_actor_critic
 from wheeled_biped.training.ppo import normalize_obs
-from wheeled_biped.utils.math_utils import get_gravity_in_body_frame
+from wheeled_biped.utils.math_utils import (
+    get_gravity_in_body_frame,
+    quat_conjugate,
+    quat_rotate,
+)
 
 
 class Skill(Enum):
@@ -72,6 +76,7 @@ class ControlCommand:
 
     vel_x: float = 0.0  # m/s, tiến(+)/lùi(-)
     ang_vel_z: float = 0.0  # rad/s, xoay trái(+)/phải(-)
+    height_target: float = 0.71  # m, chiều cao mong muốn (0.38–0.72)
     mode: Optional[Skill] = None  # Ép chọn skill (None = tự động)
 
 
@@ -149,6 +154,7 @@ class UnifiedController:
         # Skill hiện tại
         self._active_skill = self._pick_default_skill()
         self._prev_ctrl = np.zeros(mj_model.nu)
+        self._prev_action = jnp.zeros(mj_model.nu)  # normalized [-1,1]
         self._transition_alpha = 0.0  # 0=old, 1=new (smooth blending)
         self._transition_target: Optional[Skill] = None
         self._blend_steps = 10
@@ -196,20 +202,34 @@ class UnifiedController:
         torso_quat = jnp.array(mj_data.qpos[3:7])
         gravity_body = get_gravity_in_body_frame(torso_quat)
 
+        # Body-frame velocity (giống training - dùng quat_conjugate + quat_rotate)
+        quat_inv = quat_conjugate(torso_quat)
+        world_lin_vel = jnp.array(mj_data.qvel[:3])
+        world_ang_vel = jnp.array(mj_data.qvel[3:6])
+        body_lin_vel = quat_rotate(quat_inv, world_lin_vel)
+        body_ang_vel = quat_rotate(quat_inv, world_ang_vel)
+
         base_obs = jnp.concatenate(
             [
                 gravity_body,  # 3
-                jnp.array(mj_data.qvel[:3]),  # 3  linear vel
-                jnp.array(mj_data.qvel[3:6]),  # 3  angular vel
+                body_lin_vel,  # 3  body-frame linear vel
+                body_ang_vel,  # 3  body-frame angular vel
                 jnp.array(mj_data.qpos[7:17]),  # 10 joint pos
                 jnp.array(mj_data.qvel[6:16]),  # 10 joint vel
-                jnp.array(mj_data.ctrl[:10]),  # 10 prev action
+                self._prev_action,  # 10 prev action (normalized [-1,1])
             ]
         )  # total 39
 
         sp = self.skills[skill]
         if sp.obs_size == 39:
             return base_obs
+
+        # Balance skill: obs_size=40 → thêm height_command
+        if skill == Skill.BALANCE and sp.obs_size == 40:
+            # height_cmd normalized [0,1]: (target - 0.38) / (0.72 - 0.38)
+            # cmd.height_target mặc định ~0.71m → norm ≈ 0.97
+            height_norm = np.clip((cmd.height_target - 0.38) / (0.72 - 0.38), 0.0, 1.0)
+            return jnp.concatenate([base_obs, jnp.array([height_norm])])
 
         # Thêm command nếu cần (locomotion / walking: +2)
         if sp.needs_command:
@@ -264,8 +284,8 @@ class UnifiedController:
                 return Skill.BALANCE
 
         # 2. Phát hiện bề mặt không bằng phẳng qua chênh lệch chiều cao chân
-        left_foot_z = self._foot_height(mj_data, "l_wheel")
-        right_foot_z = self._foot_height(mj_data, "r_wheel")
+        left_foot_z = self._foot_height(mj_data, "l_wheel_link")
+        right_foot_z = self._foot_height(mj_data, "r_wheel_link")
         foot_diff = (
             abs(left_foot_z - right_foot_z)
             if left_foot_z is not None and right_foot_z is not None
@@ -379,6 +399,9 @@ class UnifiedController:
         obs_norm = normalize_obs(obs, sp.obs_rms)
         dist, _ = sp.network.apply(sp.params, obs_norm)
         action = jnp.clip(dist.loc, -1.0, 1.0)
+
+        # Lưu prev_action (normalized [-1,1]) cho obs step tiếp theo
+        self._prev_action = action
 
         # Scale action → ctrl range
         ctrl_range = self.mj_model.actuator_ctrlrange

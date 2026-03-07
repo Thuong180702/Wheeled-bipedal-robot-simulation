@@ -5,7 +5,7 @@
 
 robot:
   name: "wheeled_biped_real"
-  total_mass_kg: 7.0
+  total_mass_kg: 8.1
 
   # --- Kích thước cơ bản (m) ---
   dimensions:
@@ -20,7 +20,7 @@ robot:
   masses:
     torso: 2.5 # thân + pin + mạch
     hip_roll_motor: 0.5 # eo
-    hip_yaw_motor: 0.5 # xoay chân
+    hip_yaw_motor: 0.8 # xoay chân
     thigh: 0.8 # đùi
     shin: 0.6 # ống chân
     wheel_assembly: 0.1 # bánh xe
@@ -34,21 +34,21 @@ robot:
     wheel: null # không giới hạn (quay tự do)
 
   # --- Mô-men xoắn tối đa (Nm) ---
+  # hip_pitch dùng cùng loại motor với knee (ctrlrange=±30, forcerange=±44)
   torque_limits:
     hip_roll: 22.0
     hip_yaw: 22.0
-    hip_pitch: 22.0
+    hip_pitch: 44.0
     knee: 44.0
     wheel: 22.0
 
   # --- Tư thế đứng mặc định (rad) ---
-  # Cả hai chân cùng dấu âm: gối gập về phía trước (Y+)
-  # (trục hip_pitch/knee trái đảo ngược trong MJCF nhưng qpos cùng dấu)
+  # Dấu dương = gập về phía trước (mặt trước robot hướng -Y)
   default_standing_pose:
     hip_roll: 0.0
     hip_yaw: 0.0
-    hip_pitch: -0.3
-    knee: -0.5
+    hip_pitch: 0.3
+    knee: 0.5
     wheel: 0.0
 
 # --- Cảm biến ---

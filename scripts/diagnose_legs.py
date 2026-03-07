@@ -69,7 +69,7 @@ def test_config(l_hp, l_kn, r_hp, r_kn, label=""):
         f"  l_hip_pitch={l_hp:+.2f}  l_knee={l_kn:+.2f}  |  r_hip_pitch={r_hp:+.2f}  r_knee={r_kn:+.2f}"
     )
     print(f"{'='*70}")
-    print(f"  {'Body':20s}  {'X (left+)':>10s}  {'Y (fwd+)':>10s}  {'Z (up+)':>10s}")
+    print(f"  {'Body':20s}  {'X (left+)':>10s}  {'Y (back+)':>10s}  {'Z (up+)':>10s}")
     print(f"  {'─'*55}")
     print(f"  {'torso':20s}  {torso[0]:+10.4f}  {torso[1]:+10.4f}  {torso[2]:+10.4f}")
     print(
@@ -99,10 +99,10 @@ def test_config(l_hp, l_kn, r_hp, r_kn, label=""):
 
     print(f"\n  Hướng gối (Y so với đùi):")
     print(
-        f"    L knee offset Y = {l_knee_fwd:+.4f} {'(TRƯỚC)' if l_knee_fwd > 0.01 else '(SAU)' if l_knee_fwd < -0.01 else '(GIỮA)'}"
+        f"    L knee offset Y = {l_knee_fwd:+.4f} {'(SAU)' if l_knee_fwd > 0.01 else '(TRƯỚC)' if l_knee_fwd < -0.01 else '(GIỮA)'}"
     )
     print(
-        f"    R knee offset Y = {r_knee_fwd:+.4f} {'(TRƯỚC)' if r_knee_fwd > 0.01 else '(SAU)' if r_knee_fwd < -0.01 else '(GIỮA)'}"
+        f"    R knee offset Y = {r_knee_fwd:+.4f} {'(SAU)' if r_knee_fwd > 0.01 else '(TRƯỚC)' if r_knee_fwd < -0.01 else '(GIỮA)'}"
     )
     print(f"  Bánh xe Z: L={l_wheel_z:.4f}  R={r_wheel_z:.4f}")
 
@@ -113,10 +113,8 @@ print("=" * 70)
 print("  CHẨN ĐOÁN HƯỚNG GẬP KHỚP: TÌM CẤU HÌNH ĐÚNG")
 print("=" * 70)
 
-# Test 1: Current keyframe (l=-0.3,-0.5 r=+0.3,+0.5)
-test_config(
-    -0.3, -0.5, 0.3, 0.5, "HIỆN TẠI: l_hp=-0.3, l_kn=-0.5 | r_hp=+0.3, r_kn=+0.5"
-)
+# Test 1: Current keyframe (l=+0.3,+0.5 r=+0.3,+0.5) - cả 2 chân cùng dấu dương
+test_config(0.3, 0.5, 0.3, 0.5, "HIỆN TẠI: l_hp=+0.3, l_kn=+0.5 | r_hp=+0.3, r_kn=+0.5")
 
 # Test 2: Same signs both legs
 test_config(

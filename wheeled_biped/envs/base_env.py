@@ -156,7 +156,7 @@ class WheeledBipedEnv:
             mj_data.qpos[3:7] = [1, 0, 0, 0]  # quaternion (đứng thẳng)
             # Các khớp: [l_hip_roll, l_hip_yaw, l_hip_pitch, l_knee, l_wheel,
             #            r_hip_roll, r_hip_yaw, r_hip_pitch, r_knee, r_wheel]
-            mj_data.qpos[7:] = [0, 0, -0.3, -0.5, 0, 0, 0, -0.3, -0.5, 0]
+            mj_data.qpos[7:] = [0, 0, 0.3, 0.5, 0, 0, 0, 0.3, 0.5, 0]
 
         # Forward kinematics
         mujoco.mj_forward(self.mj_model, mj_data)

@@ -152,7 +152,7 @@ def reward_heading(torso_quat: jnp.ndarray, target_yaw: jnp.ndarray) -> jnp.ndar
     """
     euler = quat_to_euler(torso_quat)
     yaw_error = wrap_angle(euler[..., 2] - target_yaw)
-    return exp_kernel(yaw_error, sigma=0.5)
+    return exp_kernel(yaw_error, sigma=0.2)
 
 
 # ============================================================
@@ -352,6 +352,34 @@ def penalty_wheel_velocity(
 
 
 # ============================================================
+# Phạt: Trôi vị trí (position drift penalty)
+# ============================================================
+
+
+@jax.jit
+def penalty_position_drift(
+    current_xy: jnp.ndarray,
+    anchor_xy: jnp.ndarray,
+    sigma: float = 0.1,
+) -> jnp.ndarray:
+    """Phạt khi robot trôi xa khỏi vị trí neo (anchor).
+
+    Dùng exp_kernel: khi robot ở đúng vị trí → reward=1, trôi xa → reward→0.
+    Robot tạm thời lắc lư OK, miễn khoảng cách nhỏ thì reward vẫn cao.
+
+    Args:
+        current_xy: vị trí XY hiện tại (2,).
+        anchor_xy: vị trí XY neo (đặt khi reset) (2,).
+        sigma: độ rộng kernel (0.1 ≈ phạt mạnh khi trôi >10cm).
+
+    Returns:
+        Reward [0, 1]. 1.0 khi đứng đúng vị trí.
+    """
+    dist = jnp.sqrt(jnp.sum(jnp.square(current_xy - anchor_xy)))
+    return exp_kernel(dist, sigma)
+
+
+# ============================================================
 # Reward: Tiếp xúc chân (foot contact)
 # ============================================================
 
@@ -431,7 +459,7 @@ def reward_gait_symmetry(
         Reward [0, 1].
     """
     diff = jnp.sum(jnp.square(left_joint_pos - right_joint_pos), axis=-1)
-    sim = exp_kernel(diff, sigma=0.5)
+    sim = exp_kernel(diff, sigma=0.3)
     # phase_offset=0: reward same position (standing/balance)
     # phase_offset=π: reward different positions (anti-phase walking)
     return jnp.where(phase_offset > jnp.pi / 2, 1.0 - sim, sim)
@@ -445,7 +473,7 @@ def reward_gait_symmetry(
 @jax.jit
 def reward_leg_symmetry(
     joint_pos: jnp.ndarray,
-    sigma: float = 0.5,
+    sigma: float = 0.3,
 ) -> jnp.ndarray:
     """Thưởng khi 2 chân có tư thế đối xứng (giống nhau).
 
@@ -508,10 +536,10 @@ def reward_stair_progress(
     Returns:
         Reward.
     """
-    # Y axis = forward direction for this robot
+    # -Y axis = forward direction for this robot
     dy = current_pos[..., 1] - previous_pos[..., 1]
     dz = current_pos[..., 2] - previous_pos[..., 2]
-    return forward_weight * dy + height_weight * jnp.clip(dz, 0.0, None)
+    return forward_weight * (-dy) + height_weight * jnp.clip(dz, 0.0, None)
 
 
 # ============================================================
@@ -564,6 +592,54 @@ def reward_stand_up_phase(
     r_up = reward_upright(torso_quat)
     # Nhân 2 thành phần để đòi hỏi cả 2
     return r_h * r_up
+
+
+# ============================================================
+# Reward: Tư thế khớp tự nhiên (tỉ lệ hip/knee hợp lý)
+# ============================================================
+
+
+@jax.jit
+def reward_natural_pose(
+    joint_pos: jnp.ndarray,
+    height_command: jnp.ndarray,
+    sigma: float = 0.3,
+) -> jnp.ndarray:
+    """Thưởng khi tỉ lệ hip_pitch/knee tự nhiên và gối không bị hyperextend.
+
+    Tỉ lệ tự nhiên: hp ≈ kn × 0.6 (từ kinematics: keyframe hp=0.3, kn=0.5).
+    Hàm này hoạt động cho MỌI chiều cao vì chỉ kiểm tra tỉ lệ, không target cụ thể.
+
+    Đồng thời phạt khi gối < 0 (hyperextension) — luôn là sai tư thế.
+
+    Joint order: [l_hr(0), l_hy(1), l_hp(2), l_kn(3), l_wh(4),
+                  r_hr(5), r_hy(6), r_hp(7), r_kn(8), r_wh(9)]
+
+    Args:
+        joint_pos: vị trí 10 khớp.
+        height_command: chiều cao mục tiêu (m) — không dùng trực tiếp, giữ API.
+        sigma: độ rộng kernel cho tỉ lệ.
+
+    Returns:
+        Reward [0, 1]. 1.0 khi tư thế khớp tự nhiên.
+    """
+    l_hp = joint_pos[..., 2]
+    l_kn = joint_pos[..., 3]
+    r_hp = joint_pos[..., 7]
+    r_kn = joint_pos[..., 8]
+
+    # Tỉ lệ tự nhiên: hp ≈ kn × 0.6 → err = hp - kn × 0.6
+    l_ratio_err = l_hp - l_kn * 0.6
+    r_ratio_err = r_hp - r_kn * 0.6
+    ratio_reward = exp_kernel(l_ratio_err, sigma) * exp_kernel(r_ratio_err, sigma)
+
+    # Phạt gối hyperextend (kn < 0): dùng soft penalty
+    # Chỉ phạt phần âm, kn >= 0 thì không bị phạt
+    l_kn_neg = jnp.minimum(l_kn, 0.0)  # 0 nếu kn >= 0, âm nếu kn < 0
+    r_kn_neg = jnp.minimum(r_kn, 0.0)
+    knee_ok = exp_kernel(l_kn_neg, 0.15) * exp_kernel(r_kn_neg, 0.15)
+
+    return ratio_reward * knee_ok
 
 
 # ============================================================

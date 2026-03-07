@@ -9,8 +9,8 @@
     - Cảm biến: IMU (accel + gyro) + 10 encoder
 
   Hệ tọa độ:
-    - X: tiến (phía trước)
-    - Y: trái
+    - X: trái/phải (lateral)
+    - Y: tiến (phía trước) — KHÁC với wheeled_biped_real.xml (-Y = forward)
     - Z: lên
   ============================================================
 -->

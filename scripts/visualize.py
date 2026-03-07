@@ -312,8 +312,8 @@ def interactive(
 
     \b
     Phím điều khiển:
-      W / S  : Tiến / Lùi (lực bánh xe)
-      A / D  : Rẽ trái / phải (chênh lệch lực bánh)
+      ↑ / ↓  : Tiến / Lùi (lực bánh xe)
+      ← / →  : Rẽ trái / phải (chênh lệch lực bánh)
       Q / E  : Nghiêng trái / phải (hip roll)
       R      : Reset về tư thế đứng
       Space  : Dừng (phanh bánh xe)
@@ -346,15 +346,15 @@ def interactive(
     _settle_robot()
 
     # ---------- trạng thái điều khiển ----------
-    # Actuator order: l_hip_roll(0), l_hip_pitch(1), l_knee(2), l_ankle(3), l_wheel(4)
-    #                 r_hip_roll(5), r_hip_pitch(6), r_knee(7), r_ankle(8), r_wheel(9)
+    # Actuator order: l_hip_roll(0), l_hip_yaw(1), l_hip_pitch(2), l_knee(3), l_wheel(4)
+    #                 r_hip_roll(5), r_hip_yaw(6), r_hip_pitch(7), r_knee(8), r_wheel(9)
     ctrl_state = {
         "forward": 0.0,  # -1 .. +1
         "turn": 0.0,  # -1 .. +1
         "roll": 0.0,  # -1 .. +1
         "speed": 5.0,  # wheel torque magnitude (Nm)
         "roll_gain": 3.0,  # hip roll torque magnitude
-        "height_offset": 0.0,  # -1 (ngồi) .. 0 (đứng) .. +1 (kiễng)
+        "height_cmd": 0.71,  # độ cao mục tiêu (m), range [0.38, 0.72]
         "reset_requested": False,
     }
     _lock = threading.Lock()
@@ -467,16 +467,12 @@ def interactive(
             elif keycode == 91:  # [
                 ctrl_state["speed"] = max(ctrl_state["speed"] - 1.0, 1.0)
                 print(f"  Speed: {ctrl_state['speed']:.1f}")
-            elif keycode == 85:  # U — tăng chiều cao
-                ctrl_state["height_offset"] = min(
-                    ctrl_state["height_offset"] + 0.1, 1.0
-                )
-                print(f"  Height offset: {ctrl_state['height_offset']:+.1f}")
-            elif keycode == 74:  # J — giảm chiều cao (gập chân)
-                ctrl_state["height_offset"] = max(
-                    ctrl_state["height_offset"] - 0.1, -1.0
-                )
-                print(f"  Height offset: {ctrl_state['height_offset']:+.1f}")
+            elif keycode == 85:  # U — tăng chiều cao (+1cm)
+                ctrl_state["height_cmd"] = min(ctrl_state["height_cmd"] + 0.01, 0.72)
+                print(f"  Chiều cao: {ctrl_state['height_cmd']:.2f}m")
+            elif keycode == 74:  # J — giảm chiều cao (-1cm)
+                ctrl_state["height_cmd"] = max(ctrl_state["height_cmd"] - 0.01, 0.38)
+                print(f"  Chiều cao: {ctrl_state['height_cmd']:.2f}m")
             elif keycode == 259:  # Backspace — reset robot
                 ctrl_state["reset_requested"] = True
 
@@ -500,6 +496,10 @@ def interactive(
     # Decay factor — phím giữ = giá trị 1, thả phím → decay dần về 0
     decay = 0.85
 
+    # Smooth height interpolation — tránh giật khi thay đổi chiều cao
+    smooth_h_cmd = 0.71  # giá trị thực tế dùng để tính target (nội suy mượt, mét)
+    height_smooth_rate = 0.1  # tốc độ nội suy mỗi step (nhỏ = mượt hơn)
+
     with mujoco.viewer.launch_passive(
         mj_model, mj_data, key_callback=key_callback
     ) as viewer:
@@ -513,7 +513,8 @@ def interactive(
                     ctrl_state["forward"] = 0.0
                     ctrl_state["turn"] = 0.0
                     ctrl_state["roll"] = 0.0
-                    ctrl_state["height_offset"] = 0.0
+                    ctrl_state["height_cmd"] = 0.71
+                    smooth_h_cmd = 0.71
                     _settle_robot()
                     if policy_fn is not None:
                         _interactive_prev_action = jnp.zeros(10)
@@ -526,9 +527,7 @@ def interactive(
                 rll = ctrl_state["roll"]
                 spd = ctrl_state["speed"]
                 rg = ctrl_state["roll_gain"]
-                h_off = ctrl_state[
-                    "height_offset"
-                ]  # -1 (ngồi) .. 0 (đứng) .. +1 (kiễng)
+                h_cmd = ctrl_state["height_cmd"]  # mục tiêu độ cao (m)
 
                 # Decay — giảm dần khi không nhấn
                 ctrl_state["forward"] *= decay
@@ -541,61 +540,72 @@ def interactive(
                 if abs(ctrl_state["roll"]) < 0.01:
                     ctrl_state["roll"] = 0.0
 
-            # Tính target khớp theo chiều cao
-            # h_off: +1 = thẳng nhất (đứng cao), 0 = keyframe, -1 = gập tối đa (ngồi thấp)
-            # Đo được: thẳng (hp=0,kn=0)→0.73m, keyframe (hp=-0.3,kn=-0.5)→0.71m,
-            #          gập max (hp=1.5,kn=2.5)→0.36m
+            # Smooth interpolation: nội suy smooth_h_cmd → h_cmd mượt mà
+            smooth_h_cmd += (h_cmd - smooth_h_cmd) * height_smooth_rate
+            if abs(smooth_h_cmd - h_cmd) < 0.001:
+                smooth_h_cmd = h_cmd
+            h_eff = smooth_h_cmd  # h_eff = độ cao mục tiêu mượt (mét)
+
+            # Tính target khớp theo chiều cao (h_eff tính bằng mét)
+            # Keyframe baseline = 0.71m, min = 0.38m, max = 0.72m
+            MIN_H, MAX_H = 0.38, 0.72
             HP_HIGH, KN_HIGH = 0.0, 0.0  # chân thẳng → cao nhất
-            HP_KEY, KN_KEY = -0.3, -0.5  # keyframe
-            HP_LOW, KN_LOW = 1.5, 2.5  # gập tối đa → thấp nhất
+            HP_KEY, KN_KEY = 0.3, 0.5  # keyframe
+            HP_LOW, KN_LOW = 1.5, 2.5  # gập tối đa về trước → thấp nhất
 
             height_target = standing_qpos.copy()
-            if h_off >= 0:
+            if h_eff >= 0.71:
                 # Nâng cao: nội suy từ keyframe → thẳng
-                height_target[2] = HP_KEY + h_off * (HP_HIGH - HP_KEY)  # l_hip_pitch
-                height_target[7] = HP_KEY + h_off * (HP_HIGH - HP_KEY)  # r_hip_pitch
-                height_target[3] = KN_KEY + h_off * (KN_HIGH - KN_KEY)  # l_knee
-                height_target[8] = KN_KEY + h_off * (KN_HIGH - KN_KEY)  # r_knee
+                t = (h_eff - 0.71) / (MAX_H - 0.71)  # 0→1
+                height_target[2] = HP_KEY + t * (HP_HIGH - HP_KEY)  # l_hip_pitch
+                height_target[7] = HP_KEY + t * (HP_HIGH - HP_KEY)  # r_hip_pitch
+                height_target[3] = KN_KEY + t * (KN_HIGH - KN_KEY)  # l_knee
+                height_target[8] = KN_KEY + t * (KN_HIGH - KN_KEY)  # r_knee
             else:
                 # Hạ thấp: nội suy từ keyframe → gập max
-                t = -h_off  # 0→1
+                t = (0.71 - h_eff) / (0.71 - MIN_H)  # 0→1
                 height_target[2] = HP_KEY + t * (HP_LOW - HP_KEY)  # l_hip_pitch
                 height_target[7] = HP_KEY + t * (HP_LOW - HP_KEY)  # r_hip_pitch
                 height_target[3] = KN_KEY + t * (KN_LOW - KN_KEY)  # l_knee
                 height_target[8] = KN_KEY + t * (KN_LOW - KN_KEY)  # r_knee
 
             if policy_fn is not None:
-                # Tính height_command normalized [0,1] cho policy
-                MIN_H, MAX_H = 0.38, 0.72
-                if h_off >= 0:
-                    h_cmd = 0.71 + h_off * (MAX_H - 0.71)
-                else:
-                    h_cmd = 0.71 + h_off * (0.71 - MIN_H)
-                h_cmd = max(MIN_H, min(MAX_H, h_cmd))
-                h_cmd_norm = (h_cmd - MIN_H) / (MAX_H - MIN_H)
+                # Tính height_command normalized [0,1] cho policy (h_eff đã là mét)
+                h_cmd_norm = (h_eff - MIN_H) / (MAX_H - MIN_H)
+                h_cmd_norm = max(0.0, min(1.0, h_cmd_norm))
                 # Policy giữ thăng bằng
                 base_ctrl = policy_fn(mj_data, height_cmd_norm=h_cmd_norm)
-                # Override bánh xe (LEFT wheel đảo dấu — verified empirically)
+                # Override bánh xe
                 desired_left = fwd * spd - trn * spd * 0.5
                 desired_right = fwd * spd + trn * spd * 0.5
                 if abs(fwd) > 0.01 or abs(trn) > 0.01:
-                    base_ctrl[4] = np.clip(-desired_left, -10, 10)  # negate left
+                    base_ctrl[4] = np.clip(desired_left, -10, 10)  # l_wheel
                     base_ctrl[9] = np.clip(desired_right, -10, 10)
                 # Override hip roll
                 if abs(rll) > 0.01:
                     base_ctrl[0] = rll * rg
                     base_ctrl[5] = rll * rg
-                # PD override cho height control (policy có thể chưa học height)
-                if abs(h_off) > 0.01:
+                # PD blend cho height control — mượt hơn, không giật
+                # Blend policy output với PD theo |h_eff|: càng lệch keyframe → PD càng mạnh
+                if abs(h_eff - 0.71) > 0.005:
                     joint_pos = np.array(mj_data.qpos[7:17])
                     joint_vel = np.array(mj_data.qvel[6:16])
-                    kp_h, kd_h = 15.0, 1.0
+                    kp_h, kd_h = 8.0, 0.8
+                    # blend: 0→1 theo mức lệch khỏi keyframe
+                    if h_eff >= 0.71:
+                        blend = min((h_eff - 0.71) / (MAX_H - 0.71), 1.0)
+                    else:
+                        blend = min((0.71 - h_eff) / (0.71 - MIN_H), 1.0)
                     for idx in [2, 3, 7, 8]:  # hip_pitch, knee (2 bên)
                         pd_torque = (
                             kp_h * (height_target[idx] - joint_pos[idx])
                             - kd_h * joint_vel[idx]
                         )
-                        base_ctrl[idx] = np.clip(pd_torque, -15, 15)
+                        pd_torque = np.clip(pd_torque, -10, 10)
+                        # Blend: policy*(1-blend) + PD*blend
+                        base_ctrl[idx] = (1 - blend) * base_ctrl[
+                            idx
+                        ] + blend * pd_torque
                 mj_data.ctrl[:] = np.clip(
                     base_ctrl,
                     mj_model.actuator_ctrlrange[:, 0],
@@ -609,10 +619,10 @@ def interactive(
                     kp_joints * (height_target - joint_pos) - kd_joints * joint_vel
                 )
 
-                # Overlay keyboard (LEFT wheel đảo dấu)
+                # Overlay keyboard
                 desired_left = fwd * spd - trn * spd * 0.5
                 desired_right = fwd * spd + trn * spd * 0.5
-                pd_ctrl[4] = -desired_left  # l_wheel (negate)
+                pd_ctrl[4] = desired_left  # l_wheel
                 pd_ctrl[9] = desired_right  # r_wheel
                 pd_ctrl[0] += rll * rg  # l_hip_roll
                 pd_ctrl[5] += rll * rg  # r_hip_roll
@@ -702,7 +712,7 @@ def unified(
         "ang_vel_z": 0.0,
         "speed": 5.0,
         "force_skill": None,
-        "height_offset": 0.0,
+        "height_cmd": 0.71,  # độ cao mục tiêu (m), range [0.38, 0.72]
     }
     _lock = threading.Lock()
     _auto = {"mode": auto_mode}
@@ -737,12 +747,12 @@ def unified(
             elif keycode == 91:  # [
                 ctrl_cmd["speed"] = max(ctrl_cmd["speed"] - 1.0, 1.0)
                 print(f"  Speed: {ctrl_cmd['speed']:.1f}")
-            elif keycode == 85:  # U — tăng chiều cao
-                ctrl_cmd["height_offset"] = min(ctrl_cmd["height_offset"] + 0.1, 1.0)
-                print(f"  Height offset: {ctrl_cmd['height_offset']:+.1f}")
-            elif keycode == 74:  # J — giảm chiều cao
-                ctrl_cmd["height_offset"] = max(ctrl_cmd["height_offset"] - 0.1, -1.0)
-                print(f"  Height offset: {ctrl_cmd['height_offset']:+.1f}")
+            elif keycode == 85:  # U — tăng chiều cao (+1cm)
+                ctrl_cmd["height_cmd"] = min(ctrl_cmd["height_cmd"] + 0.01, 0.72)
+                print(f"  Chiều cao: {ctrl_cmd['height_cmd']:.2f}m")
+            elif keycode == 74:  # J — giảm chiều cao (-1cm)
+                ctrl_cmd["height_cmd"] = max(ctrl_cmd["height_cmd"] - 0.01, 0.38)
+                print(f"  Chiều cao: {ctrl_cmd['height_cmd']:.2f}m")
             elif keycode == 48:  # 0 → auto
                 _auto["mode"] = True
                 ctrl_cmd["force_skill"] = None
@@ -766,6 +776,8 @@ def unified(
     physics_dt = mj_model.opt.timestep
     n_substeps = max(1, int(control_dt / physics_dt))
     step_count = 0
+    smooth_h_cmd_uni = 0.71  # smooth height cho unified mode (mét)
+    height_smooth_rate_uni = 0.1
 
     with mujoco.viewer.launch_passive(
         mj_model, mj_data, key_callback=key_callback
@@ -776,7 +788,7 @@ def unified(
             with _lock:
                 vx = ctrl_cmd["vel_x"]
                 wz = ctrl_cmd["ang_vel_z"]
-                h_off = ctrl_cmd["height_offset"]
+                h_cmd = ctrl_cmd["height_cmd"]  # mục tiêu độ cao (m)
                 forced = ctrl_cmd["force_skill"] if not _auto["mode"] else None
 
                 ctrl_cmd["vel_x"] *= decay
@@ -789,26 +801,39 @@ def unified(
             cmd = ControlCommand(vel_x=vx, ang_vel_z=wz, mode=forced)
             ctrl = controller.get_action(mj_data, cmd)
 
+            # Smooth height interpolation
+            smooth_h_cmd_uni += (h_cmd - smooth_h_cmd_uni) * height_smooth_rate_uni
+            if abs(smooth_h_cmd_uni - h_cmd) < 0.001:
+                smooth_h_cmd_uni = h_cmd
+            h_eff = smooth_h_cmd_uni
+
             # Overlay height offset lên các khớp chân
-            if h_off != 0.0:
+            MIN_H, MAX_H = 0.38, 0.72
+            if abs(h_eff - 0.71) > 0.005:
                 joint_pos = np.array(mj_data.qpos[7:17])
                 joint_vel = np.array(mj_data.qvel[6:16])
-                # Nội suy target theo h_off
+                # Nội suy target theo h_eff (mét)
                 HP_HIGH, KN_HIGH = 0.0, 0.0
-                HP_KEY, KN_KEY = -0.3, -0.5
+                HP_KEY, KN_KEY = 0.3, 0.5
                 HP_LOW, KN_LOW = 1.5, 2.5
-                if h_off >= 0:
-                    hp_t = HP_KEY + h_off * (HP_HIGH - HP_KEY)
-                    kn_t = KN_KEY + h_off * (KN_HIGH - KN_KEY)
+                if h_eff >= 0.71:
+                    t = (h_eff - 0.71) / (MAX_H - 0.71)
+                    hp_t = HP_KEY + t * (HP_HIGH - HP_KEY)
+                    kn_t = KN_KEY + t * (KN_HIGH - KN_KEY)
                 else:
-                    t = -h_off
+                    t = (0.71 - h_eff) / (0.71 - MIN_H)
                     hp_t = HP_KEY + t * (HP_LOW - HP_KEY)
                     kn_t = KN_KEY + t * (KN_LOW - KN_KEY)
-                kp_h = 12.0
+                kp_h = 8.0
                 kd_h = 0.8
+                if h_eff >= 0.71:
+                    blend = min((h_eff - 0.71) / (MAX_H - 0.71), 1.0)
+                else:
+                    blend = min((0.71 - h_eff) / (0.71 - MIN_H), 1.0)
                 for j_idx, target in [(2, hp_t), (7, hp_t), (3, kn_t), (8, kn_t)]:
                     pd = kp_h * (target - joint_pos[j_idx]) - kd_h * joint_vel[j_idx]
-                    ctrl[j_idx] = np.clip(ctrl[j_idx] + pd, -10, 10)
+                    pd = np.clip(pd, -10, 10)
+                    ctrl[j_idx] = (1 - blend) * ctrl[j_idx] + blend * pd
 
             mj_data.ctrl[:] = ctrl
 
