@@ -207,7 +207,7 @@ class PPOTrainer:
         self.episode_length = task_cfg.get("episode_length", 1000)
 
         # Rollout params: mỗi rollout dài bao nhiêu bước trước khi update
-        self._rollout_length = 32  # bước
+        self._rollout_length = ppo_cfg.get("rollout_length", 32)  # bước
 
         # Tạo network
         self.rng = jax.random.PRNGKey(42)

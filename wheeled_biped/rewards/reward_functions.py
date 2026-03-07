@@ -595,7 +595,7 @@ def reward_stand_up_phase(
 
 
 # ============================================================
-# Reward: Tư thế khớp tự nhiên (tỉ lệ hip/knee hợp lý)
+# Reward: Tư thế khớp theo mục tiêu chiều cao tuyệt đối
 # ============================================================
 
 
@@ -603,43 +603,65 @@ def reward_stand_up_phase(
 def reward_natural_pose(
     joint_pos: jnp.ndarray,
     height_command: jnp.ndarray,
-    sigma: float = 0.3,
+    sigma: float = 0.5,
 ) -> jnp.ndarray:
-    """Thưởng khi tỉ lệ hip_pitch/knee tự nhiên và gối không bị hyperextend.
+    """Thưởng khi hip_pitch & knee gần vị trí mục tiêu TUYỆT ĐỐI theo height_command.
 
-    Tỉ lệ tự nhiên: hp ≈ kn × 0.6 (từ kinematics: keyframe hp=0.3, kn=0.5).
-    Hàm này hoạt động cho MỌI chiều cao vì chỉ kiểm tra tỉ lệ, không target cụ thể.
+    Kinematic map (2 đoạn tuyến tính, từ interactive code):
+      h = 0.72m (thẳng max) : hp = 0.0, kn = 0.0
+      h = 0.71m (keyframe)  : hp = 0.3, kn = 0.5
+      h = 0.38m (gập max)   : hp = 1.5, kn = 2.5
 
-    Đồng thời phạt khi gối < 0 (hyperextension) — luôn là sai tư thế.
+    Reward = 1.0 khi hp, kn đúng target; giảm mạnh khi ngồi sai tư thế.
+    Điều này ngăn robot học "ngồi sâu để match height_command thấp" khi
+    thực tế đang được yêu cầu đứng cao (ví dụ h_cmd=0.71 nhưng hp=0.65).
 
     Joint order: [l_hr(0), l_hy(1), l_hp(2), l_kn(3), l_wh(4),
                   r_hr(5), r_hy(6), r_hp(7), r_kn(8), r_wh(9)]
 
     Args:
         joint_pos: vị trí 10 khớp.
-        height_command: chiều cao mục tiêu (m) — không dùng trực tiếp, giữ API.
-        sigma: độ rộng kernel cho tỉ lệ.
+        height_command: chiều cao mục tiêu (m), range [0.38, 0.72].
+        sigma: độ rộng exp_kernel (rad). Nhỏ hơn = ketat hơn.
 
     Returns:
-        Reward [0, 1]. 1.0 khi tư thế khớp tự nhiên.
+        Reward [0, 1]. 1.0 khi hp/kn đúng target cho height_command hiện tại.
     """
+    h = jnp.clip(height_command, 0.38, 0.72)
+
+    # Interpolation parameters (clamp để tránh NaN khi JAX evaluate cả 2 nhánh)
+    # Segment cao: h ∈ [0.71, 0.72] → t_high ∈ [0, 1]
+    t_high = jnp.clip((h - 0.71) / (0.72 - 0.71), 0.0, 1.0)
+    # Segment thấp: h ∈ [0.38, 0.71] → t_low ∈ [0, 1]
+    t_low = jnp.clip((h - 0.38) / (0.71 - 0.38), 0.0, 1.0)
+
+    # Target trong từng segment
+    target_hp_high = 0.3 + t_high * (0.0 - 0.3)  # 0.3 → 0.0
+    target_kn_high = 0.5 + t_high * (0.0 - 0.5)  # 0.5 → 0.0
+    target_hp_low = 1.5 + t_low * (0.3 - 1.5)  # 1.5 → 0.3
+    target_kn_low = 2.5 + t_low * (0.5 - 2.5)  # 2.5 → 0.5
+
+    # Chọn segment đúng
+    is_high = h >= 0.71
+    target_hp = jnp.where(is_high, target_hp_high, target_hp_low)
+    target_kn = jnp.where(is_high, target_kn_high, target_kn_low)
+
     l_hp = joint_pos[..., 2]
     l_kn = joint_pos[..., 3]
     r_hp = joint_pos[..., 7]
     r_kn = joint_pos[..., 8]
 
-    # Tỉ lệ tự nhiên: hp ≈ kn × 0.6 → err = hp - kn × 0.6
-    l_ratio_err = l_hp - l_kn * 0.6
-    r_ratio_err = r_hp - r_kn * 0.6
-    ratio_reward = exp_kernel(l_ratio_err, sigma) * exp_kernel(r_ratio_err, sigma)
+    # Sai số tổng (RMS của 4 khớp chính)
+    hp_err = jnp.square(l_hp - target_hp) + jnp.square(r_hp - target_hp)
+    kn_err = jnp.square(l_kn - target_kn) + jnp.square(r_kn - target_kn)
+    total_err = jnp.sqrt(hp_err + kn_err)  # đơn vị: rad
 
-    # Phạt gối hyperextend (kn < 0): dùng soft penalty
-    # Chỉ phạt phần âm, kn >= 0 thì không bị phạt
-    l_kn_neg = jnp.minimum(l_kn, 0.0)  # 0 nếu kn >= 0, âm nếu kn < 0
+    # Phạt gối hyperextend (kn < 0)
+    l_kn_neg = jnp.minimum(l_kn, 0.0)
     r_kn_neg = jnp.minimum(r_kn, 0.0)
     knee_ok = exp_kernel(l_kn_neg, 0.15) * exp_kernel(r_kn_neg, 0.15)
 
-    return ratio_reward * knee_ok
+    return exp_kernel(total_err, sigma) * knee_ok
 
 
 # ============================================================
