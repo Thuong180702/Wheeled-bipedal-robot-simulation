@@ -1,11 +1,14 @@
 """
-Stand-Up Environment - Huấn luyện robot đứng dậy từ trạng thái nằm/ngã.
+Stand-Up & Height Transition Environment - Stage 2 Training.
 
-Task: Robot bắt đầu ở tư thế nằm ngửa, nằm sấp, hoặc ngẫu nhiên trên mặt đất.
-Mục tiêu: Đứng dậy ổn định về tư thế đứng thẳng (target height ~0.65m).
+Task: Robot học chuyển đổi chiều cao (đứng lên/ngồi xuống) và phục hồi từ ngã.
 
-Đây là task bổ sung quan trọng — khi robot bị ngã trong thực tế,
-nó cần khả năng tự đứng dậy.
+Mỗi episode:
+  - 70% starts: đứng ở random height ∈ [0.38, 0.72m] → chuyển sang height_command mới
+  - 30% starts: bắt đầu từ tư thế ngã → phục hồi về height_command
+
+Stage 2 trong curriculum. Obs = 40 dims (39 base + height_command 1).
+Khớp kích thước với balance_env → warm-start từ balance checkpoint.
 """
 
 from __future__ import annotations
@@ -25,176 +28,221 @@ from wheeled_biped.rewards.reward_functions import (
     penalty_body_angular_velocity,
     penalty_joint_torque,
     penalty_joint_velocity,
+    penalty_position_drift,
     reward_alive,
-    reward_height_progress,
-    reward_stand_up_phase,
+    reward_body_level,
+    reward_heading,
+    reward_height,
+    reward_leg_symmetry,
+    reward_natural_pose,
     reward_upright,
 )
 from wheeled_biped.utils.math_utils import quat_to_euler
 
 
 class StandUpEnv(WheeledBipedEnv):
-    """Environment cho task đứng dậy.
+    """Environment cho task đứng lên/ngồi xuống và phục hồi từ ngã.
 
-    Robot khởi tạo ở tư thế ngã (nằm ngửa, nằm sấp, hoặc nghiêng),
-    và phải tự đứng dậy về tư thế thẳng đứng.
+    Stage 2: Warm-start từ balance checkpoint (obs=40, cùng kích thước).
 
-    Observation mở rộng thêm 2 chiều:
-      - target_height (1): chiều cao mục tiêu
-      - height_error (1): sai lệch chiều cao hiện tại so với mục tiêu
-    Total obs: 39 + 2 = 41
+    Mỗi episode:
+      - Start: 70% đứng ở random height, 30% ngã
+      - Target: random height_command ∈ [0.38, 0.72m]
+      - Robot phải chuyển đến height_command và giữ ổn định
 
-    Reward:
-      - Thưởng tiến bộ chiều cao (height progress)
-      - Thưởng đứng thẳng (upright) — bonus khi gần thẳng đứng
-      - Thưởng stand-up phase (kết hợp height + upright)
-      - Phạt mô-men lớn
-      - Phạt action rate
-      - Phạt vận tốc góc (rung lắc)
-      - Bonus sống sót
+    Obs (40 dims) = base 39 + height_command_norm 1 → khớp balance_env.
+    Reward = balance-like + upright bonus (tín hiệu recovery từ ngã).
+    Termination: chỉ khi torso_height < 0.05m (không check tilt).
     """
 
-    # Các tư thế khởi tạo ngã
-    FALL_MODES = ["supine", "prone", "left_side", "right_side", "random_tilt"]
+    MIN_HEIGHT_CMD = 0.38  # ngồi thấp nhất
+    MAX_HEIGHT_CMD = 0.72  # đứng thẳng nhất
+
+    # (hip_pitch, knee, approx_torso_z) cho 7 tư thế đứng
+    _STANDING_POSES = [
+        (0.00, 0.00, 0.720),  # thẳng nhất
+        (0.15, 0.25, 0.715),
+        (0.30, 0.50, 0.710),  # keyframe
+        (0.60, 1.00, 0.600),
+        (0.90, 1.50, 0.520),
+        (1.20, 2.00, 0.450),
+        (1.50, 2.50, 0.380),  # ngồi thấp nhất
+    ]
 
     def __init__(self, config: dict[str, Any] | None = None, **kwargs):
         super().__init__(config=config, **kwargs)
 
-        # Cấu hình task
-        task_cfg = self.config.get("task", {})
-        self._target_height = task_cfg.get("target_height", 0.65)
-
-        # Termination nới lỏng hơn — cho phép nằm trên đất lâu hơn
-        term_cfg = self.config.get("termination", {})
-        self._max_tilt = term_cfg.get("max_tilt_rad", 3.14)  # gần như không giới hạn
-        self._min_height = term_cfg.get("min_height", 0.05)  # rất thấp
-        self._episode_length = task_cfg.get("episode_length", 1500)  # dài hơn
-
-        # Reward weights
         reward_cfg = self.config.get("rewards", {})
         self._reward_weights = {
-            "height_progress": reward_cfg.get("height_progress", 2.0),
-            "stand_up_phase": reward_cfg.get("stand_up_phase", 1.5),
+            "body_level": reward_cfg.get("body_level", 1.5),
+            "height": reward_cfg.get("height", 2.0),
             "upright": reward_cfg.get("upright", 1.0),
-            "height_target": reward_cfg.get("height_target", 0.8),
-            "joint_torque": reward_cfg.get("joint_torque", -0.00005),
-            "joint_velocity": reward_cfg.get("joint_velocity", -0.00005),
-            "action_rate": reward_cfg.get("action_rate", -0.0005),
-            "angular_velocity": reward_cfg.get("angular_velocity", -0.001),
-            "alive": reward_cfg.get("alive", 0.1),
+            "natural_pose": reward_cfg.get("natural_pose", 1.5),
+            "symmetry": reward_cfg.get("symmetry", 0.3),
+            "alive": reward_cfg.get("alive", 0.5),
+            "heading": reward_cfg.get("heading", 0.5),
+            "position_drift": reward_cfg.get("position_drift", 0.3),
+            "orientation": reward_cfg.get("orientation", 0.5),
+            "yaw_rate": reward_cfg.get("yaw_rate", 0.3),
+            "joint_torque": reward_cfg.get("joint_torque", -0.0005),
+            "joint_velocity": reward_cfg.get("joint_velocity", -0.0002),
+            "action_rate": reward_cfg.get("action_rate", -0.005),
         }
 
-        # Obs thêm 2 chiều: target_height + height_error
-        self.obs_size += 2
+        task_cfg = self.config.get("task", {})
+        # Tỉ lệ bắt đầu từ tư thế ngã (0.0–1.0); default 30%
+        self._fallen_ratio = float(task_cfg.get("fallen_ratio", 0.3))
 
-        # Pre-compute fallen poses cho JIT-compatible selection
+        # Pre-compute init poses (JIT-compatible indexing)
+        self._standing_qpos = self._precompute_standing_qpos()
         self._fallen_qpos = self._precompute_fallen_qpos()
         self._base_mjx_data = self._create_base_mjx_data()
 
     def _compute_obs_size(self) -> int:
-        """Base obs = 39, sẽ cộng thêm 2 trong __init__."""
-        return super()._compute_obs_size()
+        """Obs = base 39 + height_command 1 = 40. Khớp balance_env."""
+        return super()._compute_obs_size() + 1
 
-    def _precompute_fallen_qpos(self) -> jnp.ndarray:
-        """Pre-compute qpos cho các tư thế ngã.
+    def _precompute_standing_qpos(self) -> jnp.ndarray:
+        """7 tư thế đứng từ thẳng cao (~0.72m) đến ngồi thấp (~0.38m).
 
-        Returns (N, nq) array — JIT-compatible qua indexing.
+        Set cả z (torso height) và joint angles để tránh floating artifact.
+        Pattern khớp fallen_qpos: q[7:] = [0, 0, hp, kn, 0, 0, 0, hp, kn, 0]
         """
         import numpy as np
 
         nq = self.mj_model.nq
         poses = []
+        for hp, kn, z in self._STANDING_POSES:
+            q = np.zeros(nq)
+            q[2] = z  # torso z (phù hợp với góc khớp)
+            q[3] = 1.0  # quat w=1 → thẳng đứng [w, x, y, z] = [1, 0, 0, 0]
+            q[7:] = [0, 0, hp, kn, 0, 0, 0, hp, kn, 0]  # 10 joints
+            poses.append(q.copy())
+        return jnp.array(poses)
+
+    def _precompute_fallen_qpos(self) -> jnp.ndarray:
+        """7 tư thế ngã cho recovery training (kế thừa từ design cũ)."""
+        import numpy as np
+
+        nq = self.mj_model.nq
+        poses = []
+
+        def _q(xyz, wxyz, joints):
+            q = np.zeros(nq)
+            q[:3] = xyz
+            q[3:7] = wxyz
+            q[7:] = joints
+            return q.copy()
 
         # 0: supine — nằm ngửa
-        q = np.zeros(nq)
-        q[:3] = [0, 0, 0.15]
-        q[3:7] = [0.7071, -0.7071, 0, 0]
-        q[7:] = [0, 0, -0.5, -1.0, 0, 0, 0, -0.5, -1.0, 0]
-        poses.append(q.copy())
-
+        poses.append(
+            _q(
+                [0, 0, 0.15],
+                [0.7071, -0.7071, 0, 0],
+                [0, 0, -0.5, -1.0, 0, 0, 0, -0.5, -1.0, 0],
+            )
+        )
         # 1: prone — nằm sấp
-        q[:3] = [0, 0, 0.15]
-        q[3:7] = [0.7071, 0.7071, 0, 0]
-        q[7:] = [0, 0, -0.8, -0.5, 0, 0, 0, -0.8, -0.5, 0]
-        poses.append(q.copy())
-
-        # 2: left side
-        q[:3] = [0, 0, 0.15]
-        q[3:7] = [0.7071, 0, 0.7071, 0]
-        q[7:] = [0.3, 0, -0.3, -0.5, 0, -0.3, 0, -0.3, -0.5, 0]
-        poses.append(q.copy())
-
-        # 3: right side
-        q[:3] = [0, 0, 0.15]
-        q[3:7] = [0.7071, 0, -0.7071, 0]
-        q[7:] = [-0.3, 0, -0.3, -0.5, 0, 0.3, 0, -0.3, -0.5, 0]
-        poses.append(q.copy())
-
-        # 4: random tilt — pitch axis (~70°)
+        poses.append(
+            _q(
+                [0, 0, 0.15],
+                [0.7071, 0.7071, 0, 0],
+                [0, 0, -0.8, -0.5, 0, 0, 0, -0.8, -0.5, 0],
+            )
+        )
+        # 2: nghiêng trái
+        poses.append(
+            _q(
+                [0, 0, 0.15],
+                [0.7071, 0, 0.7071, 0],
+                [0.3, 0, -0.3, -0.5, 0, -0.3, 0, -0.3, -0.5, 0],
+            )
+        )
+        # 3: nghiêng phải
+        poses.append(
+            _q(
+                [0, 0, 0.15],
+                [0.7071, 0, -0.7071, 0],
+                [-0.3, 0, -0.3, -0.5, 0, 0.3, 0, -0.3, -0.5, 0],
+            )
+        )
+        # 4: pitch nặng (~70°)
         angle = 1.2
-        q[:3] = [0, 0, 0.20]
-        q[3:7] = [np.cos(angle / 2), np.sin(angle / 2), 0, 0]
-        q[7:] = [0, 0, -0.3, -1.0, 0, 0, 0, -0.3, -1.0, 0]
-        poses.append(q.copy())
-
-        # 5: random tilt — roll axis
-        q[3:7] = [np.cos(angle / 2), 0, np.sin(angle / 2), 0]
-        poses.append(q.copy())
-
-        # 6: random tilt — combined axis
+        poses.append(
+            _q(
+                [0, 0, 0.20],
+                [np.cos(angle / 2), np.sin(angle / 2), 0, 0],
+                [0, 0, -0.3, -1.0, 0, 0, 0, -0.3, -1.0, 0],
+            )
+        )
+        # 5: roll nặng (~70°)
+        poses.append(
+            _q(
+                [0, 0, 0.20],
+                [np.cos(angle / 2), 0, np.sin(angle / 2), 0],
+                [0, 0, -0.3, -1.0, 0, 0, 0, -0.3, -1.0, 0],
+            )
+        )
+        # 6: combined tilt
         sa = np.sin(angle / 2) * 0.7071
-        q[3:7] = [np.cos(angle / 2), sa, sa, 0]
-        poses.append(q.copy())
+        poses.append(
+            _q(
+                [0, 0, 0.20],
+                [np.cos(angle / 2), sa, sa, 0],
+                [0, 0, -0.3, -0.5, 0, 0, 0, -0.3, -0.5, 0],
+            )
+        )
 
         return jnp.array(poses)
 
     def _create_base_mjx_data(self) -> mjx.Data:
-        """Tạo base MJX data (velocity = 0) để clone trong reset."""
+        """Tạo base MJX data (keyframe) để clone trong reset."""
         mj_data = mujoco.MjData(self.mj_model)
         if self.mj_model.nkey > 0:
             mujoco.mj_resetDataKeyframe(self.mj_model, mj_data, 0)
         mujoco.mj_forward(self.mj_model, mj_data)
         return mjx.put_data(self.mj_model, mj_data)
 
-    def _get_fallen_mjx_data(self, rng: jax.Array) -> mjx.Data:
-        """Chọn tư thế ngã ngẫu nhiên (JIT-compatible).
-
-        Dùng pre-computed qpos array + JAX random indexing.
-        """
-        n_poses = self._fallen_qpos.shape[0]
-        mode_idx = jax.random.randint(rng, (), 0, n_poses)
-        selected_qpos = self._fallen_qpos[mode_idx]
-        return self._base_mjx_data.replace(qpos=selected_qpos)
-
-    def _extract_obs(
-        self,
-        mjx_data: mjx.Data,
-        prev_action: jnp.ndarray,
-    ) -> jnp.ndarray:
-        """Trích xuất obs + height info cho stand-up task."""
-        base_obs = super()._extract_obs(mjx_data, prev_action)
-        torso_height = mjx_data.qpos[2]
-        height_error = self._target_height - torso_height
-        extra = jnp.array([self._target_height, height_error])
-        return jnp.concatenate([base_obs, extra])
-
     @functools.partial(jax.jit, static_argnums=(0,))
     def reset(self, rng: jax.Array) -> EnvState:
-        """Reset — robot bắt đầu ở tư thế ngã."""
-        rng, fall_key, noise_key = jax.random.split(rng, 3)
-
-        # Tạo tư thế ngã ngẫu nhiên
-        mjx_data = self._get_fallen_mjx_data(fall_key)
-
-        # Thêm nhiễu nhỏ vào khớp
-        joint_noise = jax.random.uniform(
-            noise_key, shape=(self.NUM_JOINTS,), minval=-0.03, maxval=0.03
+        """Reset: mixed start (70% đứng random height, 30% ngã) + random height_command."""
+        rng, type_key, stand_key, fall_key, noise_key, height_key = jax.random.split(
+            rng, 6
         )
-        new_qpos = mjx_data.qpos.at[7:].add(joint_noise)
-        mjx_data = mjx_data.replace(qpos=new_qpos)
+
+        n_standing = self._standing_qpos.shape[0]  # 7
+        n_fallen = self._fallen_qpos.shape[0]  # 7
+
+        is_fallen_start = jax.random.uniform(type_key) < self._fallen_ratio
+        standing_idx = jax.random.randint(stand_key, (), 0, n_standing)
+        fallen_idx = jax.random.randint(fall_key, (), 0, n_fallen)
+
+        standing_qpos = self._standing_qpos[standing_idx]
+        fallen_qpos = self._fallen_qpos[fallen_idx]
+        selected_qpos = jnp.where(is_fallen_start, fallen_qpos, standing_qpos)
+
+        mjx_data = self._base_mjx_data.replace(qpos=selected_qpos)
+
+        # Nhiễu nhỏ vào joint angles để đa dạng hóa start state
+        joint_noise = jax.random.uniform(
+            noise_key, shape=(self.NUM_JOINTS,), minval=-0.05, maxval=0.05
+        )
+        mjx_data = mjx_data.replace(qpos=mjx_data.qpos.at[7:].add(joint_noise))
+
+        # Random height_command: full range ngay từ đầu (không cần curriculum)
+        height_command = jax.random.uniform(
+            height_key, shape=(), minval=self.MIN_HEIGHT_CMD, maxval=self.MAX_HEIGHT_CMD
+        )
 
         prev_action = jnp.zeros(self.num_actions)
-        obs = self._extract_obs(mjx_data, prev_action)
+        base_obs = self._extract_obs(mjx_data, prev_action)
+        height_norm = (height_command - self.MIN_HEIGHT_CMD) / (
+            self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
+        )
+        obs = jnp.concatenate([base_obs, jnp.array([height_norm])])
+
+        anchor_xy = mjx_data.qpos[:2]
+        initial_yaw = quat_to_euler(mjx_data.qpos[3:7])[2]
 
         return EnvState(
             mjx_data=mjx_data,
@@ -206,36 +254,64 @@ class StandUpEnv(WheeledBipedEnv):
             info={
                 "is_fallen": jnp.bool_(False),
                 "time_limit": jnp.bool_(False),
-                "prev_height": mjx_data.qpos[2],  # Để tính height progress
+                "height_command": height_command,
+                "anchor_xy": anchor_xy,
+                "initial_yaw": initial_yaw,
             },
         )
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def step(self, state: EnvState, action: jnp.ndarray) -> EnvState:
-        """Step — mục tiêu đứng dậy."""
-        # Lưu chiều cao trước khi step
-        prev_height = state.mjx_data.qpos[2]
+        """Step: physics + reward + termination (không có push disturbance)."""
+        action = jnp.clip(action, -1.0, 1.0)
 
-        # Gọi base step
-        new_state = super().step(state, action)
+        ctrl_range = self.mjx_model.actuator_ctrlrange
+        scaled_action = ctrl_range[:, 0] + (action + 1.0) * 0.5 * (
+            ctrl_range[:, 1] - ctrl_range[:, 0]
+        )
+        mjx_data = state.mjx_data.replace(ctrl=scaled_action)
 
-        # Cập nhật obs (đã override _extract_obs)
-        obs = self._extract_obs(new_state.mjx_data, action)
+        def physics_step(data, _):
+            data = mjx.step(self.mjx_model, data)
+            return data, None
 
-        # Cập nhật info với prev_height
-        new_info = {**new_state.info, "prev_height": prev_height}
+        mjx_data, _ = jax.lax.scan(
+            physics_step, mjx_data, None, length=self._n_substeps
+        )
 
-        return new_state._replace(obs=obs, info=new_info)
+        base_obs = self._extract_obs(mjx_data, action)
+        height_command = state.info["height_command"]
+        height_norm = (height_command - self.MIN_HEIGHT_CMD) / (
+            self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
+        )
+        obs = jnp.concatenate([base_obs, jnp.array([height_norm])])
+
+        reward = self._compute_reward(mjx_data, action, state)
+        is_fallen = self._check_termination(mjx_data)
+        step_count = state.step_count + 1
+        time_limit = step_count >= self._episode_length
+        done = is_fallen | time_limit
+
+        return EnvState(
+            mjx_data=mjx_data,
+            obs=obs,
+            reward=reward,
+            done=done,
+            step_count=step_count,
+            prev_action=action,
+            info={
+                "is_fallen": is_fallen,
+                "time_limit": time_limit,
+                "height_command": height_command,
+                "anchor_xy": state.info["anchor_xy"],
+                "initial_yaw": state.info["initial_yaw"],
+            },
+        )
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def _check_termination(self, mjx_data: mjx.Data) -> jnp.ndarray:
-        """Termination nới lỏng — chỉ kết thúc nếu chiều cao cực thấp.
-
-        Không dùng tilt check vì robot ban đầu đã nằm.
-        """
-        torso_height = mjx_data.qpos[2]
-        # Chỉ terminate khi quá thấp (ví dụ rơi khỏi map)
-        return torso_height < self._min_height
+        """Chỉ terminate khi torso < 0.05m. Không check tilt (robot có thể bắt đầu ngã)."""
+        return mjx_data.qpos[2] < self._min_height
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def _compute_reward(
@@ -244,38 +320,50 @@ class StandUpEnv(WheeledBipedEnv):
         action: jnp.ndarray,
         prev_state: EnvState,
     ) -> jnp.ndarray:
-        """Tính reward cho task đứng dậy."""
+        """Reward = balance-like + upright bonus cho recovery từ ngã."""
         torso_quat = mjx_data.qpos[3:7]
         torso_height = mjx_data.qpos[2]
+        joint_pos = mjx_data.qpos[7:17]
         joint_vel = mjx_data.qvel[6:]
         ang_vel = mjx_data.qvel[3:6]
         torques = mjx_data.ctrl
-        prev_height = prev_state.info.get("prev_height", torso_height)
+
+        is_fallen = self._check_termination(mjx_data)
+        height_command = prev_state.info["height_command"]
+        current_xy = mjx_data.qpos[:2]
+        anchor_xy = prev_state.info["anchor_xy"]
+        initial_yaw = prev_state.info["initial_yaw"]
 
         components = {
-            # Thưởng nâng cao (delta height)
-            "height_progress": reward_height_progress(
-                torso_height, prev_height, scale=5.0
+            # Thân nằm ngang (phạt roll + pitch)
+            "body_level": reward_body_level(
+                torso_quat, sigma_roll=0.15, sigma_pitch=0.15
             ),
-            # Thưởng phase tổng hợp (height × upright)
-            "stand_up_phase": reward_stand_up_phase(
-                torso_height, torso_quat, self._target_height
-            ),
-            # Thưởng đứng thẳng
+            # Đạt chiều cao mục tiêu (σ=0.25: gradient trong ±0.5m)
+            "height": reward_height(torso_height, height_command, sigma=0.25),
+            # Đứng thẳng — tín hiệu mạnh khi recover từ ngã
+            # (1.0 khi thẳng đứng, 0.0 khi nằm ngang)
             "upright": reward_upright(torso_quat),
-            # Bonus khi đạt chiều cao gần mục tiêu
-            "height_target": jnp.where(
-                torso_height > self._target_height * 0.85,
-                1.0,
-                torso_height / self._target_height,
+            # Tư thế khớp tự nhiên theo chiều cao mục tiêu
+            "natural_pose": reward_natural_pose(joint_pos, height_command, sigma=0.8),
+            # 2 chân đối xứng
+            "symmetry": reward_leg_symmetry(joint_pos, sigma=0.5),
+            # Bonus sống sót
+            "alive": reward_alive(~is_fallen),
+            # Giữ hướng ban đầu (nới lỏng hơn balance)
+            "heading": reward_heading(torso_quat, initial_yaw, sigma=0.5),
+            # Ổn định góc
+            "orientation": jnp.clip(
+                1.0 - jnp.sqrt(penalty_body_angular_velocity(ang_vel)) * 0.15, 0.0, 1.0
             ),
-            # Phạt
+            # Chống xoay yaw
+            "yaw_rate": jnp.clip(1.0 - jnp.abs(ang_vel[2]) * 0.5, 0.0, 1.0),
+            # Drift nới lỏng (sigma=1.0) — cho phép pivot khi recovery
+            "position_drift": penalty_position_drift(current_xy, anchor_xy, sigma=1.0),
+            # Penalties nhẹ hơn balance — robot cần torque lớn khi chuyển chiều cao
             "joint_torque": penalty_joint_torque(torques),
             "joint_velocity": penalty_joint_velocity(joint_vel),
             "action_rate": penalty_action_rate(action, prev_state.prev_action),
-            "angular_velocity": penalty_body_angular_velocity(ang_vel),
-            # Bonus sống sót
-            "alive": jnp.float32(1.0),
         }
 
         return compute_total_reward(components, self._reward_weights)

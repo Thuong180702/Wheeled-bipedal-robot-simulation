@@ -9,14 +9,14 @@ task:
   num_envs: 4096 # số env song song trên GPU
   # Height curriculum: mở rộng dần khoảng height_command
   # Ban đầu [0.68, 0.72] (gần keyframe), dần mở rộng → [0.38, 0.72]
-  height_curriculum_steps: 40000 # per-env steps, 0=tắt curriculum
+  height_curriculum_steps: 100000 # per-env steps, tăng từ 40000→80000 để robot thích nghi dần
   initial_min_height: 0.68 # min ban đầu (keyframe=0.71)
 
 # --- PPO Hyperparameters ---
 ppo:
   learning_rate: 2.0e-4 # giảm từ 3e-4 → ổn định hơn với minibatch nhỏ
   num_epochs: 4
-  num_minibatches: 8 # 128envs×64steps=8192 ÷ 8 = 1024 samples/batch (tăng từ 32)
+  num_minibatches: 8 # 4096envs×64steps=262144 ÷ 8 = 32768 samples/batch
   rollout_length: 64 # tăng từ 32 → 8192 samples/update, credit assignment tốt hơn
   gamma: 0.99
   gae_lambda: 0.95
@@ -35,29 +35,30 @@ network:
 
 # --- Reward weights ---
 # Tập trung tín hiệu chính: tư thế đúng + chiều cao + thân ngang
-# Tổng thưởng max ≈ 7.5, phạt nhẹ
+# Tổng thưởng max ≈ 9.2, phạt nhẹ
 rewards:
-  body_level: 1.5 # thưởng thân nằm ngang (exp σ_roll=0.1, σ_pitch=0.1)
+  body_level: 1.5 # thưởng thân nằm ngang (exp σ_roll=0.15, σ_pitch=0.15)
   height: 1.5 # thưởng giữ chiều cao theo height_command (exp σ=0.25)
   natural_pose: 1.5 # thưởng hp/kn đúng target TUYỆT ĐỐI (exp σ=0.8 — gradient mạnh)
   symmetry: 0.3 # thưởng 2 chân đối xứng (exp σ=0.5) — giảm vì natural_pose đã xử lý
   alive: 0.5 # thưởng sống sót (signal luôn có)
-  heading: 0.3 # thưởng giữ hướng yaw ban đầu (exp σ=0.1)
+  heading: 1.0 # tăng từ 0.3→1.0: chống spinning yaw (sigma=0.5 rad trong env)
   legs_forward: 0.3 # thưởng hip_yaw ≈ 0
   legs_vertical: 0.3 # thưởng hip_roll ≈ 0
   position_drift: 1.0 # tăng từ 0.3 → 1.0: đủ mạnh để robot không drift xa
-  orientation: 0.3 # phạt vận tốc góc thân (chống rung lắc)
+  orientation: 0.8 # tăng từ 0.3→0.8: chống rung lắc góc (formulation linear mới)
+  yaw_rate: 0.5 # mới: phạt riêng tốc độ xoay yaw (chống spinning)
   # === ĐÃ LOẠI BỎ (xung đột hoặc trùng lặp) ===
   no_motion: 0.0 # ❌ XUNG ĐỘT: robot bánh xe CẦN velocity để cân bằng
   wheel_velocity: 0.0 # ❌ XUNG ĐỘT: bánh xe là công cụ cân bằng chính
   # === Phạt (giữ nhẹ) ===
-  joint_torque: -0.0005 # phạt mô-men lớn
-  joint_velocity: -0.0002 # phạt tốc độ khớp — giảm (bao gồm cả wheel vel)
-  action_rate: -0.01 # tăng từ -0.002 → -0.01: chống rung, action mượt hơn
+  joint_torque: -0.001 # phạt mô-men lớn
+  joint_velocity: -0.0005 # phạt tốc độ khớp — giảm (bao gồm cả wheel vel)
+  action_rate: -0.02 # tăng từ -0.002 → -0.02: chống rung, action mượt hơn
 
 # --- Termination ---
 termination:
-  max_tilt_rad: 0.8 # ngã > 45° thì kết thúc
+  max_tilt_rad: 0.8 # ngã > 46° (0.8 rad) thì kết thúc
   min_height: 0.3 # quá thấp thì kết thúc
 
 # --- Domain Randomization ---
@@ -66,6 +67,6 @@ domain_randomization:
   mass_range: [0.9, 1.1] # ±10% khối lượng
   friction_range: [0.7, 1.3] # ±30% ma sát
   joint_damping_range: [0.8, 1.2]
-  push_interval: 200 # đẩy ngẫu nhiên mỗi 200 steps (~4s)
-  push_magnitude: 20 # lực đẩy tối đa (N), thực tế random [50%–100%] × magnitude
+  push_interval: 500 # đẩy ngẫu nhiên mỗi 500 steps (~10s)
+  push_magnitude: 0 # Stage 1: không push — robot học balance thuần trước
   push_duration: 5 # số steps giữ lực (5 × 0.02s = 0.1 giây mỗi lần đẩy)

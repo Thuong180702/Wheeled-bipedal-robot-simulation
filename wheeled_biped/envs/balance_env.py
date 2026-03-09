@@ -48,12 +48,14 @@ from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate, quat_to_
 class BalanceEnv(WheeledBipedEnv):
     """Environment cho task đứng vững ở nhiều chiều cao.
 
-    Mỗi episode random một height_command ∈ [0.35, 0.71].
+    Mỗi episode random một height_command ∈ [0.38, 0.72].
+    Với curriculum: khởi đầu [0.68, 0.72] (gần keyframe 0.71m),
+    mở rộng dần → [0.38, 0.72] sau height_curriculum_steps per-env steps.
     Robot phải giữ chiều cao theo lệnh, thân ngang, 2 chân đối xứng, đứng yên.
 
     Observation (40 dims):
       - base obs (39): gravity_body, lin_vel, ang_vel, joint_pos, joint_vel, prev_action
-      - height_command (1): chiều cao mục tiêu (normalized về [0, 1])
+      - height_command (1): chiều cao mục tiêu (normalized về [0, 1] theo [MIN=0.38, MAX=0.72])
     """
 
     # Khoảng chiều cao lệnh (m) — đo từ kinematics thực tế
@@ -71,17 +73,18 @@ class BalanceEnv(WheeledBipedEnv):
             "height": reward_cfg.get("height", 1.5),
             "legs_forward": reward_cfg.get("legs_forward", 0.3),
             "legs_vertical": reward_cfg.get("legs_vertical", 0.3),
-            "joint_torque": reward_cfg.get("joint_torque", -0.0001),
-            "joint_velocity": reward_cfg.get("joint_velocity", -0.00005),
-            "action_rate": reward_cfg.get("action_rate", -0.005),
-            "orientation": reward_cfg.get("orientation", 0.0),
+            "joint_torque": reward_cfg.get("joint_torque", -0.001),
+            "joint_velocity": reward_cfg.get("joint_velocity", -0.0005),
+            "action_rate": reward_cfg.get("action_rate", -0.02),
+            "orientation": reward_cfg.get("orientation", 0.8),
             "alive": reward_cfg.get("alive", 0.5),
             "no_motion": reward_cfg.get("no_motion", 0.0),
             "symmetry": reward_cfg.get("symmetry", 0.3),
             "wheel_velocity": reward_cfg.get("wheel_velocity", 0.0),
-            "position_drift": reward_cfg.get("position_drift", 0.2),
-            "heading": reward_cfg.get("heading", 0.3),
+            "position_drift": reward_cfg.get("position_drift", 1.0),
+            "heading": reward_cfg.get("heading", 1.0),
             "natural_pose": reward_cfg.get("natural_pose", 1.5),
+            "yaw_rate": reward_cfg.get("yaw_rate", 0.5),
         }
 
         # Height curriculum config
@@ -95,7 +98,7 @@ class BalanceEnv(WheeledBipedEnv):
         # Push disturbance config
         dr_cfg = self.config.get("domain_randomization", {})
         self._push_interval = int(dr_cfg.get("push_interval", 200))
-        self._push_magnitude = float(dr_cfg.get("push_magnitude", 30.0))
+        self._push_magnitude = float(dr_cfg.get("push_magnitude", 20.0))
         self._push_duration = int(dr_cfg.get("push_duration", 5))  # số steps giữ lực
         self._push_enabled = bool(dr_cfg.get("enabled", True))
         # Lấy torso body_id từ mj_model
@@ -324,7 +327,7 @@ class BalanceEnv(WheeledBipedEnv):
         components = {
             # Thân nằm ngang song song mặt đất (phạt roll + pitch riêng)
             "body_level": reward_body_level(
-                torso_quat, sigma_roll=0.1, sigma_pitch=0.1
+                torso_quat, sigma_roll=0.15, sigma_pitch=0.15
             ),
             # Giữ chiều cao theo lệnh
             "height": reward_height(
@@ -338,10 +341,13 @@ class BalanceEnv(WheeledBipedEnv):
             "symmetry": reward_leg_symmetry(joint_pos, sigma=0.5),
             # Đứng yên, không di chuyển
             "no_motion": reward_no_motion(base_lin_vel, sigma=0.2),
-            # Ổn định hướng (phạt rung lắc góc)
+            # Ổn định tổng thể (phạt rung lắc góc tất cả trục)
+            # Linear: gradient tuyến tính trong [0, 6.67 rad/s]; hiệu quả hơn exp-saturation
             "orientation": jnp.clip(
-                1.0 - penalty_body_angular_velocity(ang_vel) * 0.01, 0.0, 1.0
+                1.0 - jnp.sqrt(penalty_body_angular_velocity(ang_vel)) * 0.15, 0.0, 1.0
             ),
+            # Phạt riêng tốc độ xoay yaw (chống spinning)
+            "yaw_rate": jnp.clip(1.0 - jnp.abs(ang_vel[2]) * 0.5, 0.0, 1.0),
             # Bonus sống sót
             "alive": reward_alive(is_alive),
             # Phạt mô-men lớn (tiết kiệm năng lượng)
@@ -352,10 +358,10 @@ class BalanceEnv(WheeledBipedEnv):
             "action_rate": penalty_action_rate(action, prev_state.prev_action),
             # Phạt bánh xe quay (giữ robot đứng yên tại chỗ)
             "wheel_velocity": penalty_wheel_velocity(joint_vel),
-            # Giữ vị trí neo — cho phép drift nhẹ khi cân bằng
-            "position_drift": penalty_position_drift(current_xy, anchor_xy, sigma=0.2),  # σ=0.2: cho phép sway ±10cm tự nhiên, phạt drift >20cm
-            # Giữ hướng ban đầu — phạt xoay yaw khỏi hướng reset
-            "heading": reward_heading(torso_quat, initial_yaw),
+            # Giữ vị trí neo — sigma=0.5: gradient còn tác dụng tới ~0.8m drift
+            "position_drift": penalty_position_drift(current_xy, anchor_xy, sigma=0.5),
+            # Giữ hướng ban đầu — sigma=0.5 rad: gradient tới ~80° (thay vì 12° với sigma=0.1)
+            "heading": reward_heading(torso_quat, initial_yaw, sigma=0.5),
             # Tư thế khớp tự nhiên — hp/kn phù hợp với chiều cao mục tiêu
             "natural_pose": reward_natural_pose(joint_pos, height_command, sigma=0.8),
         }

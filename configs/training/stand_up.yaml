@@ -1,25 +1,26 @@
+﻿# ============================================================
+# Training config: Stand Up / Height Transition (Stage 2)
 # ============================================================
-# Training config: Stand Up (Đứng dậy)
-# ============================================================
-# Robot bắt đầu ở tư thế ngã (nằm ngửa/sấp/nghiêng),
-# mục tiêu tự đứng dậy về tư thế thẳng đứng.
+# Robot hoc chuyen doi chieu cao (dung len/ngoi xuong) va phuc hoi tu nga.
+# Warm-start tu balance checkpoint (obs=40, khop kich thuoc).
 
 task:
   name: "stand_up"
   env: "StandUpEnv"
-  episode_length: 1500 # 1500 steps × 0.02s = 30s (dài hơn vì đứng dậy cần thời gian)
+  episode_length: 1500 # 1500 x 0.02s = 30s (du dai cho transition day du)
   num_envs: 4096
-  target_height: 0.65 # chiều cao đứng mục tiêu (m)
+  fallen_ratio: 0.3 # 30% episodes bat dau tu tu the nga, 70% dung
 
 # --- PPO Hyperparameters ---
 ppo:
-  learning_rate: 3.0e-4
+  learning_rate: 2.0e-4 # khop balance
   num_epochs: 4
-  num_minibatches: 32
+  num_minibatches: 8 # 4096x64/8 = 32768 samples/batch (khop balance)
+  rollout_length: 64 # phai co: default PPO la 32, can 64
   gamma: 0.99
   gae_lambda: 0.95
   clip_epsilon: 0.2
-  entropy_coeff: 0.015 # cao hơn chút — khuyến khích khám phá
+  entropy_coeff: 0.05 # khop balance
   value_loss_coeff: 0.5
   max_grad_norm: 0.5
   normalize_advantages: true
@@ -29,27 +30,32 @@ network:
   policy_hidden: [256, 256, 128]
   value_hidden: [256, 256, 128]
   activation: "elu"
-  init_std: 1.0
+  init_std: 0.15 # khop balance de warm-start hoat dong dung
 
 # --- Reward weights ---
 rewards:
-  height_progress: 2.0 # thưởng nâng cao (delta height)
-  stand_up_phase: 1.5 # thưởng tổng hợp (height × upright)
-  upright: 1.0 # thưởng đứng thẳng
-  height_target: 0.8 # bonus đạt chiều cao mục tiêu
-  joint_torque: -0.00005 # phạt mô-men lớn (nhẹ hơn balance)
-  joint_velocity: -0.00005 # phạt tốc độ khớp
-  action_rate: -0.0005 # phạt thay đổi action
-  angular_velocity: -0.001 # phạt rung lắc
-  alive: 0.1 # thưởng sống sót
+  body_level: 1.5
+  height: 2.0
+  upright: 1.0
+  natural_pose: 1.5
+  symmetry: 0.3
+  alive: 0.5
+  heading: 0.5
+  position_drift: 0.3
+  orientation: 0.5
+  yaw_rate: 0.3
+  joint_torque: -0.0005
+  joint_velocity: -0.0002
+  action_rate: -0.005
 
 # --- Termination ---
 termination:
-  max_tilt_rad: 3.14 # gần không giới hạn (robot bắt đầu ngã rồi)
-  min_height: 0.05 # chỉ kết thúc khi rơi khỏi map
+  max_tilt_rad: 3.14 # gan vo han - khong terminate do tilt (robot bat dau nga)
+  min_height: 0.05 # chi terminate khi roi khoi map
 
 # --- Domain Randomization ---
 domain_randomization:
   enabled: true
   mass_range: [0.9, 1.1]
   friction_range: [0.7, 1.3]
+  joint_damping_range: [0.8, 1.2]

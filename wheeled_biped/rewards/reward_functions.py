@@ -139,20 +139,25 @@ def reward_tracking_velocity(
 # ============================================================
 
 
-@jax.jit
-def reward_heading(torso_quat: jnp.ndarray, target_yaw: jnp.ndarray) -> jnp.ndarray:
+def reward_heading(
+    torso_quat: jnp.ndarray,
+    target_yaw: jnp.ndarray,
+    sigma: float = 0.1,
+) -> jnp.ndarray:
     """Thưởng khi robot hướng đúng mục tiêu.
 
     Args:
         torso_quat: quaternion hướng thân.
         target_yaw: góc yaw mong muốn.
+        sigma: độ rộng kernel (rad). sigma=0.1 chỉ hiệu quả khi yaw_error<0.2 rad,
+               dùng sigma=0.5 để giữ gradient tại sai số lớn hơn.
 
     Returns:
         Reward [0, 1].
     """
     euler = quat_to_euler(torso_quat)
     yaw_error = wrap_angle(euler[..., 2] - target_yaw)
-    return exp_kernel(yaw_error, sigma=0.1)
+    return exp_kernel(yaw_error, sigma=sigma)
 
 
 # ============================================================
