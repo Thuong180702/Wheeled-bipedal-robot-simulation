@@ -7,6 +7,10 @@ task:
   env: "BalanceEnv"
   episode_length: 1000 # 1000 steps × 0.02s = 20s
   num_envs: 4096 # số env song song trên GPU
+  # Height curriculum: mở rộng dần khoảng height_command
+  # Ban đầu [0.68, 0.72] (gần keyframe), dần mở rộng → [0.38, 0.72]
+  height_curriculum_steps: 40000 # per-env steps, 0=tắt curriculum
+  initial_min_height: 0.68 # min ban đầu (keyframe=0.71)
 
 # --- PPO Hyperparameters ---
 ppo:
@@ -31,25 +35,25 @@ network:
 
 # --- Reward weights ---
 # Tập trung tín hiệu chính: tư thế đúng + chiều cao + thân ngang
-# Tổng thưởng max ≈ 6.7, phạt nhẹ
+# Tổng thưởng max ≈ 7.5, phạt nhẹ
 rewards:
-  body_level: 1.5 # thưởng thân nằm ngang (exp σ_roll=0.15, σ_pitch=0.15)
+  body_level: 1.5 # thưởng thân nằm ngang (exp σ_roll=0.1, σ_pitch=0.1)
   height: 1.5 # thưởng giữ chiều cao theo height_command (exp σ=0.25)
   natural_pose: 1.5 # thưởng hp/kn đúng target TUYỆT ĐỐI (exp σ=0.8 — gradient mạnh)
   symmetry: 0.3 # thưởng 2 chân đối xứng (exp σ=0.5) — giảm vì natural_pose đã xử lý
   alive: 0.5 # thưởng sống sót (signal luôn có)
-  heading: 0.3 # thưởng giữ hướng yaw ban đầu (exp σ=0.2)
+  heading: 0.3 # thưởng giữ hướng yaw ban đầu (exp σ=0.1)
   legs_forward: 0.3 # thưởng hip_yaw ≈ 0
   legs_vertical: 0.3 # thưởng hip_roll ≈ 0
-  position_drift: 0.2 # thưởng giữ vị trí XY (exp σ=0.5)
+  position_drift: 1.0 # tăng từ 0.3 → 1.0: đủ mạnh để robot không drift xa
+  orientation: 0.3 # phạt vận tốc góc thân (chống rung lắc)
   # === ĐÃ LOẠI BỎ (xung đột hoặc trùng lặp) ===
   no_motion: 0.0 # ❌ XUNG ĐỘT: robot bánh xe CẦN velocity để cân bằng
-  orientation: 0.0 # ❌ TRÙNG LẶP: đã có body_level
   wheel_velocity: 0.0 # ❌ XUNG ĐỘT: bánh xe là công cụ cân bằng chính
   # === Phạt (giữ nhẹ) ===
-  joint_torque: -0.0001 # phạt mô-men lớn
-  joint_velocity: -0.00005 # phạt tốc độ khớp — giảm (bao gồm cả wheel vel)
-  action_rate: -0.005 # phạt thay đổi action — giảm từ 0.01 (cho phản ứng nhanh)
+  joint_torque: -0.0005 # phạt mô-men lớn
+  joint_velocity: -0.0002 # phạt tốc độ khớp — giảm (bao gồm cả wheel vel)
+  action_rate: -0.01 # tăng từ -0.002 → -0.01: chống rung, action mượt hơn
 
 # --- Termination ---
 termination:

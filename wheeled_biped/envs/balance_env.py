@@ -84,6 +84,14 @@ class BalanceEnv(WheeledBipedEnv):
             "natural_pose": reward_cfg.get("natural_pose", 1.5),
         }
 
+        # Height curriculum config
+        # Ban đầu chỉ train gần keyframe (dễ), sau mở rộng dần xuống ngồi thấp
+        task_cfg = self.config.get("task", {})
+        self._curriculum_steps = int(task_cfg.get("height_curriculum_steps", 0))
+        self._initial_min_height = float(
+            task_cfg.get("initial_min_height", self.MIN_HEIGHT_CMD)
+        )
+
         # Push disturbance config
         dr_cfg = self.config.get("domain_randomization", {})
         self._push_interval = int(dr_cfg.get("push_interval", 200))
@@ -116,9 +124,13 @@ class BalanceEnv(WheeledBipedEnv):
         mjx_data = mjx_data.replace(qpos=new_qpos)
 
         # Random height command cho episode này
+        # Ban đầu dùng initial_min_height (gần keyframe), curriculum sẽ mở rộng sau
         rng, height_key = jax.random.split(rng)
         height_command = jax.random.uniform(
-            height_key, shape=(), minval=self.MIN_HEIGHT_CMD, maxval=self.MAX_HEIGHT_CMD
+            height_key,
+            shape=(),
+            minval=self._initial_min_height,
+            maxval=self.MAX_HEIGHT_CMD,
         )
 
         prev_action = jnp.zeros(self.num_actions)
@@ -151,6 +163,7 @@ class BalanceEnv(WheeledBipedEnv):
                 "anchor_xy": anchor_xy,
                 "initial_yaw": initial_yaw,
                 "push_rng": push_key,
+                "lifetime_steps": jnp.int32(0),
             },
         )
 
@@ -230,7 +243,50 @@ class BalanceEnv(WheeledBipedEnv):
                 "anchor_xy": state.info["anchor_xy"],  # giữ nguyên
                 "initial_yaw": state.info["initial_yaw"],  # giữ nguyên
                 "push_rng": new_push_rng,  # cập nhật rng cho push tiếp theo
+                "lifetime_steps": state.info["lifetime_steps"] + 1,
             },
+        )
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def reset_if_done(self, state: EnvState, rng) -> EnvState:
+        """Override base: carry lifetime_steps + height curriculum."""
+        new_state = self.reset(rng)
+
+        # Carry lifetime_steps from old state (NEVER reset về 0)
+        carried_lifetime = state.info["lifetime_steps"]
+
+        if self._curriculum_steps > 0:
+            # Tính progress: 0.0 → 1.0
+            progress = jnp.clip(carried_lifetime / self._curriculum_steps, 0.0, 1.0)
+            # Mở rộng min height: initial_min → MIN_HEIGHT_CMD
+            current_min = self._initial_min_height + progress * (
+                self.MIN_HEIGHT_CMD - self._initial_min_height
+            )
+            # Re-sample height trong curriculum range
+            rng_h, _ = jax.random.split(rng)
+            curriculum_height = jax.random.uniform(
+                rng_h, shape=(), minval=current_min, maxval=self.MAX_HEIGHT_CMD
+            )
+            # Normalize vẫn dùng FULL range để obs nhất quán
+            height_norm = (curriculum_height - self.MIN_HEIGHT_CMD) / (
+                self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
+            )
+            new_obs = new_state.obs.at[-1].set(height_norm)
+            new_info = {
+                **new_state.info,
+                "height_command": curriculum_height,
+                "lifetime_steps": carried_lifetime,
+            }
+            new_state = new_state._replace(info=new_info, obs=new_obs)
+        else:
+            # Không có curriculum, chỉ carry lifetime_steps
+            new_info = {**new_state.info, "lifetime_steps": carried_lifetime}
+            new_state = new_state._replace(info=new_info)
+
+        return jax.tree.map(
+            lambda new, old: jnp.where(state.done, new, old),
+            new_state,
+            state,
         )
 
     @functools.partial(jax.jit, static_argnums=(0,))
@@ -268,7 +324,7 @@ class BalanceEnv(WheeledBipedEnv):
         components = {
             # Thân nằm ngang song song mặt đất (phạt roll + pitch riêng)
             "body_level": reward_body_level(
-                torso_quat, sigma_roll=0.15, sigma_pitch=0.15
+                torso_quat, sigma_roll=0.1, sigma_pitch=0.1
             ),
             # Giữ chiều cao theo lệnh
             "height": reward_height(
@@ -297,7 +353,7 @@ class BalanceEnv(WheeledBipedEnv):
             # Phạt bánh xe quay (giữ robot đứng yên tại chỗ)
             "wheel_velocity": penalty_wheel_velocity(joint_vel),
             # Giữ vị trí neo — cho phép drift nhẹ khi cân bằng
-            "position_drift": penalty_position_drift(current_xy, anchor_xy, sigma=0.5),
+            "position_drift": penalty_position_drift(current_xy, anchor_xy, sigma=0.2),  # σ=0.2: cho phép sway ±10cm tự nhiên, phạt drift >20cm
             # Giữ hướng ban đầu — phạt xoay yaw khỏi hướng reset
             "heading": reward_heading(torso_quat, initial_yaw),
             # Tư thế khớp tự nhiên — hp/kn phù hợp với chiều cao mục tiêu

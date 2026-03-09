@@ -152,7 +152,7 @@ def reward_heading(torso_quat: jnp.ndarray, target_yaw: jnp.ndarray) -> jnp.ndar
     """
     euler = quat_to_euler(torso_quat)
     yaw_error = wrap_angle(euler[..., 2] - target_yaw)
-    return exp_kernel(yaw_error, sigma=0.2)
+    return exp_kernel(yaw_error, sigma=0.1)
 
 
 # ============================================================

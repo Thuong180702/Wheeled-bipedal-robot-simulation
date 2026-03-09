@@ -63,6 +63,10 @@ def policy(
     checkpoint: str = typer.Option(..., help="Đường dẫn checkpoint."),
     num_steps: int = typer.Option(2000, help="Số bước mô phỏng."),
     slow_factor: float = typer.Option(1.0, help="Hệ số chậm (>1 = chậm hơn)."),
+    log: bool = typer.Option(
+        False, help="Ghi telemetry CSV + hiển thị biểu đồ sau khi chạy."
+    ),
+    log_dir: str = typer.Option("outputs/telemetry", help="Thư mục lưu log."),
 ):
     """Mô phỏng robot với policy đã train trong viewer."""
     import pickle
@@ -75,6 +79,7 @@ def policy(
     from wheeled_biped.training.networks import create_actor_critic
     from wheeled_biped.training.ppo import normalize_obs
     from wheeled_biped.utils.config import get_model_path
+    from wheeled_biped.utils.telemetry import TelemetryRecorder, plot_telemetry
 
     # Tải checkpoint
     ckpt_path = Path(checkpoint) / "checkpoint.pkl"
@@ -108,6 +113,8 @@ def policy(
 
     console.print(f"[green]Đang chạy policy từ: {checkpoint}[/green]")
     console.print(f"  Steps: {num_steps}, Slow: {slow_factor}x")
+    if log:
+        console.print(f"  [cyan]Telemetry: ON → {log_dir}/[/cyan]")
 
     control_dt = 0.02
     physics_dt = mj_model.opt.timestep
@@ -119,6 +126,9 @@ def policy(
     # Height command mặc định = 0.71m (keyframe)
     # Normalize về [0, 1]: (0.71 - 0.38) / (0.72 - 0.38) ≈ 0.97
     height_cmd_norm = jnp.array([0.97])
+
+    # Telemetry recorder
+    recorder = TelemetryRecorder(control_dt=control_dt) if log else None
 
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
         for step in range(num_steps):
@@ -176,6 +186,10 @@ def policy(
             for _ in range(n_substeps):
                 mujoco.mj_step(mj_model, mj_data)
 
+            # Ghi telemetry
+            if recorder is not None:
+                recorder.record(mj_data)
+
             viewer.sync()
 
             # Timing
@@ -183,6 +197,19 @@ def policy(
             sleep_time = control_dt * slow_factor - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)
+
+    # Sau khi viewer đóng: lưu log + vẽ biểu đồ
+    if recorder is not None and len(recorder.data) > 0:
+        import datetime
+
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv_path = recorder.save_csv(f"{log_dir}/policy_{ts}.csv")
+        console.print(f"[green]Đã lưu telemetry: {csv_path}[/green]")
+        plot_telemetry(
+            recorder.to_numpy(),
+            output_path=f"{log_dir}/policy_{ts}.png",
+            show=True,
+        )
 
 
 @app.command()
@@ -193,6 +220,7 @@ def render(
     width: int = typer.Option(1280, help="Chiều rộng video."),
     height: int = typer.Option(720, help="Chiều cao video."),
     fps: int = typer.Option(50, help="FPS video."),
+    log: bool = typer.Option(True, help="Ghi telemetry CSV + biểu đồ cạnh video."),
 ):
     """Render video từ policy đã train."""
     import pickle
@@ -211,6 +239,7 @@ def render(
         quat_conjugate,
         quat_rotate,
     )
+    from wheeled_biped.utils.telemetry import TelemetryRecorder, plot_telemetry
 
     # Tải checkpoint
     ckpt_path = Path(checkpoint) / "checkpoint.pkl"
@@ -253,6 +282,7 @@ def render(
     # Height command mặc định = keyframe (normalized ≈ 0.97)
     height_cmd_norm = jnp.array([0.97])
     console.print(f"Rendering {num_steps} steps...")
+    recorder = TelemetryRecorder(control_dt=control_dt) if log else None
 
     for step in range(num_steps):
         torso_quat = jnp.array(mj_data.qpos[3:7])
@@ -289,12 +319,27 @@ def render(
         for _ in range(n_substeps):
             mujoco.mj_step(mj_model, mj_data)
 
+        if recorder is not None:
+            recorder.record(mj_data)
+
         renderer.update_scene(mj_data, camera="track")
         frames.append(renderer.render())
 
     # Lưu video
     mediapy.write_video(output, frames, fps=fps)
     console.print(f"[green]Đã lưu video: {output}[/green]")
+
+    # Lưu telemetry cạnh video
+    if recorder is not None and len(recorder.data) > 0:
+        out_path = Path(output)
+        csv_path = recorder.save_csv(out_path.with_suffix(".csv"))
+        console.print(f"[green]Đã lưu telemetry: {csv_path}[/green]")
+        plot_telemetry(
+            recorder.to_numpy(),
+            output_path=str(out_path.with_suffix(".png")),
+            show=False,
+        )
+        console.print(f"[green]Đã lưu biểu đồ: {out_path.with_suffix('.png')}[/green]")
 
 
 @app.command()
@@ -307,6 +352,10 @@ def interactive(
         None,
         help="Checkpoint policy để giữ thăng bằng (nếu có).",
     ),
+    log: bool = typer.Option(
+        False, help="Ghi telemetry CSV + biểu đồ khi đóng viewer."
+    ),
+    log_dir: str = typer.Option("outputs/telemetry", help="Thư mục lưu log."),
 ):
     """Điều khiển robot bằng bàn phím trong MuJoCo viewer.
 
@@ -327,6 +376,7 @@ def interactive(
     import numpy as np
 
     from wheeled_biped.utils.config import get_model_path
+    from wheeled_biped.utils.telemetry import TelemetryRecorder, plot_telemetry
 
     path = model_path or str(get_model_path())
     console.print(f"Đang mở model: {path}")
@@ -500,6 +550,11 @@ def interactive(
     smooth_h_cmd = 0.71  # giá trị thực tế dùng để tính target (nội suy mượt, mét)
     height_smooth_rate = 0.1  # tốc độ nội suy mỗi step (nhỏ = mượt hơn)
 
+    # Telemetry recorder
+    recorder = TelemetryRecorder(control_dt=control_dt) if log else None
+    if log:
+        console.print(f"  [cyan]Telemetry: ON → {log_dir}/[/cyan]")
+
     with mujoco.viewer.launch_passive(
         mj_model, mj_data, key_callback=key_callback
     ) as viewer:
@@ -636,12 +691,28 @@ def interactive(
             for _ in range(n_substeps):
                 mujoco.mj_step(mj_model, mj_data)
 
+            if recorder is not None:
+                recorder.record(mj_data)
+
             viewer.sync()
 
             elapsed = time.time() - step_start
             sleep_time = control_dt - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)
+
+    # Sau khi viewer đóng: lưu telemetry
+    if recorder is not None and len(recorder.data) > 0:
+        import datetime
+
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv_path = recorder.save_csv(f"{log_dir}/interactive_{ts}.csv")
+        console.print(f"\n[green]Đã lưu telemetry: {csv_path}[/green]")
+        plot_telemetry(
+            recorder.to_numpy(),
+            output_path=f"{log_dir}/interactive_{ts}.png",
+            show=True,
+        )
 
 
 @app.command()
