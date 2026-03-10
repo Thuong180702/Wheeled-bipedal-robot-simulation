@@ -15,12 +15,12 @@ task:
 # --- PPO Hyperparameters ---
 ppo:
   learning_rate: 2.0e-4 # giảm từ 3e-4 → ổn định hơn với minibatch nhỏ
-  num_epochs: 4
-  num_minibatches: 8 # 4096envs×64steps=262144 ÷ 8 = 32768 samples/batch
-  rollout_length: 64 # tăng từ 32 → 8192 samples/update, credit assignment tốt hơn
+  num_epochs: 2 # CPU: giảm từ 4→2, tránh reuse data quá nhiều với batch nhỏ (4)
+  num_minibatches: 4 # CPU: 128×64÷4=2048 samples/batch (vs 1024 trước) — ổn định hơn (8)
+  rollout_length: 64
   gamma: 0.99
   gae_lambda: 0.95
-  clip_epsilon: 0.2
+  clip_epsilon: 0.3 # CPU: nới rộng từ 0.2→0.3, cho phép policy update lớn hơn với ít data
   entropy_coeff: 0.05 # tăng từ 0.03 → ngăn entropy collapse mạnh hơn
   value_loss_coeff: 0.5
   max_grad_norm: 0.5
