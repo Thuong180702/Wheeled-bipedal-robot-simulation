@@ -35,19 +35,19 @@ network:
 
 # --- Reward weights ---
 # Tập trung tín hiệu chính: tư thế đúng + chiều cao + thân ngang
-# Tổng thưởng max ≈ 9.2, phạt nhẹ
+# Tổng thưởng max ≈ 11.6, phạt nhẹ
 rewards:
   body_level: 1.5 # thưởng thân nằm ngang (exp σ_roll=0.15, σ_pitch=0.15)
   height: 1.5 # thưởng giữ chiều cao theo height_command (exp σ=0.25)
   natural_pose: 1.5 # thưởng hp/kn đúng target TUYỆT ĐỐI (exp σ=0.8 — gradient mạnh)
   symmetry: 0.3 # thưởng 2 chân đối xứng (exp σ=0.5) — giảm vì natural_pose đã xử lý
   alive: 0.5 # thưởng sống sót (signal luôn có)
-  heading: 1.0 # tăng từ 0.3→1.0: chống spinning yaw (sigma=0.5 rad trong env)
-  legs_forward: 0.3 # thưởng hip_yaw ≈ 0
-  legs_vertical: 0.3 # thưởng hip_roll ≈ 0
-  position_drift: 1.0 # tăng từ 0.3 → 1.0: đủ mạnh để robot không drift xa
-  orientation: 0.8 # tăng từ 0.3→0.8: chống rung lắc góc (formulation linear mới)
-  yaw_rate: 0.5 # mới: phạt riêng tốc độ xoay yaw (chống spinning)
+  heading: 1.5 # tăng 1.0→1.5: phá local optimum "spinning balance"
+  legs_forward: 0.5
+  legs_vertical: 0.5
+  position_drift: 1.5 # tăng 1.0→1.5: phạt mạnh hơn khi robot drift theo vòng xoáy
+  orientation: 0.8
+  yaw_rate: 1.5 # tăng 0.5→1.5: phạt trực tiếp tốc độ quay yaw
   # === ĐÃ LOẠI BỎ (xung đột hoặc trùng lặp) ===
   no_motion: 0.0 # ❌ XUNG ĐỘT: robot bánh xe CẦN velocity để cân bằng
   wheel_velocity: 0.0 # ❌ XUNG ĐỘT: bánh xe là công cụ cân bằng chính
