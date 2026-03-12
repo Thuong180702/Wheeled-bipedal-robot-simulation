@@ -332,6 +332,24 @@ def single(
         f"\n[bold green]Done![/bold green] Best reward: {result.get('best_reward', 'N/A')}"
     )
 
+    # Curriculum report tóm tắt
+    cur_min = result.get("curriculum_min_height")
+    cur_level = result.get("curriculum_level")
+    cur_total = result.get("curriculum_num_levels")
+    if cur_min is not None:
+        final_min = getattr(env, "MIN_HEIGHT_CMD", 0.38)
+        max_h = getattr(env, "MAX_HEIGHT_CMD", 0.72)
+        console.print(
+            f"\n[bold cyan]📊 Curriculum:[/bold cyan] Level {cur_level}/{cur_total}, "
+            f"height range [{cur_min:.2f}, {max_h:.2f}] m"
+        )
+        if cur_min > final_min:
+            console.print(
+                f"   [yellow]⚠️  Chưa xong! Dùng --resume để train tiếp range [{final_min:.2f}, {max_h:.2f}][/yellow]"
+            )
+        else:
+            console.print(f"   [green]✅ Full range hoàn thành![/green]")
+
 
 if __name__ == "__main__":
     app()

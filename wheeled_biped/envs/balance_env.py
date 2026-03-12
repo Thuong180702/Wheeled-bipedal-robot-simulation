@@ -50,7 +50,7 @@ class BalanceEnv(WheeledBipedEnv):
 
     Mỗi episode random một height_command ∈ [0.38, 0.72].
     Với curriculum: khởi đầu [0.68, 0.72] (gần keyframe 0.71m),
-    mở rộng dần → [0.38, 0.72] sau height_curriculum_steps per-env steps.
+    mở rộng dần → [0.38, 0.72] khi reward đạt ngưỡng (trainer quản lý).
     Robot phải giữ chiều cao theo lệnh, thân ngang, 2 chân đối xứng, đứng yên.
 
     Observation (40 dims):
@@ -88,9 +88,9 @@ class BalanceEnv(WheeledBipedEnv):
         }
 
         # Height curriculum config
-        # Ban đầu chỉ train gần keyframe (dễ), sau mở rộng dần xuống ngồi thấp
+        # Trainer sẽ quản lý curriculum_min_height dựa trên reward threshold
+        # Env chỉ lưu initial_min_height để dùng làm giá trị mặc định ban đầu
         task_cfg = self.config.get("task", {})
-        self._curriculum_steps = int(task_cfg.get("height_curriculum_steps", 0))
         self._initial_min_height = float(
             task_cfg.get("initial_min_height", self.MIN_HEIGHT_CMD)
         )
@@ -167,6 +167,7 @@ class BalanceEnv(WheeledBipedEnv):
                 "initial_yaw": initial_yaw,
                 "push_rng": push_key,
                 "lifetime_steps": jnp.int32(0),
+                "curriculum_min_height": jnp.float32(self._initial_min_height),
             },
         )
 
@@ -247,44 +248,40 @@ class BalanceEnv(WheeledBipedEnv):
                 "initial_yaw": state.info["initial_yaw"],  # giữ nguyên
                 "push_rng": new_push_rng,  # cập nhật rng cho push tiếp theo
                 "lifetime_steps": state.info["lifetime_steps"] + 1,
+                "curriculum_min_height": state.info["curriculum_min_height"],
             },
         )
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def reset_if_done(self, state: EnvState, rng) -> EnvState:
-        """Override base: carry lifetime_steps + height curriculum."""
+        """Override base: carry lifetime_steps + curriculum_min_height.
+
+        curriculum_min_height được trainer quản lý (dựa trên reward threshold).
+        Env chỉ carry giá trị này qua các episode và dùng nó để sample height.
+        """
         new_state = self.reset(rng)
 
-        # Carry lifetime_steps from old state (NEVER reset về 0)
+        # Carry từ old state (KHÔNG reset)
         carried_lifetime = state.info["lifetime_steps"]
+        curriculum_min = state.info["curriculum_min_height"]
 
-        if self._curriculum_steps > 0:
-            # Tính progress: 0.0 → 1.0
-            progress = jnp.clip(carried_lifetime / self._curriculum_steps, 0.0, 1.0)
-            # Mở rộng min height: initial_min → MIN_HEIGHT_CMD
-            current_min = self._initial_min_height + progress * (
-                self.MIN_HEIGHT_CMD - self._initial_min_height
-            )
-            # Re-sample height trong curriculum range
-            rng_h, _ = jax.random.split(rng)
-            curriculum_height = jax.random.uniform(
-                rng_h, shape=(), minval=current_min, maxval=self.MAX_HEIGHT_CMD
-            )
-            # Normalize vẫn dùng FULL range để obs nhất quán
-            height_norm = (curriculum_height - self.MIN_HEIGHT_CMD) / (
-                self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
-            )
-            new_obs = new_state.obs.at[-1].set(height_norm)
-            new_info = {
-                **new_state.info,
-                "height_command": curriculum_height,
-                "lifetime_steps": carried_lifetime,
-            }
-            new_state = new_state._replace(info=new_info, obs=new_obs)
-        else:
-            # Không có curriculum, chỉ carry lifetime_steps
-            new_info = {**new_state.info, "lifetime_steps": carried_lifetime}
-            new_state = new_state._replace(info=new_info)
+        # Re-sample height trong curriculum range hiện tại
+        rng_h, _ = jax.random.split(rng)
+        curriculum_height = jax.random.uniform(
+            rng_h, shape=(), minval=curriculum_min, maxval=self.MAX_HEIGHT_CMD
+        )
+        # Normalize vẫn dùng FULL range để obs nhất quán
+        height_norm = (curriculum_height - self.MIN_HEIGHT_CMD) / (
+            self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
+        )
+        new_obs = new_state.obs.at[-1].set(height_norm)
+        new_info = {
+            **new_state.info,
+            "height_command": curriculum_height,
+            "curriculum_min_height": curriculum_min,
+            "lifetime_steps": carried_lifetime,
+        }
+        new_state = new_state._replace(info=new_info, obs=new_obs)
 
         return jax.tree.map(
             lambda new, old: jnp.where(state.done, new, old),
@@ -339,8 +336,12 @@ class BalanceEnv(WheeledBipedEnv):
             "legs_vertical": reward_legs_vertical(joint_pos, sigma=0.15),
             # 2 chân đối xứng
             "symmetry": reward_leg_symmetry(joint_pos, sigma=0.5),
-            # Đứng yên, không di chuyển
-            "no_motion": reward_no_motion(base_lin_vel, sigma=0.2),
+            # Đứng yên, không di chuyển — công thức tuyến tính để gradient còn tác dụng
+            # ngay cả khi robot đang drift nhanh (exp_kernel sigma=0.2 → 0 tại >0.5 m/s)
+            # clip(1 - |v_xy| * 0.4): gradient tới 2.5 m/s, robot dải 2 m/s vẫn nhận phạt
+            "no_motion": jnp.clip(
+                1.0 - jnp.linalg.norm(base_lin_vel[:2]) * 0.4, 0.0, 1.0
+            ),
             # Ổn định tổng thể (phạt rung lắc góc tất cả trục)
             # Linear: gradient tuyến tính trong [0, 6.67 rad/s]; hiệu quả hơn exp-saturation
             "orientation": jnp.clip(
@@ -358,8 +359,8 @@ class BalanceEnv(WheeledBipedEnv):
             "action_rate": penalty_action_rate(action, prev_state.prev_action),
             # Phạt bánh xe quay (giữ robot đứng yên tại chỗ)
             "wheel_velocity": penalty_wheel_velocity(joint_vel),
-            # Giữ vị trí neo — sigma=0.5: gradient còn tác dụng tới ~0.8m drift
-            "position_drift": penalty_position_drift(current_xy, anchor_xy, sigma=0.5),
+            # Giữ vị trí neo — sigma=1.0: gradient còn tác dụng tới ~2m drift
+            "position_drift": penalty_position_drift(current_xy, anchor_xy, sigma=1.0),
             # Giữ hướng ban đầu — sigma=0.5 rad: gradient tới ~80° (thay vì 12° với sigma=0.1)
             "heading": reward_heading(torso_quat, initial_yaw, sigma=0.5),
             # Tư thế khớp tự nhiên — hp/kn phù hợp với chiều cao mục tiêu

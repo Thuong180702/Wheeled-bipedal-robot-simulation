@@ -187,6 +187,8 @@ class PPOTrainer:
         self._stop_requested = False  # Flag để dừng training từ bên ngoài
         self._resumed_global_step = 0  # Sẽ được set khi load_checkpoint
         self._resumed_best_reward = float("-inf")
+        self._resumed_curriculum_min = None  # Curriculum min height từ checkpoint
+        self._curriculum_min_height = None  # Giá trị hiện tại (cập nhật trong train())
 
         # PPO hyperparams
         ppo_cfg = config.get("ppo", {})
@@ -499,6 +501,45 @@ class PPOTrainer:
 
         steps_per_update = self._rollout_length * self.num_envs
 
+        # ====== Reward-based Curriculum ======
+        curriculum_cfg = self.config.get("curriculum", {})
+        curriculum_enabled = curriculum_cfg.get("enabled", False)
+        threshold_ratio = float(curriculum_cfg.get("reward_threshold", 0.92))
+        num_levels = int(curriculum_cfg.get("num_levels", 10))
+        window_size = int(curriculum_cfg.get("window", 50))
+
+        # Tính max reward có thể đạt (tổng trọng số dương)
+        reward_weights = self.config.get("rewards", {})
+        max_reward_possible = sum(w for w in reward_weights.values() if w > 0)
+        reward_threshold = threshold_ratio * max_reward_possible
+
+        # Curriculum state
+        task_cfg = self.config.get("task", {})
+        initial_min_h = float(task_cfg.get("initial_min_height", 0.68))
+        final_min_h = getattr(self.env, "MIN_HEIGHT_CMD", 0.38)
+        level_step = (initial_min_h - final_min_h) / max(num_levels, 1)
+
+        # Khôi phục từ checkpoint hoặc dùng giá trị mặc định
+        if self._resumed_curriculum_min is not None:
+            current_min_h = self._resumed_curriculum_min
+        else:
+            current_min_h = initial_min_h
+        self._curriculum_min_height = current_min_h
+
+        # Set curriculum_min_height cho tất cả envs
+        if curriculum_enabled and "curriculum_min_height" in env_state.info:
+            new_min_arr = jnp.full_like(
+                env_state.info["curriculum_min_height"], current_min_h
+            )
+            env_state = env_state._replace(
+                info={**env_state.info, "curriculum_min_height": new_min_arr}
+            )
+
+        reward_window: list[float] = []  # Reward window cho curriculum
+        curriculum_level = (
+            round((initial_min_h - current_min_h) / level_step) if level_step > 0 else 0
+        )
+
         # Tính số updates còn lại (trừ bước đã train trước đó nếu resume)
         resumed_step = self._resumed_global_step
         remaining_steps = max(steps_per_update, total_steps - resumed_step)
@@ -654,13 +695,18 @@ class PPOTrainer:
                 eta_m = eta_s / 60
 
                 # Luôn in progress mỗi update
+                # Thêm curriculum info nếu enabled
+                range_str = ""
+                if curriculum_enabled:
+                    range_str = f" | range=[{current_min_h:.2f},0.72] L{curriculum_level}/{num_levels}"
                 print(
                     f"  [{update}/{num_updates}] "
                     f"step={global_step:,} | "
                     f"reward={avg_reward:.4f} | "
                     f"fps={fps:.0f} | "
                     f"{update_elapsed:.1f}s/update | "
-                    f"ETA {eta_m:.0f}m",
+                    f"ETA {eta_m:.0f}m"
+                    f"{range_str}",
                     flush=True,
                 )
 
@@ -681,6 +727,42 @@ class PPOTrainer:
                     # Save best
                     if avg_reward > best_reward:
                         best_reward = avg_reward
+
+                # ====== Curriculum advancement ======
+                if curriculum_enabled and current_min_h > final_min_h:
+                    reward_window.append(avg_reward)
+                    if len(reward_window) > window_size:
+                        reward_window.pop(0)
+                    if len(reward_window) >= window_size:
+                        window_avg = sum(reward_window) / len(reward_window)
+                        if window_avg >= reward_threshold:
+                            current_min_h = max(
+                                round(current_min_h - level_step, 4), final_min_h
+                            )
+                            self._curriculum_min_height = current_min_h
+                            curriculum_level = min(curriculum_level + 1, num_levels)
+                            # Update tất cả envs
+                            new_min_arr = jnp.full_like(
+                                env_state.info["curriculum_min_height"],
+                                current_min_h,
+                            )
+                            env_state = env_state._replace(
+                                info={
+                                    **env_state.info,
+                                    "curriculum_min_height": new_min_arr,
+                                }
+                            )
+                            reward_window.clear()
+                            max_h = getattr(self.env, "MAX_HEIGHT_CMD", 0.72)
+                            print(
+                                f"  \U0001f4c8 Curriculum Level {curriculum_level}/{num_levels}: "
+                                f"height range [{current_min_h:.2f}, {max_h:.2f}] "
+                                f"(avg={window_avg:.2f} >= {reward_threshold:.2f})"
+                            )
+                            if current_min_h <= final_min_h:
+                                print(
+                                    f"  \u2705 Curriculum hoàn thành! Full range [{final_min_h:.2f}, {max_h:.2f}]"
+                                )
 
                 # Live viewer update
                 if viewer is not None and update % view_interval == 0:
@@ -717,13 +799,33 @@ class PPOTrainer:
             best_reward=best_reward,
         )
 
+        # ====== Curriculum Report ======
+        if curriculum_enabled:
+            max_h = getattr(self.env, "MAX_HEIGHT_CMD", 0.72)
+            print(f"\n  \U0001f4ca Curriculum Report:")
+            print(f"     Height range đã train: [{current_min_h:.2f}, {max_h:.2f}] m")
+            print(f"     Level: {curriculum_level}/{num_levels}")
+            if current_min_h > final_min_h:
+                print(
+                    f"     \u26a0\ufe0f  Chưa hoàn thành! Range đầy đủ: [{final_min_h:.2f}, {max_h:.2f}] m"
+                )
+                print(f"     \u2192 Tiếp tục train với --resume để mở rộng range")
+            else:
+                print(f"     \u2705 Đã train đầy đủ full range!")
+
         if self.logger:
             self.logger.close()
 
         if viewer is not None:
             viewer.request_stop()
 
-        return {"best_reward": best_reward, "total_steps": global_step}
+        return {
+            "best_reward": best_reward,
+            "total_steps": global_step,
+            "curriculum_min_height": current_min_h if curriculum_enabled else None,
+            "curriculum_level": curriculum_level if curriculum_enabled else None,
+            "curriculum_num_levels": num_levels if curriculum_enabled else None,
+        }
 
     def _save_checkpoint(
         self,
@@ -744,6 +846,11 @@ class PPOTrainer:
             "config": self.config,
             "global_step": int(global_step),
             "best_reward": float(best_reward),
+            "curriculum_min_height": (
+                float(self._curriculum_min_height)
+                if self._curriculum_min_height is not None
+                else None
+            ),
         }
 
         with open(os.path.join(path, "checkpoint.pkl"), "wb") as f:
@@ -764,6 +871,11 @@ class PPOTrainer:
         # Khôi phục training state (tương thích checkpoint cũ)
         self._resumed_global_step = checkpoint.get("global_step", 0)
         self._resumed_best_reward = checkpoint.get("best_reward", float("-inf"))
+        self._resumed_curriculum_min = checkpoint.get("curriculum_min_height", None)
         print(
-            f"  📂 Checkpoint: step={self._resumed_global_step:,}, best_reward={self._resumed_best_reward:.4f}"
+            f"  \U0001f4c2 Checkpoint: step={self._resumed_global_step:,}, best_reward={self._resumed_best_reward:.4f}"
         )
+        if self._resumed_curriculum_min is not None:
+            print(
+                f"  \U0001f4c2 Curriculum min_height: {self._resumed_curriculum_min:.2f}"
+            )
