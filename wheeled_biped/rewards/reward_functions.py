@@ -242,7 +242,7 @@ def reward_alive(is_alive: jnp.ndarray) -> jnp.ndarray:
 
 
 @jax.jit
-def reward_no_motion(base_lin_vel: jnp.ndarray, sigma: float = 0.1) -> jnp.ndarray:
+def reward_no_motion(base_lin_vel: jnp.ndarray, sigma: float = 0.2) -> jnp.ndarray:
     """Thưởng khi robot đứng yên, không di chuyển.
 
     Args:

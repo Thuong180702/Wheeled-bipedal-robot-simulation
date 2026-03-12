@@ -7,28 +7,28 @@ task:
   env: "BalanceEnv"
   episode_length: 1000 # 1000 steps × 0.02s = 20s
   num_envs: 4096 # số env song song trên GPU
-  initial_min_height: 0.68 # min ban đầu (keyframe=0.71)
+  initial_min_height: 0.695 # min ban đầu (keyframe=0.71)
 
 # --- Height Curriculum (reward-based) ---
 # Mở rộng khoảng height_command khi robot đạt đủ reward
-# Ban đầu [0.68, 0.72] → dần mở rộng → [0.38, 0.72]
+# Ban đầu [0.695, 0.72] → dần mở rộng → [0.38, 0.72]
 # Chỉ tăng level khi avg_reward >= reward_threshold × max_possible_reward
 curriculum:
   enabled: true
-  reward_threshold: 0.92 # 92% tổng reward tối đa → mở rộng range
-  num_levels: 10 # 10 cấp: mỗi cấp giảm min_height 0.03m (0.68 → 0.38)
+  reward_threshold: 0.9 # 90% tổng reward tối đa → mở rộng range
+  num_levels: 20 # 20 cấp: mỗi cấp giảm min_height 0.015m (0.695 → 0.38)
   window: 50 # trung bình reward qua 50 updates gần nhất
 
 # --- PPO Hyperparameters ---
 ppo:
-  learning_rate: 2.0e-4 # giảm từ 3e-4 → ổn định hơn với minibatch nhỏ
-  num_epochs: 2 # CPU: giảm từ 4→2, tránh reuse data quá nhiều với batch nhỏ (4)
-  num_minibatches: 4 # CPU: 128×64÷4=2048 samples/batch (vs 1024 trước) — ổn định hơn (8)
-  rollout_length: 64
+  learning_rate: 3.0e-4
+  num_epochs: 4
+  num_minibatches: 32
+  rollout_length: 128
   gamma: 0.99
   gae_lambda: 0.95
-  clip_epsilon: 0.3 # CPU: nới rộng từ 0.2→0.3, cho phép policy update lớn hơn với ít data
-  entropy_coeff: 0.05 # tăng từ 0.03 → ngăn entropy collapse mạnh hơn
+  clip_epsilon: 0.2
+  entropy_coeff: 0.01
   value_loss_coeff: 0.5
   max_grad_norm: 0.5
   normalize_advantages: true
@@ -38,15 +38,15 @@ network:
   policy_hidden: [256, 256, 128]
   value_hidden: [256, 256, 128]
   activation: "elu"
-  init_std: 0.15 # std ban đầu cho action distribution (nhỏ hơn vì ctrlrange rộng)
+  init_std: 0.3
 
 # --- Reward weights ---
 # Tập trung tín hiệu chính: tư thế đúng + chiều cao + thân ngang
-# Tổng thưởng max ≈ 9.5, phạt nhẹ
+# Tổng thưởng max ≈ 9, phạt nhẹ
 rewards:
   body_level: 1.5 # thưởng thân nằm ngang (exp σ_roll=0.15, σ_pitch=0.15)
   height: 2.5 # thưởng giữ chiều cao theo height_command (exp σ=0.25)
-  natural_pose: 1 # thưởng hp/kn đúng target TUYỆT ĐỐI (exp σ=0.8 — gradient mạnh)
+  natural_pose: 0.5 # thưởng hp/kn đúng target TUYỆT ĐỐI (exp σ=0.8 — gradient mạnh)
   symmetry: 0.5 # thưởng 2 chân đối xứng (exp σ=0.5) — giảm vì natural_pose đã xử lý
   alive: 0.2 # thưởng sống sót (signal luôn có)
   heading: 0.5 # phá local optimum "spinning balance"
@@ -55,10 +55,9 @@ rewards:
   position_drift: 0.8 # phạt mạnh hơn khi robot drift
   orientation: 0.5
   yaw_rate: 0.5 # phạt trực tiếp tốc độ quay yaw
-  # === velocity penalties ===
   no_motion: 0.5 # chống local optimum "linear drift" Dùng công thức tuyến tính trong balance_env.py → gradient tới 2.5 m/s
-  wheel_velocity: 0.0 # ❌ tắt: wheel_velocity penalty trùng với no_motion, chỉ dùng 1 cái
   # === Phạt (giữ nhẹ) ===
+  wheel_velocity: -0.001 # wheel_velocity penalty trùng với no_motion, chỉ dùng 1 cái
   joint_torque: -0.0001 # phạt mô-men lớn
   joint_velocity: -0.0001 # phạt tốc độ khớp — giảm (bao gồm cả wheel vel)
   action_rate: -0.01 # chống rung, action mượt hơn

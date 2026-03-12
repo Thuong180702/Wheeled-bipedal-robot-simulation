@@ -49,7 +49,7 @@ class BalanceEnv(WheeledBipedEnv):
     """Environment cho task đứng vững ở nhiều chiều cao.
 
     Mỗi episode random một height_command ∈ [0.38, 0.72].
-    Với curriculum: khởi đầu [0.68, 0.72] (gần keyframe 0.71m),
+    Với curriculum: khởi đầu [0.695, 0.72] (gần keyframe 0.71m),
     mở rộng dần → [0.38, 0.72] khi reward đạt ngưỡng (trainer quản lý).
     Robot phải giữ chiều cao theo lệnh, thân ngang, 2 chân đối xứng, đứng yên.
 
@@ -70,20 +70,20 @@ class BalanceEnv(WheeledBipedEnv):
         reward_cfg = self.config.get("rewards", {})
         self._reward_weights = {
             "body_level": reward_cfg.get("body_level", 1.5),
-            "height": reward_cfg.get("height", 1.5),
-            "legs_forward": reward_cfg.get("legs_forward", 0.3),
-            "legs_vertical": reward_cfg.get("legs_vertical", 0.3),
-            "joint_torque": reward_cfg.get("joint_torque", -0.001),
-            "joint_velocity": reward_cfg.get("joint_velocity", -0.0005),
-            "action_rate": reward_cfg.get("action_rate", -0.02),
-            "orientation": reward_cfg.get("orientation", 0.8),
-            "alive": reward_cfg.get("alive", 0.5),
-            "no_motion": reward_cfg.get("no_motion", 0.0),
-            "symmetry": reward_cfg.get("symmetry", 0.3),
-            "wheel_velocity": reward_cfg.get("wheel_velocity", 0.0),
-            "position_drift": reward_cfg.get("position_drift", 1.0),
-            "heading": reward_cfg.get("heading", 1.0),
-            "natural_pose": reward_cfg.get("natural_pose", 1.5),
+            "height": reward_cfg.get("height", 2.5),
+            "legs_forward": reward_cfg.get("legs_forward", 0.5),
+            "legs_vertical": reward_cfg.get("legs_vertical", 0.5),
+            "joint_torque": reward_cfg.get("joint_torque", -0.0001),
+            "joint_velocity": reward_cfg.get("joint_velocity", -0.0001),
+            "action_rate": reward_cfg.get("action_rate", -0.01),
+            "orientation": reward_cfg.get("orientation", 0.5),
+            "alive": reward_cfg.get("alive", 0.2),
+            "no_motion": reward_cfg.get("no_motion", 0.5),
+            "symmetry": reward_cfg.get("symmetry", 0.5),
+            "wheel_velocity": reward_cfg.get("wheel_velocity", -0.001),
+            "position_drift": reward_cfg.get("position_drift", 0.8),
+            "heading": reward_cfg.get("heading", 0.5),
+            "natural_pose": reward_cfg.get("natural_pose", 0.5),
             "yaw_rate": reward_cfg.get("yaw_rate", 0.5),
         }
 
@@ -338,10 +338,7 @@ class BalanceEnv(WheeledBipedEnv):
             "symmetry": reward_leg_symmetry(joint_pos, sigma=0.5),
             # Đứng yên, không di chuyển — công thức tuyến tính để gradient còn tác dụng
             # ngay cả khi robot đang drift nhanh (exp_kernel sigma=0.2 → 0 tại >0.5 m/s)
-            # clip(1 - |v_xy| * 0.4): gradient tới 2.5 m/s, robot dải 2 m/s vẫn nhận phạt
-            "no_motion": jnp.clip(
-                1.0 - jnp.linalg.norm(base_lin_vel[:2]) * 0.4, 0.0, 1.0
-            ),
+            "no_motion": reward_no_motion(base_lin_vel, sigma=0.2),
             # Ổn định tổng thể (phạt rung lắc góc tất cả trục)
             # Linear: gradient tuyến tính trong [0, 6.67 rad/s]; hiệu quả hơn exp-saturation
             "orientation": jnp.clip(
