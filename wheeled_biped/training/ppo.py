@@ -180,6 +180,7 @@ class PPOTrainer:
         env: WheeledBipedEnv,
         config: dict[str, Any],
         logger: TrainingLogger | None = None,
+        seed: int = 42,
     ):
         self.env = env
         self.config = config
@@ -212,7 +213,7 @@ class PPOTrainer:
         self._rollout_length = ppo_cfg.get("rollout_length", 32)  # bước
 
         # Tạo network
-        self.rng = jax.random.PRNGKey(42)
+        self.rng = jax.random.PRNGKey(seed)
         self.rng, init_key = jax.random.split(self.rng)
         self.model, self.params = create_actor_critic(
             obs_size=env.obs_size,

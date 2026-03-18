@@ -301,7 +301,7 @@ def single(
     )
 
     # Trainer
-    trainer = PPOTrainer(env=env, config=training_config, logger=logger)
+    trainer = PPOTrainer(env=env, config=training_config, logger=logger, seed=seed)
 
     # Resume
     if resume:
