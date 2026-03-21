@@ -21,10 +21,10 @@ curriculum:
 
 # --- PPO Hyperparameters ---
 ppo:
-  learning_rate: 3.0e-4
+  learning_rate: 2.0e-4
   num_epochs: 4
-  num_minibatches: 16
-  rollout_length: 64
+  num_minibatches: 32
+  rollout_length: 128
   gamma: 0.99
   gae_lambda: 0.95
   clip_epsilon: 0.2
@@ -58,10 +58,10 @@ rewards:
   yaw_rate: 0.5 # phạt trực tiếp tốc độ quay yaw
   no_motion: 0.5 # chống local optimum "linear drift"
   # === Phạt (giữ nhẹ) ===
-  wheel_velocity: -0.0001
+  wheel_velocity: -0.0005
   joint_torque: -0.0001 # phạt mô-men lớn
-  joint_velocity: -0.0001 # phạt tốc độ khớp — giảm (bao gồm cả wheel vel)
-  action_rate: -0.01 # chống rung, action mượt hơn
+  joint_velocity: -0.0005 # phạt tốc độ khớp — giảm (bao gồm cả wheel vel)
+  action_rate: -0.02 # chống rung, action mượt hơn
 
 # --- Termination ---
 termination:

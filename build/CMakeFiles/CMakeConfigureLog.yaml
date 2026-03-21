@@ -17725,3 +17725,641 @@ events:
         
       exitCode: 1
 ...
+
+---
+events:
+  -
+    kind: "find-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:462 (find_file)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:500 (CMAKE_DETERMINE_COMPILER_ID_WRITE)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "file"
+    variable: "src_in"
+    description: "Path to a file."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "CMakeCXXCompilerId.cpp.in"
+    candidate_directories:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/"
+    found: "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeCXXCompilerId.cpp.in"
+    search_context:
+      ENV{PATH}:
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code"
+        - "C:\\Program Files\\Eclipse Adoptium\\jdk-25.0.1.8-hotspot\\bin"
+        - "C:\\Program Files\\Common Files\\Siemens\\Automation\\Simatic OAM\\bin"
+        - "C:\\WINDOWS\\system32"
+        - "C:\\WINDOWS"
+        - "C:\\WINDOWS\\System32\\Wbem"
+        - "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\"
+        - "C:\\WINDOWS\\System32\\OpenSSH\\"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\Interfaces"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\ACE\\Interfaces"
+        - "C:\\Program Files (x86)\\Microsoft SQL Server\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\130\\DTS\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\150\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn\\"
+        - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Program Files\\dotnet\\"
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Program Files (x86)\\SOPAS ET\\"
+        - "C:\\Users\\Administrator\\scoop\\apps\\python313\\current\\Scripts"
+        - "C:\\Users\\Administrator\\scoop\\apps\\python313\\current"
+        - "C:\\Users\\Administrator\\scoop\\apps\\git\\current\\bin"
+        - "C:\\Users\\Administrator\\scoop\\shims"
+        - "d:\\cursor\\resources\\app\\codeBin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\curl-8.8.0_1-win64-mingw\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\gn-windows-amd64-2239"
+        - "C:\\Program Files\\7-Zip"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\dtc-1.6.1\\tools\\usr\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\gperf-3.0.1\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\wget-1.21.4"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\Scripts"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310"
+        - "C:\\Program Files\\Git\\bin"
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Users\\Administrator\\.dotnet\\tools"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Antigravity\\bin"
+      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/flaxlib"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:5 (project)"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" failed.
+      Compiler: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/arm-none-eabi-g++.exe 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      1
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-exit.o): in function `exit':
+      exit.c:(.text.exit+0x28): undefined reference to `_exit'
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-closer.o): in function `_close_r':
+      closer.c:(.text._close_r+0x18): undefined reference to `_close'
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-lseekr.o): in function `_lseek_r':
+      lseekr.c:(.text._lseek_r+0x24): undefined reference to `_lseek'
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-readr.o): in function `_read_r':
+      readr.c:(.text._read_r+0x24): undefined reference to `_read'
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-writer.o): in function `_write_r':
+      writer.c:(.text._write_r+0x24): undefined reference to `_write'
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-sbrkr.o): in function `_sbrk_r':
+      sbrkr.c:(.text._sbrk_r+0x18): undefined reference to `_sbrk'
+      collect2.exe: error: ld returned 1 exit status
+      
+      
+  -
+    kind: "find-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:462 (find_file)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:500 (CMAKE_DETERMINE_COMPILER_ID_WRITE)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "file"
+    variable: "src_in"
+    description: "Path to a file."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "CMakeCXXCompilerId.cpp.in"
+    candidate_directories:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/"
+    found: "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeCXXCompilerId.cpp.in"
+    search_context:
+      ENV{PATH}:
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code"
+        - "C:\\Program Files\\Eclipse Adoptium\\jdk-25.0.1.8-hotspot\\bin"
+        - "C:\\Program Files\\Common Files\\Siemens\\Automation\\Simatic OAM\\bin"
+        - "C:\\WINDOWS\\system32"
+        - "C:\\WINDOWS"
+        - "C:\\WINDOWS\\System32\\Wbem"
+        - "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\"
+        - "C:\\WINDOWS\\System32\\OpenSSH\\"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\Interfaces"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\ACE\\Interfaces"
+        - "C:\\Program Files (x86)\\Microsoft SQL Server\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\130\\DTS\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\150\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn\\"
+        - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Program Files\\dotnet\\"
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Program Files (x86)\\SOPAS ET\\"
+        - "C:\\Users\\Administrator\\scoop\\apps\\python313\\current\\Scripts"
+        - "C:\\Users\\Administrator\\scoop\\apps\\python313\\current"
+        - "C:\\Users\\Administrator\\scoop\\apps\\git\\current\\bin"
+        - "C:\\Users\\Administrator\\scoop\\shims"
+        - "d:\\cursor\\resources\\app\\codeBin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\curl-8.8.0_1-win64-mingw\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\gn-windows-amd64-2239"
+        - "C:\\Program Files\\7-Zip"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\dtc-1.6.1\\tools\\usr\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\gperf-3.0.1\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\wget-1.21.4"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\Scripts"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310"
+        - "C:\\Program Files\\Git\\bin"
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Users\\Administrator\\.dotnet\\tools"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Antigravity\\bin"
+      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/flaxlib"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:5 (project)"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+      Compiler: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/arm-none-eabi-g++.exe 
+      Build flags: 
+      Id flags: -c 
+      
+      The output was:
+      0
+      
+      
+      Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CMakeCXXCompilerId.o"
+      
+      The CXX compiler identification is GNU, found in:
+        D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/4.2.0-rc1/CompilerIdCXX/CMakeCXXCompilerId.o
+      
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerABI.cmake:83 (try_compile)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:5 (project)"
+    checks:
+      - "Detecting CXX compiler ABI info"
+    directories:
+      source: "D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-ttpz7x"
+      binary: "D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-ttpz7x"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g"
+      CMAKE_CXX_SCAN_FOR_MODULES: "OFF"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_CXX_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: 'D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-ttpz7x'
+        
+        Run Build Command(s): C:/Users/Administrator/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_022f2
+        [1/2] C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE   -v -o CMakeFiles/cmTC_022f2.dir/CMakeCXXCompilerABI.cpp.obj -c "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp"
+        Using built-in specs.
+        COLLECT_GCC=C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE
+        Target: arm-none-eabi
+        Configured with: /data/jenkins/workspace/GNU-toolchain/arm-14/src/gcc/configure --target=arm-none-eabi --prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/install --with-gmp=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-mpfr=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-mpc=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-isl=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --disable-shared --disable-nls --disable-threads --disable-tls --enable-checking=release --enable-languages=c,c++,fortran --with-newlib --with-gnu-as --with-headers=yes --with-gnu-ld --with-native-system-header-dir=/include --with-sysroot=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/install/arm-none-eabi --with-bugurl=https://bugs.linaro.org/ --with-multilib-list=aprofile,rmprofile --with-libiconv-prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-libiconv-prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --enable-mingw-wildcard --host=i686-w64-mingw32 --with-pkgversion='Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)'
+        Thread model: single
+        Supported LTO compression algorithms: zlib
+        gcc version 14.3.1 20250623 (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_022f2.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-mcpu=arm7tdmi' '-mfloat-abi=soft' '-marm' '-mlibarch=armv4t' '-march=armv4t' '-dumpdir' 'CMakeFiles/cmTC_022f2.dir/'
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/cc1plus.exe -quiet -v -iprefix C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/ -isysroot C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi -D__USES_INITFINI__ C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_022f2.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mcpu=arm7tdmi -mfloat-abi=soft -marm -mlibarch=armv4t -march=armv4t -version -o C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ccwU7iHy.s
+        GNU C++17 (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) version 14.3.1 20250623 (arm-none-eabi)
+        	compiled by GNU C version 10-win32 20220113, GMP version 6.2.1, MPFR version 3.1.6, MPC version 1.0.3, isl version isl-0.15-1-g835ea3a-GMP
+        
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1/arm-none-eabi"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1/backward"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/include"
+        ignoring nonexistent directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/install/lib/gcc/arm-none-eabi/14.3.1/../../../../include"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/include-fixed"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/include"
+        #include "..." search starts here:
+        #include <...> search starts here:
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1/arm-none-eabi
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1/backward
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/include
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/include-fixed
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include
+        End of search list.
+        Compiler executable checksum: dada17c8e112483894e5d212ab573e65
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_022f2.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-mcpu=arm7tdmi' '-mfloat-abi=soft' '-marm' '-mlibarch=armv4t' '-march=armv4t' '-dumpdir' 'CMakeFiles/cmTC_022f2.dir/'
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/as.exe -v -march=armv4t -mfloat-abi=soft -meabi=5 -o CMakeFiles/cmTC_022f2.dir/CMakeCXXCompilerABI.cpp.obj C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ccwU7iHy.s
+        GNU assembler version 2.44.0 (arm-none-eabi) using BFD version (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 2.44.0.20250616
+        COMPILER_PATH=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/
+        LIBRARY_PATH=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_022f2.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-mcpu=arm7tdmi' '-mfloat-abi=soft' '-marm' '-mlibarch=armv4t' '-march=armv4t' '-dumpdir' 'CMakeFiles/cmTC_022f2.dir/CMakeCXXCompilerABI.cpp.'
+        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE  -v -Wl,-v CMakeFiles/cmTC_022f2.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_022f2.exe -Wl,--out-implib,libcmTC_022f2.dll.a -Wl,--major-image-version,0,--minor-image-version,0   && cd ."
+        FAILED: [code=1] cmTC_022f2.exe 
+        C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE  -v -Wl,-v CMakeFiles/cmTC_022f2.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_022f2.exe -Wl,--out-implib,libcmTC_022f2.dll.a -Wl,--major-image-version,0,--minor-image-version,0   && cd ."
+        Using built-in specs.
+        COLLECT_GCC=C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE
+        COLLECT_LTO_WRAPPER=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/lto-wrapper.exe
+        Target: arm-none-eabi
+        Configured with: /data/jenkins/workspace/GNU-toolchain/arm-14/src/gcc/configure --target=arm-none-eabi --prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/install --with-gmp=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-mpfr=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-mpc=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-isl=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --disable-shared --disable-nls --disable-threads --disable-tls --enable-checking=release --enable-languages=c,c++,fortran --with-newlib --with-gnu-as --with-headers=yes --with-gnu-ld --with-native-system-header-dir=/include --with-sysroot=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/install/arm-none-eabi --with-bugurl=https://bugs.linaro.org/ --with-multilib-list=aprofile,rmprofile --with-libiconv-prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-libiconv-prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --enable-mingw-wildcard --host=i686-w64-mingw32 --with-pkgversion='Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)'
+        Thread model: single
+        Supported LTO compression algorithms: zlib
+        gcc version 14.3.1 20250623 (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 
+        COMPILER_PATH=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/
+        LIBRARY_PATH=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_022f2.exe' '-mcpu=arm7tdmi' '-mfloat-abi=soft' '-marm' '-mlibarch=armv4t' '-march=armv4t' '-dumpdir' 'cmTC_022f2.'
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/collect2.exe -plugin C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/liblto_plugin.dll -plugin-opt=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\cc0LjVJ3.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc --sysroot=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi -X -o cmTC_022f2.exe C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crti.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtbegin.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/crt0.o -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1 -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/lib -v CMakeFiles/cmTC_022f2.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_022f2.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lm --start-group -lgcc -lc --end-group C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtend.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtn.o
+        collect2 version 14.3.1 20250623
+        C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe -plugin C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/liblto_plugin.dll -plugin-opt=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\cc0LjVJ3.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc --sysroot=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi -X -o cmTC_022f2.exe C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crti.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtbegin.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/crt0.o -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1 -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/lib -v CMakeFiles/cmTC_022f2.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_022f2.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lm --start-group -lgcc -lc --end-group C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtend.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtn.o
+        GNU ld (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 2.44.0.20250616
+        C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: unrecognized option '--major-image-version'
+        C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: use the --help option for usage information
+        collect2.exe: error: ld returned 1 exit status
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeTestCXXCompiler.cmake:56 (try_compile)"
+      - "CMakeLists.txt:5 (project)"
+    checks:
+      - "Check for working CXX compiler: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/arm-none-eabi-g++.exe"
+    directories:
+      source: "D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-05faov"
+      binary: "D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-05faov"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g"
+      CMAKE_CXX_SCAN_FOR_MODULES: "OFF"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_CXX_COMPILER_WORKS"
+      cached: true
+      stdout: |
+        Change Dir: 'D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-05faov'
+        
+        Run Build Command(s): C:/Users/Administrator/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_fbc7c
+        [1/2] C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE    -o CMakeFiles/cmTC_fbc7c.dir/testCXXCompiler.cxx.obj -c D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-05faov/testCXXCompiler.cxx
+        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE   CMakeFiles/cmTC_fbc7c.dir/testCXXCompiler.cxx.obj -o cmTC_fbc7c.exe -Wl,--out-implib,libcmTC_fbc7c.dll.a -Wl,--major-image-version,0,--minor-image-version,0  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 && cd ."
+        FAILED: [code=1] cmTC_fbc7c.exe 
+        C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE   CMakeFiles/cmTC_fbc7c.dir/testCXXCompiler.cxx.obj -o cmTC_fbc7c.exe -Wl,--out-implib,libcmTC_fbc7c.dll.a -Wl,--major-image-version,0,--minor-image-version,0  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 && cd ."
+        C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: unrecognized option '--major-image-version'
+        C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: use the --help option for usage information
+        collect2.exe: error: ld returned 1 exit status
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+...
+
+---
+events:
+  -
+    kind: "find-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:462 (find_file)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:500 (CMAKE_DETERMINE_COMPILER_ID_WRITE)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "file"
+    variable: "src_in"
+    description: "Path to a file."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "CMakeCXXCompilerId.cpp.in"
+    candidate_directories:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/"
+    found: "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeCXXCompilerId.cpp.in"
+    search_context:
+      ENV{PATH}:
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code"
+        - "C:\\Program Files\\Eclipse Adoptium\\jdk-25.0.1.8-hotspot\\bin"
+        - "C:\\Program Files\\Common Files\\Siemens\\Automation\\Simatic OAM\\bin"
+        - "C:\\WINDOWS\\system32"
+        - "C:\\WINDOWS"
+        - "C:\\WINDOWS\\System32\\Wbem"
+        - "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\"
+        - "C:\\WINDOWS\\System32\\OpenSSH\\"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\Interfaces"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\ACE\\Interfaces"
+        - "C:\\Program Files (x86)\\Microsoft SQL Server\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\130\\DTS\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\150\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn\\"
+        - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Program Files\\dotnet\\"
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Program Files (x86)\\SOPAS ET\\"
+        - "C:\\Users\\Administrator\\scoop\\apps\\python313\\current\\Scripts"
+        - "C:\\Users\\Administrator\\scoop\\apps\\python313\\current"
+        - "C:\\Users\\Administrator\\scoop\\apps\\git\\current\\bin"
+        - "C:\\Users\\Administrator\\scoop\\shims"
+        - "d:\\cursor\\resources\\app\\codeBin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\curl-8.8.0_1-win64-mingw\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\gn-windows-amd64-2239"
+        - "C:\\Program Files\\7-Zip"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\dtc-1.6.1\\tools\\usr\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\gperf-3.0.1\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\wget-1.21.4"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\Scripts"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310"
+        - "C:\\Program Files\\Git\\bin"
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Users\\Administrator\\.dotnet\\tools"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Antigravity\\bin"
+      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/flaxlib"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:5 (project)"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" failed.
+      Compiler: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/arm-none-eabi-g++.exe 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      1
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-exit.o): in function `exit':
+      exit.c:(.text.exit+0x28): undefined reference to `_exit'
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-closer.o): in function `_close_r':
+      closer.c:(.text._close_r+0x18): undefined reference to `_close'
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-lseekr.o): in function `_lseek_r':
+      lseekr.c:(.text._lseek_r+0x24): undefined reference to `_lseek'
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-readr.o): in function `_read_r':
+      readr.c:(.text._read_r+0x24): undefined reference to `_read'
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-writer.o): in function `_write_r':
+      writer.c:(.text._write_r+0x24): undefined reference to `_write'
+      C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib\\libc.a(libc_a-sbrkr.o): in function `_sbrk_r':
+      sbrkr.c:(.text._sbrk_r+0x18): undefined reference to `_sbrk'
+      collect2.exe: error: ld returned 1 exit status
+      
+      
+  -
+    kind: "find-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:462 (find_file)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:500 (CMAKE_DETERMINE_COMPILER_ID_WRITE)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:5 (project)"
+    mode: "file"
+    variable: "src_in"
+    description: "Path to a file."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "CMakeCXXCompilerId.cpp.in"
+    candidate_directories:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/"
+    found: "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeCXXCompilerId.cpp.in"
+    search_context:
+      ENV{PATH}:
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code"
+        - "C:\\Program Files\\Eclipse Adoptium\\jdk-25.0.1.8-hotspot\\bin"
+        - "C:\\Program Files\\Common Files\\Siemens\\Automation\\Simatic OAM\\bin"
+        - "C:\\WINDOWS\\system32"
+        - "C:\\WINDOWS"
+        - "C:\\WINDOWS\\System32\\Wbem"
+        - "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\"
+        - "C:\\WINDOWS\\System32\\OpenSSH\\"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\Interfaces"
+        - "C:\\Program Files (x86)\\Common Files\\Siemens\\ACE\\Interfaces"
+        - "C:\\Program Files (x86)\\Microsoft SQL Server\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\130\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\130\\DTS\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\150\\Tools\\Binn\\"
+        - "C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn\\"
+        - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Program Files\\dotnet\\"
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Program Files (x86)\\SOPAS ET\\"
+        - "C:\\Users\\Administrator\\scoop\\apps\\python313\\current\\Scripts"
+        - "C:\\Users\\Administrator\\scoop\\apps\\python313\\current"
+        - "C:\\Users\\Administrator\\scoop\\apps\\git\\current\\bin"
+        - "C:\\Users\\Administrator\\scoop\\shims"
+        - "d:\\cursor\\resources\\app\\codeBin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\curl-8.8.0_1-win64-mingw\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\gn-windows-amd64-2239"
+        - "C:\\Program Files\\7-Zip"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\dtc-1.6.1\\tools\\usr\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\gperf-3.0.1\\bin"
+        - "C:\\Users\\Administrator\\.mcuxpressotools\\wget-1.21.4"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\Scripts"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310"
+        - "C:\\Program Files\\Git\\bin"
+        - "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\14.3 rel1\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WinGet\\Links"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Users\\Administrator\\.dotnet\\tools"
+        - "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Antigravity\\bin"
+      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/flaxlib"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:5 (project)"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+      Compiler: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/arm-none-eabi-g++.exe 
+      Build flags: 
+      Id flags: -c 
+      
+      The output was:
+      0
+      
+      
+      Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CMakeCXXCompilerId.o"
+      
+      The CXX compiler identification is GNU, found in:
+        D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/4.2.0-rc1/CompilerIdCXX/CMakeCXXCompilerId.o
+      
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerABI.cmake:83 (try_compile)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:5 (project)"
+    checks:
+      - "Detecting CXX compiler ABI info"
+    directories:
+      source: "D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-wpd3dk"
+      binary: "D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-wpd3dk"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g"
+      CMAKE_CXX_SCAN_FOR_MODULES: "OFF"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_CXX_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: 'D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-wpd3dk'
+        
+        Run Build Command(s): C:/Users/Administrator/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_1abc3
+        [1/2] C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE   -v -o CMakeFiles/cmTC_1abc3.dir/CMakeCXXCompilerABI.cpp.obj -c "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp"
+        Using built-in specs.
+        COLLECT_GCC=C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE
+        Target: arm-none-eabi
+        Configured with: /data/jenkins/workspace/GNU-toolchain/arm-14/src/gcc/configure --target=arm-none-eabi --prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/install --with-gmp=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-mpfr=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-mpc=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-isl=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --disable-shared --disable-nls --disable-threads --disable-tls --enable-checking=release --enable-languages=c,c++,fortran --with-newlib --with-gnu-as --with-headers=yes --with-gnu-ld --with-native-system-header-dir=/include --with-sysroot=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/install/arm-none-eabi --with-bugurl=https://bugs.linaro.org/ --with-multilib-list=aprofile,rmprofile --with-libiconv-prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-libiconv-prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --enable-mingw-wildcard --host=i686-w64-mingw32 --with-pkgversion='Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)'
+        Thread model: single
+        Supported LTO compression algorithms: zlib
+        gcc version 14.3.1 20250623 (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_1abc3.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-mcpu=arm7tdmi' '-mfloat-abi=soft' '-marm' '-mlibarch=armv4t' '-march=armv4t' '-dumpdir' 'CMakeFiles/cmTC_1abc3.dir/'
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/cc1plus.exe -quiet -v -iprefix C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/ -isysroot C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi -D__USES_INITFINI__ C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_1abc3.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mcpu=arm7tdmi -mfloat-abi=soft -marm -mlibarch=armv4t -march=armv4t -version -o C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ccCFYwAJ.s
+        GNU C++17 (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) version 14.3.1 20250623 (arm-none-eabi)
+        	compiled by GNU C version 10-win32 20220113, GMP version 6.2.1, MPFR version 3.1.6, MPC version 1.0.3, isl version isl-0.15-1-g835ea3a-GMP
+        
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1/arm-none-eabi"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1/backward"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/include"
+        ignoring nonexistent directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/install/lib/gcc/arm-none-eabi/14.3.1/../../../../include"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/include-fixed"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/lib/gcc/../../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include"
+        ignoring duplicate directory "C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/include"
+        #include "..." search starts here:
+        #include <...> search starts here:
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1/arm-none-eabi
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include/c++/14.3.1/backward
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/include
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/include-fixed
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/include
+        End of search list.
+        Compiler executable checksum: dada17c8e112483894e5d212ab573e65
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_1abc3.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-mcpu=arm7tdmi' '-mfloat-abi=soft' '-marm' '-mlibarch=armv4t' '-march=armv4t' '-dumpdir' 'CMakeFiles/cmTC_1abc3.dir/'
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/as.exe -v -march=armv4t -mfloat-abi=soft -meabi=5 -o CMakeFiles/cmTC_1abc3.dir/CMakeCXXCompilerABI.cpp.obj C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ccCFYwAJ.s
+        GNU assembler version 2.44.0 (arm-none-eabi) using BFD version (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 2.44.0.20250616
+        COMPILER_PATH=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/
+        LIBRARY_PATH=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_1abc3.dir/CMakeCXXCompilerABI.cpp.obj' '-c' '-mcpu=arm7tdmi' '-mfloat-abi=soft' '-marm' '-mlibarch=armv4t' '-march=armv4t' '-dumpdir' 'CMakeFiles/cmTC_1abc3.dir/CMakeCXXCompilerABI.cpp.'
+        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE  -v -Wl,-v CMakeFiles/cmTC_1abc3.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_1abc3.exe -Wl,--out-implib,libcmTC_1abc3.dll.a -Wl,--major-image-version,0,--minor-image-version,0   && cd ."
+        FAILED: [code=1] cmTC_1abc3.exe 
+        C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE  -v -Wl,-v CMakeFiles/cmTC_1abc3.dir/CMakeCXXCompilerABI.cpp.obj -o cmTC_1abc3.exe -Wl,--out-implib,libcmTC_1abc3.dll.a -Wl,--major-image-version,0,--minor-image-version,0   && cd ."
+        Using built-in specs.
+        COLLECT_GCC=C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE
+        COLLECT_LTO_WRAPPER=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/lto-wrapper.exe
+        Target: arm-none-eabi
+        Configured with: /data/jenkins/workspace/GNU-toolchain/arm-14/src/gcc/configure --target=arm-none-eabi --prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/install --with-gmp=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-mpfr=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-mpc=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-isl=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --disable-shared --disable-nls --disable-threads --disable-tls --enable-checking=release --enable-languages=c,c++,fortran --with-newlib --with-gnu-as --with-headers=yes --with-gnu-ld --with-native-system-header-dir=/include --with-sysroot=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/install/arm-none-eabi --with-bugurl=https://bugs.linaro.org/ --with-multilib-list=aprofile,rmprofile --with-libiconv-prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --with-libiconv-prefix=/data/jenkins/workspace/GNU-toolchain/arm-14/build-mingw-arm-none-eabi/host-tools --enable-mingw-wildcard --host=i686-w64-mingw32 --with-pkgversion='Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)'
+        Thread model: single
+        Supported LTO compression algorithms: zlib
+        gcc version 14.3.1 20250623 (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 
+        COMPILER_PATH=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/
+        LIBRARY_PATH=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/;C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_1abc3.exe' '-mcpu=arm7tdmi' '-mfloat-abi=soft' '-marm' '-mlibarch=armv4t' '-march=armv4t' '-dumpdir' 'cmTC_1abc3.'
+         C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/collect2.exe -plugin C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/liblto_plugin.dll -plugin-opt=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ccMKDre6.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc --sysroot=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi -X -o cmTC_1abc3.exe C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crti.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtbegin.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/crt0.o -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1 -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/lib -v CMakeFiles/cmTC_1abc3.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_1abc3.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lm --start-group -lgcc -lc --end-group C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtend.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtn.o
+        collect2 version 14.3.1 20250623
+        C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe -plugin C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/liblto_plugin.dll -plugin-opt=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../libexec/gcc/arm-none-eabi/14.3.1/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ccMKDre6.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc --sysroot=C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi -X -o cmTC_1abc3.exe C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crti.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtbegin.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib/crt0.o -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1 -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/lib -LC:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../arm-none-eabi/lib -v CMakeFiles/cmTC_1abc3.dir/CMakeCXXCompilerABI.cpp.obj --out-implib libcmTC_1abc3.dll.a --major-image-version 0 --minor-image-version 0 -lstdc++ -lm --start-group -lgcc -lc --end-group C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtend.o C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/crtn.o
+        GNU ld (Arm GNU Toolchain 14.3.Rel1 (Build arm-14.174)) 2.44.0.20250616
+        C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: unrecognized option '--major-image-version'
+        C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: use the --help option for usage information
+        collect2.exe: error: ld returned 1 exit status
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeTestCXXCompiler.cmake:56 (try_compile)"
+      - "CMakeLists.txt:5 (project)"
+    checks:
+      - "Check for working CXX compiler: C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/arm-none-eabi-g++.exe"
+    directories:
+      source: "D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-1m5kc1"
+      binary: "D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-1m5kc1"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g"
+      CMAKE_CXX_SCAN_FOR_MODULES: "OFF"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_CXX_COMPILER_WORKS"
+      cached: true
+      stdout: |
+        Change Dir: 'D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-1m5kc1'
+        
+        Run Build Command(s): C:/Users/Administrator/AppData/Local/Microsoft/WinGet/Links/ninja.exe -v cmTC_1c1f8
+        [1/2] C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE    -o CMakeFiles/cmTC_1c1f8.dir/testCXXCompiler.cxx.obj -c D:/2CHAN/Wheeled-bipedal-robot-simulation/build/CMakeFiles/CMakeScratch/TryCompile-1m5kc1/testCXXCompiler.cxx
+        [2/2] C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE   CMakeFiles/cmTC_1c1f8.dir/testCXXCompiler.cxx.obj -o cmTC_1c1f8.exe -Wl,--out-implib,libcmTC_1c1f8.dll.a -Wl,--major-image-version,0,--minor-image-version,0  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 && cd ."
+        FAILED: [code=1] cmTC_1c1f8.exe 
+        C:\\WINDOWS\\system32\\cmd.exe /C "cd . && C:\\PROGRA~2\\ARMGNU~1\\142BCE~1.3RE\\bin\\AR10B2~1.EXE   CMakeFiles/cmTC_1c1f8.dir/testCXXCompiler.cxx.obj -o cmTC_1c1f8.exe -Wl,--out-implib,libcmTC_1c1f8.dll.a -Wl,--major-image-version,0,--minor-image-version,0  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 && cd ."
+        C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: unrecognized option '--major-image-version'
+        C:/PROGRA~2/ARMGNU~1/142BCE~1.3RE/bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/bin/ld.exe: use the --help option for usage information
+        collect2.exe: error: ld returned 1 exit status
+        ninja: build stopped: subcommand failed.
+        
+      exitCode: 1
+...
