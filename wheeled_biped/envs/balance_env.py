@@ -48,20 +48,19 @@ from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate, quat_to_
 class BalanceEnv(WheeledBipedEnv):
     """Environment cho task đứng vững ở nhiều chiều cao.
 
-    Mỗi episode random một height_command ∈ [0.38, 0.72].
-    Với curriculum: khởi đầu [0.695, 0.72] (gần keyframe 0.71m),
-    mở rộng dần → [0.38, 0.72] khi reward đạt ngưỡng (trainer quản lý).
+    Mỗi episode random một height_command ∈ [0.40, 0.70].
+    Với curriculum: khởi đầu [0.69, 0.70],
+    mở rộng dần → [0.40, 0.70] khi reward đạt ngưỡng (trainer quản lý).
     Robot phải giữ chiều cao theo lệnh, thân ngang, 2 chân đối xứng, đứng yên.
 
     Observation (40 dims):
-      - base obs (39): gravity_body, lin_vel, ang_vel, joint_pos, joint_vel, prev_action
-      - height_command (1): chiều cao mục tiêu (normalized về [0, 1] theo [MIN=0.38, MAX=0.72])
+        - base obs (39): gravity_body, lin_vel, ang_vel, joint_pos, joint_vel, prev_action
+        - height_command (1): chiều cao mục tiêu (normalized về [0, 1] theo [MIN=0.40, MAX=0.70])
     """
 
     # Khoảng chiều cao lệnh (m) — đo từ kinematics thực tế
-    # Thẳng nhất (hp=0, kn=0): ~0.73m, Gập tối đa (hp=1.5, kn=2.5): ~0.36m
-    MIN_HEIGHT_CMD = 0.38  # ngồi thấp nhất (an toàn trên min_height=0.3)
-    MAX_HEIGHT_CMD = 0.72  # đứng thẳng nhất
+    MIN_HEIGHT_CMD = 0.40
+    MAX_HEIGHT_CMD = 0.70
 
     def __init__(self, config: dict[str, Any] | None = None, **kwargs):
         super().__init__(config=config, **kwargs)
@@ -101,12 +100,101 @@ class BalanceEnv(WheeledBipedEnv):
         self._push_magnitude = float(dr_cfg.get("push_magnitude", 20.0))
         self._push_duration = int(dr_cfg.get("push_duration", 5))  # số steps giữ lực
         self._push_enabled = bool(dr_cfg.get("enabled", True))
+
+        # Low-level PID config: policy -> target, PID -> actuator ctrl
+        pid_cfg = self.config.get("low_level_pid", {})
+        self._pid_enabled = bool(pid_cfg.get("enabled", False))
+        self._pid_smoothing_alpha = float(pid_cfg.get("action_smoothing_alpha", 0.0))
+        self._pid_i_limit = float(pid_cfg.get("anti_windup_limit", 0.3))
+        self._wheel_vel_limit = float(pid_cfg.get("wheel_vel_limit", 20.0))
+
+        # Joint range theo thứ tự action/joint của env (qpos[7:])
+        joint_mins = []
+        joint_maxs = []
+        for joint_name in self.JOINT_NAMES:
+            jid = self.mj_model.joint(joint_name).id
+            jrange = self.mj_model.jnt_range[jid]
+            joint_mins.append(float(jrange[0]))
+            joint_maxs.append(float(jrange[1]))
+        self._joint_mins = jnp.array(joint_mins, dtype=jnp.float32)
+        self._joint_maxs = jnp.array(joint_maxs, dtype=jnp.float32)
+
+        # Wheel joint dùng velocity target thay vì position target
+        wheel_indices = [i for i, n in enumerate(self.JOINT_NAMES) if "wheel" in n]
+        wheel_mask = [
+            1.0 if i in wheel_indices else 0.0 for i in range(self.num_actions)
+        ]
+        self._wheel_mask = jnp.array(wheel_mask, dtype=jnp.float32)
+
+        # PID gains (vector theo 10 joints), có fallback an toàn
+        default_kp = [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+        default_ki = [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
+        default_kd = [3.0, 2.0, 4.0, 4.0, 0.2, 3.0, 2.0, 4.0, 4.0, 0.2]
+        kp_cfg = pid_cfg.get("kp", default_kp)
+        ki_cfg = pid_cfg.get("ki", default_ki)
+        kd_cfg = pid_cfg.get("kd", default_kd)
+        if not isinstance(kp_cfg, list) or len(kp_cfg) != self.num_actions:
+            kp_cfg = default_kp
+        if not isinstance(ki_cfg, list) or len(ki_cfg) != self.num_actions:
+            ki_cfg = default_ki
+        if not isinstance(kd_cfg, list) or len(kd_cfg) != self.num_actions:
+            kd_cfg = default_kd
+        self._pid_kp = jnp.array(kp_cfg, dtype=jnp.float32)
+        self._pid_ki = jnp.array(ki_cfg, dtype=jnp.float32)
+        self._pid_kd = jnp.array(kd_cfg, dtype=jnp.float32)
+
+        # Cache actuator ctrl range cho clip output PID
+        ctrl_range = self.mjx_model.actuator_ctrlrange
+        self._ctrl_min = ctrl_range[:, 0]
+        self._ctrl_max = ctrl_range[:, 1]
+
         # Lấy torso body_id từ mj_model
         import mujoco
 
         self._torso_id = mujoco.mj_name2id(
             self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso"
         )
+
+    def _pid_low_level_ctrl(
+        self,
+        mjx_data: mjx.Data,
+        normalized_target: jnp.ndarray,
+        pid_integral: jnp.ndarray,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """PID low-level: target chuẩn hóa -> actuator ctrl.
+
+        - Joint thường: vị trí đích q_des trong joint range
+        - Joint bánh: vận tốc đích dq_des trong [-wheel_vel_limit, +wheel_vel_limit]
+        """
+        joint_pos = mjx_data.qpos[7:17]
+        joint_vel = mjx_data.qvel[6:16]
+
+        pos_target = self._joint_mins + (normalized_target + 1.0) * 0.5 * (
+            self._joint_maxs - self._joint_mins
+        )
+        vel_target_wheel = normalized_target * self._wheel_vel_limit
+
+        pos_err = pos_target - joint_pos
+        vel_err = -joint_vel
+
+        # Wheel dùng velocity error, các joint còn lại dùng position error
+        error = (1.0 - self._wheel_mask) * pos_err + self._wheel_mask * (
+            vel_target_wheel - joint_vel
+        )
+        # Damping term cho cả joint thường và wheel để KD gain có tác dụng nhất quán.
+        d_error = vel_err
+
+        integral_new = jnp.clip(
+            pid_integral + error * self.CONTROL_DT,
+            -self._pid_i_limit,
+            self._pid_i_limit,
+        )
+
+        ctrl = (
+            self._pid_kp * error + self._pid_kd * d_error + self._pid_ki * integral_new
+        )
+        ctrl = jnp.clip(ctrl, self._ctrl_min, self._ctrl_max)
+        return ctrl, integral_new
 
     def _compute_obs_size(self) -> int:
         """Observation = base 39 + height_command 1 = 40."""
@@ -168,6 +256,7 @@ class BalanceEnv(WheeledBipedEnv):
                 "push_rng": push_key,
                 "lifetime_steps": jnp.int32(0),
                 "curriculum_min_height": jnp.float32(self._initial_min_height),
+                "pid_integral": jnp.zeros(self.num_actions, dtype=jnp.float32),
             },
         )
 
@@ -176,11 +265,27 @@ class BalanceEnv(WheeledBipedEnv):
         """Step với height_command trong observation."""
         action = jnp.clip(action, -1.0, 1.0)
 
-        # Scale action theo ctrlrange
-        ctrl_range = self.mjx_model.actuator_ctrlrange
-        ctrl_min = ctrl_range[:, 0]
-        ctrl_max = ctrl_range[:, 1]
-        scaled_action = ctrl_min + (action + 1.0) * 0.5 * (ctrl_max - ctrl_min)
+        # Lọc action để giảm rung trước khi đưa vào low-level controller
+        if self._pid_enabled and self._pid_smoothing_alpha > 0.0:
+            control_action = (
+                self._pid_smoothing_alpha * state.prev_action
+                + (1.0 - self._pid_smoothing_alpha) * action
+            )
+        else:
+            control_action = action
+
+        # Direct torque mode (cũ) hoặc PID low-level mode
+        if self._pid_enabled:
+            scaled_action, pid_integral = self._pid_low_level_ctrl(
+                state.mjx_data,
+                control_action,
+                state.info["pid_integral"],
+            )
+        else:
+            scaled_action = self._ctrl_min + (control_action + 1.0) * 0.5 * (
+                self._ctrl_max - self._ctrl_min
+            )
+            pid_integral = state.info["pid_integral"]
 
         mjx_data = state.mjx_data.replace(ctrl=scaled_action)
 
@@ -215,7 +320,7 @@ class BalanceEnv(WheeledBipedEnv):
         )
 
         # Base obs (39 dims)
-        base_obs = self._extract_obs(mjx_data, action)
+        base_obs = self._extract_obs(mjx_data, control_action)
 
         # Append height_command (normalized)
         height_command = state.info["height_command"]
@@ -225,7 +330,7 @@ class BalanceEnv(WheeledBipedEnv):
         obs = jnp.concatenate([base_obs, jnp.array([height_norm])])
 
         # Reward
-        reward = self._compute_reward(mjx_data, action, state)
+        reward = self._compute_reward(mjx_data, control_action, state)
 
         # Termination
         is_fallen = self._check_termination(mjx_data)
@@ -239,7 +344,7 @@ class BalanceEnv(WheeledBipedEnv):
             reward=reward,
             done=done,
             step_count=step_count,
-            prev_action=action,
+            prev_action=control_action,
             info={
                 "is_fallen": is_fallen,
                 "time_limit": time_limit,
@@ -249,6 +354,7 @@ class BalanceEnv(WheeledBipedEnv):
                 "push_rng": new_push_rng,  # cập nhật rng cho push tiếp theo
                 "lifetime_steps": state.info["lifetime_steps"] + 1,
                 "curriculum_min_height": state.info["curriculum_min_height"],
+                "pid_integral": pid_integral,
             },
         )
 

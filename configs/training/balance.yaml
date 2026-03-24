@@ -7,16 +7,16 @@ task:
   env: "BalanceEnv"
   episode_length: 1000 # 1000 steps × 0.02s = 20s
   num_envs: 4096 # số env song song trên GPU
-  initial_min_height: 0.705 # min ban đầu (keyframe=0.71)
+  initial_min_height: 0.69 # min ban đầu
 
 # --- Height Curriculum (reward-based) ---
 # Mở rộng khoảng height_command khi robot đạt đủ reward
-# Ban đầu [0.705, 0.72] → dần mở rộng → [0.38, 0.72]
+# Ban đầu [0.69, 0.70] → dần mở rộng → [0.40, 0.70]
 # Chỉ tăng level khi avg_reward >= reward_threshold × max_possible_reward
 curriculum:
   enabled: true
   reward_threshold: 0.85 # 85% tổng reward tối đa → mở rộng range
-  num_levels: 34 # 34 cấp: mỗi cấp giảm min_height 0.01m (0.705 → 0.38)
+  num_levels: 29 # 29 cấp: mỗi cấp giảm min_height 0.01m (0.69 → 0.40)
   window: 50 # trung bình reward qua 50 updates gần nhất
 
 # --- PPO Hyperparameters ---
@@ -41,6 +41,22 @@ network:
   activation: "elu"
   init_std: 0.2
 
+# --- Low-level PID (gần với điều khiển thực tế) ---
+# Policy sinh target chuẩn hóa [-1, 1], PID low-level đổi sang torque/force actuator.
+# - Khớp hông/gối: điều khiển vị trí (q_des)
+# - Bánh xe: điều khiển vận tốc (dq_des)
+low_level_pid:
+  enabled: true
+  action_smoothing_alpha: 0.4 # 0 = không lọc, 0.4~0.6 giúp giảm rung rõ
+  anti_windup_limit: 0.35 # giới hạn tích phân lỗi
+  wheel_vel_limit: 20.0 # rad/s khi action = ±1 cho bánh xe
+  # Theo thứ tự JOINT_NAMES:
+  # [l_hip_roll, l_hip_yaw, l_hip_pitch, l_knee, l_wheel,
+  #  r_hip_roll, r_hip_yaw, r_hip_pitch, r_knee, r_wheel]
+  kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+  ki: [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
+  kd: [3.0, 2.0, 4.0, 4.0, 0.2, 3.0, 2.0, 4.0, 4.0, 0.2]
+
 # --- Reward weights ---
 # Tập trung tín hiệu chính: tư thế đúng + chiều cao + thân ngang
 # Tổng thưởng max ≈ 9.5, phạt nhẹ
@@ -58,10 +74,10 @@ rewards:
   yaw_rate: 0.5 # phạt trực tiếp tốc độ quay yaw
   no_motion: 0.5 # chống local optimum "linear drift"
   # === Phạt (giữ nhẹ) ===
-  wheel_velocity: -0.0005
-  joint_torque: -0.0001 # phạt mô-men lớn
-  joint_velocity: -0.0005 # phạt tốc độ khớp — giảm (bao gồm cả wheel vel)
-  action_rate: -0.02 # chống rung, action mượt hơn
+  wheel_velocity: -0.0006 # phạt tốc độ bánh xe — giảm để bánh xe có thể giúp cân bằng
+  joint_torque: -0.0005 # phạt mô-men lớn
+  joint_velocity: -0.0006 # phạt tốc độ khớp — giảm (bao gồm cả wheel vel)
+  action_rate: -0.025 # chống rung, action mượt hơn
 
 # --- Termination ---
 termination:

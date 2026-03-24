@@ -75,7 +75,9 @@ def policy(
     import jax.numpy as jnp
     import mujoco
     import mujoco.viewer
+    import numpy as np
 
+    from wheeled_biped.envs.balance_env import BalanceEnv
     from wheeled_biped.training.networks import create_actor_critic
     from wheeled_biped.training.ppo import normalize_obs
     from wheeled_biped.utils.config import get_model_path
@@ -120,12 +122,66 @@ def policy(
     physics_dt = mj_model.opt.timestep
     n_substeps = int(control_dt / physics_dt)
 
-    # Track prev_action (normalized [-1,1], giống training)
-    prev_action = jnp.zeros(10)
+    # Height range và default height lấy theo env/config để đồng bộ với training
+    min_h = float(getattr(BalanceEnv, "MIN_HEIGHT_CMD", 0.40))
+    max_h = float(getattr(BalanceEnv, "MAX_HEIGHT_CMD", 0.70))
+    default_h = float(config.get("task", {}).get("initial_min_height", 0.69))
+    default_h = max(min(default_h, max_h), min_h)
+    height_cmd_norm = jnp.array([(default_h - min_h) / (max_h - min_h)])
 
-    # Height command mặc định = 0.71m (keyframe)
-    # Normalize về [0, 1]: (0.71 - 0.38) / (0.72 - 0.38) ≈ 0.97
-    height_cmd_norm = jnp.array([0.97])
+    # Low-level PID settings (nếu checkpoint bật)
+    pid_cfg = config.get("low_level_pid", {})
+    pid_enabled = bool(pid_cfg.get("enabled", False))
+    pid_alpha = float(pid_cfg.get("action_smoothing_alpha", 0.0))
+    pid_i_limit = float(pid_cfg.get("anti_windup_limit", 0.3))
+    wheel_vel_limit = float(pid_cfg.get("wheel_vel_limit", 20.0))
+
+    joint_names = [
+        "l_hip_roll",
+        "l_hip_yaw",
+        "l_hip_pitch",
+        "l_knee",
+        "l_wheel",
+        "r_hip_roll",
+        "r_hip_yaw",
+        "r_hip_pitch",
+        "r_knee",
+        "r_wheel",
+    ]
+    joint_mins = []
+    joint_maxs = []
+    for n in joint_names:
+        jid = mj_model.joint(n).id
+        jrange = mj_model.jnt_range[jid]
+        joint_mins.append(float(jrange[0]))
+        joint_maxs.append(float(jrange[1]))
+    joint_mins = jnp.array(joint_mins, dtype=jnp.float32)
+    joint_maxs = jnp.array(joint_maxs, dtype=jnp.float32)
+    wheel_mask = jnp.array([1.0 if "wheel" in n else 0.0 for n in joint_names])
+
+    default_kp = [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+    default_ki = [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
+    default_kd = [3.0, 2.0, 4.0, 4.0, 0.2, 3.0, 2.0, 4.0, 4.0, 0.2]
+    kp_cfg = pid_cfg.get("kp", default_kp)
+    ki_cfg = pid_cfg.get("ki", default_ki)
+    kd_cfg = pid_cfg.get("kd", default_kd)
+    if not isinstance(kp_cfg, list) or len(kp_cfg) != 10:
+        kp_cfg = default_kp
+    if not isinstance(ki_cfg, list) or len(ki_cfg) != 10:
+        ki_cfg = default_ki
+    if not isinstance(kd_cfg, list) or len(kd_cfg) != 10:
+        kd_cfg = default_kd
+    pid_kp = jnp.array(kp_cfg, dtype=jnp.float32)
+    pid_ki = jnp.array(ki_cfg, dtype=jnp.float32)
+    pid_kd = jnp.array(kd_cfg, dtype=jnp.float32)
+
+    ctrl_range = jnp.array(mj_model.actuator_ctrlrange)
+    ctrl_min = ctrl_range[:, 0]
+    ctrl_max = ctrl_range[:, 1]
+    pid_integral = jnp.zeros(10)
+
+    # prev_action trong observation phải khớp training (action sau smoothing)
+    prev_action = jnp.zeros(10)
 
     # Telemetry recorder
     recorder = TelemetryRecorder(control_dt=control_dt) if log else None
@@ -172,15 +228,39 @@ def policy(
             action = dist.loc  # deterministic
             action = jnp.clip(action, -1.0, 1.0)
 
-            # Lưu prev_action cho step tiếp theo (normalized [-1,1])
-            prev_action = action
+            # Low-level PID path (giống training) hoặc direct path
+            if pid_enabled and pid_alpha > 0.0:
+                control_action = pid_alpha * prev_action + (1.0 - pid_alpha) * action
+            else:
+                control_action = action
 
-            # Scale action
-            ctrl_range = mj_model.actuator_ctrlrange
-            ctrl = ctrl_range[:, 0] + (action + 1) * 0.5 * (
-                ctrl_range[:, 1] - ctrl_range[:, 0]
-            )
-            mj_data.ctrl[:] = ctrl
+            if pid_enabled:
+                joint_pos = jnp.array(mj_data.qpos[7:17])
+                joint_vel = jnp.array(mj_data.qvel[6:16])
+                pos_target = joint_mins + (control_action + 1.0) * 0.5 * (
+                    joint_maxs - joint_mins
+                )
+                vel_target_wheel = control_action * wheel_vel_limit
+                pos_err = pos_target - joint_pos
+                error = (1.0 - wheel_mask) * pos_err + wheel_mask * (
+                    vel_target_wheel - joint_vel
+                )
+                d_error = -joint_vel
+                pid_integral = jnp.clip(
+                    pid_integral + error * control_dt,
+                    -pid_i_limit,
+                    pid_i_limit,
+                )
+                ctrl = jnp.clip(
+                    pid_kp * error + pid_kd * d_error + pid_ki * pid_integral,
+                    ctrl_min,
+                    ctrl_max,
+                )
+            else:
+                ctrl = ctrl_min + (control_action + 1.0) * 0.5 * (ctrl_max - ctrl_min)
+
+            prev_action = control_action
+            mj_data.ctrl[:] = np.array(ctrl)
 
             # Physics steps
             for _ in range(n_substeps):
@@ -231,6 +311,7 @@ def render(
     import mujoco
     import numpy as np
 
+    from wheeled_biped.envs.balance_env import BalanceEnv
     from wheeled_biped.training.networks import create_actor_critic
     from wheeled_biped.training.ppo import normalize_obs
     from wheeled_biped.utils.config import get_model_path
@@ -278,9 +359,60 @@ def render(
     n_substeps = int(control_dt / physics_dt)
 
     frames = []
+    min_h = float(getattr(BalanceEnv, "MIN_HEIGHT_CMD", 0.40))
+    max_h = float(getattr(BalanceEnv, "MAX_HEIGHT_CMD", 0.70))
+    default_h = float(config.get("task", {}).get("initial_min_height", 0.69))
+    default_h = max(min(default_h, max_h), min_h)
+    height_cmd_norm = jnp.array([(default_h - min_h) / (max_h - min_h)])
+
+    pid_cfg = config.get("low_level_pid", {})
+    pid_enabled = bool(pid_cfg.get("enabled", False))
+    pid_alpha = float(pid_cfg.get("action_smoothing_alpha", 0.0))
+    pid_i_limit = float(pid_cfg.get("anti_windup_limit", 0.3))
+    wheel_vel_limit = float(pid_cfg.get("wheel_vel_limit", 20.0))
+    joint_names = [
+        "l_hip_roll",
+        "l_hip_yaw",
+        "l_hip_pitch",
+        "l_knee",
+        "l_wheel",
+        "r_hip_roll",
+        "r_hip_yaw",
+        "r_hip_pitch",
+        "r_knee",
+        "r_wheel",
+    ]
+    joint_mins = []
+    joint_maxs = []
+    for n in joint_names:
+        jid = mj_model.joint(n).id
+        jrange = mj_model.jnt_range[jid]
+        joint_mins.append(float(jrange[0]))
+        joint_maxs.append(float(jrange[1]))
+    joint_mins = jnp.array(joint_mins, dtype=jnp.float32)
+    joint_maxs = jnp.array(joint_maxs, dtype=jnp.float32)
+    wheel_mask = jnp.array([1.0 if "wheel" in n else 0.0 for n in joint_names])
+    default_kp = [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+    default_ki = [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
+    default_kd = [3.0, 2.0, 4.0, 4.0, 0.2, 3.0, 2.0, 4.0, 4.0, 0.2]
+    kp_cfg = pid_cfg.get("kp", default_kp)
+    ki_cfg = pid_cfg.get("ki", default_ki)
+    kd_cfg = pid_cfg.get("kd", default_kd)
+    if not isinstance(kp_cfg, list) or len(kp_cfg) != 10:
+        kp_cfg = default_kp
+    if not isinstance(ki_cfg, list) or len(ki_cfg) != 10:
+        ki_cfg = default_ki
+    if not isinstance(kd_cfg, list) or len(kd_cfg) != 10:
+        kd_cfg = default_kd
+    pid_kp = jnp.array(kp_cfg, dtype=jnp.float32)
+    pid_ki = jnp.array(ki_cfg, dtype=jnp.float32)
+    pid_kd = jnp.array(kd_cfg, dtype=jnp.float32)
+    ctrl_range = jnp.array(mj_model.actuator_ctrlrange)
+    ctrl_min = ctrl_range[:, 0]
+    ctrl_max = ctrl_range[:, 1]
+    pid_integral = jnp.zeros(10)
     prev_action = jnp.zeros(10)
-    # Height command mặc định = keyframe (normalized ≈ 0.97)
-    height_cmd_norm = jnp.array([0.97])
+
     console.print(f"Rendering {num_steps} steps...")
     recorder = TelemetryRecorder(control_dt=control_dt) if log else None
 
@@ -308,12 +440,38 @@ def render(
         obs_norm = normalize_obs(obs, obs_rms)
         dist, _ = model.apply(params, obs_norm)
         action = jnp.clip(dist.loc, -1.0, 1.0)
-        prev_action = action
 
-        ctrl_range = mj_model.actuator_ctrlrange
-        ctrl = ctrl_range[:, 0] + (action + 1) * 0.5 * (
-            ctrl_range[:, 1] - ctrl_range[:, 0]
-        )
+        if pid_enabled and pid_alpha > 0.0:
+            control_action = pid_alpha * prev_action + (1.0 - pid_alpha) * action
+        else:
+            control_action = action
+
+        if pid_enabled:
+            joint_pos = jnp.array(mj_data.qpos[7:17])
+            joint_vel = jnp.array(mj_data.qvel[6:16])
+            pos_target = joint_mins + (control_action + 1.0) * 0.5 * (
+                joint_maxs - joint_mins
+            )
+            vel_target_wheel = control_action * wheel_vel_limit
+            pos_err = pos_target - joint_pos
+            error = (1.0 - wheel_mask) * pos_err + wheel_mask * (
+                vel_target_wheel - joint_vel
+            )
+            d_error = -joint_vel
+            pid_integral = jnp.clip(
+                pid_integral + error * control_dt,
+                -pid_i_limit,
+                pid_i_limit,
+            )
+            ctrl = jnp.clip(
+                pid_kp * error + pid_kd * d_error + pid_ki * pid_integral,
+                ctrl_min,
+                ctrl_max,
+            )
+        else:
+            ctrl = ctrl_min + (control_action + 1.0) * 0.5 * (ctrl_max - ctrl_min)
+
+        prev_action = control_action
         mj_data.ctrl[:] = np.array(ctrl)
 
         for _ in range(n_substeps):
@@ -375,6 +533,7 @@ def interactive(
     import mujoco.viewer
     import numpy as np
 
+    from wheeled_biped.envs.balance_env import BalanceEnv
     from wheeled_biped.utils.config import get_model_path
     from wheeled_biped.utils.telemetry import TelemetryRecorder, plot_telemetry
 
@@ -395,6 +554,11 @@ def interactive(
 
     _settle_robot()
 
+    MIN_H = float(getattr(BalanceEnv, "MIN_HEIGHT_CMD", 0.40))
+    MAX_H = float(getattr(BalanceEnv, "MAX_HEIGHT_CMD", 0.70))
+    default_height_cmd = max(min(0.69, MAX_H), MIN_H)
+    KEY_H = default_height_cmd
+
     # ---------- trạng thái điều khiển ----------
     # Actuator order: l_hip_roll(0), l_hip_yaw(1), l_hip_pitch(2), l_knee(3), l_wheel(4)
     #                 r_hip_roll(5), r_hip_yaw(6), r_hip_pitch(7), r_knee(8), r_wheel(9)
@@ -404,7 +568,7 @@ def interactive(
         "roll": 0.0,  # -1 .. +1
         "speed": 5.0,  # wheel torque magnitude (Nm)
         "roll_gain": 3.0,  # hip roll torque magnitude
-        "height_cmd": 0.71,  # độ cao mục tiêu (m), range [0.38, 0.72]
+        "height_cmd": default_height_cmd,  # độ cao mục tiêu (m)
         "reset_requested": False,
     }
     _lock = threading.Lock()
@@ -452,10 +616,59 @@ def interactive(
             )
 
             _interactive_prev_action = jnp.zeros(10)
-            _interactive_height_cmd_norm = 1.0  # default: đứng thẳng
+            _interactive_pid_integral = jnp.zeros(10)
+            _interactive_height_cmd_norm = (default_height_cmd - MIN_H) / (
+                MAX_H - MIN_H
+            )
+
+            pid_cfg = config.get("low_level_pid", {})
+            pid_enabled = bool(pid_cfg.get("enabled", False))
+            pid_alpha = float(pid_cfg.get("action_smoothing_alpha", 0.0))
+            pid_i_limit = float(pid_cfg.get("anti_windup_limit", 0.3))
+            wheel_vel_limit = float(pid_cfg.get("wheel_vel_limit", 20.0))
+            joint_names = [
+                "l_hip_roll",
+                "l_hip_yaw",
+                "l_hip_pitch",
+                "l_knee",
+                "l_wheel",
+                "r_hip_roll",
+                "r_hip_yaw",
+                "r_hip_pitch",
+                "r_knee",
+                "r_wheel",
+            ]
+            joint_mins = []
+            joint_maxs = []
+            for n in joint_names:
+                jid = mj_model.joint(n).id
+                jrange = mj_model.jnt_range[jid]
+                joint_mins.append(float(jrange[0]))
+                joint_maxs.append(float(jrange[1]))
+            joint_mins = jnp.array(joint_mins, dtype=jnp.float32)
+            joint_maxs = jnp.array(joint_maxs, dtype=jnp.float32)
+            wheel_mask = jnp.array([1.0 if "wheel" in n else 0.0 for n in joint_names])
+            default_kp = [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+            default_ki = [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
+            default_kd = [3.0, 2.0, 4.0, 4.0, 0.2, 3.0, 2.0, 4.0, 4.0, 0.2]
+            kp_cfg = pid_cfg.get("kp", default_kp)
+            ki_cfg = pid_cfg.get("ki", default_ki)
+            kd_cfg = pid_cfg.get("kd", default_kd)
+            if not isinstance(kp_cfg, list) or len(kp_cfg) != 10:
+                kp_cfg = default_kp
+            if not isinstance(ki_cfg, list) or len(ki_cfg) != 10:
+                ki_cfg = default_ki
+            if not isinstance(kd_cfg, list) or len(kd_cfg) != 10:
+                kd_cfg = default_kd
+            pid_kp = jnp.array(kp_cfg, dtype=jnp.float32)
+            pid_ki = jnp.array(ki_cfg, dtype=jnp.float32)
+            pid_kd = jnp.array(kd_cfg, dtype=jnp.float32)
+            ctrl_range = jnp.array(mj_model.actuator_ctrlrange)
+            ctrl_min = ctrl_range[:, 0]
+            ctrl_max = ctrl_range[:, 1]
 
             def _policy(data, height_cmd_norm=None):
-                nonlocal _interactive_prev_action, _interactive_height_cmd_norm
+                nonlocal _interactive_prev_action, _interactive_height_cmd_norm, _interactive_pid_integral
                 if height_cmd_norm is not None:
                     _interactive_height_cmd_norm = height_cmd_norm
                 torso_quat = jnp.array(data.qpos[3:7])
@@ -477,11 +690,45 @@ def interactive(
                 obs_norm = normalize_obs(obs, obs_rms)
                 dist, _ = network.apply(params, obs_norm)
                 action = jnp.clip(dist.loc, -1.0, 1.0)
-                _interactive_prev_action = action
-                ctrl_range = mj_model.actuator_ctrlrange
-                ctrl = ctrl_range[:, 0] + (action + 1) * 0.5 * (
-                    ctrl_range[:, 1] - ctrl_range[:, 0]
-                )
+
+                if pid_enabled and pid_alpha > 0.0:
+                    control_action = (
+                        pid_alpha * _interactive_prev_action
+                        + (1.0 - pid_alpha) * action
+                    )
+                else:
+                    control_action = action
+
+                if pid_enabled:
+                    joint_pos = jnp.array(data.qpos[7:17])
+                    joint_vel = jnp.array(data.qvel[6:16])
+                    pos_target = joint_mins + (control_action + 1.0) * 0.5 * (
+                        joint_maxs - joint_mins
+                    )
+                    vel_target_wheel = control_action * wheel_vel_limit
+                    pos_err = pos_target - joint_pos
+                    error = (1.0 - wheel_mask) * pos_err + wheel_mask * (
+                        vel_target_wheel - joint_vel
+                    )
+                    d_error = -joint_vel
+                    _interactive_pid_integral = jnp.clip(
+                        _interactive_pid_integral + error * control_dt,
+                        -pid_i_limit,
+                        pid_i_limit,
+                    )
+                    ctrl = jnp.clip(
+                        pid_kp * error
+                        + pid_kd * d_error
+                        + pid_ki * _interactive_pid_integral,
+                        ctrl_min,
+                        ctrl_max,
+                    )
+                else:
+                    ctrl = ctrl_min + (control_action + 1.0) * 0.5 * (
+                        ctrl_max - ctrl_min
+                    )
+
+                _interactive_prev_action = control_action
                 return np.array(ctrl)
 
             policy_fn = _policy
@@ -518,10 +765,10 @@ def interactive(
                 ctrl_state["speed"] = max(ctrl_state["speed"] - 1.0, 1.0)
                 print(f"  Speed: {ctrl_state['speed']:.1f}")
             elif keycode == 85:  # U — tăng chiều cao (+1cm)
-                ctrl_state["height_cmd"] = min(ctrl_state["height_cmd"] + 0.01, 0.72)
+                ctrl_state["height_cmd"] = min(ctrl_state["height_cmd"] + 0.01, MAX_H)
                 print(f"  Chiều cao: {ctrl_state['height_cmd']:.2f}m")
             elif keycode == 74:  # J — giảm chiều cao (-1cm)
-                ctrl_state["height_cmd"] = max(ctrl_state["height_cmd"] - 0.01, 0.38)
+                ctrl_state["height_cmd"] = max(ctrl_state["height_cmd"] - 0.01, MIN_H)
                 print(f"  Chiều cao: {ctrl_state['height_cmd']:.2f}m")
             elif keycode == 259:  # Backspace — reset robot
                 ctrl_state["reset_requested"] = True
@@ -547,7 +794,9 @@ def interactive(
     decay = 0.85
 
     # Smooth height interpolation — tránh giật khi thay đổi chiều cao
-    smooth_h_cmd = 0.71  # giá trị thực tế dùng để tính target (nội suy mượt, mét)
+    smooth_h_cmd = (
+        default_height_cmd  # giá trị thực tế dùng để tính target (nội suy mượt, mét)
+    )
     height_smooth_rate = 0.1  # tốc độ nội suy mỗi step (nhỏ = mượt hơn)
 
     # Telemetry recorder
@@ -568,12 +817,15 @@ def interactive(
                     ctrl_state["forward"] = 0.0
                     ctrl_state["turn"] = 0.0
                     ctrl_state["roll"] = 0.0
-                    ctrl_state["height_cmd"] = 0.71
-                    smooth_h_cmd = 0.71
+                    ctrl_state["height_cmd"] = default_height_cmd
+                    smooth_h_cmd = default_height_cmd
                     _settle_robot()
                     if policy_fn is not None:
                         _interactive_prev_action = jnp.zeros(10)
-                        _interactive_height_cmd_norm = 0.97
+                        _interactive_pid_integral = jnp.zeros(10)
+                        _interactive_height_cmd_norm = (default_height_cmd - MIN_H) / (
+                            MAX_H - MIN_H
+                        )
                     viewer.sync()
                     continue
 
@@ -602,23 +854,22 @@ def interactive(
             h_eff = smooth_h_cmd  # h_eff = độ cao mục tiêu mượt (mét)
 
             # Tính target khớp theo chiều cao (h_eff tính bằng mét)
-            # Keyframe baseline = 0.71m, min = 0.38m, max = 0.72m
-            MIN_H, MAX_H = 0.38, 0.72
+            # Keyframe baseline = KEY_H, min = MIN_H, max = MAX_H
             HP_HIGH, KN_HIGH = 0.0, 0.0  # chân thẳng → cao nhất
             HP_KEY, KN_KEY = 0.3, 0.5  # keyframe
             HP_LOW, KN_LOW = 1.5, 2.5  # gập tối đa về trước → thấp nhất
 
             height_target = standing_qpos.copy()
-            if h_eff >= 0.71:
+            if h_eff >= KEY_H:
                 # Nâng cao: nội suy từ keyframe → thẳng
-                t = (h_eff - 0.71) / (MAX_H - 0.71)  # 0→1
+                t = (h_eff - KEY_H) / max(MAX_H - KEY_H, 1e-6)  # 0→1
                 height_target[2] = HP_KEY + t * (HP_HIGH - HP_KEY)  # l_hip_pitch
                 height_target[7] = HP_KEY + t * (HP_HIGH - HP_KEY)  # r_hip_pitch
                 height_target[3] = KN_KEY + t * (KN_HIGH - KN_KEY)  # l_knee
                 height_target[8] = KN_KEY + t * (KN_HIGH - KN_KEY)  # r_knee
             else:
                 # Hạ thấp: nội suy từ keyframe → gập max
-                t = (0.71 - h_eff) / (0.71 - MIN_H)  # 0→1
+                t = (KEY_H - h_eff) / max(KEY_H - MIN_H, 1e-6)  # 0→1
                 height_target[2] = HP_KEY + t * (HP_LOW - HP_KEY)  # l_hip_pitch
                 height_target[7] = HP_KEY + t * (HP_LOW - HP_KEY)  # r_hip_pitch
                 height_target[3] = KN_KEY + t * (KN_LOW - KN_KEY)  # l_knee
@@ -642,15 +893,15 @@ def interactive(
                     base_ctrl[5] = rll * rg
                 # PD blend cho height control — mượt hơn, không giật
                 # Blend policy output với PD theo |h_eff|: càng lệch keyframe → PD càng mạnh
-                if abs(h_eff - 0.71) > 0.005:
+                if abs(h_eff - KEY_H) > 0.005:
                     joint_pos = np.array(mj_data.qpos[7:17])
                     joint_vel = np.array(mj_data.qvel[6:16])
                     kp_h, kd_h = 8.0, 0.8
                     # blend: 0→1 theo mức lệch khỏi keyframe
-                    if h_eff >= 0.71:
-                        blend = min((h_eff - 0.71) / (MAX_H - 0.71), 1.0)
+                    if h_eff >= KEY_H:
+                        blend = min((h_eff - KEY_H) / max(MAX_H - KEY_H, 1e-6), 1.0)
                     else:
-                        blend = min((0.71 - h_eff) / (0.71 - MIN_H), 1.0)
+                        blend = min((KEY_H - h_eff) / max(KEY_H - MIN_H, 1e-6), 1.0)
                     for idx in [2, 3, 7, 8]:  # hip_pitch, knee (2 bên)
                         pd_torque = (
                             kp_h * (height_target[idx] - joint_pos[idx])

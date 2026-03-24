@@ -40,7 +40,7 @@ def curriculum(
         help="Thư mục lưu kết quả.",
     ),
     steps_per_stage: int = typer.Option(
-        5_000_000,
+        50_000_000,
         help="Số bước tối đa mỗi stage.",
     ),
 ):
@@ -82,7 +82,7 @@ def single(
         help="Đường dẫn config (mặc định dùng config của stage).",
     ),
     steps: int = typer.Option(
-        5_000_000,
+        50_000_000,
         help="Tổng số bước training.",
     ),
     num_envs: int = typer.Option(
@@ -337,8 +337,8 @@ def single(
     cur_level = result.get("curriculum_level")
     cur_total = result.get("curriculum_num_levels")
     if cur_min is not None:
-        final_min = getattr(env, "MIN_HEIGHT_CMD", 0.38)
-        max_h = getattr(env, "MAX_HEIGHT_CMD", 0.72)
+        final_min = getattr(env, "MIN_HEIGHT_CMD", 0.4)
+        max_h = getattr(env, "MAX_HEIGHT_CMD", 0.7)
         console.print(
             f"\n[bold cyan]📊 Curriculum:[/bold cyan] Level {cur_level}/{cur_total}, "
             f"height range [{cur_min:.2f}, {max_h:.2f}] m"

@@ -699,7 +699,11 @@ class PPOTrainer:
                 # Thêm curriculum info nếu enabled
                 range_str = ""
                 if curriculum_enabled:
-                    range_str = f" | range=[{current_min_h:.2f},0.72] L{curriculum_level}/{num_levels}"
+                    max_h = getattr(self.env, "MAX_HEIGHT_CMD", 0.72)
+                    range_str = (
+                        f" | range=[{current_min_h:.2f},{max_h:.2f}] "
+                        f"L{curriculum_level}/{num_levels}"
+                    )
                 print(
                     f"  [{update}/{num_updates}] "
                     f"step={global_step:,} | "
