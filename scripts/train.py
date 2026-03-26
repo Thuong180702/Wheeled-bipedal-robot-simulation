@@ -292,12 +292,20 @@ def single(
     env_name = training_config.get("task", {}).get("env", "BalanceEnv")
     env = make_env(env_name, config=training_config)
 
-    # Logger
+    # Logger — with reproducibility metadata
+    from wheeled_biped.utils.config import get_run_metadata
+
+    run_meta = get_run_metadata(
+        config=training_config,
+        seed=seed,
+        experiment_name=f"{stage}_seed{seed}",
+    )
     logger = TrainingLogger(
         log_dir=os.path.join(output_dir, "logs"),
         experiment_name=f"{stage}_seed{seed}",
         use_tensorboard=True,
         config=training_config,
+        metadata=run_meta,
     )
 
     # Trainer

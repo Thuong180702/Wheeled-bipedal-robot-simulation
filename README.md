@@ -64,6 +64,8 @@ Hip width:  23 cm           Model:      SolidWorks → URDF → MuJoCo
 │   │   ├── stair_env.py               # Task leo cầu thang
 │   │   ├── terrain_env.py             # Task địa hình gồ ghề
 │   │   └── standup_env.py             # Task đứng dậy
+│   ├── eval/                          # Benchmark suite
+│   │   └── benchmark.py               # 4 evaluation modes
 │   ├── rewards/
 │   │   └── reward_functions.py        # Reward components (JAX)
 │   ├── training/
@@ -75,6 +77,8 @@ Hip width:  23 cm           Model:      SolidWorks → URDF → MuJoCo
 │   │   └── unified_controller.py      # Unified multi-skill controller
 │   ├── sim/
 │   │   ├── domain_randomization.py    # DR cho sim-to-real
+│   │   ├── push_disturbance.py        # Push disturbance helper
+│   │   ├── low_level_control.py       # PID low-level control helper
 │   │   └── terrain_generator.py       # Tạo terrain
 │   └── utils/
 │       ├── math_utils.py              # Quaternion, rotation (JAX)
@@ -82,9 +86,9 @@ Hip width:  23 cm           Model:      SolidWorks → URDF → MuJoCo
 │       └── logger.py                  # TensorBoard + WandB
 ├── scripts/
 │   ├── train.py                       # Script training
-│   ├── evaluate.py                    # Đánh giá model
+│   ├── evaluate.py                    # Đánh giá model (4 benchmark modes)
 │   └── visualize.py                   # Trực quan hóa + điều khiển
-├── tests/                             # Unit tests
+├── tests/                             # Unit tests (8 files)
 ├── pyproject.toml
 └── requirements.txt
 ```
@@ -222,10 +226,30 @@ Nhấn **Ctrl+C** để dừng bất cứ lúc nào. Checkpoint sẽ được t�
 
 ### 3. Đánh giá model
 
+`evaluate.py` hỗ trợ 4 benchmark mode:
+
+| Mode | Mô tả |
+|---|---|
+| `nominal` (mặc định) | Đánh giá chuẩn — báo mean reward, fall_rate, timeout_rate |
+| `push_recovery` | Tăng lực đẩy — báo fall_after_push_rate |
+| `domain_randomized` | Ngẫu nhiên mass + friction — báo height_error, position_drift |
+| `command_tracking` | Sweep chiều cao — báo per-command height RMSE |
+
 ```bash
-# Đánh giá policy đã train
+# Nominal (cũ)
 python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --stage balance
+
+# Push recovery
+python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode push_recovery
+
+# Command tracking
+python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode command_tracking
+
+# Domain randomized
+python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode domain_randomized
 ```
+
+Kết quả JSON được lưu tự động vào `<checkpoint>/eval_results_<mode>.json`.
 
 ### 4. Trực quan hóa policy đã train
 
@@ -303,10 +327,15 @@ python scripts/visualize.py unified --checkpoint-dir outputs/checkpoints --no-au
 # Chạy tất cả tests
 pytest tests/ -v
 
-# Chạy test cụ thể
-pytest tests/test_model.py -v
-pytest tests/test_rewards.py -v
-pytest tests/test_env.py -v
+# Tests cụ thể
+pytest tests/test_model.py -v          # Kiểm tra MuJoCo model
+pytest tests/test_rewards.py -v        # Reward components
+pytest tests/test_env.py -v            # Balance env reset/step
+pytest tests/test_ppo_trainer.py -v    # PPO trainer invariants
+pytest tests/test_curriculum.py -v     # Curriculum promote/hold/demote
+pytest tests/test_unified_controller.py -v  # Unified controller edge cases
+pytest tests/test_benchmark.py -v     # Benchmark suite
+pytest tests/test_sim_helpers.py -v   # Sim helper functions
 ```
 
 ---
@@ -323,8 +352,11 @@ python scripts/train.py single --stage stand_up --steps 5000000
 python scripts/train.py single --stage balance --live-view
 python scripts/train.py curriculum --steps-per-stage 5000000
 
-# ─── Đánh giá ───
-python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --stage balance
+# ─── Đánh giá (4 modes) ───
+python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final
+python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode push_recovery
+python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode command_tracking
+python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode domain_randomized
 
 # ─── Xem policy ───
 python scripts/visualize.py policy --checkpoint outputs/checkpoints/balance/final
@@ -418,10 +450,11 @@ Mỗi stage kế thừa (warm-start) từ checkpoint stage trước.
 
 ### Sim-to-Real Transfer
 
-- **Domain Randomization:** Ngẫu nhiên hóa khối lượng (±10%), ma sát (±30%), damping khớp
-- **External Perturbation:** Đẩy ngẫu nhiên lên thân robot mỗi N bước
-- **Sensor Noise:** Thêm nhiễu Gaussian vào IMU và encoder
+- **Domain Randomization:** Ngẫu nhiên hóa khối lượng (±10%), ma sát (±30%), damping khớp (xem `sim/domain_randomization.py`)
+- **External Perturbation:** Đẩy ngẫu nhiên lên thân robot theo chu kỳ (`sim/push_disturbance.py`)
 - **Observation Normalization:** Running mean/std chuẩn hóa input
+
+> **Lưu ý:** Sensor noise (IMU/encoder) chưa được implement. Sim-to-real transfer chưa được xác nhận trên phần cứng thực.
 
 ## Cấu hình
 

@@ -11,12 +11,30 @@ và tự động chuyển đổi giữa các skill dựa trên:
 
 Ưu tiên:  Balance → Locomotion → Walking → Stair → Terrain
 (nếu không có checkpoint nào thì bỏ qua skill đó)
+
+Changes from original
+---------------------
+Fix 1 – Blend counter only resets when the *target* skill changes (not on
+         every step where desired != active). Transitions now complete
+         naturally after ``_blend_steps`` consecutive steps.
+Fix 2 – Explicit per-skill obs adapters replace the silent generic
+         zero-pad / truncation fallback. A ``ValueError`` is raised for
+         genuine schema mismatches, keeping the ``unknown_pad`` path as an
+         explicit escape hatch that logs a warning.
+Fix 3 – Dwell-time hysteresis: a raw skill detection must be stable for
+         ``dwell_threshold`` (default 3) consecutive calls before the
+         controller acts on it, preventing single-frame spikes from
+         triggering transitions.
+Fix 4 – Per-skill ``_prev_actions`` buffers replace the single shared
+         ``_prev_action``. Each skill's observation is always built from
+         its own last action, even during blending.
 """
 
 from __future__ import annotations
 
 import os
 import pickle
+import warnings
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
@@ -57,6 +75,35 @@ _SKILL_PRIORITY = [
     Skill.BALANCE,
 ]
 
+# ---------------------------------------------------------------------------
+# Observation adapter registry
+# ---------------------------------------------------------------------------
+# Each adapter name describes exactly how the 39-dim base observation is
+# extended (or not) to reach the skill's required obs_size.
+#
+#   "exact"        → obs_size == 39 and no extras are added
+#   "height_cmd"   → obs_size == 40; append normalised height command (1 dim)
+#   "velocity_cmd" → obs_size == 41; append [vel_x, ang_vel_z] (2 dims)
+#   "unknown_pad"  → obs_size > 41 and unknown extras; zero-pad with warning
+#
+# Choosing "unknown_pad" is still explicit – it forces the caller to be
+# aware they are feeding potentially-wrong features to the network.
+_VALID_ADAPTERS = frozenset({"exact", "height_cmd", "velocity_cmd", "unknown_pad"})
+
+_BASE_OBS_SIZE = 39  # gravity(3) + lin_vel(3) + ang_vel(3) + qpos(10) + qvel(10) + prev_action(10)
+
+
+def _infer_adapter(obs_size: int, needs_command: bool) -> str:
+    """Choose an obs adapter name from obs_size and needs_command flag."""
+    if obs_size == _BASE_OBS_SIZE:
+        return "exact"
+    if obs_size == _BASE_OBS_SIZE + 1 and not needs_command:
+        return "height_cmd"
+    if obs_size == _BASE_OBS_SIZE + 2 and needs_command:
+        return "velocity_cmd"
+    # Any other size: explicit escape-hatch with warning
+    return "unknown_pad"
+
 
 @dataclass
 class SkillPolicy:
@@ -67,16 +114,18 @@ class SkillPolicy:
     obs_rms: Any
     obs_size: int
     config: Dict[str, Any]
-    needs_command: bool = False  # Locomotion/Walking cần velocity command
+    needs_command: bool = False   # Locomotion/Walking cần velocity command
+    # Fix 2: explicit adapter chosen at load time
+    obs_adapter: str = "exact"   # one of _VALID_ADAPTERS
 
 
 @dataclass
 class ControlCommand:
     """Lệnh điều khiển từ bên ngoài (bàn phím, joystick, planner)."""
 
-    vel_x: float = 0.0  # m/s, tiến(+)/lùi(-)
-    ang_vel_z: float = 0.0  # rad/s, xoay trái(+)/phải(-)
-    height_target: float = 0.71  # m, chiều cao mong muốn (0.38–0.72)
+    vel_x: float = 0.0          # m/s, tiến(+)/lùi(-)
+    ang_vel_z: float = 0.0      # rad/s, xoay trái(+)/phải(-)
+    height_target: float = 0.71 # m, chiều cao mong muốn (0.38–0.72)
     mode: Optional[Skill] = None  # Ép chọn skill (None = tự động)
 
 
@@ -89,6 +138,7 @@ class UnifiedController:
         mj_model: mujoco.MjModel,
         *,
         stage_map: Dict[str, str] | None = None,
+        dwell_threshold: int = 3,
     ):
         """
         Args:
@@ -96,6 +146,9 @@ class UnifiedController:
                             (balance/, wheeled_locomotion/, walking/, ...)
             mj_model: MuJoCo model (để lấy actuator_ctrlrange, nq, nv, ...)
             stage_map: Mapping tùy chỉnh  {skill_name: checkpoint_subfolder}
+            dwell_threshold: Number of consecutive calls _detect_skill_raw must
+                             return the same skill before the controller acts on
+                             the switch request (hysteresis, Fix 3).
         """
         self.mj_model = mj_model
         self.ckpt_dir = Path(checkpoint_dir)
@@ -144,7 +197,7 @@ class UnifiedController:
                     ckpt_path, needs_command=(name in ("locomotion", "walking"))
                 )
                 self.skills[skill_enum] = sp
-                print(f"  [ok]   {name}: obs_size={sp.obs_size}")
+                print(f"  [ok]   {name}: obs_size={sp.obs_size} adapter={sp.obs_adapter}")
             except Exception as e:
                 print(f"  [fail] {name}: {e}")
 
@@ -153,15 +206,25 @@ class UnifiedController:
 
         # Skill hiện tại
         self._active_skill = self._pick_default_skill()
+
+        # Fix 4: per-skill prev_action buffers
+        self._prev_actions: Dict[Skill, jnp.ndarray] = {
+            sk: jnp.zeros(mj_model.nu) for sk in self.skills
+        }
+
         self._prev_ctrl = np.zeros(mj_model.nu)
-        self._prev_action = jnp.zeros(mj_model.nu)  # normalized [-1,1]
-        self._transition_alpha = 0.0  # 0=old, 1=new (smooth blending)
+        self._transition_alpha = 0.0     # 0=old, 1=new (smooth blending)
         self._transition_target: Optional[Skill] = None
         self._blend_steps = 10
         self._blend_counter = 0
 
+        # Fix 3: dwell-time hysteresis state
+        self._dwell_threshold = max(1, int(dwell_threshold))
+        self._dwell_counts: Dict[Skill, int] = {}  # raw-detection vote counter
+
         print(f"\n  Active skills: {[s.name for s in self.skills]}")
         print(f"  Default skill: {self._active_skill.name}")
+        print(f"  Dwell threshold: {self._dwell_threshold} steps")
 
     # ------------------------------------------------------------------
     # Loading
@@ -174,6 +237,17 @@ class UnifiedController:
         obs_rms = jax.device_put(ckpt["obs_rms"])
         config = ckpt["config"]
         obs_size = int(obs_rms.mean.shape[0])
+
+        # Fix 2: choose adapter at load time
+        adapter = _infer_adapter(obs_size, needs_command)
+        if adapter == "unknown_pad":
+            warnings.warn(
+                f"Checkpoint at {ckpt_path} has obs_size={obs_size} which does not match "
+                f"any known adapter (base={_BASE_OBS_SIZE}, height_cmd={_BASE_OBS_SIZE+1}, "
+                f"velocity_cmd={_BASE_OBS_SIZE+2}). Using 'unknown_pad' — obs semantics "
+                f"may be wrong. Consider adding an explicit adapter.",
+                stacklevel=3,
+            )
 
         self.rng, rng_init = jax.random.split(self.rng)
         network, _ = create_actor_critic(
@@ -190,6 +264,7 @@ class UnifiedController:
             obs_size=obs_size,
             config=config,
             needs_command=needs_command,
+            obs_adapter=adapter,
         )
 
     # ------------------------------------------------------------------
@@ -198,11 +273,18 @@ class UnifiedController:
     def _build_obs(
         self, mj_data: mujoco.MjData, skill: Skill, cmd: ControlCommand
     ) -> jnp.ndarray:
-        """Xây obs vector phù hợp với obs_size của skill."""
+        """Xây obs vector phù hợp với obs_size của skill.
+
+        Fix 2: uses the explicit ``obs_adapter`` stored in SkillPolicy instead
+        of the old silent generic pad/cut fallback.
+        """
+        sp = self.skills[skill]
+        # Fix 4: use per-skill prev_action buffer
+        prev_action = self._prev_actions[skill]
+
         torso_quat = jnp.array(mj_data.qpos[3:7])
         gravity_body = get_gravity_in_body_frame(torso_quat)
 
-        # Body-frame velocity (giống training - dùng quat_conjugate + quat_rotate)
         quat_inv = quat_conjugate(torso_quat)
         world_lin_vel = jnp.array(mj_data.qvel[:3])
         world_ang_vel = jnp.array(mj_data.qvel[3:6])
@@ -211,40 +293,57 @@ class UnifiedController:
 
         base_obs = jnp.concatenate(
             [
-                gravity_body,  # 3
-                body_lin_vel,  # 3  body-frame linear vel
-                body_ang_vel,  # 3  body-frame angular vel
+                gravity_body,              # 3
+                body_lin_vel,              # 3  body-frame linear vel
+                body_ang_vel,              # 3  body-frame angular vel
                 jnp.array(mj_data.qpos[7:17]),  # 10 joint pos
                 jnp.array(mj_data.qvel[6:16]),  # 10 joint vel
-                self._prev_action,  # 10 prev action (normalized [-1,1])
+                prev_action,              # 10 prev action (normalized [-1,1])
             ]
         )  # total 39
 
-        sp = self.skills[skill]
-        if sp.obs_size == 39:
+        adapter = sp.obs_adapter
+
+        if adapter == "exact":
+            if base_obs.shape[0] != sp.obs_size:
+                raise ValueError(
+                    f"Skill {skill.name}: adapter='exact' but computed obs has "
+                    f"{base_obs.shape[0]} dims, expected {sp.obs_size}. "
+                    f"Check _BASE_OBS_SIZE or the checkpoint's obs_rms."
+                )
             return base_obs
 
-        # Balance skill: obs_size=40 → thêm height_command
-        if skill == Skill.BALANCE and sp.obs_size == 40:
-            # height_cmd normalized [0,1]: (target - 0.38) / (0.72 - 0.38)
-            # cmd.height_target mặc định ~0.71m → norm ≈ 0.97
-            height_norm = np.clip((cmd.height_target - 0.38) / (0.72 - 0.38), 0.0, 1.0)
-            return jnp.concatenate([base_obs, jnp.array([height_norm])])
+        if adapter == "height_cmd":
+            # height_cmd normalised [0,1]: (target - 0.38) / (0.72 - 0.38)
+            height_norm = float(
+                np.clip((cmd.height_target - 0.38) / (0.72 - 0.38), 0.0, 1.0)
+            )
+            obs = jnp.concatenate([base_obs, jnp.array([height_norm])])
+            if obs.shape[0] != sp.obs_size:
+                raise ValueError(
+                    f"Skill {skill.name}: adapter='height_cmd' produced {obs.shape[0]} "
+                    f"dims, expected {sp.obs_size}."
+                )
+            return obs
 
-        # Thêm command nếu cần (locomotion / walking: +2)
-        if sp.needs_command:
+        if adapter == "velocity_cmd":
             command_vec = jnp.array([cmd.vel_x, cmd.ang_vel_z])
             obs = jnp.concatenate([base_obs, command_vec])
+            if obs.shape[0] != sp.obs_size:
+                raise ValueError(
+                    f"Skill {skill.name}: adapter='velocity_cmd' produced {obs.shape[0]} "
+                    f"dims, expected {sp.obs_size}."
+                )
+            return obs
+
+        # unknown_pad — explicit escape hatch with warning already issued at load
+        current_len = base_obs.shape[0]
+        if current_len < sp.obs_size:
+            obs = jnp.concatenate([base_obs, jnp.zeros(sp.obs_size - current_len)])
+        elif current_len > sp.obs_size:
+            obs = base_obs[: sp.obs_size]
         else:
             obs = base_obs
-
-        # Pad hoặc cắt nếu chênh size (vd walking thêm gait phase)
-        current_len = obs.shape[0]
-        if current_len < sp.obs_size:
-            obs = jnp.concatenate([obs, jnp.zeros(sp.obs_size - current_len)])
-        elif current_len > sp.obs_size:
-            obs = obs[: sp.obs_size]
-
         return obs
 
     # ------------------------------------------------------------------
@@ -263,19 +362,20 @@ class UnifiedController:
                 return s
         return list(self.skills.keys())[0]
 
-    def _detect_skill(self, mj_data: mujoco.MjData, cmd: ControlCommand) -> Skill:
-        """Tự động phát hiện skill phù hợp dựa trên trạng thái hiện tại."""
+    def _detect_skill_raw(self, mj_data: mujoco.MjData, cmd: ControlCommand) -> Skill:
+        """Raw skill detection — single-step heuristic (no hysteresis).
 
+        Internal method; callers should use ``_detect_skill`` which adds
+        dwell-time filtering (Fix 3).
+        """
         # Nếu user ép mode
         if cmd.mode is not None and cmd.mode in self.skills:
             return cmd.mode
 
         torso_height = float(mj_data.qpos[2])
         torso_quat = mj_data.qpos[3:7]
-        # Tilt angle: arccos(2*qw^2 - 1) — xấp xỉ
         tilt = float(np.arccos(np.clip(2 * torso_quat[0] ** 2 - 1, -1, 1)))
 
-        # Vận tốc mong muốn
         v_cmd = abs(cmd.vel_x) + abs(cmd.ang_vel_z)
 
         # 1. Robot đang ngã hoặc nghiêng nhiều → Balance
@@ -301,10 +401,8 @@ class UnifiedController:
 
         # 4. Đang di chuyển nhanh → locomotion hoặc walking
         if v_cmd > 0.3:
-            # Nếu vận tốc cao → locomotion (wheel-based)
             if v_cmd > 0.8 and Skill.LOCOMOTION in self.skills:
                 return Skill.LOCOMOTION
-            # Vận tốc trung bình → walking
             if Skill.WALKING in self.skills:
                 return Skill.WALKING
             if Skill.LOCOMOTION in self.skills:
@@ -315,6 +413,36 @@ class UnifiedController:
             return Skill.BALANCE
 
         return self._active_skill  # Giữ nguyên
+
+    def _detect_skill(self, mj_data: mujoco.MjData, cmd: ControlCommand) -> Skill:
+        """Hysteresis-filtered skill detection (Fix 3).
+
+        A raw skill detection must be returned for ``_dwell_threshold``
+        consecutive calls before the controller acts on it.  This prevents
+        single-frame sensor spikes (e.g. a brief foot height difference)
+        from triggering unwanted transitions.
+
+        Forced-mode commands (``cmd.mode is not None``) bypass hysteresis.
+        """
+        # Forced mode bypasses dwell filter — user intent is immediate
+        if cmd.mode is not None and cmd.mode in self.skills:
+            self._dwell_counts.clear()
+            return cmd.mode
+
+        raw = self._detect_skill_raw(mj_data, cmd)
+
+        # Decay counts for any skill that is no longer the raw winner
+        stale = [sk for sk in list(self._dwell_counts) if sk != raw]
+        for sk in stale:
+            del self._dwell_counts[sk]
+
+        self._dwell_counts[raw] = self._dwell_counts.get(raw, 0) + 1
+
+        if self._dwell_counts[raw] >= self._dwell_threshold:
+            return raw
+
+        # Not yet stable enough — keep current skill
+        return self._active_skill
 
     def _foot_height(self, mj_data: mujoco.MjData, body_name: str) -> Optional[float]:
         """Trả về chiều cao (z) của body wheel."""
@@ -346,14 +474,23 @@ class UnifiedController:
         if cmd is None:
             cmd = ControlCommand()
 
-        # Phát hiện skill phù hợp
+        # Phát hiện skill phù hợp (with dwell-time filter)
         desired_skill = self._detect_skill(mj_data, cmd)
 
-        # Smooth transition nếu đổi skill
+        # Fix 1: only reset blend counter when the *target* changes
         if desired_skill != self._active_skill:
-            self._transition_target = desired_skill
-            self._blend_counter = 0
-            self._transition_alpha = 0.0
+            if desired_skill != self._transition_target:
+                # Truly new target → start a fresh blend
+                self._transition_target = desired_skill
+                self._blend_counter = 0
+                self._transition_alpha = 0.0
+            # else: same target already in progress → keep incrementing
+        else:
+            # desired == active → cancel any in-progress transition
+            if self._transition_target is not None:
+                self._transition_target = None
+                self._blend_counter = 0
+                self._transition_alpha = 0.0
 
         # Tính action từ skill hiện tại
         current_ctrl = self._compute_skill_ctrl(mj_data, self._active_skill, cmd)
@@ -400,8 +537,8 @@ class UnifiedController:
         dist, _ = sp.network.apply(sp.params, obs_norm)
         action = jnp.clip(dist.loc, -1.0, 1.0)
 
-        # Lưu prev_action (normalized [-1,1]) cho obs step tiếp theo
-        self._prev_action = action
+        # Fix 4: update only this skill's prev_action buffer
+        self._prev_actions[skill] = action
 
         # Scale action → ctrl range
         ctrl_range = self.mj_model.actuator_ctrlrange
@@ -422,7 +559,8 @@ class UnifiedController:
         return list(self.skills.keys())
 
     def force_skill(self, skill: Skill) -> None:
-        """Ép chuyển sang skill (bỏ qua auto-detect)."""
+        """Ép chuyển sang skill (bỏ qua auto-detect và hysteresis)."""
         if skill in self.skills:
             self._active_skill = skill
             self._transition_target = None
+            self._dwell_counts.clear()

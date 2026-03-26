@@ -24,6 +24,8 @@ from wheeled_biped.sim.domain_randomization import (
     apply_external_force,
     clear_external_force,
 )
+from wheeled_biped.sim.push_disturbance import apply_push_disturbance
+from wheeled_biped.sim.low_level_control import pid_control
 from wheeled_biped.rewards.reward_functions import (
     compute_total_reward,
     penalty_action_rate,
@@ -161,40 +163,23 @@ class BalanceEnv(WheeledBipedEnv):
         normalized_target: jnp.ndarray,
         pid_integral: jnp.ndarray,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """PID low-level: target chuẩn hóa -> actuator ctrl.
-
-        - Joint thường: vị trí đích q_des trong joint range
-        - Joint bánh: vận tốc đích dq_des trong [-wheel_vel_limit, +wheel_vel_limit]
-        """
-        joint_pos = mjx_data.qpos[7:17]
-        joint_vel = mjx_data.qvel[6:16]
-
-        pos_target = self._joint_mins + (normalized_target + 1.0) * 0.5 * (
-            self._joint_maxs - self._joint_mins
+        """Delegate to the reusable pid_control helper in sim.low_level_control."""
+        return pid_control(
+            mjx_data,
+            normalized_target,
+            pid_integral,
+            kp=self._pid_kp,
+            ki=self._pid_ki,
+            kd=self._pid_kd,
+            joint_mins=self._joint_mins,
+            joint_maxs=self._joint_maxs,
+            wheel_mask=self._wheel_mask,
+            wheel_vel_limit=self._wheel_vel_limit,
+            i_limit=self._pid_i_limit,
+            ctrl_min=self._ctrl_min,
+            ctrl_max=self._ctrl_max,
+            control_dt=self.CONTROL_DT,
         )
-        vel_target_wheel = normalized_target * self._wheel_vel_limit
-
-        pos_err = pos_target - joint_pos
-        vel_err = -joint_vel
-
-        # Wheel dùng velocity error, các joint còn lại dùng position error
-        error = (1.0 - self._wheel_mask) * pos_err + self._wheel_mask * (
-            vel_target_wheel - joint_vel
-        )
-        # Damping term cho cả joint thường và wheel để KD gain có tác dụng nhất quán.
-        d_error = vel_err
-
-        integral_new = jnp.clip(
-            pid_integral + error * self.CONTROL_DT,
-            -self._pid_i_limit,
-            self._pid_i_limit,
-        )
-
-        ctrl = (
-            self._pid_kp * error + self._pid_kd * d_error + self._pid_ki * integral_new
-        )
-        ctrl = jnp.clip(ctrl, self._ctrl_min, self._ctrl_max)
-        return ctrl, integral_new
 
     def _compute_obs_size(self) -> int:
         """Observation = base 39 + height_command 1 = 40."""
@@ -290,25 +275,16 @@ class BalanceEnv(WheeledBipedEnv):
         mjx_data = state.mjx_data.replace(ctrl=scaled_action)
 
         # Push disturbance: áp dụng lực ngẫu nhiên mỗi push_interval steps
-        # Lực được giữ trong push_duration steps rồi xóa
         push_rng = state.info["push_rng"]
-        step_count = state.step_count
-        is_push_step = (step_count % self._push_interval) == 0
-        is_push_active = (step_count % self._push_interval) < self._push_duration
-
-        push_rng, new_push_rng = jax.random.split(push_rng)
-        mjx_data_pushed, _ = apply_external_force(
+        mjx_data, new_push_rng = apply_push_disturbance(
             mjx_data,
             push_rng,
             body_id=self._torso_id,
-            magnitude=self._push_magnitude,
-        )
-        # Chỉ áp dụng khi enabled và đang trong push_duration window
-        apply_push = self._push_enabled & is_push_active
-        mjx_data = jax.lax.cond(
-            apply_push,
-            lambda: mjx_data_pushed,
-            lambda: clear_external_force(mjx_data),
+            step_count=state.step_count,
+            push_interval=self._push_interval,
+            push_duration=self._push_duration,
+            push_magnitude=self._push_magnitude,
+            push_enabled=self._push_enabled,
         )
 
         def physics_step(data, _):

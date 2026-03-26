@@ -1,0 +1,340 @@
+"""
+Tests for PPO trainer invariants.
+
+Covers:
+  - Single rollout + update produces no NaN in params
+  - obs_rms updates correctly (Welford)
+  - Loss metrics dict has expected keys
+  - Checkpoint save → load round-trip
+  - compute_gae shapes and no-NaN property
+"""
+
+from __future__ import annotations
+
+import pickle
+import sys
+from pathlib import Path
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+
+# ---------------------------------------------------------------------------
+# Minimal config helpers
+# ---------------------------------------------------------------------------
+
+_TINY_CONFIG = {
+    "task": {
+        "env": "BalanceEnv",
+        "num_envs": 4,
+        "episode_length": 20,
+        "initial_min_height": 0.68,
+    },
+    "ppo": {
+        "learning_rate": 3e-4,
+        "num_epochs": 1,
+        "num_minibatches": 2,
+        "gamma": 0.99,
+        "gae_lambda": 0.95,
+        "clip_epsilon": 0.2,
+        "entropy_coeff": 0.01,
+        "value_loss_coeff": 0.5,
+        "max_grad_norm": 0.5,
+        "normalize_advantages": True,
+        "rollout_length": 4,
+    },
+    "network": {
+        "policy_hidden": [32, 32],
+        "value_hidden": [32, 32],
+        "activation": "elu",
+    },
+    "rewards": {
+        "upright": 1.0,
+        "alive": 0.5,
+    },
+    "curriculum": {"enabled": False},
+}
+
+NUM_ENVS = 4
+OBS_SIZE = 40   # BalanceEnv is 39+1=40
+ACTION_SIZE = 10
+
+
+@pytest.fixture(scope="module")
+def env():
+    from wheeled_biped.envs.balance_env import BalanceEnv
+    return BalanceEnv(config=_TINY_CONFIG)
+
+
+@pytest.fixture(scope="module")
+def trainer(env):
+    from wheeled_biped.training.ppo import PPOTrainer
+    t = PPOTrainer(env=env, config=_TINY_CONFIG, logger=None, seed=0)
+    # Fix num_envs to match test size
+    t.num_envs = NUM_ENVS
+    t._rollout_length = 4
+    return t
+
+
+@pytest.fixture(scope="module")
+def rollout_data(trainer, env):
+    """Run one rollout and return (env_state, transitions, rng)."""
+    rng = jax.random.PRNGKey(7)
+    env_state = env.v_reset(rng, NUM_ENVS)
+    rng, rollout_key = jax.random.split(rng)
+    env_state, transitions, rng = trainer._rollout(
+        trainer.params, env_state, rollout_key, trainer.obs_rms
+    )
+    jax.block_until_ready(transitions.reward)
+    return env_state, transitions, rng
+
+
+# ---------------------------------------------------------------------------
+# Tests: compute_gae
+# ---------------------------------------------------------------------------
+
+class TestComputeGAE:
+    def test_output_shapes(self, trainer):
+        """GAE advantages and returns have shape (T, num_envs)."""
+        from wheeled_biped.training.ppo import compute_gae
+
+        T, N = 8, 4
+        rewards = jnp.ones((T, N))
+        values = jnp.ones((T, N)) * 0.5
+        dones = jnp.zeros((T, N))
+        last_value = jnp.ones(N) * 0.5
+
+        adv, ret = compute_gae(rewards, values, dones, last_value)
+
+        assert adv.shape == (T, N), f"advantages shape {adv.shape}"
+        assert ret.shape == (T, N), f"returns shape {ret.shape}"
+
+    def test_no_nan(self, trainer):
+        """GAE with random rewards produces no NaN."""
+        from wheeled_biped.training.ppo import compute_gae
+
+        rng = jax.random.PRNGKey(42)
+        T, N = 16, 4
+        rewards = jax.random.normal(rng, (T, N))
+        values = jax.random.normal(rng, (T, N))
+        dones = (jax.random.uniform(rng, (T, N)) > 0.8).astype(jnp.float32)
+        last_value = jnp.zeros(N)
+
+        adv, ret = compute_gae(rewards, values, dones, last_value)
+
+        assert not np.any(np.isnan(np.array(adv))), "NaN in advantages"
+        assert not np.any(np.isnan(np.array(ret))), "NaN in returns"
+
+    def test_returns_equal_advantages_plus_values(self):
+        """returns = advantages + values (definition)."""
+        from wheeled_biped.training.ppo import compute_gae
+
+        T, N = 4, 2
+        rewards = jnp.ones((T, N))
+        values = jnp.ones((T, N)) * 2.0
+        dones = jnp.zeros((T, N))
+        last_value = jnp.ones(N) * 2.0
+
+        adv, ret = compute_gae(rewards, values, dones, last_value)
+        diff = jnp.abs(ret - (adv + values))
+        assert float(jnp.max(diff)) < 1e-4, "returns != advantages + values"
+
+
+# ---------------------------------------------------------------------------
+# Tests: obs normalization
+# ---------------------------------------------------------------------------
+
+class TestObsNormalization:
+    def test_rms_updates_mean(self, trainer):
+        """update_running_mean_std changes the mean after a batch."""
+        from wheeled_biped.training.ppo import (
+            init_running_mean_std,
+            update_running_mean_std,
+        )
+
+        rms = init_running_mean_std((OBS_SIZE,))
+        original_mean = np.array(rms.mean).copy()
+
+        batch = jnp.ones((32, OBS_SIZE)) * 5.0
+        rms2 = update_running_mean_std(rms, batch)
+
+        new_mean = np.array(rms2.mean)
+        # Mean should have moved toward 5.0
+        assert not np.allclose(new_mean, original_mean), "mean did not update"
+
+    def test_rms_no_nan(self, trainer):
+        """Normalized obs has no NaN."""
+        from wheeled_biped.training.ppo import (
+            init_running_mean_std,
+            normalize_obs,
+            update_running_mean_std,
+        )
+
+        rms = init_running_mean_std((OBS_SIZE,))
+        batch = jax.random.normal(jax.random.PRNGKey(1), (64, OBS_SIZE))
+        rms = update_running_mean_std(rms, batch)
+
+        obs = jax.random.normal(jax.random.PRNGKey(2), (OBS_SIZE,))
+        normed = normalize_obs(obs, rms)
+        assert not np.any(np.isnan(np.array(normed))), "normalized obs has NaN"
+
+
+# ---------------------------------------------------------------------------
+# Tests: single rollout + update
+# ---------------------------------------------------------------------------
+
+class TestSingleUpdate:
+    def test_rollout_obs_no_nan(self, rollout_data):
+        """Rollout observations contain no NaN."""
+        _, transitions, _ = rollout_data
+        obs_np = np.array(transitions.obs)
+        assert not np.any(np.isnan(obs_np)), "NaN in rollout obs"
+
+    def test_rollout_reward_no_nan(self, rollout_data):
+        """Rollout rewards contain no NaN."""
+        _, transitions, _ = rollout_data
+        rew_np = np.array(transitions.reward)
+        assert not np.any(np.isnan(rew_np)), "NaN in rollout rewards"
+
+    def test_update_step_no_nan_params(self, trainer, rollout_data):
+        """After one PPO update step params have no NaN."""
+        env_state, transitions, rng = rollout_data
+
+        # Compute last value for GAE
+        from wheeled_biped.training.ppo import normalize_obs
+        last_obs = normalize_obs(env_state.obs, trainer.obs_rms)
+        _, last_value = trainer.model.apply(trainer.params, last_obs)
+
+        rng, update_key = jax.random.split(rng)
+        new_params, new_opt_state, metrics, _ = trainer._update_step(
+            trainer.params,
+            trainer.opt_state,
+            transitions,
+            last_value,
+            update_key,
+        )
+        jax.block_until_ready(new_params)
+
+        # Check no NaN in leaf arrays
+        leaves = jax.tree_util.tree_leaves(jax.device_get(new_params))
+        for leaf in leaves:
+            assert not np.any(np.isnan(leaf)), "NaN found in updated params"
+
+    def test_update_step_metrics_keys(self, trainer, rollout_data):
+        """Metrics dict from _update_step contains required keys."""
+        env_state, transitions, rng = rollout_data
+
+        from wheeled_biped.training.ppo import normalize_obs
+        last_obs = normalize_obs(env_state.obs, trainer.obs_rms)
+        _, last_value = trainer.model.apply(trainer.params, last_obs)
+
+        rng, update_key = jax.random.split(rng)
+        _, _, metrics, _ = trainer._update_step(
+            trainer.params,
+            trainer.opt_state,
+            transitions,
+            last_value,
+            update_key,
+        )
+
+        required = {"loss/policy", "loss/value", "loss/entropy", "loss/total"}
+        for key in required:
+            assert key in metrics, f"Missing metric key: {key}"
+
+    def test_update_step_loss_is_finite(self, trainer, rollout_data):
+        """Total loss is a finite scalar."""
+        env_state, transitions, rng = rollout_data
+
+        from wheeled_biped.training.ppo import normalize_obs
+        last_obs = normalize_obs(env_state.obs, trainer.obs_rms)
+        _, last_value = trainer.model.apply(trainer.params, last_obs)
+
+        rng, update_key = jax.random.split(rng)
+        _, _, metrics, _ = trainer._update_step(
+            trainer.params,
+            trainer.opt_state,
+            transitions,
+            last_value,
+            update_key,
+        )
+
+        total_loss = float(metrics["loss/total"])
+        assert np.isfinite(total_loss), f"Loss not finite: {total_loss}"
+
+
+# ---------------------------------------------------------------------------
+# Tests: checkpoint save / load
+# ---------------------------------------------------------------------------
+
+class TestCheckpoint:
+    def test_checkpoint_keys_present(self, trainer, tmp_path):
+        """Saved checkpoint pickle contains all required keys."""
+        ckpt_dir = str(tmp_path / "ckpt_keys")
+        trainer._save_checkpoint(ckpt_dir, global_step=100, best_reward=0.5)
+
+        pkl_path = Path(ckpt_dir) / "checkpoint.pkl"
+        assert pkl_path.exists(), "checkpoint.pkl not created"
+
+        with open(pkl_path, "rb") as f:
+            ckpt = pickle.load(f)
+
+        required_keys = {"params", "opt_state", "obs_rms", "config", "global_step", "best_reward"}
+        for k in required_keys:
+            assert k in ckpt, f"Missing checkpoint key: {k}"
+
+    def test_checkpoint_global_step_matches(self, trainer, tmp_path):
+        """Loaded checkpoint restores global_step correctly."""
+        ckpt_dir = str(tmp_path / "ckpt_step")
+        trainer._save_checkpoint(ckpt_dir, global_step=12345, best_reward=1.23)
+        trainer.load_checkpoint(ckpt_dir)
+        assert trainer._resumed_global_step == 12345
+
+    def test_checkpoint_best_reward_matches(self, trainer, tmp_path):
+        """Loaded checkpoint restores best_reward correctly."""
+        ckpt_dir = str(tmp_path / "ckpt_reward")
+        trainer._save_checkpoint(ckpt_dir, global_step=0, best_reward=-3.14)
+        trainer.load_checkpoint(ckpt_dir)
+        assert abs(trainer._resumed_best_reward - (-3.14)) < 1e-5
+
+    def test_checkpoint_obs_rms_roundtrip(self, trainer, tmp_path):
+        """obs_rms mean is preserved through save/load."""
+        from wheeled_biped.training.ppo import (
+            init_running_mean_std,
+            update_running_mean_std,
+        )
+
+        # Give the trainer a non-trivial obs_rms
+        batch = jnp.ones((16, OBS_SIZE)) * 3.0
+        trainer.obs_rms = update_running_mean_std(trainer.obs_rms, batch)
+        original_mean = np.array(trainer.obs_rms.mean).copy()
+
+        ckpt_dir = str(tmp_path / "ckpt_rms")
+        trainer._save_checkpoint(ckpt_dir, global_step=0, best_reward=0.0)
+
+        # Corrupt the in-memory state
+        trainer.obs_rms = init_running_mean_std((OBS_SIZE,))
+
+        trainer.load_checkpoint(ckpt_dir)
+        restored_mean = np.array(trainer.obs_rms.mean)
+        assert np.allclose(original_mean, restored_mean, atol=1e-5), (
+            "obs_rms mean not preserved through checkpoint round-trip"
+        )
+
+    def test_checkpoint_params_roundtrip(self, trainer, tmp_path):
+        """Network params are preserved through save/load (spot-check one leaf)."""
+        import jax.tree_util as jtu
+
+        ckpt_dir = str(tmp_path / "ckpt_params")
+        original_leaves = [np.array(l) for l in jtu.tree_leaves(jax.device_get(trainer.params))]
+
+        trainer._save_checkpoint(ckpt_dir, global_step=0, best_reward=0.0)
+        trainer.load_checkpoint(ckpt_dir)
+
+        restored_leaves = [np.array(l) for l in jtu.tree_leaves(jax.device_get(trainer.params))]
+        for orig, rest in zip(original_leaves, restored_leaves):
+            assert np.allclose(orig, rest, atol=1e-6), "Params differ after checkpoint round-trip"

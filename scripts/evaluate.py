@@ -3,10 +3,19 @@ Script đánh giá model đã train.
 
 Cách dùng:
   python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --stage balance
+  python scripts/evaluate.py --checkpoint ... --mode push_recovery
+  python scripts/evaluate.py --checkpoint ... --mode command_tracking
+
+Các mode:
+  nominal           Đánh giá chuẩn (mặc định). Thêm fall_rate, timeout_rate.
+  push_recovery     Push mạnh hơn. Báo fall_after_push_rate.
+  domain_randomized Mass + friction ngẫu nhiên. Báo height_error, position_drift.
+  command_tracking  Sweep chiều cao cố định. Báo per-command height RMSE.
 """
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -30,14 +39,31 @@ def evaluate(
     num_episodes: int = typer.Option(100, help="Số episode đánh giá."),
     num_envs: int = typer.Option(64, help="Số env song song."),
     seed: int = typer.Option(0, help="Random seed."),
+    output: str = typer.Option(
+        "",
+        help="Đường dẫn file JSON lưu kết quả (mặc định: <checkpoint>/eval_results.json).",
+    ),
+    mode: str = typer.Option(
+        "nominal",
+        help=(
+            "Benchmark mode. Chọn một trong: "
+            "nominal | push_recovery | domain_randomized | command_tracking. "
+            "Mặc định: nominal (tương đương hành vi cũ)."
+        ),
+    ),
 ):
     """Chạy đánh giá trên model đã train."""
     import pickle
 
+    from wheeled_biped.eval.benchmark import MODES, run_benchmark
     from wheeled_biped.envs import make_env
     from wheeled_biped.training.networks import create_actor_critic
     from wheeled_biped.training.ppo import normalize_obs
     from wheeled_biped.utils.config import load_training_config
+
+    if mode not in MODES:
+        console.print(f"[red]Mode không hợp lệ: {mode!r}. Chọn: {MODES}[/red]")
+        raise typer.Exit(1)
 
     # Tải checkpoint
     ckpt_path = Path(checkpoint) / "checkpoint.pkl"
@@ -65,10 +91,9 @@ def evaluate(
         rng=rng,
     )
 
-    console.print(f"\n[bold]Đánh giá: {stage}[/bold]")
+    console.print(f"\n[bold]Đánh giá: {stage}[/bold] | mode=[cyan]{mode}[/cyan]")
     console.print(f"  Checkpoint: {checkpoint}")
-    console.print(f"  Episodes: {num_episodes}")
-    console.print(f"  Envs: {num_envs}\n")
+    console.print(f"  Episodes: {num_episodes} | Envs: {num_envs}\n")
 
     # Reset envs
     rng, reset_key = jax.random.split(rng)
@@ -81,59 +106,66 @@ def evaluate(
 
     max_steps = 2000  # tối đa mỗi episode
 
-    for step in range(max_steps):
-        if len(episode_rewards) >= num_episodes:
-            break
+    # --- Dispatch to benchmark suite ---
+    result = run_benchmark(
+        mode=mode,
+        env=env,
+        model=model,
+        params=params,
+        obs_rms=obs_rms,
+        rng=rng,
+        num_episodes=num_episodes,
+        num_envs=num_envs,
+        max_steps=max_steps,
+    )
 
-        rng, action_key = jax.random.split(rng)
-
-        # Normalize obs
-        obs = normalize_obs(env_states.obs, obs_rms)
-
-        # Lấy action (deterministic: dùng mean)
-        dist, _ = model.apply(params, obs)
-        actions = dist.loc  # mean action (deterministic)
-        actions = jnp.clip(actions, -1.0, 1.0)
-
-        # Step
-        env_states = env.v_step(env_states, actions)
-        current_rewards += env_states.reward
-        current_lengths += 1
-
-        # Thu thập episode hoàn thành
-        dones = env_states.done
-        for i in range(num_envs):
-            if dones[i] and len(episode_rewards) < num_episodes:
-                episode_rewards.append(float(current_rewards[i]))
-                episode_lengths.append(int(current_lengths[i]))
-
-        # Reset envs done
-        rng, reset_key = jax.random.split(rng)
-        env_states = env.v_reset_if_done(env_states, reset_key)
-
-        # Reset counters cho envs done
-        current_rewards = jnp.where(dones, 0.0, current_rewards)
-        current_lengths = jnp.where(dones, 0, current_lengths)
-
-    # Hiển thị kết quả
+    # --- Display table ---
     import numpy as np
 
-    rewards_arr = np.array(episode_rewards)
-    lengths_arr = np.array(episode_lengths)
-
-    table = Table(title="Kết quả đánh giá")
+    table = Table(title=f"Benchmark: {stage} | mode={mode}")
     table.add_column("Metric", style="cyan")
     table.add_column("Giá trị", style="green")
 
-    table.add_row("Số episode", str(len(episode_rewards)))
-    table.add_row("Reward trung bình", f"{rewards_arr.mean():.4f}")
-    table.add_row("Reward std", f"{rewards_arr.std():.4f}")
-    table.add_row("Reward min", f"{rewards_arr.min():.4f}")
-    table.add_row("Reward max", f"{rewards_arr.max():.4f}")
-    table.add_row("Độ dài episode TB", f"{lengths_arr.mean():.1f}")
-    table.add_row("Độ dài episode max", f"{lengths_arr.max()}")
+    table.add_row("Mode", mode)
+    table.add_row("Số episode", str(result.num_episodes))
+    table.add_row("Reward mean", f"{result.reward_mean:.4f}")
+    table.add_row("Reward std", f"{result.reward_std:.4f}")
+    table.add_row("Reward min", f"{result.reward_min:.4f}")
+    table.add_row("Reward p5", f"{result.reward_p5:.4f}")
+    table.add_row("Reward p50 (median)", f"{result.reward_p50:.4f}")
+    table.add_row("Reward p95", f"{result.reward_p95:.4f}")
+    table.add_row("Reward max", f"{result.reward_max:.4f}")
+    table.add_row("Độ dài episode TB", f"{result.episode_length_mean:.1f}")
+    table.add_row("Success rate", f"{result.success_rate:.2%}")
+    table.add_row("Fall rate", f"{result.fall_rate:.2%}")
+    table.add_row("Timeout rate", f"{result.timeout_rate:.2%}")
+
+    # Mode-specific extras
+    for key, val in result.mode_metrics.items():
+        if key == "per_command":
+            for cmd_info in val:
+                h = cmd_info["height_command"]
+                table.add_row(
+                    f"cmd h={h:.2f}m RMSE",
+                    f"{cmd_info['height_rmse']:.4f}",
+                )
+        elif isinstance(val, float):
+            table.add_row(key, f"{val:.4f}")
+        else:
+            table.add_row(key, str(val))
 
     console.print(table)
+
+    # --- Write JSON results ---
+    results_dict = result.to_dict()
+    results_dict["checkpoint"] = checkpoint
+    results_dict["stage"] = stage
+    results_dict["seed"] = seed
+
+    out_path = output if output else str(Path(checkpoint) / f"eval_results_{mode}.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(results_dict, f, indent=2)
+    console.print(f"\n[dim]Results saved → {out_path}[/dim]")
 
 
 if __name__ == "__main__":

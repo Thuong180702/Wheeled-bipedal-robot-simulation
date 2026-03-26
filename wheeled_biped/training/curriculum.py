@@ -47,6 +47,8 @@ class CurriculumManager:
         self.promotion_window = curriculum_cfg.get("promotion_window", 100)
         self.demotion_threshold = curriculum_cfg.get("demotion_threshold", 0.3)
         self.max_stage_steps = curriculum_cfg.get("max_stage_steps", 5_000_000)
+        # Guard against infinitely holding on a stage (e.g. success_value misconfigured)
+        self.max_retries_per_stage = curriculum_cfg.get("max_retries_per_stage", 5)
 
         self.current_stage_idx = 0
         self.output_dir = Path(output_dir)
@@ -176,23 +178,34 @@ class CurriculumManager:
     def run(self, total_steps_per_stage: int | None = None) -> dict[str, Any]:
         """Chạy toàn bộ curriculum pipeline.
 
+        Stage progression is performance-gated:
+          - "promote"  : success_rate >= promotion_threshold → advance to next stage
+          - "demote"   : success_rate < demotion_threshold (and stage > 0) → go back
+          - "continue" : staying on current stage for another attempt
+
+        An attempt counter per stage prevents infinite hold loops; when
+        max_retries_per_stage is exhausted the manager force-promotes.
+
         Args:
             total_steps_per_stage: số bước mỗi stage (mặc định dùng config).
 
         Returns:
-            Dict kết quả tổng hợp.
+            Dict kết quả tổng hợp (key = stage name).
         """
         results = {}
+        stage_attempts: dict[int, int] = {}  # stage_idx → attempt count
 
         while not self.is_complete:
             stage = self.current_stage
             stage_name = stage["name"]
             stage_steps = total_steps_per_stage or self.max_stage_steps
+            attempt = stage_attempts.get(self.current_stage_idx, 0) + 1
+            stage_attempts[self.current_stage_idx] = attempt
 
             print(f"\n{'═'*60}")
             print(
                 f"  Stage {self.current_stage_idx}/{self.num_stages - 1}: "
-                f"{stage_name}"
+                f"{stage_name}  (attempt {attempt}/{self.max_retries_per_stage})"
             )
             print(f"  {stage.get('description', '')}")
             print(f"  Max steps: {stage_steps:,}")
@@ -212,9 +225,37 @@ class CurriculumManager:
 
             results[stage_name] = train_result
 
-            # Đánh giá chuyển stage
-            if not self.promote():
-                break  # Đã hoàn thành tất cả
+            # ── Performance-gated stage progression ──────────────────────
+            stage_best_reward = train_result.get("best_reward", 0.0)
+            decision = self._evaluate_promotion(stage_best_reward)
+
+            print(
+                f"\n  📊 Curriculum decision: [{decision.upper()}] "
+                f"best_reward={stage_best_reward:.4f}  "
+                f"(attempt {attempt}/{self.max_retries_per_stage})"
+            )
+
+            if decision == "promote":
+                if not self.promote():
+                    break  # completed final stage
+                # Reset attempt counter for the new stage
+                stage_attempts.pop(self.current_stage_idx - 1, None)
+
+            elif decision == "demote":
+                self.demote()
+                # Also reset attempt counter for the stage we demoted to
+                stage_attempts.pop(self.current_stage_idx, None)
+
+            else:  # "continue" — re-train the same stage
+                if attempt >= self.max_retries_per_stage:
+                    print(
+                        f"  ⚠️  max_retries_per_stage ({self.max_retries_per_stage}) "
+                        f"reached on stage '{stage_name}' — force-promoting."
+                    )
+                    if not self.promote():
+                        break
+                    stage_attempts.pop(self.current_stage_idx - 1, None)
+                # else: loop back and re-run the same stage
 
         return results
 

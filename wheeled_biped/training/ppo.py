@@ -720,10 +720,18 @@ class PPOTrainer:
                     log_metrics = {
                         "reward/mean": avg_reward,
                         "reward/std": float(jnp.std(transitions.reward)),
+                        "reward/min": float(jnp.min(transitions.reward)),
+                        "reward/max": float(jnp.max(transitions.reward)),
                         "training/fps": fps,
                         "training/global_step": global_step,
+                        "training/update_time_s": update_elapsed,
                         **{k: float(v) for k, v in metrics.items()},
                     }
+
+                    # Curriculum metrics (enable sweeps over curriculum params)
+                    if curriculum_enabled:
+                        log_metrics["curriculum/level"] = float(curriculum_level)
+                        log_metrics["curriculum/min_height"] = float(current_min_h)
 
                     if self.logger:
                         self.logger.set_step(global_step)
@@ -791,6 +799,9 @@ class PPOTrainer:
                         global_step=global_step,
                         best_reward=best_reward,
                     )
+                    # Flush logger buffer to disk alongside checkpoint
+                    if self.logger:
+                        self.logger.flush()
 
         except KeyboardInterrupt:
             print(f"\n\n⚠️  Training bị dừng bởi người dùng (Ctrl+C)")

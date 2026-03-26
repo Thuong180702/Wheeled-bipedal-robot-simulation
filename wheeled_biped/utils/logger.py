@@ -2,6 +2,12 @@
 Logger cho training: hỗ trợ TensorBoard và WandB.
 
 Tự động phát hiện backend có sẵn.
+
+Features:
+  - TensorBoard (tensorboardX) — scalar, histogram, text
+  - Weights & Biases (wandb) — scalar, text
+  - File JSONL — always enabled, crash-safe via auto-flush (flush_every)
+  - run_metadata.json — reproducibility fields written at init
 """
 
 from __future__ import annotations
@@ -31,13 +37,31 @@ class TrainingLogger:
         use_wandb: bool = False,
         wandb_project: str = "wheeled-biped",
         config: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        flush_every: int = 50,
     ):
+        """Khởi tạo logger.
+
+        Args:
+            log_dir: thư mục lưu log.
+            experiment_name: tên thí nghiệm.
+            use_tensorboard: bật TensorBoard.
+            use_wandb: bật W&B.
+            wandb_project: tên W&B project.
+            config: dict config (gửi lên W&B, lưu vào metadata).
+            metadata: dict reproducibility fields (git hash, seed, v.v.) —
+                ghi vào run_metadata.json trong log_dir khi khởi tạo.
+            flush_every: tự động flush JSONL sau N lần log_scalar.
+                Ngăn mất dữ liệu khi crash. Mặc định 50.
+        """
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.experiment_name = experiment_name
         self._step = 0
         self._start_time = time.time()
         self._metrics_buffer: list[dict] = []
+        self._log_call_count = 0
+        self._flush_every = max(1, flush_every)
 
         # TensorBoard
         self._tb_writer = None
@@ -68,6 +92,15 @@ class TrainingLogger:
         # JSON log
         self._json_path = self.log_dir / f"{experiment_name}_metrics.jsonl"
 
+        # Write reproducibility metadata at init (if provided)
+        if metadata is not None:
+            meta_payload = {"experiment_name": experiment_name, **metadata}
+            if config is not None:
+                meta_payload["config"] = config
+            meta_path = self.log_dir / "run_metadata.json"
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(meta_payload, f, indent=2, default=str)
+
     @property
     def step(self) -> int:
         return self._step
@@ -91,6 +124,10 @@ class TrainingLogger:
             wandb.log({tag: value}, step=s)
 
         self._metrics_buffer.append({"step": s, "tag": tag, "value": value})
+        # Auto-flush to prevent data loss on crash
+        self._log_call_count += 1
+        if self._log_call_count % self._flush_every == 0:
+            self.flush()
 
     def log_dict(self, metrics: dict[str, float], step: int | None = None) -> None:
         """Ghi nhiều scalar cùng lúc."""
@@ -104,6 +141,18 @@ class TrainingLogger:
         s = step if step is not None else self._step
         if self._tb_writer is not None:
             self._tb_writer.add_histogram(tag, values, s)
+
+    def log_text(self, tag: str, text: str, step: int | None = None) -> None:
+        """Ghi text summary (TensorBoard + WandB).
+
+        Hữu ích để ghi ghi chú về quyết định curriculum, hyperparams, v.v.
+        """
+        s = step if step is not None else self._step
+        if self._tb_writer is not None:
+            self._tb_writer.add_text(tag, text, s)
+        if self._wandb_run is not None:
+            import wandb
+            wandb.log({tag: wandb.Html(f"<pre>{text}</pre>")}, step=s)
 
     def flush(self) -> None:
         """Đẩy buffer ra file."""
