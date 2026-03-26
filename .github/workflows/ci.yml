@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master", "dev"]
+  pull_request:
+    branches: ["main", "master", "dev"]
+
+# Cancel in-progress runs on the same branch to save runner minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: Lint & Test (CPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+
+      # ── Python ──────────────────────────────────────────────────────────────
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      # ── Install dependencies ─────────────────────────────────────────────────
+      # Install CPU-only JAX explicitly before the package so pip doesn't pull
+      # in the cuda12 variant listed in pyproject.toml dependencies.
+      - name: Install CPU JAX
+        run: pip install --upgrade "jax[cpu]>=0.4.25" "jaxlib>=0.4.25"
+
+      - name: Install project + dev extras
+        run: pip install -e ".[dev]"
+
+      # ── Lint ─────────────────────────────────────────────────────────────────
+      - name: Ruff — lint
+        run: ruff check .
+
+      - name: Ruff — format check
+        run: ruff format --check .
+
+      # ── Tests (CPU-safe subset) ───────────────────────────────────────────────
+      # Excluded from CI:
+      #   test_env.py          — constructs BalanceEnv and runs full MJX sim steps;
+      #                          JIT compile time is prohibitive on free runners.
+      # All other test files run on JAX CPU backend and complete in < 2 min total.
+      - name: Pytest — unit tests
+        env:
+          JAX_PLATFORM_NAME: cpu   # Force JAX to CPU even if CUDA libs are present
+          XLA_FLAGS: "--xla_force_host_platform_device_count=1"
+        run: |
+          python -m pytest tests/ \
+            --ignore=tests/test_env.py \
+            -v --tb=short -q \
+            --timeout=120

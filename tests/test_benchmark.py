@@ -259,7 +259,8 @@ class TestBaseMetrics:
         rewards = [1.0, 2.0, 3.0]
         lengths = [100, 100, 100]
         fallen = [False, False, False]
-        m = _base_metrics(rewards, lengths, fallen, max_steps=100)
+        timed_out = [True, True, True]   # all episodes reached time limit
+        m = _base_metrics(rewards, lengths, fallen, timed_out)
 
         assert m["success_rate"] == pytest.approx(1.0)
         assert m["fall_rate"] == pytest.approx(0.0)
@@ -273,10 +274,12 @@ class TestBaseMetrics:
         rewards = [0.5, 0.3]
         lengths = [30, 50]
         fallen = [True, True]
-        m = _base_metrics(rewards, lengths, fallen, max_steps=1000)
+        timed_out = [False, False]  # both fell; time_limit not reached
+        m = _base_metrics(rewards, lengths, fallen, timed_out)
 
         assert m["fall_rate"] == pytest.approx(1.0)
         assert m["success_rate"] == pytest.approx(0.0)
+        assert m["timeout_rate"] == pytest.approx(0.0)
 
     def test_percentiles(self):
         from wheeled_biped.eval.benchmark import _base_metrics
@@ -284,12 +287,87 @@ class TestBaseMetrics:
         rewards = list(range(101))   # 0..100
         lengths = [50] * 101
         fallen = [False] * 101
-        m = _base_metrics(rewards, lengths, fallen, max_steps=1000)
+        timed_out = [True] * 101
+        m = _base_metrics(rewards, lengths, fallen, timed_out)
 
         assert m["reward_p50"] == pytest.approx(50.0)
         assert m["reward_p5"] == pytest.approx(5.0)
         assert m["reward_p95"] == pytest.approx(95.0)
 
+
+# ---------------------------------------------------------------------------
+# Success semantics: regression tests for the old length >= max_steps bug
+# ---------------------------------------------------------------------------
+
+class TestSuccessSemantics:
+    """Verify that success_rate uses env time_limit, NOT length >= benchmark max_steps.
+
+    Old bug
+    -------
+    _base_metrics computed success_rate = mean(length >= max_steps).
+    If the env's internal episode_length (e.g. 500 steps) was SMALLER than
+    the benchmark's max_steps (e.g. 1000), a perfect policy that never fell
+    and always timed out at step 500 would get success_rate = 0.0.
+
+    New behaviour
+    -------------
+    success_rate = mean(time_limit) from info, so the episode's actual
+    termination reason drives the metric regardless of max_steps.
+    """
+
+    def test_old_bug_scenario_now_correct(self):
+        """Env episode_length=500 steps, benchmark max_steps=1000.
+
+        Under the old logic: length(500) < max_steps(1000) → success=0.
+        Under the new logic: time_limit=True  → success=1.
+        """
+        from wheeled_biped.eval.benchmark import _base_metrics
+
+        rewards = [10.0, 12.0, 11.0]
+        lengths = [500, 500, 500]     # env timed out at 500 steps
+        fallen = [False, False, False]
+        timed_out = [True, True, True]  # info["time_limit"] was True
+
+        m = _base_metrics(rewards, lengths, fallen, timed_out)
+
+        # New: correct — all episodes reached the env time limit
+        assert m["success_rate"] == pytest.approx(1.0), (
+            "success_rate should be 1.0 when all episodes reached time_limit, "
+            "regardless of benchmark max_steps"
+        )
+        assert m["fall_rate"] == pytest.approx(0.0)
+
+    def test_mixed_fall_and_timeout(self):
+        """2 fell, 3 timed out → success_rate = 0.6, fall_rate = 0.4."""
+        from wheeled_biped.eval.benchmark import _base_metrics
+
+        rewards = [5.0] * 5
+        lengths = [100, 200, 300, 400, 500]
+        fallen   = [True,  True,  False, False, False]
+        timed_out = [False, False, True,  True,  True]
+
+        m = _base_metrics(rewards, lengths, fallen, timed_out)
+
+        assert m["success_rate"] == pytest.approx(0.6)
+        assert m["fall_rate"] == pytest.approx(0.4)
+        assert m["timeout_rate"] == pytest.approx(0.6)  # synonymous with success_rate
+
+    def test_success_rate_equals_timeout_rate(self):
+        """Invariant: success_rate == timeout_rate always."""
+        from wheeled_biped.eval.benchmark import _base_metrics
+
+        import random
+        rng = random.Random(42)
+        n = 20
+        fallen    = [rng.random() < 0.3 for _ in range(n)]
+        timed_out = [not f for f in fallen]
+        m = _base_metrics(
+            episode_rewards=[1.0] * n,
+            episode_lengths=[100] * n,
+            episode_fallen=fallen,
+            episode_timed_out=timed_out,
+        )
+        assert m["success_rate"] == pytest.approx(m["timeout_rate"])
 
 # ---------------------------------------------------------------------------
 # Nominal mode
@@ -305,7 +383,8 @@ class TestNominalMode:
         fake_ep_r = [1.0, 2.0, 3.0, 1.5]
         fake_ep_l = [100, 50, 200, 150]
         fake_ep_f = [False, True, False, False]
-        monkeypatch.setattr(bm, "_rollout", lambda *a, **kw: (fake_ep_r, fake_ep_l, fake_ep_f, []))
+        fake_ep_t = [True, False, True, True]  # time_limit flags
+        monkeypatch.setattr(bm, "_rollout", lambda *a, **kw: (fake_ep_r, fake_ep_l, fake_ep_f, fake_ep_t, []))
 
         result = _run_nominal(
             env=MagicMock(),
@@ -364,7 +443,7 @@ class TestPushRecoveryMode:
         def _recording_rollout(*a, **kw):
             push_enabled_during.append(env._push_enabled)
             push_mag_during.append(env._push_magnitude)
-            return fake_ep_r, fake_ep_l, fake_ep_f, []
+            return fake_ep_r, fake_ep_l, fake_ep_f, [False, True], []
 
         monkeypatch.setattr(bm, "_rollout", _recording_rollout)
 
@@ -433,7 +512,7 @@ class TestDomainRandomizedMode:
         def _recording_rollout(*a, **kw):
             mass_during.append(env.mj_model.body_mass.copy())
             friction_during.append(env.mj_model.geom_friction.copy())
-            return [1.0, 2.0], [50, 60], [False, False], []
+            return [1.0, 2.0], [50, 60], [False, False], [True, True], []
 
         monkeypatch.setattr(bm, "_rollout", _recording_rollout)
 

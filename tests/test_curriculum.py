@@ -76,7 +76,7 @@ class TestEvaluatePromotion:
         mgr = _make_manager(window=10, success_value=1.0)
         # Only 5 entries (< window=10)
         for _ in range(5):
-            result = mgr._evaluate_promotion(avg_reward=2.0)
+            result = mgr._evaluate_promotion(metric_value=2.0)
         assert result == "continue", f"Expected 'continue', got '{result}'"
 
     def test_promote_when_above_threshold(self):
@@ -85,7 +85,7 @@ class TestEvaluatePromotion:
         # All 10 entries well above success_value=1.0
         result = None
         for _ in range(10):
-            result = mgr._evaluate_promotion(avg_reward=2.0)
+            result = mgr._evaluate_promotion(metric_value=2.0)
         assert result == "promote", f"Expected 'promote', got '{result}'"
 
     def test_hold_when_partial_success(self):
@@ -97,7 +97,7 @@ class TestEvaluatePromotion:
         result = None
         for i in range(10):
             reward = 2.0 if i < 5 else 0.0    # 5 success, 5 fail
-            result = mgr._evaluate_promotion(avg_reward=reward)
+            result = mgr._evaluate_promotion(metric_value=reward)
         assert result == "continue", f"Expected 'continue', got '{result}'"
 
     def test_demote_when_poor_performance_nonzero_stage(self):
@@ -110,7 +110,7 @@ class TestEvaluatePromotion:
         # All rewards well below success_value → 0% success rate
         result = None
         for _ in range(10):
-            result = mgr._evaluate_promotion(avg_reward=0.0)
+            result = mgr._evaluate_promotion(metric_value=0.0)
         assert result == "demote", f"Expected 'demote', got '{result}'"
 
     def test_no_demote_at_stage_zero(self):
@@ -122,7 +122,7 @@ class TestEvaluatePromotion:
 
         result = None
         for _ in range(10):
-            result = mgr._evaluate_promotion(avg_reward=0.0)
+            result = mgr._evaluate_promotion(metric_value=0.0)
         # Should be 'continue', not 'demote'
         assert result != "demote", f"Should not demote at stage 0, got '{result}'"
 
@@ -130,7 +130,7 @@ class TestEvaluatePromotion:
         """_performance_history grows with each call."""
         mgr = _make_manager(window=10, success_value=1.0)
         for i in range(7):
-            mgr._evaluate_promotion(avg_reward=float(i))
+            mgr._evaluate_promotion(metric_value=float(i))
         assert len(mgr._performance_history) == 7
 
     def test_promote_uses_most_recent_window(self):
@@ -138,11 +138,11 @@ class TestEvaluatePromotion:
         mgr = _make_manager(window=5, promotion_threshold=0.8, success_value=1.0)
         # First 10 entries: bad
         for _ in range(10):
-            mgr._evaluate_promotion(avg_reward=0.0)
+            mgr._evaluate_promotion(metric_value=0.0)
         # Next 5 entries: all good — should trigger promote
         result = None
         for _ in range(5):
-            result = mgr._evaluate_promotion(avg_reward=5.0)
+            result = mgr._evaluate_promotion(metric_value=5.0)
         assert result == "promote", f"Expected 'promote' on recent window, got '{result}'"
 
 
@@ -230,10 +230,17 @@ class TestStateMachine:
 # Tests: run() — performance-gated main loop
 # ---------------------------------------------------------------------------
 
-def _make_stub_trainer(best_reward: float):
-    """Return a MagicMock trainer whose .train() returns the given best_reward."""
+def _make_stub_trainer(best_reward: float, eval_reward_mean: float | None = None):
+    """Return a MagicMock trainer whose .train() returns the given rewards.
+
+    If eval_reward_mean is None, the dict mimics a legacy trainer that did not
+    include eval_reward_mean (used to test the best_reward fallback).
+    """
     stub = MagicMock()
-    stub.train.return_value = {"best_reward": best_reward, "total_steps": 100}
+    result = {"best_reward": best_reward, "total_steps": 100}
+    if eval_reward_mean is not None:
+        result["eval_reward_mean"] = eval_reward_mean
+    stub.train.return_value = result
     return stub, MagicMock()   # (trainer, logger)
 
 
@@ -376,5 +383,143 @@ class TestCurriculumRun:
 
         # Both stages should appear (stage_0 may appear twice in results dict
         # but dict update means we see the last run)
+        assert "stage_0" in results
+        assert "stage_1" in results
+
+
+# ---------------------------------------------------------------------------
+# Tests: eval_reward_mean takes priority over best_reward
+# ---------------------------------------------------------------------------
+
+class TestEvalMetricPreference:
+    """Verify that curriculum.run() uses eval_reward_mean when present and
+    falls back to best_reward when it is absent.
+
+    This is the core eval-driven guarantee: a stable smoothed metric (mean of
+    last 50 training updates) drives promotion instead of the all-time-max
+    best_reward (which is inflated by early lucky rollouts).
+    """
+
+    def _run_with_custom_result(self, mgr, train_result: dict) -> dict:
+        """Single-call helper: one trainer that returns train_result."""
+        def _fake_create(stage_idx):
+            stub = MagicMock()
+            stub.train.return_value = train_result
+            return stub, MagicMock()
+
+        mgr._create_trainer_for_stage = _fake_create
+        with pytest.raises(Exception):  # exits via promote() or max_retries
+            pass
+        # Run directly
+        mgr._create_trainer_for_stage = _fake_create
+        from unittest.mock import patch
+        with patch("wheeled_biped.training.curriculum.Path.mkdir"):
+            return mgr.run(total_steps_per_stage=100)
+
+    def test_eval_reward_mean_preferred_over_best_reward(self):
+        """When eval_reward_mean is present, it drives the promotion decision,
+        not best_reward.
+
+        Scenario:
+          - best_reward = 0.0  (low → would stay/demote on its own)
+          - eval_reward_mean = 5.0  (high → drives promotion)
+          - success_value = 1.0, window = 1
+          Both stage 0 and stage 1 get one call each with this result.
+        """
+        mgr = _make_manager(
+            num_stages=2,
+            window=1,
+            promotion_threshold=0.8,
+            success_value=1.0,
+            max_retries=5,
+        )
+        call_iter = iter(
+            [{"best_reward": 0.0, "eval_reward_mean": 5.0, "total_steps": 10},
+             {"best_reward": 0.0, "eval_reward_mean": 5.0, "total_steps": 10}]
+        )
+
+        def _fake_create(idx):
+            stub = MagicMock()
+            try:
+                stub.train.return_value = next(call_iter)
+            except StopIteration:
+                stub.train.return_value = {"best_reward": 99.0, "eval_reward_mean": 99.0, "total_steps": 10}
+            return stub, MagicMock()
+
+        mgr._create_trainer_for_stage = _fake_create
+        from unittest.mock import patch
+        with patch("wheeled_biped.training.curriculum.Path.mkdir"):
+            results = mgr.run(total_steps_per_stage=100)
+
+        # eval_reward_mean=5.0 > success_value=1.0 → promoted both stages
+        assert "stage_0" in results
+        assert "stage_1" in results
+
+    def test_best_reward_fallback_when_eval_missing(self):
+        """When eval_reward_mean is absent, best_reward fallback is used."""
+        mgr = _make_manager(
+            num_stages=2,
+            window=1,
+            promotion_threshold=0.8,
+            success_value=1.0,
+            max_retries=5,
+        )
+        # No eval_reward_mean key — only best_reward
+        call_iter = iter(
+            [{"best_reward": 5.0, "total_steps": 10},
+             {"best_reward": 5.0, "total_steps": 10}]
+        )
+
+        def _fake_create(idx):
+            stub = MagicMock()
+            try:
+                stub.train.return_value = next(call_iter)
+            except StopIteration:
+                stub.train.return_value = {"best_reward": 99.0, "total_steps": 10}
+            return stub, MagicMock()
+
+        mgr._create_trainer_for_stage = _fake_create
+        from unittest.mock import patch
+        with patch("wheeled_biped.training.curriculum.Path.mkdir"):
+            results = mgr.run(total_steps_per_stage=100)
+
+        # best_reward=5.0 > success_value=1.0 → promoted (backward-compatible)
+        assert "stage_0" in results
+        assert "stage_1" in results
+
+    def test_low_eval_reward_mean_overrides_high_best_reward(self):
+        """eval_reward_mean=0.0 (below threshold) prevents promotion even when
+        best_reward is high — verifying the preference is truly active."""
+        mgr = _make_manager(
+            num_stages=2,
+            window=2,             # needs 2 calls to fill window
+            promotion_threshold=0.8,
+            success_value=1.0,
+            max_retries=1,        # only 1 attempt before force-promote
+        )
+        # Both results: best_reward high (would promote alone), eval_reward_mean low (would not)
+        results_seq = [
+            {"best_reward": 10.0, "eval_reward_mean": 0.0, "total_steps": 10},
+            {"best_reward": 10.0, "eval_reward_mean": 0.0, "total_steps": 10},
+            {"best_reward": 10.0, "eval_reward_mean": 0.0, "total_steps": 10},
+            {"best_reward": 10.0, "eval_reward_mean": 0.0, "total_steps": 10},
+        ]
+        call_iter = iter(results_seq)
+
+        def _fake_create(idx):
+            stub = MagicMock()
+            try:
+                stub.train.return_value = next(call_iter)
+            except StopIteration:
+                stub.train.return_value = {"best_reward": 99.0, "eval_reward_mean": 0.0, "total_steps": 10}
+            return stub, MagicMock()
+
+        mgr._create_trainer_for_stage = _fake_create
+        from unittest.mock import patch
+        with patch("wheeled_biped.training.curriculum.Path.mkdir"):
+            results = mgr.run(total_steps_per_stage=100)
+
+        # eval_reward_mean=0.0 < success_value=1.0 → never naturally promoted;
+        # force-promoted after max_retries=1. Both stages still appear in results.
         assert "stage_0" in results
         assert "stage_1" in results

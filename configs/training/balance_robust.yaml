@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # Training config: Balance Robust (Stage 3)
 # ============================================================
 # Robot chịu lực ngẫu nhiên mạnh ở bất kì chiều cao nào.
@@ -36,7 +36,36 @@ network:
   activation: "elu"
   init_std: 0.15
 
-# --- Reward weights --- (giống balance để không làm mất kỹ năng đã học)
+# --- Reward weights ---
+# OBJECTIVE: Push-recovery robustness — survive and recover from large impulsive forces
+# (push_magnitude=40N, push_interval=200 steps = 4 s).
+#
+# Separation note — differences versus balance.yaml explained:
+#
+#   no_motion    → 0.0   (was 0.5 in balance)
+#     Reason: During/after a push the robot *must* move wheels to prevent falling.
+#     Rewarding stillness would directly fight the recovery reflex.
+#
+#   wheel_velocity → 0.0  (was -0.0006 in balance)
+#     Reason: The wheels are the primary balancing actuators under push.
+#     Penalising wheel speed would punish the exact behaviour needed for recovery.
+#
+#   action_rate  → -0.005  (was -0.02 in balance)
+#     Reason: The step immediately after push impact requires a rapid correction
+#     (wheel velocity changes from 0 → large in one step). action_rate=-0.02
+#     was fighting that correction with ~3× the effect of balance.yaml's penalty
+#     relative to the typical single-step reward. Reducing to -0.005 keeps
+#     anti-jitter at steady state while not punishing the recovery burst.
+#     NOTE: Do NOT zero this fully — small anti-jitter is still useful at rest.
+#
+#   natural_pose → 1.5  (same numerical value as balance, both σ=0.8)
+#     This is intentionally kept: the policy should return to a natural stance
+#     AFTER recovery, not maintain an arbitrary leaning posture under push.
+#     σ=0.8 is permissive enough that transient recovery lean is not heavily penalised.
+#
+# Terms kept identical (safe for both objectives):
+#   body_level, height, symmetry, alive, heading, legs_forward, legs_vertical,
+#   position_drift, orientation, yaw_rate, joint_torque, joint_velocity
 rewards:
   body_level: 1.5
   height: 1.5
@@ -49,11 +78,13 @@ rewards:
   position_drift: 1.0
   orientation: 0.8
   yaw_rate: 0.5
-  no_motion: 0.0 # tắt — bánh xe cần velocity để cân bằng
-  wheel_velocity: 0.0 # tắt — bánh xe là công cụ cân bằng chính
+  # === Recovery-safe: standing-specific terms zeroed out ===
+  no_motion: 0.0    # zeroed — wheels must spin to recover from push
+  wheel_velocity: 0.0 # zeroed — wheels are primary balancing actuators under push
+  # === Penalties ===
   joint_torque: -0.001
   joint_velocity: -0.0005
-  action_rate: -0.02
+  action_rate: -0.005  # reduced 4× vs balance (-0.02): allows fast post-push corrections
 
 # --- Termination ---
 termination:

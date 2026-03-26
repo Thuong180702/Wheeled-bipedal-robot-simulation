@@ -1,476 +1,462 @@
 # Wheeled Bipedal Robot Simulation
 
-Mô phỏng và huấn luyện robot hai chân có bánh xe (Wheeled Bipedal Robot) bằng **MuJoCo MJX + JAX** trên GPU, sử dụng Reinforcement Learning (PPO) với chiến lược **Curriculum Learning**.
+Simulation and reinforcement learning training for a wheeled bipedal robot using **MuJoCo MJX + JAX**, with PPO and curriculum learning.
 
-## Tổng quan
+> **Status:** Active research prototype. Only the `balance` stage has been trained and
+> evaluated to date. Sim-to-real transfer has not been validated on hardware.
 
-Dự án xây dựng pipeline hoàn chỉnh từ mô hình vật lý đến huấn luyện AI, hướng tới ứng dụng sim-to-real:
+---
 
-| Task                   | Mô tả                                |
-| ---------------------- | ------------------------------------ |
-| **Balance**            | Đứng vững, chống nhiễu loạn          |
-| **Wheeled Locomotion** | Di chuyển bằng bánh xe (tiến/lùi/rẽ) |
-| **Walking**            | Bước chân đi bộ                      |
-| **Stair Climbing**     | Leo lên/xuống cầu thang              |
-| **Rough Terrain**      | Đi trên địa hình gồ ghề              |
-| **Stand Up**           | Tự đứng dậy khi bị ngã/nằm xuống     |
+## Overview
 
-## Thông số Robot
+| Task               | Description                                    | Status       |
+|--------------------|------------------------------------------------|--------------|
+| **Balance**        | Stand upright, hold target height, resist push | Implemented  |
+| **Balance Robust** | Push-recovery fine-tuning (40 N disturbances)  | Config ready |
+| **Wheeled Locomotion** | Wheel-driven forward/backward/turn          | Config ready |
+| **Walking**        | Leg-stepping locomotion                        | Config ready |
+| **Stair Climbing** | Step up/down                                   | Config ready |
+| **Rough Terrain**  | Uneven surface traversal                       | Config ready |
+| **Stand Up**       | Self-recovery from fallen pose                 | Config ready |
+
+---
+
+## Robot specs
 
 ```
-Đùi:        26 cm          Bánh xe:    Ø12 cm
-Ống chân:   28 cm          Tổng KL:    ~8.1 kg
-Động cơ:    10 × BLDC      Cảm biến:   IMU + 10 encoder
-Hip width:  23 cm           Model:      SolidWorks → URDF → MuJoCo
+Thigh:       26 cm     Wheel:      Ø12 cm
+Shin:        28 cm     Total mass: ~8.1 kg
+Actuators:   10 × BLDC  Sensors:   IMU + 10 encoders
+Model:       SolidWorks → URDF → MuJoCo MJCF
 ```
 
-**Cấu hình động cơ (5 loại × 2 bên = 10):**
+Joints per leg (5 × 2 = 10 total):
 
-| Motor     | Chức năng                            | ctrlrange (Nm) | forcerange (Nm) | Joint range (rad) |
-| --------- | ------------------------------------ | -------------- | --------------- | ----------------- |
-| Hip Roll  | Nghiêng hông ngang (eo)              | ±15            | ±22             | [-0.7, 0.7]       |
-| Hip Yaw   | Xoay chân quanh trục đứng (xoaychan) | ±15            | ±22             | [-0.4, 0.4]       |
-| Hip Pitch | Gập đùi trước/sau (dui)              | ±30            | ±44             | [-0.5, 1.8]       |
-| Knee      | Gập gối (ongchan)                    | ±30            | ±44             | [-0.5, 2.7]       |
-| Wheel     | Bánh xe (banhxe)                     | ±15            | ±22             | unlimited         |
+| Joint     | Function        | ctrlrange (Nm) | Joint range (rad) |
+|-----------|-----------------|----------------|-------------------|
+| Hip Roll  | Lateral lean    | ±15            | [-0.7, 0.7]       |
+| Hip Yaw   | Foot rotation   | ±15            | [-0.4, 0.4]       |
+| Hip Pitch | Thigh flex      | ±30            | [-0.5, 1.8]       |
+| Knee      | Knee flex       | ±30            | [-0.5, 2.7]       |
+| Wheel     | Drive wheel     | ±15            | unlimited         |
 
-## Cấu trúc dự án
+> **Note:** Left hip_pitch / knee axes are mirrored vs. the right leg (SolidWorks URDF
+> symmetry). The policy learns to compensate automatically.
+
+---
+
+## Project structure
 
 ```
 ├── assets/
 │   ├── robot/
-│   │   ├── wheeled_biped.xml          # MuJoCo MJCF model (hand-crafted)
-│   │   └── wheeled_biped_real.xml     # MuJoCo MJCF từ URDF thực tế
+│   │   ├── wheeled_biped.xml          # MuJoCo MJCF (primary model)
+│   │   └── wheeled_biped_real.xml     # MJCF converted from URDF
 │   └── robot-urdf/
-│       ├── urdf/HOANTHIEN_TEST.urdf   # URDF gốc từ SolidWorks
-│       ├── meshes/*.STL               # 11 file STL mesh
-│       └── config/                    # Joint config cho ROS
+│       ├── urdf/HOANTHIEN_TEST.urdf
+│       ├── meshes/*.STL               # 11 STL mesh files
+│       └── config/                    # ROS joint config
 ├── configs/
-│   ├── robot.yaml                     # Thông số robot
-│   ├── curriculum.yaml                # Cấu hình curriculum pipeline
+│   ├── robot.yaml                     # Robot parameters
+│   ├── curriculum.yaml                # Multi-stage curriculum pipeline
 │   └── training/
-│       ├── balance.yaml
+│       ├── balance.yaml               # Pure standing balance (push_magnitude=0)
+│       ├── balance_robust.yaml        # Push-recovery fine-tuning (40 N)
 │       ├── wheeled_locomotion.yaml
 │       ├── walking.yaml
 │       ├── stair_climbing.yaml
 │       ├── rough_terrain.yaml
 │       └── stand_up.yaml
-├── wheeled_biped/                     # Package chính
-│   ├── envs/                          # MJX environments
-│   │   ├── base_env.py                # Base env (MJX + JAX)
-│   │   ├── balance_env.py             # Task đứng vững
-│   │   ├── locomotion_env.py          # Task di chuyển bánh xe
-│   │   ├── walking_env.py             # Task đi bộ
-│   │   ├── stair_env.py               # Task leo cầu thang
-│   │   ├── terrain_env.py             # Task địa hình gồ ghề
-│   │   └── standup_env.py             # Task đứng dậy
-│   ├── eval/                          # Benchmark suite
-│   │   └── benchmark.py               # 4 evaluation modes
+├── docs/
+│   └── baseline_workflow.md           # How to generate and compare baselines
+├── wheeled_biped/                     # Main package
+│   ├── envs/
+│   │   ├── base_env.py                # MJX base environment
+│   │   ├── balance_env.py             # Balance task (40-dim obs)
+│   │   └── ...                        # Other env stubs
+│   ├── eval/
+│   │   ├── benchmark.py               # 4 benchmark modes
+│   │   └── baseline.py                # Baseline save / comparison utilities
 │   ├── rewards/
-│   │   └── reward_functions.py        # Reward components (JAX)
+│   │   └── reward_functions.py        # JAX reward components
 │   ├── training/
-│   │   ├── ppo.py                     # PPO algorithm (JAX)
+│   │   ├── ppo.py                     # PPO + obs normalisation
 │   │   ├── networks.py                # Actor-Critic (Flax)
-│   │   ├── curriculum.py              # Curriculum manager
-│   │   └── live_viewer.py             # Live viewer khi training
+│   │   ├── curriculum.py              # Eval-driven curriculum manager
+│   │   └── live_viewer.py             # Real-time viewer during training
 │   ├── inference/
-│   │   └── unified_controller.py      # Unified multi-skill controller
+│   │   └── unified_controller.py      # Multi-skill controller with hysteresis
 │   ├── sim/
-│   │   ├── domain_randomization.py    # DR cho sim-to-real
-│   │   ├── push_disturbance.py        # Push disturbance helper
-│   │   ├── low_level_control.py       # PID low-level control helper
-│   │   └── terrain_generator.py       # Tạo terrain
+│   │   ├── domain_randomization.py    # Mass / friction / damping randomisation
+│   │   ├── push_disturbance.py        # Periodic push helper (JAX-compatible)
+│   │   ├── low_level_control.py       # PID joint controller helper
+│   │   └── terrain_generator.py
 │   └── utils/
-│       ├── math_utils.py              # Quaternion, rotation (JAX)
-│       ├── config.py                  # YAML config loader
-│       └── logger.py                  # TensorBoard + WandB
+│       ├── math_utils.py              # JAX quaternion / rotation utilities
+│       ├── config.py                  # YAML loader + model path resolver
+│       └── logger.py                  # TensorBoard + WandB logger
 ├── scripts/
-│   ├── train.py                       # Script training
-│   ├── evaluate.py                    # Đánh giá model (4 benchmark modes)
-│   └── visualize.py                   # Trực quan hóa + điều khiển
-├── tests/                             # Unit tests (8 files)
+│   ├── train.py                       # Training entry point
+│   ├── evaluate.py                    # Evaluation (4 benchmark modes)
+│   ├── visualize.py                   # MuJoCo viewer / video / interactive
+│   └── compare_baseline.py            # Regression comparison CLI
+├── tests/                             # 10 test files (pytest)
+├── .github/workflows/ci.yml           # GitHub Actions CI
 ├── pyproject.toml
 └── requirements.txt
 ```
 
 ---
 
-## Cài đặt
+## Installation
 
-### Yêu cầu hệ thống
+### Requirements
 
-- **Python 3.10** (bắt buộc — jaxlib chưa hỗ trợ 3.12 trên Windows)
-- NVIDIA GPU + CUDA 12 (khuyến nghị, hoạt động được trên CPU)
+- Python 3.10 (required — JAX/jaxlib constraints)
+- NVIDIA GPU + CUDA 12 (recommended; CPU fallback works but is slow for training)
 - RAM ≥ 16 GB
 
-### Cài đặt từ đầu
+### Install
 
 ```bash
-# Clone repository
 git clone https://github.com/Thuong180702/Wheeled-bipedal-robot-simulation.git
 cd Wheeled-bipedal-robot-simulation
 
-# Tạo virtual environment (Python 3.10)
 python -m venv .venv
+.venv\Scripts\activate       # Windows
+# source .venv/bin/activate  # Linux / macOS
 
-# Kích hoạt venv
-.venv\Scripts\activate          # Windows PowerShell
-# source .venv/bin/activate     # Linux / Mac
-
-# Cài đặt dependencies
 pip install -r requirements.txt
-
-# Nếu gặp lỗi uvloop trên Windows:
-pip install orbax-checkpoint --no-deps
-pip install flax --no-deps
-pip install msgpack rich PyYAML
 ```
 
-### Kiểm tra cài đặt
+> **Windows note:** If you encounter `uvloop` errors: install `orbax-checkpoint`,
+> `flax`, `msgpack`, `rich`, and `PyYAML` manually with `--no-deps`.
+
+### Verify
 
 ```bash
-# Kiểm tra MuJoCo + JAX
-python -c "import mujoco; import jax; print(f'MuJoCo {mujoco.__version__}, JAX {jax.__version__}')"
-
-# Xem robot model trong viewer
-python scripts/visualize.py model
-
-# Chạy unit tests
-pytest tests/ -v
+python -c "import mujoco; import jax; print(mujoco.__version__, jax.__version__)"
+python scripts/visualize.py model          # open robot in MuJoCo viewer
+pytest tests/ -v --ignore=tests/test_env.py  # run CPU-safe tests
 ```
 
 ---
 
-## Hướng dẫn sử dụng
+## Usage
 
-### 1. Xem robot model
+### 1. View robot model
 
 ```bash
-# Mở MuJoCo viewer để xem robot ở tư thế đứng
 python scripts/visualize.py model
-
-# Dùng file MJCF tùy chỉnh
 python scripts/visualize.py model --model-path path/to/custom.xml
 ```
 
 ### 2. Training
 
-#### Training một task đơn lẻ
+#### Single stage
 
 ```bash
-# Task đứng vững (balance)
+# Pure standing balance (no push disturbances — best starting point)
 python scripts/train.py single --stage balance --steps 5000000
 
-# Task di chuyển bằng bánh xe
+# Push-recovery fine-tune (warm-start from balance checkpoint)
+python scripts/train.py single --stage balance_robust --steps 3000000
+
+# Other stages
 python scripts/train.py single --stage wheeled_locomotion --steps 5000000
-
-# Task đi bộ
-python scripts/train.py single --stage walking --steps 5000000
-
-# Task leo cầu thang
-python scripts/train.py single --stage stair_climbing --steps 5000000
-
-# Task địa hình gồ ghề
-python scripts/train.py single --stage rough_terrain --steps 5000000
-
-# Task đứng dậy (từ tư thế ngã/nằm)
-python scripts/train.py single --stage stand_up --steps 5000000
+python scripts/train.py single --stage walking           --steps 5000000
+python scripts/train.py single --stage stair_climbing    --steps 5000000
+python scripts/train.py single --stage rough_terrain     --steps 5000000
+python scripts/train.py single --stage stand_up          --steps 5000000
 ```
 
-#### Tùy chỉnh training
+Common options:
 
 ```bash
-# Tùy chỉnh số environments song song
-python scripts/train.py single --stage balance --num-envs 8192
-
-# Thay đổi thư mục output
-python scripts/train.py single --stage balance --output-dir my_outputs
-
-# Đổi random seed
-python scripts/train.py single --stage balance --seed 123
+--num-envs 8192         # parallel environments (default 4096)
+--output-dir my_outputs # output directory (default: outputs/)
+--seed 123              # random seed
+--resume <checkpoint>   # resume from a saved checkpoint
 ```
 
-#### Training với live viewer (xem robot khi đang train)
+#### Training with live viewer
 
 ```bash
-# Mở cửa sổ MuJoCo viewer real-time trong lúc training
 python scripts/train.py single --stage balance --live-view
-
-# Tùy chỉnh tần suất cập nhật viewer (mỗi N updates)
 python scripts/train.py single --stage balance --live-view --view-interval 5
 ```
 
-> **Lưu ý:** Viewer chạy trên main thread, training chạy ở background thread.
-> Đóng cửa sổ viewer bất cứ lúc nào — training vẫn tiếp tục.
+The viewer runs on the main thread; training continues in a background thread.
+Close the viewer window at any time — training keeps running.
 
-#### Training đầy đủ Curriculum (tất cả 5 stages)
+#### Full curriculum
 
 ```bash
 python scripts/train.py curriculum --steps-per-stage 5000000
 ```
 
-Pipeline tự động chạy theo thứ tự:
-`Balance → Wheeled Locomotion → Walking → Stair Climbing → Rough Terrain`
+Stages run in order: Balance → Wheeled Locomotion → Walking → Stair Climbing → Rough Terrain.
+Each stage warm-starts from the previous stage's checkpoint.
 
-Mỗi stage kế thừa (warm-start) từ checkpoint stage trước.
-
-#### Tiếp tục training từ checkpoint
+#### Resume from checkpoint
 
 ```bash
 python scripts/train.py single --stage balance --resume outputs/checkpoints/balance/step_1000000
 ```
 
-#### Dừng training
+Press **Ctrl+C** to stop at any time. The latest checkpoint is saved automatically.
 
-Nhấn **Ctrl+C** để dừng bất cứ lúc nào. Checkpoint sẽ được tự động lưu trước khi thoát.
+### 3. Evaluate a trained policy
 
-### 3. Đánh giá model
+Four benchmark modes:
 
-`evaluate.py` hỗ trợ 4 benchmark mode:
+| Mode | Description | Key metrics |
+|---|---|---|
+| `nominal` | Standard env defaults | `reward_mean`, `fall_rate`, `success_rate` |
+| `push_recovery` | Stronger / always-enabled push | `fall_after_push_rate` |
+| `domain_randomized` | ±15% mass, ±40% friction | `height_error_mean`, `position_drift_mean` |
+| `command_tracking` | Sweep target heights | `overall_height_rmse`, per-command RMSE |
 
-| Mode | Mô tả |
+```bash
+python scripts/evaluate.py \
+  --checkpoint outputs/checkpoints/balance/final \
+  --stage balance \
+  --mode nominal          # or push_recovery / domain_randomized / command_tracking
+```
+
+Results are saved to `<checkpoint>/eval_results_<mode>.json`.
+
+**`success_rate` semantics:** A episode is a success if the env's own `time_limit` flag
+fires (i.e., the robot survived the full episode) — *not* a comparison against the
+benchmark's `max_steps`. `fall_rate + success_rate ≈ 1.0`.
+
+### 4. Benchmark baseline comparison
+
+```bash
+# Save a baseline after training
+cp outputs/checkpoints/balance/final/eval_results_nominal.json baselines/nominal_v1.json
+
+# Compare a later run against the baseline (exit code 1 if regression)
+python scripts/compare_baseline.py \
+  --baseline baselines/nominal_v1.json \
+  --current  outputs/checkpoints/balance/final/eval_results_nominal.json
+```
+
+See [`docs/baseline_workflow.md`](docs/baseline_workflow.md) for the full workflow
+and tolerance reference.
+
+### 5. Visualize a trained policy
+
+```bash
+# Watch policy in MuJoCo viewer
+python scripts/visualize.py policy \
+  --checkpoint outputs/checkpoints/balance/final
+
+# Custom step count and slow-motion
+python scripts/visualize.py policy \
+  --checkpoint outputs/checkpoints/balance/final \
+  --num-steps 5000 --slow-factor 2.0
+```
+
+### 6. Render video
+
+```bash
+python scripts/visualize.py render \
+  --checkpoint outputs/checkpoints/balance/final \
+  --output demo.mp4
+
+# Custom resolution
+python scripts/visualize.py render \
+  --checkpoint outputs/checkpoints/balance/final \
+  --output demo.mp4 --width 1920 --height 1080 --fps 60
+```
+
+### 7. Interactive keyboard control
+
+```bash
+python scripts/visualize.py interactive                                    # PD control only
+python scripts/visualize.py interactive --checkpoint .../balance/final    # with policy
+```
+
+| Key | Function |
 |---|---|
-| `nominal` (mặc định) | Đánh giá chuẩn — báo mean reward, fall_rate, timeout_rate |
-| `push_recovery` | Tăng lực đẩy — báo fall_after_push_rate |
-| `domain_randomized` | Ngẫu nhiên mass + friction — báo height_error, position_drift |
-| `command_tracking` | Sweep chiều cao — báo per-command height RMSE |
+| ↑ / ↓ | Forward / backward |
+| ← / → | Turn left / right |
+| Q / E | Roll left / right |
+| U / J | Increase / decrease target height |
+| Space | Brake |
+| [ / ] | Slow / fast |
+
+### 8. Unified multi-skill controller
 
 ```bash
-# Nominal (cũ)
-python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --stage balance
-
-# Push recovery
-python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode push_recovery
-
-# Command tracking
-python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode command_tracking
-
-# Domain randomized
-python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode domain_randomized
-```
-
-Kết quả JSON được lưu tự động vào `<checkpoint>/eval_results_<mode>.json`.
-
-### 4. Trực quan hóa policy đã train
-
-```bash
-# Xem policy chạy trong MuJoCo viewer
-python scripts/visualize.py policy --checkpoint outputs/checkpoints/balance/final
-
-# Tùy chỉnh số bước và tốc độ
-python scripts/visualize.py policy --checkpoint outputs/checkpoints/balance/final --num-steps 5000 --slow-factor 2.0
-```
-
-### 5. Render video
-
-```bash
-# Render video MP4 từ policy
-python scripts/visualize.py render --checkpoint outputs/checkpoints/balance/final --output demo.mp4
-
-# Tùy chỉnh resolution và FPS
-python scripts/visualize.py render --checkpoint outputs/checkpoints/balance/final --output demo.mp4 --width 1920 --height 1080 --fps 60
-```
-
-### 6. Điều khiển robot bằng bàn phím (Interactive)
-
-```bash
-# Điều khiển bằng PD controller (không cần checkpoint)
-python scripts/visualize.py interactive
-
-# Điều khiển với policy giữ thăng bằng (cần checkpoint)
-python scripts/visualize.py interactive --checkpoint outputs/checkpoints/balance/final
-```
-
-**Phím điều khiển:**
-
-| Phím    | Chức năng             |
-| ------- | --------------------- |
-| ↑ / ↓   | Tiến / Lùi            |
-| ← / →   | Rẽ trái / phải        |
-| Q / E   | Nghiêng trái / phải   |
-| U / J   | Tăng / Giảm chiều cao |
-| Space   | Dừng lại (phanh)      |
-| \[ / \] | Giảm / Tăng tốc độ    |
-
-### 7. Unified Controller (tự động chọn skill)
-
-Sau khi train đủ các task, dùng unified controller để robot tự động chuyển skill:
-
-```bash
-# Chạy unified controller với auto-detect
 python scripts/visualize.py unified --checkpoint-dir outputs/checkpoints
-
-# Tắt auto, chọn thủ công bằng phím 1-5
 python scripts/visualize.py unified --checkpoint-dir outputs/checkpoints --no-auto-mode
 ```
 
-**Phím điều khiển:**
+Keys 1–6 force a specific skill; 0 returns to auto-detect. Skill switching uses
+dwell-time hysteresis (3 consecutive frames) to avoid single-frame spurious transitions.
 
-| Phím    | Chức năng              |
-| ------- | ---------------------- |
-| ↑ / ↓   | Tiến / Lùi             |
-| ← / →   | Rẽ trái / phải         |
-| U / J   | Tăng / Giảm chiều cao  |
-| Space   | Dừng lại               |
-| \[ / \] | Giảm / Tăng tốc độ     |
-| 1       | Ép chọn Balance        |
-| 2       | Ép chọn Locomotion     |
-| 3       | Ép chọn Walking        |
-| 4       | Ép chọn Stair Climbing |
-| 5       | Ép chọn Rough Terrain  |
-| 6       | Ép chọn Stand Up       |
-| 0       | Quay về Auto-detect    |
+**Tilt detection** uses the gravity vector projected into the body frame
+(`arccos(-g_body[2])`), which is yaw-invariant. A robot that only rotates around
+the vertical axis will not falsely trigger balance fallback.
 
-### 8. Chạy tests
+### 9. Run tests
 
 ```bash
-# Chạy tất cả tests
-pytest tests/ -v
+# Full CPU-safe test suite (used in CI)
+pytest tests/ --ignore=tests/test_env.py -v
 
-# Tests cụ thể
-pytest tests/test_model.py -v          # Kiểm tra MuJoCo model
-pytest tests/test_rewards.py -v        # Reward components
-pytest tests/test_env.py -v            # Balance env reset/step
-pytest tests/test_ppo_trainer.py -v    # PPO trainer invariants
-pytest tests/test_curriculum.py -v     # Curriculum promote/hold/demote
-pytest tests/test_unified_controller.py -v  # Unified controller edge cases
-pytest tests/test_benchmark.py -v     # Benchmark suite
-pytest tests/test_sim_helpers.py -v   # Sim helper functions
+# Individual files
+pytest tests/test_model.py -v             # MuJoCo model integrity
+pytest tests/test_rewards.py -v           # Reward functions
+pytest tests/test_ppo_trainer.py -v       # PPO invariants (no NaN, checkpoint round-trip)
+pytest tests/test_curriculum.py -v        # Curriculum promote/hold/demote
+pytest tests/test_unified_controller.py -v # Tilt semantics, skill switching
+pytest tests/test_benchmark.py -v         # Benchmark success/fall/timeout semantics
+pytest tests/test_sim_helpers.py -v       # Push disturbance, PID control
+pytest tests/test_baseline.py -v          # Baseline comparison logic
+
+# test_env.py is excluded from CI (full MJX rollout, slow on CPU runners)
+pytest tests/test_env.py -v
 ```
 
 ---
 
-## Tham khảo nhanh — Tất cả lệnh
+## Quick reference
 
 ```bash
-# ─── Xem model ───
+# ── View ──────────────────────────────────────────────────────────────────────
 python scripts/visualize.py model
+python scripts/visualize.py policy     --checkpoint outputs/checkpoints/balance/final
+python scripts/visualize.py render     --checkpoint outputs/checkpoints/balance/final --output demo.mp4
+python scripts/visualize.py interactive --checkpoint outputs/checkpoints/balance/final
+python scripts/visualize.py unified    --checkpoint-dir outputs/checkpoints
 
-# ─── Training ───
-python scripts/train.py single --stage balance --steps 5000000
-python scripts/train.py single --stage stand_up --steps 5000000
-python scripts/train.py single --stage balance --live-view
+# ── Train ─────────────────────────────────────────────────────────────────────
+python scripts/train.py single     --stage balance        --steps 5000000
+python scripts/train.py single     --stage balance_robust --steps 3000000
+python scripts/train.py single     --stage balance        --live-view
 python scripts/train.py curriculum --steps-per-stage 5000000
 
-# ─── Đánh giá (4 modes) ───
-python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final
+# ── Evaluate ──────────────────────────────────────────────────────────────────
+python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode nominal
 python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode push_recovery
-python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode command_tracking
 python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode domain_randomized
+python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode command_tracking
 
-# ─── Xem policy ───
-python scripts/visualize.py policy --checkpoint outputs/checkpoints/balance/final
+# ── Baseline comparison ───────────────────────────────────────────────────────
+python scripts/compare_baseline.py --baseline baselines/nominal_v1.json \
+                                   --current  outputs/.../eval_results_nominal.json
 
-# ─── Render video ───
-python scripts/visualize.py render --checkpoint outputs/checkpoints/balance/final --output demo.mp4
-
-# ─── Điều khiển tương tác ───
-python scripts/visualize.py interactive
-python scripts/visualize.py interactive --checkpoint outputs/checkpoints/balance/final
-
-# ─── Unified controller ───
-python scripts/visualize.py unified --checkpoint-dir outputs/checkpoints
-
-# ─── Tests ───
-pytest tests/ -v
+# ── Tests ─────────────────────────────────────────────────────────────────────
+pytest tests/ --ignore=tests/test_env.py -v
 ```
 
 ---
 
-## Kiến trúc kỹ thuật
+## Architecture
 
-### MuJoCo MJX + JAX
+### Observation space (40 dims for BalanceEnv)
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    GPU (CUDA 12)                     │
-│  ┌───────────┐  ┌───────────┐  ┌────────────────┐  │
-│  │ MJX Model │  │ MJX Data  │  │ JAX JIT/VMAP   │  │
-│  │ (Physics) │→ │ ×4096 env │→ │ (Vectorized)   │  │
-│  └───────────┘  └───────────┘  └────────────────┘  │
-│                       ↕                              │
-│  ┌────────────────────────────────────────────────┐  │
-│  │        PPO (Actor-Critic, Flax + Optax)        │  │
-│  │  ┌──────────┐  ┌──────────┐  ┌─────────────┐  │  │
-│  │  │  Actor   │  │  Critic  │  │  GAE + Loss  │  │  │
-│  │  │ (Policy) │  │ (Value)  │  │  Computation │  │  │
-│  │  └──────────┘  └──────────┘  └─────────────┘  │  │
-│  └────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
-```
+| Component | Dims | Description |
+|---|---|---|
+| Gravity in body frame | 3 | Body tilt — yaw-invariant tilt detection |
+| Linear velocity | 3 | Body-frame linear velocity |
+| Angular velocity | 3 | Body-frame angular velocity |
+| Joint positions | 10 | All 10 joint angles (encoders) |
+| Joint velocities | 10 | All 10 joint velocities |
+| Previous action | 10 | Last control output |
+| Height command | 1 | Target height, normalised to [0, 1] |
 
-### Observation Space (39 chiều)
+> Base 39-dim observation is shared across skills; `height_command` is the BalanceEnv
+> extension. The unified controller provides per-skill observation adapters —
+> generic zero-padding is an explicit fallback that logs a warning.
 
-| Component    | Kích thước | Mô tả                      |
-| ------------ | ---------- | -------------------------- |
-| Gravity body | 3          | Trọng lực trong body frame |
-| Linear vel   | 3          | Vận tốc tuyến tính thân    |
-| Angular vel  | 3          | Vận tốc góc thân           |
-| Joint pos    | 10         | Vị trí 10 khớp (encoder)   |
-| Joint vel    | 10         | Vận tốc 10 khớp            |
-| Prev action  | 10         | Action bước trước          |
+### Action space (10 dims, normalised to [−1, 1])
 
-### Action Space (10 chiều)
+With `low_level_pid.enabled: true` (default in `balance.yaml`):
+- Joints 0–3, 5–8 (hip/knee): policy output is interpreted as a **position target**,
+  converted to torque by a PID controller.
+- Joints 4, 9 (wheels): policy output is a **velocity target** (scaled by `wheel_vel_limit`).
 
-| Index | Khớp      | Torque Max | Mô tả                    |
-| ----- | --------- | ---------- | ------------------------ |
-| 0, 5  | Hip Roll  | ±22 Nm     | Nghiêng hông L/R         |
-| 1, 6  | Hip Yaw   | ±22 Nm     | Xoay chân L/R            |
-| 2, 7  | Hip Pitch | ±22 Nm     | Gập đùi L/R              |
-| 3, 8  | Knee      | ±44 Nm     | Gập gối L/R (motor mạnh) |
-| 4, 9  | Wheel     | ±22 Nm     | Bánh xe L/R              |
+Without PID: output is scaled directly to actuator torque range.
 
-Output policy ∈ [-1, 1] được scale sang torque theo giới hạn từng motor.
+### PPO training
 
-> **Lưu ý:** Trục khớp chân trái (hip_pitch, knee) đảo ngược so với chân phải
-> do đối xứng URDF từ SolidWorks. Policy tự học bù sự bất đối xứng này.
+- Vectorised rollout using `jax.vmap` over 4096 parallel MJX environments.
+- Observation running mean/std normalisation (Welford online update).
+- GAE advantage estimation with γ=0.99, λ=0.95.
+- Curriculum progression driven by `eval_reward_mean` — the mean of the last 50
+  training update rewards (smoothed, not the all-time-max `best_reward`). Falls back
+  to `best_reward` for checkpoints from older trainers.
 
-### Curriculum Learning
+### Balance reward design
 
-```
-Stage 0: Balance ────┐
-                     │ success_rate > 80%
-Stage 1: Wheeled ←───┘
-     Locomotion ─────┐
-                     │ success_rate > 80%
-Stage 2: Walking ←───┘
-                ─────┐
-                     │
-Stage 3: Stairs ←────┘
-                ─────┐
-                     │
-Stage 4: Rough  ←────┘
-        Terrain
+Two training configs serve different objectives:
 
-Stage 5: Stand Up ←── warm-start từ Balance
-         (đứng dậy khi ngã)
-```
+| Term | `balance.yaml` | `balance_robust.yaml` | Note |
+|---|---|---|---|
+| `no_motion` | 0.5 | **0.0** | Wheels must spin to recover from push |
+| `wheel_velocity` | −0.0006 | **0.0** | Wheels are primary balancing actuators under push |
+| `action_rate` | −0.025 | **−0.005** | Rapid wheel burst needed immediately after impact |
+| `height`, `body_level`, `natural_pose` | shared | shared | Consistent standing objective |
 
-Mỗi stage kế thừa (warm-start) từ checkpoint stage trước.
+Both configs share `push_magnitude=0` (balance) or `40 N` (robust).
 
-### Sim-to-Real Transfer
+### Curriculum manager
 
-- **Domain Randomization:** Ngẫu nhiên hóa khối lượng (±10%), ma sát (±30%), damping khớp (xem `sim/domain_randomization.py`)
-- **External Perturbation:** Đẩy ngẫu nhiên lên thân robot theo chu kỳ (`sim/push_disturbance.py`)
-- **Observation Normalization:** Running mean/std chuẩn hóa input
+`configs/curriculum.yaml` defines the pipeline. `CurriculumManager` in
+`wheeled_biped/training/curriculum.py` gates stage promotion / hold / demotion using
+`eval_reward_mean` from the trainer. The `_evaluate_promotion` method compares the
+metric against the stage's `success_value` threshold over a sliding `promotion_window`.
 
-> **Lưu ý:** Sensor noise (IMU/encoder) chưa được implement. Sim-to-real transfer chưa được xác nhận trên phần cứng thực.
+### CI
 
-## Cấu hình
+GitHub Actions workflow at `.github/workflows/ci.yml`:
+- **Ruff** lint + format check
+- **Pytest** over 7 of 9 test files (excludes `test_env.py` — full MJX JIT compile is
+  prohibitively slow on free runners)
+- CPU-only JAX (`jax[cpu]`) — `jax[cuda12]` override applied before package install
 
-Tất cả hyperparameter được quản lý qua file YAML trong `configs/`:
+---
 
-- `configs/robot.yaml` — thông số vật lý robot
-- `configs/curriculum.yaml` — pipeline curriculum
-- `configs/training/*.yaml` — hyperparameter từng task
+## Configuration
 
-Có thể điều chỉnh:
+All hyperparameters are in `configs/`:
 
-- Số environments song song (`num_envs`)
-- Learning rate, epochs, clip_epsilon, ...
-- Trọng số reward
-- Ngưỡng chuyển stage
-- Cấu hình domain randomization
+- `configs/robot.yaml` — robot physics parameters
+- `configs/curriculum.yaml` — multi-stage pipeline definition
+- `configs/training/<stage>.yaml` — per-task hyperparameters
+
+Key knobs:
+
+| Parameter | Location | Effect |
+|---|---|---|
+| `task.num_envs` | `<stage>.yaml` | Parallel environments (GPU memory bound) |
+| `ppo.learning_rate` | `<stage>.yaml` | Step size |
+| `rewards.*` | `<stage>.yaml` | Per-component reward weights |
+| `domain_randomization.push_magnitude` | `<stage>.yaml` | Push force (0 = disabled) |
+| `termination.max_tilt_rad` | `<stage>.yaml` | Fall threshold (~0.8 rad = 46°) |
+| `low_level_pid.enabled` | `<stage>.yaml` | PID low-level control mode |
+
+---
+
+## Known limitations and gaps
+
+- **Only `balance` has been trained.** All other stages are config-ready but untrained.
+- **No sensor noise.** IMU and encoder noise are not modelled in simulation.
+- **Sim-to-real not validated.** Domain randomisation and push disturbance are the only
+  transfer bridges; no hardware tests have been performed.
+- **`test_env.py` excluded from CI.** The full MJX rollout JIT-compiles to GPU code;
+  compile time is impractical on CPU-only GitHub runners.
+- **Unified controller requires all checkpoints.** Missing skill checkpoints are
+  skipped gracefully, but the controller has only been tested in simulation.
+- **Height curriculum is env-internal.** The `curriculum_min_height` value is carried
+  through episodes via `EnvState.info`, not managed by `CurriculumManager`. The two
+  curriculum systems are independent.
+
+---
 
 ## License
 

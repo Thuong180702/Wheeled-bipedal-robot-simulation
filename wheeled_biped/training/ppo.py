@@ -615,11 +615,17 @@ class PPOTrainer:
             )
             if viewer is not None:
                 viewer.request_stop()
-            return {"best_reward": self._resumed_best_reward, "total_steps": gs}
+            return {"best_reward": self._resumed_best_reward,
+                    "eval_reward_mean": self._resumed_best_reward,
+                    "total_steps": gs}
 
         global_step = resumed_step + steps_per_update  # Tính cả bước đã resume
         start_time = time.time()
         best_reward = self._resumed_best_reward  # Giữ best_reward từ lần trước
+        # eval_reward_mean: mean of recent avg_rewards — a smoother metric for
+        # curriculum promotion decisions than the all-time-max best_reward.
+        _recent_rewards: list[float] = []   # rolling window, last 50 updates
+        _RECENT_WINDOW = 50
 
         # Cập nhật viewer ngay sau warmup
         if viewer is not None:
@@ -690,6 +696,10 @@ class PPOTrainer:
 
                 # Progress mỗi update (để người dùng biết còn chạy)
                 avg_reward = float(jnp.mean(transitions.reward))
+                # Accumulate for eval_reward_mean (curriculum progression metric)
+                _recent_rewards.append(avg_reward)
+                if len(_recent_rewards) > _RECENT_WINDOW:
+                    _recent_rewards.pop(0)
                 elapsed_total = time.time() - start_time
                 fps = global_step / max(elapsed_total, 1)
                 eta_s = (num_updates - update) * update_elapsed
@@ -835,8 +845,14 @@ class PPOTrainer:
         if viewer is not None:
             viewer.request_stop()
 
+        eval_reward_mean = (
+            float(sum(_recent_rewards) / len(_recent_rewards))
+            if _recent_rewards else best_reward
+        )
+
         return {
             "best_reward": best_reward,
+            "eval_reward_mean": eval_reward_mean,
             "total_steps": global_step,
             "curriculum_min_height": current_min_h if curriculum_enabled else None,
             "curriculum_level": curriculum_level if curriculum_enabled else None,

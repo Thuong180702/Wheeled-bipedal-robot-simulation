@@ -559,3 +559,107 @@ class TestPerSkillPrevActions:
         # updated by BALANCE, not LOCOMOTION
         loco_after = np.array(ctrl._prev_actions[Skill.LOCOMOTION])
         assert np.all(loco_after == 0.0), "LOCOMOTION buffer should be untouched"
+
+
+# ---------------------------------------------------------------------------
+# Tests: Tilt detection — gravity-in-body-frame semantics
+# ---------------------------------------------------------------------------
+# These tests exercise the tilt formula directly (no MuJoCo needed) by calling
+# get_gravity_in_body_frame with controlled quaternions and computing the tilt
+# angle the same way _detect_skill_raw does.
+#
+# Old formula: arccos(2*qw^2 - 1)  [total rotation angle, yaw-inclusive]
+# New formula: arccos(-g_body[2])  [angle from world-up, yaw-invariant]
+# ---------------------------------------------------------------------------
+
+def _gravity_body_tilt(quat_wxyz) -> float:
+    """Compute tilt using the new formula (matches _detect_skill_raw)."""
+    from wheeled_biped.utils.math_utils import get_gravity_in_body_frame
+    g = np.array(get_gravity_in_body_frame(jnp.array(quat_wxyz)))
+    return float(np.arccos(np.clip(-g[2], -1.0, 1.0)))
+
+
+def _old_tilt(quat_wxyz) -> float:
+    """Compute tilt using the OLD (buggy) formula for comparison."""
+    qw = quat_wxyz[0]
+    return float(np.arccos(np.clip(2 * qw ** 2 - 1, -1.0, 1.0)))
+
+
+class TestTiltSemantics:
+    """Verify that the gravity-body-frame tilt is yaw-invariant and pitch-sensitive.
+
+    The key regression: the old formula arccos(2*qw^2 - 1) computes the total
+    rotation angle from the identity quaternion, which includes yaw.  A robot
+    facing sideways (90° yaw, perfectly upright) has qw = cos(45°) ≈ 0.707,
+    so old_tilt = arccos(2*0.5-1) = arccos(0) = π/2 ≈ 1.57 rad.
+    With the 0.5 rad threshold this falsely triggers BALANCE mode.
+
+    The new formula returns 0 for any pure-yaw rotation.
+    """
+
+    def test_upright_tilt_is_zero(self):
+        """Identity quaternion (perfectly upright): tilt = 0."""
+        quat = [1.0, 0.0, 0.0, 0.0]  # [w, x, y, z]
+        assert _gravity_body_tilt(quat) == pytest.approx(0.0, abs=1e-5)
+
+    def test_yaw_only_new_formula_is_zero(self):
+        """Pure 90-degree yaw: new formula → tilt = 0 (yaw-invariant).
+
+        Old (buggy) formula → tilt ≈ π/2 = 1.57 rad → falsely > 0.5 threshold.
+        """
+        import math
+        # 90° yaw around z-axis:  q = [cos(45°), 0, 0, sin(45°)]
+        quat = [math.cos(math.pi / 4), 0.0, 0.0, math.sin(math.pi / 4)]
+        new_tilt = _gravity_body_tilt(quat)
+        old_tilt = _old_tilt(quat)
+
+        # New formula correctly returns ~0 (float32 JAX may accumulate ≤1e-3 rad)
+        assert new_tilt == pytest.approx(0.0, abs=1e-3), (
+            f"New formula: yaw-only rotation should give tilt≈0, got {new_tilt:.6f} rad "
+            f"(still << 0.5 rad threshold)"
+        )
+        # Old formula was wrongly giving ~π/2 ≈ 1.57 rad (well above the 0.5 threshold)
+        assert old_tilt > 1.0, (
+            f"Old formula (regression reference): expected tilt > 1.0 rad for 90° yaw, "
+            f"got {old_tilt:.4f}"
+        )
+
+    def test_yaw_180_new_formula_is_zero(self):
+        """180-degree yaw: new formula → tilt = 0, old → tilt = π ≈ 3.14."""
+        import math
+        quat = [math.cos(math.pi / 2), 0.0, 0.0, math.sin(math.pi / 2)]  # 180° yaw
+        assert _gravity_body_tilt(quat) == pytest.approx(0.0, abs=1e-5)
+
+    def test_45_degree_pitch_detected(self):
+        """45-degree pitch around y-axis: tilt ≈ π/4 ≈ 0.785 rad > 0.5 threshold.
+
+        Both old and new formulas agree here (no yaw component):
+        a robot leaning forward by 45° should trigger balance mode.
+        """
+        import math
+        # 45° pitch: q = [cos(22.5°), 0, sin(22.5°), 0]
+        half = math.radians(22.5)
+        quat = [math.cos(half), 0.0, math.sin(half), 0.0]
+        new_tilt = _gravity_body_tilt(quat)
+        assert new_tilt == pytest.approx(math.radians(45), abs=1e-4), (
+            f"New tilt for 45° pitch should be ~0.785 rad, got {new_tilt:.4f}"
+        )
+        assert new_tilt > 0.5, "45° pitch should exceed the 0.5 rad balance threshold"
+
+    def test_30_degree_roll_detected(self):
+        """30-degree roll around x-axis: tilt ≈ π/6 ≈ 0.524 rad > 0.5 threshold."""
+        import math
+        half = math.radians(15)
+        quat = [math.cos(half), math.sin(half), 0.0, 0.0]
+        new_tilt = _gravity_body_tilt(quat)
+        assert new_tilt == pytest.approx(math.radians(30), abs=1e-4)
+        assert new_tilt > 0.5
+
+    def test_small_pitch_below_threshold(self):
+        """10-degree pitch: tilt ≈ 0.175 rad which is < 0.5 rad; should not trigger."""
+        import math
+        half = math.radians(5)
+        quat = [math.cos(half), 0.0, math.sin(half), 0.0]
+        new_tilt = _gravity_body_tilt(quat)
+        assert new_tilt == pytest.approx(math.radians(10), abs=1e-4)
+        assert new_tilt < 0.5

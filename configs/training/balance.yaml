@@ -58,13 +58,36 @@ low_level_pid:
   kd: [3.0, 2.0, 4.0, 4.0, 0.2, 3.0, 2.0, 4.0, 4.0, 0.2]
 
 # --- Reward weights ---
-# Tập trung tín hiệu chính: tư thế đúng + chiều cao + thân ngang
-# Tổng thưởng max ≈ 9.5, phạt nhẹ
+# OBJECTIVE: Pure standing balance (no push disturbance — push_magnitude=0 above).
+#
+# Separation note — terms that are STANDING-SPECIFIC and would conflict with
+# push-recovery training if push_magnitude > 0:
+#
+#   no_motion      (+0.5)  Rewards zero linear velocity.
+#                           → Would punish the wheel spin needed to absorb a push.
+#                           Set to 0 in balance_robust.yaml.
+#
+#   wheel_velocity (-0.0006) Penalises wheel angular speed to keep robot stationary.
+#                           → Would punish wheels acting as stabilisers during recovery.
+#                           Set to 0 in balance_robust.yaml.
+#
+#   action_rate    (-0.025) Penalises rapid action changes.
+#                           → For pure standing, this prevents jitter.
+#                           → For push recovery, this penalises the fast wheel
+#                             corrections fired immediately after impact.
+#                           Reduced in balance_robust.yaml (see comments there).
+#
+# Terms shared safely with recovery:
+#   body_level, height, natural_pose, symmetry, alive, heading,
+#   legs_forward, legs_vertical, position_drift, orientation, yaw_rate,
+#   joint_torque, joint_velocity
+#
+# Max reward ≈ 9.5 at perfect stance, mild penalties.
 rewards:
   body_level: 1.5 # thưởng thân nằm ngang (exp σ_roll=0.15, σ_pitch=0.15)
   height: 2.5 # thưởng giữ chiều cao theo height_command (exp σ=0.25)
   natural_pose: 0.4 # thưởng hp/kn đúng target TUYỆT ĐỐI (exp σ=0.8 — gradient mạnh)
-  symmetry: 0.5 # thưởng 2 chân đối xứng (exp σ=0.5) — giảm vì natural_pose đã xử lý
+  symmetry: 0.5 # thưởng 2 chân đối xứng (exp σ=0.5)
   alive: 0.3 # thưởng sống sót (signal luôn có)
   heading: 0.5 # phá local optimum "spinning balance"
   legs_forward: 0.5
@@ -72,12 +95,13 @@ rewards:
   position_drift: 1.0 # phạt mạnh hơn khi robot drift
   orientation: 0.8
   yaw_rate: 0.5 # phạt trực tiếp tốc độ quay yaw
-  no_motion: 0.5 # chống local optimum "linear drift"
-  # === Phạt (giữ nhẹ) ===
-  wheel_velocity: -0.0006 # phạt tốc độ bánh xe — giảm để bánh xe có thể giúp cân bằng
+  # === Standing-specific (zero in balance_robust) ===
+  no_motion: 0.5 # rewards stationary stance — conflicts with push recovery
+  wheel_velocity: -0.0006 # penalises wheel spin — conflicts with push recovery
+  # === Penalties ===
   joint_torque: -0.0005 # phạt mô-men lớn
-  joint_velocity: -0.0006 # phạt tốc độ khớp — giảm (bao gồm cả wheel vel)
-  action_rate: -0.025 # chống rung, action mượt hơn
+  joint_velocity: -0.0006 # phạt tốc độ khớp
+  action_rate: -0.025 # anti-jitter for standing; tighter than robust (see note above)
 
 # --- Termination ---
 termination:

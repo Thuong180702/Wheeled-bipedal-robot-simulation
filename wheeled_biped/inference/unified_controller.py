@@ -373,8 +373,19 @@ class UnifiedController:
             return cmd.mode
 
         torso_height = float(mj_data.qpos[2])
-        torso_quat = mj_data.qpos[3:7]
-        tilt = float(np.arccos(np.clip(2 * torso_quat[0] ** 2 - 1, -1, 1)))
+        torso_quat = jnp.array(mj_data.qpos[3:7])
+        # Physically meaningful tilt: angle between body-frame z-axis and world up.
+        #
+        # Old formula: arccos(2*qw^2 - 1) = total rotation angle from identity.
+        # This INCLUDES yaw: a robot facing sideways (90° yaw) triggers tilt≈1.57 rad,
+        # exceeding the 0.5 rad threshold and falsely activating BALANCE mode.
+        #
+        # New formula: project gravity into body frame; the z-component tells us how
+        # much the body aligns with world-up.  Pure yaw leaves gz = -1 (tilt=0).
+        # Roll/pitch of θ degrees shifts gz toward 0, giving tilt = arccos(-gz) = θ.
+        # get_gravity_in_body_frame is already imported and used in _build_obs.
+        g_body = np.array(get_gravity_in_body_frame(torso_quat))  # [gx, gy, gz]
+        tilt = float(np.arccos(np.clip(-g_body[2], -1.0, 1.0)))
 
         v_cmd = abs(cmd.vel_x) + abs(cmd.ang_vel_z)
 

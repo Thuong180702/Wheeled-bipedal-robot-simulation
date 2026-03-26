@@ -116,13 +116,19 @@ class CurriculumManager:
 
         return trainer, logger
 
-    def _evaluate_promotion(self, avg_reward: float) -> str:
-        """Đánh giá xem có nên chuyển stage không.
+    def _evaluate_promotion(self, metric_value: float) -> str:
+        """Evaluate whether to promote, continue, or demote.
+
+        Args:
+            metric_value: the scalar to compare against the stage's
+                ``success_value`` threshold.  Callers should prefer a stable
+                evaluation metric (e.g. ``eval_reward_mean`` from the trainer)
+                over a noisy training statistic like ``best_reward``.
 
         Returns:
             "promote" | "demote" | "continue"
         """
-        self._performance_history.append(avg_reward)
+        self._performance_history.append(metric_value)
 
         if len(self._performance_history) < self.promotion_window:
             return "continue"
@@ -226,12 +232,17 @@ class CurriculumManager:
             results[stage_name] = train_result
 
             # ── Performance-gated stage progression ──────────────────────
-            stage_best_reward = train_result.get("best_reward", 0.0)
-            decision = self._evaluate_promotion(stage_best_reward)
+            # Prefer eval_reward_mean (mean of last 50 training updates — stable)
+            # over best_reward (all-time max — noisy, inflated by early outliers).
+            eval_metric = train_result.get(
+                "eval_reward_mean",
+                train_result.get("best_reward", 0.0),
+            )
+            decision = self._evaluate_promotion(eval_metric)
 
             print(
                 f"\n  📊 Curriculum decision: [{decision.upper()}] "
-                f"best_reward={stage_best_reward:.4f}  "
+                f"eval_metric={eval_metric:.4f}  "
                 f"(attempt {attempt}/{self.max_retries_per_stage})"
             )
 

@@ -1,41 +1,61 @@
-# Bỏ qua byte-compiled / cache
-# __pycache__/
-# *.py[cod]
-# *$py.class
-# *.so
+# =============================================================================
+# Wheeled Bipedal Robot Simulation — .gitignore
+# =============================================================================
 
-# Distribution / packaging
-# build/
-# dist/
-# *.egg-info/
-# *.egg
+# ─── Python bytecode ─────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
 
-# Virtual environments
+# ─── Virtual environments ────────────────────────────────────────────────────
 .venv/
 venv/
 env/
+ENV/
+.env
 
-# IDE
-# .vscode/
-# .idea/
-# *.swp
-# *.swo
+# ─── Build / packaging ───────────────────────────────────────────────────────
+build/
+dist/
+*.egg-info/
+*.egg
+MANIFEST
 
-# Logging & checkpoints
-# logs/
-# wandb/
-# checkpoints/
-# outputs/
-# runs/
+# ─── Training outputs (checkpoints, logs, telemetry) ─────────────────────────
+outputs/
+runs/
+wandb/
+logs/
 
-# OS
-# Thumbs.db
-# .DS_Store
+# ─── MuJoCo runtime logs ─────────────────────────────────────────────────────
+MUJOCO_LOG.TXT
+mujoco_log.txt
 
-# Jupyter
-# .ipynb_checkpoints/
+# ─── Testing & linting caches ────────────────────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Data
-# *.hdf5
-# *.pkl
-# *.onnx
+# ─── Jupyter ─────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ─── OS / editor artifacts ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ─── Binary outputs ───────────────────────────────────────────────────────────
+*.mp4
+*.avi
+*.gif
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+*.log
+*.bak
+*.tmp

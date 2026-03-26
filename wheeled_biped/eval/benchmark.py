@@ -74,9 +74,9 @@ class BenchmarkResult:
     episode_length_mean: float = 0.0
     episode_length_max: int = 0
     # Common derived metrics (all modes)
-    success_rate: float = 0.0   # fraction with length >= max_steps
+    success_rate: float = 0.0   # fraction ending because env time_limit fired (not fallen)
     fall_rate: float = 0.0      # fraction ending in is_fallen
-    timeout_rate: float = 0.0   # fraction ending in time_limit
+    timeout_rate: float = 0.0   # same as success_rate: fraction reaching env episode limit
     # Mode-specific extras stored in a free-form dict
     mode_metrics: dict[str, Any] = field(default_factory=dict)
 
@@ -109,6 +109,7 @@ def _rollout(
     episode_rewards: list[float] = []
     episode_lengths: list[int] = []
     episode_fallen: list[bool] = []
+    episode_timed_out: list[bool] = []  # True when env time_limit fired
     episode_info_last: list[dict] = []
 
     current_rewards = jnp.zeros(num_envs)
@@ -135,7 +136,9 @@ def _rollout(
                 episode_rewards.append(float(current_rewards[i]))
                 episode_lengths.append(int(current_lengths[i]))
                 fallen = bool(env_states.info.get("is_fallen", jnp.zeros(num_envs))[i])
+                timed_out = bool(env_states.info.get("time_limit", jnp.zeros(num_envs))[i])
                 episode_fallen.append(fallen)
+                episode_timed_out.append(timed_out)
                 ep_info = {k: (float(v[i]) if hasattr(v, "__len__") else float(v))
                            for k, v in env_states.info.items()
                            if k not in ("push_rng", "pid_integral", "anchor_xy")}
@@ -146,19 +149,30 @@ def _rollout(
         current_rewards = jnp.where(dones, 0.0, current_rewards)
         current_lengths = jnp.where(dones, 0, current_lengths)
 
-    return episode_rewards, episode_lengths, episode_fallen, episode_info_last
+    return episode_rewards, episode_lengths, episode_fallen, episode_timed_out, episode_info_last
 
 
 def _base_metrics(
     episode_rewards: list[float],
     episode_lengths: list[int],
     episode_fallen: list[bool],
-    max_steps: int,
+    episode_timed_out: list[bool],
 ) -> dict[str, Any]:
-    """Compute statistics shared across all modes."""
+    """Compute statistics shared across all modes.
+
+    ``success_rate`` and ``timeout_rate`` are both derived from the env's own
+    ``time_limit`` flag in ``info``, **not** from comparing episode length against
+    an external ``max_steps`` threshold.  This avoids mislabelling a perfectly
+    successful episode as a failure when the benchmark's ``max_steps`` is larger
+    than the env's internal episode length limit.
+
+    Invariant: success_rate == timeout_rate and fall_rate + success_rate == 1.0
+    (assuming every done comes from exactly one of is_fallen / time_limit).
+    """
     r = np.array(episode_rewards, dtype=float)
     l = np.array(episode_lengths, dtype=float)
     f = np.array(episode_fallen, dtype=bool)
+    t = np.array(episode_timed_out, dtype=bool)
     return {
         "num_episodes": len(episode_rewards),
         "reward_mean": float(r.mean()),
@@ -170,9 +184,10 @@ def _base_metrics(
         "reward_max": float(r.max()),
         "episode_length_mean": float(l.mean()),
         "episode_length_max": int(l.max()),
-        "success_rate": float(np.mean(l >= max_steps)),
+        # Use env's time_limit flag: fraction that reached episode end without falling
+        "success_rate": float(np.mean(t)),
         "fall_rate": float(np.mean(f)),
-        "timeout_rate": float(np.mean(~f)),
+        "timeout_rate": float(np.mean(t)),   # synonymous with success_rate for this env
     }
 
 
@@ -182,10 +197,10 @@ def _base_metrics(
 
 def _run_nominal(env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps):
     """Standard evaluation — env default settings."""
-    ep_r, ep_l, ep_f, _ = _rollout(
+    ep_r, ep_l, ep_f, ep_t, _ = _rollout(
         env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps
     )
-    base = _base_metrics(ep_r, ep_l, ep_f, max_steps)
+    base = _base_metrics(ep_r, ep_l, ep_f, ep_t)
     result = BenchmarkResult(mode="nominal", **base)
     return result
 
@@ -217,14 +232,14 @@ def _run_push_recovery(
     env._push_magnitude = push_magnitude
 
     try:
-        ep_r, ep_l, ep_f, _ = _rollout(
+        ep_r, ep_l, ep_f, ep_t, _ = _rollout(
             env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps
         )
     finally:
         env._push_enabled = orig_push_enabled
         env._push_magnitude = orig_push_magnitude
 
-    base = _base_metrics(ep_r, ep_l, ep_f, max_steps)
+    base = _base_metrics(ep_r, ep_l, ep_f, ep_t)
     fallen_lengths = [l for l, f in zip(ep_l, ep_f) if f]
     mode_metrics = {
         "push_magnitude_used": push_magnitude,
@@ -278,7 +293,7 @@ def _run_domain_randomized(
         height_errors.extend(np.abs(heights - h_cmds).tolist())
 
     try:
-        ep_r, ep_l, ep_f, ep_info = _rollout(
+        ep_r, ep_l, ep_f, ep_t, ep_info = _rollout(
             env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps,
             step_hook=_height_hook,
         )
@@ -287,7 +302,7 @@ def _run_domain_randomized(
         env.mj_model.geom_friction[:] = orig_friction
         env.mjx_model = mjx.put_model(env.mj_model)
 
-    base = _base_metrics(ep_r, ep_l, ep_f, max_steps)
+    base = _base_metrics(ep_r, ep_l, ep_f, ep_t)
     mode_metrics = {
         "mass_perturb_pct": mass_perturb,
         "friction_perturb_pct": friction_perturb,
@@ -357,7 +372,7 @@ def _run_command_tracking(
         rng, cmd_key = jax.random.split(rng)
 
         try:
-            ep_r, ep_l, ep_f, _ = _rollout(
+            ep_r, ep_l, ep_f, ep_t, _ = _rollout(
                 env, model, params, obs_rms, cmd_key,
                 num_episodes, num_envs, max_steps,
                 step_hook=_track_hook,
@@ -372,7 +387,7 @@ def _run_command_tracking(
         per_command_results.append({
             "height_command": cmd_clamped,
             "height_rmse": rmse,
-            "success_rate": float(np.mean(np.array(ep_l) >= max_steps)),
+            "success_rate": float(np.mean(ep_t)),
             "fall_rate": float(np.mean(np.array(ep_f))),
             "reward_mean": float(np.mean(ep_r)),
             "num_episodes": len(ep_r),
