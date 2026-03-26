@@ -338,3 +338,74 @@ class TestCheckpoint:
         restored_leaves = [np.array(l) for l in jtu.tree_leaves(jax.device_get(trainer.params))]
         for orig, rest in zip(original_leaves, restored_leaves):
             assert np.allclose(orig, rest, atol=1e-6), "Params differ after checkpoint round-trip"
+
+
+# ---------------------------------------------------------------------------
+# Tests: eval_pass()
+# ---------------------------------------------------------------------------
+
+class TestEvalPass:
+    """Tests for PPOTrainer.eval_pass() — the held-out evaluation method.
+
+    These tests verify the structural contract of eval_pass() without requiring
+    a full MJX GPU training loop.  They run with tiny envs (4 envs, short episodes).
+    """
+
+    def test_eval_pass_returns_required_keys(self, trainer, env):
+        """eval_pass() returns a dict with all required metric keys."""
+        rng = jax.random.PRNGKey(99)
+        result = trainer.eval_pass(num_eval_envs=4, num_episodes=4, rng=rng)
+
+        required = {
+            "eval_reward_mean",
+            "eval_reward_std",
+            "eval_fall_rate",
+            "eval_success_rate",
+            "eval_num_episodes",
+        }
+        for key in required:
+            assert key in result, f"Missing key in eval_pass result: {key}"
+
+    def test_eval_pass_no_nan(self, trainer, env):
+        """eval_pass() produces no NaN in any metric."""
+        rng = jax.random.PRNGKey(55)
+        result = trainer.eval_pass(num_eval_envs=4, num_episodes=4, rng=rng)
+
+        for key, val in result.items():
+            assert np.isfinite(val), f"Non-finite value for {key}: {val}"
+
+    def test_eval_pass_rates_sum_to_one(self, trainer, env):
+        """fall_rate + success_rate == 1.0 (they are complements)."""
+        rng = jax.random.PRNGKey(77)
+        result = trainer.eval_pass(num_eval_envs=4, num_episodes=4, rng=rng)
+
+        total = result["eval_fall_rate"] + result["eval_success_rate"]
+        assert abs(total - 1.0) < 1e-6, (
+            f"fall_rate + success_rate = {total} (expected 1.0)"
+        )
+
+    def test_eval_pass_collects_episodes(self, trainer, env):
+        """eval_pass() reports at least one completed episode."""
+        rng = jax.random.PRNGKey(13)
+        result = trainer.eval_pass(num_eval_envs=4, num_episodes=4, rng=rng)
+
+        assert result["eval_num_episodes"] >= 1, (
+            "eval_pass() should complete at least 1 episode"
+        )
+
+    def test_eval_pass_does_not_mutate_obs_rms(self, trainer, env):
+        """eval_pass() does not change obs_rms (evaluation is read-only)."""
+        from wheeled_biped.training.ppo import update_running_mean_std
+        import jax.numpy as jnp
+
+        # Record current obs_rms mean
+        before_mean = np.array(trainer.obs_rms.mean).copy()
+
+        rng = jax.random.PRNGKey(42)
+        trainer.eval_pass(num_eval_envs=4, num_episodes=4, rng=rng)
+
+        after_mean = np.array(trainer.obs_rms.mean)
+        assert np.allclose(before_mean, after_mean, atol=1e-7), (
+            "eval_pass() must not mutate obs_rms"
+        )
+

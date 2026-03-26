@@ -356,6 +356,107 @@ class PPOTrainer:
 
         return final_state, transitions, rng
 
+    def eval_pass(
+        self,
+        num_eval_envs: int = 64,
+        num_episodes: int = 50,
+        rng: jax.Array | None = None,
+    ) -> dict[str, float]:
+        """Run a held-out evaluation pass using the current policy.
+
+        This produces a real evaluation metric suitable for curriculum gating:
+          - Runs ``num_eval_envs`` independent environments in parallel.
+          - Accumulates per-episode returns (sum of rewards) until ``num_episodes``
+            complete episodes have been observed across all envs.
+          - Policy acts *greedily* (mean action, no exploration noise).
+          - Does NOT update ``obs_rms``, ``params``, or any training state.
+
+        Args:
+            num_eval_envs: parallel evaluation environments.
+            num_episodes: minimum completed episodes to average over.
+            rng: optional JAX key; defaults to a new split from self.rng.
+
+        Returns:
+            Dict with keys:
+              ``eval_reward_mean``   -- mean episode return.
+              ``eval_reward_std``    -- std of episode returns.
+              ``eval_fall_rate``     -- fraction of episodes that terminated early
+                                       (is_fallen flag set, not a time-limit).
+              ``eval_success_rate``  -- fraction that survived the full episode.
+              ``eval_num_episodes``  -- actual number of completed episodes counted.
+        """
+        if rng is None:
+            self.rng, rng = jax.random.split(self.rng)
+
+        rng, reset_key = jax.random.split(rng)
+        env_state = self.env.v_reset(reset_key, num_eval_envs)
+
+        episode_returns: list[float] = []
+        episode_falls: list[bool] = []
+        # Accumulate per-env partial returns across steps
+        running_return = [0.0] * num_eval_envs
+        running_fallen = [False] * num_eval_envs
+
+        max_steps = self.env._episode_length * 4  # hard safety cap
+        obs_rms = self.obs_rms  # snapshot — not updated
+        params = self.params
+
+        for _ in range(max_steps):
+            if len(episode_returns) >= num_episodes:
+                break
+
+            # Greedy action: use mode (mean) of the policy distribution (no sampling noise)
+            # model.__call__(obs) returns (action_dist, value); dist.mode() = mean for Gaussian
+            norm_obs = jax.vmap(lambda o: normalize_obs(o, obs_rms))(env_state.obs)
+            dist, _ = self.model.apply(params, norm_obs)
+            action = jnp.clip(dist.mode(), -1.0, 1.0)
+
+            next_state = self.env.v_step(env_state, action)
+
+
+            # Collect per-env reward and done BEFORE auto-reset
+            rewards_np = list(jax.device_get(jnp.asarray(next_state.reward)))
+            dones_np = list(jax.device_get(jnp.asarray(next_state.done)))
+
+            # Check fallen flag if available, otherwise use done-before-time-limit
+            if "is_fallen" in next_state.info:
+                fallen_np = list(jax.device_get(
+                    jnp.asarray(next_state.info["is_fallen"])
+                ))
+            else:
+                fallen_np = dones_np  # conservative fallback
+
+            for i in range(num_eval_envs):
+                running_return[i] += float(rewards_np[i])
+                if dones_np[i]:
+                    episode_returns.append(running_return[i])
+                    episode_falls.append(bool(fallen_np[i]))
+                    running_return[i] = 0.0
+                    running_fallen[i] = False
+
+            rng, reset_key = jax.random.split(rng)
+            env_state = self.env.v_reset_if_done(next_state, reset_key)
+
+        if not episode_returns:
+            # Fallback: use last partial return rather than returning nothing
+            episode_returns = running_return[:]
+            episode_falls = running_fallen[:]
+
+        n = len(episode_returns)
+        mean_ret = float(sum(episode_returns) / n)
+        std_ret = float((
+            sum((r - mean_ret) ** 2 for r in episode_returns) / n
+        ) ** 0.5) if n > 1 else 0.0
+        fall_rate = float(sum(episode_falls) / n)
+
+        return {
+            "eval_reward_mean": mean_ret,
+            "eval_reward_std": std_ret,
+            "eval_fall_rate": fall_rate,
+            "eval_success_rate": 1.0 - fall_rate,
+            "eval_num_episodes": n,
+        }
+
     @functools.partial(jax.jit, static_argnums=(0,))
     def _update_step(
         self,
@@ -622,10 +723,11 @@ class PPOTrainer:
         global_step = resumed_step + steps_per_update  # Tính cả bước đã resume
         start_time = time.time()
         best_reward = self._resumed_best_reward  # Giữ best_reward từ lần trước
-        # eval_reward_mean: mean of recent avg_rewards — a smoother metric for
-        # curriculum promotion decisions than the all-time-max best_reward.
-        _recent_rewards: list[float] = []   # rolling window, last 50 updates
-        _RECENT_WINDOW = 50
+        # train_reward_mean: rolling mean of per-step avg_rewards during training.
+        # This is a TRAINING metric — used for logging only, NOT for curriculum gating.
+        # Curriculum gating uses eval_reward_mean from eval_pass() at the end of train().
+        _train_rewards: list[float] = []   # rolling window, last 50 updates
+        _TRAIN_WINDOW = 50
 
         # Cập nhật viewer ngay sau warmup
         if viewer is not None:
@@ -696,10 +798,10 @@ class PPOTrainer:
 
                 # Progress mỗi update (để người dùng biết còn chạy)
                 avg_reward = float(jnp.mean(transitions.reward))
-                # Accumulate for eval_reward_mean (curriculum progression metric)
-                _recent_rewards.append(avg_reward)
-                if len(_recent_rewards) > _RECENT_WINDOW:
-                    _recent_rewards.pop(0)
+                # Accumulate for train_reward_mean (logging only)
+                _train_rewards.append(avg_reward)
+                if len(_train_rewards) > _TRAIN_WINDOW:
+                    _train_rewards.pop(0)
                 elapsed_total = time.time() - start_time
                 fps = global_step / max(elapsed_total, 1)
                 eta_s = (num_updates - update) * update_elapsed
@@ -845,14 +947,46 @@ class PPOTrainer:
         if viewer is not None:
             viewer.request_stop()
 
-        eval_reward_mean = (
-            float(sum(_recent_rewards) / len(_recent_rewards))
-            if _recent_rewards else best_reward
+        # Compute train_reward_mean (rolling window of step-level rewards, NOT eval)
+        train_reward_mean = (
+            float(sum(_train_rewards) / len(_train_rewards))
+            if _train_rewards else best_reward
         )
+
+        # ── Real evaluation pass ──────────────────────────────────────────────
+        # Run a lightweight held-out evaluation (no gradient updates) to produce
+        # a trustworthy metric for curriculum gating.  64 envs × up to 50 episodes
+        # is cheap relative to the training budget but gives a clean signal.
+        print("  📊 Running end-of-stage eval pass...")
+        self.rng, eval_key = jax.random.split(self.rng)
+        eval_metrics = self.eval_pass(
+            num_eval_envs=min(64, self.num_envs),
+            num_episodes=50,
+            rng=eval_key,
+        )
+        eval_reward_mean = eval_metrics["eval_reward_mean"]
+        print(
+            f"  📊 Eval: reward_mean={eval_reward_mean:.4f} "
+            f"fall_rate={eval_metrics['eval_fall_rate']:.3f} "
+            f"n={eval_metrics['eval_num_episodes']}"
+        )
+        if self.logger:
+            self.logger.set_step(global_step)
+            self.logger.log_dict({
+                "eval/reward_mean":   eval_reward_mean,
+                "eval/reward_std":    eval_metrics["eval_reward_std"],
+                "eval/fall_rate":     eval_metrics["eval_fall_rate"],
+                "eval/success_rate":  eval_metrics["eval_success_rate"],
+                "eval/num_episodes":  float(eval_metrics["eval_num_episodes"]),
+                "train/reward_mean_recent": train_reward_mean,
+            })
 
         return {
             "best_reward": best_reward,
-            "eval_reward_mean": eval_reward_mean,
+            "train_reward_mean": train_reward_mean,  # rolling train metric (logging only)
+            "eval_reward_mean": eval_reward_mean,    # real eval pass — used for curriculum
+            "eval_fall_rate": eval_metrics["eval_fall_rate"],
+            "eval_success_rate": eval_metrics["eval_success_rate"],
             "total_steps": global_step,
             "curriculum_min_height": current_min_h if curriculum_enabled else None,
             "curriculum_level": curriculum_level if curriculum_enabled else None,

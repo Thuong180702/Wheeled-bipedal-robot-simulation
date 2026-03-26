@@ -41,10 +41,12 @@ network:
   activation: "elu"
   init_std: 0.2
 
-# --- Low-level PID (gần với điều khiển thực tế) ---
-# Policy sinh target chuẩn hóa [-1, 1], PID low-level đổi sang torque/force actuator.
-# - Khớp hông/gối: điều khiển vị trí (q_des)
-# - Bánh xe: điều khiển vận tốc (dq_des)
+# --- Low-level controller (legs: PD+I position; wheels: PI velocity) ---
+# Policy sinh target chuẩn hóa [-1, 1], low-level đổi sang torque actuator.
+# - Khớp hông/gối: PD+I điều khiển vị trí (q_des)
+# - Bánh xe: PI  điều khiển vận tốc (dq_des) — kd masked to 0 internally
+#   (wheel velocity-error derivative = joint_accel, not joint_vel;
+#    using -joint_vel would be a unit mismatch; see low_level_control.py)
 low_level_pid:
   enabled: true
   action_smoothing_alpha: 0.4 # 0 = không lọc, 0.4~0.6 giúp giảm rung rõ
@@ -55,7 +57,9 @@ low_level_pid:
   #  r_hip_roll, r_hip_yaw, r_hip_pitch, r_knee, r_wheel]
   kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
   ki: [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
-  kd: [3.0, 2.0, 4.0, 4.0, 0.2, 3.0, 2.0, 4.0, 4.0, 0.2]
+  # kd indices 4 and 9 (wheels) are masked to 0 inside pid_control(); the
+  # values here are kept non-zero only for reference — they have no effect.
+  kd: [3.0, 2.0, 4.0, 4.0, 0.0, 3.0, 2.0, 4.0, 4.0, 0.0]
 
 # --- Reward weights ---
 # OBJECTIVE: Pure standing balance (no push disturbance — push_magnitude=0 above).

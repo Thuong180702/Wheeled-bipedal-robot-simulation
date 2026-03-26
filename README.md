@@ -76,7 +76,8 @@ Joints per leg (5 × 2 = 10 total):
 │   │   └── ...                        # Other env stubs
 │   ├── eval/
 │   │   ├── benchmark.py               # 4 benchmark modes
-│   │   └── baseline.py                # Baseline save / comparison utilities
+│   │   ├── baseline.py                # Baseline save / comparison utilities
+│   │   └── standing_quality.py        # Posture quality signals (pure numpy)
 │   ├── rewards/
 │   │   └── reward_functions.py        # JAX reward components
 │   ├── training/
@@ -99,6 +100,7 @@ Joints per leg (5 × 2 = 10 total):
 │   ├── train.py                       # Training entry point
 │   ├── evaluate.py                    # Evaluation (4 benchmark modes)
 │   ├── visualize.py                   # MuJoCo viewer / video / interactive
+│   ├── validate_checkpoint.py         # Standing validation (benchmark + posture quality)
 │   └── compare_baseline.py            # Regression comparison CLI
 ├── tests/                             # 10 test files (pytest)
 ├── .github/workflows/ci.yml           # GitHub Actions CI
@@ -245,7 +247,46 @@ python scripts/compare_baseline.py \
 See [`docs/baseline_workflow.md`](docs/baseline_workflow.md) for the full workflow
 and tolerance reference.
 
-### 5. Visualize a trained policy
+### 5. Standing validation (quality check)
+
+Combines a nominal benchmark with a headless per-step rollout to surface
+reward exploitation patterns that JSON metrics alone cannot detect.
+
+```bash
+python scripts/validate_checkpoint.py \
+  --checkpoint outputs/checkpoints/balance/final
+
+# Custom height command and rollout length
+python scripts/validate_checkpoint.py \
+  --checkpoint outputs/checkpoints/balance/final \
+  --height-cmd 0.65 --num-steps 1000 --save-csv
+```
+
+**Outputs** (written to the checkpoint directory by default):
+
+| File | Contents |
+|---|---|
+| `validation_report.json` | Benchmark metrics + all quality signals with WARN/OK |
+| `telemetry_plot.png` | 6-panel per-step signal plot (position, orientation, velocity, joints, torques) |
+| `telemetry.csv` | Raw per-step telemetry (only with `--save-csv`) |
+
+**Quality signals checked and what they reveal:**
+
+| Signal | Exploit / problem it catches |
+|---|---|
+| `wheel_spin_mean_rads` | Wheel-momentum balancing instead of posture |
+| `height_std_m` | Vertical oscillation / height bouncing |
+| `xy_drift_max_m` | Slow rolling / drifting while appearing stable |
+| `roll/pitch_mean_abs_deg` | Chronic lean below the 46° termination threshold |
+| `ctrl_jitter_mean_nm` | Chattering actuation (action_rate penalty too weak) |
+| `leg_asymmetry_mean_rad` | Asymmetric crouching (one side lower than the other) |
+| `ang_vel_rms_rads` | Chronic torso wobble below termination threshold |
+
+Each WARN flag includes a plain-text description of the exploit pattern it suggests.
+
+---
+
+### 6. Visualize a trained policy
 
 ```bash
 # Watch policy in MuJoCo viewer
@@ -258,7 +299,7 @@ python scripts/visualize.py policy \
   --num-steps 5000 --slow-factor 2.0
 ```
 
-### 6. Render video
+### 7. Render video
 
 ```bash
 python scripts/visualize.py render \
@@ -271,7 +312,7 @@ python scripts/visualize.py render \
   --output demo.mp4 --width 1920 --height 1080 --fps 60
 ```
 
-### 7. Interactive keyboard control
+### 8. Interactive keyboard control
 
 ```bash
 python scripts/visualize.py interactive                                    # PD control only
@@ -287,7 +328,7 @@ python scripts/visualize.py interactive --checkpoint .../balance/final    # with
 | Space | Brake |
 | [ / ] | Slow / fast |
 
-### 8. Unified multi-skill controller
+### 9. Unified multi-skill controller
 
 ```bash
 python scripts/visualize.py unified --checkpoint-dir outputs/checkpoints
@@ -301,7 +342,7 @@ dwell-time hysteresis (3 consecutive frames) to avoid single-frame spurious tran
 (`arccos(-g_body[2])`), which is yaw-invariant. A robot that only rotates around
 the vertical axis will not falsely trigger balance fallback.
 
-### 9. Run tests
+### 10. Run tests
 
 ```bash
 # Full CPU-safe test suite (used in CI)
@@ -316,6 +357,7 @@ pytest tests/test_unified_controller.py -v # Tilt semantics, skill switching
 pytest tests/test_benchmark.py -v         # Benchmark success/fall/timeout semantics
 pytest tests/test_sim_helpers.py -v       # Push disturbance, PID control
 pytest tests/test_baseline.py -v          # Baseline comparison logic
+pytest tests/test_standing_quality.py -v  # Standing quality signals (pure numpy, no JAX/MuJoCo)
 
 # test_env.py is excluded from CI (full MJX rollout, slow on CPU runners)
 pytest tests/test_env.py -v
@@ -344,6 +386,7 @@ python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode
 python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode push_recovery
 python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode domain_randomized
 python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode command_tracking
+python scripts/validate_checkpoint.py --checkpoint outputs/checkpoints/balance/final
 
 # ── Baseline comparison ───────────────────────────────────────────────────────
 python scripts/compare_baseline.py --baseline baselines/nominal_v1.json \
@@ -387,9 +430,11 @@ Without PID: output is scaled directly to actuator torque range.
 - Vectorised rollout using `jax.vmap` over 4096 parallel MJX environments.
 - Observation running mean/std normalisation (Welford online update).
 - GAE advantage estimation with γ=0.99, λ=0.95.
-- Curriculum progression driven by `eval_reward_mean` — the mean of the last 50
-  training update rewards (smoothed, not the all-time-max `best_reward`). Falls back
-  to `best_reward` for checkpoints from older trainers.
+- Curriculum progression driven by `eval_reward_mean` — the mean episode reward from a
+  dedicated `eval_pass()` call at the end of each training run (64 envs × 50 episodes,
+  greedy policy, obs_rms frozen). Distinct from `train_reward_mean` (rolling per-update
+  mean used for logging only). Falls back to `best_reward` for checkpoints from older
+  trainers.
 
 ### Balance reward design
 

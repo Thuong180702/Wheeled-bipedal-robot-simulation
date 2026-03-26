@@ -237,7 +237,11 @@ def _make_stub_trainer(best_reward: float, eval_reward_mean: float | None = None
     include eval_reward_mean (used to test the best_reward fallback).
     """
     stub = MagicMock()
-    result = {"best_reward": best_reward, "total_steps": 100}
+    result = {
+        "best_reward": best_reward,
+        "train_reward_mean": best_reward,  # new key — rolling train metric
+        "total_steps": 100,
+    }
     if eval_reward_mean is not None:
         result["eval_reward_mean"] = eval_reward_mean
     stub.train.return_value = result
@@ -388,16 +392,19 @@ class TestCurriculumRun:
 
 
 # ---------------------------------------------------------------------------
-# Tests: eval_reward_mean takes priority over best_reward
+# Tests: eval_reward_mean (from real eval pass) takes priority over best_reward
 # ---------------------------------------------------------------------------
 
 class TestEvalMetricPreference:
     """Verify that curriculum.run() uses eval_reward_mean when present and
     falls back to best_reward when it is absent.
 
-    This is the core eval-driven guarantee: a stable smoothed metric (mean of
-    last 50 training updates) drives promotion instead of the all-time-max
-    best_reward (which is inflated by early lucky rollouts).
+    This tests the interface contract: curriculum.run() reads eval_reward_mean
+    from the trainer's result dict and uses it for stage promotion decisions.
+    The real PPOTrainer now populates this key from a dedicated eval_pass()
+    (held-out episodes, greedy policy) rather than a rolling training window.
+    This class tests the curriculum's consumption of that key, independent of
+    how the trainer produces it.
     """
 
     def _run_with_custom_result(self, mgr, train_result: dict) -> dict:
