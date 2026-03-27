@@ -409,3 +409,126 @@ class TestEvalPass:
             "eval_pass() must not mutate obs_rms"
         )
 
+    def test_eval_pass_curriculum_min_height_accepted(self, trainer, env):
+        """eval_pass() accepts curriculum_min_height without raising.
+
+        curriculum_min_height=0.40 is below initial_min_height (0.68), so it
+        exercises the full patching path: resample height_command from the wider
+        range and update obs[:, -1] accordingly.
+        """
+        rng = jax.random.PRNGKey(5)
+        result = trainer.eval_pass(
+            num_eval_envs=4, num_episodes=4, rng=rng, curriculum_min_height=0.40
+        )
+        required = {
+            "eval_reward_mean", "eval_reward_std", "eval_fall_rate",
+            "eval_success_rate", "eval_num_episodes",
+        }
+        for key in required:
+            assert key in result, f"Missing key in result: {key}"
+        assert np.isfinite(result["eval_reward_mean"])
+
+    def test_eval_pass_curriculum_min_height_changes_result(self, trainer, env):
+        """curriculum_min_height=0.40 produces different results than the default
+        initial range (0.68).
+
+        Using the same RNG seed, the only difference between the two runs is the
+        initial height_command distribution:
+          default:  [0.68, 0.70] → height_norm ∈ [0.933, 1.0]
+          curriculum: [0.40, 0.70] → height_norm ∈ [0.0, 1.0]
+        Different obs → different greedy actions → different rewards.
+        If results are identical, the parameter had no effect (regression).
+        """
+        rng_seed = jax.random.PRNGKey(99)
+
+        result_default = trainer.eval_pass(
+            num_eval_envs=4, num_episodes=4, rng=jax.random.PRNGKey(99)
+        )
+        result_curriculum = trainer.eval_pass(
+            num_eval_envs=4, num_episodes=4, rng=jax.random.PRNGKey(99),
+            curriculum_min_height=0.40,
+        )
+        assert result_default["eval_reward_mean"] != result_curriculum["eval_reward_mean"], (
+            "curriculum_min_height=0.40 must change eval results vs default "
+            "(proves the parameter actively patches height_command / obs)"
+        )
+
+    def test_eval_pass_curriculum_min_height_none_unchanged(self, trainer, env):
+        """curriculum_min_height=None is identical to omitting the argument."""
+        rng = jax.random.PRNGKey(17)
+        result_omitted = trainer.eval_pass(num_eval_envs=4, num_episodes=4,
+                                           rng=jax.random.PRNGKey(17))
+        result_none    = trainer.eval_pass(num_eval_envs=4, num_episodes=4,
+                                           rng=jax.random.PRNGKey(17),
+                                           curriculum_min_height=None)
+        assert result_omitted["eval_reward_mean"] == result_none["eval_reward_mean"], (
+            "curriculum_min_height=None must be identical to the default (no patch)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tests: logger lifecycle (log before close)
+# ---------------------------------------------------------------------------
+
+class TestLoggerLifecycle:
+    """Verify the correct logger lifecycle: log_dict() then close().
+
+    The historical bug: PPOTrainer.train() called logger.close() BEFORE
+    running eval_pass() and logging eval metrics.  After close(), the
+    TensorBoard writer is shut down and JSONL data accumulates in-memory
+    without being flushed.  The fix moves logger.close() to after the
+    eval logging block.
+
+    These tests verify the correct lifecycle independently of the training loop.
+    """
+
+    def test_log_dict_then_close_persists_to_jsonl(self, tmp_path):
+        """Metrics logged before close() appear in the JSONL file."""
+        import json
+        from wheeled_biped.utils.logger import TrainingLogger
+
+        logger = TrainingLogger(
+            log_dir=str(tmp_path),
+            experiment_name="lifecycle_ok",
+            use_tensorboard=False,
+            use_wandb=False,
+            flush_every=1000,   # disable auto-flush so only close() writes
+        )
+        logger.set_step(500)
+        logger.log_dict({"eval/reward_mean": 3.14, "eval/fall_rate": 0.05})
+        logger.close()  # correct order: logs first, close after
+
+        jsonl = tmp_path / "lifecycle_ok_metrics.jsonl"
+        assert jsonl.exists(), "JSONL file should be created"
+        lines = [l for l in jsonl.read_text().strip().split("\n") if l]
+        assert len(lines) == 2, f"Expected 2 log entries, got {len(lines)}"
+        tags = {json.loads(l)["tag"] for l in lines}
+        assert "eval/reward_mean" in tags
+        assert "eval/fall_rate" in tags
+
+    def test_close_flushes_buffer(self, tmp_path):
+        """close() flushes any buffered metrics to disk before closing writers."""
+        import json
+        from wheeled_biped.utils.logger import TrainingLogger
+
+        logger = TrainingLogger(
+            log_dir=str(tmp_path),
+            experiment_name="close_flush",
+            use_tensorboard=False,
+            use_wandb=False,
+            flush_every=1000,   # prevent auto-flush
+        )
+        logger.set_step(1)
+        logger.log_scalar("train/loss", 0.42)   # buffered, not yet flushed
+        # Buffer has 1 entry; file is empty until close() is called
+        jsonl = tmp_path / "close_flush_metrics.jsonl"
+        if jsonl.exists():
+            assert jsonl.read_text().strip() == "", "Should not be flushed yet"
+        logger.close()  # must flush before closing
+        assert jsonl.exists()
+        lines = [l for l in jsonl.read_text().strip().split("\n") if l]
+        assert len(lines) == 1
+        entry = json.loads(lines[0])
+        assert entry["tag"] == "train/loss"
+        assert abs(entry["value"] - 0.42) < 1e-6
+
