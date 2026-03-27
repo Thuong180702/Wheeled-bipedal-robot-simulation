@@ -610,6 +610,14 @@ class PPOTrainer:
         num_levels = int(curriculum_cfg.get("num_levels", 10))
         window_size = int(curriculum_cfg.get("window", 50))
 
+        # Eval-gated curriculum signal (more trustworthy than rolling training reward).
+        # When use_eval_signal=True, curriculum advances based on eval_pass() results
+        # (greedy policy, complete episodes) instead of the noisy per-rollout avg_reward.
+        use_eval_signal = bool(curriculum_cfg.get("use_eval_signal", False))
+        _eval_interval = int(curriculum_cfg.get("eval_interval", window_size))
+        _curriculum_eval_envs = min(32, self.num_envs)
+        _curriculum_eval_episodes = int(curriculum_cfg.get("eval_episodes", 20))
+
         # Tính max reward có thể đạt (tổng trọng số dương)
         reward_weights = self.config.get("rewards", {})
         max_reward_possible = sum(w for w in reward_weights.values() if w > 0)
@@ -812,9 +820,10 @@ class PPOTrainer:
                 range_str = ""
                 if curriculum_enabled:
                     max_h = getattr(self.env, "MAX_HEIGHT_CMD", 0.72)
+                    signal_label = "[eval]" if use_eval_signal else "[train]"
                     range_str = (
                         f" | range=[{current_min_h:.2f},{max_h:.2f}] "
-                        f"L{curriculum_level}/{num_levels}"
+                        f"L{curriculum_level}/{num_levels}{signal_label}"
                     )
                 print(
                     f"  [{update}/{num_updates}] "
@@ -855,39 +864,106 @@ class PPOTrainer:
 
                 # ====== Curriculum advancement ======
                 if curriculum_enabled and current_min_h > final_min_h:
-                    reward_window.append(avg_reward)
-                    if len(reward_window) > window_size:
-                        reward_window.pop(0)
-                    if len(reward_window) >= window_size:
-                        window_avg = sum(reward_window) / len(reward_window)
-                        if window_avg >= reward_threshold:
-                            current_min_h = max(
-                                round(current_min_h - level_step, 4), final_min_h
+                    if use_eval_signal:
+                        # ── Eval-gated path ──────────────────────────────────────────
+                        # Runs eval_pass() every _eval_interval updates.
+                        # eval_pass() uses a greedy policy over complete episodes, so
+                        # the signal is cleaner than per-rollout avg_reward (which
+                        # carries exploration noise and is mean over a single rollout).
+                        #
+                        # Threshold comparison: reward_threshold is calibrated in
+                        # per-step units (fraction of max_reward_possible).
+                        # eval_pass() returns mean episode *sum*, so we normalize:
+                        #   eval_per_step = eval_reward_mean / episode_length
+                        if update % _eval_interval == 0:
+                            self.rng, _ceval_key = jax.random.split(self.rng)
+                            _ceval = self.eval_pass(
+                                num_eval_envs=_curriculum_eval_envs,
+                                num_episodes=_curriculum_eval_episodes,
+                                rng=_ceval_key,
                             )
-                            self._curriculum_min_height = current_min_h
-                            curriculum_level = min(curriculum_level + 1, num_levels)
-                            # Update tất cả envs
-                            new_min_arr = jnp.full_like(
-                                env_state.info["curriculum_min_height"],
-                                current_min_h,
+                            _eval_per_step = (
+                                _ceval["eval_reward_mean"] / max(1, self.episode_length)
                             )
-                            env_state = env_state._replace(
-                                info={
-                                    **env_state.info,
-                                    "curriculum_min_height": new_min_arr,
-                                }
-                            )
-                            reward_window.clear()
-                            max_h = getattr(self.env, "MAX_HEIGHT_CMD", 0.72)
+                            if self.logger:
+                                self.logger.set_step(global_step)
+                                self.logger.log_dict({
+                                    "curriculum/eval_per_step": _eval_per_step,
+                                    "curriculum/eval_success_rate": _ceval["eval_success_rate"],
+                                    "curriculum/eval_fall_rate": _ceval["eval_fall_rate"],
+                                })
                             print(
-                                f"  \U0001f4c8 Curriculum Level {curriculum_level}/{num_levels}: "
-                                f"height range [{current_min_h:.2f}, {max_h:.2f}] "
-                                f"(avg={window_avg:.2f} >= {reward_threshold:.2f})"
+                                f"  [Curriculum eval] per_step={_eval_per_step:.3f} "
+                                f"threshold={reward_threshold:.3f} "
+                                f"success={_ceval['eval_success_rate']:.2f} "
+                                f"fall={_ceval['eval_fall_rate']:.2f}",
+                                flush=True,
                             )
-                            if current_min_h <= final_min_h:
-                                print(
-                                    f"  \u2705 Curriculum hoàn thành! Full range [{final_min_h:.2f}, {max_h:.2f}]"
+                            if _eval_per_step >= reward_threshold:
+                                current_min_h = max(
+                                    round(current_min_h - level_step, 4), final_min_h
                                 )
+                                self._curriculum_min_height = current_min_h
+                                curriculum_level = min(curriculum_level + 1, num_levels)
+                                new_min_arr = jnp.full_like(
+                                    env_state.info["curriculum_min_height"],
+                                    current_min_h,
+                                )
+                                env_state = env_state._replace(
+                                    info={
+                                        **env_state.info,
+                                        "curriculum_min_height": new_min_arr,
+                                    }
+                                )
+                                max_h = getattr(self.env, "MAX_HEIGHT_CMD", 0.72)
+                                print(
+                                    f"  \U0001f4c8 Curriculum Level {curriculum_level}/{num_levels}: "
+                                    f"height range [{current_min_h:.2f}, {max_h:.2f}] "
+                                    f"(eval_per_step={_eval_per_step:.3f} >= {reward_threshold:.3f})"
+                                )
+                                if current_min_h <= final_min_h:
+                                    print(
+                                        f"  \u2705 Curriculum hoàn thành! Full range "
+                                        f"[{final_min_h:.2f}, {max_h:.2f}]"
+                                    )
+                    else:
+                        # ── Training-reward window (backward-compatible) ──────────────
+                        # NOTE: avg_reward is a per-step mean across one rollout,
+                        # including exploration noise.  This is the original behavior.
+                        # Set curriculum.use_eval_signal: true for a cleaner signal.
+                        reward_window.append(avg_reward)
+                        if len(reward_window) > window_size:
+                            reward_window.pop(0)
+                        if len(reward_window) >= window_size:
+                            window_avg = sum(reward_window) / len(reward_window)
+                            if window_avg >= reward_threshold:
+                                current_min_h = max(
+                                    round(current_min_h - level_step, 4), final_min_h
+                                )
+                                self._curriculum_min_height = current_min_h
+                                curriculum_level = min(curriculum_level + 1, num_levels)
+                                new_min_arr = jnp.full_like(
+                                    env_state.info["curriculum_min_height"],
+                                    current_min_h,
+                                )
+                                env_state = env_state._replace(
+                                    info={
+                                        **env_state.info,
+                                        "curriculum_min_height": new_min_arr,
+                                    }
+                                )
+                                reward_window.clear()
+                                max_h = getattr(self.env, "MAX_HEIGHT_CMD", 0.72)
+                                print(
+                                    f"  \U0001f4c8 Curriculum Level {curriculum_level}/{num_levels}: "
+                                    f"height range [{current_min_h:.2f}, {max_h:.2f}] "
+                                    f"(avg={window_avg:.2f} >= {reward_threshold:.2f})"
+                                )
+                                if current_min_h <= final_min_h:
+                                    print(
+                                        f"  \u2705 Curriculum hoàn thành! Full range "
+                                        f"[{final_min_h:.2f}, {max_h:.2f}]"
+                                    )
 
                 # Live viewer update
                 if viewer is not None and update % view_interval == 0:

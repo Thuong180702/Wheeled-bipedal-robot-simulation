@@ -101,8 +101,9 @@ Joints per leg (5 × 2 = 10 total):
 │   ├── evaluate.py                    # Evaluation (4 benchmark modes)
 │   ├── visualize.py                   # MuJoCo viewer / video / interactive
 │   ├── validate_checkpoint.py         # Standing validation (benchmark + posture quality)
-│   └── compare_baseline.py            # Regression comparison CLI
-├── tests/                             # 10 test files (pytest)
+│   ├── compare_baseline.py            # Regression comparison CLI
+│   └── export_results.py              # Export training logs → CSV/PNG; eval JSON → Markdown table
+├── tests/                             # 11 test files (pytest)
 ├── .github/workflows/ci.yml           # GitHub Actions CI
 ├── pyproject.toml
 └── requirements.txt
@@ -345,13 +346,13 @@ the vertical axis will not falsely trigger balance fallback.
 ### 10. Run tests
 
 ```bash
-# Full CPU-safe test suite (used in CI)
-pytest tests/ --ignore=tests/test_env.py -v
+# Fast test suite — CPU-safe, typically < 3 min (equivalent to CI)
+pytest tests/ --ignore=tests/test_env.py -m "not slow" -v
 
 # Individual files
 pytest tests/test_model.py -v             # MuJoCo model integrity
 pytest tests/test_rewards.py -v           # Reward functions
-pytest tests/test_ppo_trainer.py -v       # PPO invariants (no NaN, checkpoint round-trip)
+pytest tests/test_ppo_trainer.py -v       # PPO invariants: no NaN, checkpoint round-trip, eval-gated curriculum
 pytest tests/test_curriculum.py -v        # Curriculum promote/hold/demote
 pytest tests/test_unified_controller.py -v # Tilt semantics, skill switching
 pytest tests/test_benchmark.py -v         # Benchmark success/fall/timeout semantics
@@ -359,7 +360,12 @@ pytest tests/test_sim_helpers.py -v       # Push disturbance, PID control
 pytest tests/test_baseline.py -v          # Baseline comparison logic
 pytest tests/test_standing_quality.py -v  # Standing quality signals (pure numpy, no JAX/MuJoCo)
 
-# test_env.py is excluded from CI (full MJX rollout, slow on CPU runners)
+# End-to-end smoke test — verifies train() runs without error and produces a checkpoint
+# Marked @pytest.mark.slow: 2–5 min on CPU (JAX JIT compile), < 30 s on GPU.
+# Run explicitly; not included in the fast suite above.
+pytest tests/test_smoke_train.py -v -m slow
+
+# Full MJX rollout test (slow on CPU runners — excluded from CI)
 pytest tests/test_env.py -v
 ```
 
@@ -393,7 +399,16 @@ python scripts/compare_baseline.py --baseline baselines/nominal_v1.json \
                                    --current  outputs/.../eval_results_nominal.json
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
-pytest tests/ --ignore=tests/test_env.py -v
+pytest tests/ --ignore=tests/test_env.py -m "not slow" -v     # fast suite
+pytest tests/test_smoke_train.py -v -m slow                    # end-to-end smoke test
+
+# ── Export (after training) ────────────────────────────────────────────────────
+python scripts/export_results.py curves \
+    outputs/logs/stage_0_balance/<run>_metrics.jsonl \
+    --tags reward/mean curriculum/level curriculum/eval_per_step
+python scripts/export_results.py table \
+    outputs/checkpoints/balance/final/eval_results_command_tracking.json \
+    --output outputs/tables/height_tracking.md
 ```
 
 ---
@@ -430,11 +445,22 @@ Without PID: output is scaled directly to actuator torque range.
 - Vectorised rollout using `jax.vmap` over 4096 parallel MJX environments.
 - Observation running mean/std normalisation (Welford online update).
 - GAE advantage estimation with γ=0.99, λ=0.95.
-- Curriculum progression driven by `eval_reward_mean` — the mean episode reward from a
-  dedicated `eval_pass()` call at the end of each training run (64 envs × 50 episodes,
-  greedy policy, obs_rms frozen). Distinct from `train_reward_mean` (rolling per-update
-  mean used for logging only). Falls back to `best_reward` for checkpoints from older
-  trainers.
+
+Two curriculum systems operate independently:
+
+**Within-stage height curriculum** (`PPOTrainer`, balance only): expands
+`curriculum_min_height` from 0.69 → 0.40 m over 29 levels. Default mode
+(`use_eval_signal: true` in `balance.yaml`): `eval_pass()` is called every
+`eval_interval=50` updates using the greedy policy (32 envs × 20 episodes,
+obs_rms frozen). Advancement fires when `eval_reward_mean / episode_length >=
+reward_threshold`. Progress is logged as `curriculum/eval_per_step`,
+`curriculum/eval_success_rate`, and `curriculum/eval_fall_rate`. Backward-compatible
+fallback (`use_eval_signal: false`): rolling window of per-update `avg_reward` from
+training rollouts (noisier signal, original behavior).
+
+**Multi-stage pipeline** (`CurriculumManager`, `configs/curriculum.yaml`): gates stage
+promotion/hold/demotion on `eval_reward_mean` from the end-of-training `eval_pass()`
+call. Falls back to `best_reward` for checkpoints from older trainers.
 
 ### Balance reward design
 
@@ -460,8 +486,9 @@ metric against the stage's `success_value` threshold over a sliding `promotion_w
 
 GitHub Actions workflow at `.github/workflows/ci.yml`:
 - **Ruff** lint + format check
-- **Pytest** over 7 of 9 test files (excludes `test_env.py` — full MJX JIT compile is
-  prohibitively slow on free runners)
+- **Pytest** over 10 of 11 test files (excludes `test_env.py` — full MJX JIT compile is
+  prohibitively slow on free runners). `test_smoke_train.py` is collected but its tests
+  are marked `@pytest.mark.slow`; run them locally with `pytest tests/test_smoke_train.py -m slow`.
 - CPU-only JAX (`jax[cpu]`) — `jax[cuda12]` override applied before package install
 
 ---
@@ -499,7 +526,64 @@ Key knobs:
   skipped gracefully, but the controller has only been tested in simulation.
 - **Height curriculum is env-internal.** The `curriculum_min_height` value is carried
   through episodes via `EnvState.info`, not managed by `CurriculumManager`. The two
-  curriculum systems are independent.
+  curriculum systems are independent. Within-stage advancement uses an eval-gated
+  `eval_pass()` signal by default; see Architecture > PPO training for details.
+
+---
+
+## Recommended pre-training workflow
+
+Before starting a long balance training run, complete these steps in order:
+
+```bash
+# 1. Verify the stack compiles and produces a checkpoint on your hardware
+pytest tests/test_smoke_train.py -v -m slow
+#    Expected: 8 tests pass; checkpoint written to tmp dir; ~30 s on GPU, ~2-5 min on CPU.
+
+# 2. Run the fast unit test suite to catch any regressions
+pytest tests/ --ignore=tests/test_env.py -m "not slow" -v
+
+# 3. Confirm the robot model loads cleanly
+python scripts/visualize.py model
+```
+
+Once a checkpoint exists, optionally validate it before continuing training:
+
+```bash
+python scripts/validate_checkpoint.py --checkpoint outputs/checkpoints/balance/final
+```
+
+---
+
+## Paper artifact generation
+
+After a successful run, use `scripts/export_results.py` to produce paper-ready outputs
+from the training log and benchmark JSON without additional dependencies (matplotlib is
+optional for PNG figures).
+
+```bash
+# Training curves → CSV + PNG
+python scripts/export_results.py curves \
+    outputs/logs/stage_0_balance/<run>_metrics.jsonl \
+    --tags reward/mean curriculum/level curriculum/eval_per_step \
+    --output outputs/figures/training_curves.png
+
+# CSV only (skip PNG, e.g. on a headless server without matplotlib)
+python scripts/export_results.py curves \
+    outputs/logs/stage_0_balance/<run>_metrics.jsonl \
+    --no-plot
+
+# Benchmark table → Markdown
+python scripts/export_results.py table \
+    outputs/checkpoints/balance/final/eval_results_command_tracking.json \
+    --output outputs/tables/height_tracking.md
+
+# Print to stdout (no --output)
+python scripts/export_results.py table \
+    outputs/checkpoints/balance/final/eval_results_nominal.json
+```
+
+Output files written alongside the source log/JSON by default when `--output` is omitted.
 
 ---
 
