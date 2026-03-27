@@ -22,8 +22,8 @@ curriculum:
   # every eval_interval updates.  More trustworthy than the noisy per-rollout avg_reward.
   # eval_per_step = eval_reward_mean / episode_length is compared against reward_threshold.
   use_eval_signal: true
-  eval_interval: 50   # run eval every N updates (matches legacy window for same cadence)
-  eval_episodes: 20   # episodes per check — lightweight (32 envs × 20 eps)
+  eval_interval: 50 # run eval every N updates (matches legacy window for same cadence)
+  eval_episodes: 20 # episodes per check — lightweight (32 envs × 20 eps)
 
 # --- PPO Hyperparameters ---
 ppo:
