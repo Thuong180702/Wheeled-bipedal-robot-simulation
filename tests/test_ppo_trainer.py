@@ -37,7 +37,156 @@ _TINY_CONFIG = {
     },
     "ppo": {
         "learning_rate": 3e-4,
+        "num_epochs": 1,
+        "num_minibatches": 2,
+        "gamma": 0.99,
+        "gae_lambda": 0.95,
+        "clip_epsilon": 0.2,
+        "entropy_coeff": 0.01,
+        "value_loss_coeff": 0.5,
+        "max_grad_norm": 0.5,
+        "normalize_advantages": True,
+        "rollout_length": 4,
+    },
+    "network": {
+        "policy_hidden": [32, 32],
+        "value_hidden": [32, 32],
+        "activation": "elu",
+    },
+    "rewards": {
+        "upright": 1.0,
+        "alive": 0.5,
+    },
+    "curriculum": {"enabled": False},
+}
 
+NUM_ENVS = 4
+OBS_SIZE = 40   # BalanceEnv is 39+1=40
+ACTION_SIZE = 10
+
+
+@pytest.fixture(scope="module")
+def env():
+    from wheeled_biped.envs.balance_env import BalanceEnv
+    return BalanceEnv(config=_TINY_CONFIG)
+
+
+@pytest.fixture(scope="module")
+def trainer(env):
+    from wheeled_biped.training.ppo import PPOTrainer
+    t = PPOTrainer(env=env, config=_TINY_CONFIG, logger=None, seed=0)
+    # Fix num_envs to match test size
+    t.num_envs = NUM_ENVS
+    t._rollout_length = 4
+    return t
+
+
+@pytest.fixture(scope="module")
+def rollout_data(trainer, env):
+    """Run one rollout and return (env_state, transitions, rng)."""
+    rng = jax.random.PRNGKey(7)
+    env_state = env.v_reset(rng, NUM_ENVS)
+    rng, rollout_key = jax.random.split(rng)
+    env_state, transitions, rng = trainer._rollout(
+        trainer.params, env_state, rollout_key, trainer.obs_rms
+    )
+    jax.block_until_ready(transitions.reward)
+    return env_state, transitions, rng
+
+
+# ---------------------------------------------------------------------------
+# Tests: compute_gae
+# ---------------------------------------------------------------------------
+
+class TestComputeGAE:
+    def test_output_shapes(self, trainer):
+        """GAE advantages and returns have shape (T, num_envs)."""
+        from wheeled_biped.training.ppo import compute_gae
+
+        T, N = 8, 4
+        rewards = jnp.ones((T, N))
+        values = jnp.ones((T, N)) * 0.5
+        dones = jnp.zeros((T, N))
+        last_value = jnp.ones(N) * 0.5
+
+        adv, ret = compute_gae(rewards, values, dones, last_value)
+
+        assert adv.shape == (T, N), f"advantages shape {adv.shape}"
+        assert ret.shape == (T, N), f"returns shape {ret.shape}"
+
+    def test_no_nan(self, trainer):
+        """GAE with random rewards produces no NaN."""
+        from wheeled_biped.training.ppo import compute_gae
+
+        rng = jax.random.PRNGKey(42)
+        T, N = 16, 4
+        rewards = jax.random.normal(rng, (T, N))
+        values = jax.random.normal(rng, (T, N))
+        dones = (jax.random.uniform(rng, (T, N)) > 0.8).astype(jnp.float32)
+        last_value = jnp.zeros(N)
+
+        adv, ret = compute_gae(rewards, values, dones, last_value)
+
+        assert not np.any(np.isnan(np.array(adv))), "NaN in advantages"
+        assert not np.any(np.isnan(np.array(ret))), "NaN in returns"
+
+    def test_returns_equal_advantages_plus_values(self):
+        """returns = advantages + values (definition)."""
+        from wheeled_biped.training.ppo import compute_gae
+
+        T, N = 4, 2
+        rewards = jnp.ones((T, N))
+        values = jnp.ones((T, N)) * 2.0
+        dones = jnp.zeros((T, N))
+        last_value = jnp.ones(N) * 2.0
+
+        adv, ret = compute_gae(rewards, values, dones, last_value)
+        diff = jnp.abs(ret - (adv + values))
+        assert float(jnp.max(diff)) < 1e-4, "returns != advantages + values"
+
+
+# ---------------------------------------------------------------------------
+# Tests: obs normalization
+# ---------------------------------------------------------------------------
+
+class TestObsNormalization:
+    def test_rms_updates_mean(self, trainer):
+        """update_running_mean_std changes the mean after a batch."""
+        from wheeled_biped.training.ppo import (
+            init_running_mean_std,
+            update_running_mean_std,
+        )
+
+        rms = init_running_mean_std((OBS_SIZE,))
+        original_mean = np.array(rms.mean).copy()
+
+        batch = jnp.ones((32, OBS_SIZE)) * 5.0
+        rms2 = update_running_mean_std(rms, batch)
+
+        new_mean = np.array(rms2.mean)
+        # Mean should have moved toward 5.0
+        assert not np.allclose(new_mean, original_mean), "mean did not update"
+
+    def test_rms_no_nan(self, trainer):
+        """Normalized obs has no NaN."""
+        from wheeled_biped.training.ppo import (
+            init_running_mean_std,
+            normalize_obs,
+            update_running_mean_std,
+        )
+
+        rms = init_running_mean_std((OBS_SIZE,))
+        batch = jax.random.normal(jax.random.PRNGKey(1), (64, OBS_SIZE))
+        rms = update_running_mean_std(rms, batch)
+
+        obs = jax.random.normal(jax.random.PRNGKey(2), (OBS_SIZE,))
+        normed = normalize_obs(obs, rms)
+        assert not np.any(np.isnan(np.array(normed))), "normalized obs has NaN"
+
+
+# ---------------------------------------------------------------------------
+# Tests: single rollout + update
+# ---------------------------------------------------------------------------
 
 class TestSingleUpdate:
     def test_rollout_obs_no_nan(self, rollout_data):
@@ -467,146 +616,6 @@ class TestEvalGatedCurriculum:
 
 
 # ---------------------------------------------------------------------------
-# Tests: eval-gated within-stage curriculum signal
-# ---------------------------------------------------------------------------
-
-_CURRICULUM_CONFIG = {
-    **_TINY_CONFIG,
-    "task": {
-        **_TINY_CONFIG["task"],
-        "initial_min_height": 0.68,
-    },
-    "curriculum": {
-        "enabled": True,
-        "reward_threshold": 0.5,   # low threshold — easy to meet in tests
-        "num_levels": 5,
-        "window": 2,               # small window for legacy path tests
-        "use_eval_signal": True,
-        "eval_interval": 2,        # fire every 2 updates — fast for tests
-        "eval_episodes": 2,        # minimal episodes per check
-    },
-}
-
-
-class TestEvalGatedCurriculum:
-    """Verify eval-gated within-stage curriculum advancement.
-
-    These tests monkeypatch eval_pass() so no real JAX training is needed.
-    They verify:
-      - use_eval_signal=True reads config correctly
-      - curriculum advances when eval_per_step >= threshold
-      - curriculum does NOT advance when eval_per_step < threshold
-      - backward-compat: use_eval_signal=False still uses reward_window
-    """
-
-    @pytest.fixture(scope="class")
-    def curriculum_env(self):
-        from wheeled_biped.envs.balance_env import BalanceEnv
-        return BalanceEnv(config=_CURRICULUM_CONFIG)
-
-    @pytest.fixture(scope="class")
-    def curriculum_trainer(self, curriculum_env):
-        from wheeled_biped.training.ppo import PPOTrainer
-        t = PPOTrainer(env=curriculum_env, config=_CURRICULUM_CONFIG, logger=None, seed=1)
-        t.num_envs = NUM_ENVS
-        t._rollout_length = 4
-        return t
-
-    def test_eval_signal_config_is_read(self, curriculum_trainer):
-        """use_eval_signal and eval_interval are parsed from config."""
-        cfg = curriculum_trainer.config.get("curriculum", {})
-        assert cfg.get("use_eval_signal") is True, "use_eval_signal not set in config"
-        assert cfg.get("eval_interval") == 2, "eval_interval not set in config"
-        assert cfg.get("eval_episodes") == 2, "eval_episodes not set in config"
-
-    def test_eval_gated_advances_when_threshold_met(self, curriculum_trainer):
-        """Curriculum advances when eval_per_step >= reward_threshold.
-
-        Monkeypatches eval_pass() to return a high-reward result.
-        reward_threshold = 0.5; episode_length=10;
-        so eval_reward_mean must be >= 0.5 * 10 = 5.0 to advance.
-        """
-        import types
-        # High eval return: per_step = eval_reward_mean / episode_length >= threshold.
-        # episode_length=20, threshold=0.5*(1.0+0.5)=0.75, so need mean >= 0.75*20 = 15.0.
-        def _fake_eval_pass(self_, **kwargs):
-            return {
-                "eval_reward_mean": 20.0,   # episode return; /20 = 1.0 >= 0.75 threshold
-                "eval_reward_std": 0.0,
-                "eval_fall_rate": 0.0,
-                "eval_success_rate": 1.0,
-                "eval_num_episodes": 2,
-            }
-
-        original_eval = curriculum_trainer.eval_pass
-        curriculum_trainer.eval_pass = types.MethodType(_fake_eval_pass, curriculum_trainer)
-
-        # Simulate what the training loop does at eval_interval
-        cfg = curriculum_trainer.config.get("curriculum", {})
-        reward_threshold = cfg["reward_threshold"] * sum(
-            w for w in curriculum_trainer.config.get("rewards", {}).values() if w > 0
-        )
-        eval_result = curriculum_trainer.eval_pass(num_eval_envs=4, num_episodes=2)
-        eval_per_step = eval_result["eval_reward_mean"] / max(1, curriculum_trainer.episode_length)
-        assert eval_per_step >= reward_threshold, (
-            f"Test setup error: eval_per_step={eval_per_step} < threshold={reward_threshold}"
-        )
-
-        curriculum_trainer.eval_pass = original_eval  # restore
-
-    def test_eval_gated_does_not_advance_when_threshold_not_met(self, curriculum_trainer):
-        """Curriculum does not advance when eval_per_step < reward_threshold."""
-        import types
-        # Low eval return: per_step = 0.0 / 10 = 0.0 < 0.5 threshold
-        def _fake_eval_pass_low(self_, **kwargs):
-            return {
-                "eval_reward_mean": 0.0,
-                "eval_reward_std": 0.0,
-                "eval_fall_rate": 1.0,
-                "eval_success_rate": 0.0,
-                "eval_num_episodes": 2,
-            }
-
-        original_eval = curriculum_trainer.eval_pass
-        curriculum_trainer.eval_pass = types.MethodType(_fake_eval_pass_low, curriculum_trainer)
-
-        eval_result = curriculum_trainer.eval_pass(num_eval_envs=4, num_episodes=2)
-        eval_per_step = eval_result["eval_reward_mean"] / max(1, curriculum_trainer.episode_length)
-
-        cfg = curriculum_trainer.config.get("curriculum", {})
-        reward_threshold = cfg["reward_threshold"] * sum(
-            w for w in curriculum_trainer.config.get("rewards", {}).values() if w > 0
-        )
-        assert eval_per_step < reward_threshold, (
-            f"Test setup error: eval_per_step={eval_per_step} >= threshold={reward_threshold}"
-        )
-
-        curriculum_trainer.eval_pass = original_eval  # restore
-
-    def test_backward_compat_uses_reward_window_when_eval_disabled(self):
-        """When use_eval_signal=False, config still reads window for legacy path."""
-        legacy_config = {
-            **_CURRICULUM_CONFIG,
-            "curriculum": {
-                **_CURRICULUM_CONFIG["curriculum"],
-                "use_eval_signal": False,
-            },
-        }
-        cfg = legacy_config.get("curriculum", {})
-        assert cfg.get("use_eval_signal") is False
-        assert cfg.get("window") == 2   # legacy window still present
-
-    def test_eval_per_step_normalization(self, curriculum_trainer):
-        """eval_per_step = eval_reward_mean / episode_length is correct."""
-        episode_length = curriculum_trainer.episode_length
-        # If mean episode return = 7.5 and episode_length = 10 → per_step = 0.75
-        eval_reward_mean = 7.5
-        expected = eval_reward_mean / max(1, episode_length)
-        computed = eval_reward_mean / max(1, episode_length)
-        assert abs(computed - expected) < 1e-9
-
-
-# ---------------------------------------------------------------------------
 # Tests: logger lifecycle (log before close)
 # ---------------------------------------------------------------------------
 
@@ -671,4 +680,5 @@ class TestLoggerLifecycle:
         entry = json.loads(lines[0])
         assert entry["tag"] == "train/loss"
         assert abs(entry["value"] - 0.42) < 1e-6
+>>>>>>> ae2d01aece342f46b1107f3c66e01bf9f523e08e
 
