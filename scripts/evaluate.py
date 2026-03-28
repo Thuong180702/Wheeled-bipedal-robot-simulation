@@ -37,7 +37,7 @@ def evaluate(
     checkpoint: str = typer.Option(..., help="Đường dẫn checkpoint."),
     stage: str = typer.Option("balance", help="Tên stage."),
     num_episodes: int = typer.Option(100, help="Số episode đánh giá."),
-    num_envs: int = typer.Option(64, help="Số env song song."),
+    num_envs: int = typer.Option(128, help="Số env song song."),
     seed: int = typer.Option(0, help="Random seed."),
     output: str = typer.Option(
         "",

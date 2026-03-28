@@ -361,6 +361,7 @@ class PPOTrainer:
         num_eval_envs: int = 64,
         num_episodes: int = 50,
         rng: jax.Array | None = None,
+        curriculum_min_height: float | None = None,
     ) -> dict[str, float]:
         """Run a held-out evaluation pass using the current policy.
 
@@ -375,6 +376,12 @@ class PPOTrainer:
             num_eval_envs: parallel evaluation environments.
             num_episodes: minimum completed episodes to average over.
             rng: optional JAX key; defaults to a new split from self.rng.
+            curriculum_min_height: when the in-env height curriculum is active,
+                pass the current ``current_min_h`` from the training loop here.
+                eval_pass() will resample the initial height_command (and obs)
+                from ``[curriculum_min_height, MAX_HEIGHT_CMD]`` so the eval
+                reflects the actual height range being trained, not the fixed
+                initial_min_height baked into BalanceEnv.reset().
 
         Returns:
             Dict with keys:
@@ -390,6 +397,35 @@ class PPOTrainer:
 
         rng, reset_key = jax.random.split(rng)
         env_state = self.env.v_reset(reset_key, num_eval_envs)
+
+        # If curriculum is active, patch the initial env state so the first
+        # episode's height_command and obs reflect the current training range
+        # rather than the fixed initial_min_height baked into reset().
+        # Subsequent reset_if_done() calls will carry curriculum_min_height
+        # forward automatically (BalanceEnv.reset_if_done preserves it).
+        if (
+            curriculum_min_height is not None
+            and hasattr(self.env, "MAX_HEIGHT_CMD")
+            and hasattr(self.env, "MIN_HEIGHT_CMD")
+            and "curriculum_min_height" in env_state.info
+        ):
+            rng, h_key = jax.random.split(rng)
+            abs_min = float(self.env.MIN_HEIGHT_CMD)
+            max_h = float(self.env.MAX_HEIGHT_CMD)
+            curr_min = float(curriculum_min_height)
+            new_h_cmd = jax.random.uniform(
+                h_key, shape=(num_eval_envs,), minval=curr_min, maxval=max_h
+            )
+            height_norm = (new_h_cmd - abs_min) / (max_h - abs_min)
+            new_obs = env_state.obs.at[:, -1].set(height_norm)
+            new_info = {
+                **env_state.info,
+                "height_command": new_h_cmd,
+                "curriculum_min_height": jnp.full_like(
+                    env_state.info["curriculum_min_height"], curr_min
+                ),
+            }
+            env_state = env_state._replace(obs=new_obs, info=new_info)
 
         episode_returns: list[float] = []
         episode_falls: list[bool] = []
@@ -1017,9 +1053,6 @@ class PPOTrainer:
             else:
                 print(f"     \u2705 Đã train đầy đủ full range!")
 
-        if self.logger:
-            self.logger.close()
-
         if viewer is not None:
             viewer.request_stop()
 
@@ -1039,6 +1072,7 @@ class PPOTrainer:
             num_eval_envs=min(64, self.num_envs),
             num_episodes=50,
             rng=eval_key,
+            curriculum_min_height=current_min_h if curriculum_enabled else None,
         )
         eval_reward_mean = eval_metrics["eval_reward_mean"]
         print(
@@ -1056,6 +1090,7 @@ class PPOTrainer:
                 "eval/num_episodes":  float(eval_metrics["eval_num_episodes"]),
                 "train/reward_mean_recent": train_reward_mean,
             })
+            self.logger.close()  # close after eval metrics are safely logged
 
         return {
             "best_reward": best_reward,
