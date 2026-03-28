@@ -103,7 +103,7 @@ while the policy is queried at \SI{50}{Hz},
 \end{equation}
 Each policy action is therefore held constant for ten simulation substeps. Training is parallelized across 4096 environments on GPU.
 
-Domain randomization~\cite{tobin2017domain} is applied during training to improve robustness: body masses are perturbed by $\pm 10\%$ and ground friction coefficients by $\pm 20\%$ relative to their nominal values.
+Domain randomization~\cite{tobin2017domain} is applied during training to improve robustness: body masses are perturbed by $\pm 10\%$, ground friction coefficients by $\pm 20\%$, and joint damping coefficients by $\pm 20\%$ relative to their nominal values.
 
 \subsection{Low-Level PID Control}
 \label{sec:pid}
@@ -299,6 +299,8 @@ with $\sigma_v = 0.2\,\mathrm{m/s}$. This term is assigned a high weight during 
 \label{sec:natural_pose}
 A key design of our method is a posture regularization term that enforces consistency between the commanded torso height and the desired leg configuration. Let the desired hip-pitch and knee angles be $q_{\mathrm{hp}}^*(h^{cmd})$ and $q_{\mathrm{kn}}^*(h^{cmd})$, computed using piecewise-linear interpolation.
 
+The interpolation is defined over the extended kinematic range $h^{cmd} \in [0.38, 0.72]\,\mathrm{m}$, divided at the nominal standing keyframe $h = 0.71\,\mathrm{m}$. During BalanceEnv training the commanded height is sampled in $[0.40, 0.70]\,\mathrm{m}$, so the function operates entirely within the lower segment; the upper segment $[0.71, 0.72]\,\mathrm{m}$ is defined for generality.
+
 For high standing heights $h^{cmd}\in[0.71,0.72]\,\mathrm{m}$:
 \begin{equation}
 t_h = \frac{h^{cmd} - 0.71}{0.72 - 0.71},
@@ -369,7 +371,7 @@ An episode terminates early if the torso tilt exceeds $0.8\,\mathrm{rad}$ ($\app
 \label{sec:curriculum}
 
 \subsection{Within-Stage Height Curriculum}
-Rather than sampling the commanded height from the full feasible range from the beginning, we employ a within-stage curriculum that progressively expands the lower bound of the height command distribution.
+Rather than sampling the commanded height from the full feasible range from the beginning, we employ a within-stage curriculum~\cite{bengio2009curriculum} that progressively expands the lower bound of the height command distribution.
 
 The height lower bound is decreased by a fixed step $\delta_h$ whenever performance exceeds a threshold $r_{\mathrm{thr}}$:
 \begin{equation}
@@ -407,7 +409,7 @@ Stage promotion is gated by a held-out evaluation metric (mean episode return fr
 \section{Training Pipeline and Evaluation Protocol}
 
 \subsection{Network Architecture}
-The policy and value function share the same architecture: separate multi-layer perceptrons (MLPs) with hidden layer sizes $\{256, 256, 128\}$ and ELU activation. Weights are initialized using orthogonal initialization. The policy network outputs the mean of a Gaussian distribution over actions, with a learned log-standard-deviation parameter initialized to $\log(0.2)$.
+The policy and value function share the same architecture: separate multi-layer perceptrons (MLPs) with hidden layer sizes $\{256, 256, 128\}$ and ELU activation, implemented using Flax~\cite{flax}. Weights are initialized using orthogonal initialization. The policy network outputs the mean of a Gaussian distribution over actions, with a learned log-standard-deviation parameter initialized to $\log(0.2)$.
 
 \subsection{Training Configuration}
 Training uses PPO with 4096 parallel environments, a rollout length of 128 steps, 4 epochs per update, 32 minibatches, learning rate $2 \times 10^{-4}$ with Adam optimizer, and gradient clipping at global norm 0.5. Each training run targets approximately $10^7$ environment steps. Observation normalization uses a Welford running mean/variance estimator that is updated during training rollouts and frozen during evaluation.
@@ -566,6 +568,11 @@ B. P. Welford,
 J. Tobin, R. Fong, A. Ray, J. Schneider, W. Zaremba, and P. Abbeel,
 ``Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World,''
 in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, 2017, pp. 23--30.
+
+\bibitem{bengio2009curriculum}
+Y. Bengio, J. Louradour, R. Collobert, and J. Weston,
+``Curriculum Learning,''
+in \emph{Proc. Int. Conf. Machine Learning (ICML)}, 2009, pp. 41--48.
 
 \bibitem{klemm2019ascento}
 V. Klemm \emph{et al.},

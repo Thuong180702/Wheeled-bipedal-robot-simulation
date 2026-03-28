@@ -189,8 +189,9 @@ python scripts/train.py single --stage balance --live-view
 python scripts/train.py single --stage balance --live-view --view-interval 5
 ```
 
-The viewer runs on the main thread; training continues in a background thread.
-Close the viewer window at any time — training keeps running.
+The viewer runs on the main thread; training runs in a background thread.
+Closing the viewer window sets a stop flag on the trainer — training saves a checkpoint
+and exits gracefully (the background thread is given up to 60 s to finish).
 
 #### Full curriculum
 
@@ -237,6 +238,7 @@ benchmark's `max_steps`. `fall_rate + success_rate ≈ 1.0`.
 
 ```bash
 # Save a baseline after training
+mkdir -p baselines/
 cp outputs/checkpoints/balance/final/eval_results_nominal.json baselines/nominal_v1.json
 
 # Compare a later run against the baseline (exit code 1 if regression)
@@ -404,7 +406,7 @@ pytest tests/test_smoke_train.py -v -m slow                    # end-to-end smok
 
 # ── Export (after training) ────────────────────────────────────────────────────
 python scripts/export_results.py curves \
-    outputs/logs/stage_0_balance/<run>_metrics.jsonl \
+    outputs/logs/balance_seed42_metrics.jsonl \
     --tags reward/mean curriculum/level curriculum/eval_per_step
 python scripts/export_results.py table \
     outputs/checkpoints/balance/final/eval_results_command_tracking.json \
@@ -561,16 +563,19 @@ After a successful run, use `scripts/export_results.py` to produce paper-ready o
 from the training log and benchmark JSON without additional dependencies (matplotlib is
 optional for PNG figures).
 
+The training logger writes to `outputs/logs/<stage>_seed<seed>_metrics.jsonl`
+(e.g. `balance_seed42_metrics.jsonl` for `--stage balance --seed 42`).
+
 ```bash
 # Training curves → CSV + PNG
 python scripts/export_results.py curves \
-    outputs/logs/stage_0_balance/<run>_metrics.jsonl \
+    outputs/logs/balance_seed42_metrics.jsonl \
     --tags reward/mean curriculum/level curriculum/eval_per_step \
     --output outputs/figures/training_curves.png
 
 # CSV only (skip PNG, e.g. on a headless server without matplotlib)
 python scripts/export_results.py curves \
-    outputs/logs/stage_0_balance/<run>_metrics.jsonl \
+    outputs/logs/balance_seed42_metrics.jsonl \
     --no-plot
 
 # Benchmark table → Markdown
