@@ -125,8 +125,8 @@ def pid_control(
     vel_target_wheel = normalized_target * wheel_vel_limit
 
     # ── Error and derivative ─────────────────────────────────────────────────
-    pos_err = pos_target - joint_pos                      # position error (legs)
-    vel_err = vel_target_wheel - joint_vel                # velocity error (wheels)
+    pos_err = pos_target - joint_pos  # position error (legs)
+    vel_err = vel_target_wheel - joint_vel  # velocity error (wheels)
 
     # Blend: position error for legs, velocity error for wheels
     error = (1.0 - wheel_mask) * pos_err + wheel_mask * vel_err
@@ -135,8 +135,8 @@ def pid_control(
     #   Legs:   d(pos_error)/dt = -joint_vel  (correct PD damping)
     #   Wheels: 0               (velocity-error derivative requires joint_accel;
     #                            -joint_vel is a unit mismatch — see module docstring)
-    leg_d_error = -joint_vel                              # anti-kickback for position joints
-    d_error = (1.0 - wheel_mask) * leg_d_error           # zero for wheels
+    leg_d_error = -joint_vel  # anti-kickback for position joints
+    d_error = (1.0 - wheel_mask) * leg_d_error  # zero for wheels
 
     # ── Integral with anti-windup ─────────────────────────────────────────────
     integral_new = jnp.clip(

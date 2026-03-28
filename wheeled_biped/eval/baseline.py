@@ -26,7 +26,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Default regression tolerances
 # ---------------------------------------------------------------------------
@@ -47,24 +46,25 @@ _RMSE_REL_TOL: float = 0.10
 # direction: "lower_better" | "higher_better"
 # tolerance_type: "abs" | "rel"
 _REGRESSION_SPECS: dict[str, tuple[str, str, float]] = {
-    "fall_rate":            ("lower_better",  "abs", _RATE_ABS_TOL),
-    "success_rate":         ("higher_better", "abs", _RATE_ABS_TOL),
-    "timeout_rate":         ("higher_better", "abs", _RATE_ABS_TOL),
-    "reward_mean":          ("higher_better", "rel", _REWARD_REL_TOL),
-    "reward_p5":            ("higher_better", "rel", _REWARD_REL_TOL),
-    "reward_p50":           ("higher_better", "rel", _REWARD_REL_TOL),
-    "reward_min":           ("higher_better", "rel", _REWARD_REL_TOL),
+    "fall_rate": ("lower_better", "abs", _RATE_ABS_TOL),
+    "success_rate": ("higher_better", "abs", _RATE_ABS_TOL),
+    "timeout_rate": ("higher_better", "abs", _RATE_ABS_TOL),
+    "reward_mean": ("higher_better", "rel", _REWARD_REL_TOL),
+    "reward_p5": ("higher_better", "rel", _REWARD_REL_TOL),
+    "reward_p50": ("higher_better", "rel", _REWARD_REL_TOL),
+    "reward_min": ("higher_better", "rel", _REWARD_REL_TOL),
     # mode_metrics (flattened from mode_metrics dict if present)
-    "overall_height_rmse":  ("lower_better",  "rel", _RMSE_REL_TOL),
-    "fall_after_push_rate": ("lower_better",  "abs", _RATE_ABS_TOL),
-    "height_error_mean":    ("lower_better",  "rel", _RMSE_REL_TOL),
-    "position_drift_mean":  ("lower_better",  "rel", _RMSE_REL_TOL),
+    "overall_height_rmse": ("lower_better", "rel", _RMSE_REL_TOL),
+    "fall_after_push_rate": ("lower_better", "abs", _RATE_ABS_TOL),
+    "height_error_mean": ("lower_better", "rel", _RMSE_REL_TOL),
+    "position_drift_mean": ("lower_better", "rel", _RMSE_REL_TOL),
 }
 
 
 # ---------------------------------------------------------------------------
 # ComparisonResult
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class MetricDelta:
@@ -73,9 +73,9 @@ class MetricDelta:
     metric: str
     baseline_value: float
     current_value: float
-    delta: float            # current - baseline
-    direction: str          # "lower_better" | "higher_better"
-    tolerance: float        # allowed absolute delta before flagging
+    delta: float  # current - baseline
+    direction: str  # "lower_better" | "higher_better"
+    tolerance: float  # allowed absolute delta before flagging
     is_regression: bool
     is_improvement: bool
 
@@ -136,13 +136,13 @@ class ComparisonResult:
         imp_sym = "⬆️ "
         unchanged_sym = "──"
 
-        print(f"\n{'='*62}")
+        print(f"\n{'=' * 62}")
         print(f"  Baseline comparison  [mode={self.mode}]")
         print(f"  baseline: {self.baseline_file}")
         print(f"  current:  {self.current_file}")
-        print(f"{'='*62}")
+        print(f"{'=' * 62}")
         print(f"  {'Metric':<30} {'Baseline':>10} {'Current':>10} {'Delta':>10}")
-        print(f"  {'-'*58}")
+        print(f"  {'-' * 58}")
 
         all_deltas = sorted(
             self.deltas,
@@ -163,15 +163,20 @@ class ComparisonResult:
                 f"{d.delta:>+10.4f}"
             )
 
-        print(f"  {'─'*58}")
-        status = f"{ok_sym} PASSED" if self.passed else f"{reg_sym} FAILED ({len(self.regressions)} regression(s))"
+        print(f"  {'─' * 58}")
+        status = (
+            f"{ok_sym} PASSED"
+            if self.passed
+            else f"{reg_sym} FAILED ({len(self.regressions)} regression(s))"
+        )
         print(f"  {status}")
-        print(f"{'='*62}\n")
+        print(f"{'=' * 62}\n")
 
 
 # ---------------------------------------------------------------------------
 # Core comparison logic
 # ---------------------------------------------------------------------------
+
 
 def _flatten_metrics(result_dict: dict[str, Any]) -> dict[str, float]:
     """Extract flat {metric_name: float} from a BenchmarkResult dict.
@@ -211,11 +216,11 @@ def _compute_delta(
         abs_tol = tol_amount
 
     if direction == "lower_better":
-        is_regression = delta > abs_tol        # current got worse
-        is_improvement = delta < -abs_tol      # current got better
+        is_regression = delta > abs_tol  # current got worse
+        is_improvement = delta < -abs_tol  # current got better
     else:  # higher_better
-        is_regression = delta < -abs_tol       # current got worse
-        is_improvement = delta > abs_tol       # current got better
+        is_regression = delta < -abs_tol  # current got worse
+        is_improvement = delta > abs_tol  # current got better
 
     return MetricDelta(
         metric=metric,
@@ -278,6 +283,7 @@ def compare_baselines(
 # ---------------------------------------------------------------------------
 # Convenience: load from file paths
 # ---------------------------------------------------------------------------
+
 
 def load_result(path: str | Path) -> dict[str, Any]:
     """Load a benchmark result JSON file."""

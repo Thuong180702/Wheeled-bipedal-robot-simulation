@@ -47,14 +47,14 @@ import numpy as np
 # all of them.
 
 THRESHOLDS: dict[str, float] = {
-    "wheel_spin_mean_rads":    3.0,   # rad/s  -- still-standing should be ~0
-    "height_std_m":            0.025, # m      -- > 2.5 cm bounce is suspicious
-    "xy_drift_max_m":          0.15,  # m      -- > 15 cm drift is suspicious
-    "roll_mean_abs_deg":       4.0,   # deg    -- chronic sideways lean
-    "pitch_mean_abs_deg":      4.0,   # deg    -- chronic forward/back lean
-    "ctrl_jitter_mean_nm":     0.5,   # Nm     -- mean step-to-step ctrl change
-    "leg_asymmetry_mean_rad":  0.10,  # rad    -- hip_pitch / knee diff L vs R
-    "ang_vel_rms_rads":        0.5,   # rad/s  -- torso pitch/roll oscillation
+    "wheel_spin_mean_rads": 3.0,  # rad/s  -- still-standing should be ~0
+    "height_std_m": 0.025,  # m      -- > 2.5 cm bounce is suspicious
+    "xy_drift_max_m": 0.15,  # m      -- > 15 cm drift is suspicious
+    "roll_mean_abs_deg": 4.0,  # deg    -- chronic sideways lean
+    "pitch_mean_abs_deg": 4.0,  # deg    -- chronic forward/back lean
+    "ctrl_jitter_mean_nm": 0.5,  # Nm     -- mean step-to-step ctrl change
+    "leg_asymmetry_mean_rad": 0.10,  # rad    -- hip_pitch / knee diff L vs R
+    "ang_vel_rms_rads": 0.5,  # rad/s  -- torso pitch/roll oscillation
 }
 
 _FLAG_MESSAGES: dict[str, str] = {
@@ -98,6 +98,7 @@ _FLAG_MESSAGES: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def compute_standing_signals(
     tele: dict[str, np.ndarray],
@@ -147,9 +148,7 @@ def compute_standing_signals(
     _record("height_std_m", float(np.std(tz)))
 
     if height_cmd is not None:
-        signals["height_tracking_rmse_m"] = float(
-            np.sqrt(np.mean((tz - height_cmd) ** 2))
-        )
+        signals["height_tracking_rmse_m"] = float(np.sqrt(np.mean((tz - height_cmd) ** 2)))
     else:
         signals["height_tracking_rmse_m"] = float("nan")
 
@@ -163,19 +162,25 @@ def compute_standing_signals(
     # ── 4. Chronic roll / pitch lean ────────────────────────────────────────
     roll_abs = np.abs(np.degrees(tele.get("roll_rad", np.zeros(1))))
     pitch_abs = np.abs(np.degrees(tele.get("pitch_rad", np.zeros(1))))
-    _record("roll_mean_abs_deg",  float(np.mean(roll_abs)))
+    _record("roll_mean_abs_deg", float(np.mean(roll_abs)))
     _record("pitch_mean_abs_deg", float(np.mean(pitch_abs)))
 
     # ── 5. Control jitter ────────────────────────────────────────────────────
     ctrl_keys = [
-        "l_hip_roll_ctrl", "l_hip_yaw_ctrl", "l_hip_pitch_ctrl",
-        "l_knee_ctrl",     "l_wheel_ctrl",
-        "r_hip_roll_ctrl", "r_hip_yaw_ctrl", "r_hip_pitch_ctrl",
-        "r_knee_ctrl",     "r_wheel_ctrl",
+        "l_hip_roll_ctrl",
+        "l_hip_yaw_ctrl",
+        "l_hip_pitch_ctrl",
+        "l_knee_ctrl",
+        "l_wheel_ctrl",
+        "r_hip_roll_ctrl",
+        "r_hip_yaw_ctrl",
+        "r_hip_pitch_ctrl",
+        "r_knee_ctrl",
+        "r_wheel_ctrl",
     ]
     ctrl_present = [tele[k] for k in ctrl_keys if k in tele]
     if ctrl_present:
-        ctrl_mat = np.stack(ctrl_present, axis=1)        # (T, n_channels)
+        ctrl_mat = np.stack(ctrl_present, axis=1)  # (T, n_channels)
         jitter = float(np.mean(np.abs(np.diff(ctrl_mat, axis=0))))
         _record("ctrl_jitter_mean_nm", jitter)
     else:
@@ -184,19 +189,19 @@ def compute_standing_signals(
     # ── 6. Leg asymmetry (hip_pitch and knee, L vs R) ────────────────────────
     l_hp = tele.get("l_hip_pitch_pos", np.zeros(1))
     r_hp = tele.get("r_hip_pitch_pos", np.zeros(1))
-    l_kn = tele.get("l_knee_pos",      np.zeros(1))
-    r_kn = tele.get("r_knee_pos",      np.zeros(1))
+    l_kn = tele.get("l_knee_pos", np.zeros(1))
+    r_kn = tele.get("r_knee_pos", np.zeros(1))
     hp_asym = float(np.mean(np.abs(l_hp - r_hp)))
     kn_asym = float(np.mean(np.abs(l_kn - r_kn)))
     signals["leg_asymmetry_hip_pitch_rad"] = hp_asym
-    signals["leg_asymmetry_knee_rad"]      = kn_asym
+    signals["leg_asymmetry_knee_rad"] = kn_asym
     _record("leg_asymmetry_mean_rad", (hp_asym + kn_asym) / 2.0)
 
     # ── 7. Torso angular velocity RMS (roll + pitch axes) ────────────────────
     wx = tele.get("body_wx", np.zeros(1))
     wy = tele.get("body_wy", np.zeros(1))
-    _record("ang_vel_rms_rads", float(np.sqrt(np.mean(wx ** 2 + wy ** 2))))
+    _record("ang_vel_rms_rads", float(np.sqrt(np.mean(wx**2 + wy**2))))
 
-    signals["flags"]         = flags
+    signals["flags"] = flags
     signals["num_suspicious"] = len(flags)
     return signals

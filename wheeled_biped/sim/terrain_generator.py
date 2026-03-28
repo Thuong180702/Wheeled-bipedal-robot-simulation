@@ -163,9 +163,7 @@ def create_heightfield_xml(
     nrow, ncol = hfield_data.shape
 
     # Chuyển sang format MuJoCo (uint16, 0-65535)
-    normalized = (hfield_data - hfield_data.min()) / (
-        hfield_data.max() - hfield_data.min() + 1e-8
-    )
+    normalized = (hfield_data - hfield_data.min()) / (hfield_data.max() - hfield_data.min() + 1e-8)
     data_uint16 = (normalized * 65535).astype(np.uint16)
 
     # Chiều cao tối đa để truyền cho MuJoCo
@@ -218,13 +216,7 @@ def create_terrain_model_xml(
             step_depth=cfg.get("step_depth", 0.30),
             step_width=cfg.get("step_width", 1.0),
         )
-        return (
-            "<mujoco>\n"
-            "  <worldbody>\n"
-            f"    {stair_geoms}\n"
-            "  </worldbody>\n"
-            "</mujoco>"
-        )
+        return f"<mujoco>\n  <worldbody>\n    {stair_geoms}\n  </worldbody>\n</mujoco>"
 
     elif terrain_type == "rough":
         hfield_data = generate_heightfield_data(

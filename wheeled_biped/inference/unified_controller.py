@@ -32,13 +32,12 @@ Fix 4 – Per-skill ``_prev_actions`` buffers replace the single shared
 
 from __future__ import annotations
 
-import os
 import pickle
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -113,20 +112,20 @@ class SkillPolicy:
     params: Any
     obs_rms: Any
     obs_size: int
-    config: Dict[str, Any]
-    needs_command: bool = False   # Locomotion/Walking cần velocity command
+    config: dict[str, Any]
+    needs_command: bool = False  # Locomotion/Walking cần velocity command
     # Fix 2: explicit adapter chosen at load time
-    obs_adapter: str = "exact"   # one of _VALID_ADAPTERS
+    obs_adapter: str = "exact"  # one of _VALID_ADAPTERS
 
 
 @dataclass
 class ControlCommand:
     """Lệnh điều khiển từ bên ngoài (bàn phím, joystick, planner)."""
 
-    vel_x: float = 0.0          # m/s, tiến(+)/lùi(-)
-    ang_vel_z: float = 0.0      # rad/s, xoay trái(+)/phải(-)
-    height_target: float = 0.71 # m, chiều cao mong muốn (0.38–0.72)
-    mode: Optional[Skill] = None  # Ép chọn skill (None = tự động)
+    vel_x: float = 0.0  # m/s, tiến(+)/lùi(-)
+    ang_vel_z: float = 0.0  # rad/s, xoay trái(+)/phải(-)
+    height_target: float = 0.71  # m, chiều cao mong muốn (0.38–0.72)
+    mode: Skill | None = None  # Ép chọn skill (None = tự động)
 
 
 class UnifiedController:
@@ -137,7 +136,7 @@ class UnifiedController:
         checkpoint_dir: str | Path,
         mj_model: mujoco.MjModel,
         *,
-        stage_map: Dict[str, str] | None = None,
+        stage_map: dict[str, str] | None = None,
         dwell_threshold: int = 3,
     ):
         """
@@ -165,7 +164,7 @@ class UnifiedController:
         }
         smap = stage_map or default_map
 
-        self.skills: Dict[Skill, SkillPolicy] = {}
+        self.skills: dict[Skill, SkillPolicy] = {}
 
         _skill_enum = {
             "balance": Skill.BALANCE,
@@ -183,9 +182,7 @@ class UnifiedController:
             ckpt_path = self.ckpt_dir / subfolder / "checkpoint.pkl"
             if not ckpt_path.exists():
                 # Cũng thử trực tiếp tên thư mục
-                ckpt_path2 = (
-                    self.ckpt_dir / subfolder.split("/")[0] / "final" / "checkpoint.pkl"
-                )
+                ckpt_path2 = self.ckpt_dir / subfolder.split("/")[0] / "final" / "checkpoint.pkl"
                 if ckpt_path2.exists():
                     ckpt_path = ckpt_path2
                 else:
@@ -193,9 +190,7 @@ class UnifiedController:
                     continue
 
             try:
-                sp = self._load_skill(
-                    ckpt_path, needs_command=(name in ("locomotion", "walking"))
-                )
+                sp = self._load_skill(ckpt_path, needs_command=(name in ("locomotion", "walking")))
                 self.skills[skill_enum] = sp
                 print(f"  [ok]   {name}: obs_size={sp.obs_size} adapter={sp.obs_adapter}")
             except Exception as e:
@@ -208,19 +203,19 @@ class UnifiedController:
         self._active_skill = self._pick_default_skill()
 
         # Fix 4: per-skill prev_action buffers
-        self._prev_actions: Dict[Skill, jnp.ndarray] = {
+        self._prev_actions: dict[Skill, jnp.ndarray] = {
             sk: jnp.zeros(mj_model.nu) for sk in self.skills
         }
 
         self._prev_ctrl = np.zeros(mj_model.nu)
-        self._transition_alpha = 0.0     # 0=old, 1=new (smooth blending)
-        self._transition_target: Optional[Skill] = None
+        self._transition_alpha = 0.0  # 0=old, 1=new (smooth blending)
+        self._transition_target: Skill | None = None
         self._blend_steps = 10
         self._blend_counter = 0
 
         # Fix 3: dwell-time hysteresis state
         self._dwell_threshold = max(1, int(dwell_threshold))
-        self._dwell_counts: Dict[Skill, int] = {}  # raw-detection vote counter
+        self._dwell_counts: dict[Skill, int] = {}  # raw-detection vote counter
 
         print(f"\n  Active skills: {[s.name for s in self.skills]}")
         print(f"  Default skill: {self._active_skill.name}")
@@ -243,8 +238,8 @@ class UnifiedController:
         if adapter == "unknown_pad":
             warnings.warn(
                 f"Checkpoint at {ckpt_path} has obs_size={obs_size} which does not match "
-                f"any known adapter (base={_BASE_OBS_SIZE}, height_cmd={_BASE_OBS_SIZE+1}, "
-                f"velocity_cmd={_BASE_OBS_SIZE+2}). Using 'unknown_pad' — obs semantics "
+                f"any known adapter (base={_BASE_OBS_SIZE}, height_cmd={_BASE_OBS_SIZE + 1}, "
+                f"velocity_cmd={_BASE_OBS_SIZE + 2}). Using 'unknown_pad' — obs semantics "
                 f"may be wrong. Consider adding an explicit adapter.",
                 stacklevel=3,
             )
@@ -270,9 +265,7 @@ class UnifiedController:
     # ------------------------------------------------------------------
     # Observation extraction (CPU side, giống visualize.py policy)
     # ------------------------------------------------------------------
-    def _build_obs(
-        self, mj_data: mujoco.MjData, skill: Skill, cmd: ControlCommand
-    ) -> jnp.ndarray:
+    def _build_obs(self, mj_data: mujoco.MjData, skill: Skill, cmd: ControlCommand) -> jnp.ndarray:
         """Xây obs vector phù hợp với obs_size của skill.
 
         Fix 2: uses the explicit ``obs_adapter`` stored in SkillPolicy instead
@@ -293,12 +286,12 @@ class UnifiedController:
 
         base_obs = jnp.concatenate(
             [
-                gravity_body,              # 3
-                body_lin_vel,              # 3  body-frame linear vel
-                body_ang_vel,              # 3  body-frame angular vel
+                gravity_body,  # 3
+                body_lin_vel,  # 3  body-frame linear vel
+                body_ang_vel,  # 3  body-frame angular vel
                 jnp.array(mj_data.qpos[7:17]),  # 10 joint pos
                 jnp.array(mj_data.qvel[6:16]),  # 10 joint vel
-                prev_action,              # 10 prev action (normalized [-1,1])
+                prev_action,  # 10 prev action (normalized [-1,1])
             ]
         )  # total 39
 
@@ -315,9 +308,7 @@ class UnifiedController:
 
         if adapter == "height_cmd":
             # height_cmd normalised [0,1]: (target - 0.38) / (0.72 - 0.38)
-            height_norm = float(
-                np.clip((cmd.height_target - 0.38) / (0.72 - 0.38), 0.0, 1.0)
-            )
+            height_norm = float(np.clip((cmd.height_target - 0.38) / (0.72 - 0.38), 0.0, 1.0))
             obs = jnp.concatenate([base_obs, jnp.array([height_norm])])
             if obs.shape[0] != sp.obs_size:
                 raise ValueError(
@@ -455,12 +446,10 @@ class UnifiedController:
         # Not yet stable enough — keep current skill
         return self._active_skill
 
-    def _foot_height(self, mj_data: mujoco.MjData, body_name: str) -> Optional[float]:
+    def _foot_height(self, mj_data: mujoco.MjData, body_name: str) -> float | None:
         """Trả về chiều cao (z) của body wheel."""
         try:
-            body_id = mujoco.mj_name2id(
-                self.mj_model, mujoco.mjtObj.mjOBJ_BODY, body_name
-            )
+            body_id = mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_BODY, body_name)
             return float(mj_data.xpos[body_id, 2])
         except Exception:
             return None
@@ -508,9 +497,7 @@ class UnifiedController:
 
         # Blending nếu đang chuyển skill
         if self._transition_target is not None:
-            target_ctrl = self._compute_skill_ctrl(
-                mj_data, self._transition_target, cmd
-            )
+            target_ctrl = self._compute_skill_ctrl(mj_data, self._transition_target, cmd)
             self._blend_counter += 1
             self._transition_alpha = min(1.0, self._blend_counter / self._blend_steps)
             blended = (
@@ -553,9 +540,7 @@ class UnifiedController:
 
         # Scale action → ctrl range
         ctrl_range = self.mj_model.actuator_ctrlrange
-        ctrl = ctrl_range[:, 0] + (action + 1) * 0.5 * (
-            ctrl_range[:, 1] - ctrl_range[:, 0]
-        )
+        ctrl = ctrl_range[:, 0] + (action + 1) * 0.5 * (ctrl_range[:, 1] - ctrl_range[:, 0])
         return np.array(ctrl)
 
     # ------------------------------------------------------------------

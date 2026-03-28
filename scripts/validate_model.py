@@ -1,7 +1,6 @@
 """Validate the real robot MJCF model."""
 
 import mujoco
-import numpy as np
 
 m = mujoco.MjModel.from_xml_path("assets/robot/wheeled_biped_real.xml")
 d = mujoco.MjData(m)
@@ -11,7 +10,7 @@ mujoco.mj_resetDataKeyframe(m, d, 0)
 mujoco.mj_forward(m, d)
 
 print(f"nq={m.nq} nv={m.nv} nu={m.nu} nbody={m.nbody} njnt={m.njnt} ngeom={m.ngeom}")
-print(f"Expected: nq=17, nv=16, nu=10")
+print("Expected: nq=17, nv=16, nu=10")
 print()
 
 print("=== Joint names ===")

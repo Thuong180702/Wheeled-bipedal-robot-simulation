@@ -7,25 +7,23 @@ All tests are pure Python (no JAX, no MuJoCo).
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
 from wheeled_biped.eval.baseline import (
     ComparisonResult,
     MetricDelta,
-    _REGRESSION_SPECS,
+    _compute_delta,
+    _flatten_metrics,
     compare_baselines,
     compare_files,
     load_result,
-    _compute_delta,
-    _flatten_metrics,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_result(
     mode: str = "nominal",
@@ -63,6 +61,7 @@ def _make_result(
 # Tests: _flatten_metrics
 # ---------------------------------------------------------------------------
 
+
 class TestFlattenMetrics:
     def test_extracts_top_level_floats(self):
         d = _make_result()
@@ -95,6 +94,7 @@ class TestFlattenMetrics:
 # ---------------------------------------------------------------------------
 # Tests: _compute_delta
 # ---------------------------------------------------------------------------
+
 
 class TestComputeDelta:
     def test_lower_better_regression_detected(self):
@@ -138,6 +138,7 @@ class TestComputeDelta:
 # Tests: compare_baselines
 # ---------------------------------------------------------------------------
 
+
 class TestCompareBaselines:
     def test_no_regression_when_identical(self):
         d = _make_result(reward_mean=50.0, fall_rate=0.10)
@@ -147,7 +148,7 @@ class TestCompareBaselines:
 
     def test_fall_rate_regression_detected(self):
         baseline = _make_result(fall_rate=0.10)
-        current = _make_result(fall_rate=0.20)   # +0.10 > tol 0.05
+        current = _make_result(fall_rate=0.20)  # +0.10 > tol 0.05
         result = compare_baselines(current, baseline)
         reg_names = [d.metric for d in result.regressions]
         assert "fall_rate" in reg_names
@@ -162,21 +163,21 @@ class TestCompareBaselines:
 
     def test_reward_mean_regression_detected(self):
         baseline = _make_result(reward_mean=100.0)
-        current = _make_result(reward_mean=85.0)   # -15% > tol 5%
+        current = _make_result(reward_mean=85.0)  # -15% > tol 5%
         result = compare_baselines(current, baseline)
         reg_names = [d.metric for d in result.regressions]
         assert "reward_mean" in reg_names
 
     def test_improvement_detected(self):
         baseline = _make_result(fall_rate=0.20)
-        current = _make_result(fall_rate=0.05)   # -0.15, big improvement
+        current = _make_result(fall_rate=0.05)  # -0.15, big improvement
         result = compare_baselines(current, baseline)
         imp_names = [d.metric for d in result.improvements]
         assert "fall_rate" in imp_names
 
     def test_tolerance_override_tightens_check(self):
         baseline = _make_result(fall_rate=0.10)
-        current = _make_result(fall_rate=0.13)   # +0.03, within default 0.05 tol
+        current = _make_result(fall_rate=0.13)  # +0.03, within default 0.05 tol
         # Tighten to 0.01
         result = compare_baselines(current, baseline, tolerances={"fall_rate": 0.01})
         reg_names = [d.metric for d in result.regressions]
@@ -213,6 +214,7 @@ class TestCompareBaselines:
 # Tests: compare_files (disk I/O round-trip)
 # ---------------------------------------------------------------------------
 
+
 class TestCompareFiles:
     def test_roundtrip_identical(self, tmp_path):
         d = _make_result()
@@ -245,29 +247,53 @@ class TestCompareFiles:
 # Tests: ComparisonResult helpers
 # ---------------------------------------------------------------------------
 
+
 class TestComparisonResult:
     def _make_comparison(self, regressions=0, improvements=0, ok=2):
         deltas = []
         for i in range(regressions):
-            deltas.append(MetricDelta(
-                metric=f"reg_{i}", baseline_value=1.0, current_value=0.5,
-                delta=-0.5, direction="higher_better", tolerance=0.01,
-                is_regression=True, is_improvement=False,
-            ))
+            deltas.append(
+                MetricDelta(
+                    metric=f"reg_{i}",
+                    baseline_value=1.0,
+                    current_value=0.5,
+                    delta=-0.5,
+                    direction="higher_better",
+                    tolerance=0.01,
+                    is_regression=True,
+                    is_improvement=False,
+                )
+            )
         for i in range(improvements):
-            deltas.append(MetricDelta(
-                metric=f"imp_{i}", baseline_value=0.5, current_value=1.0,
-                delta=0.5, direction="higher_better", tolerance=0.01,
-                is_regression=False, is_improvement=True,
-            ))
+            deltas.append(
+                MetricDelta(
+                    metric=f"imp_{i}",
+                    baseline_value=0.5,
+                    current_value=1.0,
+                    delta=0.5,
+                    direction="higher_better",
+                    tolerance=0.01,
+                    is_regression=False,
+                    is_improvement=True,
+                )
+            )
         for i in range(ok):
-            deltas.append(MetricDelta(
-                metric=f"ok_{i}", baseline_value=1.0, current_value=1.0,
-                delta=0.0, direction="higher_better", tolerance=0.01,
-                is_regression=False, is_improvement=False,
-            ))
+            deltas.append(
+                MetricDelta(
+                    metric=f"ok_{i}",
+                    baseline_value=1.0,
+                    current_value=1.0,
+                    delta=0.0,
+                    direction="higher_better",
+                    tolerance=0.01,
+                    is_regression=False,
+                    is_improvement=False,
+                )
+            )
         return ComparisonResult(
-            mode="nominal", baseline_file="b.json", current_file="c.json",
+            mode="nominal",
+            baseline_file="b.json",
+            current_file="c.json",
             deltas=deltas,
         )
 
@@ -296,6 +322,7 @@ class TestComparisonResult:
         d = r.to_dict()
         # Should be JSON-serialisable (no numpy, no jax arrays)
         import json as _json
+
         _json.dumps(d)  # should not raise
         assert d["passed"] is False
         assert d["num_regressions"] == 1

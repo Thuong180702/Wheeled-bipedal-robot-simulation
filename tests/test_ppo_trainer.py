@@ -61,19 +61,21 @@ _TINY_CONFIG = {
 }
 
 NUM_ENVS = 4
-OBS_SIZE = 40   # BalanceEnv is 39+1=40
+OBS_SIZE = 40  # BalanceEnv is 39+1=40
 ACTION_SIZE = 10
 
 
 @pytest.fixture(scope="module")
 def env():
     from wheeled_biped.envs.balance_env import BalanceEnv
+
     return BalanceEnv(config=_TINY_CONFIG)
 
 
 @pytest.fixture(scope="module")
 def trainer(env):
     from wheeled_biped.training.ppo import PPOTrainer
+
     t = PPOTrainer(env=env, config=_TINY_CONFIG, logger=None, seed=0)
     # Fix num_envs to match test size
     t.num_envs = NUM_ENVS
@@ -98,12 +100,13 @@ def rollout_data(trainer, env):
 # Tests: compute_gae
 # ---------------------------------------------------------------------------
 
+
 class TestComputeGAE:
     def test_output_shapes(self, trainer):
         """GAE advantages and returns have shape (T, num_envs)."""
         from wheeled_biped.training.ppo import compute_gae
 
-        T, N = 8, 4
+        T, N = 8, 4  # noqa: N806
         rewards = jnp.ones((T, N))
         values = jnp.ones((T, N)) * 0.5
         dones = jnp.zeros((T, N))
@@ -119,7 +122,7 @@ class TestComputeGAE:
         from wheeled_biped.training.ppo import compute_gae
 
         rng = jax.random.PRNGKey(42)
-        T, N = 16, 4
+        T, N = 16, 4  # noqa: N806
         rewards = jax.random.normal(rng, (T, N))
         values = jax.random.normal(rng, (T, N))
         dones = (jax.random.uniform(rng, (T, N)) > 0.8).astype(jnp.float32)
@@ -134,7 +137,7 @@ class TestComputeGAE:
         """returns = advantages + values (definition)."""
         from wheeled_biped.training.ppo import compute_gae
 
-        T, N = 4, 2
+        T, N = 4, 2  # noqa: N806
         rewards = jnp.ones((T, N))
         values = jnp.ones((T, N)) * 2.0
         dones = jnp.zeros((T, N))
@@ -148,6 +151,7 @@ class TestComputeGAE:
 # ---------------------------------------------------------------------------
 # Tests: obs normalization
 # ---------------------------------------------------------------------------
+
 
 class TestObsNormalization:
     def test_rms_updates_mean(self, trainer):
@@ -188,6 +192,7 @@ class TestObsNormalization:
 # Tests: single rollout + update
 # ---------------------------------------------------------------------------
 
+
 class TestSingleUpdate:
     def test_rollout_obs_no_nan(self, rollout_data):
         """Rollout observations contain no NaN."""
@@ -207,6 +212,7 @@ class TestSingleUpdate:
 
         # Compute last value for GAE
         from wheeled_biped.training.ppo import normalize_obs
+
         last_obs = normalize_obs(env_state.obs, trainer.obs_rms)
         _, last_value = trainer.model.apply(trainer.params, last_obs)
 
@@ -230,6 +236,7 @@ class TestSingleUpdate:
         env_state, transitions, rng = rollout_data
 
         from wheeled_biped.training.ppo import normalize_obs
+
         last_obs = normalize_obs(env_state.obs, trainer.obs_rms)
         _, last_value = trainer.model.apply(trainer.params, last_obs)
 
@@ -251,6 +258,7 @@ class TestSingleUpdate:
         env_state, transitions, rng = rollout_data
 
         from wheeled_biped.training.ppo import normalize_obs
+
         last_obs = normalize_obs(env_state.obs, trainer.obs_rms)
         _, last_value = trainer.model.apply(trainer.params, last_obs)
 
@@ -270,6 +278,7 @@ class TestSingleUpdate:
 # ---------------------------------------------------------------------------
 # Tests: checkpoint save / load
 # ---------------------------------------------------------------------------
+
 
 class TestCheckpoint:
     def test_checkpoint_keys_present(self, trainer, tmp_path):
@@ -330,12 +339,12 @@ class TestCheckpoint:
         import jax.tree_util as jtu
 
         ckpt_dir = str(tmp_path / "ckpt_params")
-        original_leaves = [np.array(l) for l in jtu.tree_leaves(jax.device_get(trainer.params))]
+        original_leaves = [np.array(lf) for lf in jtu.tree_leaves(jax.device_get(trainer.params))]
 
         trainer._save_checkpoint(ckpt_dir, global_step=0, best_reward=0.0)
         trainer.load_checkpoint(ckpt_dir)
 
-        restored_leaves = [np.array(l) for l in jtu.tree_leaves(jax.device_get(trainer.params))]
+        restored_leaves = [np.array(lf) for lf in jtu.tree_leaves(jax.device_get(trainer.params))]
         for orig, rest in zip(original_leaves, restored_leaves):
             assert np.allclose(orig, rest, atol=1e-6), "Params differ after checkpoint round-trip"
 
@@ -343,6 +352,7 @@ class TestCheckpoint:
 # ---------------------------------------------------------------------------
 # Tests: eval_pass()
 # ---------------------------------------------------------------------------
+
 
 class TestEvalPass:
     """Tests for PPOTrainer.eval_pass() — the held-out evaluation method.
@@ -380,23 +390,17 @@ class TestEvalPass:
         result = trainer.eval_pass(num_eval_envs=4, num_episodes=4, rng=rng)
 
         total = result["eval_fall_rate"] + result["eval_success_rate"]
-        assert abs(total - 1.0) < 1e-6, (
-            f"fall_rate + success_rate = {total} (expected 1.0)"
-        )
+        assert abs(total - 1.0) < 1e-6, f"fall_rate + success_rate = {total} (expected 1.0)"
 
     def test_eval_pass_collects_episodes(self, trainer, env):
         """eval_pass() reports at least one completed episode."""
         rng = jax.random.PRNGKey(13)
         result = trainer.eval_pass(num_eval_envs=4, num_episodes=4, rng=rng)
 
-        assert result["eval_num_episodes"] >= 1, (
-            "eval_pass() should complete at least 1 episode"
-        )
+        assert result["eval_num_episodes"] >= 1, "eval_pass() should complete at least 1 episode"
 
     def test_eval_pass_does_not_mutate_obs_rms(self, trainer, env):
         """eval_pass() does not change obs_rms (evaluation is read-only)."""
-        from wheeled_biped.training.ppo import update_running_mean_std
-        import jax.numpy as jnp
 
         # Record current obs_rms mean
         before_mean = np.array(trainer.obs_rms.mean).copy()
@@ -409,7 +413,67 @@ class TestEvalPass:
             "eval_pass() must not mutate obs_rms"
         )
 
-<<<<<<< HEAD
+    def test_eval_pass_curriculum_min_height_accepted(self, trainer, env):
+        """eval_pass() accepts curriculum_min_height without raising.
+
+        curriculum_min_height=0.40 is below initial_min_height (0.68), so it
+        exercises the full patching path: resample height_command from the wider
+        range and update obs[:, -1] accordingly.
+        """
+        rng = jax.random.PRNGKey(5)
+        result = trainer.eval_pass(
+            num_eval_envs=4, num_episodes=4, rng=rng, curriculum_min_height=0.40
+        )
+        required = {
+            "eval_reward_mean",
+            "eval_reward_std",
+            "eval_fall_rate",
+            "eval_success_rate",
+            "eval_num_episodes",
+        }
+        for key in required:
+            assert key in result, f"Missing key in result: {key}"
+        assert np.isfinite(result["eval_reward_mean"])
+
+    def test_eval_pass_curriculum_min_height_changes_result(self, trainer, env):
+        """curriculum_min_height=0.40 produces different results than the default.
+
+        Using the same RNG seed, the only difference between the two runs is the
+        initial height_command distribution:
+          default:  [0.68, 0.70] -> height_norm in [0.933, 1.0]
+          curriculum: [0.40, 0.70] -> height_norm in [0.0, 1.0]
+        Different obs -> different greedy actions -> different rewards.
+        If results are identical, the parameter had no effect (regression).
+        """
+        result_default = trainer.eval_pass(
+            num_eval_envs=4, num_episodes=4, rng=jax.random.PRNGKey(99)
+        )
+        result_curriculum = trainer.eval_pass(
+            num_eval_envs=4,
+            num_episodes=4,
+            rng=jax.random.PRNGKey(99),
+            curriculum_min_height=0.40,
+        )
+        assert result_default["eval_reward_mean"] != result_curriculum["eval_reward_mean"], (
+            "curriculum_min_height=0.40 must change eval results vs default "
+            "(proves the parameter actively patches height_command / obs)"
+        )
+
+    def test_eval_pass_curriculum_min_height_none_unchanged(self, trainer, env):
+        """curriculum_min_height=None is identical to omitting the argument."""
+        result_omitted = trainer.eval_pass(
+            num_eval_envs=4, num_episodes=4, rng=jax.random.PRNGKey(17)
+        )
+        result_none = trainer.eval_pass(
+            num_eval_envs=4,
+            num_episodes=4,
+            rng=jax.random.PRNGKey(17),
+            curriculum_min_height=None,
+        )
+        assert result_omitted["eval_reward_mean"] == result_none["eval_reward_mean"], (
+            "curriculum_min_height=None must be identical to the default (no patch)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Tests: eval-gated within-stage curriculum signal
@@ -423,12 +487,12 @@ _CURRICULUM_CONFIG = {
     },
     "curriculum": {
         "enabled": True,
-        "reward_threshold": 0.5,   # low threshold — easy to meet in tests
+        "reward_threshold": 0.5,  # low threshold — easy to meet in tests
         "num_levels": 5,
-        "window": 2,               # small window for legacy path tests
+        "window": 2,  # small window for legacy path tests
         "use_eval_signal": True,
-        "eval_interval": 2,        # fire every 2 updates — fast for tests
-        "eval_episodes": 2,        # minimal episodes per check
+        "eval_interval": 2,  # fire every 2 updates — fast for tests
+        "eval_episodes": 2,  # minimal episodes per check
     },
 }
 
@@ -447,11 +511,13 @@ class TestEvalGatedCurriculum:
     @pytest.fixture(scope="class")
     def curriculum_env(self):
         from wheeled_biped.envs.balance_env import BalanceEnv
+
         return BalanceEnv(config=_CURRICULUM_CONFIG)
 
     @pytest.fixture(scope="class")
     def curriculum_trainer(self, curriculum_env):
         from wheeled_biped.training.ppo import PPOTrainer
+
         t = PPOTrainer(env=curriculum_env, config=_CURRICULUM_CONFIG, logger=None, seed=1)
         t.num_envs = NUM_ENVS
         t._rollout_length = 4
@@ -472,11 +538,12 @@ class TestEvalGatedCurriculum:
         so eval_reward_mean must be >= 0.5 * 10 = 5.0 to advance.
         """
         import types
+
         # High eval return: per_step = eval_reward_mean / episode_length >= threshold.
         # episode_length=20, threshold=0.5*(1.0+0.5)=0.75, so need mean >= 0.75*20 = 15.0.
         def _fake_eval_pass(self_, **kwargs):
             return {
-                "eval_reward_mean": 20.0,   # episode return; /20 = 1.0 >= 0.75 threshold
+                "eval_reward_mean": 20.0,  # episode return; /20 = 1.0 >= 0.75 threshold
                 "eval_reward_std": 0.0,
                 "eval_fall_rate": 0.0,
                 "eval_success_rate": 1.0,
@@ -493,7 +560,7 @@ class TestEvalGatedCurriculum:
         )
         final_min_h = getattr(curriculum_trainer.env, "MIN_HEIGHT_CMD", 0.38)
         num_levels = cfg.get("num_levels", 5)
-        level_step = (initial_min_h - final_min_h) / max(num_levels, 1)
+        _level_step = (initial_min_h - final_min_h) / max(num_levels, 1)  # noqa: F841
         reward_threshold = cfg["reward_threshold"] * sum(
             w for w in curriculum_trainer.config.get("rewards", {}).values() if w > 0
         )
@@ -510,6 +577,7 @@ class TestEvalGatedCurriculum:
     def test_eval_gated_does_not_advance_when_threshold_not_met(self, curriculum_trainer):
         """Curriculum does not advance when eval_per_step < reward_threshold."""
         import types
+
         # Low eval return: per_step = 0.0 / 10 = 0.0 < 0.5 threshold
         def _fake_eval_pass_low(self_, **kwargs):
             return {
@@ -547,77 +615,22 @@ class TestEvalGatedCurriculum:
         }
         cfg = legacy_config.get("curriculum", {})
         assert cfg.get("use_eval_signal") is False
-        assert cfg.get("window") == 2   # legacy window still present
+        assert cfg.get("window") == 2  # legacy window still present
 
     def test_eval_per_step_normalization(self, curriculum_trainer):
         """eval_per_step = eval_reward_mean / episode_length is correct."""
         episode_length = curriculum_trainer.episode_length
-        # If mean episode return = 7.5 and episode_length = 10 → per_step = 0.75
+        # If mean episode return = 7.5 and episode_length = 10 -> per_step = 0.75
         eval_reward_mean = 7.5
         expected = eval_reward_mean / max(1, episode_length)
         computed = eval_reward_mean / max(1, episode_length)
         assert abs(computed - expected) < 1e-9
-=======
-    def test_eval_pass_curriculum_min_height_accepted(self, trainer, env):
-        """eval_pass() accepts curriculum_min_height without raising.
-
-        curriculum_min_height=0.40 is below initial_min_height (0.68), so it
-        exercises the full patching path: resample height_command from the wider
-        range and update obs[:, -1] accordingly.
-        """
-        rng = jax.random.PRNGKey(5)
-        result = trainer.eval_pass(
-            num_eval_envs=4, num_episodes=4, rng=rng, curriculum_min_height=0.40
-        )
-        required = {
-            "eval_reward_mean", "eval_reward_std", "eval_fall_rate",
-            "eval_success_rate", "eval_num_episodes",
-        }
-        for key in required:
-            assert key in result, f"Missing key in result: {key}"
-        assert np.isfinite(result["eval_reward_mean"])
-
-    def test_eval_pass_curriculum_min_height_changes_result(self, trainer, env):
-        """curriculum_min_height=0.40 produces different results than the default
-        initial range (0.68).
-
-        Using the same RNG seed, the only difference between the two runs is the
-        initial height_command distribution:
-          default:  [0.68, 0.70] → height_norm ∈ [0.933, 1.0]
-          curriculum: [0.40, 0.70] → height_norm ∈ [0.0, 1.0]
-        Different obs → different greedy actions → different rewards.
-        If results are identical, the parameter had no effect (regression).
-        """
-        rng_seed = jax.random.PRNGKey(99)
-
-        result_default = trainer.eval_pass(
-            num_eval_envs=4, num_episodes=4, rng=jax.random.PRNGKey(99)
-        )
-        result_curriculum = trainer.eval_pass(
-            num_eval_envs=4, num_episodes=4, rng=jax.random.PRNGKey(99),
-            curriculum_min_height=0.40,
-        )
-        assert result_default["eval_reward_mean"] != result_curriculum["eval_reward_mean"], (
-            "curriculum_min_height=0.40 must change eval results vs default "
-            "(proves the parameter actively patches height_command / obs)"
-        )
-
-    def test_eval_pass_curriculum_min_height_none_unchanged(self, trainer, env):
-        """curriculum_min_height=None is identical to omitting the argument."""
-        rng = jax.random.PRNGKey(17)
-        result_omitted = trainer.eval_pass(num_eval_envs=4, num_episodes=4,
-                                           rng=jax.random.PRNGKey(17))
-        result_none    = trainer.eval_pass(num_eval_envs=4, num_episodes=4,
-                                           rng=jax.random.PRNGKey(17),
-                                           curriculum_min_height=None)
-        assert result_omitted["eval_reward_mean"] == result_none["eval_reward_mean"], (
-            "curriculum_min_height=None must be identical to the default (no patch)"
-        )
 
 
 # ---------------------------------------------------------------------------
 # Tests: logger lifecycle (log before close)
 # ---------------------------------------------------------------------------
+
 
 class TestLoggerLifecycle:
     """Verify the correct logger lifecycle: log_dict() then close().
@@ -634,6 +647,7 @@ class TestLoggerLifecycle:
     def test_log_dict_then_close_persists_to_jsonl(self, tmp_path):
         """Metrics logged before close() appear in the JSONL file."""
         import json
+
         from wheeled_biped.utils.logger import TrainingLogger
 
         logger = TrainingLogger(
@@ -641,7 +655,7 @@ class TestLoggerLifecycle:
             experiment_name="lifecycle_ok",
             use_tensorboard=False,
             use_wandb=False,
-            flush_every=1000,   # disable auto-flush so only close() writes
+            flush_every=1000,  # disable auto-flush so only close() writes
         )
         logger.set_step(500)
         logger.log_dict({"eval/reward_mean": 3.14, "eval/fall_rate": 0.05})
@@ -649,15 +663,16 @@ class TestLoggerLifecycle:
 
         jsonl = tmp_path / "lifecycle_ok_metrics.jsonl"
         assert jsonl.exists(), "JSONL file should be created"
-        lines = [l for l in jsonl.read_text().strip().split("\n") if l]
+        lines = [line for line in jsonl.read_text().strip().split("\n") if line]
         assert len(lines) == 2, f"Expected 2 log entries, got {len(lines)}"
-        tags = {json.loads(l)["tag"] for l in lines}
+        tags = {json.loads(line)["tag"] for line in lines}
         assert "eval/reward_mean" in tags
         assert "eval/fall_rate" in tags
 
     def test_close_flushes_buffer(self, tmp_path):
         """close() flushes any buffered metrics to disk before closing writers."""
         import json
+
         from wheeled_biped.utils.logger import TrainingLogger
 
         logger = TrainingLogger(
@@ -665,20 +680,18 @@ class TestLoggerLifecycle:
             experiment_name="close_flush",
             use_tensorboard=False,
             use_wandb=False,
-            flush_every=1000,   # prevent auto-flush
+            flush_every=1000,  # prevent auto-flush
         )
         logger.set_step(1)
-        logger.log_scalar("train/loss", 0.42)   # buffered, not yet flushed
+        logger.log_scalar("train/loss", 0.42)  # buffered, not yet flushed
         # Buffer has 1 entry; file is empty until close() is called
         jsonl = tmp_path / "close_flush_metrics.jsonl"
         if jsonl.exists():
             assert jsonl.read_text().strip() == "", "Should not be flushed yet"
         logger.close()  # must flush before closing
         assert jsonl.exists()
-        lines = [l for l in jsonl.read_text().strip().split("\n") if l]
+        lines = [line for line in jsonl.read_text().strip().split("\n") if line]
         assert len(lines) == 1
         entry = json.loads(lines[0])
         assert entry["tag"] == "train/loss"
         assert abs(entry["value"] - 0.42) < 1e-6
->>>>>>> ae2d01aece342f46b1107f3c66e01bf9f523e08e
-

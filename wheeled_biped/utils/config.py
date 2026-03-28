@@ -18,7 +18,7 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Không tìm thấy config: {path}")
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
@@ -123,6 +123,7 @@ def get_run_metadata(
     # JAX — version + backend
     try:
         import jax
+
         meta["jax_version"] = jax.__version__
         meta["jax_backend"] = jax.default_backend()
         meta["jax_devices"] = [str(d) for d in jax.devices()]
@@ -133,6 +134,7 @@ def get_run_metadata(
     # MuJoCo
     try:
         import mujoco
+
         meta["mujoco_version"] = mujoco.__version__
     except Exception:
         meta["mujoco_version"] = "unknown"
@@ -140,9 +142,12 @@ def get_run_metadata(
     # Git commit — best-effort, silent on failure (no git, detached HEAD, etc.)
     try:
         import subprocess
+
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         meta["git_commit"] = result.stdout.strip() if result.returncode == 0 else "unknown"
     except Exception:
@@ -164,4 +169,3 @@ def get_run_metadata(
         meta["rollout_length"] = ppo.get("rollout_length", "unknown")
 
     return meta
-

@@ -40,17 +40,21 @@ try:
     import jax
     import jax.numpy as jnp
     from mujoco import mjx
+
     from wheeled_biped.training.ppo import normalize_obs
 except Exception:  # pragma: no cover
     jax = None  # type: ignore[assignment]
     jnp = None  # type: ignore[assignment]
     mjx = None  # type: ignore[assignment]
-    normalize_obs = lambda obs, rms: obs  # type: ignore[misc]
+
+    def normalize_obs(obs, rms):  # type: ignore[misc]  # noqa: E731
+        return obs
 
 
 # ---------------------------------------------------------------------------
 # BenchmarkResult dataclass
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class BenchmarkResult:
@@ -74,15 +78,16 @@ class BenchmarkResult:
     episode_length_mean: float = 0.0
     episode_length_max: int = 0
     # Common derived metrics (all modes)
-    success_rate: float = 0.0   # fraction ending because env time_limit fired (not fallen)
-    fall_rate: float = 0.0      # fraction ending in is_fallen
-    timeout_rate: float = 0.0   # same as success_rate: fraction reaching env episode limit
+    success_rate: float = 0.0  # fraction ending because env time_limit fired (not fallen)
+    fall_rate: float = 0.0  # fraction ending in is_fallen
+    timeout_rate: float = 0.0  # same as success_rate: fraction reaching env episode limit
     # Mode-specific extras stored in a free-form dict
     mode_metrics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serialisable dict."""
         import dataclasses
+
         d = dataclasses.asdict(self)
         return d
 
@@ -90,6 +95,7 @@ class BenchmarkResult:
 # ---------------------------------------------------------------------------
 # Shared rollout helper
 # ---------------------------------------------------------------------------
+
 
 def _rollout(
     env,
@@ -139,9 +145,11 @@ def _rollout(
                 timed_out = bool(env_states.info.get("time_limit", jnp.zeros(num_envs))[i])
                 episode_fallen.append(fallen)
                 episode_timed_out.append(timed_out)
-                ep_info = {k: (float(v[i]) if hasattr(v, "__len__") else float(v))
-                           for k, v in env_states.info.items()
-                           if k not in ("push_rng", "pid_integral", "anchor_xy")}
+                ep_info = {
+                    k: (float(v[i]) if hasattr(v, "__len__") else float(v))
+                    for k, v in env_states.info.items()
+                    if k not in ("push_rng", "pid_integral", "anchor_xy")
+                }
                 episode_info_last.append(ep_info)
 
         rng, reset_key = jax.random.split(rng)
@@ -170,7 +178,7 @@ def _base_metrics(
     (assuming every done comes from exactly one of is_fallen / time_limit).
     """
     r = np.array(episode_rewards, dtype=float)
-    l = np.array(episode_lengths, dtype=float)
+    l = np.array(episode_lengths, dtype=float)  # noqa: E741
     f = np.array(episode_fallen, dtype=bool)
     t = np.array(episode_timed_out, dtype=bool)
     return {
@@ -187,13 +195,14 @@ def _base_metrics(
         # Use env's time_limit flag: fraction that reached episode end without falling
         "success_rate": float(np.mean(t)),
         "fall_rate": float(np.mean(f)),
-        "timeout_rate": float(np.mean(t)),   # synonymous with success_rate for this env
+        "timeout_rate": float(np.mean(t)),  # synonymous with success_rate for this env
     }
 
 
 # ---------------------------------------------------------------------------
 # Mode: nominal
 # ---------------------------------------------------------------------------
+
 
 def _run_nominal(env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps):
     """Standard evaluation — env default settings."""
@@ -209,8 +218,16 @@ def _run_nominal(env, model, params, obs_rms, rng, num_episodes, num_envs, max_s
 # Mode: push_recovery
 # ---------------------------------------------------------------------------
 
+
 def _run_push_recovery(
-    env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps,
+    env,
+    model,
+    params,
+    obs_rms,
+    rng,
+    num_episodes,
+    num_envs,
+    max_steps,
     push_magnitude: float = 80.0,
 ):
     """Evaluation under larger forced push disturbances.
@@ -240,7 +257,7 @@ def _run_push_recovery(
         env._push_magnitude = orig_push_magnitude
 
     base = _base_metrics(ep_r, ep_l, ep_f, ep_t)
-    fallen_lengths = [l for l, f in zip(ep_l, ep_f) if f]
+    fallen_lengths = [lf for lf, f in zip(ep_l, ep_f) if f]
     mode_metrics = {
         "push_magnitude_used": push_magnitude,
         "fall_after_push_rate": base["fall_rate"],
@@ -254,8 +271,16 @@ def _run_push_recovery(
 # Mode: domain_randomized
 # ---------------------------------------------------------------------------
 
+
 def _run_domain_randomized(
-    env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps,
+    env,
+    model,
+    params,
+    obs_rms,
+    rng,
+    num_episodes,
+    num_envs,
+    max_steps,
     mass_perturb: float = 0.30,
     friction_perturb: float = 0.50,
 ):
@@ -276,8 +301,12 @@ def _run_domain_randomized(
     orig_friction = copy.deepcopy(env.mj_model.geom_friction.copy())
 
     rng_np = np.random.default_rng(seed=42)
-    mass_perturbed = orig_mass * (1.0 + rng_np.uniform(-mass_perturb, mass_perturb, size=orig_mass.shape))
-    friction_perturbed = orig_friction * (1.0 + rng_np.uniform(-friction_perturb, friction_perturb, size=orig_friction.shape))
+    mass_perturbed = orig_mass * (
+        1.0 + rng_np.uniform(-mass_perturb, mass_perturb, size=orig_mass.shape)
+    )
+    friction_perturbed = orig_friction * (
+        1.0 + rng_np.uniform(-friction_perturb, friction_perturb, size=orig_friction.shape)
+    )
     friction_perturbed = np.clip(friction_perturbed, 0.01, None)  # friction must be positive
 
     env.mj_model.body_mass[:] = mass_perturbed
@@ -294,7 +323,14 @@ def _run_domain_randomized(
 
     try:
         ep_r, ep_l, ep_f, ep_t, ep_info = _rollout(
-            env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps,
+            env,
+            model,
+            params,
+            obs_rms,
+            rng,
+            num_episodes,
+            num_envs,
+            max_steps,
             step_hook=_height_hook,
         )
     finally:
@@ -316,8 +352,16 @@ def _run_domain_randomized(
 # Mode: command_tracking
 # ---------------------------------------------------------------------------
 
+
 def _run_command_tracking(
-    env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps,
+    env,
+    model,
+    params,
+    obs_rms,
+    rng,
+    num_episodes,
+    num_envs,
+    max_steps,
     height_commands: list[float] | None = None,
 ):
     """Evaluation sweeping fixed height commands.
@@ -345,15 +389,10 @@ def _run_command_tracking(
     # so the uniform sample [min, max] always gives ≈ cmd.
     epsilon = 0.01  # tiny range so all resets get the same command
 
-    orig_max_h_attr = "_initial_min_height"  # we patch min; keep MAX_HEIGHT_CMD intact
-
     per_command_results: list[dict] = []
     all_height_errors: list[float] = []
 
     for cmd in height_commands:
-        effective_min = max(min_h, cmd - epsilon)
-        effective_max = min(max_h, cmd + epsilon)
-
         # Clamp cmd inside valid range
         cmd_clamped = float(np.clip(cmd, min_h, max_h))
         env._initial_min_height = max(min_h, cmd_clamped - epsilon)
@@ -373,27 +412,43 @@ def _run_command_tracking(
 
         try:
             ep_r, ep_l, ep_f, ep_t, _ = _rollout(
-                env, model, params, obs_rms, cmd_key,
-                num_episodes, num_envs, max_steps,
+                env,
+                model,
+                params,
+                obs_rms,
+                cmd_key,
+                num_episodes,
+                num_envs,
+                max_steps,
                 step_hook=_track_hook,
             )
         finally:
             env._initial_min_height = orig_min_h
             env.MAX_HEIGHT_CMD = orig_class_max  # type: ignore[assignment]
 
-        rmse = float(np.sqrt(np.mean(np.array(height_errors_cmd) ** 2))) if height_errors_cmd else float("nan")
+        rmse = (
+            float(np.sqrt(np.mean(np.array(height_errors_cmd) ** 2)))
+            if height_errors_cmd
+            else float("nan")
+        )
         all_height_errors.extend(height_errors_cmd)
 
-        per_command_results.append({
-            "height_command": cmd_clamped,
-            "height_rmse": rmse,
-            "success_rate": float(np.mean(ep_t)),
-            "fall_rate": float(np.mean(np.array(ep_f))),
-            "reward_mean": float(np.mean(ep_r)),
-            "num_episodes": len(ep_r),
-        })
+        per_command_results.append(
+            {
+                "height_command": cmd_clamped,
+                "height_rmse": rmse,
+                "success_rate": float(np.mean(ep_t)),
+                "fall_rate": float(np.mean(np.array(ep_f))),
+                "reward_mean": float(np.mean(ep_r)),
+                "num_episodes": len(ep_r),
+            }
+        )
 
-    overall_rmse = float(np.sqrt(np.mean(np.array(all_height_errors) ** 2))) if all_height_errors else float("nan")
+    overall_rmse = (
+        float(np.sqrt(np.mean(np.array(all_height_errors) ** 2)))
+        if all_height_errors
+        else float("nan")
+    )
 
     # Aggregate across all commands for BenchmarkResult base fields
     all_r = [ep["reward_mean"] for ep in per_command_results]

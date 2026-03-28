@@ -46,9 +46,7 @@ def randomize_model(
     # Ngẫu nhiên khối lượng
     n_bodies = model.nbody
     mass_scales = np.array(
-        jax.random.uniform(
-            k1, shape=(n_bodies,), minval=mass_range[0], maxval=mass_range[1]
-        )
+        jax.random.uniform(k1, shape=(n_bodies,), minval=mass_range[0], maxval=mass_range[1])
     )
     model.body_mass[:] = mj_model.body_mass * mass_scales
 
@@ -64,9 +62,7 @@ def randomize_model(
     # Ngẫu nhiên damping khớp
     n_joints = model.njnt
     damping_scales = np.array(
-        jax.random.uniform(
-            k3, shape=(n_joints,), minval=damping_range[0], maxval=damping_range[1]
-        )
+        jax.random.uniform(k3, shape=(n_joints,), minval=damping_range[0], maxval=damping_range[1])
     )
     model.dof_damping[:n_joints] = mj_model.dof_damping[:n_joints] * damping_scales
 

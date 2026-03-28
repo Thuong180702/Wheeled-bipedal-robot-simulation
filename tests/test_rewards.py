@@ -13,18 +13,14 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from wheeled_biped.rewards.reward_functions import (
+from wheeled_biped.rewards.reward_functions import (  # noqa: E402
     compute_total_reward,
     penalty_action_rate,
     penalty_joint_torque,
-    penalty_joint_velocity,
-    reward_alive,
-    reward_foot_clearance,
     reward_height,
     reward_tracking_velocity,
     reward_upright,

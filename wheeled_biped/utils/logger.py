@@ -134,9 +134,7 @@ class TrainingLogger:
         for tag, value in metrics.items():
             self.log_scalar(tag, value, step)
 
-    def log_histogram(
-        self, tag: str, values: np.ndarray, step: int | None = None
-    ) -> None:
+    def log_histogram(self, tag: str, values: np.ndarray, step: int | None = None) -> None:
         """Ghi histogram (chỉ TensorBoard)."""
         s = step if step is not None else self._step
         if self._tb_writer is not None:
@@ -152,6 +150,7 @@ class TrainingLogger:
             self._tb_writer.add_text(tag, text, s)
         if self._wandb_run is not None:
             import wandb
+
             wandb.log({tag: wandb.Html(f"<pre>{text}</pre>")}, step=s)
 
     def flush(self) -> None:

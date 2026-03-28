@@ -52,7 +52,7 @@ def curriculum(
         console.print(f"[red]Không tìm thấy config: {config_path}[/red]")
         raise typer.Exit(1)
 
-    console.print(f"\n[bold green]═══ Curriculum Training ═══[/bold green]")
+    console.print("\n[bold green]═══ Curriculum Training ═══[/bold green]")
     console.print(f"  Config: {config_path}")
     console.print(f"  Output: {output_dir}")
     console.print(f"  Steps/stage: {steps_per_stage:,}\n")
@@ -66,16 +66,14 @@ def curriculum(
 
     console.print("\n[bold green]═══ Training Complete ═══[/bold green]")
     for stage_name, result in results.items():
-        console.print(
-            f"  {stage_name}: best_reward={result.get('best_reward', 'N/A'):.4f}"
-        )
+        console.print(f"  {stage_name}: best_reward={result.get('best_reward', 'N/A'):.4f}")
 
 
 @app.command()
 def single(
     stage: str = typer.Option(
         "balance",
-        help="Tên stage để train (balance/wheeled_locomotion/walking/stair_climbing/rough_terrain).",
+        help="Tên stage để train (balance/wheeled_locomotion/walking/stair_climbing/rough_terrain).",  # noqa: E501
     ),
     config: str = typer.Option(
         None,
@@ -109,19 +107,19 @@ def single(
     ),
 ):
     """Train một stage cụ thể."""
-    import jax
-
-    from wheeled_biped.envs import make_env
-    from wheeled_biped.training.ppo import PPOTrainer
-    from wheeled_biped.utils.config import load_training_config
-    from wheeled_biped.utils.logger import TrainingLogger
-
     # Chống Windows Power Throttling + CPU downclocking khi alt-tab
     import atexit
     import ctypes
     import os as _os
     import re
     import subprocess
+
+    import jax
+
+    from wheeled_biped.envs import make_env
+    from wheeled_biped.training.ppo import PPOTrainer
+    from wheeled_biped.utils.config import load_training_config
+    from wheeled_biped.utils.logger import TrainingLogger
 
     if sys.platform == "win32":
         try:
@@ -144,7 +142,7 @@ def single(
             # 3. Tắt Power Throttling đúng cách qua SetProcessInformation
             #    Cần khai báo restype + argtypes đúng để ctypes không hiểu sai kết quả
             kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-            hProcess = kernel32.GetCurrentProcess()
+            hProcess = kernel32.GetCurrentProcess()  # noqa: N806
 
             class _PTS(ctypes.Structure):
                 _fields_ = [
@@ -180,9 +178,7 @@ def single(
             #    Đây là cách đảm bảo nhất — CPU không bị downclocking khi background
             try:
                 # Lưu plan hiện tại để khôi phục khi kết thúc
-                r = subprocess.run(
-                    ["powercfg", "/getactivescheme"], capture_output=True, text=True
-                )
+                r = subprocess.run(["powercfg", "/getactivescheme"], capture_output=True, text=True)
                 m = re.search(
                     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
                     r.stdout,
@@ -191,10 +187,8 @@ def single(
                 _original_plan = m.group(0) if m else None
 
                 # High Performance GUID (built-in Windows)
-                _HIGH_PERF = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
-                result = subprocess.run(
-                    ["powercfg", "/setactive", _HIGH_PERF], capture_output=True
-                )
+                _HIGH_PERF = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"  # noqa: N806
+                result = subprocess.run(["powercfg", "/setactive", _HIGH_PERF], capture_output=True)
 
                 if result.returncode == 0:
                     console.print(
@@ -209,7 +203,8 @@ def single(
                         )
                 else:
                     console.print(
-                        "  [yellow]⚠ Không đổi Power Plan — cần chạy VSCode as Admin để fix lỗi alt-tab throttle[/yellow]"
+                        "  [yellow]⚠ Không đổi Power Plan — cần chạy VSCode as Admin"  # noqa: E501
+                        " để fix lỗi alt-tab throttle[/yellow]"
                     )
             except Exception:
                 pass
@@ -220,8 +215,7 @@ def single(
     cpu_count = _os.cpu_count() or 4
     if "XLA_FLAGS" not in _os.environ:
         _os.environ["XLA_FLAGS"] = (
-            f"--xla_cpu_multi_thread_eigen=true "
-            f"--xla_force_host_platform_device_count=1"
+            "--xla_cpu_multi_thread_eigen=true --xla_force_host_platform_device_count=1"
         )
 
     # Auto-detect CPU/GPU
@@ -233,24 +227,23 @@ def single(
         if num_envs > 256:
             old_num = num_envs
             num_envs = 128
+            console.print(f"  [yellow]⚠️  JAX backend = CPU ({cpu_count} cores)[/yellow]")
             console.print(
-                f"  [yellow]⚠️  JAX backend = CPU ({cpu_count} cores)[/yellow]"
+                f"  [yellow]   num_envs {old_num} → {num_envs}"
+                " (CPU không song song thật, nhiều envs = chậm hơn)[/yellow]"
             )
             console.print(
-                f"  [yellow]   num_envs {old_num} → {num_envs} (CPU không song song thật, nhiều envs = chậm hơn)[/yellow]"
+                "  [yellow]   Tăng envs trên CPU: JIT compile lâu hơn"
+                " + mỗi update chậm hơn → không nhanh hơn[/yellow]"
             )
+            console.print("  [yellow]   Muốn nhanh thật sự: cần GPU (WSL2 + jax[cuda12])[/yellow]")
             console.print(
-                f"  [yellow]   Tăng envs trên CPU: JIT compile lâu hơn + mỗi update chậm hơn → không nhanh hơn[/yellow]"
-            )
-            console.print(
-                f"  [yellow]   Muốn nhanh thật sự: cần GPU (WSL2 + jax[cuda12])[/yellow]"
-            )
-            console.print(
-                f"  [yellow]   Override: --num-envs N (nhưng JIT sẽ rất lâu với >256)[/yellow]\n"
+                "  [yellow]   Override: --num-envs N (nhưng JIT sẽ rất lâu với >256)[/yellow]\n"
             )
         else:
             console.print(
-                f"  [yellow]⚠️  JAX backend = CPU ({cpu_count} cores), num_envs = {num_envs}[/yellow]\n"
+                f"  [yellow]⚠️  JAX backend = CPU ({cpu_count} cores),"
+                f" num_envs = {num_envs}[/yellow]\n"
             )
     elif backend == "gpu":
         console.print(f"  [green]✅ GPU detected: {jax.devices()}[/green]")
@@ -279,7 +272,7 @@ def single(
         training_config["task"] = {}
     training_config["task"]["num_envs"] = num_envs
 
-    console.print(f"\n[bold cyan]═══ Single Stage Training ═══[/bold cyan]")
+    console.print("\n[bold cyan]═══ Single Stage Training ═══[/bold cyan]")
     console.print(f"  Stage: {stage}")
     console.print(f"  Config: {full_config_path}")
     console.print(f"  Envs: {num_envs}")
@@ -353,10 +346,11 @@ def single(
         )
         if cur_min > final_min:
             console.print(
-                f"   [yellow]⚠️  Chưa xong! Dùng --resume để train tiếp range [{final_min:.2f}, {max_h:.2f}][/yellow]"
+                f"   [yellow]⚠️  Chưa xong! Dùng --resume để train tiếp"
+                f" range [{final_min:.2f}, {max_h:.2f}][/yellow]"
             )
         else:
-            console.print(f"   [green]✅ Full range hoàn thành![/green]")
+            console.print("   [green]✅ Full range hoàn thành![/green]")
 
 
 if __name__ == "__main__":

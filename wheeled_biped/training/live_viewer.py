@@ -59,7 +59,7 @@ class LiveTrainingViewer:
 
     def update(
         self,
-        mjx_data: "mjx.Data",
+        mjx_data: mjx.Data,
         env_idx: int = 0,
         info: dict[str, str] | None = None,
     ) -> None:

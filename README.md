@@ -217,7 +217,7 @@ Four benchmark modes:
 |---|---|---|
 | `nominal` | Standard env defaults | `reward_mean`, `fall_rate`, `success_rate` |
 | `push_recovery` | Stronger / always-enabled push | `fall_after_push_rate` |
-| `domain_randomized` | ±15% mass, ±40% friction | `height_error_mean`, `position_drift_mean` |
+| `domain_randomized` | ±30% mass, ±50% friction | `height_error_mean`, `mass_perturb_pct`, `friction_perturb_pct` |
 | `command_tracking` | Sweep target heights | `overall_height_rmse`, per-command RMSE |
 
 ```bash
@@ -469,8 +469,8 @@ Two training configs serve different objectives:
 | Term | `balance.yaml` | `balance_robust.yaml` | Note |
 |---|---|---|---|
 | `no_motion` | 0.5 | **0.0** | Wheels must spin to recover from push |
-| `wheel_velocity` | −0.0006 | **0.0** | Wheels are primary balancing actuators under push |
-| `action_rate` | −0.025 | **−0.005** | Rapid wheel burst needed immediately after impact |
+| `wheel_velocity` | −0.0008 | **0.0** | Wheels are primary balancing actuators under push |
+| `action_rate` | −0.03 | **−0.005** | Rapid wheel burst needed immediately after impact |
 | `height`, `body_level`, `natural_pose` | shared | shared | Consistent standing objective |
 
 Both configs share `push_magnitude=0` (balance) or `40 N` (robust).

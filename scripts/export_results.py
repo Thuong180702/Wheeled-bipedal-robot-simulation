@@ -29,10 +29,10 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_jsonl(path: Path) -> list[dict]:
     """Load a JSONL metrics file.  Each line is {step, tag, value}."""
@@ -59,6 +59,7 @@ def _pivot_records(records: list[dict]) -> dict[str, list[tuple[int, float]]]:
 # Sub-command: curves
 # ---------------------------------------------------------------------------
 
+
 def cmd_curves(args: argparse.Namespace) -> None:
     """Export training curves to CSV and (optionally) a PNG figure."""
     src = Path(args.source)
@@ -82,7 +83,7 @@ def cmd_curves(args: argparse.Namespace) -> None:
     available = [t for t in tags if t in by_tag]
     if not available:
         all_tags = sorted(by_tag.keys())
-        print(f"WARNING: none of the requested tags found.  Available tags:")
+        print("WARNING: none of the requested tags found.  Available tags:")
         for t in all_tags:
             print(f"  {t}")
         sys.exit(1)
@@ -115,6 +116,7 @@ def cmd_curves(args: argparse.Namespace) -> None:
 
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
@@ -147,6 +149,7 @@ def cmd_curves(args: argparse.Namespace) -> None:
 # Sub-command: table
 # ---------------------------------------------------------------------------
 
+
 def cmd_table(args: argparse.Namespace) -> None:
     """Export a benchmark/eval JSON result as a Markdown table."""
     src = Path(args.source)
@@ -164,16 +167,16 @@ def cmd_table(args: argparse.Namespace) -> None:
 
     # ── Top-level scalar metrics ──────────────────────────────────────────────
     scalar_keys = [
-        ("num_episodes",         "Episodes"),
-        ("reward_mean",          "Reward mean"),
-        ("reward_std",           "Reward std"),
-        ("reward_p5",            "Reward p5"),
-        ("reward_p50",           "Reward p50 (median)"),
-        ("reward_p95",           "Reward p95"),
-        ("episode_length_mean",  "Episode length (mean)"),
-        ("success_rate",         "Success rate"),
-        ("fall_rate",            "Fall rate"),
-        ("timeout_rate",         "Timeout rate"),
+        ("num_episodes", "Episodes"),
+        ("reward_mean", "Reward mean"),
+        ("reward_std", "Reward std"),
+        ("reward_p5", "Reward p5"),
+        ("reward_p50", "Reward p50 (median)"),
+        ("reward_p95", "Reward p95"),
+        ("episode_length_mean", "Episode length (mean)"),
+        ("success_rate", "Success rate"),
+        ("fall_rate", "Fall rate"),
+        ("timeout_rate", "Timeout rate"),
     ]
 
     lines.append("| Metric | Value |")
@@ -197,21 +200,21 @@ def cmd_table(args: argparse.Namespace) -> None:
     if "per_command" in mode_metrics:
         lines.append("")
         lines.append("### Per-command height tracking\n")
-        lines.append("| Height command (m) | Height RMSE (m) | Success rate | Fall rate | Reward mean |")
-        lines.append("|--------------------|-----------------|--------------|-----------|-------------|")
+        lines.append(  # noqa: E501
+            "| Height command (m) | Height RMSE (m) | Success rate | Fall rate | Reward mean |"
+        )
+        lines.append(
+            "|--------------------|-----------------|--------------|-----------|-------------|"
+        )
         for row in mode_metrics["per_command"]:
             h = row.get("height_command", "—")
             rmse = row.get("height_rmse", float("nan"))
             sr = row.get("success_rate", float("nan"))
             fr = row.get("fall_rate", float("nan"))
             rm = row.get("reward_mean", float("nan"))
-            lines.append(
-                f"| {h:.3f} | {rmse:.4f} | {sr:.1%} | {fr:.1%} | {rm:.4f} |"
-            )
+            lines.append(f"| {h:.3f} | {rmse:.4f} | {sr:.1%} | {fr:.1%} | {rm:.4f} |")
         if "overall_height_rmse" in mode_metrics:
-            lines.append(
-                f"\n**Overall height RMSE:** {mode_metrics['overall_height_rmse']:.4f} m"
-            )
+            lines.append(f"\n**Overall height RMSE:** {mode_metrics['overall_height_rmse']:.4f} m")
 
     # push_recovery extras
     for key in ("push_magnitude_used", "fall_after_push_rate", "mean_steps_to_fall"):
@@ -252,6 +255,7 @@ def cmd_table(args: argparse.Namespace) -> None:
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -266,16 +270,20 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_curves.add_argument("source", help="Path to *_metrics.jsonl log file.")
     p_curves.add_argument(
-        "--tags", nargs="+", default=None,
+        "--tags",
+        nargs="+",
+        default=None,
         help="Metric tags to plot (default: reward/mean + curriculum metrics).",
     )
     p_curves.add_argument(
-        "--output", default=None,
+        "--output",
+        default=None,
         help="Output path (base name; .csv and .png are appended). "
-             "Default: same directory as source.",
+        "Default: same directory as source.",
     )
     p_curves.add_argument(
-        "--no-plot", action="store_true",
+        "--no-plot",
+        action="store_true",
         help="Skip PNG generation (write CSV only).",
     )
 
@@ -286,7 +294,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_table.add_argument("source", help="Path to eval_results_*.json file.")
     p_table.add_argument(
-        "--output", default=None,
+        "--output",
+        default=None,
         help="Output .md file path. Default: print to stdout.",
     )
 

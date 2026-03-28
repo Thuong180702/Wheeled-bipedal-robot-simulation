@@ -206,9 +206,7 @@ class StandUpEnv(WheeledBipedEnv):
     @functools.partial(jax.jit, static_argnums=(0,))
     def reset(self, rng: jax.Array) -> EnvState:
         """Reset: mixed start (70% đứng random height, 30% ngã) + random height_command."""
-        rng, type_key, stand_key, fall_key, noise_key, height_key = jax.random.split(
-            rng, 6
-        )
+        rng, type_key, stand_key, fall_key, noise_key, height_key = jax.random.split(rng, 6)
 
         n_standing = self._standing_qpos.shape[0]  # 7
         n_fallen = self._fallen_qpos.shape[0]  # 7
@@ -275,9 +273,7 @@ class StandUpEnv(WheeledBipedEnv):
             data = mjx.step(self.mjx_model, data)
             return data, None
 
-        mjx_data, _ = jax.lax.scan(
-            physics_step, mjx_data, None, length=self._n_substeps
-        )
+        mjx_data, _ = jax.lax.scan(physics_step, mjx_data, None, length=self._n_substeps)
 
         base_obs = self._extract_obs(mjx_data, action)
         height_command = state.info["height_command"]
@@ -336,9 +332,7 @@ class StandUpEnv(WheeledBipedEnv):
 
         components = {
             # Thân nằm ngang (phạt roll + pitch)
-            "body_level": reward_body_level(
-                torso_quat, sigma_roll=0.15, sigma_pitch=0.15
-            ),
+            "body_level": reward_body_level(torso_quat, sigma_roll=0.15, sigma_pitch=0.15),
             # Đạt chiều cao mục tiêu (σ=0.25: gradient trong ±0.5m)
             "height": reward_height(torso_height, height_command, sigma=0.25),
             # Đứng thẳng — tín hiệu mạnh khi recover từ ngã

@@ -22,9 +22,8 @@ import jax.numpy as jnp
 import optax
 
 from wheeled_biped.envs.base_env import EnvState, WheeledBipedEnv
-from wheeled_biped.training.networks import ActorCritic, create_actor_critic
+from wheeled_biped.training.networks import create_actor_critic
 from wheeled_biped.utils.logger import TrainingLogger
-
 
 # ============================================================
 # Data Structures
@@ -270,11 +269,7 @@ class PPOTrainer:
         # Entropy bonus
         entropy_loss = -jnp.mean(entropy)
 
-        total_loss = (
-            policy_loss
-            + self.value_coeff * value_loss
-            + self.entropy_coeff * entropy_loss
-        )
+        total_loss = policy_loss + self.value_coeff * value_loss + self.entropy_coeff * entropy_loss
 
         metrics = {
             "loss/total": total_loss,
@@ -282,9 +277,7 @@ class PPOTrainer:
             "loss/value": value_loss,
             "loss/entropy": -entropy_loss,
             "policy/clip_fraction": jnp.mean(jnp.abs(ratio - 1.0) > self.clip_epsilon),
-            "policy/approx_kl": jnp.mean(
-                0.5 * jnp.square(log_prob - batch.old_log_prob)
-            ),
+            "policy/approx_kl": jnp.mean(0.5 * jnp.square(log_prob - batch.old_log_prob)),
         }
 
         return total_loss, metrics
@@ -449,16 +442,13 @@ class PPOTrainer:
 
             next_state = self.env.v_step(env_state, action)
 
-
             # Collect per-env reward and done BEFORE auto-reset
             rewards_np = list(jax.device_get(jnp.asarray(next_state.reward)))
             dones_np = list(jax.device_get(jnp.asarray(next_state.done)))
 
             # Check fallen flag if available, otherwise use done-before-time-limit
             if "is_fallen" in next_state.info:
-                fallen_np = list(jax.device_get(
-                    jnp.asarray(next_state.info["is_fallen"])
-                ))
+                fallen_np = list(jax.device_get(jnp.asarray(next_state.info["is_fallen"])))
             else:
                 fallen_np = dones_np  # conservative fallback
 
@@ -480,9 +470,9 @@ class PPOTrainer:
 
         n = len(episode_returns)
         mean_ret = float(sum(episode_returns) / n)
-        std_ret = float((
-            sum((r - mean_ret) ** 2 for r in episode_returns) / n
-        ) ** 0.5) if n > 1 else 0.0
+        std_ret = (
+            float((sum((r - mean_ret) ** 2 for r in episode_returns) / n) ** 0.5) if n > 1 else 0.0
+        )
         fall_rate = float(sum(episode_falls) / n)
 
         return {
@@ -609,9 +599,7 @@ class PPOTrainer:
                 viewer = LiveTrainingViewer(self.env.mj_model, title="PPO Training")
                 # Không gọi start() — sẽ warning vì không chạy trên main thread
                 print("  ⚠️  live_view=True nhưng viewer cần chạy trên main thread.")
-                print(
-                    "     Hãy dùng:  python scripts/train.py single --stage balance --live-view"
-                )
+                print("     Hãy dùng:  python scripts/train.py single --stage balance --live-view")
                 viewer = None
             except Exception as e:
                 print(f"  ⚠️  Không mở được live viewer: {e}")
@@ -623,14 +611,10 @@ class PPOTrainer:
         backend = jax.default_backend()
         is_cpu = backend == "cpu"
         if is_cpu and self.num_envs > 256:
-            print(
-                f"  ⚠️  CPU + num_envs={self.num_envs}: JIT compile sẽ rất lâu (10-20 phút)!"
-            )
-            print(f"      Trên CPU nên dùng --num-envs 64~128 (JIT ~1-2 phút)")
-            print(
-                f"      Tăng num_envs trên CPU không nhanh hơn: mỗi update lâu hơn tỉ lệ thuận"
-            )
-            print(f"      GPU (jax[cuda12]) mới thật sự song song 4096 envs")
+            print(f"  ⚠️  CPU + num_envs={self.num_envs}: JIT compile sẽ rất lâu (10-20 phút)!")
+            print("      Trên CPU nên dùng --num-envs 64~128 (JIT ~1-2 phút)")
+            print("      Tăng num_envs trên CPU không nhanh hơn: mỗi update lâu hơn tỉ lệ thuận")
+            print("      GPU (jax[cuda12]) mới thật sự song song 4096 envs")
             print()
 
         # Reset environments
@@ -674,9 +658,7 @@ class PPOTrainer:
 
         # Set curriculum_min_height cho tất cả envs
         if curriculum_enabled and "curriculum_min_height" in env_state.info:
-            new_min_arr = jnp.full_like(
-                env_state.info["curriculum_min_height"], current_min_h
-            )
+            new_min_arr = jnp.full_like(env_state.info["curriculum_min_height"], current_min_h)
             env_state = env_state._replace(
                 info={**env_state.info, "curriculum_min_height": new_min_arr}
             )
@@ -691,7 +673,7 @@ class PPOTrainer:
         remaining_steps = max(steps_per_update, total_steps - resumed_step)
         num_updates = remaining_steps // steps_per_update
 
-        print(f"═══ PPO Training ═══")
+        print("═══ PPO Training ═══")
         print(f"  Backend: {backend.upper()}")
         print(f"  Envs: {self.num_envs}, Rollout: {self._rollout_length}")
         print(f"  Steps/update: {steps_per_update:,}")
@@ -703,10 +685,10 @@ class PPOTrainer:
         else:
             print(f"  Total updates: {num_updates:,}")
         print(f"  Target total steps: {total_steps:,}")
-        print(f"════════════════════")
+        print("════════════════════")
 
         # Warmup: JIT compile lần đầu (rất lâu — thông báo cho user)
-        print(f"  ⏳ Đang JIT compile (lần đầu có thể mất 1-3 phút)...")
+        print("  ⏳ Đang JIT compile (lần đầu có thể mất 1-3 phút)...")
         if viewer is not None:
             viewer.set_status("JIT compiling... (1-3 phút lần đầu)")
 
@@ -725,10 +707,7 @@ class PPOTrainer:
 
         # Warmup update — un-normalize để lấy raw obs cho obs_rms
         # (transitions.obs đã normalized trong _rollout, cần raw data cho Welford)
-        raw_obs = (
-            warmup_transitions.obs * jnp.sqrt(self.obs_rms.var + 1e-8)
-            + self.obs_rms.mean
-        )
+        raw_obs = warmup_transitions.obs * jnp.sqrt(self.obs_rms.var + 1e-8) + self.obs_rms.mean
         all_obs = raw_obs.reshape(-1, self.env.obs_size)
         self.obs_rms = update_running_mean_std(self.obs_rms, all_obs)
         last_obs = normalize_obs(env_state.obs, self.obs_rms)
@@ -760,9 +739,11 @@ class PPOTrainer:
             )
             if viewer is not None:
                 viewer.request_stop()
-            return {"best_reward": self._resumed_best_reward,
-                    "eval_reward_mean": self._resumed_best_reward,
-                    "total_steps": gs}
+            return {
+                "best_reward": self._resumed_best_reward,
+                "eval_reward_mean": self._resumed_best_reward,
+                "total_steps": gs,
+            }
 
         global_step = resumed_step + steps_per_update  # Tính cả bước đã resume
         start_time = time.time()
@@ -770,8 +751,8 @@ class PPOTrainer:
         # train_reward_mean: rolling mean of per-step avg_rewards during training.
         # This is a TRAINING metric — used for logging only, NOT for curriculum gating.
         # Curriculum gating uses eval_reward_mean from eval_pass() at the end of train().
-        _train_rewards: list[float] = []   # rolling window, last 50 updates
-        _TRAIN_WINDOW = 50
+        _train_rewards: list[float] = []  # rolling window, last 50 updates
+        _TRAIN_WINDOW = 50  # noqa: N806
 
         # Cập nhật viewer ngay sau warmup
         if viewer is not None:
@@ -784,20 +765,14 @@ class PPOTrainer:
             except Exception:
                 pass
 
-        last_update_time = time.time()
-
         try:
             for update in range(1, num_updates):  # Bắt đầu từ 1 (đã warmup update 0)
                 # Kiểm tra stop flag (Ctrl+C hoặc viewer đóng)
                 if self._stop_requested:
-                    print(
-                        f"\n  🛑 Training dừng theo yêu cầu tại update {update}/{num_updates}"
-                    )
+                    print(f"\n  🛑 Training dừng theo yêu cầu tại update {update}/{num_updates}")
                     break
                 if viewer is not None and not viewer.is_running:
-                    print(
-                        f"\n  🛑 Viewer đã đóng, dừng training tại update {update}/{num_updates}"
-                    )
+                    print(f"\n  🛑 Viewer đã đóng, dừng training tại update {update}/{num_updates}")
                     break
 
                 update_start = time.time()
@@ -815,10 +790,7 @@ class PPOTrainer:
 
                 # Cập nhật observation normalization bằng RAW obs
                 # (transitions.obs đã normalized, un-normalize trước khi update)
-                raw_obs = (
-                    transitions.obs * jnp.sqrt(self.obs_rms.var + 1e-8)
-                    + self.obs_rms.mean
-                )
+                raw_obs = transitions.obs * jnp.sqrt(self.obs_rms.var + 1e-8) + self.obs_rms.mean
                 all_obs = raw_obs.reshape(-1, self.env.obs_size)
                 self.obs_rms = update_running_mean_std(self.obs_rms, all_obs)
 
@@ -918,16 +890,18 @@ class PPOTrainer:
                                 num_episodes=_curriculum_eval_episodes,
                                 rng=_ceval_key,
                             )
-                            _eval_per_step = (
-                                _ceval["eval_reward_mean"] / max(1, self.episode_length)
+                            _eval_per_step = _ceval["eval_reward_mean"] / max(
+                                1, self.episode_length
                             )
                             if self.logger:
                                 self.logger.set_step(global_step)
-                                self.logger.log_dict({
-                                    "curriculum/eval_per_step": _eval_per_step,
-                                    "curriculum/eval_success_rate": _ceval["eval_success_rate"],
-                                    "curriculum/eval_fall_rate": _ceval["eval_fall_rate"],
-                                })
+                                self.logger.log_dict(
+                                    {
+                                        "curriculum/eval_per_step": _eval_per_step,
+                                        "curriculum/eval_success_rate": _ceval["eval_success_rate"],
+                                        "curriculum/eval_fall_rate": _ceval["eval_fall_rate"],
+                                    }
+                                )
                             print(
                                 f"  [Curriculum eval] per_step={_eval_per_step:.3f} "
                                 f"threshold={reward_threshold:.3f} "
@@ -953,9 +927,11 @@ class PPOTrainer:
                                 )
                                 max_h = getattr(self.env, "MAX_HEIGHT_CMD", 0.72)
                                 print(
-                                    f"  \U0001f4c8 Curriculum Level {curriculum_level}/{num_levels}: "
-                                    f"height range [{current_min_h:.2f}, {max_h:.2f}] "
-                                    f"(eval_per_step={_eval_per_step:.3f} >= {reward_threshold:.3f})"
+                                    f"  \U0001f4c8 Curriculum Level"
+                                    f" {curriculum_level}/{num_levels}:"
+                                    f" height range [{current_min_h:.2f}, {max_h:.2f}]"
+                                    f" (eval_per_step={_eval_per_step:.3f}"
+                                    f" >= {reward_threshold:.3f})"
                                 )
                                 if current_min_h <= final_min_h:
                                     print(
@@ -991,9 +967,10 @@ class PPOTrainer:
                                 reward_window.clear()
                                 max_h = getattr(self.env, "MAX_HEIGHT_CMD", 0.72)
                                 print(
-                                    f"  \U0001f4c8 Curriculum Level {curriculum_level}/{num_levels}: "
-                                    f"height range [{current_min_h:.2f}, {max_h:.2f}] "
-                                    f"(avg={window_avg:.2f} >= {reward_threshold:.2f})"
+                                    f"  \U0001f4c8 Curriculum Level"
+                                    f" {curriculum_level}/{num_levels}:"
+                                    f" height range [{current_min_h:.2f}, {max_h:.2f}]"
+                                    f" (avg={window_avg:.2f} >= {reward_threshold:.2f})"
                                 )
                                 if current_min_h <= final_min_h:
                                     print(
@@ -1028,9 +1005,9 @@ class PPOTrainer:
                         self.logger.flush()
 
         except KeyboardInterrupt:
-            print(f"\n\n⚠️  Training bị dừng bởi người dùng (Ctrl+C)")
+            print("\n\n⚠️  Training bị dừng bởi người dùng (Ctrl+C)")
             print(f"   Đã train {global_step:,} steps, best_reward={best_reward:.4f}")
-            print(f"   Đang lưu checkpoint cuối...")
+            print("   Đang lưu checkpoint cuối...")
 
         # Save final
         self._save_checkpoint(
@@ -1042,24 +1019,24 @@ class PPOTrainer:
         # ====== Curriculum Report ======
         if curriculum_enabled:
             max_h = getattr(self.env, "MAX_HEIGHT_CMD", 0.72)
-            print(f"\n  \U0001f4ca Curriculum Report:")
+            print("\n  \U0001f4ca Curriculum Report:")
             print(f"     Height range đã train: [{current_min_h:.2f}, {max_h:.2f}] m")
             print(f"     Level: {curriculum_level}/{num_levels}")
             if current_min_h > final_min_h:
                 print(
-                    f"     \u26a0\ufe0f  Chưa hoàn thành! Range đầy đủ: [{final_min_h:.2f}, {max_h:.2f}] m"
+                    f"     \u26a0\ufe0f  Chưa hoàn thành! Range đầy đủ:"
+                    f" [{final_min_h:.2f}, {max_h:.2f}] m"
                 )
-                print(f"     \u2192 Tiếp tục train với --resume để mở rộng range")
+                print("     \u2192 Tiếp tục train với --resume để mở rộng range")
             else:
-                print(f"     \u2705 Đã train đầy đủ full range!")
+                print("     \u2705 Đã train đầy đủ full range!")
 
         if viewer is not None:
             viewer.request_stop()
 
         # Compute train_reward_mean (rolling window of step-level rewards, NOT eval)
         train_reward_mean = (
-            float(sum(_train_rewards) / len(_train_rewards))
-            if _train_rewards else best_reward
+            float(sum(_train_rewards) / len(_train_rewards)) if _train_rewards else best_reward
         )
 
         # ── Real evaluation pass ──────────────────────────────────────────────
@@ -1082,20 +1059,22 @@ class PPOTrainer:
         )
         if self.logger:
             self.logger.set_step(global_step)
-            self.logger.log_dict({
-                "eval/reward_mean":   eval_reward_mean,
-                "eval/reward_std":    eval_metrics["eval_reward_std"],
-                "eval/fall_rate":     eval_metrics["eval_fall_rate"],
-                "eval/success_rate":  eval_metrics["eval_success_rate"],
-                "eval/num_episodes":  float(eval_metrics["eval_num_episodes"]),
-                "train/reward_mean_recent": train_reward_mean,
-            })
+            self.logger.log_dict(
+                {
+                    "eval/reward_mean": eval_reward_mean,
+                    "eval/reward_std": eval_metrics["eval_reward_std"],
+                    "eval/fall_rate": eval_metrics["eval_fall_rate"],
+                    "eval/success_rate": eval_metrics["eval_success_rate"],
+                    "eval/num_episodes": float(eval_metrics["eval_num_episodes"]),
+                    "train/reward_mean_recent": train_reward_mean,
+                }
+            )
             self.logger.close()  # close after eval metrics are safely logged
 
         return {
             "best_reward": best_reward,
             "train_reward_mean": train_reward_mean,  # rolling train metric (logging only)
-            "eval_reward_mean": eval_reward_mean,    # real eval pass — used for curriculum
+            "eval_reward_mean": eval_reward_mean,  # real eval pass — used for curriculum
             "eval_fall_rate": eval_metrics["eval_fall_rate"],
             "eval_success_rate": eval_metrics["eval_success_rate"],
             "total_steps": global_step,
@@ -1150,9 +1129,8 @@ class PPOTrainer:
         self._resumed_best_reward = checkpoint.get("best_reward", float("-inf"))
         self._resumed_curriculum_min = checkpoint.get("curriculum_min_height", None)
         print(
-            f"  \U0001f4c2 Checkpoint: step={self._resumed_global_step:,}, best_reward={self._resumed_best_reward:.4f}"
+            f"  \U0001f4c2 Checkpoint: step={self._resumed_global_step:,},"
+            f" best_reward={self._resumed_best_reward:.4f}"
         )
         if self._resumed_curriculum_min is not None:
-            print(
-                f"  \U0001f4c2 Curriculum min_height: {self._resumed_curriculum_min:.2f}"
-            )
+            print(f"  \U0001f4c2 Curriculum min_height: {self._resumed_curriculum_min:.2f}")

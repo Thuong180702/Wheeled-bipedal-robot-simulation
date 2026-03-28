@@ -105,9 +105,7 @@ class WheeledBipedEnv:
         self._num_qvel = self.mj_model.nv  # 6 (freejoint) + 10 (joints)
 
         # Lấy ID các body/joint quan trọng
-        self._torso_body_id = mujoco.mj_name2id(
-            self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso"
-        )
+        self._torso_body_id = mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso")
 
         # Tính kích thước observation
         self.obs_size = self._compute_obs_size()
@@ -292,9 +290,7 @@ class WheeledBipedEnv:
             data = mjx.step(self.mjx_model, data)
             return data, None
 
-        mjx_data, _ = jax.lax.scan(
-            physics_step, mjx_data, None, length=self._n_substeps
-        )
+        mjx_data, _ = jax.lax.scan(physics_step, mjx_data, None, length=self._n_substeps)
 
         # Trích xuất observation
         obs = self._extract_obs(mjx_data, action)

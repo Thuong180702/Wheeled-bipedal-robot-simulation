@@ -7,7 +7,6 @@ Tất cả hàm đều tương thích với jax.jit và jax.vmap.
 import jax
 import jax.numpy as jnp
 
-
 # ============================================================
 # Quaternion Utilities (quat = [w, x, y, z])
 # ============================================================

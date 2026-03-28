@@ -15,7 +15,6 @@ from wheeled_biped.utils.math_utils import (
     wrap_angle,
 )
 
-
 # ============================================================
 # Reward: Đứng thẳng (upright)
 # ============================================================
@@ -124,9 +123,7 @@ def reward_tracking_velocity(
     Returns:
         Reward trong khoảng [0, 1].
     """
-    lin_error = jnp.sqrt(
-        jnp.square(base_vel_x - cmd_vel_x) + jnp.square(base_vel_y - cmd_vel_y)
-    )
+    lin_error = jnp.sqrt(jnp.square(base_vel_x - cmd_vel_x) + jnp.square(base_vel_y - cmd_vel_y))
     ang_error = jnp.abs(base_ang_vel_z - cmd_ang_vel_z)
 
     r_lin = exp_kernel(lin_error, sigma_lin)

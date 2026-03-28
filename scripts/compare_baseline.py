@@ -24,7 +24,7 @@ from rich.table import Table
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from wheeled_biped.eval.baseline import compare_files
+from wheeled_biped.eval.baseline import compare_files  # noqa: E402
 
 app = typer.Typer(help="Compare benchmark results against a saved baseline.")
 console = Console()

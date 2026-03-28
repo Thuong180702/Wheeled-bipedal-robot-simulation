@@ -10,7 +10,6 @@ Workflow:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -71,9 +70,7 @@ class CurriculumManager:
         """Đã hoàn thành tất cả các stage?"""
         return self.current_stage_idx >= self.num_stages
 
-    def _create_trainer_for_stage(
-        self, stage_idx: int
-    ) -> tuple[PPOTrainer, TrainingLogger]:
+    def _create_trainer_for_stage(self, stage_idx: int) -> tuple[PPOTrainer, TrainingLogger]:
         """Tạo trainer cho một stage cụ thể.
 
         Args:
@@ -107,9 +104,7 @@ class CurriculumManager:
         # Warm-start từ stage trước (nếu có)
         pretrained_from = stage.get("pretrained_from")
         if pretrained_from and stage_idx > 0:
-            prev_checkpoint = (
-                self.output_dir / "checkpoints" / f"stage_{stage_idx - 1}" / "final"
-            )
+            prev_checkpoint = self.output_dir / "checkpoints" / f"stage_{stage_idx - 1}" / "final"
             if prev_checkpoint.exists():
                 print(f"  ⟶ Warm-start từ: {prev_checkpoint}")
                 trainer.load_checkpoint(str(prev_checkpoint))
@@ -157,12 +152,9 @@ class CurriculumManager:
         if self.current_stage_idx < self.num_stages - 1:
             self.current_stage_idx += 1
             self._performance_history.clear()
-            print(f"\n{'='*60}")
-            print(
-                f"  PROMOTED → Stage {self.current_stage_idx}: "
-                f"{self.current_stage['name']}"
-            )
-            print(f"{'='*60}\n")
+            print(f"\n{'=' * 60}")
+            print(f"  PROMOTED → Stage {self.current_stage_idx}: {self.current_stage['name']}")
+            print(f"{'=' * 60}\n")
             return True
         print("\n✓ Đã hoàn thành tất cả stages!")
         return False
@@ -172,12 +164,9 @@ class CurriculumManager:
         if self.current_stage_idx > 0:
             self.current_stage_idx -= 1
             self._performance_history.clear()
-            print(f"\n{'='*60}")
-            print(
-                f"  DEMOTED → Stage {self.current_stage_idx}: "
-                f"{self.current_stage['name']}"
-            )
-            print(f"{'='*60}\n")
+            print(f"\n{'=' * 60}")
+            print(f"  DEMOTED → Stage {self.current_stage_idx}: {self.current_stage['name']}")
+            print(f"{'=' * 60}\n")
             return True
         return False
 
@@ -208,14 +197,14 @@ class CurriculumManager:
             attempt = stage_attempts.get(self.current_stage_idx, 0) + 1
             stage_attempts[self.current_stage_idx] = attempt
 
-            print(f"\n{'═'*60}")
+            print(f"\n{'═' * 60}")
             print(
                 f"  Stage {self.current_stage_idx}/{self.num_stages - 1}: "
                 f"{stage_name}  (attempt {attempt}/{self.max_retries_per_stage})"
             )
             print(f"  {stage.get('description', '')}")
             print(f"  Max steps: {stage_steps:,}")
-            print(f"{'═'*60}\n")
+            print(f"{'═' * 60}\n")
 
             # Tạo trainer
             trainer, logger = self._create_trainer_for_stage(self.current_stage_idx)
@@ -291,9 +280,7 @@ class CurriculumManager:
         trainer, logger = self._create_trainer_for_stage(self.current_stage_idx)
 
         steps = total_steps or self.max_stage_steps
-        checkpoint_dir = str(
-            self.output_dir / "checkpoints" / f"stage_{self.current_stage_idx}"
-        )
+        checkpoint_dir = str(self.output_dir / "checkpoints" / f"stage_{self.current_stage_idx}")
 
         return trainer.train(
             total_steps=steps,

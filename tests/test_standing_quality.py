@@ -25,23 +25,28 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from wheeled_biped.eval.standing_quality import THRESHOLDS, compute_standing_signals
-
+from wheeled_biped.eval.standing_quality import THRESHOLDS, compute_standing_signals  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helper: build a synthetic "good standing" telemetry dict
 # ---------------------------------------------------------------------------
 
 _CTRL_KEYS = [
-    "l_hip_roll_ctrl", "l_hip_yaw_ctrl", "l_hip_pitch_ctrl",
-    "l_knee_ctrl",     "l_wheel_ctrl",
-    "r_hip_roll_ctrl", "r_hip_yaw_ctrl", "r_hip_pitch_ctrl",
-    "r_knee_ctrl",     "r_wheel_ctrl",
+    "l_hip_roll_ctrl",
+    "l_hip_yaw_ctrl",
+    "l_hip_pitch_ctrl",
+    "l_knee_ctrl",
+    "l_wheel_ctrl",
+    "r_hip_roll_ctrl",
+    "r_hip_yaw_ctrl",
+    "r_hip_pitch_ctrl",
+    "r_knee_ctrl",
+    "r_wheel_ctrl",
 ]
 
 
 def _make_tele(
-    T: int = 400,
+    T: int = 400,  # noqa: N803
     torso_z: float = 0.69,
     l_wheel_vel: float = 0.0,
     r_wheel_vel: float = 0.0,
@@ -63,24 +68,24 @@ def _make_tele(
     """
     t = np.arange(T, dtype=float)
     tele: dict[str, np.ndarray] = {
-        "time_s":           t * 0.02,
-        "torso_x":          np.linspace(0.0, xy_drift_total, T),
-        "torso_y":          np.zeros(T),
-        "torso_z":          np.full(T, torso_z),
-        "roll_rad":         np.full(T, roll_rad),
-        "pitch_rad":        np.full(T, pitch_rad),
-        "yaw_rad":          np.zeros(T),
-        "body_wx":          np.full(T, body_wx),
-        "body_wy":          np.full(T, body_wy),
-        "body_vx":          np.zeros(T),
-        "body_vy":          np.zeros(T),
-        "body_vz":          np.zeros(T),
-        "l_wheel_vel":      np.full(T, l_wheel_vel),
-        "r_wheel_vel":      np.full(T, r_wheel_vel),
-        "l_hip_pitch_pos":  np.full(T, l_hip_pitch_pos),
-        "r_hip_pitch_pos":  np.full(T, r_hip_pitch_pos),
-        "l_knee_pos":       np.full(T, l_knee_pos),
-        "r_knee_pos":       np.full(T, r_knee_pos),
+        "time_s": t * 0.02,
+        "torso_x": np.linspace(0.0, xy_drift_total, T),
+        "torso_y": np.zeros(T),
+        "torso_z": np.full(T, torso_z),
+        "roll_rad": np.full(T, roll_rad),
+        "pitch_rad": np.full(T, pitch_rad),
+        "yaw_rad": np.zeros(T),
+        "body_wx": np.full(T, body_wx),
+        "body_wy": np.full(T, body_wy),
+        "body_vx": np.zeros(T),
+        "body_vy": np.zeros(T),
+        "body_vz": np.zeros(T),
+        "l_wheel_vel": np.full(T, l_wheel_vel),
+        "r_wheel_vel": np.full(T, r_wheel_vel),
+        "l_hip_pitch_pos": np.full(T, l_hip_pitch_pos),
+        "r_hip_pitch_pos": np.full(T, r_hip_pitch_pos),
+        "l_knee_pos": np.full(T, l_knee_pos),
+        "r_knee_pos": np.full(T, r_knee_pos),
     }
     # ctrl channels: constant baseline + optional alternating oscillation
     baseline = [0.0, 0.0, 1.0, 1.5, 0.0, 0.0, 0.0, 1.0, 1.5, 0.0]
@@ -94,8 +99,8 @@ def _make_tele(
 # Tests
 # ---------------------------------------------------------------------------
 
-class TestComputeStandingSignals:
 
+class TestComputeStandingSignals:
     # ── Expected output structure ────────────────────────────────────────────
 
     def test_output_has_all_expected_keys(self):
@@ -189,7 +194,7 @@ class TestComputeStandingSignals:
 
     def test_height_oscillation_flagged(self):
         """Height std above threshold triggers a flag."""
-        T = 400
+        T = 400  # noqa: N806
         tele = _make_tele()
         tele["torso_z"] = 0.69 + 0.10 * np.sin(np.linspace(0, 4 * np.pi, T))
         result = compute_standing_signals(tele)
@@ -203,10 +208,7 @@ class TestComputeStandingSignals:
         """Constant height produces no height flag."""
         tele = _make_tele(torso_z=0.69)
         result = compute_standing_signals(tele)
-        assert not any(
-            "height" in f.lower() and "oscillat" in f.lower()
-            for f in result["flags"]
-        )
+        assert not any("height" in f.lower() and "oscillat" in f.lower() for f in result["flags"])
 
     # ── XY drift ─────────────────────────────────────────────────────────────
 
@@ -255,10 +257,7 @@ class TestComputeStandingSignals:
         tele = _make_tele(ctrl_amplitude=2.0)
         result = compute_standing_signals(tele)
         assert result["ctrl_jitter_mean_nm"] > THRESHOLDS["ctrl_jitter_mean_nm"]
-        assert any(
-            "jitter" in f.lower() or "chatter" in f.lower()
-            for f in result["flags"]
-        )
+        assert any("jitter" in f.lower() or "chatter" in f.lower() for f in result["flags"])
 
     def test_smooth_ctrl_not_flagged(self):
         """Constant ctrl (zero amplitude) produces no jitter flag."""
@@ -289,10 +288,7 @@ class TestComputeStandingSignals:
         tele = _make_tele(body_wx=1.5, body_wy=1.5)  # 1.5 rad/s constant wobble
         result = compute_standing_signals(tele)
         assert result["ang_vel_rms_rads"] > THRESHOLDS["ang_vel_rms_rads"]
-        assert any(
-            "wobble" in f.lower() or "oscillat" in f.lower()
-            for f in result["flags"]
-        )
+        assert any("wobble" in f.lower() or "oscillat" in f.lower() for f in result["flags"])
 
     def test_low_ang_vel_not_flagged(self):
         """Negligible angular velocity is not flagged."""
@@ -305,9 +301,9 @@ class TestComputeStandingSignals:
     def test_multiple_flags_counted(self):
         """num_suspicious counts all triggered flags correctly."""
         tele = _make_tele(
-            l_wheel_vel=10.0,                   # triggers wheel_spin
-            xy_drift_total=0.50,                # triggers xy_drift
-            roll_rad=np.radians(10.0),          # triggers roll
+            l_wheel_vel=10.0,  # triggers wheel_spin
+            xy_drift_total=0.50,  # triggers xy_drift
+            roll_rad=np.radians(10.0),  # triggers roll
         )
         result = compute_standing_signals(tele)
         assert result["num_suspicious"] == len(result["flags"])

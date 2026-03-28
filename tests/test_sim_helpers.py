@@ -20,12 +20,12 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from wheeled_biped.utils.config import get_model_path
-
+from wheeled_biped.utils.config import get_model_path  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def mj_model():
@@ -36,6 +36,7 @@ def mj_model():
 def fake_mjx_data(mj_model):
     """Minimal MJX data in standing pose."""
     from mujoco import mjx
+
     mj_data = mujoco.MjData(mj_model)
     if mj_model.nkey > 0:
         mujoco.mj_resetDataKeyframe(mj_model, mj_data, 0)
@@ -46,6 +47,7 @@ def fake_mjx_data(mj_model):
 # ---------------------------------------------------------------------------
 # apply_push_disturbance
 # ---------------------------------------------------------------------------
+
 
 class TestApplyPushDisturbance:
     """Tests for wheeled_biped.sim.push_disturbance.apply_push_disturbance."""
@@ -167,16 +169,23 @@ class TestPidControl:
 
     def _call(self, fake_mjx_data, target=None, integral=None):
         from wheeled_biped.sim.low_level_control import pid_control
+
         t = target if target is not None else jnp.zeros(_NUM_JOINTS)
         i = integral if integral is not None else jnp.zeros(_NUM_JOINTS)
         return pid_control(
-            fake_mjx_data, t, i,
-            kp=_KP, ki=_KI, kd=_KD,
-            joint_mins=_JOINT_MINS, joint_maxs=_JOINT_MAXS,
+            fake_mjx_data,
+            t,
+            i,
+            kp=_KP,
+            ki=_KI,
+            kd=_KD,
+            joint_mins=_JOINT_MINS,
+            joint_maxs=_JOINT_MAXS,
             wheel_mask=_WHEEL_MASK,
             wheel_vel_limit=20.0,
             i_limit=0.3,
-            ctrl_min=_CTRL_MIN, ctrl_max=_CTRL_MAX,
+            ctrl_min=_CTRL_MIN,
+            ctrl_max=_CTRL_MAX,
             control_dt=0.02,
         )
 
@@ -225,6 +234,7 @@ class TestPidControl:
 # pid_control — wheel-specific semantic tests
 # ---------------------------------------------------------------------------
 
+
 class TestWheelControl:
     """Targeted tests for wheel joint (PI-only) control semantics.
 
@@ -238,14 +248,17 @@ class TestWheelControl:
     """
 
     _WHEEL_IDX = [4, 9]
-    _LEG_IDX   = [0, 1, 2, 3, 5, 6, 7, 8]
+    _LEG_IDX = [0, 1, 2, 3, 5, 6, 7, 8]
 
     def _call_with_zero_ki(self, fake_mjx_data, target, kd_value: float = 10.0):
         """Call pid_control with ki=0 and configurable kd to isolate P+D terms."""
         from wheeled_biped.sim.low_level_control import pid_control
+
         return pid_control(
-            fake_mjx_data, target, jnp.zeros(_NUM_JOINTS),
-            kp=jnp.zeros(_NUM_JOINTS),    # zero kp: isolate kd only
+            fake_mjx_data,
+            target,
+            jnp.zeros(_NUM_JOINTS),
+            kp=jnp.zeros(_NUM_JOINTS),  # zero kp: isolate kd only
             ki=jnp.zeros(_NUM_JOINTS),
             kd=jnp.full(_NUM_JOINTS, kd_value),
             joint_mins=_JOINT_MINS,
@@ -254,15 +267,18 @@ class TestWheelControl:
             wheel_vel_limit=20.0,
             i_limit=0.3,
             ctrl_min=jnp.full(_NUM_JOINTS, -1e6),  # wide range to avoid clip
-            ctrl_max=jnp.full(_NUM_JOINTS,  1e6),
+            ctrl_max=jnp.full(_NUM_JOINTS, 1e6),
             control_dt=0.02,
         )
 
     def _call_kp_only(self, fake_mjx_data, target):
         """Call pid_control with only kp active, to test proportional wheel response."""
         from wheeled_biped.sim.low_level_control import pid_control
+
         return pid_control(
-            fake_mjx_data, target, jnp.zeros(_NUM_JOINTS),
+            fake_mjx_data,
+            target,
+            jnp.zeros(_NUM_JOINTS),
             kp=jnp.ones(_NUM_JOINTS) * 1.0,
             ki=jnp.zeros(_NUM_JOINTS),
             kd=jnp.zeros(_NUM_JOINTS),
@@ -272,7 +288,7 @@ class TestWheelControl:
             wheel_vel_limit=20.0,
             i_limit=0.3,
             ctrl_min=jnp.full(_NUM_JOINTS, -1e6),
-            ctrl_max=jnp.full(_NUM_JOINTS,  1e6),
+            ctrl_max=jnp.full(_NUM_JOINTS, 1e6),
             control_dt=0.02,
         )
 
@@ -311,9 +327,7 @@ class TestWheelControl:
         # but the mask must NOT zero them — we check by confirming the code path exists
         # via a NaN check (structural correctness).
         for idx in self._LEG_IDX:
-            assert np.isfinite(ctrl_np[idx]), (
-                f"Leg joint {idx} ctrl must be finite when kd>0"
-            )
+            assert np.isfinite(ctrl_np[idx]), f"Leg joint {idx} ctrl must be finite when kd>0"
 
     def test_wheel_ctrl_proportional_to_velocity_error(self, fake_mjx_data):
         """Wheel ctrl is proportional to (desired_vel - current_vel).
@@ -323,7 +337,7 @@ class TestWheelControl:
             ctrl  = kp * error = wheel_vel_limit - joint_vel
         Ctrl should be positive (commanded forward) when wheel_vel_limit > joint_vel.
         """
-        target = jnp.ones(_NUM_JOINTS)   # all targets at +1
+        target = jnp.ones(_NUM_JOINTS)  # all targets at +1
         ctrl, _ = self._call_kp_only(fake_mjx_data, target)
         ctrl_np = np.array(ctrl)
 
@@ -352,18 +366,22 @@ class TestWheelControl:
         """
         from wheeled_biped.sim.low_level_control import pid_control
 
-        target = jnp.ones(_NUM_JOINTS)   # desired_vel = +20 for wheels
+        target = jnp.ones(_NUM_JOINTS)  # desired_vel = +20 for wheels
         zero_int = jnp.zeros(_NUM_JOINTS)
         _, new_integral = pid_control(
-            fake_mjx_data, target, zero_int,
+            fake_mjx_data,
+            target,
+            zero_int,
             kp=jnp.zeros(_NUM_JOINTS),
             ki=jnp.ones(_NUM_JOINTS),
             kd=jnp.zeros(_NUM_JOINTS),
-            joint_mins=_JOINT_MINS, joint_maxs=_JOINT_MAXS,
+            joint_mins=_JOINT_MINS,
+            joint_maxs=_JOINT_MAXS,
             wheel_mask=_WHEEL_MASK,
             wheel_vel_limit=20.0,
             i_limit=0.3,
-            ctrl_min=_CTRL_MIN, ctrl_max=_CTRL_MAX,
+            ctrl_min=_CTRL_MIN,
+            ctrl_max=_CTRL_MAX,
             control_dt=0.02,
         )
         new_int_np = np.array(new_integral)
@@ -371,4 +389,3 @@ class TestWheelControl:
             assert new_int_np[idx] > 0, (
                 f"Wheel joint {idx} integral should grow from zero when vel_err > 0"
             )
-

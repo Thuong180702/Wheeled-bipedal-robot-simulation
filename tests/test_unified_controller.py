@@ -18,10 +18,8 @@ from __future__ import annotations
 
 import pickle
 import sys
-import types
 from pathlib import Path
-from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import jax
 import jax.numpy as jnp
@@ -32,20 +30,18 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from wheeled_biped.inference.unified_controller import (
+from wheeled_biped.inference.unified_controller import (  # noqa: E402
     ControlCommand,
     Skill,
-    SkillPolicy,
     UnifiedController,
     _infer_adapter,
-    _BASE_OBS_SIZE,
 )
-from wheeled_biped.utils.config import get_model_path
-
+from wheeled_biped.utils.config import get_model_path  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def mj_model():
@@ -97,6 +93,7 @@ def _write_fake_checkpoint(path: Path, obs_size: int = 39):
 # Tests: missing checkpoints
 # ---------------------------------------------------------------------------
 
+
 class TestMissingCheckpoints:
     def test_all_missing_raises_runtime_error(self, mj_model, tmp_path):
         """If no checkpoint files exist, UnifiedController raises RuntimeError."""
@@ -133,6 +130,7 @@ class TestMissingCheckpoints:
 # ---------------------------------------------------------------------------
 # Tests: obs adapter inference (Fix 2)
 # ---------------------------------------------------------------------------
+
 
 class TestObsAdapterInference:
     def test_exact_adapter_for_39(self):
@@ -180,6 +178,7 @@ class TestObsAdapterInference:
 # ---------------------------------------------------------------------------
 # Tests: _build_obs
 # ---------------------------------------------------------------------------
+
 
 class TestBuildObs:
     @pytest.fixture(scope="class")
@@ -242,7 +241,7 @@ class TestBuildObs:
         orig_adapter = ctrl.skills[skill].obs_adapter
         orig_size = ctrl.skills[skill].obs_size
         ctrl.skills[skill].obs_adapter = "exact"
-        ctrl.skills[skill].obs_size = 99   # wrong
+        ctrl.skills[skill].obs_size = 99  # wrong
         try:
             with pytest.raises(ValueError, match="exact"):
                 ctrl._build_obs(mj_data, skill, ControlCommand())
@@ -268,6 +267,7 @@ class TestBuildObs:
 # ---------------------------------------------------------------------------
 # Tests: skill detection
 # ---------------------------------------------------------------------------
+
 
 class TestSkillDetection:
     @pytest.fixture(scope="class")
@@ -325,15 +325,14 @@ class TestSkillDetection:
 # Tests: Fix 3 — dwell-time hysteresis
 # ---------------------------------------------------------------------------
 
+
 class TestDwellHysteresis:
     @pytest.fixture(scope="class")
     def ctrl_two_skills(self, mj_model, tmp_path_factory):
         tmp = tmp_path_factory.mktemp("dwell")
         _write_fake_checkpoint(tmp / "balance" / "final", obs_size=39)
         _write_fake_checkpoint(tmp / "wheeled_locomotion" / "final", obs_size=41)
-        return UnifiedController(
-            checkpoint_dir=str(tmp), mj_model=mj_model, dwell_threshold=3
-        )
+        return UnifiedController(checkpoint_dir=str(tmp), mj_model=mj_model, dwell_threshold=3)
 
     def test_single_spike_does_not_change_skill(self, ctrl_two_skills, mj_model):
         """A single raw detection of LOCOMOTION (when active=BALANCE) does not
@@ -397,6 +396,7 @@ class TestDwellHysteresis:
 # ---------------------------------------------------------------------------
 # Tests: Fix 1 — blend counter no longer resets on same target
 # ---------------------------------------------------------------------------
+
 
 class TestSkillTransition:
     @pytest.fixture(scope="class")
@@ -492,13 +492,14 @@ class TestSkillTransition:
         """force_skill() with a skill not in skills dict is a silent no-op."""
         ctrl = ctrl_two_skills
         original = ctrl._active_skill
-        ctrl.force_skill(Skill.STAIR)   # STAIR not loaded
+        ctrl.force_skill(Skill.STAIR)  # STAIR not loaded
         assert ctrl._active_skill == original
 
 
 # ---------------------------------------------------------------------------
 # Tests: Fix 4 — per-skill _prev_actions buffers
 # ---------------------------------------------------------------------------
+
 
 class TestPerSkillPrevActions:
     @pytest.fixture(scope="class")
@@ -536,8 +537,9 @@ class TestPerSkillPrevActions:
 
         loco_after = np.array(ctrl._prev_actions[Skill.LOCOMOTION])
         np.testing.assert_array_equal(
-            loco_before, loco_after,
-            err_msg="LOCOMOTION _prev_actions was mutated by BALANCE computation (Fix 4 regression)",
+            loco_before,
+            loco_after,
+            err_msg="LOCOMOTION _prev_actions was mutated by BALANCE computation (Fix 4 regression)",  # noqa: E501
         )
 
     def test_each_skill_updates_own_buffer(self, ctrl_two_skills, mj_model):
@@ -554,7 +556,6 @@ class TestPerSkillPrevActions:
         ctrl._compute_skill_ctrl(data, Skill.BALANCE, ControlCommand())
 
         # BALANCE buffer should have been updated (non-zero after policy run)
-        balance_after = np.array(ctrl._prev_actions[Skill.BALANCE])
         # The policy might produce zero actions — just check they are the same object
         # updated by BALANCE, not LOCOMOTION
         loco_after = np.array(ctrl._prev_actions[Skill.LOCOMOTION])
@@ -572,9 +573,11 @@ class TestPerSkillPrevActions:
 # New formula: arccos(-g_body[2])  [angle from world-up, yaw-invariant]
 # ---------------------------------------------------------------------------
 
+
 def _gravity_body_tilt(quat_wxyz) -> float:
     """Compute tilt using the new formula (matches _detect_skill_raw)."""
     from wheeled_biped.utils.math_utils import get_gravity_in_body_frame
+
     g = np.array(get_gravity_in_body_frame(jnp.array(quat_wxyz)))
     return float(np.arccos(np.clip(-g[2], -1.0, 1.0)))
 
@@ -582,7 +585,7 @@ def _gravity_body_tilt(quat_wxyz) -> float:
 def _old_tilt(quat_wxyz) -> float:
     """Compute tilt using the OLD (buggy) formula for comparison."""
     qw = quat_wxyz[0]
-    return float(np.arccos(np.clip(2 * qw ** 2 - 1, -1.0, 1.0)))
+    return float(np.arccos(np.clip(2 * qw**2 - 1, -1.0, 1.0)))
 
 
 class TestTiltSemantics:
@@ -608,6 +611,7 @@ class TestTiltSemantics:
         Old (buggy) formula → tilt ≈ π/2 = 1.57 rad → falsely > 0.5 threshold.
         """
         import math
+
         # 90° yaw around z-axis:  q = [cos(45°), 0, 0, sin(45°)]
         quat = [math.cos(math.pi / 4), 0.0, 0.0, math.sin(math.pi / 4)]
         new_tilt = _gravity_body_tilt(quat)
@@ -627,6 +631,7 @@ class TestTiltSemantics:
     def test_yaw_180_new_formula_is_zero(self):
         """180-degree yaw: new formula → tilt = 0, old → tilt = π ≈ 3.14."""
         import math
+
         quat = [math.cos(math.pi / 2), 0.0, 0.0, math.sin(math.pi / 2)]  # 180° yaw
         assert _gravity_body_tilt(quat) == pytest.approx(0.0, abs=1e-5)
 
@@ -637,6 +642,7 @@ class TestTiltSemantics:
         a robot leaning forward by 45° should trigger balance mode.
         """
         import math
+
         # 45° pitch: q = [cos(22.5°), 0, sin(22.5°), 0]
         half = math.radians(22.5)
         quat = [math.cos(half), 0.0, math.sin(half), 0.0]
@@ -649,6 +655,7 @@ class TestTiltSemantics:
     def test_30_degree_roll_detected(self):
         """30-degree roll around x-axis: tilt ≈ π/6 ≈ 0.524 rad > 0.5 threshold."""
         import math
+
         half = math.radians(15)
         quat = [math.cos(half), math.sin(half), 0.0, 0.0]
         new_tilt = _gravity_body_tilt(quat)
@@ -658,6 +665,7 @@ class TestTiltSemantics:
     def test_small_pitch_below_threshold(self):
         """10-degree pitch: tilt ≈ 0.175 rad which is < 0.5 rad; should not trigger."""
         import math
+
         half = math.radians(5)
         quat = [math.cos(half), 0.0, math.sin(half), 0.0]
         new_tilt = _gravity_body_tilt(quat)

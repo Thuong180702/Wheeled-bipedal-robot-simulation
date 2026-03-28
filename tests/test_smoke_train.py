@@ -28,8 +28,6 @@ import pickle
 import sys
 from pathlib import Path
 
-import jax
-import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -99,15 +97,18 @@ _TOTAL_STEPS = _NUM_ENVS * _ROLLOUT * 3  # = 48
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def smoke_env():
     from wheeled_biped.envs.balance_env import BalanceEnv
+
     return BalanceEnv(config=_SMOKE_CONFIG)
 
 
 @pytest.fixture(scope="module")
 def smoke_trainer(smoke_env):
     from wheeled_biped.training.ppo import PPOTrainer
+
     t = PPOTrainer(env=smoke_env, config=_SMOKE_CONFIG, logger=None, seed=0)
     t.num_envs = _NUM_ENVS
     t._rollout_length = _ROLLOUT
@@ -117,6 +118,7 @@ def smoke_trainer(smoke_env):
 # ---------------------------------------------------------------------------
 # Smoke test
 # ---------------------------------------------------------------------------
+
 
 class TestSmokeTrainBalance:
     """Full end-to-end: PPOTrainer.train() runs without error on tiny config."""
@@ -141,8 +143,13 @@ class TestSmokeTrainBalance:
     def test_train_required_keys(self, train_result):
         """Return dict contains all required keys."""
         result, _ = train_result
-        required = {"best_reward", "eval_reward_mean", "eval_fall_rate",
-                    "eval_success_rate", "total_steps"}
+        required = {
+            "best_reward",
+            "eval_reward_mean",
+            "eval_fall_rate",
+            "eval_success_rate",
+            "total_steps",
+        }
         for key in required:
             assert key in result, f"Missing key in train() result: {key}"
 
@@ -178,6 +185,7 @@ class TestSmokeTrainBalance:
             ckpt = pickle.load(f)
 
         import jax.tree_util as jtu
+
         for leaf in jtu.tree_leaves(ckpt["params"]):
             arr = np.array(leaf)
             assert not np.any(np.isnan(arr)), f"NaN found in saved params leaf shape={arr.shape}"
@@ -193,9 +201,7 @@ class TestSmokeTrainBalance:
         """eval_fall_rate + eval_success_rate == 1.0."""
         result, _ = train_result
         total = result["eval_fall_rate"] + result["eval_success_rate"]
-        assert abs(total - 1.0) < 1e-5, (
-            f"fall_rate + success_rate = {total} (expected 1.0)"
-        )
+        assert abs(total - 1.0) < 1e-5, f"fall_rate + success_rate = {total} (expected 1.0)"
 
     def test_global_step_matches_expected(self, train_result):
         """total_steps in result is >= the requested total_steps."""

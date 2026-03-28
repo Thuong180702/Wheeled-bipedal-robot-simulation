@@ -20,12 +20,6 @@ import jax.numpy as jnp
 from mujoco import mjx
 
 from wheeled_biped.envs.base_env import EnvState, WheeledBipedEnv
-from wheeled_biped.sim.domain_randomization import (
-    apply_external_force,
-    clear_external_force,
-)
-from wheeled_biped.sim.push_disturbance import apply_push_disturbance
-from wheeled_biped.sim.low_level_control import pid_control
 from wheeled_biped.rewards.reward_functions import (
     compute_total_reward,
     penalty_action_rate,
@@ -44,6 +38,8 @@ from wheeled_biped.rewards.reward_functions import (
     reward_natural_pose,
     reward_no_motion,
 )
+from wheeled_biped.sim.low_level_control import pid_control
+from wheeled_biped.sim.push_disturbance import apply_push_disturbance
 from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate, quat_to_euler
 
 
@@ -92,9 +88,7 @@ class BalanceEnv(WheeledBipedEnv):
         # Trainer sẽ quản lý curriculum_min_height dựa trên reward threshold
         # Env chỉ lưu initial_min_height để dùng làm giá trị mặc định ban đầu
         task_cfg = self.config.get("task", {})
-        self._initial_min_height = float(
-            task_cfg.get("initial_min_height", self.MIN_HEIGHT_CMD)
-        )
+        self._initial_min_height = float(task_cfg.get("initial_min_height", self.MIN_HEIGHT_CMD))
 
         # Push disturbance config
         dr_cfg = self.config.get("domain_randomization", {})
@@ -123,9 +117,7 @@ class BalanceEnv(WheeledBipedEnv):
 
         # Wheel joint dùng velocity target thay vì position target
         wheel_indices = [i for i, n in enumerate(self.JOINT_NAMES) if "wheel" in n]
-        wheel_mask = [
-            1.0 if i in wheel_indices else 0.0 for i in range(self.num_actions)
-        ]
+        wheel_mask = [1.0 if i in wheel_indices else 0.0 for i in range(self.num_actions)]
         self._wheel_mask = jnp.array(wheel_mask, dtype=jnp.float32)
 
         # PID gains (vector theo 10 joints), có fallback an toàn
@@ -153,9 +145,7 @@ class BalanceEnv(WheeledBipedEnv):
         # Lấy torso body_id từ mj_model
         import mujoco
 
-        self._torso_id = mujoco.mj_name2id(
-            self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso"
-        )
+        self._torso_id = mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso")
 
     def _pid_low_level_ctrl(
         self,
@@ -291,9 +281,7 @@ class BalanceEnv(WheeledBipedEnv):
             data = mjx.step(self.mjx_model, data)
             return data, None
 
-        mjx_data, _ = jax.lax.scan(
-            physics_step, mjx_data, None, length=self._n_substeps
-        )
+        mjx_data, _ = jax.lax.scan(physics_step, mjx_data, None, length=self._n_substeps)
 
         # Base obs (39 dims)
         base_obs = self._extract_obs(mjx_data, control_action)
@@ -405,9 +393,7 @@ class BalanceEnv(WheeledBipedEnv):
 
         components = {
             # Thân nằm ngang song song mặt đất (phạt roll + pitch riêng)
-            "body_level": reward_body_level(
-                torso_quat, sigma_roll=0.15, sigma_pitch=0.15
-            ),
+            "body_level": reward_body_level(torso_quat, sigma_roll=0.15, sigma_pitch=0.15),
             # Giữ chiều cao theo lệnh
             "height": reward_height(
                 torso_height, height_command, sigma=0.25

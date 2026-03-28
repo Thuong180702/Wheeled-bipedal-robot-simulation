@@ -19,15 +19,15 @@ from __future__ import annotations
 import json
 import math
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers: stubs for JAX / env / model
 # ---------------------------------------------------------------------------
+
 
 def _make_fake_jax_array(val: float, size: int = 1):
     """Return a tiny numpy array that behaves like a JAX array for our purposes."""
@@ -64,14 +64,13 @@ def _make_stub_env(
         state.done = np.zeros(n_env, dtype=bool)
         state.info = info
         state.mjx_data = MagicMock()
-        state.mjx_data.qpos = np.tile([0, 0, 0.55, 1, 0, 0, 0] + [0.0]*10, (n_env, 1))
+        state.mjx_data.qpos = np.tile([0, 0, 0.55, 1, 0, 0, 0] + [0.0] * 10, (n_env, 1))
         return state
 
     def _fake_v_step(states, actions):
         step_counter["n"] += 1
         n_env = len(states.done)
-        is_fallen = (fall_on_episode is not None and
-                     step_counter["n"] % fall_on_episode == 0)
+        is_fallen = fall_on_episode is not None and step_counter["n"] % fall_on_episode == 0
         done = np.array([step_counter["n"] >= episode_length] * n_env)
         info: dict[str, Any] = {
             "is_fallen": np.full(n_env, is_fallen, dtype=bool),
@@ -85,7 +84,7 @@ def _make_stub_env(
         state.done = done
         state.info = info
         state.mjx_data = MagicMock()
-        state.mjx_data.qpos = np.tile([0, 0, 0.55, 1, 0, 0, 0] + [0.0]*10, (n_env, 1))
+        state.mjx_data.qpos = np.tile([0, 0, 0.55, 1, 0, 0, 0] + [0.0] * 10, (n_env, 1))
         return state
 
     def _fake_v_reset_if_done(states, rng):
@@ -105,7 +104,7 @@ def _make_stub_model():
     """Return a model whose .apply() returns deterministic zero actions."""
     model = MagicMock()
     dist = MagicMock()
-    dist.loc = np.zeros((4, 10), dtype=np.float32)   # (num_envs, num_actions)
+    dist.loc = np.zeros((4, 10), dtype=np.float32)  # (num_envs, num_actions)
     value = np.zeros((4, 1), dtype=np.float32)
     model.apply.return_value = (dist, value)
     return model
@@ -122,9 +121,9 @@ def _fake_obs_rms():
 # Patch helpers: replace JAX primitives in the benchmark module with numpy ops
 # ---------------------------------------------------------------------------
 
+
 def _patch_benchmark(monkeypatch):
     """Patch JAX-heavy imports inside benchmark.py with numpy equivalents."""
-    import wheeled_biped.eval.benchmark as bm
 
     # normalize_obs: just return obs unchanged for tests
     monkeypatch.setattr(
@@ -138,7 +137,7 @@ def _patch_benchmark(monkeypatch):
 
     def _fake_split(key, *args):
         if args:
-            return [np.array([i, i+1], dtype=np.uint32) for i in range(args[0])]
+            return [np.array([i, i + 1], dtype=np.uint32) for i in range(args[0])]
         return fake_rng, fake_rng
 
     monkeypatch.setattr("wheeled_biped.eval.benchmark.jax", MagicMock(), raising=False)
@@ -150,9 +149,10 @@ def _patch_benchmark(monkeypatch):
 # Module-level imports (done lazily to avoid JAX import at collection time)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _patch_jax_in_benchmark(monkeypatch):
-    """Patch module-level jax, jnp, mjx, normalize_obs in benchmark so tests run without real JAX."""
+    """Patch module-level jax, jnp, mjx, normalize_obs in benchmark so tests run without real JAX."""  # noqa: E501
     import wheeled_biped.eval.benchmark as bm
 
     fake_jax = MagicMock()
@@ -162,7 +162,7 @@ def _patch_jax_in_benchmark(monkeypatch):
     fake_jnp = MagicMock()
     fake_jnp.zeros = np.zeros
     fake_jnp.where = np.where
-    fake_jnp.int32 = np.int32   # prevent MagicMock recursion when used as dtype
+    fake_jnp.int32 = np.int32  # prevent MagicMock recursion when used as dtype
 
     fake_mjx = MagicMock()
     fake_mjx.put_model.return_value = MagicMock()
@@ -177,6 +177,7 @@ def _patch_jax_in_benchmark(monkeypatch):
 # ---------------------------------------------------------------------------
 # BenchmarkResult tests
 # ---------------------------------------------------------------------------
+
 
 class TestBenchmarkResult:
     def test_to_dict_is_json_serialisable(self):
@@ -222,6 +223,7 @@ class TestBenchmarkResult:
 # Mode registry / validation
 # ---------------------------------------------------------------------------
 
+
 class TestModeRegistry:
     def test_modes_tuple_contains_all_four(self):
         from wheeled_biped.eval.benchmark import MODES
@@ -252,6 +254,7 @@ class TestModeRegistry:
 # _base_metrics helper
 # ---------------------------------------------------------------------------
 
+
 class TestBaseMetrics:
     def test_all_survive(self):
         from wheeled_biped.eval.benchmark import _base_metrics
@@ -259,7 +262,7 @@ class TestBaseMetrics:
         rewards = [1.0, 2.0, 3.0]
         lengths = [100, 100, 100]
         fallen = [False, False, False]
-        timed_out = [True, True, True]   # all episodes reached time limit
+        timed_out = [True, True, True]  # all episodes reached time limit
         m = _base_metrics(rewards, lengths, fallen, timed_out)
 
         assert m["success_rate"] == pytest.approx(1.0)
@@ -284,7 +287,7 @@ class TestBaseMetrics:
     def test_percentiles(self):
         from wheeled_biped.eval.benchmark import _base_metrics
 
-        rewards = list(range(101))   # 0..100
+        rewards = list(range(101))  # 0..100
         lengths = [50] * 101
         fallen = [False] * 101
         timed_out = [True] * 101
@@ -298,6 +301,7 @@ class TestBaseMetrics:
 # ---------------------------------------------------------------------------
 # Success semantics: regression tests for the old length >= max_steps bug
 # ---------------------------------------------------------------------------
+
 
 class TestSuccessSemantics:
     """Verify that success_rate uses env time_limit, NOT length >= benchmark max_steps.
@@ -324,7 +328,7 @@ class TestSuccessSemantics:
         from wheeled_biped.eval.benchmark import _base_metrics
 
         rewards = [10.0, 12.0, 11.0]
-        lengths = [500, 500, 500]     # env timed out at 500 steps
+        lengths = [500, 500, 500]  # env timed out at 500 steps
         fallen = [False, False, False]
         timed_out = [True, True, True]  # info["time_limit"] was True
 
@@ -343,8 +347,8 @@ class TestSuccessSemantics:
 
         rewards = [5.0] * 5
         lengths = [100, 200, 300, 400, 500]
-        fallen   = [True,  True,  False, False, False]
-        timed_out = [False, False, True,  True,  True]
+        fallen = [True, True, False, False, False]
+        timed_out = [False, False, True, True, True]
 
         m = _base_metrics(rewards, lengths, fallen, timed_out)
 
@@ -354,12 +358,13 @@ class TestSuccessSemantics:
 
     def test_success_rate_equals_timeout_rate(self):
         """Invariant: success_rate == timeout_rate always."""
+        import random
+
         from wheeled_biped.eval.benchmark import _base_metrics
 
-        import random
         rng = random.Random(42)
         n = 20
-        fallen    = [rng.random() < 0.3 for _ in range(n)]
+        fallen = [rng.random() < 0.3 for _ in range(n)]
         timed_out = [not f for f in fallen]
         m = _base_metrics(
             episode_rewards=[1.0] * n,
@@ -369,22 +374,26 @@ class TestSuccessSemantics:
         )
         assert m["success_rate"] == pytest.approx(m["timeout_rate"])
 
+
 # ---------------------------------------------------------------------------
 # Nominal mode
 # ---------------------------------------------------------------------------
+
 
 class TestNominalMode:
     def test_returns_standard_fields(self, monkeypatch):
         """_run_nominal should return a BenchmarkResult with all base fields."""
         import wheeled_biped.eval.benchmark as bm
-        from wheeled_biped.eval.benchmark import BenchmarkResult, _run_nominal
+        from wheeled_biped.eval.benchmark import _run_nominal
 
         # Stub _rollout to return a controlled set of episodes without needing jnp.clip
         fake_ep_r = [1.0, 2.0, 3.0, 1.5]
         fake_ep_l = [100, 50, 200, 150]
         fake_ep_f = [False, True, False, False]
         fake_ep_t = [True, False, True, True]  # time_limit flags
-        monkeypatch.setattr(bm, "_rollout", lambda *a, **kw: (fake_ep_r, fake_ep_l, fake_ep_f, fake_ep_t, []))
+        monkeypatch.setattr(  # noqa: E501
+            bm, "_rollout", lambda *a, **kw: (fake_ep_r, fake_ep_l, fake_ep_f, fake_ep_t, [])
+        )
 
         result = _run_nominal(
             env=MagicMock(),
@@ -399,7 +408,7 @@ class TestNominalMode:
 
         assert result.mode == "nominal"
         assert result.num_episodes == 4
-        assert result.fall_rate == pytest.approx(0.25)   # 1/4
+        assert result.fall_rate == pytest.approx(0.25)  # 1/4
         assert result.reward_mean == pytest.approx(1.875)  # mean([1,2,3,1.5])
         assert hasattr(result, "timeout_rate")
         assert hasattr(result, "success_rate")
@@ -422,6 +431,7 @@ class TestNominalMode:
 # Push recovery mode — patching behaviour
 # ---------------------------------------------------------------------------
 
+
 class TestPushRecoveryMode:
     def test_env_push_attrs_restored_after_run(self, monkeypatch):
         """Env push attrs must be restored to their originals after run, even on exception."""
@@ -429,7 +439,7 @@ class TestPushRecoveryMode:
         from wheeled_biped.eval.benchmark import _run_push_recovery
 
         env = MagicMock()
-        env._push_enabled = False         # deliberately set to False
+        env._push_enabled = False  # deliberately set to False
         env._push_magnitude = 5.0
 
         fake_ep_r = [1.0, 2.0]
@@ -484,12 +494,13 @@ class TestPushRecoveryMode:
         assert "push_magnitude_used" in result.mode_metrics
         assert "fall_after_push_rate" in result.mode_metrics
         assert "mean_steps_to_fall" in result.mode_metrics
-        json.dumps(result.to_dict())   # serialisable
+        json.dumps(result.to_dict())  # serialisable
 
 
 # ---------------------------------------------------------------------------
 # Domain randomized mode — patching behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestDomainRandomizedMode:
     def test_mj_model_attrs_restored_after_run(self, monkeypatch):
@@ -556,13 +567,20 @@ class TestDomainRandomizedMode:
 # Command tracking mode
 # ---------------------------------------------------------------------------
 
+
 class TestCommandTrackingMode:
     def test_per_command_results_present(self):
         from wheeled_biped.eval.benchmark import BenchmarkResult
 
         per_cmd = [
-            {"height_command": h, "height_rmse": 0.02, "success_rate": 0.9,
-             "fall_rate": 0.1, "reward_mean": 2.0, "num_episodes": 10}
+            {
+                "height_command": h,
+                "height_rmse": 0.02,
+                "success_rate": 0.9,
+                "fall_rate": 0.1,
+                "reward_mean": 2.0,
+                "num_episodes": 10,
+            }
             for h in [0.40, 0.55, 0.70]
         ]
         result = BenchmarkResult(
@@ -580,11 +598,17 @@ class TestCommandTrackingMode:
 
     def test_height_rmse_is_finite(self):
         per_cmd = [
-            {"height_command": 0.55, "height_rmse": 0.03,
-             "success_rate": 1.0, "fall_rate": 0.0,
-             "reward_mean": 3.0, "num_episodes": 5},
+            {
+                "height_command": 0.55,
+                "height_rmse": 0.03,
+                "success_rate": 1.0,
+                "fall_rate": 0.0,
+                "reward_mean": 3.0,
+                "num_episodes": 5,
+            },
         ]
         from wheeled_biped.eval.benchmark import BenchmarkResult
+
         result = BenchmarkResult(
             mode="command_tracking",
             num_episodes=5,

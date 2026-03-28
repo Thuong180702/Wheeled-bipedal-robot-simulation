@@ -17,9 +17,9 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-import mujoco
-import mujoco.viewer
-import numpy as np
+import mujoco  # noqa: E402
+import mujoco.viewer  # noqa: E402
+import numpy as np  # noqa: E402
 
 # ──────────────────────────────────────────────────────────────
 # Cấu hình khớp: tên actuator → (tên joint, giới hạn rad, mô tả)

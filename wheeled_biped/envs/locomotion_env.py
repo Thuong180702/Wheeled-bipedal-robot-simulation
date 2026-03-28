@@ -17,7 +17,6 @@ import jax.numpy as jnp
 from mujoco import mjx
 
 from wheeled_biped.envs.base_env import EnvState, WheeledBipedEnv
-from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate
 from wheeled_biped.rewards.reward_functions import (
     compute_total_reward,
     penalty_action_rate,
@@ -28,6 +27,7 @@ from wheeled_biped.rewards.reward_functions import (
     reward_tracking_velocity,
     reward_upright,
 )
+from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate
 
 
 class LocomotionEnv(WheeledBipedEnv):
@@ -70,9 +70,7 @@ class LocomotionEnv(WheeledBipedEnv):
             [cmd_vel_x, cmd_ang_vel_z]
         """
         rng, k1, k2 = jax.random.split(rng, 3)
-        cmd_vel_x = jax.random.uniform(
-            k1, minval=self._vel_x_range[0], maxval=self._vel_x_range[1]
-        )
+        cmd_vel_x = jax.random.uniform(k1, minval=self._vel_x_range[0], maxval=self._vel_x_range[1])
         cmd_ang_vel_z = jax.random.uniform(
             k2, minval=self._ang_vel_z_range[0], maxval=self._ang_vel_z_range[1]
         )

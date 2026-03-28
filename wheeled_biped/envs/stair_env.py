@@ -10,7 +10,6 @@ Stage 4 trong curriculum learning.
 from __future__ import annotations
 
 import functools
-from pathlib import Path
 from typing import Any
 
 import jax
@@ -21,10 +20,6 @@ from mujoco import mjx
 from wheeled_biped.envs.base_env import EnvState, WheeledBipedEnv
 from wheeled_biped.rewards.reward_functions import (
     compute_total_reward,
-    penalty_action_rate,
-    penalty_joint_torque,
-    reward_alive,
-    reward_foot_contact,
     reward_stair_progress,
     reward_upright,
 )
@@ -52,9 +47,7 @@ class StairEnv(WheeledBipedEnv):
         self.mjx_model = mjx.put_model(stair_model)
 
         # Cập nhật body ID
-        self._torso_body_id = mujoco.mj_name2id(
-            self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso"
-        )
+        self._torso_body_id = mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso")
 
         # Tính vị trí đích (đỉnh cầu thang, phía -Y = forward)
         num_steps = self._stair_config.get("num_steps", 8)
@@ -87,12 +80,13 @@ class StairEnv(WheeledBipedEnv):
         Đổi wheel type cylinder→sphere để tương thích MJX (cylinder-box
         collision không được hỗ trợ trong MJX, nhưng sphere-box thì có).
         """
-        from wheeled_biped.utils.config import get_model_path
         import re
+
+        from wheeled_biped.utils.config import get_model_path
 
         # Đọc XML gốc
         model_path = get_model_path()
-        with open(model_path, "r", encoding="utf-8") as f:
+        with open(model_path, encoding="utf-8") as f:
             base_xml = f.read()
 
         # Tạo stair geoms

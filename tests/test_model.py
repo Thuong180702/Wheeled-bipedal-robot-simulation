@@ -22,6 +22,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 def mj_model():
     """Tải MuJoCo model."""
     import mujoco
+
     from wheeled_biped.utils.config import get_model_path
 
     model_path = get_model_path()
@@ -125,7 +126,6 @@ class TestModelStructure:
 
     def test_total_mass(self, mj_model, mj_data):
         """Tổng khối lượng ~7kg (±1kg tolerance)."""
-        import mujoco
 
         total_mass = sum(mj_model.body_mass)
         assert 5.0 < total_mass < 9.0, f"Tổng khối lượng = {total_mass:.2f}kg"
@@ -192,6 +192,4 @@ class TestSymmetry:
             if l_id >= 0 and r_id >= 0:
                 l_mass = mj_model.body_mass[l_id]
                 r_mass = mj_model.body_mass[r_id]
-                assert (
-                    abs(l_mass - r_mass) < 0.01
-                ), f"{l_name}={l_mass:.3f}, {r_name}={r_mass:.3f}"
+                assert abs(l_mass - r_mass) < 0.01, f"{l_name}={l_mass:.3f}, {r_name}={r_mass:.3f}"

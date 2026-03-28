@@ -7,10 +7,10 @@ This script:
 4. Generates the full training-ready MJCF
 """
 
-import mujoco
-import numpy as np
-import xml.etree.ElementTree as ET
 import os
+import xml.etree.ElementTree as ET
+
+import mujoco
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COMPILED_XML = os.path.join(BASE_DIR, "assets", "robot", "wheeled_biped_real.xml")
@@ -39,16 +39,15 @@ print("\n=== Joints ===")
 for i in range(m.njnt):
     j = m.joint(i)
     print(
-        f"  {i}: {j.name:20s} type={j.type[0]} axis={m.jnt_axis[i]} range=[{j.range[0]:.3f}, {j.range[1]:.3f}]"
+        f"  {i}: {j.name:20s} type={j.type[0]} axis={m.jnt_axis[i]}"
+        f" range=[{j.range[0]:.3f}, {j.range[1]:.3f}]"
     )
 
 print("\n=== Geom world positions ===")
 for i in range(m.ngeom):
     g = m.geom(i)
     pos = d.geom_xpos[i]
-    print(
-        f"  {i}: {g.name:20s} type={g.type[0]} pos=({pos[0]:.4f}, {pos[1]:.4f}, {pos[2]:.4f})"
-    )
+    print(f"  {i}: {g.name:20s} type={g.type[0]} pos=({pos[0]:.4f}, {pos[1]:.4f}, {pos[2]:.4f})")
 
 # Step 3: Try a few joint configurations to find standing pose
 # Set hip_pitch joints to bend the legs down
@@ -77,8 +76,6 @@ for hp in [0.0, 0.3, 0.5, 0.7, 1.0]:
         rw = d.xpos[m.body("banhxephai").id]
         lw = d.xpos[m.body("banhxetrai").id]
         if abs(rw[2] - lw[2]) < 0.01:  # both at same height
-            print(
-                f"  hp={hp:.1f} kn={kn:.1f} -> wheel_z={rw[2]:.4f} (R={rw[2]:.4f} L={lw[2]:.4f})"
-            )
+            print(f"  hp={hp:.1f} kn={kn:.1f} -> wheel_z={rw[2]:.4f} (R={rw[2]:.4f} L={lw[2]:.4f})")
 
 print("\nDone!")

@@ -2,13 +2,12 @@
 Bao gồm: masses, inertia, joint limits, forces, collision, material properties.
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import mujoco
-import numpy as np
 
 MODEL_PATH = os.path.join(
     os.path.dirname(__file__), "..", "assets", "robot", "wheeled_biped_real.xml"
@@ -84,9 +83,9 @@ URDF_INERTIA_DIAG = {
 
 
 def check_separator(title):
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  {title}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 def check_basic_info(model):
@@ -114,7 +113,8 @@ def check_masses(model):
         if diff >= 0.01:
             all_ok = False
         print(
-            f"  {status} {body_name:20s}: URDF={urdf_mass:.3f} kg  MJCF={mjcf_mass:.3f} kg  Δ={diff:.4f}"
+            f"  {status} {body_name:20s}: URDF={urdf_mass:.3f} kg"
+            f"  MJCF={mjcf_mass:.3f} kg  Δ={diff:.4f}"
         )
     print(f"\n  Tổng khối lượng MJCF: {total_mass:.3f} kg")
     urdf_total = sum(URDF_MASSES.values())
@@ -139,7 +139,9 @@ def check_inertia(model):
         if rel_diff >= 15:
             all_ok = False
         print(
-            f"  {status} {body_name:20s}: URDF={[f'{v:.6f}' for v in urdf_sorted]}  MJCF={[f'{v:.6f}' for v in mjcf_sorted]}  Δ={rel_diff:.1f}%"
+            f"  {status} {body_name:20s}:"
+            f" URDF={[f'{v:.6f}' for v in urdf_sorted]}"
+            f"  MJCF={[f'{v:.6f}' for v in mjcf_sorted]}  Δ={rel_diff:.1f}%"
         )
     return all_ok
 
@@ -159,9 +161,7 @@ def check_joint_limits(model):
             status = "✓" if not is_limited else "✗"
             if is_limited:
                 all_ok = False
-            print(
-                f"  {status} {jname:18s}: Continuous — MJCF limited={bool(is_limited)}"
-            )
+            print(f"  {status} {jname:18s}: Continuous — MJCF limited={bool(is_limited)}")
         else:
             if not is_limited:
                 print(f"  ✗ {jname:18s}: URDF có limit nhưng MJCF không limited!")
@@ -302,9 +302,7 @@ def check_material_properties(model):
         )
 
     print("\n  --- Cao su (lốp bánh xe): ---")
-    print(
-        "  Thuộc tính đúng: friction~1.0-1.5, solref mềm hơn (timeconst≥0.003), condim=6"
-    )
+    print("  Thuộc tính đúng: friction~1.0-1.5, solref mềm hơn (timeconst≥0.003), condim=6")
 
     rubber_geoms = ["l_wheel_collision", "r_wheel_collision"]
     for gname in rubber_geoms:
@@ -334,9 +332,7 @@ def check_standing_stability(model):
         mujoco.mj_resetDataKeyframe(model, data, key_id)
 
     mujoco.mj_forward(model, data)
-    torso_z_start = data.xpos[
-        mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "torso")
-    ][2]
+    torso_z_start = data.xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "torso")][2]
 
     # Simulate 1000 steps
     for _ in range(1000):
@@ -346,11 +342,11 @@ def check_standing_stability(model):
     torso_z_end = data.xpos[torso_id][2]
     torso_quat = data.xquat[torso_id]
 
+    dz = torso_z_end - torso_z_start
+    print(f"  Torso Z: {torso_z_start:.4f}m → {torso_z_end:.4f}m (Δ={dz:.4f}m)")
     print(
-        f"  Torso Z: {torso_z_start:.4f}m → {torso_z_end:.4f}m (Δ={torso_z_end-torso_z_start:.4f}m)"
-    )
-    print(
-        f"  Torso quat: [{torso_quat[0]:.4f}, {torso_quat[1]:.4f}, {torso_quat[2]:.4f}, {torso_quat[3]:.4f}]"
+        f"  Torso quat: [{torso_quat[0]:.4f}, {torso_quat[1]:.4f},"
+        f" {torso_quat[2]:.4f}, {torso_quat[3]:.4f}]"
     )
 
     # Check all body positions above ground

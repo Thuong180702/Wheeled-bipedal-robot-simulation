@@ -20,7 +20,6 @@ import sys
 from pathlib import Path
 
 import jax
-import jax.numpy as jnp
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -55,11 +54,9 @@ def evaluate(
     """Chạy đánh giá trên model đã train."""
     import pickle
 
-    from wheeled_biped.eval.benchmark import MODES, run_benchmark
     from wheeled_biped.envs import make_env
+    from wheeled_biped.eval.benchmark import MODES, run_benchmark
     from wheeled_biped.training.networks import create_actor_critic
-    from wheeled_biped.training.ppo import normalize_obs
-    from wheeled_biped.utils.config import load_training_config
 
     if mode not in MODES:
         console.print(f"[red]Mode không hợp lệ: {mode!r}. Chọn: {MODES}[/red]")
@@ -95,15 +92,6 @@ def evaluate(
     console.print(f"  Checkpoint: {checkpoint}")
     console.print(f"  Episodes: {num_episodes} | Envs: {num_envs}\n")
 
-    # Reset envs
-    rng, reset_key = jax.random.split(rng)
-    env_states = env.v_reset(reset_key, num_envs)
-
-    episode_rewards = []
-    episode_lengths = []
-    current_rewards = jnp.zeros(num_envs)
-    current_lengths = jnp.zeros(num_envs, dtype=jnp.int32)
-
     max_steps = 2000  # tối đa mỗi episode
 
     # --- Dispatch to benchmark suite ---
@@ -120,7 +108,6 @@ def evaluate(
     )
 
     # --- Display table ---
-    import numpy as np
 
     table = Table(title=f"Benchmark: {stage} | mode={mode}")
     table.add_column("Metric", style="cyan")

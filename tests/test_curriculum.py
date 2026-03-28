@@ -22,10 +22,15 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Fixtures — build a CurriculumManager without touching disk
 # ---------------------------------------------------------------------------
 
-def _make_manager(num_stages: int = 3, promotion_threshold: float = 0.8,
-                  demotion_threshold: float = 0.3, window: int = 10,
-                  success_value: float = 1.0,
-                  max_retries: int = 5) -> "CurriculumManager":
+
+def _make_manager(
+    num_stages: int = 3,
+    promotion_threshold: float = 0.8,
+    demotion_threshold: float = 0.3,
+    window: int = 10,
+    success_value: float = 1.0,
+    max_retries: int = 5,
+):
     """
     Build a CurriculumManager whose stages list is fabricated in memory
     (no YAML file needed) and whose PPO trainer creation is never called.
@@ -68,6 +73,7 @@ def _make_manager(num_stages: int = 3, promotion_threshold: float = 0.8,
 # Tests: _evaluate_promotion branches
 # ---------------------------------------------------------------------------
 
+
 class TestEvaluatePromotion:
     """Direct unit-tests of the 3-way promotion decision."""
 
@@ -96,7 +102,7 @@ class TestEvaluatePromotion:
         # 5/10 success (50%) — between demotion (30%) and promotion (80%)
         result = None
         for i in range(10):
-            reward = 2.0 if i < 5 else 0.0    # 5 success, 5 fail
+            reward = 2.0 if i < 5 else 0.0  # 5 success, 5 fail
             result = mgr._evaluate_promotion(metric_value=reward)
         assert result == "continue", f"Expected 'continue', got '{result}'"
 
@@ -105,7 +111,7 @@ class TestEvaluatePromotion:
         mgr = _make_manager(
             window=10, promotion_threshold=0.8, demotion_threshold=0.3, success_value=1.0
         )
-        mgr.current_stage_idx = 1   # must be > 0 to allow demotion
+        mgr.current_stage_idx = 1  # must be > 0 to allow demotion
 
         # All rewards well below success_value → 0% success rate
         result = None
@@ -118,7 +124,7 @@ class TestEvaluatePromotion:
         mgr = _make_manager(
             window=10, promotion_threshold=0.8, demotion_threshold=0.3, success_value=1.0
         )
-        mgr.current_stage_idx = 0   # cannot demote below 0
+        mgr.current_stage_idx = 0  # cannot demote below 0
 
         result = None
         for _ in range(10):
@@ -150,6 +156,7 @@ class TestEvaluatePromotion:
 # Tests: promote() / demote() state machine
 # ---------------------------------------------------------------------------
 
+
 class TestStateMachine:
     def test_promote_increments_index(self):
         """promote() advances current_stage_idx by 1."""
@@ -169,7 +176,7 @@ class TestStateMachine:
     def test_promote_at_last_stage_returns_false(self):
         """promote() at the final stage returns False and does not advance."""
         mgr = _make_manager(num_stages=2)
-        mgr.current_stage_idx = 1   # last stage (0-indexed)
+        mgr.current_stage_idx = 1  # last stage (0-indexed)
         promoted = mgr.promote()
         assert promoted is False
         assert mgr.current_stage_idx == 1
@@ -202,7 +209,7 @@ class TestStateMachine:
         """is_complete returns True after advancing past the last stage."""
         mgr = _make_manager(num_stages=2)
         assert not mgr.is_complete
-        mgr.current_stage_idx = 2   # past all stages
+        mgr.current_stage_idx = 2  # past all stages
         assert mgr.is_complete
 
     def test_num_stages_matches_config(self):
@@ -230,6 +237,7 @@ class TestStateMachine:
 # Tests: run() — performance-gated main loop
 # ---------------------------------------------------------------------------
 
+
 def _make_stub_trainer(best_reward: float, eval_reward_mean: float | None = None):
     """Return a MagicMock trainer whose .train() returns the given rewards.
 
@@ -245,7 +253,7 @@ def _make_stub_trainer(best_reward: float, eval_reward_mean: float | None = None
     if eval_reward_mean is not None:
         result["eval_reward_mean"] = eval_reward_mean
     stub.train.return_value = result
-    return stub, MagicMock()   # (trainer, logger)
+    return stub, MagicMock()  # (trainer, logger)
 
 
 class TestCurriculumRun:
@@ -263,7 +271,7 @@ class TestCurriculumRun:
             try:
                 reward = next(call_iter)
             except StopIteration:
-                reward = float("inf")   # always promote if list is exhausted
+                reward = float("inf")  # always promote if list is exhausted
             return _make_stub_trainer(reward)
 
         mgr._create_trainer_for_stage = _fake_create
@@ -288,8 +296,12 @@ class TestCurriculumRun:
         )
         # Stage 0 needs 2 calls to fill window, then promotes and moves to stage 1.
         # Stage 1 needs 2 more calls, then promote returns False (last stage).
-        rewards = [2.0, 2.0,   # stage 0: 2 calls → promote
-                   2.0, 2.0]   # stage 1: 2 calls → promote (returns False)
+        rewards = [
+            2.0,
+            2.0,  # stage 0: 2 calls → promote
+            2.0,
+            2.0,
+        ]  # stage 1: 2 calls → promote (returns False)
         results = self._run_with_rewards(mgr, rewards)
 
         assert mgr.is_complete or mgr.current_stage_idx == mgr.num_stages - 1
@@ -298,9 +310,10 @@ class TestCurriculumRun:
 
     def test_run_final_stage_completes(self):
         """run() terminates after the final stage promotes (returns False)."""
-        mgr = _make_manager(num_stages=1, window=1, promotion_threshold=0.5,
-                            success_value=1.0, max_retries=5)
-        rewards = [2.0]   # 1 call fills window, 100% success → promote → False → break
+        mgr = _make_manager(
+            num_stages=1, window=1, promotion_threshold=0.5, success_value=1.0, max_retries=5
+        )
+        rewards = [2.0]  # 1 call fills window, 100% success → promote → False → break
         results = self._run_with_rewards(mgr, rewards)
         assert "stage_0" in results
 
@@ -316,14 +329,14 @@ class TestCurriculumRun:
         max_retries = 2
         mgr = _make_manager(
             num_stages=2,
-            window=100,           # window never fills in 1 call
+            window=100,  # window never fills in 1 call
             promotion_threshold=0.8,
             success_value=1.0,
             max_retries=max_retries,
         )
         # Stage 0: 2 hold calls → force-promote to stage 1
         # Stage 1: 2 hold calls → force-promote → promote() returns False → break
-        rewards = [0.0] * 10   # all below success_value, window never fills
+        rewards = [0.0] * 10  # all below success_value, window never fills
         results = self._run_with_rewards(mgr, rewards)
 
         assert "stage_0" in results
@@ -335,7 +348,7 @@ class TestCurriculumRun:
         max_retries = 3
         mgr = _make_manager(
             num_stages=2,
-            window=50,            # large window → always 'continue'
+            window=50,  # large window → always 'continue'
             promotion_threshold=0.9,
             success_value=10.0,
             max_retries=max_retries,
@@ -379,10 +392,14 @@ class TestCurriculumRun:
         # stage 1 attempt 1: 2 calls with reward=0.0 (0% success < 50%) → demote (stage 0)
         # stage 0 attempt 1 (post-demote): 1 call → max_retries=1 → force-promote (stage 1)
         # stage 1 attempt 1 (post-recover): 1 call → max_retries=1 → force-promote → False → break
-        rewards = [2.0, 2.0,   # stage 0: full window → promote
-                   0.0, 0.0,   # stage 1: full window → demote
-                   0.0,        # stage 0: max_retries hit → force-promote
-                   0.0]        # stage 1: max_retries hit → force-promote → done
+        rewards = [
+            2.0,
+            2.0,  # stage 0: full window → promote
+            0.0,
+            0.0,  # stage 1: full window → demote
+            0.0,  # stage 0: max_retries hit → force-promote
+            0.0,
+        ]  # stage 1: max_retries hit → force-promote → done
         results = self._run_with_rewards(mgr, rewards)
 
         # Both stages should appear (stage_0 may appear twice in results dict
@@ -394,6 +411,7 @@ class TestCurriculumRun:
 # ---------------------------------------------------------------------------
 # Tests: eval_reward_mean (from real eval pass) takes priority over best_reward
 # ---------------------------------------------------------------------------
+
 
 class TestEvalMetricPreference:
     """Verify that curriculum.run() uses eval_reward_mean when present and
@@ -409,6 +427,7 @@ class TestEvalMetricPreference:
 
     def _run_with_custom_result(self, mgr, train_result: dict) -> dict:
         """Single-call helper: one trainer that returns train_result."""
+
         def _fake_create(stage_idx):
             stub = MagicMock()
             stub.train.return_value = train_result
@@ -420,6 +439,7 @@ class TestEvalMetricPreference:
         # Run directly
         mgr._create_trainer_for_stage = _fake_create
         from unittest.mock import patch
+
         with patch("wheeled_biped.training.curriculum.Path.mkdir"):
             return mgr.run(total_steps_per_stage=100)
 
@@ -441,8 +461,10 @@ class TestEvalMetricPreference:
             max_retries=5,
         )
         call_iter = iter(
-            [{"best_reward": 0.0, "eval_reward_mean": 5.0, "total_steps": 10},
-             {"best_reward": 0.0, "eval_reward_mean": 5.0, "total_steps": 10}]
+            [
+                {"best_reward": 0.0, "eval_reward_mean": 5.0, "total_steps": 10},
+                {"best_reward": 0.0, "eval_reward_mean": 5.0, "total_steps": 10},
+            ]
         )
 
         def _fake_create(idx):
@@ -450,11 +472,16 @@ class TestEvalMetricPreference:
             try:
                 stub.train.return_value = next(call_iter)
             except StopIteration:
-                stub.train.return_value = {"best_reward": 99.0, "eval_reward_mean": 99.0, "total_steps": 10}
+                stub.train.return_value = {  # noqa: E501
+                    "best_reward": 99.0,
+                    "eval_reward_mean": 99.0,
+                    "total_steps": 10,
+                }
             return stub, MagicMock()
 
         mgr._create_trainer_for_stage = _fake_create
         from unittest.mock import patch
+
         with patch("wheeled_biped.training.curriculum.Path.mkdir"):
             results = mgr.run(total_steps_per_stage=100)
 
@@ -473,8 +500,7 @@ class TestEvalMetricPreference:
         )
         # No eval_reward_mean key — only best_reward
         call_iter = iter(
-            [{"best_reward": 5.0, "total_steps": 10},
-             {"best_reward": 5.0, "total_steps": 10}]
+            [{"best_reward": 5.0, "total_steps": 10}, {"best_reward": 5.0, "total_steps": 10}]
         )
 
         def _fake_create(idx):
@@ -487,6 +513,7 @@ class TestEvalMetricPreference:
 
         mgr._create_trainer_for_stage = _fake_create
         from unittest.mock import patch
+
         with patch("wheeled_biped.training.curriculum.Path.mkdir"):
             results = mgr.run(total_steps_per_stage=100)
 
@@ -499,10 +526,10 @@ class TestEvalMetricPreference:
         best_reward is high — verifying the preference is truly active."""
         mgr = _make_manager(
             num_stages=2,
-            window=2,             # needs 2 calls to fill window
+            window=2,  # needs 2 calls to fill window
             promotion_threshold=0.8,
             success_value=1.0,
-            max_retries=1,        # only 1 attempt before force-promote
+            max_retries=1,  # only 1 attempt before force-promote
         )
         # Both results: best_reward high (would promote alone), eval_reward_mean low (would not)
         results_seq = [
@@ -518,11 +545,16 @@ class TestEvalMetricPreference:
             try:
                 stub.train.return_value = next(call_iter)
             except StopIteration:
-                stub.train.return_value = {"best_reward": 99.0, "eval_reward_mean": 0.0, "total_steps": 10}
+                stub.train.return_value = {  # noqa: E501
+                    "best_reward": 99.0,
+                    "eval_reward_mean": 0.0,
+                    "total_steps": 10,
+                }
             return stub, MagicMock()
 
         mgr._create_trainer_for_stage = _fake_create
         from unittest.mock import patch
+
         with patch("wheeled_biped.training.curriculum.Path.mkdir"):
             results = mgr.run(total_steps_per_stage=100)
 
