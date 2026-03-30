@@ -15,7 +15,7 @@ task:
 # Chỉ tăng level khi avg_reward >= reward_threshold × max_possible_reward
 curriculum:
   enabled: true
-  reward_threshold: 0.85 # 85% tổng reward tối đa → mở rộng range
+  reward_threshold: 0.75 # 75% tổng reward tối đa → mở rộng range
   num_levels: 29 # 29 cấp: mỗi cấp giảm min_height 0.01m (0.69 → 0.40)
   window: 50 # (legacy) rolling training-reward window — only used when use_eval_signal: false
   # Eval-gated curriculum signal: runs eval_pass() (greedy policy, complete episodes)
@@ -34,7 +34,7 @@ ppo:
   gamma: 0.99
   gae_lambda: 0.95
   clip_epsilon: 0.2
-  entropy_coeff: 0.01
+  entropy_coeff: 0.005
   value_loss_coeff: 0.5
   max_grad_norm: 0.5
   normalize_advantages: true
@@ -92,12 +92,12 @@ low_level_pid:
 #   legs_forward, legs_vertical, position_drift, orientation, yaw_rate,
 #   joint_torque, joint_velocity
 #
-# Max reward ≈ 10 at perfect stance, mild penalties.
+# Max reward ≈ 10.5 at perfect stance, mild penalties.
 rewards:
   body_level: 1.5 # thưởng thân nằm ngang (exp σ_roll=0.15, σ_pitch=0.15)
   height: 2.5 # thưởng giữ chiều cao theo height_command (exp σ=0.25)
   natural_pose: 0.4 # thưởng hp/kn đúng target TUYỆT ĐỐI (exp σ=0.8 — gradient mạnh)
-  symmetry: 0.5 # thưởng 2 chân đối xứng (exp σ=0.5)
+  symmetry: 1.0 # thưởng 2 chân đối xứng (exp σ=0.5)
   alive: 0.3 # thưởng sống sót (signal luôn có)
   heading: 0.5 # phá local optimum "spinning balance"
   legs_forward: 0.5
@@ -107,11 +107,11 @@ rewards:
   yaw_rate: 0.5 # phạt trực tiếp tốc độ quay yaw
   # === Standing-specific (zero in balance_robust) ===
   no_motion: 0.5 # rewards stationary stance — conflicts with push recovery
-  wheel_velocity: -0.0008 # penalises wheel spin — conflicts with push recovery
+  wheel_velocity: -0.005 # penalises wheel spin — conflicts with push recovery
   # === Penalties ===
   joint_torque: -0.0005 # phạt mô-men lớn
   joint_velocity: -0.0006 # phạt tốc độ khớp
-  action_rate: -0.03 # anti-jitter for standing; tighter than robust (see note above)
+  action_rate: -0.05 # anti-jitter for standing; tighter than robust (see note above)
 
 # --- Termination ---
 termination:

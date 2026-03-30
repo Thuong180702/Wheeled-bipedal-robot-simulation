@@ -632,6 +632,801 @@ class TestEvalGatedCurriculum:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Config for eval-triggered checkpoint tests
+# ---------------------------------------------------------------------------
+
+_EVAL_CKPT_CONFIG = {
+    **_TINY_CONFIG,
+    "task": {
+        **_TINY_CONFIG["task"],
+        "initial_min_height": 0.68,
+    },
+    "curriculum": {
+        "enabled": True,
+        "reward_threshold": 999.0,  # impossibly high — curriculum never advances
+        "num_levels": 5,
+        "window": 2,
+        "use_eval_signal": True,
+        "eval_interval": 1,  # eval every update — triggers on the first update
+        "eval_episodes": 2,
+        "ckpt_cooldown_evals": 0,  # disable cooldown so existing tests are unaffected
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Tests: eval-triggered checkpoint saving
+# ---------------------------------------------------------------------------
+
+
+class TestEvalTriggeredCheckpoints:
+    """Verify that best_eval_per_step and best_eval_success checkpoints are saved.
+
+    Uses monkeypatched eval_pass() so no real MJX training is needed.
+    Runs a 3-update training loop (eval_interval=1) with a tiny config.
+    """
+
+    @staticmethod
+    def _make_trainer():
+        from wheeled_biped.envs.balance_env import BalanceEnv
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        env = BalanceEnv(config=_EVAL_CKPT_CONFIG)
+        t = PPOTrainer(env=env, config=_EVAL_CKPT_CONFIG, logger=None, seed=0)
+        t.num_envs = NUM_ENVS
+        t._rollout_length = 4
+        return t
+
+    def test_saves_best_eval_per_step_on_improvement(self, tmp_path):
+        """best_eval_per_step/checkpoint.pkl is created when eval_per_step improves."""
+        import types
+
+        t = self._make_trainer()
+
+        def _good_eval(self_, **kwargs):
+            return {
+                "eval_reward_mean": 50.0,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 1.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_good_eval, t)
+        spu = t._rollout_length * t.num_envs
+        t.train(total_steps=spu * 3, checkpoint_dir=str(tmp_path / "ckpt"))
+
+        assert (tmp_path / "ckpt" / "best_eval_per_step" / "checkpoint.pkl").exists(), (
+            "best_eval_per_step checkpoint should be created on first improvement"
+        )
+
+    def test_saves_best_eval_success_on_improvement(self, tmp_path):
+        """best_eval_success/checkpoint.pkl is created when eval_success_rate improves."""
+        import types
+
+        t = self._make_trainer()
+
+        def _good_eval(self_, **kwargs):
+            return {
+                "eval_reward_mean": 50.0,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 1.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_good_eval, t)
+        spu = t._rollout_length * t.num_envs
+        t.train(total_steps=spu * 3, checkpoint_dir=str(tmp_path / "ckpt"))
+
+        assert (tmp_path / "ckpt" / "best_eval_success" / "checkpoint.pkl").exists(), (
+            "best_eval_success checkpoint should be created on first improvement"
+        )
+
+    def test_no_extra_save_when_metric_does_not_improve(self, tmp_path):
+        """When eval metrics are constant, the checkpoint is written only once.
+
+        With eval_interval=1 and 3 updates, eval fires at updates 1, 2, 3.
+        The first eval (update 1) improves over -inf and triggers a save.
+        Updates 2 and 3 return the same value — no overwrite should happen.
+        We verify this by checking that global_step inside the saved checkpoint
+        matches the first eval's step, not the later ones.
+        """
+        import pickle
+        import types
+
+        t = self._make_trainer()
+
+        def _constant_eval(self_, **kwargs):
+            return {
+                "eval_reward_mean": 50.0,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 1.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_constant_eval, t)
+        spu = t._rollout_length * t.num_envs  # 4 * 4 = 16
+
+        # 4 updates: warmup (implicit) + loop updates 1,2,3
+        t.train(total_steps=spu * 4, checkpoint_dir=str(tmp_path / "ckpt"))
+
+        ckpt_file = tmp_path / "ckpt" / "best_eval_per_step" / "checkpoint.pkl"
+        assert ckpt_file.exists()
+
+        with open(ckpt_file, "rb") as f:
+            ckpt = pickle.load(f)
+
+        # global_step timeline:
+        #   after warmup:   global_step = spu (16)
+        #   update 1 done:  global_step = 2*spu (32) → eval fires → SAVE (first improvement)
+        #   update 2 done:  global_step = 3*spu (48) → eval fires → no save (same value)
+        #   update 3 done:  global_step = 4*spu (64) → eval fires → no save (same value)
+        first_eval_step = 2 * spu
+        assert ckpt["global_step"] == first_eval_step, (
+            f"Checkpoint should record global_step={first_eval_step} (first eval), "
+            f"got {ckpt['global_step']} — suggests spurious re-save on stagnant metric"
+        )
+
+    def test_existing_final_checkpoint_still_saved(self, tmp_path):
+        """Adding eval-triggered saves does not break the existing final checkpoint."""
+        import types
+
+        t = self._make_trainer()
+
+        def _dummy_eval(self_, **kwargs):
+            return {
+                "eval_reward_mean": 1.0,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 1.0,
+                "eval_success_rate": 0.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_dummy_eval, t)
+        spu = t._rollout_length * t.num_envs
+        t.train(total_steps=spu * 3, checkpoint_dir=str(tmp_path / "ckpt"))
+
+        assert (tmp_path / "ckpt" / "final" / "checkpoint.pkl").exists(), (
+            "final checkpoint must still be saved regardless of eval-triggered saves"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Config: legacy (use_eval_signal=False) path
+# ---------------------------------------------------------------------------
+
+_LEGACY_CKPT_CONFIG = {
+    **_TINY_CONFIG,
+    "task": {
+        **_TINY_CONFIG["task"],
+        "initial_min_height": 0.68,
+    },
+    "curriculum": {
+        "enabled": True,
+        "reward_threshold": 999.0,  # impossibly high — curriculum never advances
+        "num_levels": 5,
+        "window": 2,  # fills after 2 updates
+        "use_eval_signal": False,
+        "ckpt_cooldown_evals": 0,  # disable cooldown so existing tests are unaffected
+    },
+}
+
+# Config for cooldown-specific tests: cooldown=2, eval every update.
+_COOLDOWN_TEST_CONFIG = {
+    **_EVAL_CKPT_CONFIG,
+    "curriculum": {
+        **_EVAL_CKPT_CONFIG["curriculum"],
+        "ckpt_cooldown_evals": 2,
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Tests: hardened eval-triggered checkpoint saving
+# ---------------------------------------------------------------------------
+
+
+class TestEvalTriggeredCheckpointHardening:
+    """Verify the three known risks are fixed.
+
+    Risk 1 — Resume resets trackers.
+    Risk 2 — Legacy path (use_eval_signal=False) had no triggered save.
+    Risk 3 — No minimum-delta guard; tiny increments could spam saves.
+    """
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _make_eval_trainer():
+        from wheeled_biped.envs.balance_env import BalanceEnv
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        env = BalanceEnv(config=_EVAL_CKPT_CONFIG)
+        t = PPOTrainer(env=env, config=_EVAL_CKPT_CONFIG, logger=None, seed=0)
+        t.num_envs = NUM_ENVS
+        t._rollout_length = 4
+        return t
+
+    @staticmethod
+    def _make_legacy_trainer():
+        from wheeled_biped.envs.balance_env import BalanceEnv
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        env = BalanceEnv(config=_LEGACY_CKPT_CONFIG)
+        t = PPOTrainer(env=env, config=_LEGACY_CKPT_CONFIG, logger=None, seed=0)
+        t.num_envs = NUM_ENVS
+        t._rollout_length = 4
+        return t
+
+    @staticmethod
+    def _write_checkpoint(path, trainer, **extra_fields):
+        """Pickle a minimal checkpoint using the trainer's current params."""
+        import os
+        import pickle
+
+        import jax
+
+        os.makedirs(path, exist_ok=True)
+        ckpt = {
+            "params": jax.device_get(trainer.params),
+            "opt_state": jax.device_get(trainer.opt_state),
+            "obs_rms": jax.device_get(trainer.obs_rms),
+            "config": trainer.config,
+            "global_step": 0,
+            "best_reward": float("-inf"),
+            "curriculum_min_height": None,
+            "best_eval_per_step": float("-inf"),
+            "best_eval_success": float("-inf"),
+            "best_train_reward": float("-inf"),
+        }
+        ckpt.update(extra_fields)
+        with open(os.path.join(path, "checkpoint.pkl"), "wb") as f:
+            pickle.dump(ckpt, f)
+
+    # ── Risk 1: tracker survives resume ──────────────────────────────────────
+
+    def test_best_trackers_restored_from_checkpoint(self, tmp_path):
+        """load_checkpoint() restores best_eval_per_step/success/train_reward."""
+        t = self._make_eval_trainer()
+        ckpt_dir = str(tmp_path / "ckpt")
+        self._write_checkpoint(
+            ckpt_dir,
+            t,
+            best_eval_per_step=8.0,
+            best_eval_success=0.9,
+            best_train_reward=3.5,
+        )
+
+        t.load_checkpoint(ckpt_dir)
+
+        assert t._resumed_best_eval_per_step == 8.0
+        assert t._resumed_best_eval_success == 0.9
+        assert t._resumed_best_train_reward == 3.5
+
+    def test_old_checkpoint_without_tracker_fields_loads_safely(self, tmp_path):
+        """Old checkpoints missing tracker fields fall back to -inf without error."""
+        import os
+        import pickle
+
+        import jax
+
+        t = self._make_eval_trainer()
+        ckpt_dir = str(tmp_path / "ckpt")
+        os.makedirs(ckpt_dir, exist_ok=True)
+
+        # Simulate an older checkpoint that predates the tracker fields.
+        old_ckpt = {
+            "params": jax.device_get(t.params),
+            "opt_state": jax.device_get(t.opt_state),
+            "obs_rms": jax.device_get(t.obs_rms),
+            "config": t.config,
+            "global_step": 50000,
+            "best_reward": 4.2,
+            "curriculum_min_height": 0.65,
+            # no best_eval_per_step / best_eval_success / best_train_reward
+        }
+        with open(os.path.join(ckpt_dir, "checkpoint.pkl"), "wb") as f:
+            pickle.dump(old_ckpt, f)
+
+        t.load_checkpoint(ckpt_dir)  # must not raise
+
+        assert t._resumed_best_eval_per_step == float("-inf")
+        assert t._resumed_best_eval_success == float("-inf")
+        assert t._resumed_best_train_reward == float("-inf")
+
+    def test_no_overwrite_on_resume_when_eval_worse(self, tmp_path):
+        """After resume with best_eval_per_step=8.0, an eval returning 7.0 must NOT save.
+
+        The checkpoint_dir here is different from the one we loaded.  The test
+        verifies that best_eval_per_step/ is never created in the output dir.
+        """
+        import types
+
+        t = self._make_eval_trainer()
+        load_dir = str(tmp_path / "loaded")
+        self._write_checkpoint(load_dir, t, best_eval_per_step=8.0, best_eval_success=0.9)
+        t.load_checkpoint(load_dir)
+
+        def _worse_eval(self_, **kwargs):
+            # eval_per_step = 140.0 / 20 = 7.0 < 8.0 — should not save
+            return {
+                "eval_reward_mean": 140.0,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 0.85,  # 0.85 < 0.9 — should not save
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_worse_eval, t)
+        spu = t._rollout_length * t.num_envs
+        out_dir = str(tmp_path / "out")
+        # total_steps chosen so training runs ≥1 loop update after the resume point
+        t.train(total_steps=spu * 3, checkpoint_dir=out_dir)
+
+        assert not (Path(out_dir) / "best_eval_per_step" / "checkpoint.pkl").exists(), (
+            "best_eval_per_step must NOT be overwritten when eval is worse than resumed best"
+        )
+        assert not (Path(out_dir) / "best_eval_success" / "checkpoint.pkl").exists(), (
+            "best_eval_success must NOT be overwritten when eval_success_rate is worse"
+        )
+
+    def test_final_checkpoint_contains_tracker_fields(self, tmp_path):
+        """final/checkpoint.pkl must contain the three tracker fields."""
+        import types
+
+        t = self._make_eval_trainer()
+
+        def _dummy_eval(self_, **kwargs):
+            return {
+                "eval_reward_mean": 50.0,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 1.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_dummy_eval, t)
+        spu = t._rollout_length * t.num_envs
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 3, checkpoint_dir=ckpt_dir)
+
+        final_path = tmp_path / "ckpt" / "final" / "checkpoint.pkl"
+        assert final_path.exists()
+        with open(final_path, "rb") as f:
+            ckpt = pickle.load(f)
+
+        assert "best_eval_per_step" in ckpt
+        assert "best_eval_success" in ckpt
+        assert "best_train_reward" in ckpt
+
+    # ── Risk 2: legacy path ───────────────────────────────────────────────────
+
+    def test_legacy_path_saves_best_train_reward(self, tmp_path):
+        """use_eval_signal=False path creates best_train_reward/checkpoint.pkl."""
+        t = self._make_legacy_trainer()
+        spu = t._rollout_length * t.num_envs
+        ckpt_dir = str(tmp_path / "ckpt")
+        # 4 updates (window=2 fills at update 2, triggering a save)
+        t.train(total_steps=spu * 4, checkpoint_dir=ckpt_dir)
+
+        assert (tmp_path / "ckpt" / "best_train_reward" / "checkpoint.pkl").exists(), (
+            "legacy path must create best_train_reward checkpoint when rolling window improves"
+        )
+
+    def test_legacy_path_does_not_create_eval_checkpoints(self, tmp_path):
+        """use_eval_signal=False must NOT create best_eval_per_step or best_eval_success."""
+        t = self._make_legacy_trainer()
+        spu = t._rollout_length * t.num_envs
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 4, checkpoint_dir=ckpt_dir)
+
+        assert not (tmp_path / "ckpt" / "best_eval_per_step" / "checkpoint.pkl").exists()
+        assert not (tmp_path / "ckpt" / "best_eval_success" / "checkpoint.pkl").exists()
+
+    # ── Risk 3: delta guard ───────────────────────────────────────────────────
+
+    def test_tiny_improvement_below_delta_does_not_resave(self, tmp_path):
+        """Improvements below _EVAL_CKPT_MIN_DELTA (1e-3) must not trigger a second save.
+
+        Timeline (eval_interval=1, 4 loop updates):
+          update 1: eval_per_step=5.0  → saves (> -inf+1e-3)    step=2*spu
+          update 2: eval_per_step=5.0005 → 5.0005 > 5.0+0.001=5.001? No. No save.
+          update 3: same → no save
+          update 4: same → no save
+        Verify: saved checkpoint has global_step==2*spu (first and only save).
+        """
+        import types
+
+        t = self._make_eval_trainer()
+        call_count = 0
+
+        def _tiny_step_eval(self_, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            # episode_length=20; per_step = eval_reward_mean / 20
+            if call_count == 1:
+                return {
+                    "eval_reward_mean": 100.0,  # per_step = 5.0
+                    "eval_reward_std": 0.0,
+                    "eval_fall_rate": 0.0,
+                    "eval_success_rate": 0.0,
+                    "eval_num_episodes": 2,
+                }
+            return {
+                "eval_reward_mean": 100.01,  # per_step = 5.0005 < 5.0 + 1e-3
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 0.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_tiny_step_eval, t)
+        spu = t._rollout_length * t.num_envs  # 16
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 5, checkpoint_dir=ckpt_dir)
+
+        ckpt_file = tmp_path / "ckpt" / "best_eval_per_step" / "checkpoint.pkl"
+        assert ckpt_file.exists()
+        with open(ckpt_file, "rb") as f:
+            ckpt = pickle.load(f)
+
+        first_eval_step = 2 * spu
+        assert ckpt["global_step"] == first_eval_step, (
+            f"expected global_step={first_eval_step} (first eval only), "
+            f"got {ckpt['global_step']} — delta guard not working"
+        )
+
+    def test_genuine_improvement_above_delta_updates_checkpoint(self, tmp_path):
+        """Improvement >= _EVAL_CKPT_MIN_DELTA triggers a new save at the later step.
+
+        Timeline (eval_interval=1, 3 loop updates):
+          update 1: eval_per_step=5.0  → saves at step=2*spu
+          update 2: eval_per_step=6.5  → 6.5 > 5.0+0.001 → saves at step=3*spu
+        Verify: saved checkpoint has global_step==3*spu.
+        """
+        import types
+
+        t = self._make_eval_trainer()
+        call_count = 0
+
+        def _big_jump_eval(self_, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "eval_reward_mean": 100.0,  # per_step = 5.0
+                    "eval_reward_std": 0.0,
+                    "eval_fall_rate": 0.0,
+                    "eval_success_rate": 0.0,
+                    "eval_num_episodes": 2,
+                }
+            return {
+                "eval_reward_mean": 130.0,  # per_step = 6.5 > 5.0 + 0.001
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 0.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_big_jump_eval, t)
+        spu = t._rollout_length * t.num_envs  # 16
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 3, checkpoint_dir=ckpt_dir)
+
+        ckpt_file = tmp_path / "ckpt" / "best_eval_per_step" / "checkpoint.pkl"
+        assert ckpt_file.exists()
+        with open(ckpt_file, "rb") as f:
+            ckpt = pickle.load(f)
+
+        second_eval_step = 3 * spu
+        assert ckpt["global_step"] == second_eval_step, (
+            f"expected global_step={second_eval_step} (second eval after big improvement), "
+            f"got {ckpt['global_step']}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tests: improved checkpoint saving — cooldown + versioning
+# ---------------------------------------------------------------------------
+
+
+class TestImprovedCheckpointSaving:
+    """Verify cooldown guard, versioned dirs, and stable pointer for all triggered paths.
+
+    Uses _COOLDOWN_TEST_CONFIG (ckpt_cooldown_evals=2, eval_interval=1) for
+    cooldown tests and _LEGACY_CKPT_CONFIG (ckpt_cooldown_evals=0) for legacy tests.
+    """
+
+    @staticmethod
+    def _make_cooldown_trainer():
+        from wheeled_biped.envs.balance_env import BalanceEnv
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        env = BalanceEnv(config=_COOLDOWN_TEST_CONFIG)
+        t = PPOTrainer(env=env, config=_COOLDOWN_TEST_CONFIG, logger=None, seed=0)
+        t.num_envs = NUM_ENVS
+        t._rollout_length = 4
+        return t
+
+    @staticmethod
+    def _make_legacy_trainer():
+        from wheeled_biped.envs.balance_env import BalanceEnv
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        env = BalanceEnv(config=_LEGACY_CKPT_CONFIG)
+        t = PPOTrainer(env=env, config=_LEGACY_CKPT_CONFIG, logger=None, seed=0)
+        t.num_envs = NUM_ENVS
+        t._rollout_length = 4
+        return t
+
+    @staticmethod
+    def _make_eval_trainer():
+        from wheeled_biped.envs.balance_env import BalanceEnv
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        env = BalanceEnv(config=_EVAL_CKPT_CONFIG)
+        t = PPOTrainer(env=env, config=_EVAL_CKPT_CONFIG, logger=None, seed=0)
+        t.num_envs = NUM_ENVS
+        t._rollout_length = 4
+        return t
+
+    # ── cooldown ─────────────────────────────────────────────────────────────
+
+    def test_cooldown_prevents_save_within_n_evals(self, tmp_path):
+        """With ckpt_cooldown_evals=2, a save at eval N must block eval N+1.
+
+        Timeline (eval_interval=1, cooldown=2):
+          update 1 (step=2*spu): counter starts at 2, +=1→3, 3>=2 → saves.
+          update 2 (step=3*spu): counter=0+1=1, 1<2 → blocked (even with improvement).
+          update 3 (step=4*spu): counter=1+1=2, 2>=2 → saves again.
+
+        Verify that ckpt_best/eval_per_step_s{3*spu:010d}/ does NOT exist.
+        """
+        import types
+
+        t = self._make_cooldown_trainer()
+        call_count = 0
+
+        def _always_improving(self_, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            # episode_length=20; per_step = eval_reward_mean/20
+            return {
+                "eval_reward_mean": 100.0 * call_count,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 0.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_always_improving, t)
+        spu = t._rollout_length * t.num_envs  # 16
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 5, checkpoint_dir=ckpt_dir)
+
+        blocked_step = spu * 3  # update 2 — eval 2 — must be blocked
+        blocked_dir = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{blocked_step:010d}"
+        assert not blocked_dir.exists(), (
+            f"cooldown should block save at eval 2 (step {blocked_step}), "
+            f"but {blocked_dir} was created"
+        )
+
+    def test_cooldown_allows_save_after_n_evals(self, tmp_path):
+        """After the cooldown has passed, a genuine improvement must save.
+
+        Same timeline as test_cooldown_prevents_save_within_n_evals.
+        Update 3 (step=4*spu) is eval 3 — cooldown satisfied — must save.
+        """
+        import types
+
+        t = self._make_cooldown_trainer()
+        call_count = 0
+
+        def _always_improving(self_, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return {
+                "eval_reward_mean": 100.0 * call_count,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 0.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_always_improving, t)
+        spu = t._rollout_length * t.num_envs
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 5, checkpoint_dir=ckpt_dir)
+
+        allowed_step = spu * 4  # update 3 — eval 3 — cooldown satisfied
+        allowed_dir = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{allowed_step:010d}"
+        assert allowed_dir.exists(), (
+            f"save at step {allowed_step} (eval 3, after cooldown) should have been created"
+        )
+
+    def test_cooldown_zero_disables_rate_limit(self, tmp_path):
+        """ckpt_cooldown_evals=0 must allow every eval that meets the delta.
+
+        Uses _EVAL_CKPT_CONFIG (cooldown=0) and two evals that each improve.
+        Both versioned dirs should exist.
+        """
+        import types
+
+        t = self._make_eval_trainer()
+        call_count = 0
+
+        def _always_improving(self_, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return {
+                "eval_reward_mean": 100.0 * call_count,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 0.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_always_improving, t)
+        spu = t._rollout_length * t.num_envs
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 3, checkpoint_dir=ckpt_dir)
+
+        # Both eval 1 (step=2*spu) and eval 2 (step=3*spu) should save
+        dir1 = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{spu*2:010d}"
+        dir2 = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{spu*3:010d}"
+        assert dir1.exists(), f"eval 1 versioned dir missing: {dir1}"
+        assert dir2.exists(), f"eval 2 versioned dir missing: {dir2}"
+
+    # ── versioning ────────────────────────────────────────────────────────────
+
+    def test_versioned_dir_naming(self, tmp_path):
+        """Each triggered save goes to ckpt_best/eval_per_step_s{step:010d}/."""
+        import types
+
+        t = self._make_eval_trainer()  # cooldown=0
+
+        def _good_eval(self_, **kwargs):
+            return {
+                "eval_reward_mean": 50.0,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 1.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_good_eval, t)
+        spu = t._rollout_length * t.num_envs
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 3, checkpoint_dir=ckpt_dir)
+
+        # First eval fires at update 1 → global_step = 2*spu
+        first_step = spu * 2
+        versioned = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{first_step:010d}"
+        assert versioned.exists(), f"expected versioned dir: {versioned}"
+        assert (versioned / "checkpoint.pkl").exists()
+
+    def test_stable_pointer_updated_alongside_versioned(self, tmp_path):
+        """best_eval_per_step/checkpoint.pkl (stable pointer) is kept in sync."""
+        import types
+
+        t = self._make_eval_trainer()
+
+        def _good_eval(self_, **kwargs):
+            return {
+                "eval_reward_mean": 50.0,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 1.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_good_eval, t)
+        spu = t._rollout_length * t.num_envs
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 3, checkpoint_dir=ckpt_dir)
+
+        stable = tmp_path / "ckpt" / "best_eval_per_step" / "checkpoint.pkl"
+        assert stable.exists(), "stable pointer best_eval_per_step/checkpoint.pkl must exist"
+
+    def test_stable_pointer_reflects_latest_best(self, tmp_path):
+        """After two successive saves, the stable pointer holds the later step."""
+        import types
+
+        t = self._make_eval_trainer()  # cooldown=0
+        call_count = 0
+
+        def _increasing_eval(self_, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return {
+                "eval_reward_mean": 100.0 * call_count,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 0.0,
+                "eval_success_rate": 0.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_increasing_eval, t)
+        spu = t._rollout_length * t.num_envs
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 3, checkpoint_dir=ckpt_dir)
+
+        stable_path = tmp_path / "ckpt" / "best_eval_per_step" / "checkpoint.pkl"
+        assert stable_path.exists()
+        with open(stable_path, "rb") as f:
+            ckpt = pickle.load(f)
+        # Two evals saved (steps 2*spu and 3*spu); stable must reflect the later one
+        assert ckpt["global_step"] == spu * 3, (
+            f"stable pointer should reflect latest save at step {spu*3}, "
+            f"got {ckpt['global_step']}"
+        )
+
+    # ── legacy path versioning ────────────────────────────────────────────────
+
+    def test_legacy_path_creates_versioned_dir(self, tmp_path):
+        """use_eval_signal=False must write a versioned dir under ckpt_best/."""
+        t = self._make_legacy_trainer()
+        spu = t._rollout_length * t.num_envs
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 4, checkpoint_dir=ckpt_dir)
+
+        ckpt_best = tmp_path / "ckpt" / "ckpt_best"
+        assert ckpt_best.exists(), "ckpt_best/ directory should exist after legacy triggered save"
+        versioned = list(ckpt_best.glob("train_reward_s*/"))
+        assert len(versioned) >= 1, "at least one train_reward_s*/ versioned dir must exist"
+        # Each versioned dir must contain the checkpoint file
+        for d in versioned:
+            assert (d / "checkpoint.pkl").exists(), f"missing checkpoint.pkl in {d}"
+
+    def test_legacy_path_stable_pointer_exists(self, tmp_path):
+        """use_eval_signal=False must also maintain best_train_reward/ stable pointer."""
+        t = self._make_legacy_trainer()
+        spu = t._rollout_length * t.num_envs
+        ckpt_dir = str(tmp_path / "ckpt")
+        t.train(total_steps=spu * 4, checkpoint_dir=ckpt_dir)
+
+        stable = tmp_path / "ckpt" / "best_train_reward" / "checkpoint.pkl"
+        assert stable.exists(), "stable pointer best_train_reward/checkpoint.pkl must exist"
+
+    # ── periodic and final unchanged ──────────────────────────────────────────
+
+    def test_periodic_and_final_not_in_ckpt_best(self, tmp_path):
+        """Periodic (step_N/) and final/ checkpoints must NOT appear under ckpt_best/."""
+        import types
+
+        t = self._make_eval_trainer()
+
+        def _dummy(self_, **kwargs):
+            return {
+                "eval_reward_mean": 1.0,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 1.0,
+                "eval_success_rate": 0.0,
+                "eval_num_episodes": 2,
+            }
+
+        t.eval_pass = types.MethodType(_dummy, t)
+        spu = t._rollout_length * t.num_envs
+        ckpt_dir = str(tmp_path / "ckpt")
+        # save_interval=1 so a periodic save fires every update
+        t.train(total_steps=spu * 3, checkpoint_dir=ckpt_dir, save_interval=1)
+
+        ckpt_best = tmp_path / "ckpt" / "ckpt_best"
+        if ckpt_best.exists():
+            names = [d.name for d in ckpt_best.iterdir()]
+            for name in names:
+                assert name.startswith("eval_") or name.startswith("train_"), (
+                    f"unexpected entry in ckpt_best/: {name!r} "
+                    "(periodic and final saves must not go there)"
+                )
+
+        # final/ must still exist at the top level
+        assert (tmp_path / "ckpt" / "final" / "checkpoint.pkl").exists()
+
+
 class TestLoggerLifecycle:
     """Verify the correct logger lifecycle: log_dict() then close().
 

@@ -1,0 +1,48 @@
+{
+  "checkpoint": "outputs/checkpoints/balance/step_3293184",
+  "stage": "balance",
+  "height_cmd_m": 0.69,
+  "seed": 0,
+  "benchmark": {
+    "mode": "nominal",
+    "num_episodes": 100,
+    "reward_mean": 6158.030541992188,
+    "reward_std": 652.6566892885228,
+    "reward_min": 3826.760986328125,
+    "reward_p5": 5234.418627929687,
+    "reward_p50": 6153.064208984375,
+    "reward_p95": 7006.636694335937,
+    "reward_max": 7036.73095703125,
+    "episode_length_mean": 994.85,
+    "episode_length_max": 1000,
+    "success_rate": 0.98,
+    "fall_rate": 0.02,
+    "timeout_rate": 0.98,
+    "mode_metrics": {}
+  },
+  "standing_quality": {
+    "wheel_spin_mean_rads": 17.241783001686404,
+    "height_mean_m": 0.6421050369518633,
+    "height_std_m": 0.01616034353852553,
+    "height_tracking_rmse_m": 0.05054784059349655,
+    "xy_drift_final_m": 2.643304441383593,
+    "xy_drift_max_m": 2.7945132593577364,
+    "roll_mean_abs_deg": 1.8608453400923957,
+    "pitch_mean_abs_deg": 0.976792052122056,
+    "ctrl_jitter_mean_nm": 15.84063000883497,
+    "leg_asymmetry_hip_pitch_rad": 0.10584650389129424,
+    "leg_asymmetry_knee_rad": 0.07451741366562331,
+    "leg_asymmetry_mean_rad": 0.09018195877845878,
+    "ang_vel_rms_rads": 1.0860003939721217,
+    "flags": [
+      "HIGH wheel spin (17.24 rad/s mean) -- possible wheel-momentum exploit: robot spins wheels to stay upright rather than holding posture",
+      "XY drift (2.79 m max from start) -- robot rolling or drifting while appearing balanced; position_drift reward may be insufficient",
+      "CONTROL JITTER (15.841 Nm mean step-to-step change) -- chattering actuation: action_rate penalty may be too weak",
+      "TORSO WOBBLE (ang_vel RMS=1.09 rad/s) -- chronic pitch/roll oscillation below termination threshold"
+    ],
+    "num_suspicious": 4
+  },
+  "artifacts": {
+    "telemetry_plot": "outputs\\checkpoints\\balance\\step_3293184\\telemetry_plot.png"
+  }
+}

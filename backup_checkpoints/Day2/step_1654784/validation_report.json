@@ -1,0 +1,51 @@
+{
+  "checkpoint": "outputs/checkpoints/balance/step_1654784",
+  "stage": "balance",
+  "height_cmd_m": 0.69,
+  "seed": 0,
+  "benchmark": {
+    "mode": "nominal",
+    "num_episodes": 100,
+    "reward_mean": 445.8971530151367,
+    "reward_std": 166.77527683382002,
+    "reward_min": 195.4846954345703,
+    "reward_p5": 254.49204559326174,
+    "reward_p50": 404.3362579345703,
+    "reward_p95": 794.8586395263671,
+    "reward_max": 1001.9857788085938,
+    "episode_length_mean": 79.4,
+    "episode_length_max": 164,
+    "success_rate": 0.0,
+    "fall_rate": 1.0,
+    "timeout_rate": 0.0,
+    "mode_metrics": {}
+  },
+  "standing_quality": {
+    "wheel_spin_mean_rads": 18.222684228503446,
+    "height_mean_m": 0.2061830940562145,
+    "height_std_m": 0.20848226828056,
+    "height_tracking_rmse_m": 0.5268241211869717,
+    "xy_drift_final_m": 2.729153906152276,
+    "xy_drift_max_m": 2.729153906152276,
+    "roll_mean_abs_deg": 74.590807241267,
+    "pitch_mean_abs_deg": 0.7740013057403516,
+    "ctrl_jitter_mean_nm": 25.495689988443377,
+    "leg_asymmetry_hip_pitch_rad": 0.1353427332074084,
+    "leg_asymmetry_knee_rad": 0.09714116674586046,
+    "leg_asymmetry_mean_rad": 0.11624194997663442,
+    "ang_vel_rms_rads": 2.082925445756812,
+    "flags": [
+      "HIGH wheel spin (18.22 rad/s mean) -- possible wheel-momentum exploit: robot spins wheels to stay upright rather than holding posture",
+      "HEIGHT oscillation (std=0.208 m) -- vertical bounce or unstable crouching: reward may peak briefly then drift",
+      "XY drift (2.73 m max from start) -- robot rolling or drifting while appearing balanced; position_drift reward may be insufficient",
+      "CHRONIC ROLL (74.6 deg mean |roll|) -- robot leaning sideways: visually bad even if below 46 deg termination",
+      "CONTROL JITTER (25.496 Nm mean step-to-step change) -- chattering actuation: action_rate penalty may be too weak",
+      "LEG ASYMMETRY (0.116 rad mean hip_pitch+knee diff) -- one leg crouched more than the other; symmetry reward may be too weak",
+      "TORSO WOBBLE (ang_vel RMS=2.08 rad/s) -- chronic pitch/roll oscillation below termination threshold"
+    ],
+    "num_suspicious": 7
+  },
+  "artifacts": {
+    "telemetry_plot": "outputs\\checkpoints\\balance\\step_1654784\\telemetry_plot.png"
+  }
+}

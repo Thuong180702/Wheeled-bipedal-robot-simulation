@@ -189,6 +189,11 @@ class PPOTrainer:
         self._resumed_best_reward = float("-inf")
         self._resumed_curriculum_min = None  # Curriculum min height từ checkpoint
         self._curriculum_min_height = None  # Giá trị hiện tại (cập nhật trong train())
+        # Eval-triggered checkpoint trackers — restored from checkpoint on resume.
+        # Default to -inf so first eval always saves when no prior checkpoint exists.
+        self._resumed_best_eval_per_step: float = float("-inf")
+        self._resumed_best_eval_success: float = float("-inf")
+        self._resumed_best_train_reward: float = float("-inf")
 
         # PPO hyperparams
         ppo_cfg = config.get("ppo", {})
@@ -587,6 +592,7 @@ class PPOTrainer:
             Dict metrics cuối cùng.
         """
         import os
+        import shutil
 
         os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -736,6 +742,9 @@ class PPOTrainer:
                 os.path.join(checkpoint_dir, "final"),
                 global_step=gs,
                 best_reward=self._resumed_best_reward,
+                best_eval_per_step=self._resumed_best_eval_per_step,
+                best_eval_success=self._resumed_best_eval_success,
+                best_train_reward=self._resumed_best_train_reward,
             )
             if viewer is not None:
                 viewer.request_stop()
@@ -753,6 +762,30 @@ class PPOTrainer:
         # Curriculum gating uses eval_reward_mean from eval_pass() at the end of train().
         _train_rewards: list[float] = []  # rolling window, last 50 updates
         _TRAIN_WINDOW = 50  # noqa: N806
+        # ── Improvement-triggered checkpoint settings ─────────────────────────
+        # Minimum improvement required before a triggered save fires.
+        # Prevents noise-driven writes when the metric stagnates near a plateau.
+        _EVAL_CKPT_MIN_DELTA: float = 1e-3  # noqa: N806
+        _TRAIN_CKPT_MIN_DELTA: float = 1e-2  # noqa: N806  (legacy use_eval_signal=False path)
+        # Minimum evals that must pass between triggered saves (both paths).
+        # Prevents rapid-fire saves during a sustained improvement phase.
+        # Configurable via curriculum.ckpt_cooldown_evals; default 5.
+        # Cooldown is NOT persisted — resets on every (re)start.
+        # After resume, first triggered save is always eligible (safe: never misses peaks).
+        _EVAL_CKPT_COOLDOWN: int = int(curriculum_cfg.get("ckpt_cooldown_evals", 5))  # noqa: N806
+        _TRAIN_CKPT_COOLDOWN: int = _EVAL_CKPT_COOLDOWN  # noqa: N806
+        # Tracker values — restored from checkpoint metadata on resume.
+        # Fall back to -inf for old checkpoints without these fields
+        # (safe: first post-resume eval saves, then delta + cooldown kick in).
+        _best_eval_per_step: float = self._resumed_best_eval_per_step
+        _best_eval_success: float = self._resumed_best_eval_success
+        _best_train_reward: float = self._resumed_best_train_reward
+        # Per-metric eval counts since last triggered save.
+        # Init to cooldown so the first eval is always eligible.
+        _evals_since_per_step_save: int = _EVAL_CKPT_COOLDOWN
+        _evals_since_success_save: int = _EVAL_CKPT_COOLDOWN
+        _windows_since_train_save: int = _TRAIN_CKPT_COOLDOWN
+        # ─────────────────────────────────────────────────────────────────────
 
         # Cập nhật viewer ngay sau warmup
         if viewer is not None:
@@ -909,6 +942,69 @@ class PPOTrainer:
                                 f"fall={_ceval['eval_fall_rate']:.2f}",
                                 flush=True,
                             )
+                            # ── Eval-triggered checkpoints ─────────────────────────────
+                            # Guard: metric must improve by >= _EVAL_CKPT_MIN_DELTA AND
+                            # at least _EVAL_CKPT_COOLDOWN evals must have passed since
+                            # the last save for that metric.
+                            # Each save writes a versioned dir (ckpt_best/eval_per_step_s{step:010d}/)
+                            # and updates the stable pointer (best_eval_per_step/) via copy.
+                            _evals_since_per_step_save += 1
+                            _evals_since_success_save += 1
+                            if (
+                                _eval_per_step > _best_eval_per_step + _EVAL_CKPT_MIN_DELTA
+                                and _evals_since_per_step_save >= _EVAL_CKPT_COOLDOWN
+                            ):
+                                _best_eval_per_step = _eval_per_step
+                                _evals_since_per_step_save = 0
+                                _v = os.path.join(
+                                    checkpoint_dir,
+                                    "ckpt_best",
+                                    f"eval_per_step_s{global_step:010d}",
+                                )
+                                self._save_checkpoint(
+                                    _v,
+                                    global_step=global_step,
+                                    best_reward=best_reward,
+                                    best_eval_per_step=_best_eval_per_step,
+                                    best_eval_success=_best_eval_success,
+                                    best_train_reward=_best_train_reward,
+                                )
+                                _stable = os.path.join(checkpoint_dir, "best_eval_per_step")
+                                os.makedirs(_stable, exist_ok=True)
+                                shutil.copy2(
+                                    os.path.join(_v, "checkpoint.pkl"),
+                                    os.path.join(_stable, "checkpoint.pkl"),
+                                )
+                                if self.logger:
+                                    self.logger.flush()
+                            if (
+                                _ceval["eval_success_rate"] > _best_eval_success + _EVAL_CKPT_MIN_DELTA
+                                and _evals_since_success_save >= _EVAL_CKPT_COOLDOWN
+                            ):
+                                _best_eval_success = _ceval["eval_success_rate"]
+                                _evals_since_success_save = 0
+                                _v = os.path.join(
+                                    checkpoint_dir,
+                                    "ckpt_best",
+                                    f"eval_success_s{global_step:010d}",
+                                )
+                                self._save_checkpoint(
+                                    _v,
+                                    global_step=global_step,
+                                    best_reward=best_reward,
+                                    best_eval_per_step=_best_eval_per_step,
+                                    best_eval_success=_best_eval_success,
+                                    best_train_reward=_best_train_reward,
+                                )
+                                _stable = os.path.join(checkpoint_dir, "best_eval_success")
+                                os.makedirs(_stable, exist_ok=True)
+                                shutil.copy2(
+                                    os.path.join(_v, "checkpoint.pkl"),
+                                    os.path.join(_stable, "checkpoint.pkl"),
+                                )
+                                if self.logger:
+                                    self.logger.flush()
+                            # ───────────────────────────────────────────────────────────
                             if _eval_per_step >= reward_threshold:
                                 current_min_h = max(
                                     round(current_min_h - level_step, 4), final_min_h
@@ -948,6 +1044,41 @@ class PPOTrainer:
                             reward_window.pop(0)
                         if len(reward_window) >= window_size:
                             window_avg = sum(reward_window) / len(reward_window)
+                            # ── Train-reward–triggered checkpoint (legacy path) ──────
+                            # Signal: rolling window of noisy per-rollout avg_reward.
+                            # NOT an eval trigger — named best_train_reward to be explicit.
+                            # Same delta + cooldown guards as eval path.
+                            # Versioned dir: ckpt_best/train_reward_s{step:010d}/
+                            # Stable pointer: best_train_reward/ (overwritten each improvement)
+                            _windows_since_train_save += 1
+                            if (
+                                window_avg > _best_train_reward + _TRAIN_CKPT_MIN_DELTA
+                                and _windows_since_train_save >= _TRAIN_CKPT_COOLDOWN
+                            ):
+                                _best_train_reward = window_avg
+                                _windows_since_train_save = 0
+                                _v = os.path.join(
+                                    checkpoint_dir,
+                                    "ckpt_best",
+                                    f"train_reward_s{global_step:010d}",
+                                )
+                                self._save_checkpoint(
+                                    _v,
+                                    global_step=global_step,
+                                    best_reward=best_reward,
+                                    best_eval_per_step=_best_eval_per_step,
+                                    best_eval_success=_best_eval_success,
+                                    best_train_reward=_best_train_reward,
+                                )
+                                _stable = os.path.join(checkpoint_dir, "best_train_reward")
+                                os.makedirs(_stable, exist_ok=True)
+                                shutil.copy2(
+                                    os.path.join(_v, "checkpoint.pkl"),
+                                    os.path.join(_stable, "checkpoint.pkl"),
+                                )
+                                if self.logger:
+                                    self.logger.flush()
+                            # ─────────────────────────────────────────────────────────
                             if window_avg >= reward_threshold:
                                 current_min_h = max(
                                     round(current_min_h - level_step, 4), final_min_h
@@ -999,6 +1130,9 @@ class PPOTrainer:
                         os.path.join(checkpoint_dir, f"step_{global_step}"),
                         global_step=global_step,
                         best_reward=best_reward,
+                        best_eval_per_step=_best_eval_per_step,
+                        best_eval_success=_best_eval_success,
+                        best_train_reward=_best_train_reward,
                     )
                     # Flush logger buffer to disk alongside checkpoint
                     if self.logger:
@@ -1014,6 +1148,9 @@ class PPOTrainer:
             os.path.join(checkpoint_dir, "final"),
             global_step=global_step,
             best_reward=best_reward,
+            best_eval_per_step=_best_eval_per_step,
+            best_eval_success=_best_eval_success,
+            best_train_reward=_best_train_reward,
         )
 
         # ====== Curriculum Report ======
@@ -1088,8 +1225,17 @@ class PPOTrainer:
         path: str,
         global_step: int = 0,
         best_reward: float = float("-inf"),
+        best_eval_per_step: float = float("-inf"),
+        best_eval_success: float = float("-inf"),
+        best_train_reward: float = float("-inf"),
     ) -> None:
-        """Lưu checkpoint (params + obs_rms + training state)."""
+        """Lưu checkpoint (params + obs_rms + training state).
+
+        best_eval_per_step / best_eval_success / best_train_reward are the
+        eval-triggered checkpoint tracker values at save time.  Storing them
+        here lets a resumed run restore the trackers instead of restarting
+        from -inf and overwriting these directories on the first eval.
+        """
         import os
         import pickle
 
@@ -1107,6 +1253,11 @@ class PPOTrainer:
                 if self._curriculum_min_height is not None
                 else None
             ),
+            # Eval-triggered tracker values — read back by load_checkpoint()
+            # so that a resumed run does not reset these to -inf.
+            "best_eval_per_step": float(best_eval_per_step),
+            "best_eval_success": float(best_eval_success),
+            "best_train_reward": float(best_train_reward),
         }
 
         with open(os.path.join(path, "checkpoint.pkl"), "wb") as f:
@@ -1128,6 +1279,11 @@ class PPOTrainer:
         self._resumed_global_step = checkpoint.get("global_step", 0)
         self._resumed_best_reward = checkpoint.get("best_reward", float("-inf"))
         self._resumed_curriculum_min = checkpoint.get("curriculum_min_height", None)
+        # Eval-triggered tracker values — absent in older checkpoints; fall back
+        # to -inf so the first post-resume eval saves unconditionally (safe).
+        self._resumed_best_eval_per_step = checkpoint.get("best_eval_per_step", float("-inf"))
+        self._resumed_best_eval_success = checkpoint.get("best_eval_success", float("-inf"))
+        self._resumed_best_train_reward = checkpoint.get("best_train_reward", float("-inf"))
         print(
             f"  \U0001f4c2 Checkpoint: step={self._resumed_global_step:,},"
             f" best_reward={self._resumed_best_reward:.4f}"

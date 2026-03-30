@@ -1,0 +1,50 @@
+{
+  "checkpoint": "outputs/checkpoints/balance/step_1654784",
+  "stage": "balance",
+  "height_cmd_m": 0.69,
+  "seed": 0,
+  "benchmark": {
+    "mode": "nominal",
+    "num_episodes": 100,
+    "reward_mean": 280.33596069335937,
+    "reward_std": 47.44044327005101,
+    "reward_min": 197.7515869140625,
+    "reward_p5": 219.4001022338867,
+    "reward_p50": 270.8026885986328,
+    "reward_p95": 367.5708892822266,
+    "reward_max": 457.96923828125,
+    "episode_length_mean": 52.32,
+    "episode_length_max": 89,
+    "success_rate": 0.0,
+    "fall_rate": 1.0,
+    "timeout_rate": 0.0,
+    "mode_metrics": {}
+  },
+  "standing_quality": {
+    "wheel_spin_mean_rads": 18.112516992908045,
+    "height_mean_m": 0.13990944218171564,
+    "height_std_m": 0.11820343803377541,
+    "height_tracking_rmse_m": 0.5626470248422503,
+    "xy_drift_final_m": 1.066578489763106,
+    "xy_drift_max_m": 1.2202830339804491,
+    "roll_mean_abs_deg": 84.33505049401211,
+    "pitch_mean_abs_deg": 0.7221309179219453,
+    "ctrl_jitter_mean_nm": 31.202921814508866,
+    "leg_asymmetry_hip_pitch_rad": 0.04793801533334218,
+    "leg_asymmetry_knee_rad": 0.06964514121031465,
+    "leg_asymmetry_mean_rad": 0.05879157827182842,
+    "ang_vel_rms_rads": 3.695312880783821,
+    "flags": [
+      "HIGH wheel spin (18.11 rad/s mean) -- possible wheel-momentum exploit: robot spins wheels to stay upright rather than holding posture",
+      "HEIGHT oscillation (std=0.118 m) -- vertical bounce or unstable crouching: reward may peak briefly then drift",
+      "XY drift (1.22 m max from start) -- robot rolling or drifting while appearing balanced; position_drift reward may be insufficient",
+      "CHRONIC ROLL (84.3 deg mean |roll|) -- robot leaning sideways: visually bad even if below 46 deg termination",
+      "CONTROL JITTER (31.203 Nm mean step-to-step change) -- chattering actuation: action_rate penalty may be too weak",
+      "TORSO WOBBLE (ang_vel RMS=3.70 rad/s) -- chronic pitch/roll oscillation below termination threshold"
+    ],
+    "num_suspicious": 6
+  },
+  "artifacts": {
+    "telemetry_plot": "outputs\\checkpoints\\balance\\step_1654784\\telemetry_plot.png"
+  }
+}
