@@ -159,8 +159,13 @@ python scripts/visualize.py model --model-path path/to/custom.xml
 #### Single stage
 
 ```bash
-# Pure standing balance (no push disturbances — best starting point)
+# Pure standing balance — initial learning run (5M steps learns narrow height range)
 python scripts/train.py single --stage balance --steps 5000000
+
+# Pure standing balance — curriculum run (50M steps advances through all 29 height levels)
+# With num_envs=4096×rollout=128=524K steps/update and eval_interval=2,
+# the height curriculum can advance every ~1M steps.
+python scripts/train.py single --stage balance --steps 50000000
 
 # Push-recovery fine-tune (warm-start from balance checkpoint)
 python scripts/train.py single --stage balance_robust --steps 3000000
@@ -454,12 +459,14 @@ Two curriculum systems operate independently:
 **Within-stage height curriculum** (`PPOTrainer`, balance only): expands
 `curriculum_min_height` from 0.69 → 0.40 m over 29 levels. Default mode
 (`use_eval_signal: true` in `balance.yaml`): `eval_pass()` is called every
-`eval_interval=50` updates using the greedy policy (32 envs × 200 episodes,
-obs_rms frozen). Advancement fires when `eval_reward_mean / episode_length >=
-reward_threshold`. Progress is logged as `curriculum/eval_per_step`,
-`curriculum/eval_success_rate`, and `curriculum/eval_fall_rate`. Backward-compatible
-fallback (`use_eval_signal: false`): rolling window of per-update `avg_reward` from
-training rollouts (noisier signal, original behavior).
+`eval_interval=2` updates using the greedy policy (32 envs × 200 episodes,
+obs_rms frozen). With `num_envs=4096 × rollout_length=128 = 524,288 steps/update`,
+this fires the first eval at ~1 M env-steps — compatible with a 5 M-step run.
+Advancement fires when `eval_reward_mean / episode_length >= reward_threshold`.
+Progress is logged as `curriculum/eval_per_step`, `curriculum/eval_success_rate`,
+and `curriculum/eval_fall_rate`. Backward-compatible fallback (`use_eval_signal:
+false`): rolling window of per-update `avg_reward` from training rollouts (noisier
+signal, original behavior).
 
 **Multi-stage pipeline** (`CurriculumManager`, `configs/curriculum.yaml`): gates stage
 promotion/hold/demotion on `eval_reward_mean` from the end-of-training `eval_pass()`

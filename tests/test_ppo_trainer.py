@@ -1827,3 +1827,192 @@ class TestLoggerLifecycle:
         entry = json.loads(lines[0])
         assert entry["tag"] == "train/loss"
         assert abs(entry["value"] - 0.42) < 1e-6
+
+
+# ---------------------------------------------------------------------------
+# Tests: balance curriculum cadence fixes (pre-flight audit blocking issues A/B/C)
+# ---------------------------------------------------------------------------
+
+
+class TestBalanceCurriculumFixes:
+    """Tests for the three blocking curriculum fixes identified in the pre-flight audit.
+
+    Fix A: eval_interval now compatible with GPU batch size (was 50, now 2).
+    Fix B: curriculum_min_height is passed to in-training eval_pass() in ppo.py.
+    Fix C: eval_pass() max_steps cap now reaches configured eval_episodes for stable policies.
+
+    Tests A and C use only arithmetic on config values — no JIT required, fast suite.
+    Test B requires running train() with a monkeypatched eval_pass() — marked @pytest.mark.slow.
+    """
+
+    def test_eval_interval_compatible_with_5m_gpu_run(self):
+        """balance.yaml eval_interval must allow at least one eval in a 5M-step GPU run.
+
+        With num_envs=4096, rollout_length=128 → steps_per_update=524,288.
+        eval_interval=2 → first eval at 2 × 524,288 = 1,048,576 steps ≤ 5M. ✓
+        Old value of 50 → first eval at 26M steps > 5M. ✗
+        """
+        from wheeled_biped.utils.config import load_yaml
+
+        cfg = load_yaml("configs/training/balance.yaml")
+        num_envs = cfg["task"]["num_envs"]
+        rollout_length = cfg["ppo"]["rollout_length"]
+        eval_interval = cfg["curriculum"]["eval_interval"]
+
+        steps_per_update = num_envs * rollout_length
+        steps_for_first_eval = eval_interval * steps_per_update
+
+        assert steps_for_first_eval <= 5_000_000, (
+            f"eval_interval={eval_interval} × steps_per_update={steps_per_update:,}"
+            f" = {steps_for_first_eval:,} > 5M steps: curriculum eval never fires "
+            "in a standard 5M-step GPU run. Reduce eval_interval in balance.yaml."
+        )
+
+    def test_eval_interval_allows_multiple_evals_in_50m_run(self):
+        """A 50M-step GPU run should trigger at least 4 curriculum evals.
+
+        Sufficient for advancing at least a few curriculum levels before end-of-training eval.
+        """
+        from wheeled_biped.utils.config import load_yaml
+
+        cfg = load_yaml("configs/training/balance.yaml")
+        num_envs = cfg["task"]["num_envs"]
+        rollout_length = cfg["ppo"]["rollout_length"]
+        eval_interval = cfg["curriculum"]["eval_interval"]
+
+        steps_per_update = num_envs * rollout_length
+        num_updates_50m = 50_000_000 // steps_per_update
+        num_evals_50m = num_updates_50m // eval_interval
+
+        assert num_evals_50m >= 4, (
+            f"A 50M-step GPU run produces only {num_evals_50m} curriculum evals "
+            f"(eval_interval={eval_interval}, steps_per_update={steps_per_update:,}). "
+            "Need >= 4 evals to advance the curriculum meaningfully."
+        )
+
+    def test_eval_pass_max_steps_formula_reaches_configured_episodes(self):
+        """eval_pass() max_steps must collect eval_episodes for stable policies.
+
+        For a stable policy (avg_episode_length ≈ episode_length), the old formula
+        episode_length × 4 was insufficient. The fixed formula accounts for num_eval_envs.
+        """
+        from wheeled_biped.utils.config import load_yaml
+
+        cfg = load_yaml("configs/training/balance.yaml")
+        episode_length = cfg["task"]["episode_length"]  # 1000
+        eval_episodes = cfg["curriculum"]["eval_episodes"]  # 200
+        eval_envs = min(32, cfg["task"]["num_envs"])  # 32
+
+        # Old (broken) formula — capped at ~128 episodes for stable policies
+        old_max_steps = episode_length * 4  # 4000
+        old_episodes_reachable = (old_max_steps * eval_envs) // episode_length  # 128
+
+        # New formula (fixed in eval_pass())
+        new_max_steps = max(
+            episode_length * 4,
+            int(eval_episodes * episode_length * 2 / eval_envs) + 100,
+        )
+        new_episodes_reachable = (new_max_steps * eval_envs) // episode_length
+
+        # Document the bug: old formula was insufficient
+        assert old_episodes_reachable < eval_episodes, (
+            "Test setup check: old formula should have been insufficient for configured "
+            f"episode count ({old_episodes_reachable} < {eval_episodes})"
+        )
+        # Confirm new formula is sufficient
+        assert new_episodes_reachable >= eval_episodes, (
+            f"Fixed max_steps={new_max_steps} reaches only ~{new_episodes_reachable} episodes "
+            f"(target: {eval_episodes}). Formula needs adjustment."
+        )
+
+    @pytest.mark.slow
+    def test_curriculum_eval_uses_current_min_height(self, tmp_path):
+        """train() must pass curriculum_min_height to in-training eval_pass() (Fix B).
+
+        Uses a monkeypatched eval_pass() to capture the keyword arguments it is called
+        with, then runs train() with use_eval_signal=True and verifies that
+        curriculum_min_height is forwarded on every eval call.
+        """
+        import types
+
+        import jax
+
+        from wheeled_biped.envs.balance_env import BalanceEnv
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        tiny_cfg = {
+            "task": {
+                "name": "balance",
+                "env": "BalanceEnv",
+                "episode_length": 10,
+                "num_envs": 4,
+                "initial_min_height": 0.69,
+            },
+            "curriculum": {
+                "enabled": True,
+                "reward_threshold": 0.75,
+                "num_levels": 5,
+                "window": 5,
+                "use_eval_signal": True,
+                "eval_interval": 1,  # fire every update so we capture calls quickly
+                "eval_episodes": 2,
+            },
+            "ppo": {
+                "learning_rate": 1e-4,
+                "num_epochs": 1,
+                "num_minibatches": 1,
+                "rollout_length": 4,
+                "gamma": 0.99,
+                "gae_lambda": 0.95,
+                "clip_epsilon": 0.2,
+                "entropy_coeff": 0.0,
+                "value_loss_coeff": 0.5,
+                "max_grad_norm": 0.5,
+                "normalize_advantages": True,
+                "seed": 0,
+            },
+            "network": {
+                "policy_hidden": [32],
+                "value_hidden": [32],
+                "activation": "elu",
+                "init_std": 0.5,
+            },
+            "low_level_pid": {"enabled": False},
+            "rewards": {
+                "body_level": 1.0,
+                "height": 1.0,
+                "alive": 0.1,
+            },
+            "termination": {"max_tilt_rad": 0.8, "min_height": 0.3},
+            "domain_randomization": {"enabled": False},
+            "sensor_noise": {"enabled": False},
+        }
+
+        env = BalanceEnv(tiny_cfg)
+        trainer = PPOTrainer(env=env, config=tiny_cfg, rng=jax.random.PRNGKey(0))
+
+        eval_call_kwargs: list[dict] = []
+
+        def _capture_eval(self_, **kwargs):
+            eval_call_kwargs.append(dict(kwargs))
+            return {
+                "eval_reward_mean": 0.0,
+                "eval_reward_std": 0.0,
+                "eval_fall_rate": 1.0,
+                "eval_success_rate": 0.0,
+                "eval_num_episodes": 2,
+            }
+
+        trainer.eval_pass = types.MethodType(_capture_eval, trainer)
+
+        spu = tiny_cfg["ppo"]["rollout_length"] * tiny_cfg["task"]["num_envs"]
+        trainer.train(total_steps=spu * 3, checkpoint_dir=str(tmp_path / "ckpt"))
+
+        assert len(eval_call_kwargs) >= 1, (
+            "eval_pass() was never called during train() — check eval_interval and total_steps"
+        )
+        for i, kwargs in enumerate(eval_call_kwargs):
+            assert "curriculum_min_height" in kwargs, (
+                f"eval_pass() call #{i + 1} is missing 'curriculum_min_height' kwarg. "
+                "Fix B: train() must forward curriculum_min_height to eval_pass()."
+            )

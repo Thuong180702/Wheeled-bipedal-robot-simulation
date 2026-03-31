@@ -457,7 +457,18 @@ class PPOTrainer:
         running_return = [0.0] * num_eval_envs
         running_fallen = [False] * num_eval_envs
 
-        max_steps = self.env._episode_length * 4  # hard safety cap
+        # Hard safety cap: must be large enough to collect num_episodes complete episodes
+        # even when the policy is stable (avg_episode_length ≈ episode_length).
+        # Formula: each outer-loop iteration steps all num_eval_envs in parallel, so
+        #   episodes_reachable = max_steps × num_eval_envs / avg_episode_length
+        # We need episodes_reachable >= num_episodes.  Using a safety factor of 2:
+        #   max_steps = ceil(num_episodes × episode_length × 2 / num_eval_envs) + 100
+        # For default balance config (200 eps, ep_len=1000, 32 envs):
+        #   max_steps = max(4000, ceil(200×1000×2/32)+100) = max(4000, 12600) = 12600
+        # The old formula (episode_length × 4 = 4000) capped at ~128 eps for stable policies.
+        _n = max(1, num_eval_envs)
+        _min_for_episodes = int(num_episodes * self.env._episode_length * 2 / _n) + 100
+        max_steps = max(self.env._episode_length * 4, _min_for_episodes)
         obs_rms = self.obs_rms  # snapshot — not updated
         params = self.params
 
@@ -953,6 +964,9 @@ class PPOTrainer:
                                 num_eval_envs=_curriculum_eval_envs,
                                 num_episodes=_curriculum_eval_episodes,
                                 rng=_ceval_key,
+                                # Pass current curriculum level so eval samples from the
+                                # actual training height range, not the narrow initial range.
+                                curriculum_min_height=current_min_h,
                             )
                             _eval_per_step = _ceval["eval_reward_mean"] / max(
                                 1, self.episode_length

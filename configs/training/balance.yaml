@@ -22,7 +22,11 @@ curriculum:
   # every eval_interval updates.  More trustworthy than the noisy per-rollout avg_reward.
   # eval_per_step = eval_reward_mean / episode_length is compared against reward_threshold.
   use_eval_signal: true
-  eval_interval: 50 # run eval every N updates (matches legacy window for same cadence)
+  # Eval cadence: fires every N policy-gradient updates.
+  # GPU math: num_envs=4096 × rollout_length=128 = 524,288 steps/update.
+  #   eval_interval=2  → first eval at ~1 M env-steps (fits inside a 5 M-step run).
+  #   Old value of 50  → first eval at ~26 M steps: curriculum was disabled for short runs.
+  eval_interval: 2
   eval_episodes: 200 # episodes per check — 32 envs × ~6 restarts; ±7% CI at 95%
 
 # --- PPO Hyperparameters ---

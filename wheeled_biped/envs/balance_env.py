@@ -130,7 +130,10 @@ class BalanceEnv(WheeledBipedEnv):
         # PID gains (vector theo 10 joints), có fallback an toàn
         default_kp = [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
         default_ki = [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
-        default_kd = [3.0, 2.0, 4.0, 4.0, 0.2, 3.0, 2.0, 4.0, 4.0, 0.2]
+        # Wheel kd (indices 4, 9) is 0.0: wheels use PI velocity control (no derivative).
+        # pid_control() also masks wheel kd to 0 internally, so any non-zero value here
+        # has no effect; using 0.0 avoids misleading readers of the fallback defaults.
+        default_kd = [3.0, 2.0, 4.0, 4.0, 0.0, 3.0, 2.0, 4.0, 4.0, 0.0]
         kp_cfg = pid_cfg.get("kp", default_kp)
         ki_cfg = pid_cfg.get("ki", default_ki)
         kd_cfg = pid_cfg.get("kd", default_kd)
