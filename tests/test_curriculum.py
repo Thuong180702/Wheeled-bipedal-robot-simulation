@@ -468,8 +468,18 @@ class TestEvalMetricPreference:
         )
         call_iter = iter(
             [
-                {"best_reward": 0.0, "eval_reward_mean": 5.0, "episode_length": 1, "total_steps": 10},
-                {"best_reward": 0.0, "eval_reward_mean": 5.0, "episode_length": 1, "total_steps": 10},
+                {
+                    "best_reward": 0.0,
+                    "eval_reward_mean": 5.0,
+                    "episode_length": 1,
+                    "total_steps": 10,
+                },
+                {
+                    "best_reward": 0.0,
+                    "eval_reward_mean": 5.0,
+                    "episode_length": 1,
+                    "total_steps": 10,
+                },
             ]
         )
 
@@ -618,7 +628,7 @@ class TestEpisodeLengthNormalization:
         assert "stage_1" in result
 
     def test_episode_sum_below_threshold_does_not_naturally_promote(self):
-        """eval_reward_mean=800, episode_length=1000 → 0.8/step < success_value=1.0 → no natural promote."""
+        """eval_reward_mean=800, ep_len=1000 → 0.8/step < success_value=1.0 → no natural promote."""
         mgr = _make_manager(
             num_stages=2,
             window=2,  # needs 2 fills
@@ -649,9 +659,9 @@ class TestEpisodeLengthNormalization:
         )
 
         # Every value passed to _evaluate_promotion should be ~0.8 (per-step), not 800
-        assert all(
-            v < 1.0 for v in performance_history_snapshots
-        ), f"Expected per-step values < 1.0, got {performance_history_snapshots}"
+        assert all(v < 1.0 for v in performance_history_snapshots), (
+            f"Expected per-step values < 1.0, got {performance_history_snapshots}"
+        )
 
     def test_missing_episode_length_defaults_to_1000(self):
         """When episode_length is absent, default 1000 is used for normalisation."""

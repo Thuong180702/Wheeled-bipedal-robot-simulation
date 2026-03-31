@@ -20,7 +20,6 @@ import jax.numpy as jnp
 from mujoco import mjx
 
 from wheeled_biped.envs.base_env import EnvState, WheeledBipedEnv
-from wheeled_biped.sim.domain_randomization import randomize_mjx_model
 from wheeled_biped.rewards.reward_functions import (
     compute_total_reward,
     penalty_action_rate,
@@ -39,6 +38,7 @@ from wheeled_biped.rewards.reward_functions import (
     reward_natural_pose,
     reward_no_motion,
 )
+from wheeled_biped.sim.domain_randomization import randomize_mjx_model
 from wheeled_biped.sim.low_level_control import pid_control
 from wheeled_biped.sim.push_disturbance import apply_push_disturbance
 from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate, quat_to_euler

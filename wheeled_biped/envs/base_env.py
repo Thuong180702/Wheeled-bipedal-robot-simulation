@@ -215,9 +215,9 @@ class WheeledBipedEnv:
                 gravity_body,  # [0:3]
                 base_lin_vel,  # [3:6]
                 base_ang_vel,  # [6:9]
-                joint_pos,     # [9:19]
-                joint_vel,     # [19:29]
-                prev_action,   # [29:39]
+                joint_pos,  # [9:19]
+                joint_vel,  # [19:29]
+                prev_action,  # [29:39]
             ]
         )
 
@@ -226,14 +226,18 @@ class WheeledBipedEnv:
         # Four independent Gaussian noise sources, one per noised channel group.
         if rng is not None and self._noise_enabled:
             k1, k2, k3, k4 = jax.random.split(rng, 4)
-            obs_noise = jnp.concatenate([
-                jax.random.normal(k1, (3,)) * self._noise_gravity_std,           # gravity_body
-                jnp.zeros(3),                                                      # base_lin_vel (no direct sensor)
-                jax.random.normal(k2, (3,)) * self._noise_ang_vel_std,           # base_ang_vel (IMU gyro)
-                jax.random.normal(k3, (self.NUM_JOINTS,)) * self._noise_joint_pos_std,  # joint_pos (encoder)
-                jax.random.normal(k4, (self.NUM_JOINTS,)) * self._noise_joint_vel_std,  # joint_vel (encoder deriv)
-                jnp.zeros(self.NUM_JOINTS),                                        # prev_action (known, no noise)
-            ])
+            obs_noise = jnp.concatenate(
+                [
+                    jax.random.normal(k1, (3,)) * self._noise_gravity_std,  # gravity_body
+                    jnp.zeros(3),  # lin_vel: no sensor
+                    jax.random.normal(k2, (3,)) * self._noise_ang_vel_std,  # ang_vel: IMU gyro
+                    jax.random.normal(k3, (self.NUM_JOINTS,))
+                    * self._noise_joint_pos_std,  # joint_pos
+                    jax.random.normal(k4, (self.NUM_JOINTS,))
+                    * self._noise_joint_vel_std,  # joint_vel
+                    jnp.zeros(self.NUM_JOINTS),  # prev_action: no noise
+                ]
+            )
             obs = obs + obs_noise
 
         return obs

@@ -977,7 +977,8 @@ class PPOTrainer:
                             # Guard: metric must improve by >= _EVAL_CKPT_MIN_DELTA AND
                             # at least _EVAL_CKPT_COOLDOWN evals must have passed since
                             # the last save for that metric.
-                            # Each save writes a versioned dir (ckpt_best/eval_per_step_s{step:010d}/)
+                            # Each save writes a versioned dir
+                            # (ckpt_best/eval_per_step_s{step:010d}/)
                             # and updates the stable pointer (best_eval_per_step/) via copy.
                             _evals_since_per_step_save += 1
                             _evals_since_success_save += 1
@@ -1008,8 +1009,12 @@ class PPOTrainer:
                                 )
                                 if self.logger:
                                     self.logger.flush()
+                            _success_improved = (
+                                _ceval["eval_success_rate"]
+                                > _best_eval_success + _EVAL_CKPT_MIN_DELTA
+                            )
                             if (
-                                _ceval["eval_success_rate"] > _best_eval_success + _EVAL_CKPT_MIN_DELTA
+                                _success_improved
                                 and _evals_since_success_save >= _EVAL_CKPT_COOLDOWN
                             ):
                                 _best_eval_success = _ceval["eval_success_rate"]

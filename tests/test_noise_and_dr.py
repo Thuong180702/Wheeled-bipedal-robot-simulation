@@ -26,7 +26,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from wheeled_biped.utils.config import get_model_path, load_yaml  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Shared MuJoCo fixtures (same pattern as test_sim_helpers.py)
 # ---------------------------------------------------------------------------
@@ -113,13 +112,15 @@ class TestSensorNoiseConfig:
 
     def test_noise_params_loaded(self):
         """Explicit config → all std values stored correctly."""
-        env = self._make_env({
-            "enabled": True,
-            "ang_vel_std": 0.05,
-            "gravity_std": 0.02,
-            "joint_pos_std": 0.005,
-            "joint_vel_std": 0.01,
-        })
+        env = self._make_env(
+            {
+                "enabled": True,
+                "ang_vel_std": 0.05,
+                "gravity_std": 0.02,
+                "joint_pos_std": 0.005,
+                "joint_vel_std": 0.01,
+            }
+        )
         assert env._noise_enabled is True
         assert env._noise_ang_vel_std == pytest.approx(0.05)
         assert env._noise_gravity_std == pytest.approx(0.02)
@@ -128,11 +129,13 @@ class TestSensorNoiseConfig:
 
     def test_noise_disabled_flag_respected(self):
         """enabled: false overrides non-zero std values."""
-        env = self._make_env({
-            "enabled": False,
-            "ang_vel_std": 1.0,
-            "gravity_std": 1.0,
-        })
+        env = self._make_env(
+            {
+                "enabled": False,
+                "ang_vel_std": 1.0,
+                "gravity_std": 1.0,
+            }
+        )
         assert env._noise_enabled is False
 
 
@@ -149,13 +152,17 @@ class TestSensorNoiseObservation:
     def _make_noisy_env(self):
         from wheeled_biped.envs.base_env import WheeledBipedEnv
 
-        return WheeledBipedEnv(config={"sensor_noise": {
-            "enabled": True,
-            "ang_vel_std": 0.1,
-            "gravity_std": 0.05,
-            "joint_pos_std": 0.01,
-            "joint_vel_std": 0.02,
-        }})
+        return WheeledBipedEnv(
+            config={
+                "sensor_noise": {
+                    "enabled": True,
+                    "ang_vel_std": 0.1,
+                    "gravity_std": 0.05,
+                    "joint_pos_std": 0.01,
+                    "joint_vel_std": 0.02,
+                }
+            }
+        )
 
     def _make_clean_env(self):
         from wheeled_biped.envs.base_env import WheeledBipedEnv
@@ -216,8 +223,8 @@ class TestSensorNoiseObservation:
 
         # prev_action occupies last NUM_JOINTS dims
         assert np.allclose(
-            np.array(obs_noisy[-self.NUM_JOINTS:]),
-            np.array(obs_clean[-self.NUM_JOINTS:]),
+            np.array(obs_noisy[-self.NUM_JOINTS :]),
+            np.array(obs_clean[-self.NUM_JOINTS :]),
         ), "prev_action channel must not be affected by obs noise"
 
     def test_noise_disabled_obs_unchanged(self, fake_mjx_data):
@@ -252,9 +259,7 @@ class TestSensorNoiseObservation:
             "base_lin_vel[3:6] should not be noised (not a direct sensor)"
         )
         # prev_action [29:39] must be zero diff
-        assert np.allclose(diff[29:39], 0.0), (
-            "prev_action[29:39] should not be noised"
-        )
+        assert np.allclose(diff[29:39], 0.0), "prev_action[29:39] should not be noised"
         # At least one of gravity[0:3] or ang_vel[6:9] should differ
         assert diff[0:3].max() > 0.0 or diff[6:9].max() > 0.0, (
             "gravity_body or ang_vel should have non-zero noise"
@@ -273,12 +278,16 @@ class TestDRModelRandomization:
         """Two calls with different rng keys yield different body_mass arrays."""
         import mujoco
         from mujoco import mjx
+
         from wheeled_biped.sim.domain_randomization import randomize_mjx_model
 
         mj_model = mujoco.MjModel.from_xml_path(str(get_model_path()))
         base_mjx = mjx.put_model(mj_model)
-        dr_config = {"mass_range": [0.85, 1.15], "friction_range": [0.6, 1.4],
-                     "joint_damping_range": [0.7, 1.3]}
+        dr_config = {
+            "mass_range": [0.85, 1.15],
+            "friction_range": [0.6, 1.4],
+            "joint_damping_range": [0.7, 1.3],
+        }
 
         model_a, _ = randomize_mjx_model(base_mjx, jax.random.PRNGKey(0), dr_config)
         model_b, _ = randomize_mjx_model(base_mjx, jax.random.PRNGKey(1), dr_config)
@@ -291,12 +300,16 @@ class TestDRModelRandomization:
         """Same rng key yields identical randomized model."""
         import mujoco
         from mujoco import mjx
+
         from wheeled_biped.sim.domain_randomization import randomize_mjx_model
 
         mj_model = mujoco.MjModel.from_xml_path(str(get_model_path()))
         base_mjx = mjx.put_model(mj_model)
-        dr_config = {"mass_range": [0.85, 1.15], "friction_range": [0.6, 1.4],
-                     "joint_damping_range": [0.7, 1.3]}
+        dr_config = {
+            "mass_range": [0.85, 1.15],
+            "friction_range": [0.6, 1.4],
+            "joint_damping_range": [0.7, 1.3],
+        }
 
         model_a, _ = randomize_mjx_model(base_mjx, jax.random.PRNGKey(42), dr_config)
         model_b, _ = randomize_mjx_model(base_mjx, jax.random.PRNGKey(42), dr_config)
@@ -309,6 +322,7 @@ class TestDRModelRandomization:
         """Randomized mass must stay within the configured [lo, hi] * base_mass range."""
         import mujoco
         from mujoco import mjx
+
         from wheeled_biped.sim.domain_randomization import randomize_mjx_model
 
         mj_model = mujoco.MjModel.from_xml_path(str(get_model_path()))
@@ -346,12 +360,8 @@ class TestDRModelRandomization:
         env = BalanceEnv(config=config)
         state = env.reset(jax.random.PRNGKey(0))
 
-        assert "dr_mjx_model" in state.info, (
-            "state.info must contain dr_mjx_model after reset()"
-        )
-        assert "noise_rng" in state.info, (
-            "state.info must contain noise_rng after reset()"
-        )
+        assert "dr_mjx_model" in state.info, "state.info must contain dr_mjx_model after reset()"
+        assert "noise_rng" in state.info, "state.info must contain noise_rng after reset()"
 
     def test_balance_env_dr_differs_between_episodes(self):
         """Two resets with different keys produce different dr_mjx_model mass."""

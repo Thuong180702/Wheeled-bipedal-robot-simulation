@@ -484,9 +484,7 @@ class TestBalanceEnvRewardWeightDefaults:
                 continue
             code_val = env._reward_weights[key]
             if abs(float(code_val) - float(prod_val)) > 1e-9:
-                mismatches.append(
-                    f"  {key}: code default={code_val}, balance.yaml={prod_val}"
-                )
+                mismatches.append(f"  {key}: code default={code_val}, balance.yaml={prod_val}")
 
         assert not mismatches, (
             "BalanceEnv reward weight defaults diverge from configs/training/balance.yaml:\n"
@@ -538,10 +536,18 @@ class TestControlPathSemantics:
 
     _MINIMAL_CFG = {
         "task": {"episode_length": 10, "initial_min_height": 0.68},
-        "low_level_pid": {"enabled": True, "action_smoothing_alpha": 0.4,
-                          "anti_windup_limit": 0.35, "wheel_vel_limit": 20.0},
-        "domain_randomization": {"enabled": False, "push_magnitude": 0,
-                                  "push_interval": 9999, "push_duration": 1},
+        "low_level_pid": {
+            "enabled": True,
+            "action_smoothing_alpha": 0.4,
+            "anti_windup_limit": 0.35,
+            "wheel_vel_limit": 20.0,
+        },
+        "domain_randomization": {
+            "enabled": False,
+            "push_magnitude": 0,
+            "push_interval": 9999,
+            "push_duration": 1,
+        },
         "curriculum": {"enabled": False},
         "sensor_noise": {"enabled": False},
     }
@@ -567,6 +573,7 @@ class TestControlPathSemantics:
         vectorised interface used during training.
         """
         import types
+
         from wheeled_biped.envs.balance_env import BalanceEnv
 
         env = BalanceEnv(config=self._MINIMAL_CFG)
@@ -589,14 +596,14 @@ class TestControlPathSemantics:
         """
         import jax
         import jax.numpy as jnp
+
         from wheeled_biped.envs.balance_env import BalanceEnv
 
         # PID-enabled env
         env_pid = BalanceEnv(config=self._MINIMAL_CFG)
 
         # Direct-torque env (pid disabled)
-        cfg_notpid = {**self._MINIMAL_CFG,
-                      "low_level_pid": {"enabled": False}}
+        cfg_notpid = {**self._MINIMAL_CFG, "low_level_pid": {"enabled": False}}
         env_nopid = BalanceEnv(config=cfg_notpid)
 
         rng = jax.random.PRNGKey(0)
@@ -625,20 +632,37 @@ class TestControlPathSemantics:
         The env receives clip(raw_action) and applies smoothing on top.
         """
         import jax
+
         from wheeled_biped.envs.balance_env import BalanceEnv
         from wheeled_biped.training.ppo import PPOTrainer
 
         env = BalanceEnv(config=self._MINIMAL_CFG)
-        trainer = PPOTrainer(env=env, config={
-            **self._MINIMAL_CFG,
-            "ppo": {"learning_rate": 3e-4, "num_epochs": 1, "num_minibatches": 2,
-                     "gamma": 0.99, "gae_lambda": 0.95, "clip_epsilon": 0.2,
-                     "entropy_coeff": 0.01, "value_loss_coeff": 0.5,
-                     "max_grad_norm": 0.5, "normalize_advantages": True,
-                     "rollout_length": 4},
-            "network": {"policy_hidden": [32, 32], "value_hidden": [32, 32],
-                        "activation": "elu"},
-        }, logger=None, seed=0)
+        trainer = PPOTrainer(
+            env=env,
+            config={
+                **self._MINIMAL_CFG,
+                "ppo": {
+                    "learning_rate": 3e-4,
+                    "num_epochs": 1,
+                    "num_minibatches": 2,
+                    "gamma": 0.99,
+                    "gae_lambda": 0.95,
+                    "clip_epsilon": 0.2,
+                    "entropy_coeff": 0.01,
+                    "value_loss_coeff": 0.5,
+                    "max_grad_norm": 0.5,
+                    "normalize_advantages": True,
+                    "rollout_length": 4,
+                },
+                "network": {
+                    "policy_hidden": [32, 32],
+                    "value_hidden": [32, 32],
+                    "activation": "elu",
+                },
+            },
+            logger=None,
+            seed=0,
+        )
         trainer.num_envs = 4
         trainer._rollout_length = 4
 
@@ -653,7 +677,8 @@ class TestControlPathSemantics:
         # We verify by checking it equals what the policy produced (not what env saw).
         # Structural check: shape and dtype are correct
         assert transitions.action.shape[-1] == env.num_actions, (
-            f"transition.action last dim {transitions.action.shape[-1]} != num_actions {env.num_actions}"
+            f"transition.action last dim {transitions.action.shape[-1]}"
+            f" != num_actions {env.num_actions}"
         )
         # Verify stored actions are unbounded (raw samples, not clipped to [-1,1])
         # NOTE: for a freshly-initialized policy with init_std=0.2 this may occasionally
@@ -1587,8 +1612,8 @@ class TestImprovedCheckpointSaving:
         t.train(total_steps=spu * 3, checkpoint_dir=ckpt_dir)
 
         # Both eval 1 (step=2*spu) and eval 2 (step=3*spu) should save
-        dir1 = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{spu*2:010d}"
-        dir2 = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{spu*3:010d}"
+        dir1 = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{spu * 2:010d}"
+        dir2 = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{spu * 3:010d}"
         assert dir1.exists(), f"eval 1 versioned dir missing: {dir1}"
         assert dir2.exists(), f"eval 2 versioned dir missing: {dir2}"
 
@@ -1672,7 +1697,7 @@ class TestImprovedCheckpointSaving:
             ckpt = pickle.load(f)
         # Two evals saved (steps 2*spu and 3*spu); stable must reflect the later one
         assert ckpt["global_step"] == spu * 3, (
-            f"stable pointer should reflect latest save at step {spu*3}, "
+            f"stable pointer should reflect latest save at step {spu * 3}, "
             f"got {ckpt['global_step']}"
         )
 
