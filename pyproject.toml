@@ -66,3 +66,6 @@ warn_unused_configs = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+markers = [
+    "slow: marks tests that require JAX/MJX JIT compilation — excluded from fast CI (run with -m slow)",
+]

@@ -48,6 +48,8 @@ jobs:
       # Excluded from CI:
       #   test_env.py          — constructs BalanceEnv and runs full MJX sim steps;
       #                          JIT compile time is prohibitive on free runners.
+      #   @pytest.mark.slow    — tests that trigger MJX JIT (e.g. two-env ctrl comparison,
+      #                          functional curriculum train() runs); run locally with -m slow.
       # All other test files run on JAX CPU backend and complete in < 2 min total.
       - name: Pytest — unit tests
         env:
@@ -56,5 +58,6 @@ jobs:
         run: |
           python -m pytest tests/ \
             --ignore=tests/test_env.py \
+            -m "not slow" \
             -v --tb=short -q \
             --timeout=120

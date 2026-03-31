@@ -584,6 +584,7 @@ class TestControlPathSemantics:
             "env.step must dispatch to BalanceEnv.step, not WheeledBipedEnv.step"
         )
 
+    @pytest.mark.slow
     def test_pid_enabled_produces_different_ctrl_than_direct_torque(self):
         """With PID enabled, scaled_ctrl differs from simple ctrlrange scaling.
 

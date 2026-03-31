@@ -26,7 +26,7 @@ curriculum:
   # GPU math: num_envs=4096 × rollout_length=128 = 524,288 steps/update.
   #   eval_interval=2  → first eval at ~1 M env-steps (fits inside a 5 M-step run).
   #   Old value of 50  → first eval at ~26 M steps: curriculum was disabled for short runs.
-  eval_interval: 2
+  eval_interval: 20
   eval_episodes: 200 # episodes per check — 32 envs × ~6 restarts; ±7% CI at 95%
 
 # --- PPO Hyperparameters ---
@@ -128,9 +128,9 @@ termination:
 # training-vs-eval gap identified in the audit.
 domain_randomization:
   enabled: true
-  mass_range: [0.85, 1.15] # was [0.9, 1.1]
-  friction_range: [0.6, 1.4] # was [0.8, 1.2]
-  joint_damping_range: [0.7, 1.3] # was [0.8, 1.2]
+  mass_range: [0.85, 1.15] # 15% variation in mass (matches hardware variation better than 10%)
+  friction_range: [0.7, 1.3] # 30% variation in friction coefficient (wider than mass to cover more sim-vs-real gap)
+  joint_damping_range: [0.8, 1.2] # 20% variation in viscous damping
   push_interval: 500 # đẩy ngẫu nhiên mỗi 500 steps (~10s)
   push_magnitude: 0 # Stage 1: không push — robot học balance thuần trước
   push_duration: 5 # số steps giữ lực (5 × 0.02s = 0.1 giây mỗi lần đẩy)
