@@ -26,6 +26,17 @@ from wheeled_biped.training.networks import create_actor_critic
 from wheeled_biped.utils.logger import TrainingLogger
 
 # ============================================================
+# Checkpoint versioning
+# ============================================================
+
+# Increment this when the checkpoint format changes in a backward-incompatible way.
+# Version history:
+#   1 — initial versioned format (params, opt_state, obs_rms, config,
+#         global_step, best_reward, curriculum_min_height,
+#         best_eval_per_step, best_eval_success, best_train_reward)
+CHECKPOINT_VERSION: int = 1
+
+# ============================================================
 # Data Structures
 # ============================================================
 
@@ -319,7 +330,22 @@ class PPOTrainer:
                 method=self.model.get_action_and_value,
             )
 
-            # Clip action cho environment (nhưng giữ raw_action cho PPO ratio)
+            # The environment receives clip(raw_action).  Task envs such as
+            # BalanceEnv further transform this into:
+            #   control_action = alpha * prev_action + (1 - alpha) * clip(raw_action)
+            # before applying PID and stepping physics.
+            #
+            # PPO importance ratio design:
+            #   - transition.action stores raw_action (the policy sample)
+            #   - old_log_prob = log π_old(raw_action | obs)
+            #   - update recomputes log_prob_new(raw_action | obs)
+            #   → ratio = π_new(raw_action) / π_old(raw_action)  — internally consistent
+            #
+            # Imprecision: the advantage A_t reflects outcomes caused by control_action
+            # (smoothed), but the gradient pushes π_θ(raw_action).  raw_action has
+            # ~0.6 weight in control_action and the policy observes prev_action in its
+            # obs, so the signal is directionally correct.  This is an accepted
+            # engineering trade-off for action smoothing in on-policy RL.
             action = jnp.clip(raw_action, -1.0, 1.0)
 
             # Step environment
@@ -336,7 +362,7 @@ class PPOTrainer:
 
             transition = Transition(
                 obs=obs,
-                action=raw_action,  # Unclipped action: PPO ratio consistent
+                action=raw_action,  # Policy sample (pre-clip, pre-smooth) — see comment above
                 reward=transition_reward,
                 done=transition_done,
                 value=value,
@@ -894,6 +920,11 @@ class PPOTrainer:
                     if curriculum_enabled:
                         log_metrics["curriculum/level"] = float(curriculum_level)
                         log_metrics["curriculum/min_height"] = float(current_min_h)
+                        # Log the gate values so any run's JSONL is self-contained:
+                        # reward_threshold = threshold_ratio × max_reward_possible (per step).
+                        # Required to reconstruct why curriculum did/did not advance.
+                        log_metrics["curriculum/reward_threshold"] = float(reward_threshold)
+                        log_metrics["curriculum/max_reward_possible"] = float(max_reward_possible)
 
                     if self.logger:
                         self.logger.set_step(global_step)
@@ -1215,6 +1246,9 @@ class PPOTrainer:
             "eval_fall_rate": eval_metrics["eval_fall_rate"],
             "eval_success_rate": eval_metrics["eval_success_rate"],
             "total_steps": global_step,
+            # episode_length is included so CurriculumManager can normalise
+            # eval_reward_mean → per-step units for dimensionally correct gating.
+            "episode_length": self.episode_length,
             "curriculum_min_height": current_min_h if curriculum_enabled else None,
             "curriculum_level": curriculum_level if curriculum_enabled else None,
             "curriculum_num_levels": num_levels if curriculum_enabled else None,
@@ -1242,6 +1276,7 @@ class PPOTrainer:
         os.makedirs(path, exist_ok=True)
 
         checkpoint = {
+            "version": CHECKPOINT_VERSION,
             "params": jax.device_get(self.params),
             "opt_state": jax.device_get(self.opt_state),
             "obs_rms": jax.device_get(self.obs_rms),
@@ -1267,9 +1302,28 @@ class PPOTrainer:
         """Tải checkpoint."""
         import os
         import pickle
+        import warnings
 
         with open(os.path.join(path, "checkpoint.pkl"), "rb") as f:
             checkpoint = pickle.load(f)
+
+        # Version validation — fail fast on incompatible formats, warn on pre-versioned files.
+        ckpt_version = checkpoint.get("version", None)
+        if ckpt_version is None:
+            warnings.warn(
+                f"Checkpoint at '{path}' has no version field — written before versioning "
+                f"was introduced. Loading with backward-compatible defaults. "
+                f"Consider resaving to version {CHECKPOINT_VERSION}.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        elif ckpt_version > CHECKPOINT_VERSION:
+            raise ValueError(
+                f"Checkpoint at '{path}' has version {ckpt_version}, but this codebase "
+                f"only supports up to version {CHECKPOINT_VERSION}. "
+                f"Update the codebase or use the matching checkpoint."
+            )
+        # ckpt_version == CHECKPOINT_VERSION or None (pre-versioned, handled above): proceed.
 
         self.params = jax.device_put(checkpoint["params"])
         self.opt_state = jax.device_put(checkpoint["opt_state"])

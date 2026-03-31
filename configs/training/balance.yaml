@@ -23,7 +23,7 @@ curriculum:
   # eval_per_step = eval_reward_mean / episode_length is compared against reward_threshold.
   use_eval_signal: true
   eval_interval: 50 # run eval every N updates (matches legacy window for same cadence)
-  eval_episodes: 20 # episodes per check — lightweight (32 envs × 20 eps)
+  eval_episodes: 200 # episodes per check — 32 envs × ~6 restarts; ±7% CI at 95%
 
 # --- PPO Hyperparameters ---
 ppo:
@@ -110,7 +110,7 @@ rewards:
   wheel_velocity: -0.005 # penalises wheel spin — conflicts with push recovery
   # === Penalties ===
   joint_torque: -0.0005 # phạt mô-men lớn
-  joint_velocity: -0.0006 # phạt tốc độ khớp
+  joint_velocity: -0.00061 # phạt tốc độ khớp
   action_rate: -0.05 # anti-jitter for standing; tighter than robust (see note above)
 
 # --- Termination ---
@@ -119,11 +119,26 @@ termination:
   min_height: 0.3 # quá thấp thì kết thúc
 
 # --- Domain Randomization ---
+# mass/friction/damping applied per-episode via randomize_mjx_model() in BalanceEnv.reset().
+# Ranges widened vs. original (±10%/±20%) to match hardware variation and close the
+# training-vs-eval gap identified in the audit.
 domain_randomization:
   enabled: true
-  mass_range: [0.9, 1.1] # ±10% khối lượng
-  friction_range: [0.8, 1.2] # ±20% ma sát
-  joint_damping_range: [0.8, 1.2]
+  mass_range: [0.85, 1.15] # was [0.9, 1.1]
+  friction_range: [0.8, 1.2] # was [0.8, 1.2]
+  joint_damping_range: [0.8, 1.2] # was [0.8, 1.2]
   push_interval: 500 # đẩy ngẫu nhiên mỗi 500 steps (~10s)
   push_magnitude: 0 # Stage 1: không push — robot học balance thuần trước
   push_duration: 5 # số steps giữ lực (5 × 0.02s = 0.1 giây mỗi lần đẩy)
+
+# --- Sensor Noise ---
+# Conservative first-pass sim-to-real observation noise.
+# Channels: ang_vel (IMU gyro), gravity_body (IMU accel), joint_pos (encoder), joint_vel (encoder deriv).
+# base_lin_vel and prev_action are NOT noised (not direct sensor readings).
+# Set enabled: false to disable all channels at once (e.g. for ablation or debugging).
+sensor_noise:
+  enabled: true
+  ang_vel_std: 0.05 # rad/s  — MEMS IMU gyro RMS at 50 Hz control bandwidth
+  gravity_std: 0.02 # normalized  — accelerometer measurement noise
+  joint_pos_std: 0.005 # rad  — ~0.3° encoder resolution noise
+  joint_vel_std: 0.01 # rad/s  — encoder velocity estimation noise

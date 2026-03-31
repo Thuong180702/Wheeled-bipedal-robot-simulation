@@ -221,18 +221,25 @@ class CurriculumManager:
             results[stage_name] = train_result
 
             # ── Performance-gated stage progression ──────────────────────
-            # Prefer eval_reward_mean (mean of last 50 training updates — stable)
-            # over best_reward (all-time max — noisy, inflated by early outliers).
+            # Prefer eval_reward_mean (held-out greedy eval pass) over
+            # best_reward (all-time max — noisy, inflated by early outliers).
             eval_metric = train_result.get(
                 "eval_reward_mean",
                 train_result.get("best_reward", 0.0),
             )
-            decision = self._evaluate_promotion(eval_metric)
+            # Normalise to per-step units so that success_value in curriculum.yaml
+            # is expressed as reward/step (not episode sum).
+            # episode_length is provided by PPOTrainer.train(); default 1000 keeps
+            # backward compatibility with older result dicts that lack the key.
+            episode_length = train_result.get("episode_length", 1000)
+            eval_per_step = eval_metric / max(1, episode_length)
+            decision = self._evaluate_promotion(eval_per_step)
 
             print(
                 f"\n  📊 Curriculum decision: [{decision.upper()}] "
-                f"eval_metric={eval_metric:.4f}  "
-                f"(attempt {attempt}/{self.max_retries_per_stage})"
+                f"eval_per_step={eval_per_step:.4f}"
+                f" (eval_metric={eval_metric:.1f} / ep_len={episode_length})"
+                f"  (attempt {attempt}/{self.max_retries_per_stage})"
             )
 
             if decision == "promote":

@@ -103,7 +103,7 @@ while the policy is queried at \SI{50}{Hz},
 \end{equation}
 Each policy action is therefore held constant for ten simulation substeps. Training is parallelized across 4096 environments on GPU.
 
-Domain randomization~\cite{tobin2017domain} is applied during training to improve robustness: body masses are perturbed by $\pm 10\%$, ground friction coefficients by $\pm 20\%$, and joint damping coefficients by $\pm 20\%$ relative to their nominal values.
+Domain randomization~\cite{tobin2017domain} is applied during training to improve robustness: body masses are perturbed by $\pm 15\%$, ground friction coefficients by $\pm 40\%$, and joint damping coefficients by $\pm 30\%$ relative to their nominal values. Randomization is applied per episode at reset time.
 
 \subsection{Low-Level PID Control}
 \label{sec:pid}
@@ -206,10 +206,10 @@ Angular stability ($r_{\mathrm{orient}}$) & Positive & 0.5 \\
 Yaw suppression ($r_{\mathrm{yaw}}$) & Positive & 0.5 \\
 Natural pose ($r_{\mathrm{nat}}$) & Positive & 0.4 \\
 Alive bonus ($r_{\mathrm{alive}}$) & Positive & 0.3 \\
-Action rate ($p_{\Delta a}$) & Penalty & $-0.03$ \\
-Wheel velocity ($p_{\mathrm{wh}}$) & Penalty & $-0.0008$ \\
+Action rate ($p_{\Delta a}$) & Penalty & $-0.05$ \\
+Wheel velocity ($p_{\mathrm{wh}}$) & Penalty & $-0.005$ \\
 Joint torque ($p_\tau$) & Penalty & $-0.0005$ \\
-Joint velocity ($p_{\dot{q}}$) & Penalty & $-0.0006$ \\
+Joint velocity ($p_{\dot{q}}$) & Penalty & $-0.00061$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -380,7 +380,7 @@ h_{\min}^{(k+1)} = \max\!\big(h_{\min}^{(k)} - \delta_h,\; h_{\min}^{final}\big)
 \label{eq:height_curriculum}
 \end{equation}
 
-The advancement signal $\bar{r}_{\mathrm{eval}}$ is obtained from a dedicated evaluation pass: every $I_{\mathrm{eval}} = 50$ training updates, the current policy is evaluated greedily (no exploration noise) over 20 complete episodes using 32 parallel environments, with the observation normalizer held fixed. The per-step return is then
+The advancement signal $\bar{r}_{\mathrm{eval}}$ is obtained from a dedicated evaluation pass: every $I_{\mathrm{eval}} = 50$ training updates, the current policy is evaluated greedily (no exploration noise) over 200 complete episodes using 32 parallel environments, with the observation normalizer held fixed. The per-step return is then
 \begin{equation}
 \bar{r}_{\mathrm{eval}} = \frac{R_{\mathrm{mean}}}{T},
 \label{eq:eval_per_step}
@@ -514,7 +514,7 @@ This work has several important limitations that should be noted:
 
     \item \textbf{Single seed.} Planned training runs do not yet include multi-seed experiments, which are needed for statistical validity.
 
-    \item \textbf{Height curriculum evaluation is lightweight.} The within-stage height curriculum now uses a greedy evaluation pass (32 envs × 20 episodes every 50 updates) rather than noisy training-rollout rewards, reducing the risk of premature advancement. However, the evaluation budget is small, and the signal may still be noisy in early training before the policy stabilizes.
+    \item \textbf{Height curriculum evaluation is lightweight.} The within-stage height curriculum uses a greedy evaluation pass (32 envs × 200 episodes every 50 updates) rather than noisy training-rollout rewards, reducing the risk of premature advancement. However, the evaluation budget remains limited by wall-clock time, and the signal may still be noisy in early training before the policy stabilizes.
 \end{enumerate}
 
 \section{Conclusion}

@@ -251,6 +251,7 @@ def single(
     # Mapping stage → config file
     stage_configs = {
         "balance": "configs/training/balance.yaml",
+        "balance_robust": "configs/training/balance_robust.yaml",
         "wheeled_locomotion": "configs/training/wheeled_locomotion.yaml",
         "walking": "configs/training/walking.yaml",
         "stair_climbing": "configs/training/stair_climbing.yaml",

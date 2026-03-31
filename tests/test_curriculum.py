@@ -243,12 +243,18 @@ def _make_stub_trainer(best_reward: float, eval_reward_mean: float | None = None
 
     If eval_reward_mean is None, the dict mimics a legacy trainer that did not
     include eval_reward_mean (used to test the best_reward fallback).
+
+    ``episode_length: 1`` is included so that the per-step normalisation in
+    CurriculumManager.run() is a no-op (eval_per_step = metric / 1 = metric).
+    Tests that specifically exercise normalisation use their own inline stubs
+    with realistic episode_length values — see TestEpisodeLengthNormalization.
     """
     stub = MagicMock()
     result = {
         "best_reward": best_reward,
         "train_reward_mean": best_reward,  # new key — rolling train metric
         "total_steps": 100,
+        "episode_length": 1,  # keeps existing test thresholds valid after normalisation
     }
     if eval_reward_mean is not None:
         result["eval_reward_mean"] = eval_reward_mean
@@ -462,8 +468,8 @@ class TestEvalMetricPreference:
         )
         call_iter = iter(
             [
-                {"best_reward": 0.0, "eval_reward_mean": 5.0, "total_steps": 10},
-                {"best_reward": 0.0, "eval_reward_mean": 5.0, "total_steps": 10},
+                {"best_reward": 0.0, "eval_reward_mean": 5.0, "episode_length": 1, "total_steps": 10},
+                {"best_reward": 0.0, "eval_reward_mean": 5.0, "episode_length": 1, "total_steps": 10},
             ]
         )
 
@@ -475,6 +481,7 @@ class TestEvalMetricPreference:
                 stub.train.return_value = {  # noqa: E501
                     "best_reward": 99.0,
                     "eval_reward_mean": 99.0,
+                    "episode_length": 1,
                     "total_steps": 10,
                 }
             return stub, MagicMock()
@@ -498,9 +505,12 @@ class TestEvalMetricPreference:
             success_value=1.0,
             max_retries=5,
         )
-        # No eval_reward_mean key — only best_reward
+        # No eval_reward_mean key — only best_reward (legacy trainer result)
         call_iter = iter(
-            [{"best_reward": 5.0, "total_steps": 10}, {"best_reward": 5.0, "total_steps": 10}]
+            [
+                {"best_reward": 5.0, "episode_length": 1, "total_steps": 10},
+                {"best_reward": 5.0, "episode_length": 1, "total_steps": 10},
+            ]
         )
 
         def _fake_create(idx):
@@ -533,10 +543,10 @@ class TestEvalMetricPreference:
         )
         # Both results: best_reward high (would promote alone), eval_reward_mean low (would not)
         results_seq = [
-            {"best_reward": 10.0, "eval_reward_mean": 0.0, "total_steps": 10},
-            {"best_reward": 10.0, "eval_reward_mean": 0.0, "total_steps": 10},
-            {"best_reward": 10.0, "eval_reward_mean": 0.0, "total_steps": 10},
-            {"best_reward": 10.0, "eval_reward_mean": 0.0, "total_steps": 10},
+            {"best_reward": 10.0, "eval_reward_mean": 0.0, "episode_length": 1, "total_steps": 10},
+            {"best_reward": 10.0, "eval_reward_mean": 0.0, "episode_length": 1, "total_steps": 10},
+            {"best_reward": 10.0, "eval_reward_mean": 0.0, "episode_length": 1, "total_steps": 10},
+            {"best_reward": 10.0, "eval_reward_mean": 0.0, "episode_length": 1, "total_steps": 10},
         ]
         call_iter = iter(results_seq)
 
@@ -548,6 +558,7 @@ class TestEvalMetricPreference:
                 stub.train.return_value = {  # noqa: E501
                     "best_reward": 99.0,
                     "eval_reward_mean": 0.0,
+                    "episode_length": 1,
                     "total_steps": 10,
                 }
             return stub, MagicMock()
@@ -562,3 +573,112 @@ class TestEvalMetricPreference:
         # force-promoted after max_retries=1. Both stages still appear in results.
         assert "stage_0" in results
         assert "stage_1" in results
+
+
+# ---------------------------------------------------------------------------
+# Tests: episode_length normalisation
+# CurriculumManager.run() must divide eval_reward_mean by episode_length before
+# comparing against success_value.  success_value is expressed in reward/step
+# units; eval_reward_mean is an episode *sum*.
+# ---------------------------------------------------------------------------
+
+
+class TestEpisodeLengthNormalization:
+    """Verify that run() normalises eval_reward_mean → per-step before gating."""
+
+    def _run_single_stage(self, mgr, train_result: dict) -> dict:
+        def _fake_create(idx):
+            stub = MagicMock()
+            stub.train.return_value = train_result
+            return stub, MagicMock()
+
+        mgr._create_trainer_for_stage = _fake_create
+        with patch("wheeled_biped.training.curriculum.Path.mkdir"):
+            return mgr.run(total_steps_per_stage=100)
+
+    def test_episode_sum_above_threshold_promotes(self):
+        """eval_reward_mean=1500, episode_length=1000 → 1.5/step > success_value=1.0 → promotes."""
+        mgr = _make_manager(
+            num_stages=2,
+            window=1,
+            promotion_threshold=0.8,
+            success_value=1.0,
+            max_retries=5,
+        )
+        result = self._run_single_stage(
+            mgr,
+            {
+                "best_reward": 0.0,
+                "eval_reward_mean": 1500.0,  # 1500 / 1000 = 1.5 > 1.0 → promote
+                "episode_length": 1000,
+                "total_steps": 100,
+            },
+        )
+        assert "stage_0" in result
+        assert "stage_1" in result
+
+    def test_episode_sum_below_threshold_does_not_naturally_promote(self):
+        """eval_reward_mean=800, episode_length=1000 → 0.8/step < success_value=1.0 → no natural promote."""
+        mgr = _make_manager(
+            num_stages=2,
+            window=2,  # needs 2 fills
+            promotion_threshold=0.8,
+            success_value=1.0,
+            max_retries=1,  # 1 retry → force-promote so test completes
+        )
+        # All calls return 0.8/step — never naturally passes 1.0 threshold.
+        # With max_retries=1 the manager force-promotes, so the test terminates.
+        performance_history_snapshots: list[list[float]] = []
+
+        original_evaluate = mgr._evaluate_promotion
+
+        def _spy_evaluate(metric_value: float) -> str:
+            performance_history_snapshots.append(metric_value)
+            return original_evaluate(metric_value)
+
+        mgr._evaluate_promotion = _spy_evaluate
+
+        self._run_single_stage(
+            mgr,
+            {
+                "best_reward": 9999.0,  # high raw value — would promote if NOT normalised
+                "eval_reward_mean": 800.0,  # 800 / 1000 = 0.8 < 1.0
+                "episode_length": 1000,
+                "total_steps": 100,
+            },
+        )
+
+        # Every value passed to _evaluate_promotion should be ~0.8 (per-step), not 800
+        assert all(
+            v < 1.0 for v in performance_history_snapshots
+        ), f"Expected per-step values < 1.0, got {performance_history_snapshots}"
+
+    def test_missing_episode_length_defaults_to_1000(self):
+        """When episode_length is absent, default 1000 is used for normalisation."""
+        mgr = _make_manager(
+            num_stages=1,
+            window=1,
+            promotion_threshold=0.8,
+            success_value=1.0,
+            max_retries=5,
+        )
+        seen: list[float] = []
+        original = mgr._evaluate_promotion
+
+        def _spy(v: float) -> str:
+            seen.append(v)
+            return original(v)
+
+        mgr._evaluate_promotion = _spy
+        self._run_single_stage(
+            mgr,
+            {
+                "best_reward": 0.0,
+                "eval_reward_mean": 2000.0,  # 2000 / 1000 = 2.0 > 1.0
+                # no episode_length key → defaults to 1000
+                "total_steps": 100,
+            },
+        )
+        # Should have received 2.0, not 2000.0
+        assert seen, "spy was never called"
+        assert all(abs(v - 2.0) < 1e-9 for v in seen), f"Expected 2.0/step, got {seen}"

@@ -103,7 +103,7 @@ Joints per leg (5 × 2 = 10 total):
 │   ├── validate_checkpoint.py         # Standing validation (benchmark + posture quality)
 │   ├── compare_baseline.py            # Regression comparison CLI
 │   └── export_results.py              # Export training logs → CSV/PNG; eval JSON → Markdown table
-├── tests/                             # 11 test files (pytest)
+├── tests/                             # 12 test files (pytest)
 ├── .github/workflows/ci.yml           # GitHub Actions CI
 ├── pyproject.toml
 └── requirements.txt
@@ -359,6 +359,7 @@ pytest tests/test_curriculum.py -v        # Curriculum promote/hold/demote
 pytest tests/test_unified_controller.py -v # Tilt semantics, skill switching
 pytest tests/test_benchmark.py -v         # Benchmark success/fall/timeout semantics
 pytest tests/test_sim_helpers.py -v       # Push disturbance, PID control
+pytest tests/test_noise_and_dr.py -v      # Sensor noise + per-episode DR
 pytest tests/test_baseline.py -v          # Baseline comparison logic
 pytest tests/test_standing_quality.py -v  # Standing quality signals (pure numpy, no JAX/MuJoCo)
 
@@ -453,7 +454,7 @@ Two curriculum systems operate independently:
 **Within-stage height curriculum** (`PPOTrainer`, balance only): expands
 `curriculum_min_height` from 0.69 → 0.40 m over 29 levels. Default mode
 (`use_eval_signal: true` in `balance.yaml`): `eval_pass()` is called every
-`eval_interval=50` updates using the greedy policy (32 envs × 20 episodes,
+`eval_interval=50` updates using the greedy policy (32 envs × 200 episodes,
 obs_rms frozen). Advancement fires when `eval_reward_mean / episode_length >=
 reward_threshold`. Progress is logged as `curriculum/eval_per_step`,
 `curriculum/eval_success_rate`, and `curriculum/eval_fall_rate`. Backward-compatible
@@ -471,8 +472,8 @@ Two training configs serve different objectives:
 | Term | `balance.yaml` | `balance_robust.yaml` | Note |
 |---|---|---|---|
 | `no_motion` | 0.5 | **0.0** | Wheels must spin to recover from push |
-| `wheel_velocity` | −0.0008 | **0.0** | Wheels are primary balancing actuators under push |
-| `action_rate` | −0.03 | **−0.005** | Rapid wheel burst needed immediately after impact |
+| `wheel_velocity` | −0.005 | **0.0** | Wheels are primary balancing actuators under push |
+| `action_rate` | −0.05 | **−0.005** | Rapid wheel burst needed immediately after impact |
 | `height`, `body_level`, `natural_pose` | shared | shared | Consistent standing objective |
 
 Both configs share `push_magnitude=0` (balance) or `40 N` (robust).
@@ -488,7 +489,7 @@ metric against the stage's `success_value` threshold over a sliding `promotion_w
 
 GitHub Actions workflow at `.github/workflows/ci.yml`:
 - **Ruff** lint + format check
-- **Pytest** over 10 of 11 test files (excludes `test_env.py` — full MJX JIT compile is
+- **Pytest** over 11 of 12 test files (excludes `test_env.py` — full MJX JIT compile is
   prohibitively slow on free runners). `test_smoke_train.py` is collected but its tests
   are marked `@pytest.mark.slow`; run them locally with `pytest tests/test_smoke_train.py -m slow`.
 - CPU-only JAX (`jax[cpu]`) — `jax[cuda12]` override applied before package install
@@ -513,13 +514,16 @@ Key knobs:
 | `domain_randomization.push_magnitude` | `<stage>.yaml` | Push force (0 = disabled) |
 | `termination.max_tilt_rad` | `<stage>.yaml` | Fall threshold (~0.8 rad = 46°) |
 | `low_level_pid.enabled` | `<stage>.yaml` | PID low-level control mode |
+| `sensor_noise.enabled` | `<stage>.yaml` | Enable Gaussian obs noise (sim-to-real realism) |
+| `sensor_noise.ang_vel_std` | `<stage>.yaml` | Angular velocity noise std (rad/s) |
+| `sensor_noise.joint_pos_std` | `<stage>.yaml` | Joint position noise std (rad) |
 
 ---
 
 ## Known limitations and gaps
 
 - **Only `balance` has been trained.** All other stages are config-ready but untrained.
-- **No sensor noise.** IMU and encoder noise are not modelled in simulation.
+- **Sensor noise is conservative.** Gaussian noise is applied to IMU (angular velocity, gravity vector) and encoder (joint position, velocity) observations during training. The default standard deviations (`ang_vel_std: 0.05 rad/s`, `gravity_std: 0.02`, `joint_pos_std: 0.005 rad`, `joint_vel_std: 0.01 rad/s`) are initial estimates; hardware-calibrated values have not been validated. Disable with `sensor_noise.enabled: false`.
 - **Sim-to-real not validated.** Domain randomisation and push disturbance are the only
   transfer bridges; no hardware tests have been performed.
 - **`test_env.py` excluded from CI.** The full MJX rollout JIT-compiles to GPU code;

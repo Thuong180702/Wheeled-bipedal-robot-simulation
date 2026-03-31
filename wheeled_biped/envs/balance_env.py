@@ -20,6 +20,7 @@ import jax.numpy as jnp
 from mujoco import mjx
 
 from wheeled_biped.envs.base_env import EnvState, WheeledBipedEnv
+from wheeled_biped.sim.domain_randomization import randomize_mjx_model
 from wheeled_biped.rewards.reward_functions import (
     compute_total_reward,
     penalty_action_rate,
@@ -65,22 +66,25 @@ class BalanceEnv(WheeledBipedEnv):
 
         # Lấy trọng số reward
         reward_cfg = self.config.get("rewards", {})
+        # Defaults mirror configs/training/balance.yaml so partial configs behave
+        # consistently with the production config.  Any key present in the config
+        # overrides the default via .get(); keys absent in the config use these values.
         self._reward_weights = {
             "body_level": reward_cfg.get("body_level", 1.5),
             "height": reward_cfg.get("height", 2.5),
             "legs_forward": reward_cfg.get("legs_forward", 0.5),
             "legs_vertical": reward_cfg.get("legs_vertical", 0.5),
-            "joint_torque": reward_cfg.get("joint_torque", -0.0001),
-            "joint_velocity": reward_cfg.get("joint_velocity", -0.0001),
-            "action_rate": reward_cfg.get("action_rate", -0.01),
-            "orientation": reward_cfg.get("orientation", 0.5),
-            "alive": reward_cfg.get("alive", 0.2),
+            "joint_torque": reward_cfg.get("joint_torque", -0.0005),
+            "joint_velocity": reward_cfg.get("joint_velocity", -0.00061),
+            "action_rate": reward_cfg.get("action_rate", -0.05),
+            "orientation": reward_cfg.get("orientation", 0.8),
+            "alive": reward_cfg.get("alive", 0.3),
             "no_motion": reward_cfg.get("no_motion", 0.5),
-            "symmetry": reward_cfg.get("symmetry", 0.5),
-            "wheel_velocity": reward_cfg.get("wheel_velocity", -0.001),
-            "position_drift": reward_cfg.get("position_drift", 0.8),
+            "symmetry": reward_cfg.get("symmetry", 1.0),
+            "wheel_velocity": reward_cfg.get("wheel_velocity", -0.005),
+            "position_drift": reward_cfg.get("position_drift", 1.5),
             "heading": reward_cfg.get("heading", 0.5),
-            "natural_pose": reward_cfg.get("natural_pose", 0.5),
+            "natural_pose": reward_cfg.get("natural_pose", 0.4),
             "yaw_rate": reward_cfg.get("yaw_rate", 0.5),
         }
 
@@ -90,12 +94,15 @@ class BalanceEnv(WheeledBipedEnv):
         task_cfg = self.config.get("task", {})
         self._initial_min_height = float(task_cfg.get("initial_min_height", self.MIN_HEIGHT_CMD))
 
-        # Push disturbance config
+        # Push disturbance + per-episode model DR config
         dr_cfg = self.config.get("domain_randomization", {})
         self._push_interval = int(dr_cfg.get("push_interval", 200))
         self._push_magnitude = float(dr_cfg.get("push_magnitude", 20.0))
         self._push_duration = int(dr_cfg.get("push_duration", 5))  # số steps giữ lực
         self._push_enabled = bool(dr_cfg.get("enabled", True))
+        # Full DR config stored for randomize_mjx_model() (mass/friction/damping)
+        self._dr_enabled = self._push_enabled  # reuse 'enabled' flag for all DR
+        self._dr_config = dr_cfg
 
         # Low-level PID config: policy -> target, PID -> actuator ctrl
         pid_cfg = self.config.get("low_level_pid", {})
@@ -181,10 +188,17 @@ class BalanceEnv(WheeledBipedEnv):
         rng, sub_key = jax.random.split(rng)
         mjx_data = self._get_initial_mjx_data(sub_key)
 
-        # Nhiễu nhỏ vào vị trí khớp
-        rng, noise_key = jax.random.split(rng)
+        # Per-episode model DR (mass/friction/damping) — widened ranges in balance.yaml
+        if self._dr_enabled:
+            rng, dr_key = jax.random.split(rng)
+            dr_mjx_model, _ = randomize_mjx_model(self.mjx_model, dr_key, self._dr_config)
+        else:
+            dr_mjx_model = self.mjx_model
+
+        # Nhiễu vị trí khớp tại reset (widened ±0.05 → ±0.10 rad for DR)
+        rng, joint_noise_key = jax.random.split(rng)
         joint_noise = jax.random.uniform(
-            noise_key, shape=(self.NUM_JOINTS,), minval=-0.05, maxval=0.05
+            joint_noise_key, shape=(self.NUM_JOINTS,), minval=-0.10, maxval=0.10
         )
         new_qpos = mjx_data.qpos.at[7:].add(joint_noise)
         mjx_data = mjx_data.replace(qpos=new_qpos)
@@ -199,8 +213,11 @@ class BalanceEnv(WheeledBipedEnv):
             maxval=self.MAX_HEIGHT_CMD,
         )
 
+        # Obs noise key — separate from push_rng for independent noise stream
+        rng, obs_noise_key = jax.random.split(rng)
+
         prev_action = jnp.zeros(self.num_actions)
-        base_obs = self._extract_obs(mjx_data, prev_action)
+        base_obs = self._extract_obs(mjx_data, prev_action, obs_noise_key)
 
         # Normalize height_command về [0, 1]
         height_norm = (height_command - self.MIN_HEIGHT_CMD) / (
@@ -229,6 +246,8 @@ class BalanceEnv(WheeledBipedEnv):
                 "anchor_xy": anchor_xy,
                 "initial_yaw": initial_yaw,
                 "push_rng": push_key,
+                "noise_rng": obs_noise_key,
+                "dr_mjx_model": dr_mjx_model,
                 "lifetime_steps": jnp.int32(0),
                 "curriculum_min_height": jnp.float32(self._initial_min_height),
                 "pid_integral": jnp.zeros(self.num_actions, dtype=jnp.float32),
@@ -277,14 +296,18 @@ class BalanceEnv(WheeledBipedEnv):
             push_enabled=self._push_enabled,
         )
 
+        # Use per-episode DR model for physics (randomized mass/friction/damping)
+        dr_mjx_model = state.info["dr_mjx_model"]
+
         def physics_step(data, _):
-            data = mjx.step(self.mjx_model, data)
+            data = mjx.step(dr_mjx_model, data)
             return data, None
 
         mjx_data, _ = jax.lax.scan(physics_step, mjx_data, None, length=self._n_substeps)
 
-        # Base obs (39 dims)
-        base_obs = self._extract_obs(mjx_data, control_action)
+        # Advance obs noise RNG and extract noisy base obs (39 dims)
+        noise_key, new_noise_rng = jax.random.split(state.info["noise_rng"])
+        base_obs = self._extract_obs(mjx_data, control_action, noise_key)
 
         # Append height_command (normalized)
         height_command = state.info["height_command"]
@@ -316,6 +339,8 @@ class BalanceEnv(WheeledBipedEnv):
                 "anchor_xy": state.info["anchor_xy"],  # giữ nguyên
                 "initial_yaw": state.info["initial_yaw"],  # giữ nguyên
                 "push_rng": new_push_rng,  # cập nhật rng cho push tiếp theo
+                "noise_rng": new_noise_rng,  # cập nhật rng cho obs noise tiếp theo
+                "dr_mjx_model": state.info["dr_mjx_model"],  # giữ nguyên trong episode
                 "lifetime_steps": state.info["lifetime_steps"] + 1,
                 "curriculum_min_height": state.info["curriculum_min_height"],
                 "pid_integral": pid_integral,

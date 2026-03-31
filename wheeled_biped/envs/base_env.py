@@ -119,6 +119,17 @@ class WheeledBipedEnv:
         task_cfg = self.config.get("task", {})
         self._episode_length = task_cfg.get("episode_length", 1000)
 
+        # Sensor noise config (sim-to-real obs corruption)
+        # Channels: gravity_body (IMU accel), base_ang_vel (IMU gyro),
+        #           joint_pos (encoder), joint_vel (encoder deriv).
+        # base_lin_vel and prev_action are not noised.
+        noise_cfg = self.config.get("sensor_noise", {})
+        self._noise_enabled = bool(noise_cfg.get("enabled", False))
+        self._noise_ang_vel_std = float(noise_cfg.get("ang_vel_std", 0.0))
+        self._noise_gravity_std = float(noise_cfg.get("gravity_std", 0.0))
+        self._noise_joint_pos_std = float(noise_cfg.get("joint_pos_std", 0.0))
+        self._noise_joint_vel_std = float(noise_cfg.get("joint_vel_std", 0.0))
+
     def _compute_obs_size(self) -> int:
         """Tính kích thước observation vector.
 
@@ -162,15 +173,25 @@ class WheeledBipedEnv:
         # Chuyển sang MJX
         return mjx.put_data(self.mj_model, mj_data)
 
-    def _extract_obs(self, mjx_data: mjx.Data, prev_action: jnp.ndarray) -> jnp.ndarray:
+    def _extract_obs(
+        self,
+        mjx_data: mjx.Data,
+        prev_action: jnp.ndarray,
+        rng: jax.Array | None = None,
+    ) -> jnp.ndarray:
         """Trích xuất observation từ MJX data.
 
         Args:
             mjx_data: dữ liệu MJX.
             prev_action: action bước trước.
+            rng: JAX random key for observation noise (None = no noise).
+                 Noise is only added when rng is not None AND self._noise_enabled.
+                 Noised channels: gravity_body[0:3], base_ang_vel[6:9],
+                                  joint_pos[9:19], joint_vel[19:29].
+                 Channels left clean: base_lin_vel[3:6], prev_action[29:39].
 
         Returns:
-            Observation vector.
+            Observation vector (shape: 39,).
         """
         # Quaternion thân (qpos[3:7])
         torso_quat = mjx_data.qpos[3:7]
@@ -191,14 +212,29 @@ class WheeledBipedEnv:
         # Ghép lại
         obs = jnp.concatenate(
             [
-                gravity_body,  # 3
-                base_lin_vel,  # 3
-                base_ang_vel,  # 3
-                joint_pos,  # 10
-                joint_vel,  # 10
-                prev_action,  # 10
+                gravity_body,  # [0:3]
+                base_lin_vel,  # [3:6]
+                base_ang_vel,  # [6:9]
+                joint_pos,     # [9:19]
+                joint_vel,     # [19:29]
+                prev_action,   # [29:39]
             ]
         )
+
+        # Sensor noise (sim-to-real)
+        # Only applied when rng is provided and noise is enabled in config.
+        # Four independent Gaussian noise sources, one per noised channel group.
+        if rng is not None and self._noise_enabled:
+            k1, k2, k3, k4 = jax.random.split(rng, 4)
+            obs_noise = jnp.concatenate([
+                jax.random.normal(k1, (3,)) * self._noise_gravity_std,           # gravity_body
+                jnp.zeros(3),                                                      # base_lin_vel (no direct sensor)
+                jax.random.normal(k2, (3,)) * self._noise_ang_vel_std,           # base_ang_vel (IMU gyro)
+                jax.random.normal(k3, (self.NUM_JOINTS,)) * self._noise_joint_pos_std,  # joint_pos (encoder)
+                jax.random.normal(k4, (self.NUM_JOINTS,)) * self._noise_joint_vel_std,  # joint_vel (encoder deriv)
+                jnp.zeros(self.NUM_JOINTS),                                        # prev_action (known, no noise)
+            ])
+            obs = obs + obs_noise
 
         return obs
 
@@ -239,16 +275,19 @@ class WheeledBipedEnv:
         rng, sub_key = jax.random.split(rng)
         mjx_data = self._get_initial_mjx_data(sub_key)
 
-        # Thêm nhiễu nhỏ vào vị trí khớp (tránh overfitting)
-        rng, noise_key = jax.random.split(rng)
+        # Nhiễu vị trí khớp tại reset (widened ±0.05 → ±0.10 rad for #2 DR)
+        rng, joint_noise_key = jax.random.split(rng)
         joint_noise = jax.random.uniform(
-            noise_key, shape=(self.NUM_JOINTS,), minval=-0.05, maxval=0.05
+            joint_noise_key, shape=(self.NUM_JOINTS,), minval=-0.10, maxval=0.10
         )
         new_qpos = mjx_data.qpos.at[7:].add(joint_noise)
         mjx_data = mjx_data.replace(qpos=new_qpos)
 
+        # Obs noise key — split separately so noise_rng in info is independent
+        rng, obs_noise_key = jax.random.split(rng)
+
         prev_action = jnp.zeros(self.num_actions)
-        obs = self._extract_obs(mjx_data, prev_action)
+        obs = self._extract_obs(mjx_data, prev_action, obs_noise_key)
 
         return EnvState(
             mjx_data=mjx_data,
@@ -257,7 +296,11 @@ class WheeledBipedEnv:
             done=jnp.bool_(False),
             step_count=jnp.int32(0),
             prev_action=prev_action,
-            info={"is_fallen": jnp.bool_(False), "time_limit": jnp.bool_(False)},
+            info={
+                "is_fallen": jnp.bool_(False),
+                "time_limit": jnp.bool_(False),
+                "noise_rng": obs_noise_key,
+            },
         )
 
     @functools.partial(jax.jit, static_argnums=(0,))
@@ -265,6 +308,21 @@ class WheeledBipedEnv:
         """Thực hiện một step điều khiển.
 
         Mỗi step chạy n_substeps bước physics (50Hz → 10 × 500Hz).
+
+        CONTROL PATH — DIRECT TORQUE (base class only):
+            action [-1, 1]  →  scale to ctrlrange  →  mjx_data.ctrl
+        This is the fallback path for bare WheeledBipedEnv usage.
+
+        IMPORTANT: Task environments MUST override this method if they use a
+        different control mode.  BalanceEnv overrides step() to implement:
+            action [-1, 1]  →  clip  →  smooth  →  PID  →  torque
+        The two paths have COMPLETELY DIFFERENT action semantics.  A policy
+        trained with BalanceEnv will not transfer to a bare WheeledBipedEnv
+        step() call (and vice-versa).
+
+        When subclassing WheeledBipedEnv:
+          - Always override step() if the task uses PID or any other control mode.
+          - Do NOT rely on this base implementation as a drop-in for PID tasks.
 
         Args:
             state: trạng thái hiện tại.
@@ -292,8 +350,9 @@ class WheeledBipedEnv:
 
         mjx_data, _ = jax.lax.scan(physics_step, mjx_data, None, length=self._n_substeps)
 
-        # Trích xuất observation
-        obs = self._extract_obs(mjx_data, action)
+        # Advance obs noise RNG and extract noisy observation
+        noise_key, new_noise_rng = jax.random.split(state.info["noise_rng"])
+        obs = self._extract_obs(mjx_data, action, noise_key)
 
         # Tính reward (sẽ được override bởi subclass)
         reward = self._compute_reward(mjx_data, action, state)
@@ -311,7 +370,11 @@ class WheeledBipedEnv:
             done=done,
             step_count=step_count,
             prev_action=action,
-            info={"is_fallen": is_fallen, "time_limit": time_limit},
+            info={
+                "is_fallen": is_fallen,
+                "time_limit": time_limit,
+                "noise_rng": new_noise_rng,
+            },
         )
 
     def _compute_reward(

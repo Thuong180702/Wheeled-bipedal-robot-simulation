@@ -3,10 +3,21 @@
 # ============================================================
 
 curriculum:
-  promotion_threshold: 0.8   # chuyen stage khi success_rate > 80%
-  promotion_window: 100       # danh gia tren 100 episodes gan nhat
-  demotion_threshold: 0.3     # neu < 30% thi quay lai stage truoc
-  max_stage_steps: 5_000_000  # toi da buoc moi stage
+  promotion_threshold: 0.8 # chuyen stage khi success_rate > 80%
+  promotion_window: 100 # danh gia tren 100 episodes gan nhat
+  demotion_threshold: 0.3 # neu < 30% thi quay lai stage truoc
+  max_stage_steps: 50_000_000 # toi da buoc moi stage
+
+  # ── success_value units ────────────────────────────────────────────────────
+  # CurriculumManager._evaluate_promotion compares against
+  #   eval_per_step = eval_reward_mean / episode_length
+  # so success_value must be expressed as reward-per-step (not seconds, not RMSE).
+  # For balance.yaml: max_reward_possible ≈ 10.5/step.
+  #   success_value: 7.0  →  ≥ 67 % efficiency  (strong but achievable after convergence)
+  #   success_value: 6.0  →  ≥ 57 % efficiency  (used for push-recovery stage)
+  #   success_value: 5.0  →  ≥ 48 % efficiency  (conservative; stand_up task unknown)
+  # Adjust after observing actual eval_per_step values from training logs.
+  # ──────────────────────────────────────────────────────────────────────────
 
   stages:
     # -------------------------------------------------------
@@ -18,8 +29,8 @@ curriculum:
       description: "Dung vung o nhieu chieu cao (co height curriculum)"
       config: "configs/training/balance.yaml"
       terrain: "flat"
-      success_metric: "upright_time"
-      success_value: 15.0   # dung vung >= 15s lien tuc
+      # success_value in reward/step units (eval_reward_mean / episode_length)
+      success_value: 7.0 # >= 7.0 reward/step  ≈ 67% of max ~10.5
 
     # -------------------------------------------------------
     # Stage 2: Dung len / Ngoi xuong + Phuc hoi tu nga
@@ -30,8 +41,8 @@ curriculum:
       description: "Chuyen doi chieu cao va phuc hoi tu nga"
       config: "configs/training/stand_up.yaml"
       terrain: "flat"
-      success_metric: "height_tracking_error"
-      success_value: 0.05   # sai so chieu cao < 5cm
+      # success_value in reward/step units; conservative — stand_up reward design unknown
+      success_value: 5.0
       pretrained_from: "balance"
 
     # -------------------------------------------------------
@@ -43,6 +54,6 @@ curriculum:
       description: "Balance vung + chiu luc manh o bat ki chieu cao"
       config: "configs/training/balance_robust.yaml"
       terrain: "flat"
-      success_metric: "upright_time"
-      success_value: 15.0   # dung vung >= 15s duoi push manh
+      # success_value in reward/step units; slightly lower than balance due to push
+      success_value: 6.0
       pretrained_from: "stand_up"
