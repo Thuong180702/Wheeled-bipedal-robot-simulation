@@ -503,26 +503,40 @@ class TestPushRecoveryMode:
 
 
 class TestDomainRandomizedMode:
-    def test_mj_model_attrs_restored_after_run(self, monkeypatch):
-        """mj_model mass/friction must be restored to original values after run."""
-        import wheeled_biped.eval.benchmark as bm
-        from wheeled_biped.eval.benchmark import _run_domain_randomized
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
+    def _make_dr_env(self, dr_enabled: bool = True):
+        """Env stub with _dr_enabled attribute and real numpy mass/friction arrays."""
         env = MagicMock()
         env.mj_model = MagicMock()
         env.mj_model.body_mass = np.array([1.0, 2.0, 3.0])
         env.mj_model.geom_friction = np.array([[0.5, 0.5, 0.5]])
         env.mjx_model = MagicMock()
+        env._dr_enabled = dr_enabled
+        return env
+
+    def _noop_rollout(self, *a, **kw):
+        return [1.0, 2.0], [50, 60], [False, False], [True, True], []
+
+    # ------------------------------------------------------------------
+    # Core restore tests (existing coverage, kept + updated)
+    # ------------------------------------------------------------------
+
+    def test_mj_model_attrs_restored_after_run(self, monkeypatch):
+        """mj_model mass/friction must be restored to original values after run."""
+        import wheeled_biped.eval.benchmark as bm
+        from wheeled_biped.eval.benchmark import _run_domain_randomized
+
+        env = self._make_dr_env()
         orig_mass = env.mj_model.body_mass.copy()
         orig_friction = env.mj_model.geom_friction.copy()
 
-        # Track what mass/friction were during rollout
         mass_during = []
-        friction_during = []
 
         def _recording_rollout(*a, **kw):
             mass_during.append(env.mj_model.body_mass.copy())
-            friction_during.append(env.mj_model.geom_friction.copy())
             return [1.0, 2.0], [50, 60], [False, False], [True, True], []
 
         monkeypatch.setattr(bm, "_rollout", _recording_rollout)
@@ -538,15 +552,248 @@ class TestDomainRandomizedMode:
             max_steps=100,
         )
 
-        # Mass/friction should have been perturbed DURING rollout
-        assert not np.allclose(mass_during[0], orig_mass)  # perturbed
-        # And restored AFTER rollout
+        # Mass/friction perturbed DURING rollout, restored AFTER
+        assert not np.allclose(mass_during[0], orig_mass)
         np.testing.assert_array_almost_equal(env.mj_model.body_mass, orig_mass)
         np.testing.assert_array_almost_equal(env.mj_model.geom_friction, orig_friction)
         assert result.mode == "domain_randomized"
         assert "mass_perturb_pct" in result.mode_metrics
 
+    def test_mj_model_attrs_restored_on_rollout_exception(self, monkeypatch):
+        """mass/friction and _dr_enabled must be restored even when rollout raises."""
+        import wheeled_biped.eval.benchmark as bm
+        from wheeled_biped.eval.benchmark import _run_domain_randomized
+
+        env = self._make_dr_env(dr_enabled=True)
+        orig_mass = env.mj_model.body_mass.copy()
+        orig_friction = env.mj_model.geom_friction.copy()
+
+        def _exploding_rollout(*a, **kw):
+            raise RuntimeError("simulated rollout failure")
+
+        monkeypatch.setattr(bm, "_rollout", _exploding_rollout)
+
+        with pytest.raises(RuntimeError, match="simulated rollout failure"):
+            _run_domain_randomized(
+                env=env,
+                model=MagicMock(),
+                params=MagicMock(),
+                obs_rms=_fake_obs_rms(),
+                rng=np.array([0, 1]),
+                num_episodes=2,
+                num_envs=2,
+                max_steps=100,
+            )
+
+        # Restore must happen even on exception
+        np.testing.assert_array_almost_equal(env.mj_model.body_mass, orig_mass)
+        np.testing.assert_array_almost_equal(env.mj_model.geom_friction, orig_friction)
+        # _dr_enabled must be restored too
+        assert env._dr_enabled is True
+
+    # ------------------------------------------------------------------
+    # Single-layer semantics: env DR disabled by default
+    # ------------------------------------------------------------------
+
+    def test_env_dr_disabled_during_rollout_by_default(self, monkeypatch):
+        """Default mode must set env._dr_enabled=False during rollout.
+
+        This prevents BalanceEnv.reset() from stacking a second randomization
+        layer on top of the benchmark-level perturbation.  Without this fix,
+        the effective mass deviation could reach [0.595, 1.495] instead of
+        the documented [0.70, 1.30] for mass_perturb=0.30.
+        """
+        import wheeled_biped.eval.benchmark as bm
+        from wheeled_biped.eval.benchmark import _run_domain_randomized
+
+        env = self._make_dr_env(dr_enabled=True)  # env has DR enabled at init
+        dr_enabled_during_rollout = []
+
+        def _recording_rollout(*a, **kw):
+            dr_enabled_during_rollout.append(env._dr_enabled)
+            return [1.0], [50], [False], [True], []
+
+        monkeypatch.setattr(bm, "_rollout", _recording_rollout)
+
+        _run_domain_randomized(
+            env=env,
+            model=MagicMock(),
+            params=MagicMock(),
+            obs_rms=_fake_obs_rms(),
+            rng=np.array([0, 1]),
+            num_episodes=1,
+            num_envs=1,
+            max_steps=100,
+        )
+
+        # During rollout: env per-episode DR must be OFF
+        assert dr_enabled_during_rollout == [False], (
+            "env._dr_enabled must be False during the rollout to prevent double "
+            "randomization.  Got: {}".format(dr_enabled_during_rollout)
+        )
+        # After rollout: env DR must be restored to its original state
+        assert env._dr_enabled is True
+
+    def test_env_dr_flag_restored_after_run(self, monkeypatch):
+        """_dr_enabled must return to its pre-benchmark value after the run."""
+        import wheeled_biped.eval.benchmark as bm
+        from wheeled_biped.eval.benchmark import _run_domain_randomized
+
+        for initial_dr in (True, False):
+            env = self._make_dr_env(dr_enabled=initial_dr)
+            monkeypatch.setattr(bm, "_rollout", self._noop_rollout)
+
+            _run_domain_randomized(
+                env=env,
+                model=MagicMock(),
+                params=MagicMock(),
+                obs_rms=_fake_obs_rms(),
+                rng=np.array([0, 1]),
+                num_episodes=1,
+                num_envs=1,
+                max_steps=50,
+            )
+
+            assert env._dr_enabled is initial_dr, (
+                f"_dr_enabled should be restored to {initial_dr} after run"
+            )
+
+    def test_env_without_dr_attr_does_not_crash(self, monkeypatch):
+        """Envs without _dr_enabled (non-BalanceEnv) must not crash."""
+        import wheeled_biped.eval.benchmark as bm
+        from wheeled_biped.eval.benchmark import _run_domain_randomized
+
+        env = MagicMock()
+        env.mj_model = MagicMock()
+        env.mj_model.body_mass = np.array([1.0, 2.0])
+        env.mj_model.geom_friction = np.array([[0.5, 0.5, 0.5]])
+        env.mjx_model = MagicMock()
+        # Deliberately do NOT set env._dr_enabled
+
+        monkeypatch.setattr(bm, "_rollout", self._noop_rollout)
+
+        # Should not raise AttributeError
+        _run_domain_randomized(
+            env=env,
+            model=MagicMock(),
+            params=MagicMock(),
+            obs_rms=_fake_obs_rms(),
+            rng=np.array([0, 1]),
+            num_episodes=1,
+            num_envs=1,
+            max_steps=50,
+        )
+
+    # ------------------------------------------------------------------
+    # Stacked-layer mode (disable_env_dr=False)
+    # ------------------------------------------------------------------
+
+    def test_stacked_mode_leaves_env_dr_enabled_during_rollout(self, monkeypatch):
+        """disable_env_dr=False must NOT suppress env per-episode DR."""
+        import wheeled_biped.eval.benchmark as bm
+        from wheeled_biped.eval.benchmark import _run_domain_randomized
+
+        env = self._make_dr_env(dr_enabled=True)
+        dr_enabled_during_rollout = []
+
+        def _recording_rollout(*a, **kw):
+            dr_enabled_during_rollout.append(env._dr_enabled)
+            return [1.0], [50], [False], [True], []
+
+        monkeypatch.setattr(bm, "_rollout", _recording_rollout)
+
+        _run_domain_randomized(
+            env=env,
+            model=MagicMock(),
+            params=MagicMock(),
+            obs_rms=_fake_obs_rms(),
+            rng=np.array([0, 1]),
+            num_episodes=1,
+            num_envs=1,
+            max_steps=100,
+            disable_env_dr=False,  # explicitly request stacked mode
+        )
+
+        assert dr_enabled_during_rollout == [True], (
+            "disable_env_dr=False must leave env._dr_enabled True during rollout"
+        )
+
+    def test_stacked_mode_still_restores_env_dr(self, monkeypatch):
+        """Even in stacked mode, env._dr_enabled must be restored after the run."""
+        import wheeled_biped.eval.benchmark as bm
+        from wheeled_biped.eval.benchmark import _run_domain_randomized
+
+        env = self._make_dr_env(dr_enabled=True)
+        monkeypatch.setattr(bm, "_rollout", self._noop_rollout)
+
+        _run_domain_randomized(
+            env=env,
+            model=MagicMock(),
+            params=MagicMock(),
+            obs_rms=_fake_obs_rms(),
+            rng=np.array([0, 1]),
+            num_episodes=1,
+            num_envs=1,
+            max_steps=50,
+            disable_env_dr=False,
+        )
+
+        assert env._dr_enabled is True
+
+    # ------------------------------------------------------------------
+    # mode_metrics keys
+    # ------------------------------------------------------------------
+
+    def test_mode_metrics_keys_include_env_dr_disabled(self, monkeypatch):
+        """mode_metrics must include env_dr_disabled so callers can tell which mode ran."""
+        import wheeled_biped.eval.benchmark as bm
+        from wheeled_biped.eval.benchmark import _run_domain_randomized
+
+        env = self._make_dr_env()
+        monkeypatch.setattr(bm, "_rollout", self._noop_rollout)
+
+        result = _run_domain_randomized(
+            env=env,
+            model=MagicMock(),
+            params=MagicMock(),
+            obs_rms=_fake_obs_rms(),
+            rng=np.array([0, 1]),
+            num_episodes=1,
+            num_envs=1,
+            max_steps=50,
+        )
+
+        assert "env_dr_disabled" in result.mode_metrics
+        assert result.mode_metrics["env_dr_disabled"] is True  # default mode
+        assert "mass_perturb_pct" in result.mode_metrics
+        assert "friction_perturb_pct" in result.mode_metrics
+        assert "height_error_mean" in result.mode_metrics
+        json.dumps(result.to_dict())  # must be JSON-serialisable
+
+    def test_mode_metrics_env_dr_disabled_false_in_stacked_mode(self, monkeypatch):
+        """mode_metrics["env_dr_disabled"] must be False in stacked mode."""
+        import wheeled_biped.eval.benchmark as bm
+        from wheeled_biped.eval.benchmark import _run_domain_randomized
+
+        env = self._make_dr_env()
+        monkeypatch.setattr(bm, "_rollout", self._noop_rollout)
+
+        result = _run_domain_randomized(
+            env=env,
+            model=MagicMock(),
+            params=MagicMock(),
+            obs_rms=_fake_obs_rms(),
+            rng=np.array([0, 1]),
+            num_episodes=1,
+            num_envs=1,
+            max_steps=50,
+            disable_env_dr=False,
+        )
+
+        assert result.mode_metrics["env_dr_disabled"] is False
+
     def test_mode_metrics_keys(self):
+        """BenchmarkResult with domain_randomized mode_metrics is JSON-serialisable."""
         from wheeled_biped.eval.benchmark import BenchmarkResult
 
         result = BenchmarkResult(
@@ -555,11 +802,13 @@ class TestDomainRandomizedMode:
             mode_metrics={
                 "mass_perturb_pct": 0.3,
                 "friction_perturb_pct": 0.5,
+                "env_dr_disabled": True,
                 "height_error_mean": 0.05,
             },
         )
         assert "height_error_mean" in result.mode_metrics
         assert "mass_perturb_pct" in result.mode_metrics
+        assert "env_dr_disabled" in result.mode_metrics
         json.dumps(result.to_dict())
 
 

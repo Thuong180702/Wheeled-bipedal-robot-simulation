@@ -4,7 +4,7 @@ Balance Environment - Huấn luyện robot đứng vững ở nhiều chiều ca
 Task: Giữ thân robot nằm ngang, duy trì chiều cao theo lệnh (height_command),
 2 chân đối xứng, đứng yên ổn định, chống chịu nhiễu loạn.
 
-Observation: 40 dims = base 39 + height_command 1
+Observation: 41 dims = base (39 or 36) + height_command (1) + yaw_error (1)
 Height command ngẫu nhiên mỗi episode trong khoảng [min_height_cmd, max_height_cmd].
 
 Đây là stage đầu tiên trong curriculum learning.
@@ -52,9 +52,10 @@ class BalanceEnv(WheeledBipedEnv):
     mở rộng dần → [0.40, 0.70] khi reward đạt ngưỡng (trainer quản lý).
     Robot phải giữ chiều cao theo lệnh, thân ngang, 2 chân đối xứng, đứng yên.
 
-    Observation (40 dims):
-        - base obs (39): gravity_body, lin_vel, ang_vel, joint_pos, joint_vel, prev_action
+    Observation (41 dims when lin_vel_mode != "disabled", 38 dims when "disabled"):
+        - base obs (39 or 36): gravity_body, [lin_vel,] ang_vel, joint_pos, joint_vel, prev_action
         - height_command (1): chiều cao mục tiêu (normalized về [0, 1] theo [MIN=0.40, MAX=0.70])
+        - yaw_error (1): góc lệch yaw so với hướng mục tiêu (radians, wrapped to [-π, π])
     """
 
     # Khoảng chiều cao lệnh (m) — đo từ kinematics thực tế

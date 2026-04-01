@@ -16,7 +16,7 @@ task:
 #     Goal: learn stable upright stance near the nominal keyframe height.
 #     No push disturbance. Robot starts from near-nominal pose.
 #
-#   Phase B — wider balance   (levels 6–20):  height ∈ [0.64–0.55, 0.70] m
+#   Phase B — wider balance   (levels 6–20):  height ∈ [0.64–0.50, 0.70] m
 #     Goal: generalise to lower crouching targets while maintaining stability.
 #
 #   Phase C — full range      (levels 21–29): height ∈ [0.49–0.40, 0.70] m
@@ -100,11 +100,11 @@ low_level_pid:
 #                           → Would punish the wheel spin needed to absorb a push.
 #                           Set to 0 in balance_robust.yaml.
 #
-#   wheel_velocity (-0.0006) Penalises wheel angular speed to keep robot stationary.
+#   wheel_velocity (-0.005)  Penalises wheel angular speed to keep robot stationary.
 #                           → Would punish wheels acting as stabilisers during recovery.
 #                           Set to 0 in balance_robust.yaml.
 #
-#   action_rate    (-0.025) Penalises rapid action changes.
+#   action_rate    (-0.05)  Penalises rapid action changes.
 #                           → For pure standing, this prevents jitter.
 #                           → For push recovery, this penalises the fast wheel
 #                             corrections fired immediately after impact.

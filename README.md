@@ -484,7 +484,9 @@ Two training configs serve different objectives:
 | `no_motion` | 0.5 | **0.0** | Wheels must spin to recover from push |
 | `wheel_velocity` | −0.005 | **0.0** | Wheels are primary balancing actuators under push |
 | `action_rate` | −0.05 | **−0.005** | Rapid wheel burst needed immediately after impact |
-| `height`, `body_level`, `natural_pose` | shared | shared | Consistent standing objective |
+| `body_level` | 1.5 | 1.5 | Unchanged — consistent standing objective |
+| `height` | 2.5 | 1.5 | Reduced — push survival outweighs strict height tracking |
+| `natural_pose` | 0.4 | 1.5 | Increased — stronger return-to-stance after recovery |
 
 Both configs share `push_magnitude=0` (balance) or `40 N` (robust).
 

@@ -7,8 +7,13 @@ numerical metrics alone cannot detect.
 
 Usage
 -----
+    # Default: sim prototyping mode (clean lin_vel, no added noise)
     python scripts/validate_checkpoint.py \\
         --checkpoint outputs/checkpoints/balance/final
+
+    # Sim2real-preparation mode: apply sensor noise from config, respect lin_vel_mode
+    python scripts/validate_checkpoint.py \\
+        --checkpoint outputs/checkpoints/balance/final --noise
 
     # Specify height command and rollout length
     python scripts/validate_checkpoint.py \\
@@ -37,6 +42,28 @@ Quality signals checked
     ang_vel_rms_rads          Detects torso wobble below termination threshold
 
 Each WARN signal includes a description of which exploit pattern it reveals.
+
+Observation / control path notes
+---------------------------------
+The headless rollout replicates BalanceEnv's control path as closely as
+possible in a single-environment CPU loop.  Exact matches:
+  - lin_vel_mode ("clean" / "noisy" / "disabled") read from checkpoint config
+  - action smoothing EMA alpha
+  - action delay buffer (action_delay_steps N-step queue)
+  - PID low-level control with kd=0 for wheels
+  - prev_action = smooth_action (pre-delay), matching EnvState.prev_action
+
+Known remaining approximations (documented here for honesty):
+  - No per-episode domain randomisation (mass/friction/damping).
+    The vectorised benchmark (Step 1) runs DR correctly via the full JAX env.
+  - No push disturbances in the headless rollout.
+  - Observation noise is applied with numpy.random (not jax.random).
+    Noise magnitude and structure match _extract_obs() exactly; only the
+    random stream differs. This is fine for validation purposes.
+  - The headless rollout is one continuous episode; yaw_error accumulates
+    relative to the single initial heading.  Training resets yaw_error=0
+    each episode, so accumulated yaw_error beyond ~50 steps is off-distribution
+    if the policy lets the robot drift significantly.
 """
 
 from __future__ import annotations
@@ -60,19 +87,145 @@ app = typer.Typer(help="Validate a trained standing checkpoint.")
 console = Console()
 
 
+# ---------------------------------------------------------------------------
+# Observation builder — mirrors base_env._extract_obs() exactly for CPU path
+# ---------------------------------------------------------------------------
+
+def _build_headless_obs(
+    mj_data,
+    prev_action: jnp.ndarray,
+    height_cmd_norm: jnp.ndarray,
+    yaw_error: jnp.ndarray,
+    lin_vel_mode: str,
+    apply_noise: bool,
+    noise_stds: dict[str, float],
+    rng_np: np.random.Generator,
+    get_gravity_fn,
+    quat_conjugate_fn,
+    quat_rotate_fn,
+) -> jnp.ndarray:
+    """Build obs matching BalanceEnv._extract_obs() + height_cmd + yaw_error.
+
+    Obs layout (mirrors base_env._extract_obs docstring):
+
+    lin_vel_mode "clean" / "noisy"  → 39-dim base + 2 extras = 41 dims total:
+      [0:3]   gravity_body
+      [3:6]   base_lin_vel  ("clean": simulator-exact; "noisy": + Gaussian noise)
+      [6:9]   base_ang_vel  (noised when apply_noise=True)
+      [9:19]  joint_pos
+      [19:29] joint_vel
+      [29:39] prev_action
+      [39]    height_cmd_norm
+      [40]    yaw_error
+
+    lin_vel_mode "disabled"  → 36-dim base + 2 extras = 38 dims total:
+      [0:3]   gravity_body
+      [3:6]   base_ang_vel  ← shifts; lin_vel excluded
+      [6:16]  joint_pos
+      [16:26] joint_vel
+      [26:36] prev_action
+      [36]    height_cmd_norm
+      [37]    yaw_error
+
+    Noise is applied with numpy.random (not jax.random) — magnitudes and
+    structure are identical to _extract_obs().  prev_action is never noised.
+    """
+    torso_quat = jnp.array(mj_data.qpos[3:7])
+    gravity_body = get_gravity_fn(torso_quat)
+    quat_inv = quat_conjugate_fn(torso_quat)
+    base_lin_vel = quat_rotate_fn(quat_inv, jnp.array(mj_data.qvel[:3]))
+    base_ang_vel = quat_rotate_fn(quat_inv, jnp.array(mj_data.qvel[3:6]))
+    joint_pos = jnp.array(mj_data.qpos[7:17])
+    joint_vel = jnp.array(mj_data.qvel[6:16])
+
+    n_joints = 10
+
+    if lin_vel_mode == "disabled":
+        # 36-dim base — lin_vel excluded entirely
+        base_obs = jnp.concatenate([
+            gravity_body,  # [0:3]
+            base_ang_vel,  # [3:6]
+            joint_pos,     # [6:16]
+            joint_vel,     # [16:26]
+            prev_action,   # [26:36]
+        ])
+        if apply_noise:
+            noise = np.concatenate([
+                rng_np.normal(0.0, noise_stds["gravity"], 3),
+                rng_np.normal(0.0, noise_stds["ang_vel"], 3),
+                rng_np.normal(0.0, noise_stds["joint_pos"], n_joints),
+                rng_np.normal(0.0, noise_stds["joint_vel"], n_joints),
+                np.zeros(n_joints),  # prev_action: no noise
+            ]).astype(np.float32)
+            base_obs = base_obs + jnp.array(noise)
+    else:
+        # 39-dim base — "clean" or "noisy"
+        base_obs = jnp.concatenate([
+            gravity_body,  # [0:3]
+            base_lin_vel,  # [3:6]
+            base_ang_vel,  # [6:9]
+            joint_pos,     # [9:19]
+            joint_vel,     # [19:29]
+            prev_action,   # [29:39]
+        ])
+        if apply_noise:
+            # "noisy" adds Gaussian lin_vel noise; "clean" keeps lin_vel noiseless
+            lin_vel_noise = (
+                rng_np.normal(0.0, noise_stds["lin_vel"], 3)
+                if lin_vel_mode == "noisy"
+                else np.zeros(3)
+            )
+            noise = np.concatenate([
+                rng_np.normal(0.0, noise_stds["gravity"], 3),
+                lin_vel_noise,
+                rng_np.normal(0.0, noise_stds["ang_vel"], 3),
+                rng_np.normal(0.0, noise_stds["joint_pos"], n_joints),
+                rng_np.normal(0.0, noise_stds["joint_vel"], n_joints),
+                np.zeros(n_joints),  # prev_action: no noise
+            ]).astype(np.float32)
+            base_obs = base_obs + jnp.array(noise)
+
+    # Append task-specific extras (same as balance_env reset/step)
+    return jnp.concatenate([base_obs, height_cmd_norm, yaw_error])
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
 @app.command()
 def validate(
     checkpoint: str = typer.Option(..., help="Path to checkpoint directory."),
     stage: str = typer.Option("balance", help="Stage name (for labelling)."),
     num_episodes: int = typer.Option(100, help="Episodes for nominal benchmark."),
     num_envs: int = typer.Option(64, help="Parallel envs for benchmark."),
-    num_steps: int = typer.Option(1000, help="Steps for headless telemetry rollout (1 env, CPU)."),
-    height_cmd: float = typer.Option(0.69, help="Height command (m) for the headless rollout."),
+    num_steps: int = typer.Option(
+        1000, help="Steps for headless telemetry rollout (1 env, CPU)."
+    ),
+    height_cmd: float = typer.Option(
+        0.69, help="Height command (m) for the headless rollout."
+    ),
     seed: int = typer.Option(0, help="Random seed."),
-    output_dir: str = typer.Option("", help="Output directory (default: checkpoint directory)."),
+    output_dir: str = typer.Option(
+        "", help="Output directory (default: checkpoint directory)."
+    ),
     save_csv: bool = typer.Option(False, help="Also save raw telemetry CSV."),
+    noise: bool = typer.Option(
+        False,
+        "--noise/--no-noise",
+        help=(
+            "Apply sensor noise in the headless rollout, matching the training "
+            "config (sensor_noise.enabled / *_std values).  Use --noise for "
+            "sim2real-preparation validation.  Default: --no-noise (clean obs, "
+            "useful for prototyping / debugging the pure policy quality)."
+        ),
+    ),
 ) -> None:
-    """Run standing validation: benchmark metrics + posture quality signals."""
+    """Run standing validation: benchmark metrics + posture quality signals.
+
+    The headless rollout honours the checkpoint's lin_vel_mode, action delay,
+    and (optionally) sensor noise so the obs / control path matches training.
+    """
     import pickle
 
     import mujoco
@@ -88,6 +241,8 @@ def validate(
         get_gravity_in_body_frame,
         quat_conjugate,
         quat_rotate,
+        quat_to_euler,
+        wrap_angle,
     )
     from wheeled_biped.utils.telemetry import TelemetryRecorder, plot_telemetry
 
@@ -108,14 +263,62 @@ def validate(
     config = ckpt["config"]
     obs_size = int(obs_rms.mean.shape[0])
 
+    # ── Read obs / control config from checkpoint ─────────────────────────────
+    noise_cfg = config.get("sensor_noise", {})
+    lin_vel_mode = str(noise_cfg.get("lin_vel_mode", "clean"))
+    noise_enabled_in_config = bool(noise_cfg.get("enabled", False))
+    apply_noise = noise  # CLI flag; use --noise to match training distribution
+
+    noise_stds: dict[str, float] = {
+        "lin_vel":   float(noise_cfg.get("lin_vel_std", 0.3)),
+        "ang_vel":   float(noise_cfg.get("ang_vel_std", 0.0)),
+        "gravity":   float(noise_cfg.get("gravity_std", 0.0)),
+        "joint_pos": float(noise_cfg.get("joint_pos_std", 0.0)),
+        "joint_vel": float(noise_cfg.get("joint_vel_std", 0.0)),
+    }
+
+    pid_cfg = config.get("low_level_pid", {})
+    pid_enabled = bool(pid_cfg.get("enabled", False))
+    pid_alpha = float(pid_cfg.get("action_smoothing_alpha", 0.0))
+    pid_i_limit = float(pid_cfg.get("anti_windup_limit", 0.3))
+    whl_vel_lim = float(pid_cfg.get("wheel_vel_limit", 20.0))
+    action_delay_steps = int(pid_cfg.get("action_delay_steps", 0))
+
+    # Expected base obs dim from lin_vel_mode (mirrors base_env._compute_obs_size)
+    base_obs_dim = 36 if lin_vel_mode == "disabled" else 39
+    expected_obs_size = base_obs_dim + 2  # + height_cmd_norm + yaw_error
+
+    # ── Obs size sanity check ─────────────────────────────────────────────────
+    if obs_size != expected_obs_size:
+        console.print(
+            f"[red]Obs size mismatch: checkpoint obs_rms has shape ({obs_size},) "
+            f"but config lin_vel_mode='{lin_vel_mode}' implies ({expected_obs_size},). "
+            f"The checkpoint config may be inconsistent or corrupted.[/red]"
+        )
+        raise typer.Exit(1)
+
     console.print(f"\n[bold cyan]Standing Validation[/bold cyan]: {stage}")
-    console.print(f"  Checkpoint : {checkpoint}")
-    console.print(f"  Obs size   : {obs_size}")
-    console.print(f"  Height cmd : {height_cmd:.2f} m")
+    console.print(f"  Checkpoint      : {checkpoint}")
+    console.print(f"  Obs size        : {obs_size}  (lin_vel_mode='{lin_vel_mode}')")
+    console.print(f"  Height cmd      : {height_cmd:.2f} m")
+    console.print(f"  Action delay    : {action_delay_steps} step(s) "
+                  f"({'~'+str(action_delay_steps*20)+' ms' if action_delay_steps else 'none'})")
+    console.print(f"  Noise (headless): {'yes (--noise)' if apply_noise else 'no (--no-noise, default)'}")
+    if apply_noise and not noise_enabled_in_config:
+        console.print(
+            "  [yellow]Warning: --noise requested but sensor_noise.enabled=false "
+            "in config — noise stds may all be 0.[/yellow]"
+        )
+    if not apply_noise and noise_enabled_in_config:
+        console.print(
+            "  [dim]Note: training used sensor noise (sensor_noise.enabled=true) "
+            "but headless rollout runs clean obs (pass --noise to match).[/dim]"
+        )
 
     # ── Step 1: nominal benchmark (vectorised JAX) ────────────────────────────
     console.print(
-        f"\n[bold]Step 1/2[/bold] Nominal benchmark ({num_episodes} episodes, {num_envs} envs) …"
+        f"\n[bold]Step 1/2[/bold] Nominal benchmark "
+        f"({num_episodes} episodes, {num_envs} envs) …"
     )
 
     env_name = config.get("task", {}).get("env", "BalanceEnv")
@@ -139,8 +342,11 @@ def validate(
         max_steps=2000,
     )
 
-    # ── Step 2: headless CPU rollout → telemetry ─────────────────────────────
-    console.print(f"[bold]Step 2/2[/bold] Headless rollout ({num_steps} steps, 1 env, CPU) …")
+    # ── Step 2: headless CPU rollout → telemetry ──────────────────────────────
+    console.print(
+        f"[bold]Step 2/2[/bold] Headless rollout "
+        f"({num_steps} steps, 1 env, CPU) …"
+    )
 
     mj_model = mujoco.MjModel.from_xml_path(str(get_model_path()))
     mj_data = mujoco.MjData(mj_model)
@@ -153,31 +359,15 @@ def validate(
     mujoco.mj_forward(mj_model, mj_data)
 
     # Height command normalised to [0, 1] in [MIN_HEIGHT_CMD, MAX_HEIGHT_CMD]
-    # NOTE: BalanceEnv obs is 41 dims: 39-base + height_cmd_norm (obs[-2]) + yaw_error (obs[-1])
-    # validate_checkpoint uses obs_rms.mean.shape[0] to detect the actual obs size from ckpt.
     min_h = float(getattr(_BEnv, "MIN_HEIGHT_CMD", 0.40))
     max_h = float(getattr(_BEnv, "MAX_HEIGHT_CMD", 0.70))
     height_cmd_clamped = float(np.clip(height_cmd, min_h, max_h))
     height_cmd_norm = jnp.array([(height_cmd_clamped - min_h) / (max_h - min_h)])
 
-    # PID settings from config (mirrors visualize.py policy command)
-    pid_cfg = config.get("low_level_pid", {})
-    pid_enabled = bool(pid_cfg.get("enabled", False))
-    pid_alpha = float(pid_cfg.get("action_smoothing_alpha", 0.0))
-    pid_i_limit = float(pid_cfg.get("anti_windup_limit", 0.3))
-    whl_vel_lim = float(pid_cfg.get("wheel_vel_limit", 20.0))
-
+    # Joint range and wheel mask (read from mj_model, same as env)
     joint_names = [
-        "l_hip_roll",
-        "l_hip_yaw",
-        "l_hip_pitch",
-        "l_knee",
-        "l_wheel",
-        "r_hip_roll",
-        "r_hip_yaw",
-        "r_hip_pitch",
-        "r_knee",
-        "r_wheel",
+        "l_hip_roll", "l_hip_yaw", "l_hip_pitch", "l_knee", "l_wheel",
+        "r_hip_roll", "r_hip_yaw", "r_hip_pitch", "r_knee", "r_wheel",
     ]
     j_mins, j_maxs = [], []
     for n in joint_names:
@@ -190,7 +380,10 @@ def validate(
     wheel_mask = jnp.array([1.0 if "wheel" in n else 0.0 for n in joint_names])
 
     _kp_def = [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
-    _ki_def = [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
+    _ki_def = [0.8,  0.4,  1.0,  1.0,  0.1, 0.8,  0.4,  1.0,  1.0,  0.1]
+    # Wheel kd (indices 4, 9) is 0.0: wheels use PI velocity control (no derivative).
+    # The PID path also masks wheel kd to zero, so any non-zero value here is harmless
+    # but would be misleading — keep as 0.0 to match balance.yaml defaults.
     _kd_def = [3.0, 2.0, 4.0, 4.0, 0.0, 3.0, 2.0, 4.0, 4.0, 0.0]
     kp = jnp.array(pid_cfg.get("kp", _kp_def), dtype=jnp.float32)
     ki = jnp.array(pid_cfg.get("ki", _ki_def), dtype=jnp.float32)
@@ -203,51 +396,70 @@ def validate(
     control_dt = 0.02
     n_substeps = max(1, int(round(control_dt / float(mj_model.opt.timestep))))
 
+    # State for the rollout
     prev_action = jnp.zeros(mj_model.nu)
     pid_integral = jnp.zeros(mj_model.nu)
+    # Action delay buffer: list of smooth_actions, oldest at index 0 (applied next).
+    # Initialised to zeros (safe: zero command = policy's initial guess at rest).
+    # Mirrors BalanceEnv reset() info["action_delay_buffer"] initialisation.
+    delay_buffer: list[jnp.ndarray] = [jnp.zeros(mj_model.nu)] * action_delay_steps
+
+    rng_np = np.random.default_rng(seed)
     recorder = TelemetryRecorder(control_dt=control_dt)
 
-    # Track initial yaw for yaw_error obs term (obs[-1] in 41-dim BalanceEnv obs)
-    from wheeled_biped.utils.math_utils import quat_to_euler, wrap_angle
-
+    # Initial yaw for yaw_error obs term (reset to 0 at episode start, like env)
     _init_quat = jnp.array(mj_data.qpos[3:7])
     initial_yaw = float(quat_to_euler(_init_quat)[2])
 
     for _ in range(num_steps):
+        # ── Current yaw error ─────────────────────────────────────────────────
         torso_quat = jnp.array(mj_data.qpos[3:7])
-        gravity_body = get_gravity_in_body_frame(torso_quat)
-        quat_inv = quat_conjugate(torso_quat)
-        body_lin_vel = quat_rotate(quat_inv, jnp.array(mj_data.qvel[:3]))
-        body_ang_vel = quat_rotate(quat_inv, jnp.array(mj_data.qvel[3:6]))
         current_yaw = float(quat_to_euler(torso_quat)[2])
         yaw_error = jnp.array([wrap_angle(current_yaw - initial_yaw)])
 
-        # Observation -- must match BalanceEnv exactly (41 dims)
-        # obs[-2] = height_cmd_norm, obs[-1] = yaw_error
-        obs = jnp.concatenate(
-            [
-                gravity_body,  # 3
-                body_lin_vel,  # 3
-                body_ang_vel,  # 3
-                jnp.array(mj_data.qpos[7:17]),  # 10 joint pos
-                jnp.array(mj_data.qvel[6:16]),  # 10 joint vel
-                prev_action,  # 10 prev action
-                height_cmd_norm,  # 1  height command (obs[-2])
-                yaw_error,  # 1  yaw drift from start (obs[-1])
-            ]
+        # ── Build observation (matches _extract_obs + balance_env extras) ──────
+        obs = _build_headless_obs(
+            mj_data=mj_data,
+            prev_action=prev_action,
+            height_cmd_norm=height_cmd_norm,
+            yaw_error=yaw_error,
+            lin_vel_mode=lin_vel_mode,
+            apply_noise=apply_noise,
+            noise_stds=noise_stds,
+            rng_np=rng_np,
+            get_gravity_fn=get_gravity_in_body_frame,
+            quat_conjugate_fn=quat_conjugate,
+            quat_rotate_fn=quat_rotate,
         )
 
+        # ── Policy inference ──────────────────────────────────────────────────
         obs_norm = normalize_obs(obs, obs_rms)
         dist, _ = model.apply(params, obs_norm)
         action = jnp.clip(dist.loc, -1.0, 1.0)
 
-        # Action smoothing (same as training path)
+        # ── Step 1: Action smoothing (EMA) ────────────────────────────────────
+        # smooth_action = policy's intended target this step (pre-delay).
+        # Stored as prev_action for: (a) smoothing recurrence, (b) obs prev_action
+        # channel.  Mirrors BalanceEnv.step() logic exactly.
         if pid_enabled and pid_alpha > 0.0:
-            control_action = pid_alpha * prev_action + (1.0 - pid_alpha) * action
+            smooth_action = pid_alpha * prev_action + (1.0 - pid_alpha) * action
         else:
-            control_action = action
+            smooth_action = action
 
-        # Low-level control (mirrors training; kd masked to 0 for wheels)
+        # ── Step 2: Action delay buffer ───────────────────────────────────────
+        # Simulates CAN bus / EtherCAT latency between policy computer and motors.
+        # delay_buffer holds the last N smooth_actions; the oldest (index 0) is
+        # the target that reaches the PID controller this step.
+        # Mirrors BalanceEnv.step() action delay logic exactly.
+        if action_delay_steps > 0:
+            control_action = delay_buffer[0]
+            delay_buffer = delay_buffer[1:] + [smooth_action]
+        else:
+            control_action = smooth_action
+
+        # ── Step 3: Low-level control ─────────────────────────────────────────
+        # Mirrors BalanceEnv._pid_low_level_ctrl() / direct torque path.
+        # kd is masked to 0 for wheels inside this computation (d_error=0 for wheels).
         if pid_enabled:
             joint_pos = jnp.array(mj_data.qpos[7:17])
             joint_vel = jnp.array(mj_data.qvel[6:16])
@@ -255,13 +467,22 @@ def validate(
             vel_target_whl = control_action * whl_vel_lim
             pos_err = pos_target - joint_pos
             error = (1.0 - wheel_mask) * pos_err + wheel_mask * (vel_target_whl - joint_vel)
-            d_error = (1.0 - wheel_mask) * (-joint_vel)  # zero for wheels (correct)
-            pid_integral = jnp.clip(pid_integral + error * control_dt, -pid_i_limit, pid_i_limit)
-            ctrl = jnp.clip(kp * error + kd * d_error + ki * pid_integral, ctrl_min, ctrl_max)
+            d_error = (1.0 - wheel_mask) * (-joint_vel)  # zero for wheels (kd masked)
+            pid_integral = jnp.clip(
+                pid_integral + error * control_dt, -pid_i_limit, pid_i_limit
+            )
+            ctrl = jnp.clip(
+                kp * error + kd * d_error + ki * pid_integral, ctrl_min, ctrl_max
+            )
         else:
             ctrl = ctrl_min + (control_action + 1.0) * 0.5 * (ctrl_max - ctrl_min)
 
-        prev_action = control_action
+        # prev_action = smooth_action (NOT control_action after delay).
+        # This matches BalanceEnv.step() line: prev_action=smooth_action.
+        # Using smooth_action keeps obs "what did the policy last request",
+        # consistent regardless of pipeline delay depth.
+        prev_action = smooth_action
+
         mj_data.ctrl[:] = np.array(ctrl)
         for _ in range(n_substeps):
             mujoco.mj_step(mj_model, mj_data)
@@ -305,8 +526,12 @@ def validate(
     console.print(bm_table)
 
     # ── Display: quality signals table ───────────────────────────────────────
+    noise_label = f"noise={'on' if apply_noise else 'off'}, lin_vel='{lin_vel_mode}'"
     qt = Table(
-        title=f"Standing Quality Signals ({num_steps} steps, h={height_cmd_clamped:.2f} m)",
+        title=(
+            f"Standing Quality Signals "
+            f"({num_steps} steps, h={height_cmd_clamped:.2f} m, {noise_label})"
+        ),
         box=box.SIMPLE,
         show_header=True,
     )
@@ -346,6 +571,14 @@ def validate(
         "stage": stage,
         "height_cmd_m": height_cmd_clamped,
         "seed": seed,
+        "headless_rollout": {
+            "num_steps": num_steps,
+            "lin_vel_mode": lin_vel_mode,
+            "noise_applied": apply_noise,
+            "noise_enabled_in_config": noise_enabled_in_config,
+            "action_delay_steps": action_delay_steps,
+            "obs_size": obs_size,
+        },
         "benchmark": benchmark_result.to_dict(),
         "standing_quality": {
             **quality,

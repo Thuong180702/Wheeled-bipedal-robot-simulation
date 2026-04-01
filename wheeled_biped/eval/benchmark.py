@@ -5,7 +5,11 @@ Supported modes
 ---------------
 nominal           Standard env defaults. Extended stats (fall_rate, timeout_rate).
 push_recovery     Larger / always-enabled push disturbances. Reports fall_after_push_rate.
-domain_randomized Random mass ±30 % and friction ±50 %. Reports height_error, drift.
+domain_randomized Fixed benchmark-level mass ±30% and friction ±50%.  Env per-episode DR
+                  is disabled by default so the stated perturbation is the only layer.
+                  Pass mode_kwargs={"disable_env_dr": False} to stack both layers (results
+                  will be harder to interpret — see _run_domain_randomized docstring).
+                  Reports height_error, drift, and env_dr_disabled flag.
 command_tracking  Sweep over fixed height commands. Reports per-command height RMSE.
 
 Usage (Python)
@@ -283,22 +287,70 @@ def _run_domain_randomized(
     max_steps,
     mass_perturb: float = 0.30,
     friction_perturb: float = 0.50,
+    disable_env_dr: bool = True,
 ):
-    """Evaluation with randomised mass and friction.
+    """Evaluation with randomised mass and friction — single perturbation layer by default.
 
-    Patches ``mj_model.body_mass`` and ``mj_model.geom_friction`` (±%, uniform),
-    rebuilds ``mjx_model``, runs rollout, then restores originals.
+    Applies a fixed benchmark-level perturbation to the robot model, runs the
+    rollout, then restores the original model.  Per-episode model randomization
+    in the env (``env._dr_enabled``) is **disabled by default** so the stated
+    ±mass_perturb / ±friction_perturb deviations are the *only* source of model
+    uncertainty across all episodes.
+
+    Why per-episode DR must be disabled in default mode
+    ---------------------------------------------------
+    ``BalanceEnv.reset()`` calls ``randomize_mjx_model(self.mjx_model, ...)``
+    every episode when ``env._dr_enabled`` is True.  Because that function
+    multiplies *the current* ``self.mjx_model.body_mass`` by a random scale, and
+    the benchmark has already perturbed ``self.mjx_model``, the two layers
+    compose multiplicatively:
+
+        actual_mass = nominal_mass × benchmark_scale × per_episode_scale
+
+    For ±30% benchmark perturbation (scale ∈ [0.70, 1.30]) composed with
+    ±15% per-episode DR (scale ∈ [0.85, 1.15]), the actual deviation from
+    nominal can reach [0.595, 1.495] — far outside the documented ±30%.
+    Disabling per-episode DR eliminates this silent compounding.
+
+    Stacked-layer mode (advanced)
+    -----------------------------
+    Pass ``disable_env_dr=False`` to keep both layers active.  The result's
+    ``mode_metrics["env_dr_disabled"]`` flag records which mode was used.
+    Stacked results are harder to interpret scientifically: the effective
+    perturbation range depends on both configs and varies per episode.
+
+    Parameters
+    ----------
+    mass_perturb : float
+        Fractional mass perturbation, uniform ±this fraction (default 0.30 = ±30%).
+        Applied once to all bodies, fixed for the entire rollout.
+    friction_perturb : float
+        Fractional friction perturbation, uniform ±this fraction (default 0.50 = ±50%).
+        Clipped to ≥ 0.01 to keep friction positive.
+    disable_env_dr : bool
+        If True (default), ``env._dr_enabled`` is set to False for the rollout so
+        per-episode model randomization is suppressed.  Restored to its original
+        value (via finally) regardless of rollout outcome.
+        If False, per-episode DR runs on top of the benchmark perturbation; results
+        are labelled in mode_metrics.
 
     Extra metrics
     -------------
     mass_perturb_pct     : fractional mass perturbation applied
     friction_perturb_pct : fractional friction perturbation applied
+    env_dr_disabled      : True if env per-episode DR was disabled for this run
     height_error_mean    : mean |actual_height − height_command| across episodes
-    position_drift_mean  : mean end-of-ep XY drift (if info available)
     """
-    # Save originals
+    # ── Save originals ────────────────────────────────────────────────────────
     orig_mass = copy.deepcopy(env.mj_model.body_mass.copy())
     orig_friction = copy.deepcopy(env.mj_model.geom_friction.copy())
+    # Save and conditionally disable env-level per-episode DR.
+    # This prevents BalanceEnv.reset() from stacking a second randomization
+    # layer on top of the benchmark perturbation.  The attribute may not exist
+    # on non-BalanceEnv envs, so we use getattr with a safe default.
+    orig_dr_enabled = getattr(env, "_dr_enabled", False)
+    if disable_env_dr:
+        env._dr_enabled = False
 
     rng_np = np.random.default_rng(seed=42)
     mass_perturbed = orig_mass * (
@@ -334,14 +386,17 @@ def _run_domain_randomized(
             step_hook=_height_hook,
         )
     finally:
+        # Restore model and env DR flag unconditionally (even on exception).
         env.mj_model.body_mass[:] = orig_mass
         env.mj_model.geom_friction[:] = orig_friction
         env.mjx_model = mjx.put_model(env.mj_model)
+        env._dr_enabled = orig_dr_enabled
 
     base = _base_metrics(ep_r, ep_l, ep_f, ep_t)
     mode_metrics = {
         "mass_perturb_pct": mass_perturb,
         "friction_perturb_pct": friction_perturb,
+        "env_dr_disabled": disable_env_dr,
         "height_error_mean": float(np.mean(height_errors)) if height_errors else float("nan"),
     }
     result = BenchmarkResult(mode="domain_randomized", mode_metrics=mode_metrics, **base)
