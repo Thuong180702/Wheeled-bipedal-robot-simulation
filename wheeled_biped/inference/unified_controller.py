@@ -50,6 +50,8 @@ from wheeled_biped.utils.math_utils import (
     get_gravity_in_body_frame,
     quat_conjugate,
     quat_rotate,
+    quat_to_euler,
+    wrap_angle,
 )
 
 
@@ -77,30 +79,52 @@ _SKILL_PRIORITY = [
 # ---------------------------------------------------------------------------
 # Observation adapter registry
 # ---------------------------------------------------------------------------
-# Each adapter name describes exactly how the 39-dim base observation is
-# extended (or not) to reach the skill's required obs_size.
+# Each adapter name describes exactly how to build the observation vector
+# for a skill at inference time, matching what the training env produced.
 #
-#   "exact"        → obs_size == 39 and no extras are added
-#   "height_cmd"   → obs_size == 40; append normalised height command (1 dim)
-#   "velocity_cmd" → obs_size == 41; append [vel_x, ang_vel_z] (2 dims)
-#   "unknown_pad"  → obs_size > 41 and unknown extras; zero-pad with warning
+# Base sizes:
+#   _BASE_OBS_FULL    = 39  (lin_vel included: "clean" or "noisy" mode)
+#   _BASE_OBS_NOVELIN = 36  (lin_vel disabled: "disabled" mode)
 #
-# Choosing "unknown_pad" is still explicit – it forces the caller to be
-# aware they are feeding potentially-wrong features to the network.
-_VALID_ADAPTERS = frozenset({"exact", "height_cmd", "velocity_cmd", "unknown_pad"})
+# Adapters:
+#   "exact"                 → obs_size == 39; no extras
+#   "height_cmd"            → obs_size == 40; append height_cmd (1 dim)
+#   "velocity_cmd"          → obs_size == 41, needs_command; append [vel_x, ang_vel_z]
+#   "height_cmd_yaw"        → obs_size == 41, !needs_command; append height_cmd + yaw_error
+#                             (BalanceEnv with clean/noisy lin_vel + yaw obs added)
+#   "novelin_height_cmd_yaw"→ obs_size == 38; 36-dim base (no lin_vel) + height_cmd + yaw_error
+#                             (BalanceEnv with lin_vel_mode="disabled")
+#   "unknown_pad"           → any other size; zero-pad with warning
+#
+_VALID_ADAPTERS = frozenset({
+    "exact",
+    "height_cmd",
+    "velocity_cmd",
+    "height_cmd_yaw",
+    "novelin_height_cmd_yaw",
+    "unknown_pad",
+})
 
-_BASE_OBS_SIZE = 39  # gravity(3) + lin_vel(3) + ang_vel(3) + qpos(10) + qvel(10) + prev_action(10)
+_BASE_OBS_FULL = 39     # gravity(3) + lin_vel(3) + ang_vel(3) + qpos(10) + qvel(10) + prev_action(10)
+_BASE_OBS_NOVELIN = 36  # same layout without lin_vel(3)
+# Legacy alias kept for code that references _BASE_OBS_SIZE by name
+_BASE_OBS_SIZE = _BASE_OBS_FULL
 
 
 def _infer_adapter(obs_size: int, needs_command: bool) -> str:
-    """Choose an obs adapter name from obs_size and needs_command flag."""
-    if obs_size == _BASE_OBS_SIZE:
+    """Choose an obs adapter from obs_size and needs_command flag."""
+    if obs_size == _BASE_OBS_FULL:                                      # 39
         return "exact"
-    if obs_size == _BASE_OBS_SIZE + 1 and not needs_command:
+    if obs_size == _BASE_OBS_FULL + 1 and not needs_command:            # 40
         return "height_cmd"
-    if obs_size == _BASE_OBS_SIZE + 2 and needs_command:
+    if obs_size == _BASE_OBS_FULL + 2 and needs_command:                # 41
         return "velocity_cmd"
-    # Any other size: explicit escape-hatch with warning
+    if obs_size == _BASE_OBS_FULL + 2 and not needs_command:            # 41
+        # BalanceEnv trained with clean/noisy lin_vel + yaw_error (new layout)
+        return "height_cmd_yaw"
+    if obs_size == _BASE_OBS_NOVELIN + 2 and not needs_command:         # 38
+        # BalanceEnv trained with lin_vel_mode="disabled" + yaw_error
+        return "novelin_height_cmd_yaw"
     return "unknown_pad"
 
 
@@ -217,6 +241,11 @@ class UnifiedController:
         self._dwell_threshold = max(1, int(dwell_threshold))
         self._dwell_counts: dict[Skill, int] = {}  # raw-detection vote counter
 
+        # Yaw tracking for balance skill: records the robot's heading when
+        # balance mode first activates in a session.  Reset on every non-balance
+        # → balance transition so the policy sees yaw_error=0 at entry.
+        self._balance_initial_yaw: float | None = None
+
         print(f"\n  Active skills: {[s.name for s in self.skills]}")
         print(f"  Default skill: {self._active_skill.name}")
         print(f"  Dwell threshold: {self._dwell_threshold} steps")
@@ -265,6 +294,20 @@ class UnifiedController:
     # ------------------------------------------------------------------
     # Observation extraction (CPU side, giống visualize.py policy)
     # ------------------------------------------------------------------
+    def _get_balance_yaw_error(self, mj_data: mujoco.MjData) -> float:
+        """Return yaw_error (rad) for the balance skill, tracking initial heading.
+
+        The first call (or after a non-balance → balance transition) records the
+        current yaw as the reference heading.  Subsequent calls return the
+        accumulated heading drift in [-π, π].
+        """
+        torso_quat = jnp.array(mj_data.qpos[3:7])
+        current_yaw = float(quat_to_euler(torso_quat)[2])
+        if self._balance_initial_yaw is None:
+            self._balance_initial_yaw = current_yaw
+            return 0.0
+        return float(wrap_angle(jnp.array(current_yaw - self._balance_initial_yaw)))
+
     def _build_obs(self, mj_data: mujoco.MjData, skill: Skill, cmd: ControlCommand) -> jnp.ndarray:
         """Xây obs vector phù hợp với obs_size của skill.
 
@@ -284,32 +327,46 @@ class UnifiedController:
         body_lin_vel = quat_rotate(quat_inv, world_lin_vel)
         body_ang_vel = quat_rotate(quat_inv, world_ang_vel)
 
-        base_obs = jnp.concatenate(
-            [
-                gravity_body,  # 3
-                body_lin_vel,  # 3  body-frame linear vel
-                body_ang_vel,  # 3  body-frame angular vel
-                jnp.array(mj_data.qpos[7:17]),  # 10 joint pos
-                jnp.array(mj_data.qvel[6:16]),  # 10 joint vel
-                prev_action,  # 10 prev action (normalized [-1,1])
-            ]
-        )  # total 39
+        joint_pos = jnp.array(mj_data.qpos[7:17])  # 10
+        joint_vel = jnp.array(mj_data.qvel[6:16])  # 10
+
+        # Full 39-dim base (lin_vel included)
+        base_obs_full = jnp.concatenate([
+            gravity_body,   # 3
+            body_lin_vel,   # 3
+            body_ang_vel,   # 3
+            joint_pos,      # 10
+            joint_vel,      # 10
+            prev_action,    # 10
+        ])  # 39
+
+        # 36-dim base (lin_vel excluded — matches "disabled" training mode)
+        base_obs_novelin = jnp.concatenate([
+            gravity_body,   # 3
+            body_ang_vel,   # 3
+            joint_pos,      # 10
+            joint_vel,      # 10
+            prev_action,    # 10
+        ])  # 36
 
         adapter = sp.obs_adapter
 
         if adapter == "exact":
-            if base_obs.shape[0] != sp.obs_size:
+            if base_obs_full.shape[0] != sp.obs_size:
                 raise ValueError(
                     f"Skill {skill.name}: adapter='exact' but computed obs has "
-                    f"{base_obs.shape[0]} dims, expected {sp.obs_size}. "
-                    f"Check _BASE_OBS_SIZE or the checkpoint's obs_rms."
+                    f"{base_obs_full.shape[0]} dims, expected {sp.obs_size}."
                 )
-            return base_obs
+            return base_obs_full
 
         if adapter == "height_cmd":
-            # height_cmd normalised [0,1]: (target - 0.38) / (0.72 - 0.38)
-            height_norm = float(np.clip((cmd.height_target - 0.38) / (0.72 - 0.38), 0.0, 1.0))
-            obs = jnp.concatenate([base_obs, jnp.array([height_norm])])
+            # Normalization matches BalanceEnv: (h - 0.40) / (0.70 - 0.40).
+            # Note: previous inference code used (h-0.38)/0.34 — that was a
+            # pre-existing mismatch with training; fixed here.
+            height_norm = float(np.clip(
+                (cmd.height_target - 0.40) / (0.70 - 0.40), 0.0, 1.0
+            ))
+            obs = jnp.concatenate([base_obs_full, jnp.array([height_norm])])
             if obs.shape[0] != sp.obs_size:
                 raise ValueError(
                     f"Skill {skill.name}: adapter='height_cmd' produced {obs.shape[0]} "
@@ -319,7 +376,7 @@ class UnifiedController:
 
         if adapter == "velocity_cmd":
             command_vec = jnp.array([cmd.vel_x, cmd.ang_vel_z])
-            obs = jnp.concatenate([base_obs, command_vec])
+            obs = jnp.concatenate([base_obs_full, command_vec])
             if obs.shape[0] != sp.obs_size:
                 raise ValueError(
                     f"Skill {skill.name}: adapter='velocity_cmd' produced {obs.shape[0]} "
@@ -327,14 +384,42 @@ class UnifiedController:
                 )
             return obs
 
+        if adapter == "height_cmd_yaw":
+            # BalanceEnv with clean/noisy lin_vel + yaw_error (41 dims).
+            height_norm = float(np.clip(
+                (cmd.height_target - 0.40) / (0.70 - 0.40), 0.0, 1.0
+            ))
+            yaw_error = self._get_balance_yaw_error(mj_data)
+            obs = jnp.concatenate([base_obs_full, jnp.array([height_norm, yaw_error])])
+            if obs.shape[0] != sp.obs_size:
+                raise ValueError(
+                    f"Skill {skill.name}: adapter='height_cmd_yaw' produced {obs.shape[0]} "
+                    f"dims, expected {sp.obs_size}."
+                )
+            return obs
+
+        if adapter == "novelin_height_cmd_yaw":
+            # BalanceEnv with lin_vel_mode="disabled" + yaw_error (38 dims).
+            height_norm = float(np.clip(
+                (cmd.height_target - 0.40) / (0.70 - 0.40), 0.0, 1.0
+            ))
+            yaw_error = self._get_balance_yaw_error(mj_data)
+            obs = jnp.concatenate([base_obs_novelin, jnp.array([height_norm, yaw_error])])
+            if obs.shape[0] != sp.obs_size:
+                raise ValueError(
+                    f"Skill {skill.name}: adapter='novelin_height_cmd_yaw' produced "
+                    f"{obs.shape[0]} dims, expected {sp.obs_size}."
+                )
+            return obs
+
         # unknown_pad — explicit escape hatch with warning already issued at load
-        current_len = base_obs.shape[0]
+        current_len = base_obs_full.shape[0]
         if current_len < sp.obs_size:
-            obs = jnp.concatenate([base_obs, jnp.zeros(sp.obs_size - current_len)])
+            obs = jnp.concatenate([base_obs_full, jnp.zeros(sp.obs_size - current_len)])
         elif current_len > sp.obs_size:
-            obs = base_obs[: sp.obs_size]
+            obs = base_obs_full[: sp.obs_size]
         else:
-            obs = base_obs
+            obs = base_obs_full
         return obs
 
     # ------------------------------------------------------------------
@@ -484,6 +569,11 @@ class UnifiedController:
                 self._transition_target = desired_skill
                 self._blend_counter = 0
                 self._transition_alpha = 0.0
+                # Reset yaw reference when transitioning INTO balance so the
+                # policy sees yaw_error=0 at entry rather than accumulated drift
+                # from a prior non-balance episode.
+                if desired_skill == Skill.BALANCE:
+                    self._balance_initial_yaw = None
             # else: same target already in progress → keep incrementing
         else:
             # desired == active → cancel any in-progress transition

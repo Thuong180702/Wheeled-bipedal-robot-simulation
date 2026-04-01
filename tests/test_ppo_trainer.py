@@ -61,7 +61,7 @@ _TINY_CONFIG = {
 }
 
 NUM_ENVS = 4
-OBS_SIZE = 40  # BalanceEnv is 39+1=40
+OBS_SIZE = 41  # BalanceEnv is 39-base + height_cmd + yaw_error = 41
 ACTION_SIZE = 10
 
 

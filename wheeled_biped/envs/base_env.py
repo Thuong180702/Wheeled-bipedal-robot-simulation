@@ -27,7 +27,6 @@ from wheeled_biped.utils.math_utils import (
     get_gravity_in_body_frame,
     quat_conjugate,
     quat_rotate,
-    quat_to_euler,
 )
 
 
@@ -88,6 +87,22 @@ class WheeledBipedEnv:
         """
         self.config = config or {}
 
+        # ── Sensor noise config read FIRST — lin_vel_mode affects obs_size ────
+        # lin_vel_mode controls how body-frame linear velocity appears in obs:
+        #   "clean"    : simulator-exact value, zero noise (original behaviour)
+        #   "noisy"    : included but corrupted by Gaussian noise (lin_vel_std)
+        #   "disabled" : excluded entirely; base obs shrinks from 39 → 36 dims
+        # Use "clean" for sim prototyping; "noisy" or "disabled" for sim2real prep.
+        noise_cfg = self.config.get("sensor_noise", {})
+        self._noise_enabled = bool(noise_cfg.get("enabled", False))
+        self._lin_vel_mode = str(noise_cfg.get("lin_vel_mode", "clean"))
+        self._noise_lin_vel_std = float(noise_cfg.get("lin_vel_std", 0.3))
+        self._noise_ang_vel_std = float(noise_cfg.get("ang_vel_std", 0.0))
+        self._noise_gravity_std = float(noise_cfg.get("gravity_std", 0.0))
+        self._noise_joint_pos_std = float(noise_cfg.get("joint_pos_std", 0.0))
+        self._noise_joint_vel_std = float(noise_cfg.get("joint_vel_std", 0.0))
+        # ──────────────────────────────────────────────────────────────────────
+
         # Tải MuJoCo model
         model_path = model_path or get_model_path()
         self.mj_model = mujoco.MjModel.from_xml_path(str(model_path))
@@ -107,7 +122,7 @@ class WheeledBipedEnv:
         # Lấy ID các body/joint quan trọng
         self._torso_body_id = mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso")
 
-        # Tính kích thước observation
+        # Tính kích thước observation (depends on lin_vel_mode set above)
         self.obs_size = self._compute_obs_size()
 
         # Cấu hình termination
@@ -119,30 +134,23 @@ class WheeledBipedEnv:
         task_cfg = self.config.get("task", {})
         self._episode_length = task_cfg.get("episode_length", 1000)
 
-        # Sensor noise config (sim-to-real obs corruption)
-        # Channels: gravity_body (IMU accel), base_ang_vel (IMU gyro),
-        #           joint_pos (encoder), joint_vel (encoder deriv).
-        # base_lin_vel and prev_action are not noised.
-        noise_cfg = self.config.get("sensor_noise", {})
-        self._noise_enabled = bool(noise_cfg.get("enabled", False))
-        self._noise_ang_vel_std = float(noise_cfg.get("ang_vel_std", 0.0))
-        self._noise_gravity_std = float(noise_cfg.get("gravity_std", 0.0))
-        self._noise_joint_pos_std = float(noise_cfg.get("joint_pos_std", 0.0))
-        self._noise_joint_vel_std = float(noise_cfg.get("joint_vel_std", 0.0))
-
     def _compute_obs_size(self) -> int:
         """Tính kích thước observation vector.
 
-        Observation bao gồm:
-          - Trọng lực trong body frame: 3
-          - Vận tốc thân (linear): 3
-          - Vận tốc thân (angular): 3
-          - Vị trí khớp: 10
-          - Vận tốc khớp: 10
-          - Action bước trước: 10
-          Total: 39
+        Layout depends on self._lin_vel_mode:
+
+        "clean" / "noisy"  (39 dims):
+          gravity_body(3) + base_lin_vel(3) + base_ang_vel(3)
+          + joint_pos(10) + joint_vel(10) + prev_action(10)
+
+        "disabled"  (36 dims):
+          gravity_body(3) + base_ang_vel(3)          ← lin_vel removed
+          + joint_pos(10) + joint_vel(10) + prev_action(10)
         """
-        return 3 + 3 + 3 + self.NUM_JOINTS + self.NUM_JOINTS + self.NUM_JOINTS
+        base = 3 + 3 + self.NUM_JOINTS + self.NUM_JOINTS + self.NUM_JOINTS  # 36
+        if self._lin_vel_mode != "disabled":
+            base += 3  # add lin_vel channel → 39
+        return base
 
     def _get_initial_mjx_data(self, rng: jax.Array) -> mjx.Data:
         """Tạo dữ liệu ban đầu cho MJX (tư thế đứng).
@@ -185,61 +193,103 @@ class WheeledBipedEnv:
             mjx_data: dữ liệu MJX.
             prev_action: action bước trước.
             rng: JAX random key for observation noise (None = no noise).
-                 Noise is only added when rng is not None AND self._noise_enabled.
-                 Noised channels: gravity_body[0:3], base_ang_vel[6:9],
-                                  joint_pos[9:19], joint_vel[19:29].
-                 Channels left clean: base_lin_vel[3:6], prev_action[29:39].
+                 Noise applied only when rng is not None AND self._noise_enabled.
 
         Returns:
-            Observation vector (shape: 39,).
+            Observation vector.  Shape depends on self._lin_vel_mode:
+              "clean" / "noisy" → (39,)
+              "disabled"        → (36,)
+
+        Obs layout — "clean" / "noisy" (39 dims):
+          [0:3]   gravity_body  (IMU-derivable)
+          [3:6]   base_lin_vel  (clean: simulator-exact; noisy: + Gaussian noise)
+          [6:9]   base_ang_vel  (IMU gyro, noised)
+          [9:19]  joint_pos     (encoder, noised)
+          [19:29] joint_vel     (encoder derivative, noised)
+          [29:39] prev_action   (known exactly — commanded target)
+
+        Obs layout — "disabled" (36 dims):
+          [0:3]   gravity_body  (IMU-derivable)
+          [3:6]   base_ang_vel  ← shifts; lin_vel excluded entirely
+          [6:16]  joint_pos
+          [16:26] joint_vel
+          [26:36] prev_action
         """
-        # Quaternion thân (qpos[3:7])
         torso_quat = mjx_data.qpos[3:7]
-
-        # Trọng lực trong body frame (3,) - cảm biến quan trọng nhất
         gravity_body = get_gravity_in_body_frame(torso_quat)
-
-        # Vận tốc thân chuyển từ world frame sang body frame
-        # (cần thiết cho sim-to-real: IMU đo trong body frame)
         quat_inv = quat_conjugate(torso_quat)
-        base_lin_vel = quat_rotate(quat_inv, mjx_data.qvel[:3])  # (3,)
+        base_lin_vel = quat_rotate(quat_inv, mjx_data.qvel[:3])   # (3,)
         base_ang_vel = quat_rotate(quat_inv, mjx_data.qvel[3:6])  # (3,)
-
-        # Vị trí + vận tốc các khớp (trừ freejoint)
         joint_pos = mjx_data.qpos[7:]  # (10,)
         joint_vel = mjx_data.qvel[6:]  # (10,)
 
-        # Ghép lại
-        obs = jnp.concatenate(
-            [
-                gravity_body,  # [0:3]
-                base_lin_vel,  # [3:6]
-                base_ang_vel,  # [6:9]
-                joint_pos,  # [9:19]
-                joint_vel,  # [19:29]
-                prev_action,  # [29:39]
-            ]
-        )
+        if self._lin_vel_mode == "disabled":
+            # 36-dim obs: lin_vel omitted entirely.
+            obs = jnp.concatenate([
+                gravity_body,   # [0:3]
+                base_ang_vel,   # [3:6]
+                joint_pos,      # [6:16]
+                joint_vel,      # [16:26]
+                prev_action,    # [26:36]
+            ])
+            if rng is not None and self._noise_enabled:
+                k1, k2, k3, k4 = jax.random.split(rng, 4)
+                obs_noise = jnp.concatenate([
+                    jax.random.normal(k1, (3,)) * self._noise_gravity_std,
+                    jax.random.normal(k2, (3,)) * self._noise_ang_vel_std,
+                    jax.random.normal(k3, (self.NUM_JOINTS,)) * self._noise_joint_pos_std,
+                    jax.random.normal(k4, (self.NUM_JOINTS,)) * self._noise_joint_vel_std,
+                    jnp.zeros(self.NUM_JOINTS),  # prev_action: no noise
+                ])
+                obs = obs + obs_noise
+            return obs
 
-        # Sensor noise (sim-to-real)
-        # Only applied when rng is provided and noise is enabled in config.
-        # Four independent Gaussian noise sources, one per noised channel group.
+        if self._lin_vel_mode == "noisy":
+            # 39-dim obs: lin_vel included with realistic Gaussian noise.
+            # lin_vel_std models state-estimation error (IMU integration drift,
+            # encoder-based odometry noise, etc.).  Typical hardware: 0.2–0.5 m/s.
+            obs = jnp.concatenate([
+                gravity_body,
+                base_lin_vel,
+                base_ang_vel,
+                joint_pos,
+                joint_vel,
+                prev_action,
+            ])
+            if rng is not None and self._noise_enabled:
+                k1, k2, k3, k4, k5 = jax.random.split(rng, 5)
+                obs_noise = jnp.concatenate([
+                    jax.random.normal(k1, (3,)) * self._noise_gravity_std,
+                    jax.random.normal(k2, (3,)) * self._noise_lin_vel_std,   # ← noisy lin_vel
+                    jax.random.normal(k3, (3,)) * self._noise_ang_vel_std,
+                    jax.random.normal(k4, (self.NUM_JOINTS,)) * self._noise_joint_pos_std,
+                    jax.random.normal(k5, (self.NUM_JOINTS,)) * self._noise_joint_vel_std,
+                    jnp.zeros(self.NUM_JOINTS),
+                ])
+                obs = obs + obs_noise
+            return obs
+
+        # "clean" — original behaviour preserved exactly (simulator-exact lin_vel,
+        # no noise on that channel).  Default mode for sim prototyping.
+        obs = jnp.concatenate([
+            gravity_body,   # [0:3]
+            base_lin_vel,   # [3:6]  simulator-only state — see sim2real note in config
+            base_ang_vel,   # [6:9]
+            joint_pos,      # [9:19]
+            joint_vel,      # [19:29]
+            prev_action,    # [29:39]
+        ])
         if rng is not None and self._noise_enabled:
             k1, k2, k3, k4 = jax.random.split(rng, 4)
-            obs_noise = jnp.concatenate(
-                [
-                    jax.random.normal(k1, (3,)) * self._noise_gravity_std,  # gravity_body
-                    jnp.zeros(3),  # lin_vel: no sensor
-                    jax.random.normal(k2, (3,)) * self._noise_ang_vel_std,  # ang_vel: IMU gyro
-                    jax.random.normal(k3, (self.NUM_JOINTS,))
-                    * self._noise_joint_pos_std,  # joint_pos
-                    jax.random.normal(k4, (self.NUM_JOINTS,))
-                    * self._noise_joint_vel_std,  # joint_vel
-                    jnp.zeros(self.NUM_JOINTS),  # prev_action: no noise
-                ]
-            )
+            obs_noise = jnp.concatenate([
+                jax.random.normal(k1, (3,)) * self._noise_gravity_std,
+                jnp.zeros(3),  # lin_vel: no noise in "clean" mode (not a real sensor)
+                jax.random.normal(k2, (3,)) * self._noise_ang_vel_std,
+                jax.random.normal(k3, (self.NUM_JOINTS,)) * self._noise_joint_pos_std,
+                jax.random.normal(k4, (self.NUM_JOINTS,)) * self._noise_joint_vel_std,
+                jnp.zeros(self.NUM_JOINTS),
+            ])
             obs = obs + obs_noise
-
         return obs
 
     def _check_termination(self, mjx_data: mjx.Data) -> jnp.ndarray:
@@ -255,13 +305,19 @@ class WheeledBipedEnv:
         Returns:
             Boolean: True nếu cần kết thúc.
         """
-        # Chiều cao thân
         torso_height = mjx_data.qpos[2]
 
-        # Góc nghiêng từ quaternion
+        # Gravity-based tilt: angle between body-z axis and world-up.
+        # tilt = arccos(-g_body[2])  where g_body = R^{-1} * [0,0,-1].
+        #
+        # Replaces the old sqrt(roll^2 + pitch^2) Euler-norm approach which
+        # suffers from gimbal coupling: large yaw rotations inflate the Euler
+        # roll/pitch and trigger false terminations.  The gravity projection is
+        # yaw-invariant: pure yaw leaves g_body[2] = -1 → tilt = 0.
+        # Consistent with the tilt computation used in UnifiedController.
         torso_quat = mjx_data.qpos[3:7]
-        euler = quat_to_euler(torso_quat)
-        tilt = jnp.sqrt(euler[0] ** 2 + euler[1] ** 2)  # roll² + pitch²
+        g_body = get_gravity_in_body_frame(torso_quat)
+        tilt = jnp.arccos(jnp.clip(-g_body[2], -1.0, 1.0))
 
         is_fallen = (torso_height < self._min_height) | (tilt > self._max_tilt)
         return is_fallen

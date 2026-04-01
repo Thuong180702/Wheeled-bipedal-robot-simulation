@@ -1,0 +1,73 @@
+# ============================================================
+# configs/baseline_lqr.yaml
+# ============================================================
+# Configuration for running the classical LQR balance baseline.
+#
+# This is used by scripts/eval_balance.py when --controller baseline_lqr
+# is specified.  It is NOT used for RL training.
+#
+# Separation of responsibilities:
+#   RL training config  : configs/training/balance.yaml
+#   Research eval (RL)  : scripts/eval_balance.py (loads from checkpoint)
+#   Research eval (LQR) : scripts/eval_balance.py --controller baseline_lqr
+#                         (uses this file for environment and actuator config)
+# ============================================================
+
+# --- Environment ---
+task:
+  env: BalanceEnv
+  initial_min_height: 0.40      # full range for evaluation
+
+# --- Low-level PID (same as RL; LQR output passes through this layer) ---
+# The LQR controller outputs normalised targets in [-1, 1], exactly like
+# the RL policy.  These are then processed by the same PID as RL training.
+# This ensures a fair comparison at the policy level.
+low_level_pid:
+  enabled: true
+  action_smoothing_alpha: 0.4   # match balance.yaml
+  anti_windup_limit: 0.35
+  wheel_vel_limit: 20.0
+  kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+  ki: [0.8,  0.4,  1.0,  1.0,  0.1, 0.8,  0.4,  1.0,  1.0,  0.1]
+  kd: [3.0,  2.0,  4.0,  4.0,  0.0, 3.0,  2.0,  4.0,  4.0,  0.0]
+  action_delay_steps: 0
+
+# --- Sensor noise (disabled for nominal LQR eval; enable for robustness tests) ---
+sensor_noise:
+  enabled: false
+  lin_vel_mode: "clean"
+  lin_vel_std: 0.0
+  ang_vel_std: 0.0
+  gravity_std: 0.0
+  joint_pos_std: 0.0
+  joint_vel_std: 0.0
+
+# --- Termination (matches BalanceEnv defaults) ---
+termination:
+  max_tilt_rad: 0.8
+  min_height: 0.30
+
+# --- LQR controller parameters ---
+# These are forwarded to LQRBalanceController.__init__() by eval_balance.py.
+# See wheeled_biped/controllers/lqr_balance.py for parameter descriptions.
+#
+# Physical interpretation of gains:
+#   At nominal stance (h=0.65 m, CoM 0.54 m above wheel axis):
+#     LQR K_pitch      ≈ 30–60 (rad/s per rad of forward lean)
+#     LQR K_pitch_rate ≈  5–15 (rad/s per rad/s of lean rate)
+#     LQR K_fwd_vel    ≈  3–10 (rad/s per m/s of body velocity)
+#     LQR K_fwd_pos    ≈  0.5–2 (rad/s per m of position drift)
+#
+# Actual values are computed by scipy.linalg.solve_continuous_are at runtime
+# using the q_diag and r_val below.
+baseline_lqr:
+  # LQR cost diagonal: [pitch, pitch_rate, fwd_vel, fwd_pos]
+  lqr_q: [10.0, 2.0, 3.0, 0.3]
+  lqr_r: 0.8
+
+  # Roll balance PD gains (lateral stabilisation via hip_roll)
+  kp_roll: 0.4     # normalised hip_roll target per unit g_body[0]
+  kd_roll: 0.08    # damping (normalised target per unit ang_vel[1])
+
+  # Yaw hold P gain (differential wheel correction per radian of yaw_error)
+  kp_yaw: 2.5

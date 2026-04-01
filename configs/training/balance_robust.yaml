@@ -36,6 +36,23 @@ network:
   activation: "elu"
   init_std: 0.15
 
+# --- Low-level controller ---
+# IMPORTANT: Must be enabled=true and use the same gains as balance.yaml.
+# Without this section BalanceEnv defaults to pid_enabled=False (direct-torque mode),
+# which has completely different action semantics from the PID-trained checkpoint.
+# Silently switching modes would break warm-start fine-tuning.
+# action_smoothing_alpha and gains are kept identical to balance.yaml;
+# only action_delay_steps is kept at 0 (match sim_prototyping mode in stage 1).
+low_level_pid:
+  enabled: true
+  action_smoothing_alpha: 0.4
+  anti_windup_limit: 0.35
+  wheel_vel_limit: 20.0
+  kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+  ki: [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
+  kd: [3.0, 2.0, 4.0, 4.0, 0.0, 3.0, 2.0, 4.0, 4.0, 0.0]
+  action_delay_steps: 0
+
 # --- Reward weights ---
 # OBJECTIVE: Push-recovery robustness — survive and recover from large impulsive forces
 # (push_magnitude=40N, push_interval=200 steps = 4 s).
@@ -94,10 +111,22 @@ termination:
 # --- Domain Randomization ---
 domain_randomization:
   enabled: true
-  mass_range: [0.85, 1.15] # biến động ±15% (cao hơn stage 1: ±10%)
+  mass_range: [0.85, 1.15] # biến động ±15% (đồng nhất với stage 1)
   friction_range: [0.6, 1.4] # biến động ±40% (cao hơn stage 1: ±30%)
   joint_damping_range: [0.7, 1.3]
   push_interval: 200 # push mỗi 4s
   push_magnitude: 40 # lực mạnh hơn (40N vs 20N stage 1)
   push_duration: 8 # kéo dài hơn (8 steps = 0.16s vs 5 steps = 0.1s)
+
+# --- Sensor Noise & Observation Mode ---
+# Must match the balance.yaml mode used in Stage 1 (checkpoint warm-start
+# requires identical obs_size).  Change both files together.
+sensor_noise:
+  enabled: true
+  lin_vel_mode: "clean"   # keep consistent with balance.yaml
+  lin_vel_std: 0.3
+  ang_vel_std: 0.05
+  gravity_std: 0.02
+  joint_pos_std: 0.005
+  joint_vel_std: 0.01
 

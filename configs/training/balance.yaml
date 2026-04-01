@@ -9,10 +9,23 @@ task:
   num_envs: 4096 # số env song song trên GPU
   initial_min_height: 0.69 # min ban đầu
 
-# --- Height Curriculum (reward-based) ---
-# Mở rộng khoảng height_command khi robot đạt đủ reward
-# Ban đầu [0.69, 0.70] → dần mở rộng → [0.40, 0.70]
-# Chỉ tăng level khi avg_reward >= reward_threshold × max_possible_reward
+# --- Height Curriculum (eval-gated, internal to Stage 1) ---
+# Implements the intended 3-phase balance progression:
+#
+#   Phase A — narrow balance  (levels 1–5):   height ∈ [0.69, 0.70] m
+#     Goal: learn stable upright stance near the nominal keyframe height.
+#     No push disturbance. Robot starts from near-nominal pose.
+#
+#   Phase B — wider balance   (levels 6–20):  height ∈ [0.64–0.55, 0.70] m
+#     Goal: generalise to lower crouching targets while maintaining stability.
+#
+#   Phase C — full range      (levels 21–29): height ∈ [0.49–0.40, 0.70] m
+#     Goal: track any commanded height in [0.40, 0.70] — full operating range.
+#
+# Advancement: eval_per_step >= reward_threshold × max_reward_possible (see below).
+# Level step: (0.69 - 0.40) / 29 ≈ 0.01 m per level.
+# Completing all 29 levels requires ~29 × eval_interval updates at threshold.
+# With eval_interval=2 and 524K steps/update: ~30M steps to advance all 29 levels.
 curriculum:
   enabled: true
   reward_threshold: 0.75 # 75% tổng reward tối đa → mở rộng range
@@ -24,9 +37,10 @@ curriculum:
   use_eval_signal: true
   # Eval cadence: fires every N policy-gradient updates.
   # GPU math: num_envs=4096 × rollout_length=128 = 524,288 steps/update.
-  #   eval_interval=2  → first eval at ~1 M env-steps (fits inside a 5 M-step run).
-  #   Old value of 50  → first eval at ~26 M steps: curriculum was disabled for short runs.
-  eval_interval: 20
+  #   eval_interval=2  → first eval at ~1 M env-steps (fits inside a 5 M-step run). ← current
+  #   eval_interval=20 → first eval at ~10.5 M steps (too slow for 5 M runs).
+  #   Old value=50     → first eval at ~26 M steps: curriculum was disabled for short runs.
+  eval_interval: 2
   eval_episodes: 200 # episodes per check — 32 envs × ~6 restarts; ±7% CI at 95%
 
 # --- PPO Hyperparameters ---
@@ -70,6 +84,11 @@ low_level_pid:
   # kd indices 4 and 9 (wheels) are masked to 0 inside pid_control(); the
   # values here are kept non-zero only for reference — they have no effect.
   kd: [3.0, 2.0, 4.0, 4.0, 0.0, 3.0, 2.0, 4.0, 4.0, 0.0]
+  # Action delay: integer number of control steps (0.02s each) to hold a command
+  # before it reaches the PID controller.  Models CAN bus / EtherCAT latency.
+  # 0  = disabled (sim_prototyping mode, current behaviour)
+  # 1  = ~20 ms delay (typical real hardware — set this for sim2real_preparation)
+  action_delay_steps: 0
 
 # --- Reward weights ---
 # OBJECTIVE: Pure standing balance (no push disturbance — push_magnitude=0 above).
@@ -129,20 +148,43 @@ termination:
 domain_randomization:
   enabled: true
   mass_range: [0.85, 1.15] # 15% variation in mass (matches hardware variation better than 10%)
-  friction_range: [0.7, 1.3] # 30% variation in friction coefficient (wider than mass to cover more sim-vs-real gap)
-  joint_damping_range: [0.8, 1.2] # 20% variation in viscous damping
+  friction_range: [0.6, 1.4] # ±40% variation — matches balance_robust.yaml; covers tile/carpet/concrete variation
+  joint_damping_range: [0.7, 1.3] # ±30% variation — matches balance_robust.yaml; covers actuator wear variation
   push_interval: 500 # đẩy ngẫu nhiên mỗi 500 steps (~10s)
   push_magnitude: 0 # Stage 1: không push — robot học balance thuần trước
   push_duration: 5 # số steps giữ lực (5 × 0.02s = 0.1 giây mỗi lần đẩy)
 
-# --- Sensor Noise ---
-# Conservative first-pass sim-to-real observation noise.
-# Channels: ang_vel (IMU gyro), gravity_body (IMU accel), joint_pos (encoder), joint_vel (encoder deriv).
-# base_lin_vel and prev_action are NOT noised (not direct sensor readings).
-# Set enabled: false to disable all channels at once (e.g. for ablation or debugging).
+# --- Sensor Noise & Observation Mode ---
+#
+# Training mode presets:
+#
+#   sim_prototyping (this file's defaults):
+#     lin_vel_mode: "clean"          — simulator-exact velocity, no noise
+#     action_delay_steps: 0          — no latency
+#     Fastest to converge; validates reward design and curriculum.
+#     WARNING: policy will rely on exact lin_vel → may degrade on hardware.
+#
+#   sim2real_preparation (uncomment overrides below):
+#     lin_vel_mode: "noisy"          — lin_vel with realistic estimation error
+#     lin_vel_std: 0.3               — typical state-estimator noise (m/s)
+#     action_delay_steps: 1          — 1 step = ~20 ms CAN bus latency
+#     Trains a policy that degrades gracefully when exact vel is unavailable.
+#     Alternatively use lin_vel_mode: "disabled" to remove vel entirely.
+#
+# To activate sim2real_preparation mode, change:
+#   sensor_noise.lin_vel_mode: "noisy"   (or "disabled")
+#   low_level_pid.action_delay_steps: 1
+#
 sensor_noise:
   enabled: true
-  ang_vel_std: 0.05 # rad/s  — MEMS IMU gyro RMS at 50 Hz control bandwidth
-  gravity_std: 0.02 # normalized  — accelerometer measurement noise
+  # lin_vel_mode: controls base_lin_vel in policy observation.
+  #   "clean"    : simulator-exact value (obs=39+extras, original behaviour)
+  #   "noisy"    : lin_vel + Gaussian noise σ=lin_vel_std (obs=39+extras)
+  #   "disabled" : lin_vel removed entirely (obs=36+extras, safest for sim2real)
+  lin_vel_mode: "clean"
+  lin_vel_std: 0.3    # m/s — used only when lin_vel_mode="noisy"
+                       # Typical hardware IMU+encoder state estimator error.
+  ang_vel_std: 0.05   # rad/s  — MEMS IMU gyro RMS at 50 Hz control bandwidth
+  gravity_std: 0.02   # normalized  — accelerometer measurement noise
   joint_pos_std: 0.005 # rad  — ~0.3° encoder resolution noise
-  joint_vel_std: 0.01 # rad/s  — encoder velocity estimation noise
+  joint_vel_std: 0.01  # rad/s  — encoder velocity estimation noise

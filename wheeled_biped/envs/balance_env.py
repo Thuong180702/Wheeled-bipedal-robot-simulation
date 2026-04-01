@@ -41,7 +41,7 @@ from wheeled_biped.rewards.reward_functions import (
 from wheeled_biped.sim.domain_randomization import randomize_mjx_model
 from wheeled_biped.sim.low_level_control import pid_control
 from wheeled_biped.sim.push_disturbance import apply_push_disturbance
-from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate, quat_to_euler
+from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate, quat_to_euler, wrap_angle
 
 
 class BalanceEnv(WheeledBipedEnv):
@@ -110,6 +110,12 @@ class BalanceEnv(WheeledBipedEnv):
         self._pid_smoothing_alpha = float(pid_cfg.get("action_smoothing_alpha", 0.0))
         self._pid_i_limit = float(pid_cfg.get("anti_windup_limit", 0.3))
         self._wheel_vel_limit = float(pid_cfg.get("wheel_vel_limit", 20.0))
+        # Action delay: simulates communication latency between policy computer and
+        # motor drivers (CAN bus / EtherCAT typically 1–3 ms, i.e. 1 control step).
+        # 0 = no delay (default, original behaviour).
+        # N = hold the smoothed normalized target for N additional control steps
+        #     before it is delivered to the PID controller.
+        self._action_delay_steps = int(pid_cfg.get("action_delay_steps", 0))
 
         # Joint range theo thứ tự action/joint của env (qpos[7:])
         joint_mins = []
@@ -182,8 +188,12 @@ class BalanceEnv(WheeledBipedEnv):
         )
 
     def _compute_obs_size(self) -> int:
-        """Observation = base 39 + height_command 1 = 40."""
-        return super()._compute_obs_size() + 1
+        """Observation = base (39 or 36) + height_command (1) + yaw_error (1).
+
+        Default (clean lin_vel mode): 39 + 1 + 1 = 41
+        Disabled lin_vel mode:        36 + 1 + 1 = 38
+        """
+        return super()._compute_obs_size() + 2
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def reset(self, rng: jax.Array) -> EnvState:
@@ -226,7 +236,11 @@ class BalanceEnv(WheeledBipedEnv):
         height_norm = (height_command - self.MIN_HEIGHT_CMD) / (
             self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
         )
-        obs = jnp.concatenate([base_obs, jnp.array([height_norm])])
+        # yaw_error = 0 at episode start (robot begins at initial heading).
+        # This extra dim makes heading control observable to the MLP policy:
+        # gravity_body is yaw-invariant, so without yaw_error the policy cannot
+        # sense accumulated heading drift.
+        obs = jnp.concatenate([base_obs, jnp.array([height_norm, 0.0])])
 
         # Lưu vị trí XY neo và yaw ban đầu để tính reward
         anchor_xy = mjx_data.qpos[:2]
@@ -235,6 +249,27 @@ class BalanceEnv(WheeledBipedEnv):
         # Random key riêng cho push disturbance
         rng, push_key = jax.random.split(rng)
 
+        info = {
+            "is_fallen": jnp.bool_(False),
+            "time_limit": jnp.bool_(False),
+            "height_command": height_command,
+            "anchor_xy": anchor_xy,
+            "initial_yaw": initial_yaw,
+            "push_rng": push_key,
+            "noise_rng": obs_noise_key,
+            "dr_mjx_model": dr_mjx_model,
+            "lifetime_steps": jnp.int32(0),
+            "curriculum_min_height": jnp.float32(self._initial_min_height),
+            "pid_integral": jnp.zeros(self.num_actions, dtype=jnp.float32),
+        }
+        # Action delay buffer: stores the last N smoothed targets waiting to be
+        # applied.  Slot [0] = oldest (applied next step), slot [-1] = newest.
+        # Initialized to zeros so early steps see zero command (safe initial state).
+        if self._action_delay_steps > 0:
+            info["action_delay_buffer"] = jnp.zeros(
+                (self._action_delay_steps, self.num_actions), dtype=jnp.float32
+            )
+
         return EnvState(
             mjx_data=mjx_data,
             obs=obs,
@@ -242,19 +277,7 @@ class BalanceEnv(WheeledBipedEnv):
             done=jnp.bool_(False),
             step_count=jnp.int32(0),
             prev_action=prev_action,
-            info={
-                "is_fallen": jnp.bool_(False),
-                "time_limit": jnp.bool_(False),
-                "height_command": height_command,
-                "anchor_xy": anchor_xy,
-                "initial_yaw": initial_yaw,
-                "push_rng": push_key,
-                "noise_rng": obs_noise_key,
-                "dr_mjx_model": dr_mjx_model,
-                "lifetime_steps": jnp.int32(0),
-                "curriculum_min_height": jnp.float32(self._initial_min_height),
-                "pid_integral": jnp.zeros(self.num_actions, dtype=jnp.float32),
-            },
+            info=info,
         )
 
     @functools.partial(jax.jit, static_argnums=(0,))
@@ -262,16 +285,33 @@ class BalanceEnv(WheeledBipedEnv):
         """Step với height_command trong observation."""
         action = jnp.clip(action, -1.0, 1.0)
 
-        # Lọc action để giảm rung trước khi đưa vào low-level controller
+        # Step 1 — Smooth the raw policy output (reduces chattering).
+        # smooth_action is the policy's intended target this step.
         if self._pid_enabled and self._pid_smoothing_alpha > 0.0:
-            control_action = (
+            smooth_action = (
                 self._pid_smoothing_alpha * state.prev_action
                 + (1.0 - self._pid_smoothing_alpha) * action
             )
         else:
-            control_action = action
+            smooth_action = action
 
-        # Direct torque mode (cũ) hoặc PID low-level mode
+        # Step 2 — Action delay: hold smooth_action for _action_delay_steps
+        # steps before it reaches the PID controller.  This models communication
+        # latency between the policy computer and motor drivers (~20 ms / step).
+        # When delay=0 the buffer is absent and control_action = smooth_action.
+        if self._action_delay_steps > 0:
+            # Oldest entry in the buffer is the delayed target to apply now.
+            delayed_action = state.info["action_delay_buffer"][0]
+            # Shift left, enqueue the current smooth_action at the end.
+            new_delay_buffer = jnp.concatenate(
+                [state.info["action_delay_buffer"][1:], smooth_action[None, :]],
+                axis=0,
+            )
+            control_action = delayed_action
+        else:
+            control_action = smooth_action
+
+        # Step 3 — Direct torque mode (cũ) hoặc PID low-level mode
         if self._pid_enabled:
             scaled_action, pid_integral = self._pid_low_level_ctrl(
                 state.mjx_data,
@@ -312,12 +352,18 @@ class BalanceEnv(WheeledBipedEnv):
         noise_key, new_noise_rng = jax.random.split(state.info["noise_rng"])
         base_obs = self._extract_obs(mjx_data, control_action, noise_key)
 
-        # Append height_command (normalized)
+        # Append height_command (normalized) and yaw_error.
         height_command = state.info["height_command"]
         height_norm = (height_command - self.MIN_HEIGHT_CMD) / (
             self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
         )
-        obs = jnp.concatenate([base_obs, jnp.array([height_norm])])
+        # yaw_error: wrap_angle produces a value in [-π, π].
+        # The obs normalizer (Welford running mean/std) will standardize this
+        # during training.  Directly observable yaw drift closes the heading loop
+        # that ang_vel alone cannot close in a memoryless MLP policy.
+        current_yaw = quat_to_euler(mjx_data.qpos[3:7])[2]
+        yaw_error = wrap_angle(current_yaw - state.info["initial_yaw"])
+        obs = jnp.concatenate([base_obs, jnp.array([height_norm, yaw_error])])
 
         # Reward
         reward = self._compute_reward(mjx_data, control_action, state)
@@ -328,26 +374,35 @@ class BalanceEnv(WheeledBipedEnv):
         time_limit = step_count >= self._episode_length
         done = is_fallen | time_limit
 
+        # prev_action stored in state = smooth_action (the policy's intended target).
+        # This is used for: (a) the action-smoothing recurrence next step, and
+        # (b) the prev_action channel in the observation.  Using smooth_action
+        # (not delayed_action) keeps the observation semantics consistent with
+        # "what did the policy last request", regardless of pipeline delay.
+        new_info = {
+            "is_fallen": is_fallen,
+            "time_limit": time_limit,
+            "height_command": height_command,
+            "anchor_xy": state.info["anchor_xy"],
+            "initial_yaw": state.info["initial_yaw"],
+            "push_rng": new_push_rng,
+            "noise_rng": new_noise_rng,
+            "dr_mjx_model": state.info["dr_mjx_model"],
+            "lifetime_steps": state.info["lifetime_steps"] + 1,
+            "curriculum_min_height": state.info["curriculum_min_height"],
+            "pid_integral": pid_integral,
+        }
+        if self._action_delay_steps > 0:
+            new_info["action_delay_buffer"] = new_delay_buffer
+
         return EnvState(
             mjx_data=mjx_data,
             obs=obs,
             reward=reward,
             done=done,
             step_count=step_count,
-            prev_action=control_action,
-            info={
-                "is_fallen": is_fallen,
-                "time_limit": time_limit,
-                "height_command": height_command,  # giữ nguyên trong episode
-                "anchor_xy": state.info["anchor_xy"],  # giữ nguyên
-                "initial_yaw": state.info["initial_yaw"],  # giữ nguyên
-                "push_rng": new_push_rng,  # cập nhật rng cho push tiếp theo
-                "noise_rng": new_noise_rng,  # cập nhật rng cho obs noise tiếp theo
-                "dr_mjx_model": state.info["dr_mjx_model"],  # giữ nguyên trong episode
-                "lifetime_steps": state.info["lifetime_steps"] + 1,
-                "curriculum_min_height": state.info["curriculum_min_height"],
-                "pid_integral": pid_integral,
-            },
+            prev_action=smooth_action,  # policy's intended target (pre-delay)
+            info=new_info,
         )
 
     @functools.partial(jax.jit, static_argnums=(0,))
@@ -372,7 +427,8 @@ class BalanceEnv(WheeledBipedEnv):
         height_norm = (curriculum_height - self.MIN_HEIGHT_CMD) / (
             self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
         )
-        new_obs = new_state.obs.at[-1].set(height_norm)
+        # obs[-2] = height_norm, obs[-1] = yaw_error (stays 0 from fresh reset)
+        new_obs = new_state.obs.at[-2].set(height_norm)
         new_info = {
             **new_state.info,
             "height_command": curriculum_height,
@@ -452,8 +508,10 @@ class BalanceEnv(WheeledBipedEnv):
             "action_rate": penalty_action_rate(action, prev_state.prev_action),
             # Phạt bánh xe quay (giữ robot đứng yên tại chỗ)
             "wheel_velocity": penalty_wheel_velocity(joint_vel),
-            # Giữ vị trí neo — sigma=1.0: gradient còn tác dụng tới ~2m drift
-            "position_drift": penalty_position_drift(current_xy, anchor_xy, sigma=1.0),
+            # Giữ vị trí neo — sigma=0.5m: gradient active from ~0.5m drift,
+            # reward halved at ~0.5m.  Previous sigma=1.0 was too permissive:
+            # the robot could drift ~1m before seeing meaningful signal.
+            "position_drift": penalty_position_drift(current_xy, anchor_xy, sigma=0.5),
             # Giữ hướng ban đầu — sigma=0.5 rad: gradient tới ~80° (thay vì 12° với sigma=0.1)
             "heading": reward_heading(torso_quat, initial_yaw, sigma=0.5),
             # Tư thế khớp tự nhiên — hp/kn phù hợp với chiều cao mục tiêu

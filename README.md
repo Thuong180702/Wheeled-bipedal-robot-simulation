@@ -72,7 +72,7 @@ Joints per leg (5 × 2 = 10 total):
 ├── wheeled_biped/                     # Main package
 │   ├── envs/
 │   │   ├── base_env.py                # MJX base environment
-│   │   ├── balance_env.py             # Balance task (40-dim obs)
+│   │   ├── balance_env.py             # Balance task (41-dim obs: 39-base + height_cmd + yaw_error)
 │   │   └── ...                        # Other env stubs
 │   ├── eval/
 │   │   ├── benchmark.py               # 4 benchmark modes
@@ -162,9 +162,9 @@ python scripts/visualize.py model --model-path path/to/custom.xml
 # Pure standing balance — initial learning run (5M steps learns narrow height range)
 python scripts/train.py single --stage balance --steps 5000000
 
-# Pure standing balance — curriculum run (50M steps advances through all 29 height levels)
-# With num_envs=4096×rollout=128=524K steps/update and eval_interval=2,
-# the height curriculum can advance every ~1M steps.
+# Pure standing balance — curriculum run.
+# eval_interval=2 (see balance.yaml): curriculum eval fires every ~1M steps.
+# With 50M steps, the height curriculum can advance through all 29 levels (~30M needed).
 python scripts/train.py single --stage balance --steps 50000000
 
 # Push-recovery fine-tune (warm-start from balance checkpoint)
@@ -423,21 +423,24 @@ python scripts/export_results.py table \
 
 ## Architecture
 
-### Observation space (40 dims for BalanceEnv)
+### Observation space (41 dims for BalanceEnv)
 
 | Component | Dims | Description |
 |---|---|---|
 | Gravity in body frame | 3 | Body tilt — yaw-invariant tilt detection |
-| Linear velocity | 3 | Body-frame linear velocity |
+| Linear velocity | 3 | Body-frame linear velocity (simulator-exact in `clean` mode) |
 | Angular velocity | 3 | Body-frame angular velocity |
 | Joint positions | 10 | All 10 joint angles (encoders) |
 | Joint velocities | 10 | All 10 joint velocities |
-| Previous action | 10 | Last control output |
-| Height command | 1 | Target height, normalised to [0, 1] |
+| Previous action | 10 | Last control output (policy's intended target, pre-delay) |
+| Height command | 1 | Target height, normalised to [0, 1] over [0.40, 0.70] m |
+| Yaw error | 1 | Heading drift from episode start, wrapped to [−π, π] |
 
-> Base 39-dim observation is shared across skills; `height_command` is the BalanceEnv
-> extension. The unified controller provides per-skill observation adapters —
-> generic zero-padding is an explicit fallback that logs a warning.
+> Base 39-dim observation (`lin_vel_mode="clean"`) is shared across skills.
+> `height_command` and `yaw_error` are BalanceEnv extensions (dims 40–41).
+> With `lin_vel_mode="disabled"` the base shrinks to 36 dims → total 38.
+> The unified controller provides per-skill observation adapters with explicit
+> schemas; generic zero-padding is an escape hatch that logs a warning.
 
 ### Action space (10 dims, normalised to [−1, 1])
 

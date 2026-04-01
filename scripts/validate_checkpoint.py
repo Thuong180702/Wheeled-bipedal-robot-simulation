@@ -153,6 +153,8 @@ def validate(
     mujoco.mj_forward(mj_model, mj_data)
 
     # Height command normalised to [0, 1] in [MIN_HEIGHT_CMD, MAX_HEIGHT_CMD]
+    # NOTE: BalanceEnv obs is 41 dims: 39-base + height_cmd_norm (obs[-2]) + yaw_error (obs[-1])
+    # validate_checkpoint uses obs_rms.mean.shape[0] to detect the actual obs size from ckpt.
     min_h = float(getattr(_BEnv, "MIN_HEIGHT_CMD", 0.40))
     max_h = float(getattr(_BEnv, "MAX_HEIGHT_CMD", 0.70))
     height_cmd_clamped = float(np.clip(height_cmd, min_h, max_h))
@@ -205,14 +207,23 @@ def validate(
     pid_integral = jnp.zeros(mj_model.nu)
     recorder = TelemetryRecorder(control_dt=control_dt)
 
+    # Track initial yaw for yaw_error obs term (obs[-1] in 41-dim BalanceEnv obs)
+    from wheeled_biped.utils.math_utils import quat_to_euler, wrap_angle
+
+    _init_quat = jnp.array(mj_data.qpos[3:7])
+    initial_yaw = float(quat_to_euler(_init_quat)[2])
+
     for _ in range(num_steps):
         torso_quat = jnp.array(mj_data.qpos[3:7])
         gravity_body = get_gravity_in_body_frame(torso_quat)
         quat_inv = quat_conjugate(torso_quat)
         body_lin_vel = quat_rotate(quat_inv, jnp.array(mj_data.qvel[:3]))
         body_ang_vel = quat_rotate(quat_inv, jnp.array(mj_data.qvel[3:6]))
+        current_yaw = float(quat_to_euler(torso_quat)[2])
+        yaw_error = jnp.array([wrap_angle(current_yaw - initial_yaw)])
 
-        # Observation -- must match BalanceEnv exactly (40 dims)
+        # Observation -- must match BalanceEnv exactly (41 dims)
+        # obs[-2] = height_cmd_norm, obs[-1] = yaw_error
         obs = jnp.concatenate(
             [
                 gravity_body,  # 3
@@ -221,7 +232,8 @@ def validate(
                 jnp.array(mj_data.qpos[7:17]),  # 10 joint pos
                 jnp.array(mj_data.qvel[6:16]),  # 10 joint vel
                 prev_action,  # 10 prev action
-                height_cmd_norm,  # 1  height command
+                height_cmd_norm,  # 1  height command (obs[-2])
+                yaw_error,  # 1  yaw drift from start (obs[-1])
             ]
         )
 

@@ -145,6 +145,14 @@ class TestObsAdapterInference:
     def test_velocity_cmd_adapter_for_41(self):
         assert _infer_adapter(41, True) == "velocity_cmd"
 
+    def test_height_cmd_yaw_adapter_for_41(self):
+        """41-dim obs with needs_command=False → BalanceEnv with yaw_error."""
+        assert _infer_adapter(41, False) == "height_cmd_yaw"
+
+    def test_novelin_height_cmd_yaw_adapter_for_38(self):
+        """38-dim obs → BalanceEnv with lin_vel_mode='disabled' + yaw_error."""
+        assert _infer_adapter(38, False) == "novelin_height_cmd_yaw"
+
     def test_unknown_pad_for_odd_sizes(self):
         assert _infer_adapter(45, False) == "unknown_pad"
         assert _infer_adapter(50, True) == "unknown_pad"
@@ -234,6 +242,42 @@ class TestBuildObs:
             ctrl.skills[skill].obs_adapter = orig_adapter
             ctrl.skills[skill].obs_size = orig_size
             ctrl.skills[skill].needs_command = orig_nc
+
+    def test_height_cmd_yaw_adapter_41(self, ctrl, mj_data):
+        """height_cmd_yaw adapter yields 41-dim obs with height_norm and yaw_error."""
+        skill = Skill.BALANCE
+        orig_adapter = ctrl.skills[skill].obs_adapter
+        orig_size = ctrl.skills[skill].obs_size
+        ctrl.skills[skill].obs_adapter = "height_cmd_yaw"
+        ctrl.skills[skill].obs_size = 41
+        ctrl._balance_initial_yaw = None
+        try:
+            obs = ctrl._build_obs(mj_data, skill, ControlCommand(height_target=0.55))
+            assert obs.shape == (41,)
+            height_norm = float(obs[-2])
+            yaw_error = float(obs[-1])
+            assert 0.0 <= height_norm <= 1.0
+            assert yaw_error == pytest.approx(0.0, abs=1e-5)  # first call → 0
+        finally:
+            ctrl.skills[skill].obs_adapter = orig_adapter
+            ctrl.skills[skill].obs_size = orig_size
+
+    def test_novelin_height_cmd_yaw_adapter_38(self, ctrl, mj_data):
+        """novelin_height_cmd_yaw adapter yields 38-dim obs (no lin_vel)."""
+        skill = Skill.BALANCE
+        orig_adapter = ctrl.skills[skill].obs_adapter
+        orig_size = ctrl.skills[skill].obs_size
+        ctrl.skills[skill].obs_adapter = "novelin_height_cmd_yaw"
+        ctrl.skills[skill].obs_size = 38
+        ctrl._balance_initial_yaw = None
+        try:
+            obs = ctrl._build_obs(mj_data, skill, ControlCommand(height_target=0.55))
+            assert obs.shape == (38,)
+            height_norm = float(obs[-2])
+            assert 0.0 <= height_norm <= 1.0
+        finally:
+            ctrl.skills[skill].obs_adapter = orig_adapter
+            ctrl.skills[skill].obs_size = orig_size
 
     def test_exact_adapter_wrong_size_raises(self, ctrl, mj_data):
         """exact adapter with mismatched obs_size raises ValueError (Fix 2)."""
