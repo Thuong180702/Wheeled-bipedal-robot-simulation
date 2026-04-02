@@ -40,7 +40,7 @@ curriculum:
   #   eval_interval=2  → first eval at ~1 M env-steps (fits inside a 5 M-step run). ← current
   #   eval_interval=20 → first eval at ~10.5 M steps (too slow for 5 M runs).
   #   Old value=50     → first eval at ~26 M steps: curriculum was disabled for short runs.
-  eval_interval: 2
+  eval_interval: 50
   eval_episodes: 200 # episodes per check — 32 envs × ~6 restarts; ±7% CI at 95%
 
 # --- PPO Hyperparameters ---
@@ -182,9 +182,10 @@ sensor_noise:
   #   "noisy"    : lin_vel + Gaussian noise σ=lin_vel_std (obs=39+extras)
   #   "disabled" : lin_vel removed entirely (obs=36+extras, safest for sim2real)
   lin_vel_mode: "clean"
-  lin_vel_std: 0.3    # m/s — used only when lin_vel_mode="noisy"
-                       # Typical hardware IMU+encoder state estimator error.
-  ang_vel_std: 0.05   # rad/s  — MEMS IMU gyro RMS at 50 Hz control bandwidth
-  gravity_std: 0.02   # normalized  — accelerometer measurement noise
+  lin_vel_std:
+    0.3 # m/s — used only when lin_vel_mode="noisy"
+    # Typical hardware IMU+encoder state estimator error.
+  ang_vel_std: 0.05 # rad/s  — MEMS IMU gyro RMS at 50 Hz control bandwidth
+  gravity_std: 0.02 # normalized  — accelerometer measurement noise
   joint_pos_std: 0.005 # rad  — ~0.3° encoder resolution noise
-  joint_vel_std: 0.01  # rad/s  — encoder velocity estimation noise
+  joint_vel_std: 0.01 # rad/s  — encoder velocity estimation noise

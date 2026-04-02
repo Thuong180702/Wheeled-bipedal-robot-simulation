@@ -149,11 +149,17 @@ def _rollout(
                 timed_out = bool(env_states.info.get("time_limit", jnp.zeros(num_envs))[i])
                 episode_fallen.append(fallen)
                 episode_timed_out.append(timed_out)
-                ep_info = {
-                    k: (float(v[i]) if hasattr(v, "__len__") else float(v))
-                    for k, v in env_states.info.items()
-                    if k not in ("push_rng", "pid_integral", "anchor_xy")
-                }
+                ep_info: dict[str, float] = {}
+                for k, v in env_states.info.items():
+                    try:
+                        scalar = v[i] if hasattr(v, "__len__") else v
+                        val = float(scalar)
+                    except (TypeError, ValueError, IndexError):
+                        continue
+                    # Skip non-finite or non-scalar results (e.g. arrays)
+                    if not np.isfinite(val) and not (val != val):  # allow NaN through
+                        continue
+                    ep_info[k] = val
                 episode_info_last.append(ep_info)
 
         rng, reset_key = jax.random.split(rng)

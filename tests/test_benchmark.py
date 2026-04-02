@@ -162,6 +162,7 @@ def _patch_jax_in_benchmark(monkeypatch):
     fake_jnp = MagicMock()
     fake_jnp.zeros = np.zeros
     fake_jnp.where = np.where
+    fake_jnp.clip = np.clip
     fake_jnp.int32 = np.int32  # prevent MagicMock recursion when used as dtype
 
     fake_mjx = MagicMock()
@@ -425,6 +426,112 @@ class TestNominalMode:
         )
         d = result.to_dict()
         json.dumps(d)  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Regression: _rollout must not crash on non-numeric info values
+# ---------------------------------------------------------------------------
+
+
+class TestRolloutNonNumericInfo:
+    """Regression test for TypeError: float() argument ... not 'Model'.
+
+    BalanceEnv.info carries 'dr_mjx_model' (an MJX Model object),
+    'pid_integral' (a 1-D array), 'anchor_xy' (a 2-D array), etc.
+    _rollout must silently skip such entries instead of crashing.
+    """
+
+    def test_rollout_skips_object_and_array_info(self):
+        from wheeled_biped.eval.benchmark import _rollout
+
+        num_envs = 2
+        episode_length = 3
+        step_counter = {"n": 0}
+
+        # A non-numeric sentinel object (simulates mjx.Model)
+        class FakeModel:
+            pass
+
+        fake_model_obj = FakeModel()
+
+        def _make_info(done: bool):
+            return {
+                "is_fallen": np.zeros(num_envs, dtype=bool),
+                "time_limit": np.full(num_envs, done, dtype=bool),
+                "height_command": np.full(num_envs, 0.55, dtype=np.float32),
+                # Non-numeric: object (e.g. mjx.Model)
+                "dr_mjx_model": fake_model_obj,
+                # Non-numeric: multi-dim array (e.g. pid_integral per joint)
+                "pid_integral": np.zeros((num_envs, 10), dtype=np.float32),
+                # Non-numeric: 2-element vector per env
+                "anchor_xy": np.zeros((num_envs, 2), dtype=np.float32),
+                # Numeric scalar (should be kept)
+                "lifetime_steps": np.full(num_envs, 42, dtype=np.int32),
+            }
+
+        env = MagicMock()
+
+        def _v_reset(rng, n_env):
+            step_counter["n"] = 0
+            state = MagicMock()
+            state.obs = np.zeros((n_env, 40), dtype=np.float32)
+            state.reward = np.zeros(n_env, dtype=np.float32)
+            state.done = np.zeros(n_env, dtype=bool)
+            state.info = _make_info(done=False)
+            return state
+
+        def _v_step(states, actions):
+            step_counter["n"] += 1
+            n_env = len(states.done)
+            done = step_counter["n"] >= episode_length
+            state = MagicMock()
+            state.obs = np.zeros((n_env, 40), dtype=np.float32)
+            state.reward = np.ones(n_env, dtype=np.float32)
+            state.done = np.full(n_env, done, dtype=bool)
+            state.info = _make_info(done=done)
+            return state
+
+        def _v_reset_if_done(states, rng):
+            if np.any(states.done):
+                step_counter["n"] = 0
+            state = MagicMock()
+            state.obs = np.zeros((num_envs, 40), dtype=np.float32)
+            state.reward = np.zeros(num_envs, dtype=np.float32)
+            state.done = np.zeros(num_envs, dtype=bool)
+            state.info = _make_info(done=False)
+            return state
+
+        env.v_reset.side_effect = _v_reset
+        env.v_step.side_effect = _v_step
+        env.v_reset_if_done.side_effect = _v_reset_if_done
+
+        model = MagicMock()
+        dist = MagicMock()
+        dist.loc = np.zeros((num_envs, 10), dtype=np.float32)
+        model.apply.return_value = (dist, np.zeros((num_envs, 1)))
+
+        # Must NOT raise TypeError
+        ep_r, ep_l, ep_f, ep_t, ep_info = _rollout(
+            env=env,
+            model=model,
+            params=MagicMock(),
+            obs_rms=_fake_obs_rms(),
+            rng=np.array([0, 1], dtype=np.uint32),
+            num_episodes=2,
+            num_envs=num_envs,
+            max_steps=20,
+        )
+
+        assert len(ep_r) >= 2
+        # ep_info entries must NOT contain the non-numeric keys
+        for info_dict in ep_info:
+            assert "dr_mjx_model" not in info_dict, "object should be skipped"
+            assert "pid_integral" not in info_dict, "multi-dim array should be skipped"
+            assert "anchor_xy" not in info_dict, "2-element vector should be skipped"
+            # Scalar numeric keys should still be present
+            assert "height_command" in info_dict
+            assert "lifetime_steps" in info_dict
+            assert info_dict["lifetime_steps"] == pytest.approx(42.0)
 
 
 # ---------------------------------------------------------------------------
