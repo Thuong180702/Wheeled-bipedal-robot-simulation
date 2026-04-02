@@ -31,9 +31,9 @@ The controller is hierarchical with four decoupled loops:
      Maps lateral lean (obs gravity_body[0]) and lean rate
      (obs ang_vel[1]) to antisymmetric hip_roll targets.
 
-  4. YAW HOLD (P, 50 Hz)
-     Maps accumulated yaw error (obs[-1]) to a differential wheel speed
-     correction.
+  4. YAW HOLD (PD, 50 Hz)
+     Maps accumulated yaw error (obs[-1]) and yaw rate (obs[8]) to a
+     differential wheel speed correction.
 
 OUTPUT
 ------
@@ -44,7 +44,9 @@ is at the policy level, not the actuator level.
 
 FAIRNESS / ASSUMPTIONS
 -----------------------
-Uses the same 41-dim observation format as RL (no privileged state).
+Requires the 41-dim observation format (lin_vel_mode="clean" or "noisy").
+lin_vel_mode="disabled" (38-dim obs) is NOT supported: the controller reads
+forward velocity from obs[4] (body_lin_vel[1]) which is absent in 38-dim obs.
 Passes through the same action-smoothing and PID layer as RL.
 The controller is STATEFUL: it integrates forward velocity to track position
 drift.  RL can in principle achieve the same through memory (the policy sees
@@ -334,6 +336,9 @@ class LQRBalanceController:
         Derivative gain for hip_roll correction (lateral lean rate).
     kp_yaw : float, optional
         Proportional gain for differential wheel correction (yaw hold).
+    kd_yaw : float, optional
+        Derivative (rate-damping) gain for yaw hold.
+        Damps CCW/CW spin using body_ang_vel[2] (obs[8]).  Default: 0.2.
     """
 
     def __init__(
@@ -345,6 +350,7 @@ class LQRBalanceController:
         kp_roll: float = 0.4,
         kd_roll: float = 0.08,
         kp_yaw: float = 2.5,
+        kd_yaw: float = 0.2,
     ) -> None:
         self._model_path = str(Path(model_path).resolve())
         self._config = config or {}
@@ -370,6 +376,7 @@ class LQRBalanceController:
         self._kp_roll: float = kp_roll
         self._kd_roll: float = kd_roll
         self._kp_yaw: float = kp_yaw
+        self._kd_yaw: float = kd_yaw
 
         # ── Height IK (one-time FK scan) ─────────────────────────────────────
         self._hip_poly, self._knee_poly, self._h_scan_min, self._h_scan_max = (
@@ -411,6 +418,8 @@ class LQRBalanceController:
         ----------
         obs : np.ndarray, shape (41,)
             BalanceEnv observation (raw, not normalised).
+            Requires lin_vel_mode="clean" or "noisy" (41-dim).
+            lin_vel_mode="disabled" (38-dim) is NOT supported.
 
         Returns
         -------
@@ -418,6 +427,15 @@ class LQRBalanceController:
             Normalised joint targets in [-1, 1].
         """
         obs = np.asarray(obs, dtype=np.float64)
+
+        if obs.shape != (41,):
+            raise ValueError(
+                f"LQRBalanceController requires a 41-dim observation "
+                f"(lin_vel_mode='clean' or 'noisy') but received shape {obs.shape}. "
+                f"If lin_vel_mode='disabled' (38-dim obs), forward velocity (obs[4]) "
+                f"is absent and the LQR sagittal loop cannot function. "
+                f"Set lin_vel_mode='clean' in baseline_lqr.yaml."
+            )
 
         action = np.zeros(10, dtype=np.float64)
 
@@ -468,13 +486,13 @@ class LQRBalanceController:
             omega_cmd_avg, -self._wheel_vel_limit, self._wheel_vel_limit
         )
 
-        # ── 3. Yaw hold — differential wheel ─────────────────────────────────
+        # ── 3. Yaw hold — differential wheel (PD) ────────────────────────────
         yaw_error = float(obs[_OBS_YAW_ERROR])
-        # Positive yaw_error = CCW drift → left wheel forward, right wheel back
         yaw_rate = float(obs[_OBS_ANG_VEL_Z])
-        omega_diff = float(
-            -self._kp_yaw * yaw_error
-        )
+        # Positive yaw_error = CCW drift → CW correction: left wheel forward, right back.
+        # omega_diff > 0 → omega_l > omega_r (left faster = CW rotation from above).
+        # Sign convention: +omega_diff corrects CCW drift and damps CCW spin.
+        omega_diff = float(self._kp_yaw * yaw_error + self._kd_yaw * yaw_rate)
         omega_diff = np.clip(omega_diff, -2.0, 2.0)  # small correction only
 
         omega_l = np.clip(
@@ -535,6 +553,7 @@ class LQRBalanceController:
             kp_roll       : lateral lean proportional gain
             kd_roll       : lateral lean rate derivative gain
             kp_yaw        : yaw error proportional gain
+            kd_yaw        : yaw rate derivative (damping) gain
             wheel_vel_limit_rads : wheel velocity saturation limit
             l_com_m       : assumed CoM height above wheel axis
             r_wheel_m     : wheel radius
@@ -549,6 +568,7 @@ class LQRBalanceController:
             "kp_roll": self._kp_roll,
             "kd_roll": self._kd_roll,
             "kp_yaw": self._kp_yaw,
+            "kd_yaw": self._kd_yaw,
             "wheel_vel_limit_rads": self._wheel_vel_limit,
             "l_com_m": _COM_HEIGHT_NOM_M,
             "r_wheel_m": _WHEEL_RADIUS_M,

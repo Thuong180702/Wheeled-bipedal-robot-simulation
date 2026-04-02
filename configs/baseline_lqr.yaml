@@ -69,5 +69,9 @@ baseline_lqr:
   kp_roll: 0.4     # normalised hip_roll target per unit g_body[0]
   kd_roll: 0.08    # damping (normalised target per unit ang_vel[1])
 
-  # Yaw hold P gain (differential wheel correction per radian of yaw_error)
+  # Yaw hold PD gains (differential wheel correction)
+  # kp_yaw: proportional correction per radian of accumulated yaw error
+  # kd_yaw: derivative damping per radian/s of yaw rate (obs[8], body_ang_vel[2])
+  # Sign: positive yaw_error (CCW drift) → left wheel faster → CW correction
   kp_yaw: 2.5
+  kd_yaw: 0.2

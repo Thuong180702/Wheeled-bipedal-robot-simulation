@@ -185,6 +185,9 @@ def policy(
     # Telemetry recorder
     recorder = TelemetryRecorder(control_dt=control_dt) if log else None
 
+    from wheeled_biped.utils.math_utils import quat_to_euler, wrap_angle
+    _initial_yaw = float(quat_to_euler(jnp.array(mj_data.qpos[3:7]))[2])
+
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
         for step in range(num_steps):
             if not viewer.is_running():
@@ -192,7 +195,7 @@ def policy(
 
             step_start = time.time()
 
-            # Trích xuất observation - PHẢI GIỐNG CHÍNH XÁC balance_env obs (40 dims)
+            # Trích xuất observation - PHẢI GIỐNG CHÍNH XÁC balance_env obs (41 dims)
             from wheeled_biped.utils.math_utils import (
                 get_gravity_in_body_frame,
                 quat_conjugate,
@@ -200,6 +203,7 @@ def policy(
             )
 
             torso_quat = jnp.array(mj_data.qpos[3:7])
+            yaw_error = jnp.array([wrap_angle(float(quat_to_euler(torso_quat)[2]) - _initial_yaw)])
             gravity_body = get_gravity_in_body_frame(torso_quat)
 
             # Body-frame velocity (giống training)
@@ -218,6 +222,7 @@ def policy(
                     jnp.array(mj_data.qvel[6:16]),  # 10
                     prev_action,  # 10 (normalized [-1,1])
                     height_cmd_norm,  # 1 (height command normalized)
+                    yaw_error,  # 1
                 ]
             )
 
@@ -314,6 +319,8 @@ def render(
         get_gravity_in_body_frame,
         quat_conjugate,
         quat_rotate,
+        quat_to_euler,
+        wrap_angle,
     )
     from wheeled_biped.utils.telemetry import TelemetryRecorder, plot_telemetry
 
@@ -410,9 +417,11 @@ def render(
 
     console.print(f"Rendering {num_steps} steps...")
     recorder = TelemetryRecorder(control_dt=control_dt) if log else None
+    _initial_yaw = float(quat_to_euler(jnp.array(mj_data.qpos[3:7]))[2])
 
     for step in range(num_steps):
         torso_quat = jnp.array(mj_data.qpos[3:7])
+        yaw_error = jnp.array([wrap_angle(float(quat_to_euler(torso_quat)[2]) - _initial_yaw)])
         gravity_body = get_gravity_in_body_frame(torso_quat)
 
         # Body-frame velocity (giống training)
@@ -429,6 +438,7 @@ def render(
                 jnp.array(mj_data.qvel[6:16]),
                 prev_action,
                 height_cmd_norm,  # height command normalized
+                yaw_error,  # 1
             ]
         )
 
@@ -542,6 +552,8 @@ def interactive(
         mujoco.mj_forward(mj_model, mj_data)
 
     _settle_robot()
+    # Mutable container so nested functions (_policy) can read and reset this.
+    _initial_yaw: list[float] = [0.0]  # filled after imports inside `if checkpoint`
 
     MIN_H = float(getattr(BalanceEnv, "MIN_HEIGHT_CMD", 0.40))  # noqa: N806
     MAX_H = float(getattr(BalanceEnv, "MAX_HEIGHT_CMD", 0.70))  # noqa: N806
@@ -584,6 +596,8 @@ def interactive(
                 get_gravity_in_body_frame,
                 quat_conjugate,
                 quat_rotate,
+                wrap_angle,
+                quat_to_euler,
             )
 
             ckpt_path = Path(checkpoint) / "checkpoint.pkl"
@@ -605,6 +619,7 @@ def interactive(
             _interactive_prev_action = jnp.zeros(10)
             _interactive_pid_integral = jnp.zeros(10)
             _interactive_height_cmd_norm = (default_height_cmd - MIN_H) / (MAX_H - MIN_H)
+            _initial_yaw[0] = float(quat_to_euler(jnp.array(mj_data.qpos[3:7]))[2])
 
             pid_cfg = config.get("low_level_pid", {})
             pid_enabled = bool(pid_cfg.get("enabled", False))
@@ -662,6 +677,8 @@ def interactive(
                 quat_inv = quat_conjugate(torso_quat)
                 body_lin_vel = quat_rotate(quat_inv, jnp.array(data.qvel[:3]))
                 body_ang_vel = quat_rotate(quat_inv, jnp.array(data.qvel[3:6]))
+                _cur_yaw = float(quat_to_euler(torso_quat)[2])
+                yaw_error = jnp.array([wrap_angle(_cur_yaw - _initial_yaw[0])])
                 obs = jnp.concatenate(
                     [
                         gravity_body,
@@ -671,6 +688,7 @@ def interactive(
                         jnp.array(data.qvel[6:16]),
                         _interactive_prev_action,
                         jnp.array([_interactive_height_cmd_norm]),
+                        yaw_error,  # 1
                     ]
                 )
                 obs_norm = normalize_obs(obs, obs_rms)

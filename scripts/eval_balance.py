@@ -275,10 +275,15 @@ def _build_obs(
     initial_yaw: float,
     noise_cfg: dict | None = None,
     rng: np.random.Generator | None = None,
+    lin_vel_mode: str = "clean",
 ) -> jnp.ndarray:
-    """Build 41-dim BalanceEnv observation from MuJoCo state.
+    """Build BalanceEnv observation from MuJoCo state.
 
-    Layout (matches BalanceEnv._extract_obs + height_cmd + yaw_error):
+    Observation dimension depends on lin_vel_mode:
+        "clean" or "noisy" → 41 dims (base 39 + height_cmd + yaw_error)
+        "disabled"         → 38 dims (base 36 + height_cmd + yaw_error; no lin_vel)
+
+    Layout for "clean"/"noisy" (matches BalanceEnv._extract_obs + appended dims):
         [0:3]   gravity in body frame
         [3:6]   body linear velocity (body frame)
         [6:9]   body angular velocity (body frame)
@@ -288,10 +293,16 @@ def _build_obs(
         [39]    height_cmd_norm  (obs[-2])
         [40]    yaw_error        (obs[-1])
 
+    For "disabled", body linear velocity is omitted; remaining indices shift by −3.
+
     Args:
-        noise_cfg: if provided, adds Gaussian noise to ang_vel/gravity/joint signals.
-                   Keys: ang_vel_std, gravity_std, joint_pos_std, joint_vel_std.
+        noise_cfg: if provided, adds Gaussian noise to IMU/joint signals.
+                   Keys: ang_vel_std, gravity_std, joint_pos_std, joint_vel_std,
+                   lin_vel_std (only applied when lin_vel_mode="noisy").
         rng: numpy random generator for noise; required when noise_cfg is not None.
+        lin_vel_mode: "clean" (sim-exact), "noisy" (noisy lin_vel), or "disabled"
+                      (lin_vel excluded). Must match the checkpoint training config
+                      (sensor_noise.lin_vel_mode).
     """
     from wheeled_biped.utils.math_utils import (
         get_gravity_in_body_frame,
@@ -311,12 +322,14 @@ def _build_obs(
     current_yaw = float(quat_to_euler(torso_quat)[2])
     yaw_error = jnp.array([wrap_angle(current_yaw - initial_yaw)])
 
-    # Sensor noise (mirrors balance.yaml sensor_noise section)
+    # Sensor noise (mirrors BalanceEnv sensor_noise section)
     if noise_cfg is not None and rng is not None:
         ang_std = float(noise_cfg.get("ang_vel_std", 0.0))
         grav_std = float(noise_cfg.get("gravity_std", 0.0))
         jp_std = float(noise_cfg.get("joint_pos_std", 0.0))
         jv_std = float(noise_cfg.get("joint_vel_std", 0.0))
+        # lin_vel noise only applied in "noisy" mode — not "clean" or "disabled"
+        lv_std = float(noise_cfg.get("lin_vel_std", 0.0)) if lin_vel_mode == "noisy" else 0.0
         if ang_std > 0:
             body_ang_vel = body_ang_vel + jnp.array(
                 rng.normal(0.0, ang_std, size=3).astype(np.float32)
@@ -333,20 +346,39 @@ def _build_obs(
             joint_vel = joint_vel + jnp.array(
                 rng.normal(0.0, jv_std, size=10).astype(np.float32)
             )
+        if lv_std > 0:
+            body_lin_vel = body_lin_vel + jnp.array(
+                rng.normal(0.0, lv_std, size=3).astype(np.float32)
+            )
 
-    obs = jnp.concatenate(
-        [
-            gravity_body,    # 3
-            body_lin_vel,    # 3
-            body_ang_vel,    # 3
-            joint_pos,       # 10
-            joint_vel,       # 10
-            prev_action,     # 10
-            height_cmd_norm, # 1  (obs[-2])
-            yaw_error,       # 1  (obs[-1])
-        ]
-    )
-    return obs  # shape (41,) or (38,) if lin_vel disabled — here always 41
+    if lin_vel_mode == "disabled":
+        # 38-dim: lin_vel channel excluded (base 36 + height_cmd + yaw_error)
+        obs = jnp.concatenate(
+            [
+                gravity_body,    # 3
+                body_ang_vel,    # 3
+                joint_pos,       # 10
+                joint_vel,       # 10
+                prev_action,     # 10
+                height_cmd_norm, # 1  (obs[-2])
+                yaw_error,       # 1  (obs[-1])
+            ]
+        )
+    else:
+        # 41-dim: lin_vel included ("clean" = sim-exact, "noisy" = with noise)
+        obs = jnp.concatenate(
+            [
+                gravity_body,    # 3
+                body_lin_vel,    # 3
+                body_ang_vel,    # 3
+                joint_pos,       # 10
+                joint_vel,       # 10
+                prev_action,     # 10
+                height_cmd_norm, # 1  (obs[-2])
+                yaw_error,       # 1  (obs[-1])
+            ]
+        )
+    return obs
 
 
 # ---------------------------------------------------------------------------
@@ -400,18 +432,26 @@ def _compute_ctrl(
 
 
 def _is_fallen(mj_data: mujoco.MjData, config: dict) -> bool:
-    """Check termination conditions from config."""
+    """Check termination, matching BalanceEnv._check_termination() exactly.
+
+    Uses ``tilt = arccos(-g_body[2])`` — the true 3-D tilt angle derived from
+    the gravity projection — NOT ``sqrt(roll² + pitch²)`` from Euler angles.
+    The two approaches agree for small angles but diverge above ~15°.  Using the
+    gravity-based form ensures that research-eval episode boundaries are identical
+    to those seen during training.
+
+    Reference: ``wheeled_biped/envs/base_env.py:_check_termination()``
+    """
+    from wheeled_biped.utils.math_utils import get_gravity_in_body_frame
+
     term = config.get("termination", {})
     max_tilt = float(term.get("max_tilt_rad", 0.8))
     min_h = float(term.get("min_height", 0.3))
 
     torso_z = float(mj_data.qpos[2])
-    torso_quat = np.array(mj_data.qpos[3:7])
-    # gravity_body[2] ≈ -cos(tilt) when upright; tilt = arccos(-gz)
-    # Simpler: check roll and pitch via euler
-    from wheeled_biped.utils.telemetry import quat_to_euler_np
-    euler = quat_to_euler_np(torso_quat)
-    tilt = math.sqrt(euler[0] ** 2 + euler[1] ** 2)
+    torso_quat = jnp.array(mj_data.qpos[3:7], dtype=jnp.float32)
+    g_body = get_gravity_in_body_frame(torso_quat)
+    tilt = float(jnp.arccos(jnp.clip(-g_body[2], -1.0, 1.0)))
 
     return torso_z < min_h or tilt > max_tilt
 
@@ -436,6 +476,7 @@ def _run_episode(
     action_delay_steps: int = 0,
     rng_np: np.random.Generator | None = None,
     controller: Any | None = None,
+    lin_vel_mode: str = "clean",
 ) -> EpisodeResult:
     """Run a single evaluation episode; return per-episode metrics.
 
@@ -450,6 +491,9 @@ def _run_episode(
             When set, replaces the RL model.apply() call.  The controller
             receives the *raw* (un-normalised) obs and returns a normalised
             action in [-1, 1].  obs_rms / model / params are unused.
+        lin_vel_mode: observation mode — "clean"/"noisy" (41-dim) or "disabled"
+            (38-dim).  Must match the checkpoint config or baseline_lqr.yaml.
+            LQRBalanceController requires "clean" or "noisy" (41-dim).
     """
     from wheeled_biped.training.ppo import normalize_obs
     from wheeled_biped.utils.math_utils import quat_to_euler, wrap_angle
@@ -536,6 +580,7 @@ def _run_episode(
                 initial_yaw,
                 noise_cfg=noise_cfg if noise_cfg else None,
                 rng=rng_np if noise_cfg else None,
+                lin_vel_mode=lin_vel_mode,
             )
 
             # ── Policy inference ───────────────────────────────────────────
@@ -719,6 +764,7 @@ def _max_recoverable_push(
     n_episodes: int = PUSH_SURVIVAL_EPISODES,
     survival_threshold: float = PUSH_SURVIVAL_THRESHOLD,
     controller: Any | None = None,
+    lin_vel_mode: str = "clean",
 ) -> float:
     """Binary search for max push magnitude (N) with >=threshold survival rate."""
     low = PUSH_SEARCH_LOW
@@ -744,6 +790,7 @@ def _max_recoverable_push(
                 seed=base_seed + ep_i * 100,
                 push_cfg=push_cfg,
                 controller=controller,
+                lin_vel_mode=lin_vel_mode,
             )
             if not result.fell:
                 survived += 1
@@ -810,6 +857,10 @@ def _run_scenario(
     ``friction_sweep_0.5x``) by pattern-matching and setting the
     appropriate push/friction parameters.
     """
+    # Read lin_vel_mode from config so obs dimension matches training / baseline config.
+    # Defaults to "clean" (41-dim) when key is absent (e.g. older checkpoints).
+    lin_vel_mode = config.get("sensor_noise", {}).get("lin_vel_mode", "clean")
+
     # Resolve height_cmd: sweep sub-scenarios inherit from their parent
     if scenario.startswith("push_sweep_"):
         height_cmd_base = _SCENARIO_HEIGHT_CMDS["push_sweep"]
@@ -883,6 +934,7 @@ def _run_scenario(
             action_delay_steps=action_delay_steps,
             rng_np=np.random.default_rng(seed),
             controller=controller,
+            lin_vel_mode=lin_vel_mode,
         )
         results.append(ep_result)
 
@@ -916,6 +968,7 @@ def _run_scenario(
             num_steps=num_steps,
             base_seed=seeds[0] if seeds else 0,
             controller=controller,
+            lin_vel_mode=lin_vel_mode,
         )
 
     # Recovery time: mean over episodes that had a push and recovered
@@ -1233,6 +1286,8 @@ def evaluate(
     )
 
     all_results: list[ScenarioMetrics] = []
+    # Used to inject LQR metadata into JSON output (set in baseline path below)
+    _lqr_metadata: dict | None = None
 
     # ── Baseline LQR controller path ──────────────────────────────────────────
     if controller == "baseline_lqr":
@@ -1247,6 +1302,17 @@ def evaluate(
         with open(bl_cfg_path) as f:
             bl_cfg = yaml.safe_load(f)
 
+        # Validate obs mode: LQR requires 41-dim obs (lin_vel must be present)
+        _bl_lv_mode = bl_cfg.get("sensor_noise", {}).get("lin_vel_mode", "clean")
+        if _bl_lv_mode == "disabled":
+            console.print(
+                "[red]LQR baseline requires lin_vel_mode='clean' or 'noisy' (41-dim obs), "
+                f"but {baseline_config} has lin_vel_mode='disabled'. "
+                "LQRBalanceController reads forward velocity from obs[4] which is absent "
+                "in the 38-dim 'disabled' observation. Update baseline_lqr.yaml.[/red]"
+            )
+            raise typer.Exit(1)
+
         bl_lqr = bl_cfg.get("baseline_lqr", {})
         lqr_controller = LQRBalanceController(
             model_path=str(get_model_path()),
@@ -1256,8 +1322,23 @@ def evaluate(
             kp_roll=float(bl_lqr.get("kp_roll", 0.4)),
             kd_roll=float(bl_lqr.get("kd_roll", 0.08)),
             kp_yaw=float(bl_lqr.get("kp_yaw", 2.5)),
+            kd_yaw=float(bl_lqr.get("kd_yaw", 0.2)),
         )
         console.print(f"[bold]LQR Baseline[/bold] gains: {lqr_controller.gains_info()}\n")
+
+        _lqr_metadata = {
+            "gains": lqr_controller.gains_info(),
+            "is_stateful": True,
+            "lin_vel_mode": _bl_lv_mode,
+            "assumptions": (
+                "Requires lin_vel_mode='clean' or 'noisy' (41-dim obs). "
+                "Reads forward velocity from obs[4] (body_lin_vel[1]). "
+                "Stateful: integrates forward position drift per episode. "
+                "Valid for Stages 1-3 (standing balance up to variable height). "
+                "Limited for Stage 4 (push-robust): LQR linearisation breaks "
+                "for |lean| > ~15-20 degrees under large impulse forces."
+            ),
+        }
 
         bl_mj_model = _load_mj_model(bl_cfg)
         ckpt_label_bl = "baseline_lqr"
@@ -1355,6 +1436,8 @@ def evaluate(
         "seeds": seeds,
         "results": [r.to_dict() for r in all_results],
     }
+    if _lqr_metadata is not None:
+        json_data["baseline_lqr"] = _lqr_metadata
     with open(json_path, "w", encoding="utf-8") as jf:
         json.dump(json_data, jf, indent=2)
     console.print(f"[dim]JSON   → {json_path}[/dim]")

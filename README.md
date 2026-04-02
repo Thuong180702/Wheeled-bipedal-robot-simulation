@@ -50,8 +50,8 @@ Joints per leg (5 × 2 = 10 total):
 ```
 ├── assets/
 │   ├── robot/
-│   │   ├── wheeled_biped.xml          # MuJoCo MJCF (primary model)
-│   │   └── wheeled_biped_real.xml     # MJCF converted from URDF
+│   │   ├── wheeled_biped_real.xml     # MuJoCo MJCF (default — used by all scripts)
+│   │   └── wheeled_biped.xml          # Legacy MJCF (alternative model)
 │   └── robot-urdf/
 │       ├── urdf/HOANTHIEN_TEST.urdf
 │       ├── meshes/*.STL               # 11 STL mesh files
@@ -59,6 +59,7 @@ Joints per leg (5 × 2 = 10 total):
 ├── configs/
 │   ├── robot.yaml                     # Robot parameters
 │   ├── curriculum.yaml                # Multi-stage curriculum pipeline
+│   ├── baseline_lqr.yaml              # Classical LQR baseline (eval only)
 │   └── training/
 │       ├── balance.yaml               # Pure standing balance (push_magnitude=0)
 │       ├── balance_robust.yaml        # Push-recovery fine-tuning (40 N)
@@ -99,11 +100,12 @@ Joints per leg (5 × 2 = 10 total):
 ├── scripts/
 │   ├── train.py                       # Training entry point
 │   ├── evaluate.py                    # Evaluation (4 benchmark modes)
+│   ├── eval_balance.py                # Research evaluation: per-step metrics, scenario sweeps
 │   ├── visualize.py                   # MuJoCo viewer / video / interactive
 │   ├── validate_checkpoint.py         # Standing validation (benchmark + posture quality)
 │   ├── compare_baseline.py            # Regression comparison CLI
-│   └── export_results.py              # Export training logs → CSV/PNG; eval JSON → Markdown table
-├── tests/                             # 12 test files (pytest)
+│   └── export_results.py              # Export logs → CSV/PNG; eval JSON → Markdown/LaTeX
+├── tests/                             # 16 test files (pytest)
 ├── .github/workflows/ci.yml           # GitHub Actions CI
 ├── pyproject.toml
 └── requirements.txt
@@ -261,8 +263,13 @@ Combines a nominal benchmark with a headless per-step rollout to surface
 reward exploitation patterns that JSON metrics alone cannot detect.
 
 ```bash
+# Default: clean obs (no sensor noise) — useful for debugging pure policy quality
 python scripts/validate_checkpoint.py \
   --checkpoint outputs/checkpoints/balance/final
+
+# Sim-to-real preparation: apply sensor noise from checkpoint config
+python scripts/validate_checkpoint.py \
+  --checkpoint outputs/checkpoints/balance/final --noise
 
 # Custom height command and rollout length
 python scripts/validate_checkpoint.py \
@@ -292,9 +299,62 @@ python scripts/validate_checkpoint.py \
 
 Each WARN flag includes a plain-text description of the exploit pattern it suggests.
 
+### 6. Research evaluation (paper metrics)
+
+`scripts/eval_balance.py` produces per-step quantitative metrics
+(pitch/roll RMS, torque RMS, drift, recovery time) across scenario groups
+for paper tables and ablation studies.  It runs single-env CPU rollouts;
+it is **not** the training-time curriculum eval (`PPOTrainer.eval_pass()`).
+
+```bash
+# Single checkpoint, all default scenarios
+python scripts/eval_balance.py \
+  --checkpoint outputs/checkpoints/balance/final
+
+# Selected scenarios
+python scripts/eval_balance.py \
+  --checkpoint outputs/checkpoints/balance/final \
+  --scenarios nominal push_recovery friction_low friction_high
+
+# Push magnitude sweep (8 points: 20–200 N)
+python scripts/eval_balance.py \
+  --checkpoint outputs/checkpoints/balance/final \
+  --scenarios push_sweep --num-episodes 10
+
+# Friction sweep (6 points: 0.3×–1.8×)
+python scripts/eval_balance.py \
+  --checkpoint outputs/checkpoints/balance/final \
+  --scenarios friction_sweep --num-episodes 10
+
+# Compare two checkpoints, more episodes, multiple seeds
+python scripts/eval_balance.py \
+  --checkpoint outputs/checkpoints/balance/v1 outputs/checkpoints/balance/v2 \
+  --num-episodes 50 --seeds 0 42 123 \
+  --output-dir results/paper_eval
+
+# Classical LQR baseline (no checkpoint required)
+python scripts/eval_balance.py \
+  --controller baseline_lqr \
+  --scenarios nominal push_recovery \
+  --num-episodes 20 \
+  --output-dir results/lqr_baseline
+```
+
+**Output files** (written to `--output-dir`, default = first checkpoint dir):
+
+| File | Contents |
+|---|---|
+| `eval_results.csv` | All metrics, one row per checkpoint × scenario |
+| `eval_results.json` | Structured results with full metadata |
+| `summary_table.txt` | Paper-ready formatted summary table |
+
+**Available scenarios:** `nominal`, `narrow_height`, `wide_height`, `full_range`,
+`push_recovery`, `friction_low`, `friction_high`, `sensor_noise_delay`,
+`push_sweep`, `friction_sweep`
+
 ---
 
-### 6. Visualize a trained policy
+### 7. Visualize a trained policy
 
 ```bash
 # Watch policy in MuJoCo viewer
@@ -307,7 +367,7 @@ python scripts/visualize.py policy \
   --num-steps 5000 --slow-factor 2.0
 ```
 
-### 7. Render video
+### 8. Render video
 
 ```bash
 python scripts/visualize.py render \
@@ -320,7 +380,7 @@ python scripts/visualize.py render \
   --output demo.mp4 --width 1920 --height 1080 --fps 60
 ```
 
-### 8. Interactive keyboard control
+### 9. Interactive keyboard control
 
 ```bash
 python scripts/visualize.py interactive                                    # PD control only
@@ -336,7 +396,7 @@ python scripts/visualize.py interactive --checkpoint .../balance/final    # with
 | Space | Brake |
 | [ / ] | Slow / fast |
 
-### 9. Unified multi-skill controller
+### 10. Unified multi-skill controller
 
 ```bash
 python scripts/visualize.py unified --checkpoint-dir outputs/checkpoints
@@ -350,23 +410,27 @@ dwell-time hysteresis (3 consecutive frames) to avoid single-frame spurious tran
 (`arccos(-g_body[2])`), which is yaw-invariant. A robot that only rotates around
 the vertical axis will not falsely trigger balance fallback.
 
-### 10. Run tests
+### 11. Run tests
 
 ```bash
 # Fast test suite — CPU-safe, typically < 3 min (equivalent to CI)
 pytest tests/ --ignore=tests/test_env.py -m "not slow" -v
 
 # Individual files
-pytest tests/test_model.py -v             # MuJoCo model integrity
-pytest tests/test_rewards.py -v           # Reward functions
-pytest tests/test_ppo_trainer.py -v       # PPO invariants: no NaN, checkpoint round-trip, eval-gated curriculum
-pytest tests/test_curriculum.py -v        # Curriculum promote/hold/demote
+pytest tests/test_model.py -v              # MuJoCo model integrity
+pytest tests/test_rewards.py -v            # Reward functions
+pytest tests/test_ppo_trainer.py -v        # PPO invariants: no NaN, checkpoint round-trip, eval-gated curriculum
+pytest tests/test_curriculum.py -v         # Curriculum promote/hold/demote
 pytest tests/test_unified_controller.py -v # Tilt semantics, skill switching
-pytest tests/test_benchmark.py -v         # Benchmark success/fall/timeout semantics
-pytest tests/test_sim_helpers.py -v       # Push disturbance, PID control
-pytest tests/test_noise_and_dr.py -v      # Sensor noise + per-episode DR
-pytest tests/test_baseline.py -v          # Baseline comparison logic
-pytest tests/test_standing_quality.py -v  # Standing quality signals (pure numpy, no JAX/MuJoCo)
+pytest tests/test_benchmark.py -v          # Benchmark success/fall/timeout semantics
+pytest tests/test_sim_helpers.py -v        # Push disturbance, PID control
+pytest tests/test_noise_and_dr.py -v       # Sensor noise + per-episode DR
+pytest tests/test_baseline.py -v           # Baseline comparison logic
+pytest tests/test_standing_quality.py -v   # Standing quality signals (pure numpy, no JAX/MuJoCo)
+pytest tests/test_validate_checkpoint.py -v # validate_checkpoint.py CLI smoke tests
+pytest tests/test_latex_table.py -v        # LaTeX table generator
+pytest tests/test_lqr_controller.py -v     # LQR balance controller (mocked MuJoCo)
+pytest tests/test_eval_balance.py -v       # eval_balance.py data structures and scenario sweep
 
 # End-to-end smoke test — verifies train() runs without error and produces a checkpoint
 # Marked @pytest.mark.slow: 2–5 min on CPU (JAX JIT compile), < 30 s on GPU.
@@ -395,12 +459,18 @@ python scripts/train.py single     --stage balance_robust --steps 3000000
 python scripts/train.py single     --stage balance        --live-view
 python scripts/train.py curriculum --steps-per-stage 5000000
 
-# ── Evaluate ──────────────────────────────────────────────────────────────────
+# ── Evaluate (benchmark) ──────────────────────────────────────────────────────
 python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode nominal
 python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode push_recovery
 python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode domain_randomized
 python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode command_tracking
 python scripts/validate_checkpoint.py --checkpoint outputs/checkpoints/balance/final
+
+# ── Research evaluation (paper metrics) ───────────────────────────────────────
+python scripts/eval_balance.py --checkpoint outputs/checkpoints/balance/final
+python scripts/eval_balance.py --checkpoint outputs/checkpoints/balance/final \
+    --scenarios nominal push_recovery push_sweep --num-episodes 20
+python scripts/eval_balance.py --controller baseline_lqr --scenarios nominal
 
 # ── Baseline comparison ───────────────────────────────────────────────────────
 python scripts/compare_baseline.py --baseline baselines/nominal_v1.json \
@@ -417,6 +487,9 @@ python scripts/export_results.py curves \
 python scripts/export_results.py table \
     outputs/checkpoints/balance/final/eval_results_command_tracking.json \
     --output outputs/tables/height_tracking.md
+python scripts/export_results.py latex \
+    results/paper_eval/eval_results.json \
+    --output outputs/tables/balance_eval.tex
 ```
 
 ---
@@ -501,10 +574,11 @@ metric against the stage's `success_value` threshold over a sliding `promotion_w
 
 GitHub Actions workflow at `.github/workflows/ci.yml`:
 - **Ruff** lint + format check
-- **Pytest** over 11 of 12 test files (excludes `test_env.py` — full MJX JIT compile is
+- **Pytest** over 15 of 16 test files (excludes `test_env.py` — full MJX JIT compile is
   prohibitively slow on free runners). `test_smoke_train.py` is collected but its tests
   are marked `@pytest.mark.slow`; run them locally with `pytest tests/test_smoke_train.py -m slow`.
-- CPU-only JAX (`jax[cpu]`) — `jax[cuda12]` override applied before package install
+- CPU-only JAX (`jax[cpu]`) installed explicitly before the project package to avoid
+  pulling in the cuda12 variant
 
 ---
 
@@ -582,6 +656,8 @@ optional for PNG figures).
 The training logger writes to `outputs/logs/<stage>_seed<seed>_metrics.jsonl`
 (e.g. `balance_seed42_metrics.jsonl` for `--stage balance --seed 42`).
 
+Three sub-commands: `curves`, `table`, `latex`.
+
 ```bash
 # Training curves → CSV + PNG
 python scripts/export_results.py curves \
@@ -594,7 +670,7 @@ python scripts/export_results.py curves \
     outputs/logs/balance_seed42_metrics.jsonl \
     --no-plot
 
-# Benchmark table → Markdown
+# Benchmark table → Markdown (from evaluate.py output)
 python scripts/export_results.py table \
     outputs/checkpoints/balance/final/eval_results_command_tracking.json \
     --output outputs/tables/height_tracking.md
@@ -602,6 +678,13 @@ python scripts/export_results.py table \
 # Print to stdout (no --output)
 python scripts/export_results.py table \
     outputs/checkpoints/balance/final/eval_results_nominal.json
+
+# Research eval → LaTeX booktabs table (from eval_balance.py output)
+python scripts/export_results.py latex \
+    results/paper_eval/eval_results.json \
+    --output outputs/tables/balance_eval.tex \
+    --caption "Balance evaluation results." \
+    --label "tab:balance_eval"
 ```
 
 Output files written alongside the source log/JSON by default when `--output` is omitted.
