@@ -26,6 +26,16 @@ Usage
         --checkpoint ckpt_v1 ckpt_v2 \\
         --scenarios nominal push_recovery friction_low friction_high
 
+    # Push magnitude sweep (paper Figure: degradation vs force)
+    python scripts/eval_balance.py \\
+        --checkpoint outputs/checkpoints/balance/final \\
+        --scenarios push_sweep --num-episodes 10
+
+    # Friction sweep
+    python scripts/eval_balance.py \\
+        --checkpoint outputs/checkpoints/balance/final \\
+        --scenarios friction_sweep --num-episodes 10
+
     # Paper evaluation with more episodes and multiple seeds
     python scripts/eval_balance.py \\
         --checkpoint outputs/checkpoints/balance/final \\
@@ -50,6 +60,10 @@ Scenario groups
     friction_low         friction multiplier 0.6 (slippery tile/wet floor)
     friction_high        friction multiplier 1.4 (rough carpet/rubber)
     sensor_noise_delay   IMU/encoder noise + 1-step (~20 ms) action delay
+    push_sweep           parametric push magnitude sweep: 20..200 N (8 points)
+                         produces one row per magnitude for degradation curves
+    friction_sweep       parametric friction multiplier sweep: 0.3..1.8 (6 points)
+                         produces one row per friction value
 
 Metrics computed per scenario (10 required metrics)
 ----------------------------------------------------
@@ -129,9 +143,15 @@ _SCENARIO_HEIGHT_CMDS: dict[str, float] = {
     "friction_low": 0.65,
     "friction_high": 0.65,
     "sensor_noise_delay": 0.65,
+    "push_sweep": 0.65,
+    "friction_sweep": 0.65,
 }
 
 ALL_SCENARIOS = list(_SCENARIO_HEIGHT_CMDS.keys())
+
+# Sweep scenario defaults
+PUSH_SWEEP_MAGNITUDES: list[float] = [20.0, 40.0, 60.0, 80.0, 100.0, 130.0, 160.0, 200.0]
+FRICTION_SWEEP_SCALES: list[float] = [0.3, 0.5, 0.7, 1.0, 1.3, 1.8]
 
 # Push disturbance applied in push_recovery scenario
 RECOVERY_PUSH_MAGNITUDE = 50.0   # N — single-impulse push for recovery time measurement
@@ -740,6 +760,33 @@ def _max_recoverable_push(
 
 
 # ---------------------------------------------------------------------------
+# Sweep expansion
+# ---------------------------------------------------------------------------
+
+
+def _expand_scenarios(scenarios: list[str]) -> list[str]:
+    """Expand sweep scenario names into per-parameter sub-scenario names.
+
+    ``push_sweep`` → [``push_sweep_20N``, ``push_sweep_40N``, ...] (8 items)
+    ``friction_sweep`` → [``friction_sweep_0.3x``, ``friction_sweep_0.5x``, ...] (6 items)
+
+    Non-sweep scenarios pass through unchanged.
+    """
+    expanded: list[str] = []
+    for s in scenarios:
+        if s == "push_sweep":
+            for mag in PUSH_SWEEP_MAGNITUDES:
+                label = f"{mag:g}"  # "20" not "20.0"
+                expanded.append(f"push_sweep_{label}N")
+        elif s == "friction_sweep":
+            for fsc in FRICTION_SWEEP_SCALES:
+                expanded.append(f"friction_sweep_{fsc}x")
+        else:
+            expanded.append(s)
+    return expanded
+
+
+# ---------------------------------------------------------------------------
 # Scenario runner
 # ---------------------------------------------------------------------------
 
@@ -757,8 +804,19 @@ def _run_scenario(
     seeds: list[int],
     controller: Any | None = None,
 ) -> ScenarioMetrics:
-    """Run all episodes for one scenario and aggregate metrics."""
-    height_cmd_base = _SCENARIO_HEIGHT_CMDS[scenario]
+    """Run all episodes for one scenario and aggregate metrics.
+
+    Handles expanded sweep sub-scenarios (e.g. ``push_sweep_60N``,
+    ``friction_sweep_0.5x``) by pattern-matching and setting the
+    appropriate push/friction parameters.
+    """
+    # Resolve height_cmd: sweep sub-scenarios inherit from their parent
+    if scenario.startswith("push_sweep_"):
+        height_cmd_base = _SCENARIO_HEIGHT_CMDS["push_sweep"]
+    elif scenario.startswith("friction_sweep_"):
+        height_cmd_base = _SCENARIO_HEIGHT_CMDS["friction_sweep"]
+    else:
+        height_cmd_base = _SCENARIO_HEIGHT_CMDS[scenario]
 
     # Scenario-specific parameters
     friction_scale = 1.0
@@ -776,6 +834,18 @@ def _run_scenario(
             "duration": RECOVERY_PUSH_DURATION,
             "warmup_steps": RECOVERY_PUSH_WARMUP_STEPS,
         }
+    elif scenario.startswith("push_sweep_"):
+        # Extract magnitude from name: "push_sweep_60N" → 60.0
+        mag_str = scenario.removeprefix("push_sweep_").removesuffix("N")
+        push_cfg = {
+            "magnitude": float(mag_str),
+            "duration": RECOVERY_PUSH_DURATION,
+            "warmup_steps": RECOVERY_PUSH_WARMUP_STEPS,
+        }
+    elif scenario.startswith("friction_sweep_"):
+        # Extract scale from name: "friction_sweep_0.5x" → 0.5
+        fsc_str = scenario.removeprefix("friction_sweep_").removesuffix("x")
+        friction_scale = float(fsc_str)
     elif scenario == "sensor_noise_delay":
         # Mirror balance.yaml sensor_noise section values
         noise_cfg = {
@@ -852,6 +922,19 @@ def _run_scenario(
     recovery_times = [r.recovery_time_s for r in results]
     recovery_time_mean = _nanmean(recovery_times)
 
+    # Determine sweep metadata
+    scenario_group = scenario
+    scenario_param_name = ""
+    scenario_param_value = ""
+    if scenario.startswith("push_sweep_"):
+        scenario_group = "push_sweep"
+        scenario_param_name = "push_magnitude_n"
+        scenario_param_value = str(push_cfg["magnitude"]) if push_cfg else ""
+    elif scenario.startswith("friction_sweep_"):
+        scenario_group = "friction_sweep"
+        scenario_param_name = "friction_scale"
+        scenario_param_value = str(friction_scale)
+
     return ScenarioMetrics(
         scenario=scenario,
         checkpoint=checkpoint_path,
@@ -873,7 +956,10 @@ def _run_scenario(
             "scenario_height_cmd": height_cmd_base,
             "friction_scale": friction_scale,
             "action_delay_steps": action_delay_steps,
-            "push_magnitude": RECOVERY_PUSH_MAGNITUDE if push_cfg else 0.0,
+            "push_magnitude": push_cfg["magnitude"] if push_cfg else 0.0,
+            "scenario_group": scenario_group,
+            "scenario_param_name": scenario_param_name,
+            "scenario_param_value": scenario_param_value,
         },
     )
 
@@ -968,7 +1054,9 @@ def _save_csv(
     if not all_metrics:
         return
     fieldnames = [
-        "checkpoint", "scenario", "num_episodes",
+        "checkpoint", "scenario",
+        "scenario_group", "scenario_param_name", "scenario_param_value",
+        "num_episodes",
         "fall_rate", "survival_rate",
         "survival_time_mean_s", "survival_time_std_s",
         "pitch_rms_deg", "roll_rms_deg", "pitch_rate_rms_rads",
@@ -981,6 +1069,10 @@ def _save_csv(
         writer.writeheader()
         for m in all_metrics:
             row = {k: getattr(m, k, None) for k in fieldnames}
+            # Pull sweep metadata from extra dict
+            row["scenario_group"] = m.extra.get("scenario_group", m.scenario)
+            row["scenario_param_name"] = m.extra.get("scenario_param_name", "")
+            row["scenario_param_value"] = m.extra.get("scenario_param_value", "")
             # Format NaN as empty string for clean CSV
             for k, v in row.items():
                 if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
@@ -1104,6 +1196,9 @@ def evaluate(
         )
         raise typer.Exit(1)
 
+    # Expand sweep scenarios into per-parameter sub-scenarios
+    expanded_scenarios = _expand_scenarios(scenarios)
+
     # Validate controller choice
     if controller not in ("rl", "baseline_lqr"):
         console.print(
@@ -1130,7 +1225,8 @@ def evaluate(
         f"\n[bold cyan]Balance Research Evaluation[/bold cyan]\n"
         f"  Controller  : {controller}\n"
         f"  Checkpoints : {checkpoint if checkpoint else '(none — classical baseline)'}\n"
-        f"  Scenarios   : {scenarios}\n"
+        f"  Scenarios   : {scenarios}"
+        f"{' → ' + str(len(expanded_scenarios)) + ' sub-scenarios' if len(expanded_scenarios) != len(scenarios) else ''}\n"
         f"  Episodes    : {num_episodes} × {num_steps} steps\n"
         f"  Seeds       : {seeds}\n"
         f"  Output dir  : {out_dir}\n"
@@ -1166,7 +1262,7 @@ def evaluate(
         bl_mj_model = _load_mj_model(bl_cfg)
         ckpt_label_bl = "baseline_lqr"
 
-        for scenario in scenarios:
+        for scenario in expanded_scenarios:
             console.print(f"  [cyan]→[/cyan] {scenario} ({num_episodes} episodes) …")
             metrics = _run_scenario(
                 scenario=scenario,
@@ -1220,7 +1316,7 @@ def evaluate(
 
         console.print(f"[bold]Checkpoint:[/bold] {ckpt_label}  (obs={env.obs_size})")
 
-        for scenario in scenarios:
+        for scenario in expanded_scenarios:
             console.print(f"  [cyan]→[/cyan] {scenario} ({num_episodes} episodes) …")
             metrics = _run_scenario(
                 scenario=scenario,

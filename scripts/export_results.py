@@ -5,6 +5,7 @@ Two sub-commands:
 
   curves   -- Read a JSONL metrics log → CSV + optional PNG figure.
   table    -- Read a benchmark/eval JSON → Markdown table.
+  latex    -- Read eval_balance.py JSON → LaTeX booktabs table.
 
 Usage examples:
 
@@ -18,6 +19,11 @@ Usage examples:
   python scripts/export_results.py table \\
       outputs/checkpoints/stage_0/final/eval_results_command_tracking.json \\
       --output outputs/tables/height_tracking.md
+
+  # LaTeX table from eval_balance.py output
+  python scripts/export_results.py latex \\
+      outputs/checkpoints/balance/final/eval_results.json \\
+      --output outputs/tables/balance_eval.tex
 """
 
 from __future__ import annotations
@@ -299,7 +305,67 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Output .md file path. Default: print to stdout.",
     )
 
+    # latex
+    p_latex = sub.add_parser(
+        "latex",
+        help="Export eval_balance.py JSON → LaTeX booktabs table.",
+    )
+    p_latex.add_argument("source", help="Path to eval_results.json from eval_balance.py.")
+    p_latex.add_argument(
+        "--output",
+        default=None,
+        help="Output .tex file path. Default: print to stdout.",
+    )
+    p_latex.add_argument(
+        "--caption",
+        default=None,
+        help="LaTeX table caption.",
+    )
+    p_latex.add_argument(
+        "--label",
+        default=None,
+        help=r"LaTeX table label (for \ref{}).",
+    )
+
     return parser
+
+
+# ---------------------------------------------------------------------------
+# Sub-command: latex
+# ---------------------------------------------------------------------------
+
+
+def cmd_latex(args: argparse.Namespace) -> None:
+    """Export eval_balance.py JSON results as a LaTeX booktabs table."""
+    src = Path(args.source)
+    if not src.exists():
+        print(f"ERROR: file not found: {src}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(src, encoding="utf-8") as f:
+        data = json.load(f)
+
+    # eval_balance.py JSON has {"results": [...]}
+    # evaluate.py JSON is a flat dict — wrap in a list
+    if "results" in data and isinstance(data["results"], list):
+        results = data["results"]
+    else:
+        results = [data]
+
+    from wheeled_biped.eval.latex_table import generate_latex_table
+
+    caption = args.caption if args.caption else "Balance evaluation results."
+    label = args.label if args.label else "tab:balance_eval"
+
+    tex = generate_latex_table(results, caption=caption, label=label)
+
+    if args.output:
+        out = Path(args.output)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(tex, encoding="utf-8")
+        print(f"LaTeX table written → {out}")
+    else:
+        print(tex)
 
 
 if __name__ == "__main__":
@@ -309,3 +375,5 @@ if __name__ == "__main__":
         cmd_curves(args)
     elif args.command == "table":
         cmd_table(args)
+    elif args.command == "latex":
+        cmd_latex(args)
