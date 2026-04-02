@@ -186,6 +186,7 @@ def policy(
     recorder = TelemetryRecorder(control_dt=control_dt) if log else None
 
     from wheeled_biped.utils.math_utils import quat_to_euler, wrap_angle
+
     _initial_yaw = float(quat_to_euler(jnp.array(mj_data.qpos[3:7]))[2])
 
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
@@ -596,8 +597,8 @@ def interactive(
                 get_gravity_in_body_frame,
                 quat_conjugate,
                 quat_rotate,
-                wrap_angle,
                 quat_to_euler,
+                wrap_angle,
             )
 
             ckpt_path = Path(checkpoint) / "checkpoint.pkl"

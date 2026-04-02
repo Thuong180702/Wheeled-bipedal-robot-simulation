@@ -79,20 +79,20 @@ def _make_obs(
         prev_action = np.zeros(10)
     return np.array(
         [
-            grav_x,          # [0]
-            grav_y,          # [1]
-            grav_z,          # [2]
-            lin_vel_x,       # [3]
-            lin_vel_y,       # [4]
-            lin_vel_z,       # [5]
-            ang_vel_x,       # [6]
-            ang_vel_y,       # [7]
-            ang_vel_z,       # [8]
-            *joint_pos,      # [9:19]
-            *joint_vel,      # [19:29]
-            *prev_action,    # [29:39]
-            height_cmd_norm, # [39]
-            yaw_error,       # [40]
+            grav_x,  # [0]
+            grav_y,  # [1]
+            grav_z,  # [2]
+            lin_vel_x,  # [3]
+            lin_vel_y,  # [4]
+            lin_vel_z,  # [5]
+            ang_vel_x,  # [6]
+            ang_vel_y,  # [7]
+            ang_vel_z,  # [8]
+            *joint_pos,  # [9:19]
+            *joint_vel,  # [19:29]
+            *prev_action,  # [29:39]
+            height_cmd_norm,  # [39]
+            yaw_error,  # [40]
         ],
         dtype=np.float32,
     )
@@ -107,8 +107,8 @@ class TestComputeLqrGains:
     def test_returns_4_gains(self):
         from wheeled_biped.controllers.lqr_balance import _compute_lqr_gains
 
-        K = _compute_lqr_gains()
-        assert K.shape == (4,)
+        k = _compute_lqr_gains()
+        assert k.shape == (4,)
 
     def test_all_gains_negative(self):
         """All K elements should be negative for this TWIP sign convention.
@@ -117,15 +117,15 @@ class TestComputeLqrGains:
         """
         from wheeled_biped.controllers.lqr_balance import _compute_lqr_gains
 
-        K = _compute_lqr_gains()
-        assert np.all(K < 0), f"Expected all negative K, got {K}"
+        k = _compute_lqr_gains()
+        assert np.all(k < 0), f"Expected all negative K, got {k}"
 
     def test_custom_q_r_changes_gains(self):
         from wheeled_biped.controllers.lqr_balance import _compute_lqr_gains
 
-        K_default = _compute_lqr_gains()
-        K_custom = _compute_lqr_gains(q_diag=(20.0, 5.0, 3.0, 0.3), r_val=0.5)
-        assert not np.allclose(K_default, K_custom)
+        k_default = _compute_lqr_gains()
+        k_custom = _compute_lqr_gains(q_diag=(20.0, 5.0, 3.0, 0.3), r_val=0.5)
+        assert not np.allclose(k_default, k_custom)
 
 
 # ---------------------------------------------------------------------------
@@ -313,8 +313,7 @@ class TestSignConventions:
         l_wheel = float(action[4])
         r_wheel = float(action[9])
         assert l_wheel > r_wheel, (
-            f"Expected l_wheel > r_wheel for CCW drift, "
-            f"got l={l_wheel:.4f}, r={r_wheel:.4f}"
+            f"Expected l_wheel > r_wheel for CCW drift, got l={l_wheel:.4f}, r={r_wheel:.4f}"
         )
 
     def test_cw_yaw_error_right_wheel_faster(self):
@@ -326,8 +325,7 @@ class TestSignConventions:
         l_wheel = float(action[4])
         r_wheel = float(action[9])
         assert r_wheel > l_wheel, (
-            f"Expected r_wheel > l_wheel for CW drift, "
-            f"got l={l_wheel:.4f}, r={r_wheel:.4f}"
+            f"Expected r_wheel > l_wheel for CW drift, got l={l_wheel:.4f}, r={r_wheel:.4f}"
         )
 
     def test_ccw_yaw_rate_damps_correctly(self):
@@ -339,8 +337,7 @@ class TestSignConventions:
         l_wheel = float(action[4])
         r_wheel = float(action[9])
         assert l_wheel > r_wheel, (
-            f"Expected l_wheel > r_wheel for CCW spin damping, "
-            f"got l={l_wheel:.4f}, r={r_wheel:.4f}"
+            f"Expected l_wheel > r_wheel for CCW spin damping, got l={l_wheel:.4f}, r={r_wheel:.4f}"
         )
 
     def test_left_lean_increases_l_hip_roll(self):
@@ -353,9 +350,7 @@ class TestSignConventions:
         action_right = ctrl.compute_action(obs_right)
         # l_hip_roll is index 0, r_hip_roll is index 5
         # left lean → positive roll correction
-        assert action_left[0] > action_right[0], (
-            "l_hip_roll should be higher for left lean"
-        )
+        assert action_left[0] > action_right[0], "l_hip_roll should be higher for left lean"
         assert action_left[5] < action_right[5], (
             "r_hip_roll should be lower for left lean (antisymmetric)"
         )
@@ -476,7 +471,7 @@ class TestGainsInfo:
         for k in self._REQUIRED_KEYS:
             assert k in info, f"gains_info() missing key: {k}"
 
-    def test_lqr_gains_K_is_list_of_4(self):
+    def test_lqr_gains_k_is_list_of_4(self):
         ctrl = _make_controller()
         info = ctrl.gains_info()
         assert isinstance(info["lqr_gains_K"], list)

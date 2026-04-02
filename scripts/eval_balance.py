@@ -92,7 +92,6 @@ import json
 import math
 import pickle
 import sys
-import textwrap
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -154,18 +153,18 @@ PUSH_SWEEP_MAGNITUDES: list[float] = [20.0, 40.0, 60.0, 80.0, 100.0, 130.0, 160.
 FRICTION_SWEEP_SCALES: list[float] = [0.3, 0.5, 0.7, 1.0, 1.3, 1.8]
 
 # Push disturbance applied in push_recovery scenario
-RECOVERY_PUSH_MAGNITUDE = 50.0   # N — single-impulse push for recovery time measurement
-RECOVERY_PUSH_DURATION = 5       # control steps force is applied (= 0.1 s)
+RECOVERY_PUSH_MAGNITUDE = 50.0  # N — single-impulse push for recovery time measurement
+RECOVERY_PUSH_DURATION = 5  # control steps force is applied (= 0.1 s)
 RECOVERY_PUSH_WARMUP_STEPS = 150  # steps before push is applied
 # Recovery criterion: pitch stays within this threshold for this many consecutive steps
 RECOVERY_PITCH_THRESHOLD_DEG = 5.0
 RECOVERY_CONFIRM_STEPS = 10
 
 # Binary search bounds for max recoverable push
-PUSH_SEARCH_LOW = 10.0    # N
+PUSH_SEARCH_LOW = 10.0  # N
 PUSH_SEARCH_HIGH = 300.0  # N
-PUSH_SEARCH_ITERS = 8     # binary search iterations
-PUSH_SURVIVAL_EPISODES = 8    # episodes per candidate magnitude
+PUSH_SEARCH_ITERS = 8  # binary search iterations
+PUSH_SURVIVAL_EPISODES = 8  # episodes per candidate magnitude
 PUSH_SURVIVAL_THRESHOLD = 0.5  # fraction that must survive
 
 
@@ -177,6 +176,7 @@ PUSH_SURVIVAL_THRESHOLD = 0.5  # fraction that must survive
 @dataclass
 class EpisodeResult:
     """Metrics from a single evaluation episode."""
+
     height_cmd: float
     fell: bool
     episode_steps: int
@@ -195,6 +195,7 @@ class EpisodeResult:
 @dataclass
 class ScenarioMetrics:
     """Aggregated metrics across all episodes for one scenario."""
+
     scenario: str
     checkpoint: str
     num_episodes: int
@@ -228,6 +229,7 @@ class ScenarioMetrics:
 def _load_mj_model(config: dict) -> mujoco.MjModel:
     """Load robot MuJoCo model."""
     from wheeled_biped.utils.config import get_model_path
+
     path = str(get_model_path())
     return mujoco.MjModel.from_xml_path(path)
 
@@ -339,13 +341,9 @@ def _build_obs(
                 rng.normal(0.0, grav_std, size=3).astype(np.float32)
             )
         if jp_std > 0:
-            joint_pos = joint_pos + jnp.array(
-                rng.normal(0.0, jp_std, size=10).astype(np.float32)
-            )
+            joint_pos = joint_pos + jnp.array(rng.normal(0.0, jp_std, size=10).astype(np.float32))
         if jv_std > 0:
-            joint_vel = joint_vel + jnp.array(
-                rng.normal(0.0, jv_std, size=10).astype(np.float32)
-            )
+            joint_vel = joint_vel + jnp.array(rng.normal(0.0, jv_std, size=10).astype(np.float32))
         if lv_std > 0:
             body_lin_vel = body_lin_vel + jnp.array(
                 rng.normal(0.0, lv_std, size=3).astype(np.float32)
@@ -355,27 +353,27 @@ def _build_obs(
         # 38-dim: lin_vel channel excluded (base 36 + height_cmd + yaw_error)
         obs = jnp.concatenate(
             [
-                gravity_body,    # 3
-                body_ang_vel,    # 3
-                joint_pos,       # 10
-                joint_vel,       # 10
-                prev_action,     # 10
-                height_cmd_norm, # 1  (obs[-2])
-                yaw_error,       # 1  (obs[-1])
+                gravity_body,  # 3
+                body_ang_vel,  # 3
+                joint_pos,  # 10
+                joint_vel,  # 10
+                prev_action,  # 10
+                height_cmd_norm,  # 1  (obs[-2])
+                yaw_error,  # 1  (obs[-1])
             ]
         )
     else:
         # 41-dim: lin_vel included ("clean" = sim-exact, "noisy" = with noise)
         obs = jnp.concatenate(
             [
-                gravity_body,    # 3
-                body_lin_vel,    # 3
-                body_ang_vel,    # 3
-                joint_pos,       # 10
-                joint_vel,       # 10
-                prev_action,     # 10
-                height_cmd_norm, # 1  (obs[-2])
-                yaw_error,       # 1  (obs[-1])
+                gravity_body,  # 3
+                body_lin_vel,  # 3
+                body_ang_vel,  # 3
+                joint_pos,  # 10
+                joint_vel,  # 10
+                prev_action,  # 10
+                height_cmd_norm,  # 1  (obs[-2])
+                yaw_error,  # 1  (obs[-1])
             ]
         )
     return obs
@@ -496,8 +494,8 @@ def _run_episode(
             LQRBalanceController requires "clean" or "noisy" (41-dim).
     """
     from wheeled_biped.training.ppo import normalize_obs
-    from wheeled_biped.utils.math_utils import quat_to_euler, wrap_angle
-    from wheeled_biped.utils.telemetry import TelemetryRecorder, quat_to_euler_np
+    from wheeled_biped.utils.math_utils import quat_to_euler
+    from wheeled_biped.utils.telemetry import TelemetryRecorder
 
     if rng_np is None:
         rng_np = np.random.default_rng(seed)
@@ -526,9 +524,7 @@ def _run_episode(
         j_maxs.append(float(jrange[1]))
     joint_mins = jnp.array(j_mins, dtype=jnp.float32)
     joint_maxs = jnp.array(j_maxs, dtype=jnp.float32)
-    wheel_mask = jnp.array(
-        [1.0 if "wheel" in n else 0.0 for n in JOINT_NAMES], dtype=jnp.float32
-    )
+    wheel_mask = jnp.array([1.0 if "wheel" in n else 0.0 for n in JOINT_NAMES], dtype=jnp.float32)
 
     # Number of physics substeps per control step (mirrors base_env.py)
     n_substeps = max(1, int(round(CONTROL_DT / float(mj_model.opt.timestep))))
@@ -561,7 +557,6 @@ def _run_episode(
     push_step_applied: int | None = None
     recovery_step: int | None = None
     confirm_count = 0
-    baseline_pitch_deg: float | None = None
     pitch_buffer: list[float] = []  # used for baseline computation
 
     # ── Telemetry ────────────────────────────────────────────────────────────
@@ -586,9 +581,7 @@ def _run_episode(
             # ── Policy inference ───────────────────────────────────────────
             if controller is not None:
                 # Classical baseline: raw obs → normalised action directly
-                raw_action = jnp.array(
-                    controller.compute_action(np.array(obs)), dtype=jnp.float32
-                )
+                raw_action = jnp.array(controller.compute_action(np.array(obs)), dtype=jnp.float32)
             else:
                 obs_norm = normalize_obs(obs, obs_rms)
                 dist, _ = model.apply(params, obs_norm)
@@ -629,9 +622,7 @@ def _run_episode(
                     push_steps_remaining = push_duration
                     push_applied = True
                     push_step_applied = step_i
-                    # Compute baseline pitch before push
-                    if pitch_buffer:
-                        baseline_pitch_deg = float(np.mean(np.abs(pitch_buffer)))
+                    # Baseline pitch before push is available via pitch_buffer if needed
 
                 if push_active and push_steps_remaining > 0:
                     # Apply lateral impulse to torso body_id=1 (torso)
@@ -667,6 +658,7 @@ def _run_episode(
 
             # Track pitch for baseline and recovery detection
             from wheeled_biped.utils.telemetry import quat_to_euler_np as _q2e
+
             _euler = _q2e(np.array(mj_data.qpos[3:7]))
             current_pitch_deg = float(abs(np.degrees(_euler[1])))
             pitch_buffer.append(current_pitch_deg)
@@ -697,11 +689,9 @@ def _run_episode(
     tele = recorder.to_numpy()
 
     episode_steps = actual_steps
-    survival_time_s = episode_steps * CONTROL_DT
 
     pitch_arr = np.degrees(tele.get("pitch_rad", np.zeros(max(1, episode_steps))))
     roll_arr = np.degrees(tele.get("roll_rad", np.zeros(max(1, episode_steps))))
-    wx_arr = tele.get("body_wx", np.zeros(max(1, episode_steps)))
     wy_arr = tele.get("body_wy", np.zeros(max(1, episode_steps)))
     tx = tele.get("torso_x", np.zeros(max(1, episode_steps)))
     ty = tele.get("torso_y", np.zeros(max(1, episode_steps)))
@@ -709,20 +699,18 @@ def _run_episode(
     l_wv = tele.get("l_wheel_vel", np.zeros(max(1, episode_steps)))
     r_wv = tele.get("r_wheel_vel", np.zeros(max(1, episode_steps)))
 
-    torque_arrays = [
-        tele.get(f"{j}_torque", np.zeros(max(1, episode_steps))) for j in JOINT_NAMES
-    ]
+    torque_arrays = [tele.get(f"{j}_torque", np.zeros(max(1, episode_steps))) for j in JOINT_NAMES]
 
-    pitch_rms_deg = float(np.sqrt(np.mean(pitch_arr ** 2)))
-    roll_rms_deg = float(np.sqrt(np.mean(roll_arr ** 2)))
+    pitch_rms_deg = float(np.sqrt(np.mean(pitch_arr**2)))
+    roll_rms_deg = float(np.sqrt(np.mean(roll_arr**2)))
     # pitch_rate = body_wy (pitch axis in world frame ≈ wy for small roll)
-    pitch_rate_rms_rads = float(np.sqrt(np.mean(wy_arr ** 2)))
+    pitch_rate_rms_rads = float(np.sqrt(np.mean(wy_arr**2)))
     xy_disp = np.sqrt((tx - tx[0]) ** 2 + (ty - ty[0]) ** 2)
     xy_drift_max_m = float(np.max(xy_disp)) if len(xy_disp) > 0 else 0.0
     height_rmse_m = float(np.sqrt(np.mean((tz - height_cmd_clamped) ** 2)))
     wheel_speed_rms_rads = float(np.sqrt(np.mean((np.abs(l_wv) + np.abs(r_wv)) ** 2 / 4.0)))
     all_torques = np.concatenate([t.reshape(-1) for t in torque_arrays])
-    torque_rms_nm = float(np.sqrt(np.mean(all_torques ** 2)))
+    torque_rms_nm = float(np.sqrt(np.mean(all_torques**2)))
 
     # Recovery time
     if push_cfg is not None and push_step_applied is not None and recovery_step is not None:
@@ -955,9 +943,7 @@ def _run_scenario(
 
     max_recoverable = float("nan")
     if scenario == "push_recovery":
-        console.print(
-            f"    [dim]Binary search: max recoverable push for {scenario}...[/dim]"
-        )
+        console.print(f"    [dim]Binary search: max recoverable push for {scenario}...[/dim]")
         max_recoverable = _max_recoverable_push(
             mj_model=mj_model,
             params=params,
@@ -1055,6 +1041,7 @@ def _fmt_val(val: Any, fmt: str) -> str:
 def _col_width(fmt: str) -> int:
     """Extract integer column width from a format spec like '>10.2f' or '<18'."""
     import re
+
     m = re.search(r"(\d+)", fmt)
     return int(m.group(1)) if m else 10
 
@@ -1107,15 +1094,25 @@ def _save_csv(
     if not all_metrics:
         return
     fieldnames = [
-        "checkpoint", "scenario",
-        "scenario_group", "scenario_param_name", "scenario_param_value",
+        "checkpoint",
+        "scenario",
+        "scenario_group",
+        "scenario_param_name",
+        "scenario_param_value",
         "num_episodes",
-        "fall_rate", "survival_rate",
-        "survival_time_mean_s", "survival_time_std_s",
-        "pitch_rms_deg", "roll_rms_deg", "pitch_rate_rms_rads",
-        "xy_drift_max_m", "height_rmse_m",
-        "wheel_speed_rms_rads", "torque_rms_nm",
-        "recovery_time_s", "max_recoverable_push_n",
+        "fall_rate",
+        "survival_rate",
+        "survival_time_mean_s",
+        "survival_time_std_s",
+        "pitch_rms_deg",
+        "roll_rms_deg",
+        "pitch_rate_rms_rads",
+        "xy_drift_max_m",
+        "height_rmse_m",
+        "wheel_speed_rms_rads",
+        "torque_rms_nm",
+        "recovery_time_s",
+        "max_recoverable_push_n",
     ]
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
@@ -1237,16 +1234,12 @@ def evaluate(
     """
     import yaml
 
-    from wheeled_biped.envs.balance_env import BalanceEnv as _BEnv
     from wheeled_biped.training.networks import create_actor_critic
 
     # Validate scenarios
     invalid = [s for s in scenarios if s not in ALL_SCENARIOS]
     if invalid:
-        console.print(
-            f"[red]Unknown scenario(s): {invalid}. "
-            f"Valid: {ALL_SCENARIOS}[/red]"
-        )
+        console.print(f"[red]Unknown scenario(s): {invalid}. Valid: {ALL_SCENARIOS}[/red]")
         raise typer.Exit(1)
 
     # Expand sweep scenarios into per-parameter sub-scenarios
@@ -1254,15 +1247,11 @@ def evaluate(
 
     # Validate controller choice
     if controller not in ("rl", "baseline_lqr"):
-        console.print(
-            f"[red]Unknown controller '{controller}'. Choices: rl, baseline_lqr[/red]"
-        )
+        console.print(f"[red]Unknown controller '{controller}'. Choices: rl, baseline_lqr[/red]")
         raise typer.Exit(1)
 
     if controller == "rl" and not checkpoint:
-        console.print(
-            "[red]--checkpoint is required when --controller rl (default).[/red]"
-        )
+        console.print("[red]--checkpoint is required when --controller rl (default).[/red]")
         raise typer.Exit(1)
 
     # Resolve output directory
@@ -1274,12 +1263,16 @@ def evaluate(
         out_dir = Path("baseline_eval")
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    _sub_note = (
+        f" → {len(expanded_scenarios)} sub-scenarios"
+        if len(expanded_scenarios) != len(scenarios)
+        else ""
+    )
     console.print(
         f"\n[bold cyan]Balance Research Evaluation[/bold cyan]\n"
         f"  Controller  : {controller}\n"
         f"  Checkpoints : {checkpoint if checkpoint else '(none — classical baseline)'}\n"
-        f"  Scenarios   : {scenarios}"
-        f"{' → ' + str(len(expanded_scenarios)) + ' sub-scenarios' if len(expanded_scenarios) != len(scenarios) else ''}\n"
+        f"  Scenarios   : {scenarios}{_sub_note}\n"
         f"  Episodes    : {num_episodes} × {num_steps} steps\n"
         f"  Seeds       : {seeds}\n"
         f"  Output dir  : {out_dir}\n"
@@ -1362,9 +1355,7 @@ def evaluate(
                 metrics.max_recoverable_push_n = float("nan")
             all_results.append(metrics)
 
-        console.print(
-            _rich_table(all_results, title="Results — LQR Baseline")
-        )
+        console.print(_rich_table(all_results, title="Results — LQR Baseline"))
 
     # ── RL checkpoint path ────────────────────────────────────────────────────
     for ckpt_path in checkpoint:
@@ -1383,6 +1374,7 @@ def evaluate(
         # Build model (actor-critic) with the correct obs/action dimensions
         env_name = config.get("task", {}).get("env", "BalanceEnv")
         from wheeled_biped.envs import make_env
+
         env = make_env(env_name, config=config)
         rng_jax = jax.random.PRNGKey(seeds[0])
         model, _ = create_actor_critic(
@@ -1417,9 +1409,7 @@ def evaluate(
 
         # Rich table for this checkpoint
         ckpt_results = [r for r in all_results if r.checkpoint == ckpt_path]
-        console.print(
-            _rich_table(ckpt_results, title=f"Results — {ckpt_label}")
-        )
+        console.print(_rich_table(ckpt_results, title=f"Results — {ckpt_label}"))
 
     # ── Save outputs ──────────────────────────────────────────────────────────
     csv_path = out_dir / "eval_results.csv"

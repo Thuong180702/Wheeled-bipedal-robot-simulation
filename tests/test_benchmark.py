@@ -736,7 +736,7 @@ class TestDomainRandomizedMode:
         # During rollout: env per-episode DR must be OFF
         assert dr_enabled_during_rollout == [False], (
             "env._dr_enabled must be False during the rollout to prevent double "
-            "randomization.  Got: {}".format(dr_enabled_during_rollout)
+            f"randomization.  Got: {dr_enabled_during_rollout}"
         )
         # After rollout: env DR must be restored to its original state
         assert env._dr_enabled is True

@@ -218,29 +218,33 @@ class WheeledBipedEnv:
         torso_quat = mjx_data.qpos[3:7]
         gravity_body = get_gravity_in_body_frame(torso_quat)
         quat_inv = quat_conjugate(torso_quat)
-        base_lin_vel = quat_rotate(quat_inv, mjx_data.qvel[:3])   # (3,)
+        base_lin_vel = quat_rotate(quat_inv, mjx_data.qvel[:3])  # (3,)
         base_ang_vel = quat_rotate(quat_inv, mjx_data.qvel[3:6])  # (3,)
         joint_pos = mjx_data.qpos[7:]  # (10,)
         joint_vel = mjx_data.qvel[6:]  # (10,)
 
         if self._lin_vel_mode == "disabled":
             # 36-dim obs: lin_vel omitted entirely.
-            obs = jnp.concatenate([
-                gravity_body,   # [0:3]
-                base_ang_vel,   # [3:6]
-                joint_pos,      # [6:16]
-                joint_vel,      # [16:26]
-                prev_action,    # [26:36]
-            ])
+            obs = jnp.concatenate(
+                [
+                    gravity_body,  # [0:3]
+                    base_ang_vel,  # [3:6]
+                    joint_pos,  # [6:16]
+                    joint_vel,  # [16:26]
+                    prev_action,  # [26:36]
+                ]
+            )
             if rng is not None and self._noise_enabled:
                 k1, k2, k3, k4 = jax.random.split(rng, 4)
-                obs_noise = jnp.concatenate([
-                    jax.random.normal(k1, (3,)) * self._noise_gravity_std,
-                    jax.random.normal(k2, (3,)) * self._noise_ang_vel_std,
-                    jax.random.normal(k3, (self.NUM_JOINTS,)) * self._noise_joint_pos_std,
-                    jax.random.normal(k4, (self.NUM_JOINTS,)) * self._noise_joint_vel_std,
-                    jnp.zeros(self.NUM_JOINTS),  # prev_action: no noise
-                ])
+                obs_noise = jnp.concatenate(
+                    [
+                        jax.random.normal(k1, (3,)) * self._noise_gravity_std,
+                        jax.random.normal(k2, (3,)) * self._noise_ang_vel_std,
+                        jax.random.normal(k3, (self.NUM_JOINTS,)) * self._noise_joint_pos_std,
+                        jax.random.normal(k4, (self.NUM_JOINTS,)) * self._noise_joint_vel_std,
+                        jnp.zeros(self.NUM_JOINTS),  # prev_action: no noise
+                    ]
+                )
                 obs = obs + obs_noise
             return obs
 
@@ -248,47 +252,55 @@ class WheeledBipedEnv:
             # 39-dim obs: lin_vel included with realistic Gaussian noise.
             # lin_vel_std models state-estimation error (IMU integration drift,
             # encoder-based odometry noise, etc.).  Typical hardware: 0.2–0.5 m/s.
-            obs = jnp.concatenate([
-                gravity_body,
-                base_lin_vel,
-                base_ang_vel,
-                joint_pos,
-                joint_vel,
-                prev_action,
-            ])
+            obs = jnp.concatenate(
+                [
+                    gravity_body,
+                    base_lin_vel,
+                    base_ang_vel,
+                    joint_pos,
+                    joint_vel,
+                    prev_action,
+                ]
+            )
             if rng is not None and self._noise_enabled:
                 k1, k2, k3, k4, k5 = jax.random.split(rng, 5)
-                obs_noise = jnp.concatenate([
-                    jax.random.normal(k1, (3,)) * self._noise_gravity_std,
-                    jax.random.normal(k2, (3,)) * self._noise_lin_vel_std,   # ← noisy lin_vel
-                    jax.random.normal(k3, (3,)) * self._noise_ang_vel_std,
-                    jax.random.normal(k4, (self.NUM_JOINTS,)) * self._noise_joint_pos_std,
-                    jax.random.normal(k5, (self.NUM_JOINTS,)) * self._noise_joint_vel_std,
-                    jnp.zeros(self.NUM_JOINTS),
-                ])
+                obs_noise = jnp.concatenate(
+                    [
+                        jax.random.normal(k1, (3,)) * self._noise_gravity_std,
+                        jax.random.normal(k2, (3,)) * self._noise_lin_vel_std,  # ← noisy lin_vel
+                        jax.random.normal(k3, (3,)) * self._noise_ang_vel_std,
+                        jax.random.normal(k4, (self.NUM_JOINTS,)) * self._noise_joint_pos_std,
+                        jax.random.normal(k5, (self.NUM_JOINTS,)) * self._noise_joint_vel_std,
+                        jnp.zeros(self.NUM_JOINTS),
+                    ]
+                )
                 obs = obs + obs_noise
             return obs
 
         # "clean" — original behaviour preserved exactly (simulator-exact lin_vel,
         # no noise on that channel).  Default mode for sim prototyping.
-        obs = jnp.concatenate([
-            gravity_body,   # [0:3]
-            base_lin_vel,   # [3:6]  simulator-only state — see sim2real note in config
-            base_ang_vel,   # [6:9]
-            joint_pos,      # [9:19]
-            joint_vel,      # [19:29]
-            prev_action,    # [29:39]
-        ])
+        obs = jnp.concatenate(
+            [
+                gravity_body,  # [0:3]
+                base_lin_vel,  # [3:6]  simulator-only state — see sim2real note in config
+                base_ang_vel,  # [6:9]
+                joint_pos,  # [9:19]
+                joint_vel,  # [19:29]
+                prev_action,  # [29:39]
+            ]
+        )
         if rng is not None and self._noise_enabled:
             k1, k2, k3, k4 = jax.random.split(rng, 4)
-            obs_noise = jnp.concatenate([
-                jax.random.normal(k1, (3,)) * self._noise_gravity_std,
-                jnp.zeros(3),  # lin_vel: no noise in "clean" mode (not a real sensor)
-                jax.random.normal(k2, (3,)) * self._noise_ang_vel_std,
-                jax.random.normal(k3, (self.NUM_JOINTS,)) * self._noise_joint_pos_std,
-                jax.random.normal(k4, (self.NUM_JOINTS,)) * self._noise_joint_vel_std,
-                jnp.zeros(self.NUM_JOINTS),
-            ])
+            obs_noise = jnp.concatenate(
+                [
+                    jax.random.normal(k1, (3,)) * self._noise_gravity_std,
+                    jnp.zeros(3),  # lin_vel: no noise in "clean" mode (not a real sensor)
+                    jax.random.normal(k2, (3,)) * self._noise_ang_vel_std,
+                    jax.random.normal(k3, (self.NUM_JOINTS,)) * self._noise_joint_pos_std,
+                    jax.random.normal(k4, (self.NUM_JOINTS,)) * self._noise_joint_vel_std,
+                    jnp.zeros(self.NUM_JOINTS),
+                ]
+            )
             obs = obs + obs_noise
         return obs
 

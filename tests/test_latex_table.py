@@ -6,21 +6,17 @@ No external dependencies beyond pytest.
 
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
-
-import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from wheeled_biped.eval.latex_table import (  # noqa: E402
     DEFAULT_COLUMNS,
-    generate_latex_table,
     _fmt,
+    generate_latex_table,
 )
-
 
 # ---------------------------------------------------------------------------
 # _fmt helper
@@ -103,9 +99,9 @@ class TestGenerateLatexTable:
         tex = generate_latex_table(results)
         # Count lines with \\ that are between midrule and bottomrule
         lines = tex.split("\n")
-        midrule_idx = next(i for i, l in enumerate(lines) if r"\midrule" in l)
-        bottomrule_idx = next(i for i, l in enumerate(lines) if r"\bottomrule" in l)
-        data_lines = [l for l in lines[midrule_idx + 1 : bottomrule_idx] if r"\\" in l]
+        midrule_idx = next(i for i, ln in enumerate(lines) if r"\midrule" in ln)
+        bottomrule_idx = next(i for i, ln in enumerate(lines) if r"\bottomrule" in ln)
+        data_lines = [ln for ln in lines[midrule_idx + 1 : bottomrule_idx] if r"\\" in ln]
         assert len(data_lines) == len(results)
 
     def test_empty_results(self):
@@ -134,8 +130,8 @@ class TestGenerateLatexTable:
         n_cols = len(DEFAULT_COLUMNS)
         tex = generate_latex_table(results)
         lines = tex.split("\n")
-        midrule_idx = next(i for i, l in enumerate(lines) if r"\midrule" in l)
-        bottomrule_idx = next(i for i, l in enumerate(lines) if r"\bottomrule" in l)
+        midrule_idx = next(i for i, ln in enumerate(lines) if r"\midrule" in ln)
+        bottomrule_idx = next(i for i, ln in enumerate(lines) if r"\bottomrule" in ln)
         for line in lines[midrule_idx + 1 : bottomrule_idx]:
             if r"\\" in line:
                 assert line.count("&") == n_cols - 1

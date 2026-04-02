@@ -13,15 +13,10 @@ These tests run WITHOUT MuJoCo/JAX — they only test the pure-Python components
 from __future__ import annotations
 
 import csv
-import io
 import math
 import sys
-import tempfile
-from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import MagicMock
-
-import pytest
 
 # Ensure project root is on sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -39,7 +34,6 @@ from scripts.eval_balance import (  # noqa: E402
     _is_fallen,
     _save_csv,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -197,8 +191,16 @@ class TestAllScenarios:
         assert "friction_sweep" in ALL_SCENARIOS
 
     def test_original_scenarios_preserved(self):
-        for s in ["nominal", "narrow_height", "wide_height", "full_range",
-                   "push_recovery", "friction_low", "friction_high", "sensor_noise_delay"]:
+        for s in [
+            "nominal",
+            "narrow_height",
+            "wide_height",
+            "full_range",
+            "push_recovery",
+            "friction_low",
+            "friction_high",
+            "sensor_noise_delay",
+        ]:
             assert s in ALL_SCENARIOS
 
 
@@ -321,7 +323,6 @@ class TestIsFallen:
     def _make_mj_data(self, z: float = 0.65, quat: tuple = (1.0, 0.0, 0.0, 0.0)):
         """Return a minimal mock mj_data with qpos[2]=z and qpos[3:7]=quat."""
         import numpy as np
-        from unittest.mock import MagicMock
 
         mj_data = MagicMock()
         qpos = np.zeros(17)
@@ -336,6 +337,7 @@ class TestIsFallen:
     def _quat_from_pitch(self, pitch_rad: float) -> tuple:
         """Quaternion for a pure pitch rotation (about world X axis, per sign convention)."""
         import math
+
         c = math.cos(pitch_rad / 2)
         s = math.sin(pitch_rad / 2)
         return (c, s, 0.0, 0.0)
@@ -358,6 +360,7 @@ class TestIsFallen:
     def test_small_tilt_not_fallen(self):
         """5° tilt is well within the 0.8 rad (~46°) threshold."""
         import math
+
         quat = self._quat_from_pitch(math.radians(5))
         mj_data = self._make_mj_data(z=0.65, quat=quat)
         config = {"termination": {"max_tilt_rad": 0.8, "min_height": 0.3}}
@@ -366,6 +369,7 @@ class TestIsFallen:
     def test_large_tilt_fallen(self):
         """90° tilt clearly exceeds 0.8 rad threshold."""
         import math
+
         quat = self._quat_from_pitch(math.pi / 2)
         mj_data = self._make_mj_data(z=0.65, quat=quat)
         config = {"termination": {"max_tilt_rad": 0.8, "min_height": 0.3}}
@@ -373,7 +377,6 @@ class TestIsFallen:
 
     def test_tilt_just_below_threshold_not_fallen(self):
         """Tilt slightly below 0.8 rad → not fallen."""
-        import math
         quat = self._quat_from_pitch(0.75)  # 0.75 < 0.8
         mj_data = self._make_mj_data(z=0.65, quat=quat)
         config = {"termination": {"max_tilt_rad": 0.8, "min_height": 0.3}}
@@ -381,7 +384,6 @@ class TestIsFallen:
 
     def test_tilt_just_above_threshold_fallen(self):
         """Tilt slightly above 0.8 rad → fallen."""
-        import math
         quat = self._quat_from_pitch(0.85)  # 0.85 > 0.8
         mj_data = self._make_mj_data(z=0.65, quat=quat)
         config = {"termination": {"max_tilt_rad": 0.8, "min_height": 0.3}}
@@ -400,6 +402,7 @@ class TestIsFallen:
         The test verifies the gravity-based result, which matches BalanceEnv.
         """
         import math
+
         # 45° pitch rotation only: true tilt = 45° = 0.785 rad < 0.8 → not fallen
         quat = self._quat_from_pitch(math.radians(45))
         mj_data = self._make_mj_data(z=0.65, quat=quat)
@@ -412,6 +415,7 @@ class TestIsFallen:
     def test_both_fallen_conditions_trigger(self):
         """Both height and tilt can independently trigger a fall."""
         import math
+
         # Robot at 90° tilt AND low height
         quat = self._quat_from_pitch(math.pi / 2)
         mj_data = self._make_mj_data(z=0.20, quat=quat)

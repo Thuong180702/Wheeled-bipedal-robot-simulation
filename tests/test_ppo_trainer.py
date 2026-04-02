@@ -194,6 +194,8 @@ class TestObsNormalization:
 
 
 class TestSingleUpdate:
+    pytestmark = pytest.mark.slow
+
     def test_rollout_obs_no_nan(self, rollout_data):
         """Rollout observations contain no NaN."""
         _, transitions, _ = rollout_data
@@ -625,6 +627,7 @@ class TestControlPathSemantics:
             "If they match, the PID path may not be active."
         )
 
+    @pytest.mark.slow
     def test_rollout_stores_raw_action_not_clipped(self):
         """PPO rollout transition.action stores the raw (pre-clip) policy sample.
 
@@ -697,7 +700,10 @@ class TestEvalPass:
 
     These tests verify the structural contract of eval_pass() without requiring
     a full MJX GPU training loop.  They run with tiny envs (4 envs, short episodes).
+    Marked slow because eval_pass() triggers MJX JIT compilation on first call.
     """
+
+    pytestmark = pytest.mark.slow
 
     def test_eval_pass_returns_required_keys(self, trainer, env):
         """eval_pass() returns a dict with all required metric keys."""
@@ -1003,7 +1009,10 @@ class TestEvalTriggeredCheckpoints:
 
     Uses monkeypatched eval_pass() so no real MJX training is needed.
     Runs a 3-update training loop (eval_interval=1) with a tiny config.
+    Marked slow because t.train() triggers MJX JIT compilation on first call.
     """
+
+    pytestmark = pytest.mark.slow
 
     @staticmethod
     def _make_trainer():
@@ -1275,6 +1284,7 @@ class TestEvalTriggeredCheckpointHardening:
         assert t._resumed_best_eval_success == float("-inf")
         assert t._resumed_best_train_reward == float("-inf")
 
+    @pytest.mark.slow
     def test_no_overwrite_on_resume_when_eval_worse(self, tmp_path):
         """After resume with best_eval_per_step=8.0, an eval returning 7.0 must NOT save.
 
@@ -1311,6 +1321,7 @@ class TestEvalTriggeredCheckpointHardening:
             "best_eval_success must NOT be overwritten when eval_success_rate is worse"
         )
 
+    @pytest.mark.slow
     def test_final_checkpoint_contains_tracker_fields(self, tmp_path):
         """final/checkpoint.pkl must contain the three tracker fields."""
         import types
@@ -1342,6 +1353,7 @@ class TestEvalTriggeredCheckpointHardening:
 
     # ── Risk 2: legacy path ───────────────────────────────────────────────────
 
+    @pytest.mark.slow
     def test_legacy_path_saves_best_train_reward(self, tmp_path):
         """use_eval_signal=False path creates best_train_reward/checkpoint.pkl."""
         t = self._make_legacy_trainer()
@@ -1354,6 +1366,7 @@ class TestEvalTriggeredCheckpointHardening:
             "legacy path must create best_train_reward checkpoint when rolling window improves"
         )
 
+    @pytest.mark.slow
     def test_legacy_path_does_not_create_eval_checkpoints(self, tmp_path):
         """use_eval_signal=False must NOT create best_eval_per_step or best_eval_success."""
         t = self._make_legacy_trainer()
@@ -1366,6 +1379,7 @@ class TestEvalTriggeredCheckpointHardening:
 
     # ── Risk 3: delta guard ───────────────────────────────────────────────────
 
+    @pytest.mark.slow
     def test_tiny_improvement_below_delta_does_not_resave(self, tmp_path):
         """Improvements below _EVAL_CKPT_MIN_DELTA (1e-3) must not trigger a second save.
 
@@ -1417,6 +1431,7 @@ class TestEvalTriggeredCheckpointHardening:
             f"got {ckpt['global_step']} — delta guard not working"
         )
 
+    @pytest.mark.slow
     def test_genuine_improvement_above_delta_updates_checkpoint(self, tmp_path):
         """Improvement >= _EVAL_CKPT_MIN_DELTA triggers a new save at the later step.
 
@@ -1476,7 +1491,10 @@ class TestImprovedCheckpointSaving:
 
     Uses _COOLDOWN_TEST_CONFIG (ckpt_cooldown_evals=2, eval_interval=1) for
     cooldown tests and _LEGACY_CKPT_CONFIG (ckpt_cooldown_evals=0) for legacy tests.
+    Marked slow because all tests call t.train() which triggers MJX JIT compilation.
     """
+
+    pytestmark = pytest.mark.slow
 
     @staticmethod
     def _make_cooldown_trainer():
@@ -1704,6 +1722,7 @@ class TestImprovedCheckpointSaving:
 
     # ── legacy path versioning ────────────────────────────────────────────────
 
+    @pytest.mark.slow
     def test_legacy_path_creates_versioned_dir(self, tmp_path):
         """use_eval_signal=False must write a versioned dir under ckpt_best/."""
         t = self._make_legacy_trainer()
@@ -1719,6 +1738,7 @@ class TestImprovedCheckpointSaving:
         for d in versioned:
             assert (d / "checkpoint.pkl").exists(), f"missing checkpoint.pkl in {d}"
 
+    @pytest.mark.slow
     def test_legacy_path_stable_pointer_exists(self, tmp_path):
         """use_eval_signal=False must also maintain best_train_reward/ stable pointer."""
         t = self._make_legacy_trainer()

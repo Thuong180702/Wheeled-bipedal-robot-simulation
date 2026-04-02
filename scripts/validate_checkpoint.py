@@ -91,6 +91,7 @@ console = Console()
 # Observation builder — mirrors base_env._extract_obs() exactly for CPU path
 # ---------------------------------------------------------------------------
 
+
 def _build_headless_obs(
     mj_data,
     prev_action: jnp.ndarray,
@@ -142,32 +143,38 @@ def _build_headless_obs(
 
     if lin_vel_mode == "disabled":
         # 36-dim base — lin_vel excluded entirely
-        base_obs = jnp.concatenate([
-            gravity_body,  # [0:3]
-            base_ang_vel,  # [3:6]
-            joint_pos,     # [6:16]
-            joint_vel,     # [16:26]
-            prev_action,   # [26:36]
-        ])
+        base_obs = jnp.concatenate(
+            [
+                gravity_body,  # [0:3]
+                base_ang_vel,  # [3:6]
+                joint_pos,  # [6:16]
+                joint_vel,  # [16:26]
+                prev_action,  # [26:36]
+            ]
+        )
         if apply_noise:
-            noise = np.concatenate([
-                rng_np.normal(0.0, noise_stds["gravity"], 3),
-                rng_np.normal(0.0, noise_stds["ang_vel"], 3),
-                rng_np.normal(0.0, noise_stds["joint_pos"], n_joints),
-                rng_np.normal(0.0, noise_stds["joint_vel"], n_joints),
-                np.zeros(n_joints),  # prev_action: no noise
-            ]).astype(np.float32)
+            noise = np.concatenate(
+                [
+                    rng_np.normal(0.0, noise_stds["gravity"], 3),
+                    rng_np.normal(0.0, noise_stds["ang_vel"], 3),
+                    rng_np.normal(0.0, noise_stds["joint_pos"], n_joints),
+                    rng_np.normal(0.0, noise_stds["joint_vel"], n_joints),
+                    np.zeros(n_joints),  # prev_action: no noise
+                ]
+            ).astype(np.float32)
             base_obs = base_obs + jnp.array(noise)
     else:
         # 39-dim base — "clean" or "noisy"
-        base_obs = jnp.concatenate([
-            gravity_body,  # [0:3]
-            base_lin_vel,  # [3:6]
-            base_ang_vel,  # [6:9]
-            joint_pos,     # [9:19]
-            joint_vel,     # [19:29]
-            prev_action,   # [29:39]
-        ])
+        base_obs = jnp.concatenate(
+            [
+                gravity_body,  # [0:3]
+                base_lin_vel,  # [3:6]
+                base_ang_vel,  # [6:9]
+                joint_pos,  # [9:19]
+                joint_vel,  # [19:29]
+                prev_action,  # [29:39]
+            ]
+        )
         if apply_noise:
             # "noisy" adds Gaussian lin_vel noise; "clean" keeps lin_vel noiseless
             lin_vel_noise = (
@@ -175,14 +182,16 @@ def _build_headless_obs(
                 if lin_vel_mode == "noisy"
                 else np.zeros(3)
             )
-            noise = np.concatenate([
-                rng_np.normal(0.0, noise_stds["gravity"], 3),
-                lin_vel_noise,
-                rng_np.normal(0.0, noise_stds["ang_vel"], 3),
-                rng_np.normal(0.0, noise_stds["joint_pos"], n_joints),
-                rng_np.normal(0.0, noise_stds["joint_vel"], n_joints),
-                np.zeros(n_joints),  # prev_action: no noise
-            ]).astype(np.float32)
+            noise = np.concatenate(
+                [
+                    rng_np.normal(0.0, noise_stds["gravity"], 3),
+                    lin_vel_noise,
+                    rng_np.normal(0.0, noise_stds["ang_vel"], 3),
+                    rng_np.normal(0.0, noise_stds["joint_pos"], n_joints),
+                    rng_np.normal(0.0, noise_stds["joint_vel"], n_joints),
+                    np.zeros(n_joints),  # prev_action: no noise
+                ]
+            ).astype(np.float32)
             base_obs = base_obs + jnp.array(noise)
 
     # Append task-specific extras (same as balance_env reset/step)
@@ -193,22 +202,17 @@ def _build_headless_obs(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 @app.command()
 def validate(
     checkpoint: str = typer.Option(..., help="Path to checkpoint directory."),
     stage: str = typer.Option("balance", help="Stage name (for labelling)."),
     num_episodes: int = typer.Option(100, help="Episodes for nominal benchmark."),
     num_envs: int = typer.Option(64, help="Parallel envs for benchmark."),
-    num_steps: int = typer.Option(
-        1000, help="Steps for headless telemetry rollout (1 env, CPU)."
-    ),
-    height_cmd: float = typer.Option(
-        0.69, help="Height command (m) for the headless rollout."
-    ),
+    num_steps: int = typer.Option(1000, help="Steps for headless telemetry rollout (1 env, CPU)."),
+    height_cmd: float = typer.Option(0.69, help="Height command (m) for the headless rollout."),
     seed: int = typer.Option(0, help="Random seed."),
-    output_dir: str = typer.Option(
-        "", help="Output directory (default: checkpoint directory)."
-    ),
+    output_dir: str = typer.Option("", help="Output directory (default: checkpoint directory)."),
     save_csv: bool = typer.Option(False, help="Also save raw telemetry CSV."),
     noise: bool = typer.Option(
         False,
@@ -270,9 +274,9 @@ def validate(
     apply_noise = noise  # CLI flag; use --noise to match training distribution
 
     noise_stds: dict[str, float] = {
-        "lin_vel":   float(noise_cfg.get("lin_vel_std", 0.3)),
-        "ang_vel":   float(noise_cfg.get("ang_vel_std", 0.0)),
-        "gravity":   float(noise_cfg.get("gravity_std", 0.0)),
+        "lin_vel": float(noise_cfg.get("lin_vel_std", 0.3)),
+        "ang_vel": float(noise_cfg.get("ang_vel_std", 0.0)),
+        "gravity": float(noise_cfg.get("gravity_std", 0.0)),
         "joint_pos": float(noise_cfg.get("joint_pos_std", 0.0)),
         "joint_vel": float(noise_cfg.get("joint_vel_std", 0.0)),
     }
@@ -301,9 +305,12 @@ def validate(
     console.print(f"  Checkpoint      : {checkpoint}")
     console.print(f"  Obs size        : {obs_size}  (lin_vel_mode='{lin_vel_mode}')")
     console.print(f"  Height cmd      : {height_cmd:.2f} m")
-    console.print(f"  Action delay    : {action_delay_steps} step(s) "
-                  f"({'~'+str(action_delay_steps*20)+' ms' if action_delay_steps else 'none'})")
-    console.print(f"  Noise (headless): {'yes (--noise)' if apply_noise else 'no (--no-noise, default)'}")
+    console.print(
+        f"  Action delay    : {action_delay_steps} step(s) "
+        f"({'~' + str(action_delay_steps * 20) + ' ms' if action_delay_steps else 'none'})"
+    )
+    noise_label = "yes (--noise)" if apply_noise else "no (--no-noise, default)"
+    console.print(f"  Noise (headless): {noise_label}")
     if apply_noise and not noise_enabled_in_config:
         console.print(
             "  [yellow]Warning: --noise requested but sensor_noise.enabled=false "
@@ -317,8 +324,7 @@ def validate(
 
     # ── Step 1: nominal benchmark (vectorised JAX) ────────────────────────────
     console.print(
-        f"\n[bold]Step 1/2[/bold] Nominal benchmark "
-        f"({num_episodes} episodes, {num_envs} envs) …"
+        f"\n[bold]Step 1/2[/bold] Nominal benchmark ({num_episodes} episodes, {num_envs} envs) …"
     )
 
     env_name = config.get("task", {}).get("env", "BalanceEnv")
@@ -343,10 +349,7 @@ def validate(
     )
 
     # ── Step 2: headless CPU rollout → telemetry ──────────────────────────────
-    console.print(
-        f"[bold]Step 2/2[/bold] Headless rollout "
-        f"({num_steps} steps, 1 env, CPU) …"
-    )
+    console.print(f"[bold]Step 2/2[/bold] Headless rollout ({num_steps} steps, 1 env, CPU) …")
 
     mj_model = mujoco.MjModel.from_xml_path(str(get_model_path()))
     mj_data = mujoco.MjData(mj_model)
@@ -366,8 +369,16 @@ def validate(
 
     # Joint range and wheel mask (read from mj_model, same as env)
     joint_names = [
-        "l_hip_roll", "l_hip_yaw", "l_hip_pitch", "l_knee", "l_wheel",
-        "r_hip_roll", "r_hip_yaw", "r_hip_pitch", "r_knee", "r_wheel",
+        "l_hip_roll",
+        "l_hip_yaw",
+        "l_hip_pitch",
+        "l_knee",
+        "l_wheel",
+        "r_hip_roll",
+        "r_hip_yaw",
+        "r_hip_pitch",
+        "r_knee",
+        "r_wheel",
     ]
     j_mins, j_maxs = [], []
     for n in joint_names:
@@ -380,7 +391,7 @@ def validate(
     wheel_mask = jnp.array([1.0 if "wheel" in n else 0.0 for n in joint_names])
 
     _kp_def = [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
-    _ki_def = [0.8,  0.4,  1.0,  1.0,  0.1, 0.8,  0.4,  1.0,  1.0,  0.1]
+    _ki_def = [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
     # Wheel kd (indices 4, 9) is 0.0: wheels use PI velocity control (no derivative).
     # The PID path also masks wheel kd to zero, so any non-zero value here is harmless
     # but would be misleading — keep as 0.0 to match balance.yaml defaults.
@@ -468,12 +479,8 @@ def validate(
             pos_err = pos_target - joint_pos
             error = (1.0 - wheel_mask) * pos_err + wheel_mask * (vel_target_whl - joint_vel)
             d_error = (1.0 - wheel_mask) * (-joint_vel)  # zero for wheels (kd masked)
-            pid_integral = jnp.clip(
-                pid_integral + error * control_dt, -pid_i_limit, pid_i_limit
-            )
-            ctrl = jnp.clip(
-                kp * error + kd * d_error + ki * pid_integral, ctrl_min, ctrl_max
-            )
+            pid_integral = jnp.clip(pid_integral + error * control_dt, -pid_i_limit, pid_i_limit)
+            ctrl = jnp.clip(kp * error + kd * d_error + ki * pid_integral, ctrl_min, ctrl_max)
         else:
             ctrl = ctrl_min + (control_action + 1.0) * 0.5 * (ctrl_max - ctrl_min)
 

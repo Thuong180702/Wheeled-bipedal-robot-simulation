@@ -22,7 +22,6 @@ from __future__ import annotations
 import math
 from typing import Any
 
-
 # Default columns shown in the paper table.
 # Each entry: (dict_key, header_label, format_spec_or_None, percent_flag)
 DEFAULT_COLUMNS: list[tuple[str, str, str | None, bool]] = [

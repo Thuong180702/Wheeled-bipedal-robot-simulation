@@ -96,16 +96,19 @@ _SKILL_PRIORITY = [
 #                             (BalanceEnv with lin_vel_mode="disabled")
 #   "unknown_pad"           → any other size; zero-pad with warning
 #
-_VALID_ADAPTERS = frozenset({
-    "exact",
-    "height_cmd",
-    "velocity_cmd",
-    "height_cmd_yaw",
-    "novelin_height_cmd_yaw",
-    "unknown_pad",
-})
+_VALID_ADAPTERS = frozenset(
+    {
+        "exact",
+        "height_cmd",
+        "velocity_cmd",
+        "height_cmd_yaw",
+        "novelin_height_cmd_yaw",
+        "unknown_pad",
+    }
+)
 
-_BASE_OBS_FULL = 39     # gravity(3) + lin_vel(3) + ang_vel(3) + qpos(10) + qvel(10) + prev_action(10)
+# gravity(3) + lin_vel(3) + ang_vel(3) + qpos(10) + qvel(10) + prev_action(10)
+_BASE_OBS_FULL = 39
 _BASE_OBS_NOVELIN = 36  # same layout without lin_vel(3)
 # Legacy alias kept for code that references _BASE_OBS_SIZE by name
 _BASE_OBS_SIZE = _BASE_OBS_FULL
@@ -113,16 +116,16 @@ _BASE_OBS_SIZE = _BASE_OBS_FULL
 
 def _infer_adapter(obs_size: int, needs_command: bool) -> str:
     """Choose an obs adapter from obs_size and needs_command flag."""
-    if obs_size == _BASE_OBS_FULL:                                      # 39
+    if obs_size == _BASE_OBS_FULL:  # 39
         return "exact"
-    if obs_size == _BASE_OBS_FULL + 1 and not needs_command:            # 40
+    if obs_size == _BASE_OBS_FULL + 1 and not needs_command:  # 40
         return "height_cmd"
-    if obs_size == _BASE_OBS_FULL + 2 and needs_command:                # 41
+    if obs_size == _BASE_OBS_FULL + 2 and needs_command:  # 41
         return "velocity_cmd"
-    if obs_size == _BASE_OBS_FULL + 2 and not needs_command:            # 41
+    if obs_size == _BASE_OBS_FULL + 2 and not needs_command:  # 41
         # BalanceEnv trained with clean/noisy lin_vel + yaw_error (new layout)
         return "height_cmd_yaw"
-    if obs_size == _BASE_OBS_NOVELIN + 2 and not needs_command:         # 38
+    if obs_size == _BASE_OBS_NOVELIN + 2 and not needs_command:  # 38
         # BalanceEnv trained with lin_vel_mode="disabled" + yaw_error
         return "novelin_height_cmd_yaw"
     return "unknown_pad"
@@ -331,23 +334,27 @@ class UnifiedController:
         joint_vel = jnp.array(mj_data.qvel[6:16])  # 10
 
         # Full 39-dim base (lin_vel included)
-        base_obs_full = jnp.concatenate([
-            gravity_body,   # 3
-            body_lin_vel,   # 3
-            body_ang_vel,   # 3
-            joint_pos,      # 10
-            joint_vel,      # 10
-            prev_action,    # 10
-        ])  # 39
+        base_obs_full = jnp.concatenate(
+            [
+                gravity_body,  # 3
+                body_lin_vel,  # 3
+                body_ang_vel,  # 3
+                joint_pos,  # 10
+                joint_vel,  # 10
+                prev_action,  # 10
+            ]
+        )  # 39
 
         # 36-dim base (lin_vel excluded — matches "disabled" training mode)
-        base_obs_novelin = jnp.concatenate([
-            gravity_body,   # 3
-            body_ang_vel,   # 3
-            joint_pos,      # 10
-            joint_vel,      # 10
-            prev_action,    # 10
-        ])  # 36
+        base_obs_novelin = jnp.concatenate(
+            [
+                gravity_body,  # 3
+                body_ang_vel,  # 3
+                joint_pos,  # 10
+                joint_vel,  # 10
+                prev_action,  # 10
+            ]
+        )  # 36
 
         adapter = sp.obs_adapter
 
@@ -363,9 +370,7 @@ class UnifiedController:
             # Normalization matches BalanceEnv: (h - 0.40) / (0.70 - 0.40).
             # Note: previous inference code used (h-0.38)/0.34 — that was a
             # pre-existing mismatch with training; fixed here.
-            height_norm = float(np.clip(
-                (cmd.height_target - 0.40) / (0.70 - 0.40), 0.0, 1.0
-            ))
+            height_norm = float(np.clip((cmd.height_target - 0.40) / (0.70 - 0.40), 0.0, 1.0))
             obs = jnp.concatenate([base_obs_full, jnp.array([height_norm])])
             if obs.shape[0] != sp.obs_size:
                 raise ValueError(
@@ -386,9 +391,7 @@ class UnifiedController:
 
         if adapter == "height_cmd_yaw":
             # BalanceEnv with clean/noisy lin_vel + yaw_error (41 dims).
-            height_norm = float(np.clip(
-                (cmd.height_target - 0.40) / (0.70 - 0.40), 0.0, 1.0
-            ))
+            height_norm = float(np.clip((cmd.height_target - 0.40) / (0.70 - 0.40), 0.0, 1.0))
             yaw_error = self._get_balance_yaw_error(mj_data)
             obs = jnp.concatenate([base_obs_full, jnp.array([height_norm, yaw_error])])
             if obs.shape[0] != sp.obs_size:
@@ -400,9 +403,7 @@ class UnifiedController:
 
         if adapter == "novelin_height_cmd_yaw":
             # BalanceEnv with lin_vel_mode="disabled" + yaw_error (38 dims).
-            height_norm = float(np.clip(
-                (cmd.height_target - 0.40) / (0.70 - 0.40), 0.0, 1.0
-            ))
+            height_norm = float(np.clip((cmd.height_target - 0.40) / (0.70 - 0.40), 0.0, 1.0))
             yaw_error = self._get_balance_yaw_error(mj_data)
             obs = jnp.concatenate([base_obs_novelin, jnp.array([height_norm, yaw_error])])
             if obs.shape[0] != sp.obs_size:

@@ -119,24 +119,24 @@ _JOINT_LIMITS: dict[str, tuple[float, float]] = {
 }
 
 # TWIP physical parameters (estimated from XML masses and geometry)
-_ROBOT_MASS_KG = 8.1          # total mass (torso + legs + wheels)
-_COM_HEIGHT_NOM_M = 0.54      # CoM above wheel axis at nominal h = 0.65 m
-_WHEEL_RADIUS_M = 0.06        # from geom size="0.06 0.025"
-_WHEEL_VEL_LIMIT = 20.0       # rad/s — same as low_level_pid.wheel_vel_limit
+_ROBOT_MASS_KG = 8.1  # total mass (torso + legs + wheels)
+_COM_HEIGHT_NOM_M = 0.54  # CoM above wheel axis at nominal h = 0.65 m
+_WHEEL_RADIUS_M = 0.06  # from geom size="0.06 0.025"
+_WHEEL_VEL_LIMIT = 20.0  # rad/s — same as low_level_pid.wheel_vel_limit
 
 # Height command range — must match BalanceEnv
 _MIN_H = 0.40
 _MAX_H = 0.70
 
 # Observation indices (41-dim BalanceEnv obs)
-_OBS_GRAV_Y = 1        # g_body[1] ≈ -sin(forward_lean); used for pitch balance
-_OBS_GRAV_X = 0        # g_body[0] ≈ sin(left_lean); used for roll balance
-_OBS_LIN_VEL_Y = 4     # body_lin_vel[1]; fwd_vel = -obs[4]
-_OBS_ANG_VEL_X = 6     # body_ang_vel[0] = forward lean rate
-_OBS_ANG_VEL_Y = 7     # body_ang_vel[1] = lateral lean rate
-_OBS_ANG_VEL_Z = 8     # body_ang_vel[2] = yaw rate
-_OBS_HEIGHT_CMD = 39   # normalised height command ∈ [0, 1]
-_OBS_YAW_ERROR = 40    # yaw drift from episode start [rad]
+_OBS_GRAV_Y = 1  # g_body[1] ≈ -sin(forward_lean); used for pitch balance
+_OBS_GRAV_X = 0  # g_body[0] ≈ sin(left_lean); used for roll balance
+_OBS_LIN_VEL_Y = 4  # body_lin_vel[1]; fwd_vel = -obs[4]
+_OBS_ANG_VEL_X = 6  # body_ang_vel[0] = forward lean rate
+_OBS_ANG_VEL_Y = 7  # body_ang_vel[1] = lateral lean rate
+_OBS_ANG_VEL_Z = 8  # body_ang_vel[2] = yaw rate
+_OBS_HEIGHT_CMD = 39  # normalised height command ∈ [0, 1]
+_OBS_YAW_ERROR = 40  # yaw drift from episode start [rad]
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +198,7 @@ def _compute_lqr_gains(
     g = 9.81
     tau_s = 0.25  # wheel PI effective settling time [s]
 
-    A = np.array(
+    a_mat = np.array(
         [
             [0.0, 1.0, 0.0, 0.0],
             [g / l_com, 0.0, 0.0, 0.0],
@@ -206,13 +206,13 @@ def _compute_lqr_gains(
             [0.0, 0.0, 1.0, 0.0],
         ]
     )
-    B = np.array([[0.0], [-r_wheel / (l_com * tau_s)], [r_wheel], [0.0]])
-    Q = np.diag(q_diag)
-    R = np.array([[r_val]])
+    b_mat = np.array([[0.0], [-r_wheel / (l_com * tau_s)], [r_wheel], [0.0]])
+    q_mat = np.diag(q_diag)
+    r_mat = np.array([[r_val]])
 
-    P = solve_continuous_are(A, B, Q, R)
-    K = (np.linalg.inv(R) @ B.T @ P).flatten()
-    return K  # shape (4,), all elements negative for this sign convention
+    p_mat = solve_continuous_are(a_mat, b_mat, q_mat, r_mat)
+    k_gains = (np.linalg.inv(r_mat) @ b_mat.T @ p_mat).flatten()
+    return k_gains  # shape (4,), all elements negative for this sign convention
 
 
 # ---------------------------------------------------------------------------
@@ -356,9 +356,7 @@ class LQRBalanceController:
         self._config = config or {}
 
         pid_cfg = self._config.get("low_level_pid", {})
-        self._wheel_vel_limit: float = float(
-            pid_cfg.get("wheel_vel_limit", _WHEEL_VEL_LIMIT)
-        )
+        self._wheel_vel_limit: float = float(pid_cfg.get("wheel_vel_limit", _WHEEL_VEL_LIMIT))
         self._control_dt: float = 0.02
 
         # ── LQR gains ────────────────────────────────────────────────────────
@@ -379,8 +377,8 @@ class LQRBalanceController:
         self._kd_yaw: float = kd_yaw
 
         # ── Height IK (one-time FK scan) ─────────────────────────────────────
-        self._hip_poly, self._knee_poly, self._h_scan_min, self._h_scan_max = (
-            _build_height_ik(self._model_path)
+        self._hip_poly, self._knee_poly, self._h_scan_min, self._h_scan_max = _build_height_ik(
+            self._model_path
         )
 
         # ── Episode state (reset each episode) ───────────────────────────────
@@ -448,9 +446,7 @@ class LQRBalanceController:
         q_knee_des = float(np.polyval(self._knee_poly, h_query))
 
         # Clamp desired angles to joint limits
-        q_hip_des = float(
-            np.clip(q_hip_des, *_JOINT_LIMITS["l_hip_pitch"])
-        )
+        q_hip_des = float(np.clip(q_hip_des, *_JOINT_LIMITS["l_hip_pitch"]))
         q_knee_des = float(np.clip(q_knee_des, *_JOINT_LIMITS["l_knee"]))
 
         # Normalise to [-1, 1] (same mapping as pid_control)
@@ -469,22 +465,18 @@ class LQRBalanceController:
         # ── 2. Sagittal balance — LQR wheel velocity ─────────────────────────
         # Extract state signals from obs (see sign convention in module docstring)
         # lean_fwd: positive = top of robot leans toward front (-Y direction)
-        lean_fwd = -float(obs[_OBS_GRAV_Y])          # = -g_body[1]
-        lean_rate = float(obs[_OBS_ANG_VEL_X])        # = body_ang_vel[0]
-        fwd_vel = -float(obs[_OBS_LIN_VEL_Y])         # = -body_lin_vel[1]
+        lean_fwd = -float(obs[_OBS_GRAV_Y])  # = -g_body[1]
+        lean_rate = float(obs[_OBS_ANG_VEL_X])  # = body_ang_vel[0]
+        fwd_vel = -float(obs[_OBS_LIN_VEL_Y])  # = -body_lin_vel[1]
 
         # Integrate forward position drift (Euler, 50 Hz)
         self._fwd_pos_drift += fwd_vel * self._control_dt
 
-        lqr_state = np.array(
-            [lean_fwd, lean_rate, fwd_vel, self._fwd_pos_drift]
-        )
+        lqr_state = np.array([lean_fwd, lean_rate, fwd_vel, self._fwd_pos_drift])
         # u = -(K · x)  [negative feedback; K elements are negative,
         #                 so u = |K|·x is positive for forward lean]
         omega_cmd_avg = float(-np.dot(self._K_lqr, lqr_state))
-        omega_cmd_avg = np.clip(
-            omega_cmd_avg, -self._wheel_vel_limit, self._wheel_vel_limit
-        )
+        omega_cmd_avg = np.clip(omega_cmd_avg, -self._wheel_vel_limit, self._wheel_vel_limit)
 
         # ── 3. Yaw hold — differential wheel (PD) ────────────────────────────
         yaw_error = float(obs[_OBS_YAW_ERROR])
@@ -495,12 +487,8 @@ class LQRBalanceController:
         omega_diff = float(self._kp_yaw * yaw_error + self._kd_yaw * yaw_rate)
         omega_diff = np.clip(omega_diff, -2.0, 2.0)  # small correction only
 
-        omega_l = np.clip(
-            omega_cmd_avg + omega_diff, -self._wheel_vel_limit, self._wheel_vel_limit
-        )
-        omega_r = np.clip(
-            omega_cmd_avg - omega_diff, -self._wheel_vel_limit, self._wheel_vel_limit
-        )
+        omega_l = np.clip(omega_cmd_avg + omega_diff, -self._wheel_vel_limit, self._wheel_vel_limit)
+        omega_r = np.clip(omega_cmd_avg - omega_diff, -self._wheel_vel_limit, self._wheel_vel_limit)
 
         # Normalise wheel velocity to [-1, 1] (same as pid_control vel_target)
         action[_IDX["l_wheel"]] = np.clip(omega_l / self._wheel_vel_limit, -1.0, 1.0)
@@ -515,9 +503,7 @@ class LQRBalanceController:
         #   When leaning LEFT (+X), increase l_hip_roll (roll left hip outward)
         #   and decrease r_hip_roll (roll right hip inward)
         # NOTE: exact sign requires hardware validation; these are conservative gains.
-        roll_correction = (
-            self._kp_roll * lean_left + self._kd_roll * lean_rate_left
-        )
+        roll_correction = self._kp_roll * lean_left + self._kd_roll * lean_rate_left
         # Clamp correction to ±0.3 rad before normalising (conservative)
         roll_correction = np.clip(roll_correction, -0.3, 0.3)
 

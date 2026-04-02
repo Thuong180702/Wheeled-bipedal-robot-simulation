@@ -34,15 +34,16 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Import the helper under test
 from scripts.validate_checkpoint import _build_headless_obs  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Stubs
 # ---------------------------------------------------------------------------
+
 
 def _identity_gravity(quat):
     """Stub: gravity_body = [0, 0, -1] always (upright robot)."""
     try:
         import jax.numpy as jnp
+
         return jnp.array([0.0, 0.0, -1.0])
     except ImportError:
         return np.array([0.0, 0.0, -1.0])
@@ -59,7 +60,6 @@ def _identity_rotate(quat, vec):
 def _make_mj_data_stub(lin_vel=(0.1, 0.2, 0.0), ang_vel=(0.0, 0.0, 0.0)):
     """Minimal mj_data stub with realistic qpos/qvel arrays."""
     try:
-        import jax.numpy as jnp
         qpos = np.zeros(17)
         qpos[3] = 1.0  # quaternion w-component
         qpos[2] = 0.65  # torso height
@@ -91,6 +91,7 @@ def _noise_stds_nonzero() -> dict:
 def _kwargs(lin_vel_mode="clean", apply_noise=False, noise_stds=None):
     try:
         import jax.numpy as jnp
+
         prev_action = jnp.zeros(10)
         height_cmd_norm = jnp.array([0.5])
         yaw_error = jnp.array([0.0])
@@ -118,6 +119,7 @@ def _kwargs(lin_vel_mode="clean", apply_noise=False, noise_stds=None):
 # Obs dimension tests
 # ---------------------------------------------------------------------------
 
+
 class TestObsDimensions:
     """_build_headless_obs must produce the right number of dims per lin_vel_mode."""
 
@@ -137,6 +139,7 @@ class TestObsDimensions:
         """obs[-2] must equal height_cmd_norm regardless of lin_vel_mode."""
         try:
             import jax.numpy as jnp
+
             height = jnp.array([0.75])
         except ImportError:
             height = np.array([0.75])
@@ -153,6 +156,7 @@ class TestObsDimensions:
         """obs[-1] must equal yaw_error regardless of lin_vel_mode."""
         try:
             import jax.numpy as jnp
+
             yaw = jnp.array([1.23])
         except ImportError:
             yaw = np.array([1.23])
@@ -169,6 +173,7 @@ class TestObsDimensions:
 # ---------------------------------------------------------------------------
 # lin_vel inclusion / exclusion
 # ---------------------------------------------------------------------------
+
 
 class TestLinVelPlacement:
     """Check that lin_vel is included/excluded and at the right position."""
@@ -203,6 +208,7 @@ class TestLinVelPlacement:
 # Noise channel tests
 # ---------------------------------------------------------------------------
 
+
 class TestNoiseApplication:
     """Noise must be applied to the right channels and absent when disabled."""
 
@@ -231,6 +237,7 @@ class TestNoiseApplication:
         """obs[29:39] (prev_action in clean/noisy mode) must equal prev_action exactly."""
         try:
             import jax.numpy as jnp
+
             prev = jnp.array([0.1 * i for i in range(10)], dtype=jnp.float32)
         except ImportError:
             prev = np.array([0.1 * i for i in range(10)], dtype=np.float32)
@@ -252,6 +259,7 @@ class TestNoiseApplication:
         """obs[26:36] (prev_action in disabled mode) must equal prev_action exactly."""
         try:
             import jax.numpy as jnp
+
             prev = jnp.array([0.5 * i for i in range(10)], dtype=jnp.float32)
         except ImportError:
             prev = np.array([0.5 * i for i in range(10)], dtype=np.float32)
@@ -298,6 +306,7 @@ class TestNoiseApplication:
 # Action delay buffer semantics
 # ---------------------------------------------------------------------------
 
+
 class TestActionDelayBuffer:
     """The delay buffer must behave as a FIFO queue: oldest action applied first."""
 
@@ -318,18 +327,17 @@ class TestActionDelayBuffer:
 
     def test_one_step_delay_applies_previous_action(self):
         """With delay=1, first step applies zero (init), second applies step-0 action."""
-        delay_steps = 1
-        delay_buffer = [np.zeros(10)]  # init: one zeros entry
+        delay_buffer = [np.zeros(10)]  # init: one zeros entry (delay=1)
 
         smooth_step0 = np.full(10, 1.0)
         smooth_step1 = np.full(10, 2.0)
 
         # Step 0
-        ctrl_step0 = delay_buffer[0]   # zeros (init)
+        ctrl_step0 = delay_buffer[0]  # zeros (init)
         delay_buffer = delay_buffer[1:] + [smooth_step0]
 
         # Step 1
-        ctrl_step1 = delay_buffer[0]   # smooth_step0 (1 step delayed)
+        ctrl_step1 = delay_buffer[0]  # smooth_step0 (1 step delayed)
         delay_buffer = delay_buffer[1:] + [smooth_step1]
 
         np.testing.assert_array_equal(ctrl_step0, np.zeros(10))
@@ -337,8 +345,7 @@ class TestActionDelayBuffer:
 
     def test_two_step_delay_fifo_order(self):
         """With delay=2, actions appear in the correct FIFO order."""
-        delay_steps = 2
-        delay_buffer = [np.zeros(10), np.zeros(10)]  # init: two zeros entries
+        delay_buffer = [np.zeros(10), np.zeros(10)]  # init: two zeros entries (delay=2)
 
         actions = [np.full(10, float(i)) for i in range(1, 6)]  # 1.0 to 5.0
         ctrl_sequence = []
@@ -385,31 +392,36 @@ class TestActionDelayBuffer:
 # Obs size invariant
 # ---------------------------------------------------------------------------
 
+
 class TestObsSizeInvariant:
     """obs.shape[0] must equal expected_obs_size derived from lin_vel_mode."""
 
-    @pytest.mark.parametrize("mode,expected", [
-        ("clean", 41),
-        ("noisy", 41),
-        ("disabled", 38),
-    ])
+    @pytest.mark.parametrize(
+        "mode,expected",
+        [
+            ("clean", 41),
+            ("noisy", 41),
+            ("disabled", 38),
+        ],
+    )
     def test_obs_size_matches_expected(self, mode, expected):
         obs = _build_headless_obs(**_kwargs(lin_vel_mode=mode))
         assert obs.shape[0] == expected, (
             f"lin_vel_mode='{mode}': expected {expected} dims, got {obs.shape[0]}"
         )
 
-    @pytest.mark.parametrize("mode,expected_base", [
-        ("clean", 39),
-        ("noisy", 39),
-        ("disabled", 36),
-    ])
+    @pytest.mark.parametrize(
+        "mode,expected_base",
+        [
+            ("clean", 39),
+            ("noisy", 39),
+            ("disabled", 36),
+        ],
+    )
     def test_base_obs_matches_base_env_compute_obs_size(self, mode, expected_base):
         """base_obs dim must match WheeledBipedEnv._compute_obs_size() logic."""
         # Replicate _compute_obs_size() formula (36 base + 3 if not disabled)
         computed = 36 if mode == "disabled" else 39
-        assert computed == expected_base, (
-            f"_compute_obs_size formula broken for mode='{mode}'"
-        )
+        assert computed == expected_base, f"_compute_obs_size formula broken for mode='{mode}'"
         obs = _build_headless_obs(**_kwargs(lin_vel_mode=mode))
         assert obs.shape[0] == expected_base + 2  # + height_cmd_norm + yaw_error
