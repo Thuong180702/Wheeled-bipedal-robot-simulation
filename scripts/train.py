@@ -1,6 +1,18 @@
 """
 Script chính để training robot.
 
+Output layout (new convention):
+  outputs/<stage>/rl/seed<seed>/                   ← run root
+  outputs/<stage>/rl/seed<seed>/checkpoints/       ← PPO checkpoints
+  outputs/<stage>/rl/seed<seed>/<stage>_seed<seed>_metrics.jsonl
+  outputs/<stage>/rl/seed<seed>/run_metadata.json
+  outputs/<stage>/rl/seed<seed>/tb/<stage>_seed<seed>/  ← TensorBoard
+
+Examples:
+  outputs/balance/rl/seed42/
+  outputs/balance/rl/seed113/
+  outputs/balance_robust/rl/seed42/
+
 Cách dùng:
   # Training đầy đủ curriculum
   python scripts/train.py curriculum
@@ -8,8 +20,11 @@ Cách dùng:
   # Training một stage cụ thể
   python scripts/train.py single --stage balance --steps 5000000
 
+  # Training với seed cụ thể
+  python scripts/train.py single --stage balance --steps 50000000 --seed 113
+
   # Tiếp tục từ checkpoint
-  python scripts/train.py single --stage balance --resume checkpoints/stage_0/step_1000000
+  python scripts/train.py single --stage balance --resume outputs/balance/rl/seed42/checkpoints/step_1000000
 """
 
 from __future__ import annotations
@@ -286,6 +301,9 @@ def single(
     env_name = training_config.get("task", {}).get("env", "BalanceEnv")
     env = make_env(env_name, config=training_config)
 
+    # Build per-run root: outputs/<stage>/rl/seed<seed>/
+    run_root = os.path.join(output_dir, stage, "rl", f"seed{seed}")
+
     # Logger — with reproducibility metadata
     from wheeled_biped.utils.config import get_run_metadata
 
@@ -295,7 +313,7 @@ def single(
         experiment_name=f"{stage}_seed{seed}",
     )
     logger = TrainingLogger(
-        log_dir=os.path.join(output_dir, "logs"),
+        log_dir=run_root,
         experiment_name=f"{stage}_seed{seed}",
         use_tensorboard=True,
         config=training_config,
@@ -310,8 +328,8 @@ def single(
         trainer.load_checkpoint(resume)
         console.print(f"[green]Đã tải checkpoint: {resume}[/green]")
 
-    # Train
-    checkpoint_dir = os.path.join(output_dir, "checkpoints", stage)
+    # Train — checkpoints nested inside the run root
+    checkpoint_dir = os.path.join(run_root, "checkpoints")
 
     if live_view:
         # Viewer chạy trên main thread, training chạy trên background thread

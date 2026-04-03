@@ -89,11 +89,11 @@ class CurriculumManager:
         env_name = config.get("task", {}).get("env", "BalanceEnv")
         env = make_env(env_name, config=config)
 
-        # Logger
-        log_dir = self.output_dir / "logs"
+        # Logger — per-run root: outputs/<stage_name>/rl/
+        log_dir = self.output_dir / stage_name / "rl"
         logger = TrainingLogger(
             log_dir=log_dir,
-            experiment_name=f"stage_{stage_idx}_{stage_name}",
+            experiment_name=stage_name,
             use_tensorboard=True,
             config=config,
         )
@@ -104,7 +104,8 @@ class CurriculumManager:
         # Warm-start từ stage trước (nếu có)
         pretrained_from = stage.get("pretrained_from")
         if pretrained_from and stage_idx > 0:
-            prev_checkpoint = self.output_dir / "checkpoints" / f"stage_{stage_idx - 1}" / "final"
+            prev_stage_name = self.stages[stage_idx - 1]["name"]
+            prev_checkpoint = self.output_dir / prev_stage_name / "rl" / "checkpoints" / "final"
             if prev_checkpoint.exists():
                 print(f"  ⟶ Warm-start từ: {prev_checkpoint}")
                 trainer.load_checkpoint(str(prev_checkpoint))
@@ -209,9 +210,9 @@ class CurriculumManager:
             # Tạo trainer
             trainer, logger = self._create_trainer_for_stage(self.current_stage_idx)
 
-            # Train
+            # Train — checkpoints under outputs/<stage_name>/rl/checkpoints/
             checkpoint_dir = str(
-                self.output_dir / "checkpoints" / f"stage_{self.current_stage_idx}"
+                self.output_dir / stage_name / "rl" / "checkpoints"
             )
             train_result = trainer.train(
                 total_steps=stage_steps,

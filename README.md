@@ -70,6 +70,26 @@ Joints per leg (5 × 2 = 10 total):
 │       └── stand_up.yaml
 ├── docs/
 │   └── baseline_workflow.md           # How to generate and compare baselines
+├── outputs/                           # All experiment artifacts (gitignored)
+│   ├── balance/
+│   │   ├── rl/
+│   │   │   ├── seed42/                # One directory per independent run
+│   │   │   │   ├── checkpoints/       # PPO checkpoints (step_N/, final/)
+│   │   │   │   ├── balance_seed42_metrics.jsonl
+│   │   │   │   ├── run_metadata.json
+│   │   │   │   └── tb/                # TensorBoard event files
+│   │   │   ├── seed113/
+│   │   │   ├── seed999/
+│   │   │   └── paper_eval/            # Aggregated eval output across seeds
+│   │   └── lqr/                       # LQR baseline evaluation outputs
+│   ├── balance_robust/rl/seed42/
+│   ├── stand_up/rl/seed42/
+│   └── <stage>/rl/seed<N>/
+├── paper/                             # LaTeX manuscript
+│   ├── main.tex
+│   ├── refs.bib
+│   └── figures/
+│       └── annotated_robot_joints.png
 ├── wheeled_biped/                     # Main package
 │   ├── envs/
 │   │   ├── base_env.py                # MJX base environment
@@ -110,6 +130,30 @@ Joints per leg (5 × 2 = 10 total):
 ├── pyproject.toml
 └── requirements.txt
 ```
+
+### Artifact layout convention
+
+All training runs write into `outputs/<stage>/<controller>/seed<seed>/`:
+
+| Controller | Description | Output root |
+|---|---|---|
+| `rl` | PPO-trained policy | `outputs/<stage>/rl/seed<N>/` |
+| `lqr` | Classical LQR baseline (eval only) | `outputs/<stage>/lqr/` |
+
+Each RL run directory is self-contained:
+
+```
+outputs/balance/rl/seed42/
+├── checkpoints/
+│   ├── step_1000000/checkpoint.pkl
+│   └── final/checkpoint.pkl
+├── balance_seed42_metrics.jsonl   ← training metrics (JSONL)
+├── run_metadata.json              ← seed, config, git hash
+└── tb/balance_seed42/             ← TensorBoard events
+```
+
+Final paper results use 3 independent seeds (42, 113, 999). Each seed is a fully
+independent training run; results are aggregated post-hoc over the three runs.
 
 ---
 
@@ -164,10 +208,12 @@ python scripts/visualize.py model --model-path path/to/custom.xml
 # Pure standing balance — initial learning run (5M steps learns narrow height range)
 python scripts/train.py single --stage balance --steps 5000000
 
-# Pure standing balance — curriculum run.
-# eval_interval=2 (see balance.yaml): curriculum eval fires every ~1M steps.
-# With 50M steps, the height curriculum can advance through all 29 levels (~30M needed).
-python scripts/train.py single --stage balance --steps 50000000
+# Same run with explicit seed — outputs go to outputs/balance/rl/seed42/
+python scripts/train.py single --stage balance --steps 50000000 --seed 42
+
+# Second seed for paper results (3 seeds total: 42, 113, 999)
+python scripts/train.py single --stage balance --steps 50000000 --seed 113
+python scripts/train.py single --stage balance --steps 50000000 --seed 999
 
 # Push-recovery fine-tune (warm-start from balance checkpoint)
 python scripts/train.py single --stage balance_robust --steps 3000000
@@ -180,13 +226,21 @@ python scripts/train.py single --stage rough_terrain     --steps 5000000
 python scripts/train.py single --stage stand_up          --steps 5000000
 ```
 
+Outputs land in `outputs/<stage>/rl/seed<N>/`:
+```
+outputs/balance/rl/seed42/
+├── checkpoints/final/checkpoint.pkl
+├── balance_seed42_metrics.jsonl
+└── run_metadata.json
+```
+
 Common options:
 
 ```bash
 --num-envs 8192         # parallel environments (default 4096)
---output-dir my_outputs # output directory (default: outputs/)
---seed 123              # random seed
---resume <checkpoint>   # resume from a saved checkpoint
+--output-dir my_outputs # output root (default: outputs/)
+--seed 42               # random seed — determines output subdirectory
+--resume <checkpoint>   # resume from a saved checkpoint directory
 ```
 
 #### Training with live viewer
@@ -212,7 +266,8 @@ Each stage warm-starts from the previous stage's checkpoint.
 #### Resume from checkpoint
 
 ```bash
-python scripts/train.py single --stage balance --resume outputs/checkpoints/balance/step_1000000
+python scripts/train.py single --stage balance --seed 42 \
+    --resume outputs/balance/rl/seed42/checkpoints/step_1000000
 ```
 
 Press **Ctrl+C** to stop at any time. The latest checkpoint is saved automatically.
@@ -230,12 +285,12 @@ Four benchmark modes:
 
 ```bash
 python scripts/evaluate.py \
-  --checkpoint outputs/checkpoints/balance/final \
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final \
   --stage balance \
   --mode nominal          # or push_recovery / domain_randomized / command_tracking
 ```
 
-Results are saved to `<checkpoint>/eval_results_<mode>.json`.
+Results are saved to `outputs/balance/rl/seed42/checkpoints/final/eval_results_<mode>.json`.
 
 **`success_rate` semantics:** A episode is a success if the env's own `time_limit` flag
 fires (i.e., the robot survived the full episode) — *not* a comparison against the
@@ -246,12 +301,12 @@ benchmark's `max_steps`. `fall_rate + success_rate ≈ 1.0`.
 ```bash
 # Save a baseline after training
 mkdir -p baselines/
-cp outputs/checkpoints/balance/final/eval_results_nominal.json baselines/nominal_v1.json
+cp outputs/balance/rl/seed42/checkpoints/final/eval_results_nominal.json baselines/nominal_v1.json
 
 # Compare a later run against the baseline (exit code 1 if regression)
 python scripts/compare_baseline.py \
   --baseline baselines/nominal_v1.json \
-  --current  outputs/checkpoints/balance/final/eval_results_nominal.json
+  --current  outputs/balance/rl/seed42/checkpoints/final/eval_results_nominal.json
 ```
 
 See [`docs/baseline_workflow.md`](docs/baseline_workflow.md) for the full workflow
@@ -265,19 +320,20 @@ reward exploitation patterns that JSON metrics alone cannot detect.
 ```bash
 # Default: clean obs (no sensor noise) — useful for debugging pure policy quality
 python scripts/validate_checkpoint.py \
-  --checkpoint outputs/checkpoints/balance/final
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final
 
 # Sim-to-real preparation: apply sensor noise from checkpoint config
 python scripts/validate_checkpoint.py \
-  --checkpoint outputs/checkpoints/balance/final --noise
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final --noise
 
 # Custom height command and rollout length
 python scripts/validate_checkpoint.py \
-  --checkpoint outputs/checkpoints/balance/final \
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final \
   --height-cmd 0.65 --num-steps 1000 --save-csv
 ```
 
 **Outputs** (written to the checkpoint directory by default):
+`outputs/balance/rl/seed42/checkpoints/final/`
 
 | File | Contents |
 |---|---|
@@ -309,35 +365,37 @@ it is **not** the training-time curriculum eval (`PPOTrainer.eval_pass()`).
 ```bash
 # Single checkpoint, all default scenarios
 python scripts/eval_balance.py \
-  --checkpoint outputs/checkpoints/balance/final
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final
 
 # Selected scenarios
 python scripts/eval_balance.py \
-  --checkpoint outputs/checkpoints/balance/final \
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final \
   --scenarios nominal push_recovery friction_low friction_high
 
 # Push magnitude sweep (8 points: 20–200 N)
 python scripts/eval_balance.py \
-  --checkpoint outputs/checkpoints/balance/final \
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final \
   --scenarios push_sweep --num-episodes 10
 
 # Friction sweep (6 points: 0.3×–1.8×)
 python scripts/eval_balance.py \
-  --checkpoint outputs/checkpoints/balance/final \
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final \
   --scenarios friction_sweep --num-episodes 10
 
-# Compare two checkpoints, more episodes, multiple seeds
+# Paper evaluation: 3 seeds, 50 episodes each, results written to paper_eval/
 python scripts/eval_balance.py \
-  --checkpoint outputs/checkpoints/balance/v1 outputs/checkpoints/balance/v2 \
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final \
+               outputs/balance/rl/seed113/checkpoints/final \
+               outputs/balance/rl/seed999/checkpoints/final \
   --num-episodes 50 --seeds 0 42 123 \
-  --output-dir results/paper_eval
+  --output-dir outputs/balance/rl/paper_eval
 
 # Classical LQR baseline (no checkpoint required)
 python scripts/eval_balance.py \
   --controller baseline_lqr \
   --scenarios nominal push_recovery \
   --num-episodes 20 \
-  --output-dir results/lqr_baseline
+  --output-dir outputs/balance/lqr
 ```
 
 **Output files** (written to `--output-dir`, default = first checkpoint dir):
@@ -359,11 +417,11 @@ python scripts/eval_balance.py \
 ```bash
 # Watch policy in MuJoCo viewer
 python scripts/visualize.py policy \
-  --checkpoint outputs/checkpoints/balance/final
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final
 
 # Custom step count and slow-motion
 python scripts/visualize.py policy \
-  --checkpoint outputs/checkpoints/balance/final \
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final \
   --num-steps 5000 --slow-factor 2.0
 ```
 
@@ -371,12 +429,12 @@ python scripts/visualize.py policy \
 
 ```bash
 python scripts/visualize.py render \
-  --checkpoint outputs/checkpoints/balance/final \
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final \
   --output demo.mp4
 
 # Custom resolution
 python scripts/visualize.py render \
-  --checkpoint outputs/checkpoints/balance/final \
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final \
   --output demo.mp4 --width 1920 --height 1080 --fps 60
 ```
 
@@ -384,7 +442,8 @@ python scripts/visualize.py render \
 
 ```bash
 python scripts/visualize.py interactive                                    # PD control only
-python scripts/visualize.py interactive --checkpoint .../balance/final    # with policy
+python scripts/visualize.py interactive \
+  --checkpoint outputs/balance/rl/seed42/checkpoints/final               # with policy
 ```
 
 | Key | Function |
@@ -399,8 +458,9 @@ python scripts/visualize.py interactive --checkpoint .../balance/final    # with
 ### 10. Unified multi-skill controller
 
 ```bash
-python scripts/visualize.py unified --checkpoint-dir outputs/checkpoints
-python scripts/visualize.py unified --checkpoint-dir outputs/checkpoints --no-auto-mode
+# Default: reads checkpoints from outputs/<stage>/rl/seed42/checkpoints/final/
+python scripts/visualize.py unified
+python scripts/visualize.py unified --checkpoint-dir outputs --no-auto-mode
 ```
 
 Keys 1–6 force a specific skill; 0 returns to auto-detect. Skill switching uses
@@ -448,33 +508,43 @@ pytest tests/test_env.py -v
 ```bash
 # ── View ──────────────────────────────────────────────────────────────────────
 python scripts/visualize.py model
-python scripts/visualize.py policy     --checkpoint outputs/checkpoints/balance/final
-python scripts/visualize.py render     --checkpoint outputs/checkpoints/balance/final --output demo.mp4
-python scripts/visualize.py interactive --checkpoint outputs/checkpoints/balance/final
-python scripts/visualize.py unified    --checkpoint-dir outputs/checkpoints
+python scripts/visualize.py policy     --checkpoint outputs/balance/rl/seed42/checkpoints/final
+python scripts/visualize.py render     --checkpoint outputs/balance/rl/seed42/checkpoints/final --output demo.mp4
+python scripts/visualize.py interactive --checkpoint outputs/balance/rl/seed42/checkpoints/final
+python scripts/visualize.py unified    --checkpoint-dir outputs
 
 # ── Train ─────────────────────────────────────────────────────────────────────
-python scripts/train.py single     --stage balance        --steps 5000000
-python scripts/train.py single     --stage balance_robust --steps 3000000
+python scripts/train.py single     --stage balance        --steps 5000000  --seed 42
+python scripts/train.py single     --stage balance        --steps 50000000 --seed 113
+python scripts/train.py single     --stage balance_robust --steps 3000000  --seed 42
 python scripts/train.py single     --stage balance        --live-view
 python scripts/train.py curriculum --steps-per-stage 5000000
 
+# ── Resume ────────────────────────────────────────────────────────────────────
+python scripts/train.py single --stage balance --seed 42 \
+    --resume outputs/balance/rl/seed42/checkpoints/step_1000000
+
 # ── Evaluate (benchmark) ──────────────────────────────────────────────────────
-python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode nominal
-python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode push_recovery
-python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode domain_randomized
-python scripts/evaluate.py --checkpoint outputs/checkpoints/balance/final --mode command_tracking
-python scripts/validate_checkpoint.py --checkpoint outputs/checkpoints/balance/final
+python scripts/evaluate.py --checkpoint outputs/balance/rl/seed42/checkpoints/final --mode nominal
+python scripts/evaluate.py --checkpoint outputs/balance/rl/seed42/checkpoints/final --mode push_recovery
+python scripts/evaluate.py --checkpoint outputs/balance/rl/seed42/checkpoints/final --mode domain_randomized
+python scripts/evaluate.py --checkpoint outputs/balance/rl/seed42/checkpoints/final --mode command_tracking
+python scripts/validate_checkpoint.py --checkpoint outputs/balance/rl/seed42/checkpoints/final
 
 # ── Research evaluation (paper metrics) ───────────────────────────────────────
-python scripts/eval_balance.py --checkpoint outputs/checkpoints/balance/final
-python scripts/eval_balance.py --checkpoint outputs/checkpoints/balance/final \
-    --scenarios nominal push_recovery push_sweep --num-episodes 20
-python scripts/eval_balance.py --controller baseline_lqr --scenarios nominal
+python scripts/eval_balance.py --checkpoint outputs/balance/rl/seed42/checkpoints/final
+python scripts/eval_balance.py \
+    --checkpoint outputs/balance/rl/seed42/checkpoints/final \
+                 outputs/balance/rl/seed113/checkpoints/final \
+                 outputs/balance/rl/seed999/checkpoints/final \
+    --scenarios nominal push_recovery push_sweep --num-episodes 50 \
+    --output-dir outputs/balance/rl/paper_eval
+python scripts/eval_balance.py --controller baseline_lqr --scenarios nominal \
+    --output-dir outputs/balance/lqr
 
 # ── Baseline comparison ───────────────────────────────────────────────────────
 python scripts/compare_baseline.py --baseline baselines/nominal_v1.json \
-                                   --current  outputs/.../eval_results_nominal.json
+    --current outputs/balance/rl/seed42/checkpoints/final/eval_results_nominal.json
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 pytest tests/ --ignore=tests/test_env.py -m "not slow" -v     # fast suite
@@ -482,14 +552,20 @@ pytest tests/test_smoke_train.py -v -m slow                    # end-to-end smok
 
 # ── Export (after training) ────────────────────────────────────────────────────
 python scripts/export_results.py curves \
-    outputs/logs/balance_seed42_metrics.jsonl \
-    --tags reward/mean curriculum/level curriculum/eval_per_step
+    outputs/balance/rl/seed42/balance_seed42_metrics.jsonl \
+    --tags reward/mean curriculum/level curriculum/eval_per_step \
+    --output outputs/balance/rl/seed42/training_curves.png
 python scripts/export_results.py table \
-    outputs/checkpoints/balance/final/eval_results_command_tracking.json \
-    --output outputs/tables/height_tracking.md
+    outputs/balance/rl/seed42/checkpoints/final/eval_results_command_tracking.json \
+    --output outputs/balance/rl/seed42/tables/height_tracking.md
 python scripts/export_results.py latex \
-    results/paper_eval/eval_results.json \
+    outputs/balance/rl/paper_eval/eval_results.json \
     --output outputs/tables/balance_eval.tex
+
+# ── LQR baseline evaluation ───────────────────────────────────────────────────
+python scripts/eval_balance.py --controller baseline_lqr \
+    --scenarios nominal push_recovery friction_low friction_high \
+    --num-episodes 20 --output-dir outputs/balance/lqr
 ```
 
 ---
@@ -642,7 +718,7 @@ python scripts/visualize.py model
 Once a checkpoint exists, optionally validate it before continuing training:
 
 ```bash
-python scripts/validate_checkpoint.py --checkpoint outputs/checkpoints/balance/final
+python scripts/validate_checkpoint.py --checkpoint outputs/balance/rl/seed42/checkpoints/final
 ```
 
 ---
@@ -653,41 +729,74 @@ After a successful run, use `scripts/export_results.py` to produce paper-ready o
 from the training log and benchmark JSON without additional dependencies (matplotlib is
 optional for PNG figures).
 
-The training logger writes to `outputs/logs/<stage>_seed<seed>_metrics.jsonl`
-(e.g. `balance_seed42_metrics.jsonl` for `--stage balance --seed 42`).
+The training logger writes to `outputs/<stage>/rl/seed<seed>/<stage>_seed<seed>_metrics.jsonl`
+(e.g. `outputs/balance/rl/seed42/balance_seed42_metrics.jsonl` for `--stage balance --seed 42`).
 
 Three sub-commands: `curves`, `table`, `latex`.
 
 ```bash
-# Training curves → CSV + PNG
+# Training curves → CSV + PNG (per seed)
 python scripts/export_results.py curves \
-    outputs/logs/balance_seed42_metrics.jsonl \
+    outputs/balance/rl/seed42/balance_seed42_metrics.jsonl \
     --tags reward/mean curriculum/level curriculum/eval_per_step \
-    --output outputs/figures/training_curves.png
+    --output outputs/balance/rl/seed42/training_curves.png
 
 # CSV only (skip PNG, e.g. on a headless server without matplotlib)
 python scripts/export_results.py curves \
-    outputs/logs/balance_seed42_metrics.jsonl \
+    outputs/balance/rl/seed42/balance_seed42_metrics.jsonl \
     --no-plot
 
 # Benchmark table → Markdown (from evaluate.py output)
 python scripts/export_results.py table \
-    outputs/checkpoints/balance/final/eval_results_command_tracking.json \
-    --output outputs/tables/height_tracking.md
+    outputs/balance/rl/seed42/checkpoints/final/eval_results_command_tracking.json \
+    --output outputs/balance/rl/seed42/tables/height_tracking.md
 
 # Print to stdout (no --output)
 python scripts/export_results.py table \
-    outputs/checkpoints/balance/final/eval_results_nominal.json
+    outputs/balance/rl/seed42/checkpoints/final/eval_results_nominal.json
 
-# Research eval → LaTeX booktabs table (from eval_balance.py output)
+# Research eval → LaTeX booktabs table (from eval_balance.py output over 3 seeds)
 python scripts/export_results.py latex \
-    results/paper_eval/eval_results.json \
+    outputs/balance/rl/paper_eval/eval_results.json \
     --output outputs/tables/balance_eval.tex \
     --caption "Balance evaluation results." \
     --label "tab:balance_eval"
 ```
 
 Output files written alongside the source log/JSON by default when `--output` is omitted.
+
+### 3-seed experiment protocol
+
+Final paper results should be reported over 3 independent seeds (42, 113, 999):
+
+```bash
+# 1. Train all three seeds
+python scripts/train.py single --stage balance --steps 50000000 --seed 42
+python scripts/train.py single --stage balance --steps 50000000 --seed 113
+python scripts/train.py single --stage balance --steps 50000000 --seed 999
+
+# 2. Evaluate all three seeds
+python scripts/eval_balance.py \
+    --checkpoint outputs/balance/rl/seed42/checkpoints/final \
+                 outputs/balance/rl/seed113/checkpoints/final \
+                 outputs/balance/rl/seed999/checkpoints/final \
+    --num-episodes 50 --num-steps 2000 --seeds 0 42 123 \
+    --output-dir outputs/balance/rl/paper_eval
+
+# 3. Evaluate LQR baseline
+python scripts/eval_balance.py \
+    --controller baseline_lqr \
+    --scenarios nominal push_recovery friction_low friction_high \
+    --num-episodes 50 --output-dir outputs/balance/lqr
+
+# 4. Export to LaTeX table
+python scripts/export_results.py latex \
+    outputs/balance/rl/paper_eval/eval_results.json \
+    --output outputs/tables/balance_eval.tex
+```
+
+Each seed is a fully independent training run with its own RNG state. Results are
+aggregated (mean ± std) post-hoc; the three runs are never mixed during training.
 
 ---
 

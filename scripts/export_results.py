@@ -9,20 +9,25 @@ Two sub-commands:
 
 Usage examples:
 
-  # Training curves from log file
+  # Training curves from log file (new output layout)
   python scripts/export_results.py curves \\
-      outputs/logs/stage_0_balance/stage_0_balance_metrics.jsonl \\
+      outputs/balance/rl/seed42/balance_seed42_metrics.jsonl \\
       --tags reward/mean curriculum/level curriculum/eval_per_step \\
-      --output outputs/figures/training_curves.png
+      --output outputs/balance/rl/seed42/training_curves.png
+
+  # Aggregate 3-seed training curves into one figure
+  python scripts/export_results.py curves \\
+      outputs/balance/rl/seed42/balance_seed42_metrics.jsonl \\
+      --tags reward/mean --output outputs/balance/rl/paper/seed42_curves.png
 
   # Benchmark table from evaluate.py output
   python scripts/export_results.py table \\
-      outputs/checkpoints/stage_0/final/eval_results_command_tracking.json \\
-      --output outputs/tables/height_tracking.md
+      outputs/balance/rl/seed42/checkpoints/final/eval_results_command_tracking.json \\
+      --output outputs/balance/rl/seed42/tables/height_tracking.md
 
   # LaTeX table from eval_balance.py output
   python scripts/export_results.py latex \\
-      outputs/checkpoints/balance/final/eval_results.json \\
+      outputs/balance/rl/paper_eval/eval_results.json \\
       --output outputs/tables/balance_eval.tex
 """
 

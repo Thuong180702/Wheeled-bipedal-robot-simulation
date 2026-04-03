@@ -19,29 +19,39 @@ Research eval (offline, this script):
 Usage
 -----
     # Single checkpoint, all default scenarios
-    python scripts/eval_balance.py --checkpoint outputs/checkpoints/balance/final
+    python scripts/eval_balance.py --checkpoint outputs/balance/rl/seed42/checkpoints/final
 
     # Compare two checkpoints, selected scenarios
     python scripts/eval_balance.py \\
-        --checkpoint ckpt_v1 ckpt_v2 \\
+        --checkpoint outputs/balance/rl/seed42/checkpoints/final \\
+                     outputs/balance/rl/seed113/checkpoints/final \\
         --scenarios nominal push_recovery friction_low friction_high
 
     # Push magnitude sweep (paper Figure: degradation vs force)
     python scripts/eval_balance.py \\
-        --checkpoint outputs/checkpoints/balance/final \\
+        --checkpoint outputs/balance/rl/seed42/checkpoints/final \\
         --scenarios push_sweep --num-episodes 10
 
     # Friction sweep
     python scripts/eval_balance.py \\
-        --checkpoint outputs/checkpoints/balance/final \\
+        --checkpoint outputs/balance/rl/seed42/checkpoints/final \\
         --scenarios friction_sweep --num-episodes 10
 
-    # Paper evaluation with more episodes and multiple seeds
+    # Paper evaluation: 3 seeds, more episodes
     python scripts/eval_balance.py \\
-        --checkpoint outputs/checkpoints/balance/final \\
+        --checkpoint outputs/balance/rl/seed42/checkpoints/final \\
+                     outputs/balance/rl/seed113/checkpoints/final \\
+                     outputs/balance/rl/seed999/checkpoints/final \\
         --num-episodes 50 --num-steps 2000 \\
         --seeds 0 42 123 \\
-        --output-dir results/paper_eval
+        --output-dir outputs/balance/rl/paper_eval
+
+    # Classical LQR baseline (no checkpoint required)
+    python scripts/eval_balance.py \\
+        --controller baseline_lqr \\
+        --scenarios nominal push_recovery \\
+        --num-episodes 20 \\
+        --output-dir outputs/balance/lqr
 
 Output files (written to --output-dir, default = first checkpoint directory)
 -----------------------------------------------------------------------------
@@ -1260,7 +1270,8 @@ def evaluate(
     elif checkpoint:
         out_dir = Path(checkpoint[0])
     else:
-        out_dir = Path("baseline_eval")
+        # LQR baseline: default to outputs/balance/lqr/
+        out_dir = Path("outputs") / "balance" / "lqr"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     _sub_note = (

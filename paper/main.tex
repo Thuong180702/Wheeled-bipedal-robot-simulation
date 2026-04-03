@@ -214,18 +214,14 @@ q_{\mathrm{wh}}^R
 \end{equation}
 where the superscripts $L$ and $R$ denote the left and right legs, respectively.
 
-% [TODO-FIGURE: robot overview figure showing physical platform and MuJoCo model
-%  side by side, with joint labels annotated on the MuJoCo mesh.
-%  Replace the placeholder below once the figure is ready.]
 \begin{figure}[t]
     \centering
-    \fbox{\parbox{0.70\linewidth}{\centering\small
-    [TODO-FIGURE: annotated robot joint diagram]\\
-    \textit{figures/annotated\_robot\_joints.png}}}
+    \includegraphics[width=\linewidth]{figures/annotated_robot_joints.png}
     \caption{Mechanical structure and joint layout of the wheeled biped robot.
-    Each leg has five actuated joints: hip roll, hip yaw, hip pitch, knee,
-    and wheel.
-    The left leg is annotated; the right leg is symmetric.}
+    Each leg has five actuated joints: hip roll (HR), hip yaw (HY), hip pitch (HP),
+    knee (KN), and drive wheel (WH).
+    The left leg is annotated; the right leg is symmetric.
+    Figure source: \texttt{paper/figures/annotated\_robot\_joints.png}.}
     \label{fig:robot_joint_layout}
 \end{figure}
 
@@ -958,7 +954,26 @@ Ten metrics are computed per scenario:
 \end{enumerate}
 
 Aggregate metrics: fall rate, survival rate.
-Reported over multiple seeds (default 3) for statistical stability.
+
+\noindent\textbf{Multi-seed evaluation protocol.}
+Final RL results are reported as mean $\pm$ standard deviation over three
+independent training runs with seeds 42, 113, and 999.
+Each seed produces a fully independent run: the policy is initialized with a
+distinct random seed and trained from scratch; seeds are never mixed during
+training or evaluation.
+The three trained checkpoints reside at:
+\begin{itemize}
+    \item \texttt{outputs/balance/rl/seed42/checkpoints/final/}
+    \item \texttt{outputs/balance/rl/seed113/checkpoints/final/}
+    \item \texttt{outputs/balance/rl/seed999/checkpoints/final/}
+\end{itemize}
+Aggregated evaluation results (all three seeds) are collected by
+\texttt{scripts/eval\_balance.py} with
+\texttt{{-}{-}checkpoint} pointing to all three directories simultaneously,
+writing aggregated outputs to
+\texttt{outputs/balance/rl/paper\_eval/}.
+The LQR baseline (evaluation-only; no training) writes to
+\texttt{outputs/balance/lqr/}.
 
 % [TODO-TABLE: RL vs LQR comparison table. Columns: scenario (nominal,
 %  narrow_height, full_range, push_recovery, friction_low, friction_high).
@@ -1029,10 +1044,14 @@ $h^{cmd}$ (m) & Surv.\ (\%) & $e_h$ (m) & Pitch (deg) & Torque (Nm) \\
 \bottomrule
 \end{tabular}
 \end{table}
-% [TODO-RESULT: insert nominal benchmark metrics for final balance checkpoint,
-%  using: python scripts/eval_balance.py --checkpoint outputs/.../balance/final
-%  --scenarios nominal narrow_height wide_height full_range
-%  --num-episodes 50 --seeds 0 42 123]
+% [TODO-RESULT: insert nominal benchmark metrics for final balance checkpoint (3 seeds),
+%  using: python scripts/eval_balance.py
+%    --checkpoint outputs/balance/rl/seed42/checkpoints/final
+%                 outputs/balance/rl/seed113/checkpoints/final
+%                 outputs/balance/rl/seed999/checkpoints/final
+%    --scenarios nominal narrow_height wide_height full_range
+%    --num-episodes 50 --seeds 0 42 123
+%    --output-dir outputs/balance/rl/paper_eval]
 
 % [TODO-FIGURE: robot posture snapshots at commanded heights
 %  0.40, 0.55, 0.65, 0.69 m showing variable-height balancing]
@@ -1114,11 +1133,14 @@ angular velocity over many steps to sense accumulated yaw drift.
     The sensor-noise and action-delay configurations are designed for
     sim-to-real preparation but have not been hardware-validated.
 
-    \item \textbf{Single-seed training.}
-    Initial training plans do not include multi-seed experiments.
-    Statistical validity of the main claims requires at least 3 seeds.
+    \item \textbf{Multi-seed training planned, not yet complete.}
+    The evaluation protocol uses 3 independent seeds (42, 113, 999),
+    each producing a separate training run stored under
+    \texttt{outputs/balance/rl/seed\{42,113,999\}/}.
+    Quantitative results will report mean $\pm$ std across all three seeds.
     % [TODO-CLAIM: report multi-seed variance before asserting
-    %  statistical significance of any comparison]
+    %  statistical significance of any comparison; seeds 42/113/999
+    %  must all complete training before filling result tables]
 
     \item \textbf{LQR at large disturbances.}
     The LQR is only valid near the nominal height and small lean angles.

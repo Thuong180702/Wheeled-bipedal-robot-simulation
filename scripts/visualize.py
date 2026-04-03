@@ -6,10 +6,10 @@ Cách dùng:
   python scripts/visualize.py model
 
   # Xem policy đã train
-  python scripts/visualize.py policy --checkpoint outputs/checkpoints/balance/final
+  python scripts/visualize.py policy --checkpoint outputs/balance/rl/seed42/checkpoints/final
 
   # Render video
-  python scripts/visualize.py render --checkpoint outputs/checkpoints/balance/final \
+  python scripts/visualize.py render --checkpoint outputs/balance/rl/seed42/checkpoints/final \
     --output video.mp4
 """
 
@@ -960,8 +960,13 @@ def interactive(
 @app.command()
 def unified(
     checkpoint_dir: str = typer.Option(
-        "outputs/checkpoints",
-        help="Thư mục gốc chứa các checkpoint (balance/, wheeled_locomotion/, ...).",
+        "outputs",
+        help=(
+            "Root outputs directory. Uses new layout: "
+            "outputs/<stage>/rl/seed42/checkpoints/final/. "
+            "Pass a custom --stage-map (not yet exposed as CLI flag) via UnifiedController "
+            "for non-default seeds. Default: outputs/"
+        ),
     ),
     model_path: str = typer.Option(
         None,

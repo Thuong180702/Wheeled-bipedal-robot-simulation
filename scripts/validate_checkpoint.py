@@ -9,20 +9,20 @@ Usage
 -----
     # Default: sim prototyping mode (clean lin_vel, no added noise)
     python scripts/validate_checkpoint.py \\
-        --checkpoint outputs/checkpoints/balance/final
+        --checkpoint outputs/balance/rl/seed42/checkpoints/final
 
     # Sim2real-preparation mode: apply sensor noise from config, respect lin_vel_mode
     python scripts/validate_checkpoint.py \\
-        --checkpoint outputs/checkpoints/balance/final --noise
+        --checkpoint outputs/balance/rl/seed42/checkpoints/final --noise
 
     # Specify height command and rollout length
     python scripts/validate_checkpoint.py \\
-        --checkpoint outputs/checkpoints/balance/final \\
+        --checkpoint outputs/balance/rl/seed42/checkpoints/final \\
         --height-cmd 0.65 --num-steps 1000
 
     # Also save raw telemetry CSV
     python scripts/validate_checkpoint.py \\
-        --checkpoint outputs/checkpoints/balance/final --save-csv
+        --checkpoint outputs/balance/rl/seed42/checkpoints/final --save-csv
 
 Outputs (written to --output-dir, default = checkpoint directory)
 -----------------------------------------------------------------

@@ -13,19 +13,17 @@
 \citation{jax}
 \citation{mujoco,mujoco_mjx_docs}
 \citation{jax}
-\citation{tobin2017domain}
 \@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{2}{}\protected@file@percent }
 \newlabel{sec:related}{{II}{2}{}{section.2}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {III}Robot Platform and Simulation Setup}{2}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Robot Morphology}{2}{}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Mechanical structure and joint layout of the wheeled biped robot. Each leg has five actuated joints: hip roll, hip yaw, hip pitch, knee, and wheel. The left leg is annotated; the right leg is symmetric.}}{2}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Mechanical structure and joint layout of the wheeled biped robot. Each leg has five actuated joints: hip roll (HR), hip yaw (HY), hip pitch (HP), knee (KN), and drive wheel (WH). The left leg is annotated; the right leg is symmetric. Figure source: \texttt  {paper/figures/annotated\_robot\_joints.png}.}}{2}{}\protected@file@percent }
 \newlabel{fig:robot_joint_layout}{{1}{2}{}{figure.1}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Simulation Environment}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Low-Level PID Control}{2}{}\protected@file@percent }
-\newlabel{sec:pid}{{\mbox  {III-C}}{2}{}{subsection.3.3}{}}
+\citation{tobin2017domain}
 \citation{welford1962}
-\citation{ppo}
-\citation{gae}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Low-Level PID Control}{3}{}\protected@file@percent }
+\newlabel{sec:pid}{{\mbox  {III-C}}{3}{}{subsection.3.3}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Per-joint PID gains. Joint order: hip roll (HR), hip yaw (HY), hip pitch (HP), knee (KN), wheel (WH). Gains are identical for left and right legs. The wheel $K_d$ is masked to zero internally regardless of the table value.}}{3}{}\protected@file@percent }
 \newlabel{tab:pid_gains}{{I}{3}{}{table.1}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {IV}Problem Formulation}{3}{}\protected@file@percent }
@@ -33,13 +31,15 @@
 \newlabel{eq:obs}{{6}{3}{}{equation.6}{}}
 \newlabel{eq:height_norm}{{7}{3}{}{equation.7}{}}
 \newlabel{eq:yaw_error}{{8}{3}{}{equation.8}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Learning Objective}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {V}Reward Design}{3}{}\protected@file@percent }
-\newlabel{sec:reward}{{V}{3}{}{section.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Reward Structure}{3}{}\protected@file@percent }
-\newlabel{eq:reward_total}{{11}{3}{}{equation.11}{}}
+\citation{ppo}
+\citation{gae}
 \@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Reward components and weights for the variable-height \texttt  {balance} task. Weights for the \texttt  {balance\_robust} fine-tuning stage differ: $w_{\mathrm  {still}}=0$, $w_{\mathrm  {wh}}=0$, $w_{\mathrm  {nat}}=1.5$, $w_{\mathrm  {alive}}=0.5$, $w_{\Delta a}=-0.005$, to accommodate wheel-based push recovery motion.}}{4}{}\protected@file@percent }
 \newlabel{tab:reward_weights}{{II}{4}{}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Learning Objective}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {V}Reward Design}{4}{}\protected@file@percent }
+\newlabel{sec:reward}{{V}{4}{}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Reward Structure}{4}{}\protected@file@percent }
+\newlabel{eq:reward_total}{{11}{4}{}{equation.11}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Primary Reward Terms}{4}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}1}Body-Level Reward}{4}{}\protected@file@percent }
 \newlabel{eq:body_level}{{12}{4}{}{equation.12}{}}
@@ -58,9 +58,9 @@
 \newlabel{eq:legs_vertical}{{20}{4}{}{equation.20}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}7}No-Motion Reward}{4}{}\protected@file@percent }
 \newlabel{eq:no_motion}{{21}{4}{}{equation.21}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Height-Consistent Natural Pose Reward}{4}{}\protected@file@percent }
-\newlabel{sec:natural_pose}{{\mbox  {V-C}}{4}{}{subsection.5.3}{}}
 \citation{bengio2009curriculum}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Height-Consistent Natural Pose Reward}{5}{}\protected@file@percent }
+\newlabel{sec:natural_pose}{{\mbox  {V-C}}{5}{}{subsection.5.3}{}}
 \newlabel{eq:natural_pose}{{25}{5}{}{equation.25}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Effort and Smoothness Penalties}{5}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-E}}Termination Conditions}{5}{}\protected@file@percent }
@@ -71,10 +71,10 @@
 \newlabel{eq:eval_per_step}{{30}{5}{}{equation.30}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Multi-Stage Macro-Curriculum}{5}{}\protected@file@percent }
 \newlabel{sec:multi_stage}{{\mbox  {VI-B}}{5}{}{subsection.6.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {VII}Classical LQR Baseline}{5}{}\protected@file@percent }
-\newlabel{sec:lqr}{{VII}{5}{}{section.7}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Motivation}{5}{}\protected@file@percent }
 \citation{flax}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Classical LQR Baseline}{6}{}\protected@file@percent }
+\newlabel{sec:lqr}{{VII}{6}{}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Motivation}{6}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Linearized TWIP Model}{6}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Height-Dependent Inverse Kinematics}{6}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-D}}Multi-Axis Control}{6}{}\protected@file@percent }
@@ -84,14 +84,14 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-B}}Training Configuration}{6}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-C}}Research Evaluation Protocol}{6}{}\protected@file@percent }
 \newlabel{sec:eval_protocol}{{\mbox  {VIII-C}}{6}{}{subsection.8.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces RL policy vs.\ LQR baseline comparison (planned). All result cells to be filled after training.}}{7}{}\protected@file@percent }
-\newlabel{tab:rl_vs_lqr}{{III}{7}{}{table.3}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {IX}Experimental Results}{7}{}\protected@file@percent }
 \newlabel{sec:results}{{IX}{7}{}{section.9}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-A}}Learning Curves}{7}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-B}}Nominal Balance and Variable-Height Results}{7}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces RL policy vs.\ LQR baseline comparison (planned). All result cells to be filled after training.}}{7}{}\protected@file@percent }
+\newlabel{tab:rl_vs_lqr}{{III}{7}{}{table.3}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Variable-height balancing: performance vs.\ commanded height. All values pending training completion.}}{7}{}\protected@file@percent }
 \newlabel{tab:balance_results}{{IV}{7}{}{table.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-B}}Nominal Balance and Variable-Height Results}{7}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-C}}Push Robustness}{7}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-D}}Friction Robustness}{7}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-E}}Ablation: Natural Pose Reward}{7}{}\protected@file@percent }
@@ -99,7 +99,6 @@
 \@writefile{toc}{\contentsline {section}{\numberline {X}Discussion and Limitations}{7}{}\protected@file@percent }
 \newlabel{sec:discussion}{{X}{7}{}{section.10}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-A}}Framework Design}{7}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-B}}Current Limitations}{7}{}\protected@file@percent }
 \bibstyle{IEEEtran}
 \bibcite{ppo}{1}
 \bibcite{mujoco}{2}
@@ -114,6 +113,7 @@
 \bibcite{klemm2020lqrwbc}{11}
 \bibcite{hsu2022wbrfuzzy}{12}
 \bibcite{li2021wheelbiped}{13}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-B}}Current Limitations}{8}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {XI}Conclusion}{8}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{References}{8}{}\protected@file@percent }
 \gdef \@abspage@last{8}

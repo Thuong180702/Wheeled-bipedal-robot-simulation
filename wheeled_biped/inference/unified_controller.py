@@ -168,10 +168,14 @@ class UnifiedController:
     ):
         """
         Args:
-            checkpoint_dir: Thư mục chứa các sub-folder checkpoint
-                            (balance/, wheeled_locomotion/, walking/, ...)
+            checkpoint_dir: Root outputs directory.  Default layout (new convention):
+                            ``outputs/<stage>/rl/seed<N>/checkpoints/final/``.
+                            Pass ``stage_map`` to override the per-skill subfolder
+                            mapping for non-default seeds or custom layouts.
             mj_model: MuJoCo model (để lấy actuator_ctrlrange, nq, nv, ...)
-            stage_map: Mapping tùy chỉnh  {skill_name: checkpoint_subfolder}
+            stage_map: Custom mapping {skill_name: checkpoint_subfolder} relative
+                       to checkpoint_dir.  Defaults to seed42 paths under the new
+                       ``outputs/<stage>/rl/seed42/checkpoints/final`` convention.
             dwell_threshold: Number of consecutive calls _detect_skill_raw must
                              return the same skill before the controller acts on
                              the switch request (hysteresis, Fix 3).
@@ -180,14 +184,15 @@ class UnifiedController:
         self.ckpt_dir = Path(checkpoint_dir)
         self.rng = jax.random.PRNGKey(42)
 
-        # Mapping mặc định: tên stage → thư mục con
+        # Default mapping: skill name → subfolder relative to checkpoint_dir.
+        # Uses new output layout: outputs/<stage>/rl/seed42/checkpoints/final
         default_map = {
-            "balance": "balance/final",
-            "locomotion": "wheeled_locomotion/final",
-            "walking": "walking/final",
-            "stair": "stair_climbing/final",
-            "terrain": "rough_terrain/final",
-            "stand_up": "stand_up/final",
+            "balance": "balance/rl/seed42/checkpoints/final",
+            "locomotion": "wheeled_locomotion/rl/seed42/checkpoints/final",
+            "walking": "walking/rl/seed42/checkpoints/final",
+            "stair": "stair_climbing/rl/seed42/checkpoints/final",
+            "terrain": "rough_terrain/rl/seed42/checkpoints/final",
+            "stand_up": "stand_up/rl/seed42/checkpoints/final",
         }
         smap = stage_map or default_map
 
