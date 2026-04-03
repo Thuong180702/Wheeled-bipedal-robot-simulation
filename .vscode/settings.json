@@ -1,5 +1,28 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:venv",
     "cmake.sourceDirectory": "D:/2CHAN/Wheeled-bipedal-robot-simulation/.venv/Lib/site-packages/flaxlib_src",
-    "cmake.ignoreCMakeListsMissing": true
+    "cmake.ignoreCMakeListsMissing": true,
+    "latex-workshop.latex.tools": [
+        {
+            "name": "pdflatex",
+            "command": "pdflatex",
+            "args": [
+                "-synctex=1",
+                "-interaction=nonstopmode",
+                "-file-line-error",
+                "-output-directory=%OUTDIR%",
+                "%DOC%"
+            ]
+        }
+    ],
+    "latex-workshop.latex.recipes": [
+        {
+            "name": "pdflatex x2",
+            "tools": [
+                "pdflatex",
+                "pdflatex"
+            ]
+        }
+    ],
+    "latex-workshop.latex.recipe.default": "first"
 }

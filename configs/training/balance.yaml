@@ -41,7 +41,7 @@ curriculum:
   #   eval_interval=20 → first eval at ~10.5 M steps (too slow for 5 M runs).
   #   Old value=50     → first eval at ~26 M steps: curriculum was disabled for short runs.
   # CPU math: num_envs=128 × rollout_length=128 = 16.384 steps/update.
-  eval_interval: 2
+  eval_interval: 50
   eval_episodes: 200 # episodes per check — 32 envs × ~6 restarts; ±7% CI at 95%
 
 # --- PPO Hyperparameters ---

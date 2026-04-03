@@ -207,12 +207,18 @@ def _build_headless_obs(
 def validate(
     checkpoint: str = typer.Option(..., help="Path to checkpoint directory."),
     stage: str = typer.Option("balance", help="Stage name (for labelling)."),
-    num_episodes: int = typer.Option(100, help="Episodes for nominal benchmark."),
-    num_envs: int = typer.Option(64, help="Parallel envs for benchmark."),
-    num_steps: int = typer.Option(1000, help="Steps for headless telemetry rollout (1 env, CPU)."),
-    height_cmd: float = typer.Option(0.69, help="Height command (m) for the headless rollout."),
+    num_episodes: int = typer.Option(128, help="Episodes for nominal benchmark."),
+    num_envs: int = typer.Option(128, help="Parallel envs for benchmark."),
+    num_steps: int = typer.Option(
+        1000, help="Steps for headless telemetry rollout (1 env, CPU)."
+    ),
+    height_cmd: float = typer.Option(
+        0.69, help="Height command (m) for the headless rollout."
+    ),
     seed: int = typer.Option(0, help="Random seed."),
-    output_dir: str = typer.Option("", help="Output directory (default: checkpoint directory)."),
+    output_dir: str = typer.Option(
+        "", help="Output directory (default: checkpoint directory)."
+    ),
     save_csv: bool = typer.Option(False, help="Also save raw telemetry CSV."),
     noise: bool = typer.Option(
         False,
@@ -349,7 +355,9 @@ def validate(
     )
 
     # ── Step 2: headless CPU rollout → telemetry ──────────────────────────────
-    console.print(f"[bold]Step 2/2[/bold] Headless rollout ({num_steps} steps, 1 env, CPU) …")
+    console.print(
+        f"[bold]Step 2/2[/bold] Headless rollout ({num_steps} steps, 1 env, CPU) …"
+    )
 
     mj_model = mujoco.MjModel.from_xml_path(str(get_model_path()))
     mj_data = mujoco.MjData(mj_model)
@@ -474,13 +482,21 @@ def validate(
         if pid_enabled:
             joint_pos = jnp.array(mj_data.qpos[7:17])
             joint_vel = jnp.array(mj_data.qvel[6:16])
-            pos_target = joint_mins + (control_action + 1.0) * 0.5 * (joint_maxs - joint_mins)
+            pos_target = joint_mins + (control_action + 1.0) * 0.5 * (
+                joint_maxs - joint_mins
+            )
             vel_target_whl = control_action * whl_vel_lim
             pos_err = pos_target - joint_pos
-            error = (1.0 - wheel_mask) * pos_err + wheel_mask * (vel_target_whl - joint_vel)
+            error = (1.0 - wheel_mask) * pos_err + wheel_mask * (
+                vel_target_whl - joint_vel
+            )
             d_error = (1.0 - wheel_mask) * (-joint_vel)  # zero for wheels (kd masked)
-            pid_integral = jnp.clip(pid_integral + error * control_dt, -pid_i_limit, pid_i_limit)
-            ctrl = jnp.clip(kp * error + kd * d_error + ki * pid_integral, ctrl_min, ctrl_max)
+            pid_integral = jnp.clip(
+                pid_integral + error * control_dt, -pid_i_limit, pid_i_limit
+            )
+            ctrl = jnp.clip(
+                kp * error + kd * d_error + ki * pid_integral, ctrl_min, ctrl_max
+            )
         else:
             ctrl = ctrl_min + (control_action + 1.0) * 0.5 * (ctrl_max - ctrl_min)
 
@@ -549,7 +565,9 @@ def validate(
 
     # Print threshold-gated signals first, then extras without thresholds
     gated = [k for k in quality if k in THRESHOLDS]
-    extras = [k for k in quality if k not in THRESHOLDS and isinstance(quality[k], float)]
+    extras = [
+        k for k in quality if k not in THRESHOLDS and isinstance(quality[k], float)
+    ]
 
     for key in gated:
         val = quality[key]
@@ -564,7 +582,9 @@ def validate(
 
     # ── Display: flags ────────────────────────────────────────────────────────
     if flags:
-        console.print(f"\n[bold red]  {num_suspicious} suspicious signal(s):[/bold red]")
+        console.print(
+            f"\n[bold red]  {num_suspicious} suspicious signal(s):[/bold red]"
+        )
         for f in flags:
             console.print(f"  [red]•[/red] {f}")
     else:
