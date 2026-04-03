@@ -121,9 +121,9 @@ The main contributions of this work are:
 
 The framework additionally includes a multi-stage macro-curriculum
 (\texttt{balance} $\to$ \texttt{stand\_up} $\to$ \texttt{balance\_robust})
-and a research evaluation benchmark suite implemented in
-\texttt{scripts/eval\_balance.py}.
-These extensions are described in this paper but their full experimental
+and a quantitative offline evaluation benchmark suite with ten scenario
+groups and ten per-scenario metrics.
+These extensions are described in this paper, though their full experimental
 results remain as future work.
 
 The rest of this paper is organized as follows.
@@ -220,8 +220,9 @@ where the superscripts $L$ and $R$ denote the left and right legs, respectively.
     \caption{Mechanical structure and joint layout of the wheeled biped robot.
     Each leg has five actuated joints: hip roll (HR), hip yaw (HY), hip pitch (HP),
     knee (KN), and drive wheel (WH).
-    The left leg is annotated; the right leg is symmetric.
-    Figure source: \texttt{paper/figures/annotated\_robot\_joints.png}.}
+    The left leg is annotated; the right leg is mirror-symmetric.
+    The hip and knee joints enable variable-height posture regulation;
+    the wheel joints provide balancing torque.}
     \label{fig:robot_joint_layout}
 \end{figure}
 
@@ -386,10 +387,11 @@ This term is necessary because the gravity-body-frame component
 $g_t^b$ is yaw-invariant: a memoryless MLP cannot perceive
 accumulated heading drift from $g^b$ and $\omega^b$ alone.
 
-When \texttt{lin\_vel\_mode=``disabled''} is configured for sim-to-real
-preparation without a reliable velocity estimator, $v_t^b$ is removed,
+When linear velocity is unavailable (e.g., in sim-to-real preparation
+without a reliable velocity estimator), $v_t^b$ can be removed,
 reducing the observation to 38 dimensions.
-All results in this paper assume the default \texttt{lin\_vel\_mode=``clean''}.
+All results in this paper use simulator-exact linear velocity,
+which corresponds to the upper bound on velocity-estimate quality.
 
 Observations are normalized online using Welford's running mean and
 variance estimator~\cite{welford1962}, updated during training
@@ -735,16 +737,14 @@ The 29 levels span three qualitative phases:
     full operating range including deep crouching.
 \end{itemize}
 
-% [TODO-FIGURE: curriculum progression figure showing h_min (curriculum_min_height)
-%  and eval_per_step vs. training updates, with phase boundaries annotated.
-%  Key logger keys: curriculum/min_height, curriculum/level,
-%  eval/eval_per_step, eval/eval_fall_rate.]
+% [TODO-FIGURE: curriculum progression figure showing minimum commanded height
+%  and per-step evaluation reward vs.\ training updates,
+%  with Phase A/B/C boundaries annotated. Three-seed mean ± std preferred.]
 
 \subsection{Multi-Stage Macro-Curriculum}
 \label{sec:multi_stage}
-The codebase includes a multi-stage curriculum manager
-(\texttt{wheeled\_biped/training/curriculum.py}) that chains training
-stages with warm-starting and performance-gated promotion/demotion.
+A multi-stage curriculum manager chains training stages with
+warm-starting and performance-gated promotion and demotion.
 The three stages are:
 
 \begin{enumerate}
@@ -793,11 +793,10 @@ but have not yet been trained; their results are not reported here.
 \subsection{Motivation}
 Classical control methods provide an interpretable reference
 for evaluating RL policies.
-We implement an LQR baseline
-(\texttt{wheeled\_biped/controllers/lqr\_balance.py}) that operates on
+We implement an LQR baseline that operates on
 the same 41-dimensional observation interface and shares the same
 PID low-level controller as the RL policy, enabling a
-controlled comparison without confounding actuator-interface effects.
+controlled comparison without confounding actuator-interface differences.
 
 \subsection{Linearized TWIP Model}
 The sagittal balance component is based on a linearized
@@ -905,11 +904,11 @@ entropy coefficient 0.005, value-loss coefficient 0.5.
 
 \subsection{Research Evaluation Protocol}
 \label{sec:eval_protocol}
-Research evaluation is performed offline using a single-environment CPU
-MuJoCo rollout with per-step telemetry recording
-(\texttt{scripts/eval\_balance.py}).
-This is distinct from the curriculum advancement signal
-(\texttt{PPOTrainer.eval\_pass()}) used during training.
+Research evaluation is performed offline using a deterministic
+single-environment MuJoCo rollout with per-step telemetry recording.
+This evaluation pipeline is strictly separate from the in-training
+curriculum advancement evaluation, which uses a vectorized greedy
+rollout over the current policy to gate height-range expansion.
 
 \noindent\textbf{Evaluation scenarios.}
 Ten scenario groups are defined:
@@ -957,23 +956,14 @@ Aggregate metrics: fall rate, survival rate.
 
 \noindent\textbf{Multi-seed evaluation protocol.}
 Final RL results are reported as mean $\pm$ standard deviation over three
-independent training runs with seeds 42, 113, and 999.
-Each seed produces a fully independent run: the policy is initialized with a
-distinct random seed and trained from scratch; seeds are never mixed during
-training or evaluation.
-The three trained checkpoints reside at:
-\begin{itemize}
-    \item \texttt{outputs/balance/rl/seed42/checkpoints/final/}
-    \item \texttt{outputs/balance/rl/seed113/checkpoints/final/}
-    \item \texttt{outputs/balance/rl/seed999/checkpoints/final/}
-\end{itemize}
-Aggregated evaluation results (all three seeds) are collected by
-\texttt{scripts/eval\_balance.py} with
-\texttt{{-}{-}checkpoint} pointing to all three directories simultaneously,
-writing aggregated outputs to
-\texttt{outputs/balance/rl/paper\_eval/}.
-The LQR baseline (evaluation-only; no training) writes to
-\texttt{outputs/balance/lqr/}.
+independent training runs initialized with random seeds 42, 113, and 999.
+Each run is trained from scratch with a distinct random state;
+no parameters, replay data, or normalization statistics are shared between
+runs during training or evaluation.
+The offline evaluation pipeline is applied identically to all three
+trained policies, and scalar metrics are aggregated post-hoc.
+The LQR baseline requires no training and is evaluated once under the
+same scenario suite.
 
 % [TODO-TABLE: RL vs LQR comparison table. Columns: scenario (nominal,
 %  narrow_height, full_range, push_recovery, friction_low, friction_high).
@@ -1018,11 +1008,10 @@ This section will be populated with quantitative results after the
 All placeholders below indicate planned experiments.}
 
 \subsection{Learning Curves}
-% [TODO-FIGURE: training curve showing train/reward_mean,
-%  curriculum/eval_per_step, and curriculum/min_height vs.\ training steps.
-%  Mark Phase A/B/C boundaries on the x-axis.
-%  Also plot: eval/fall_rate, eval/survival_rate.
-%  Use logger keys from PPOTrainer TensorBoard/JSONL output.]
+% [TODO-FIGURE: training curves showing mean episode return,
+%  per-step evaluation reward, and minimum commanded height vs.\ training
+%  steps (three seeds, with shaded variance). Mark Phase A/B/C boundaries
+%  on the x-axis. Also show eval fall rate and survival rate.]
 \textit{[TODO-FIGURE: training curve and curriculum level progression]}
 
 \subsection{Nominal Balance and Variable-Height Results}
@@ -1044,49 +1033,46 @@ $h^{cmd}$ (m) & Surv.\ (\%) & $e_h$ (m) & Pitch (deg) & Torque (Nm) \\
 \bottomrule
 \end{tabular}
 \end{table}
-% [TODO-RESULT: insert nominal benchmark metrics for final balance checkpoint (3 seeds),
-%  using: python scripts/eval_balance.py
-%    --checkpoint outputs/balance/rl/seed42/checkpoints/final
-%                 outputs/balance/rl/seed113/checkpoints/final
-%                 outputs/balance/rl/seed999/checkpoints/final
-%    --scenarios nominal narrow_height wide_height full_range
-%    --num-episodes 50 --seeds 0 42 123
-%    --output-dir outputs/balance/rl/paper_eval]
+% [TODO-RESULT: insert variable-height benchmark metrics aggregated over
+%  3 independent seeds (seeds 42, 113, 999), scenarios: nominal,
+%  narrow_height, wide_height, full_range; 50 episodes per scenario.
+%  Report mean ± std for survival rate, height RMSE, pitch RMS, torque RMS.]
 
 % [TODO-FIGURE: robot posture snapshots at commanded heights
 %  0.40, 0.55, 0.65, 0.69 m showing variable-height balancing]
 
 \subsection{Push Robustness}
-% [TODO-FIGURE: push_sweep degradation curve: survival_rate vs. push_magnitude,
-%  comparing RL policy and LQR baseline.
-%  Run: python scripts/eval_balance.py --scenarios push_sweep --num-episodes 20]
+% [TODO-FIGURE: push-sweep degradation curve: survival rate vs.\ push magnitude
+%  (8 points, 20--200 N), comparing RL policy (3-seed mean ± std) and LQR
+%  baseline. Indicate the maximum recoverable push force for each controller.]
 % [TODO-RESULT: max_recoverable_push_n for RL policy vs. LQR baseline
 %  from push_recovery scenario]
 \textit{[TODO-FIGURE: push\_sweep degradation curve;
 TODO-RESULT: max recoverable push force]}
 
 \subsection{Friction Robustness}
-% [TODO-FIGURE: friction_sweep degradation curve: survival_rate vs. friction_scale,
-%  comparing RL policy and LQR baseline.
-%  Run: python scripts/eval_balance.py --scenarios friction_sweep --num-episodes 20]
+% [TODO-FIGURE: friction-sweep degradation curve: survival rate vs.\ friction
+%  multiplier (6 points, 0.3×--1.8×), comparing RL policy (3-seed mean ± std)
+%  and LQR baseline.]
 \textit{[TODO-FIGURE: friction\_sweep degradation curve]}
 
 \subsection{Ablation: Natural Pose Reward}
-% [TODO-ABLATION: train two policies---one with r_nat weight=0.4 (baseline)
-%  and one with r_nat weight=0 (ablation).
-%  Report: height_rmse_m and pitch_rms_deg at h_cmd=0.40m (deep crouch)
-%  where posture degeneracy is most likely.
-%  Also report convergence speed (steps to reach r_thr=0.75).
-%  This ablation directly validates the main methodological contribution.]
+% [TODO-ABLATION: compare full model (natural pose weight 0.4) against
+%  a variant with natural pose reward disabled. Report height RMSE and
+%  pitch RMS at the deepest commanded height (h=0.40 m), where posture
+%  degeneracy is most likely. Also report convergence speed (steps to
+%  reach the curriculum advancement threshold). This ablation directly
+%  validates the primary methodological contribution.]
 \textit{[TODO-ABLATION: natural pose reward ($r_{\mathrm{nat}}$)
 ablation: weight=0.4 vs.\ weight=0]}
 
 \subsection{Ablation: Observation Design}
-% [TODO-ABLATION: compare lin_vel_mode=clean vs. noisy vs. disabled
-%  to assess velocity-estimate robustness. Only run if experiments
-%  are available; do not report this ablation if not conducted.]
-\textit{[TODO-ABLATION: lin\_vel\_mode comparison (clean/noisy/disabled)
---- only report if experiment is run]}
+% [TODO-ABLATION: compare policies trained with simulator-exact velocity,
+%  noisy velocity, and no velocity in the observation, to assess
+%  sensitivity to the quality of the linear velocity estimate.
+%  Only report if experiment is conducted.]
+\textit{[TODO-ABLATION: velocity-estimate robustness (exact / noisy / absent)
+--- only report if experiment is conducted]}
 
 % ============================================================
 \section{Discussion and Limitations}
@@ -1134,13 +1120,12 @@ angular velocity over many steps to sense accumulated yaw drift.
     sim-to-real preparation but have not been hardware-validated.
 
     \item \textbf{Multi-seed training planned, not yet complete.}
-    The evaluation protocol uses 3 independent seeds (42, 113, 999),
-    each producing a separate training run stored under
-    \texttt{outputs/balance/rl/seed\{42,113,999\}/}.
+    Final reported metrics are to be aggregated over three independent
+    training runs (seeds 42, 113, and 999), each trained from scratch.
     Quantitative results will report mean $\pm$ std across all three seeds.
     % [TODO-CLAIM: report multi-seed variance before asserting
-    %  statistical significance of any comparison; seeds 42/113/999
-    %  must all complete training before filling result tables]
+    %  statistical significance of any comparison; all three seeds
+    %  must complete training before filling result tables]
 
     \item \textbf{LQR at large disturbances.}
     The LQR is only valid near the nominal height and small lean angles.
@@ -1185,7 +1170,8 @@ Quantitative results will be reported in a future revision.
 
 Future work:
 (1) complete training and report variable-height balance results
-with ablations over $r_{\mathrm{nat}}$ and \texttt{lin\_vel\_mode};
+with ablations over the natural pose reward weight and
+the quality of the linear velocity estimate;
 (2) train and evaluate \texttt{stand\_up} and \texttt{balance\_robust};
 (3) multi-seed statistical validation;
 (4) quantitative RL vs.\ LQR comparison across all ten scenarios; and
