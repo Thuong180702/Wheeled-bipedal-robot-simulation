@@ -167,6 +167,25 @@ def compute_gae(
     return advantages, returns
 
 
+def _compute_training_fps(
+    *,
+    steps_per_update: int,
+    updates_since_timer: int,
+    elapsed_total_s: float,
+) -> float:
+    """Tính FPS cho phiên train hiện tại (không phụ thuộc bước đã resume).
+
+    FPS được định nghĩa theo số bước đã xử lý kể từ khi bắt đầu vòng lặp train
+    của phiên hiện tại (sau warmup update), tránh phình sai khi ``global_step``
+    đã lớn từ checkpoint cũ.
+    """
+    if updates_since_timer <= 0 or steps_per_update <= 0:
+        return 0.0
+
+    steps_done = float(steps_per_update * updates_since_timer)
+    return steps_done / max(float(elapsed_total_s), 1e-6)
+
+
 # ============================================================
 # PPO Trainer
 # ============================================================
@@ -285,7 +304,11 @@ class PPOTrainer:
         # Entropy bonus
         entropy_loss = -jnp.mean(entropy)
 
-        total_loss = policy_loss + self.value_coeff * value_loss + self.entropy_coeff * entropy_loss
+        total_loss = (
+            policy_loss
+            + self.value_coeff * value_loss
+            + self.entropy_coeff * entropy_loss
+        )
 
         metrics = {
             "loss/total": total_loss,
@@ -293,7 +316,9 @@ class PPOTrainer:
             "loss/value": value_loss,
             "loss/entropy": -entropy_loss,
             "policy/clip_fraction": jnp.mean(jnp.abs(ratio - 1.0) > self.clip_epsilon),
-            "policy/approx_kl": jnp.mean(0.5 * jnp.square(log_prob - batch.old_log_prob)),
+            "policy/approx_kl": jnp.mean(
+                0.5 * jnp.square(log_prob - batch.old_log_prob)
+            ),
         }
 
         return total_loss, metrics
@@ -493,7 +518,9 @@ class PPOTrainer:
 
             # Check fallen flag if available, otherwise use done-before-time-limit
             if "is_fallen" in next_state.info:
-                fallen_np = list(jax.device_get(jnp.asarray(next_state.info["is_fallen"])))
+                fallen_np = list(
+                    jax.device_get(jnp.asarray(next_state.info["is_fallen"]))
+                )
             else:
                 fallen_np = dones_np  # conservative fallback
 
@@ -516,7 +543,9 @@ class PPOTrainer:
         n = len(episode_returns)
         mean_ret = float(sum(episode_returns) / n)
         std_ret = (
-            float((sum((r - mean_ret) ** 2 for r in episode_returns) / n) ** 0.5) if n > 1 else 0.0
+            float((sum((r - mean_ret) ** 2 for r in episode_returns) / n) ** 0.5)
+            if n > 1
+            else 0.0
         )
         fall_rate = float(sum(episode_falls) / n)
 
@@ -645,7 +674,9 @@ class PPOTrainer:
                 viewer = LiveTrainingViewer(self.env.mj_model, title="PPO Training")
                 # Không gọi start() — sẽ warning vì không chạy trên main thread
                 print("  ⚠️  live_view=True nhưng viewer cần chạy trên main thread.")
-                print("     Hãy dùng:  python scripts/train.py single --stage balance --live-view")
+                print(
+                    "     Hãy dùng:  python scripts/train.py single --stage balance --live-view"
+                )
                 viewer = None
             except Exception as e:
                 print(f"  ⚠️  Không mở được live viewer: {e}")
@@ -657,9 +688,13 @@ class PPOTrainer:
         backend = jax.default_backend()
         is_cpu = backend == "cpu"
         if is_cpu and self.num_envs > 256:
-            print(f"  ⚠️  CPU + num_envs={self.num_envs}: JIT compile sẽ rất lâu (10-20 phút)!")
+            print(
+                f"  ⚠️  CPU + num_envs={self.num_envs}: JIT compile sẽ rất lâu (10-20 phút)!"
+            )
             print("      Trên CPU nên dùng --num-envs 64~128 (JIT ~1-2 phút)")
-            print("      Tăng num_envs trên CPU không nhanh hơn: mỗi update lâu hơn tỉ lệ thuận")
+            print(
+                "      Tăng num_envs trên CPU không nhanh hơn: mỗi update lâu hơn tỉ lệ thuận"
+            )
             print("      GPU (jax[cuda12]) mới thật sự song song 4096 envs")
             print()
 
@@ -704,7 +739,9 @@ class PPOTrainer:
 
         # Set curriculum_min_height cho tất cả envs
         if curriculum_enabled and "curriculum_min_height" in env_state.info:
-            new_min_arr = jnp.full_like(env_state.info["curriculum_min_height"], current_min_h)
+            new_min_arr = jnp.full_like(
+                env_state.info["curriculum_min_height"], current_min_h
+            )
             env_state = env_state._replace(
                 info={**env_state.info, "curriculum_min_height": new_min_arr}
             )
@@ -753,7 +790,10 @@ class PPOTrainer:
 
         # Warmup update — un-normalize để lấy raw obs cho obs_rms
         # (transitions.obs đã normalized trong _rollout, cần raw data cho Welford)
-        raw_obs = warmup_transitions.obs * jnp.sqrt(self.obs_rms.var + 1e-8) + self.obs_rms.mean
+        raw_obs = (
+            warmup_transitions.obs * jnp.sqrt(self.obs_rms.var + 1e-8)
+            + self.obs_rms.mean
+        )
         all_obs = raw_obs.reshape(-1, self.env.obs_size)
         self.obs_rms = update_running_mean_std(self.obs_rms, all_obs)
         last_obs = normalize_obs(env_state.obs, self.obs_rms)
@@ -806,13 +846,17 @@ class PPOTrainer:
         # Minimum improvement required before a triggered save fires.
         # Prevents noise-driven writes when the metric stagnates near a plateau.
         _EVAL_CKPT_MIN_DELTA: float = 1e-3  # noqa: N806
-        _TRAIN_CKPT_MIN_DELTA: float = 1e-2  # noqa: N806  (legacy use_eval_signal=False path)
+        _TRAIN_CKPT_MIN_DELTA: float = (
+            1e-2  # noqa: N806  (legacy use_eval_signal=False path)
+        )
         # Minimum evals that must pass between triggered saves (both paths).
         # Prevents rapid-fire saves during a sustained improvement phase.
         # Configurable via curriculum.ckpt_cooldown_evals; default 5.
         # Cooldown is NOT persisted — resets on every (re)start.
         # After resume, first triggered save is always eligible (safe: never misses peaks).
-        _EVAL_CKPT_COOLDOWN: int = int(curriculum_cfg.get("ckpt_cooldown_evals", 5))  # noqa: N806
+        _EVAL_CKPT_COOLDOWN: int = int(
+            curriculum_cfg.get("ckpt_cooldown_evals", 5)
+        )  # noqa: N806
         _TRAIN_CKPT_COOLDOWN: int = _EVAL_CKPT_COOLDOWN  # noqa: N806
         # Tracker values — restored from checkpoint metadata on resume.
         # Fall back to -inf for old checkpoints without these fields
@@ -842,10 +886,14 @@ class PPOTrainer:
             for update in range(1, num_updates):  # Bắt đầu từ 1 (đã warmup update 0)
                 # Kiểm tra stop flag (Ctrl+C hoặc viewer đóng)
                 if self._stop_requested:
-                    print(f"\n  🛑 Training dừng theo yêu cầu tại update {update}/{num_updates}")
+                    print(
+                        f"\n  🛑 Training dừng theo yêu cầu tại update {update}/{num_updates}"
+                    )
                     break
                 if viewer is not None and not viewer.is_running:
-                    print(f"\n  🛑 Viewer đã đóng, dừng training tại update {update}/{num_updates}")
+                    print(
+                        f"\n  🛑 Viewer đã đóng, dừng training tại update {update}/{num_updates}"
+                    )
                     break
 
                 update_start = time.time()
@@ -863,7 +911,10 @@ class PPOTrainer:
 
                 # Cập nhật observation normalization bằng RAW obs
                 # (transitions.obs đã normalized, un-normalize trước khi update)
-                raw_obs = transitions.obs * jnp.sqrt(self.obs_rms.var + 1e-8) + self.obs_rms.mean
+                raw_obs = (
+                    transitions.obs * jnp.sqrt(self.obs_rms.var + 1e-8)
+                    + self.obs_rms.mean
+                )
                 all_obs = raw_obs.reshape(-1, self.env.obs_size)
                 self.obs_rms = update_running_mean_std(self.obs_rms, all_obs)
 
@@ -892,7 +943,11 @@ class PPOTrainer:
                 if len(_train_rewards) > _TRAIN_WINDOW:
                     _train_rewards.pop(0)
                 elapsed_total = time.time() - start_time
-                fps = global_step / max(elapsed_total, 1)
+                fps = _compute_training_fps(
+                    steps_per_update=steps_per_update,
+                    updates_since_timer=update,
+                    elapsed_total_s=elapsed_total,
+                )
                 eta_s = (num_updates - update) * update_elapsed
                 eta_m = eta_s / 60
 
@@ -937,8 +992,12 @@ class PPOTrainer:
                         # Log the gate values so any run's JSONL is self-contained:
                         # reward_threshold = threshold_ratio × max_reward_possible (per step).
                         # Required to reconstruct why curriculum did/did not advance.
-                        log_metrics["curriculum/reward_threshold"] = float(reward_threshold)
-                        log_metrics["curriculum/max_reward_possible"] = float(max_reward_possible)
+                        log_metrics["curriculum/reward_threshold"] = float(
+                            reward_threshold
+                        )
+                        log_metrics["curriculum/max_reward_possible"] = float(
+                            max_reward_possible
+                        )
 
                     if self.logger:
                         self.logger.set_step(global_step)
@@ -979,8 +1038,12 @@ class PPOTrainer:
                                 self.logger.log_dict(
                                     {
                                         "curriculum/eval_per_step": _eval_per_step,
-                                        "curriculum/eval_success_rate": _ceval["eval_success_rate"],
-                                        "curriculum/eval_fall_rate": _ceval["eval_fall_rate"],
+                                        "curriculum/eval_success_rate": _ceval[
+                                            "eval_success_rate"
+                                        ],
+                                        "curriculum/eval_fall_rate": _ceval[
+                                            "eval_fall_rate"
+                                        ],
                                     }
                                 )
                             print(
@@ -1000,7 +1063,8 @@ class PPOTrainer:
                             _evals_since_per_step_save += 1
                             _evals_since_success_save += 1
                             if (
-                                _eval_per_step > _best_eval_per_step + _EVAL_CKPT_MIN_DELTA
+                                _eval_per_step
+                                > _best_eval_per_step + _EVAL_CKPT_MIN_DELTA
                                 and _evals_since_per_step_save >= _EVAL_CKPT_COOLDOWN
                             ):
                                 _best_eval_per_step = _eval_per_step
@@ -1018,7 +1082,9 @@ class PPOTrainer:
                                     best_eval_success=_best_eval_success,
                                     best_train_reward=_best_train_reward,
                                 )
-                                _stable = os.path.join(checkpoint_dir, "best_eval_per_step")
+                                _stable = os.path.join(
+                                    checkpoint_dir, "best_eval_per_step"
+                                )
                                 os.makedirs(_stable, exist_ok=True)
                                 shutil.copy2(
                                     os.path.join(_v, "checkpoint.pkl"),
@@ -1049,7 +1115,9 @@ class PPOTrainer:
                                     best_eval_success=_best_eval_success,
                                     best_train_reward=_best_train_reward,
                                 )
-                                _stable = os.path.join(checkpoint_dir, "best_eval_success")
+                                _stable = os.path.join(
+                                    checkpoint_dir, "best_eval_success"
+                                )
                                 os.makedirs(_stable, exist_ok=True)
                                 shutil.copy2(
                                     os.path.join(_v, "checkpoint.pkl"),
@@ -1123,7 +1191,9 @@ class PPOTrainer:
                                     best_eval_success=_best_eval_success,
                                     best_train_reward=_best_train_reward,
                                 )
-                                _stable = os.path.join(checkpoint_dir, "best_train_reward")
+                                _stable = os.path.join(
+                                    checkpoint_dir, "best_train_reward"
+                                )
                                 os.makedirs(_stable, exist_ok=True)
                                 shutil.copy2(
                                     os.path.join(_v, "checkpoint.pkl"),
@@ -1226,7 +1296,9 @@ class PPOTrainer:
 
         # Compute train_reward_mean (rolling window of step-level rewards, NOT eval)
         train_reward_mean = (
-            float(sum(_train_rewards) / len(_train_rewards)) if _train_rewards else best_reward
+            float(sum(_train_rewards) / len(_train_rewards))
+            if _train_rewards
+            else best_reward
         )
 
         # ── Real evaluation pass ──────────────────────────────────────────────
@@ -1357,12 +1429,20 @@ class PPOTrainer:
         self._resumed_curriculum_min = checkpoint.get("curriculum_min_height", None)
         # Eval-triggered tracker values — absent in older checkpoints; fall back
         # to -inf so the first post-resume eval saves unconditionally (safe).
-        self._resumed_best_eval_per_step = checkpoint.get("best_eval_per_step", float("-inf"))
-        self._resumed_best_eval_success = checkpoint.get("best_eval_success", float("-inf"))
-        self._resumed_best_train_reward = checkpoint.get("best_train_reward", float("-inf"))
+        self._resumed_best_eval_per_step = checkpoint.get(
+            "best_eval_per_step", float("-inf")
+        )
+        self._resumed_best_eval_success = checkpoint.get(
+            "best_eval_success", float("-inf")
+        )
+        self._resumed_best_train_reward = checkpoint.get(
+            "best_train_reward", float("-inf")
+        )
         print(
             f"  \U0001f4c2 Checkpoint: step={self._resumed_global_step:,},"
             f" best_reward={self._resumed_best_reward:.4f}"
         )
         if self._resumed_curriculum_min is not None:
-            print(f"  \U0001f4c2 Curriculum min_height: {self._resumed_curriculum_min:.2f}")
+            print(
+                f"  \U0001f4c2 Curriculum min_height: {self._resumed_curriculum_min:.2f}"
+            )

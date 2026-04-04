@@ -41,7 +41,12 @@ from wheeled_biped.rewards.reward_functions import (
 from wheeled_biped.sim.domain_randomization import randomize_mjx_model
 from wheeled_biped.sim.low_level_control import pid_control
 from wheeled_biped.sim.push_disturbance import apply_push_disturbance
-from wheeled_biped.utils.math_utils import quat_conjugate, quat_rotate, quat_to_euler, wrap_angle
+from wheeled_biped.utils.math_utils import (
+    quat_conjugate,
+    quat_rotate,
+    quat_to_euler,
+    wrap_angle,
+)
 
 
 class BalanceEnv(WheeledBipedEnv):
@@ -93,7 +98,9 @@ class BalanceEnv(WheeledBipedEnv):
         # Trainer sẽ quản lý curriculum_min_height dựa trên reward threshold
         # Env chỉ lưu initial_min_height để dùng làm giá trị mặc định ban đầu
         task_cfg = self.config.get("task", {})
-        self._initial_min_height = float(task_cfg.get("initial_min_height", self.MIN_HEIGHT_CMD))
+        self._initial_min_height = float(
+            task_cfg.get("initial_min_height", self.MIN_HEIGHT_CMD)
+        )
 
         # Push disturbance + per-episode model DR config
         dr_cfg = self.config.get("domain_randomization", {})
@@ -131,7 +138,9 @@ class BalanceEnv(WheeledBipedEnv):
 
         # Wheel joint dùng velocity target thay vì position target
         wheel_indices = [i for i, n in enumerate(self.JOINT_NAMES) if "wheel" in n]
-        wheel_mask = [1.0 if i in wheel_indices else 0.0 for i in range(self.num_actions)]
+        wheel_mask = [
+            1.0 if i in wheel_indices else 0.0 for i in range(self.num_actions)
+        ]
         self._wheel_mask = jnp.array(wheel_mask, dtype=jnp.float32)
 
         # PID gains (vector theo 10 joints), có fallback an toàn
@@ -162,7 +171,9 @@ class BalanceEnv(WheeledBipedEnv):
         # Lấy torso body_id từ mj_model
         import mujoco
 
-        self._torso_id = mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso")
+        self._torso_id = mujoco.mj_name2id(
+            self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso"
+        )
 
     def _pid_low_level_ctrl(
         self,
@@ -205,7 +216,9 @@ class BalanceEnv(WheeledBipedEnv):
         # Per-episode model DR (mass/friction/damping) — widened ranges in balance.yaml
         if self._dr_enabled:
             rng, dr_key = jax.random.split(rng)
-            dr_mjx_model, _ = randomize_mjx_model(self.mjx_model, dr_key, self._dr_config)
+            dr_mjx_model, _ = randomize_mjx_model(
+                self.mjx_model, dr_key, self._dr_config
+            )
         else:
             dr_mjx_model = self.mjx_model
 
@@ -347,7 +360,9 @@ class BalanceEnv(WheeledBipedEnv):
             data = mjx.step(dr_mjx_model, data)
             return data, None
 
-        mjx_data, _ = jax.lax.scan(physics_step, mjx_data, None, length=self._n_substeps)
+        mjx_data, _ = jax.lax.scan(
+            physics_step, mjx_data, None, length=self._n_substeps
+        )
 
         # Advance obs noise RNG and extract noisy base obs (39 dims)
         noise_key, new_noise_rng = jax.random.split(state.info["noise_rng"])
@@ -478,7 +493,9 @@ class BalanceEnv(WheeledBipedEnv):
 
         components = {
             # Thân nằm ngang song song mặt đất (phạt roll + pitch riêng)
-            "body_level": reward_body_level(torso_quat, sigma_roll=0.15, sigma_pitch=0.15),
+            "body_level": reward_body_level(
+                torso_quat, sigma_roll=0.15, sigma_pitch=0.15
+            ),
             # Giữ chiều cao theo lệnh
             "height": reward_height(
                 torso_height, height_command, sigma=0.25
@@ -488,7 +505,7 @@ class BalanceEnv(WheeledBipedEnv):
             # Chân vuông góc mặt đất (hip_roll ≈ 0)
             "legs_vertical": reward_legs_vertical(joint_pos, sigma=0.15),
             # 2 chân đối xứng
-            "symmetry": reward_leg_symmetry(joint_pos, sigma=0.5),
+            "symmetry": reward_leg_symmetry(joint_pos, sigma=0.3),
             # Đứng yên, không di chuyển — công thức tuyến tính để gradient còn tác dụng
             # ngay cả khi robot đang drift nhanh (exp_kernel sigma=0.2 → 0 tại >0.5 m/s)
             "no_motion": reward_no_motion(base_lin_vel, sigma=0.2),
@@ -516,7 +533,7 @@ class BalanceEnv(WheeledBipedEnv):
             # Giữ hướng ban đầu — sigma=0.5 rad: gradient tới ~80° (thay vì 12° với sigma=0.1)
             "heading": reward_heading(torso_quat, initial_yaw, sigma=0.5),
             # Tư thế khớp tự nhiên — hp/kn phù hợp với chiều cao mục tiêu
-            "natural_pose": reward_natural_pose(joint_pos, height_command, sigma=0.8),
+            "natural_pose": reward_natural_pose(joint_pos, height_command, sigma=0.5),
         }
 
         return compute_total_reward(components, self._reward_weights)
