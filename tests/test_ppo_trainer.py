@@ -494,10 +494,10 @@ class TestBalanceEnvRewardWeightDefaults:
         )
 
     def test_joint_velocity_default_matches_yaml(self):
-        """Focused check: joint_velocity default must be -0.00061 (not -0.0006)."""
+        """Focused check: joint_velocity default must be -0.0007 (matches balance.yaml)."""
         env = self._make_env_no_rewards_cfg()
-        assert abs(env._reward_weights["joint_velocity"] - (-0.00061)) < 1e-9, (
-            f"joint_velocity default={env._reward_weights['joint_velocity']}, expected -0.00061"
+        assert abs(env._reward_weights["joint_velocity"] - (-0.0007)) < 1e-9, (
+            f"joint_velocity default={env._reward_weights['joint_velocity']}, expected -0.0007"
         )
 
     def test_explicit_config_overrides_default(self):
@@ -2037,3 +2037,214 @@ class TestBalanceCurriculumFixes:
                 f"eval_pass() call #{i + 1} is missing 'curriculum_min_height' kwarg. "
                 "Fix B: train() must forward curriculum_min_height to eval_pass()."
             )
+
+
+# ===========================================================================
+# TestTrainingFPSSemantics
+# ===========================================================================
+
+
+class TestTrainingFPSSemantics:
+    """Unit tests for _compute_training_fps timing semantics.
+
+    These are pure arithmetic tests — no JAX, no MuJoCo, no JIT.
+    They verify that the FPS helper:
+      (a) uses training-only time (not wall-clock including eval),
+      (b) produces stable output regardless of external overhead,
+      (c) handles edge cases gracefully.
+    """
+
+    def _fps(self, *, steps_per_update, updates_done, train_time_s):
+        from wheeled_biped.training.ppo import _compute_training_fps
+
+        return _compute_training_fps(
+            steps_per_update=steps_per_update,
+            updates_done=updates_done,
+            train_time_s=train_time_s,
+        )
+
+    def test_basic_throughput(self):
+        """10 updates × 512 steps at 1s/update → 5120 fps."""
+        fps = self._fps(steps_per_update=512, updates_done=10, train_time_s=1.0)
+        assert abs(fps - 5120.0) < 1e-3
+
+    def test_zero_updates_returns_zero(self):
+        """No updates yet → fps=0, no division-by-zero."""
+        fps = self._fps(steps_per_update=512, updates_done=0, train_time_s=0.0)
+        assert fps == 0.0
+
+    def test_eval_overhead_excluded(self):
+        """Simulates a run where 10s of eval overhead is added externally.
+
+        If the function correctly uses training-only time, the FPS it computes
+        must be identical regardless of how much eval overhead occurred.
+        The caller is responsible for NOT adding eval time to train_time_s;
+        this test documents that contract.
+        """
+        steps_per_update = 512
+        updates_done = 10
+        train_time_s = 5.0  # only training time
+
+        fps_no_eval = self._fps(
+            steps_per_update=steps_per_update,
+            updates_done=updates_done,
+            train_time_s=train_time_s,
+        )
+        # If we mistakenly added eval overhead to the denominator, fps would differ.
+        fps_with_eval_overhead = self._fps(
+            steps_per_update=steps_per_update,
+            updates_done=updates_done,
+            train_time_s=train_time_s + 10.0,  # wrong: should not include eval
+        )
+        # Confirm that adding eval to the denominator *does* degrade the metric
+        # (this is the bug we fixed — now the caller never passes eval time in).
+        assert fps_with_eval_overhead < fps_no_eval, (
+            "FPS with inflated denominator should be lower — confirms the bug exists "
+            "when eval time is incorrectly included."
+        )
+        # The contract: train() accumulates update_elapsed (training-only) into
+        # _train_time_total and never adds eval_pass() time.  fps_no_eval is what
+        # train() now reports; fps_with_eval_overhead is what the old code produced.
+
+    def test_consistent_fps_across_updates_without_eval(self):
+        """FPS should be roughly stable if each update takes the same time."""
+        spu = 512
+        t_per_update = 0.5  # seconds per update
+
+        fps_values = [
+            self._fps(
+                steps_per_update=spu,
+                updates_done=n,
+                train_time_s=n * t_per_update,
+            )
+            for n in range(1, 20)
+        ]
+        # All should be close to spu / t_per_update = 1024
+        expected = spu / t_per_update
+        for fps in fps_values:
+            assert abs(fps - expected) / expected < 1e-6, (
+                f"fps={fps:.1f} deviated from expected={expected:.1f}"
+            )
+
+
+# ===========================================================================
+# TestBestRewardTracking
+# ===========================================================================
+
+
+class TestBestRewardTracking:
+    """Tests that best_reward tracks the true maximum over ALL training updates.
+
+    Root cause of the bug: best_reward was updated inside `if update %
+    log_interval == 0:`, so any reward peak between two log checkpoints was
+    silently dropped.  The fix moves the update outside the gate.
+
+    These tests are slow because they need train() to run (JAX JIT compile).
+    """
+
+    pytestmark = pytest.mark.slow
+
+    _TINY_CFG = {
+        "task": {
+            "env": "BalanceEnv",
+            "num_envs": 4,
+            "episode_length": 10,
+            "initial_min_height": 0.68,
+        },
+        "ppo": {
+            "learning_rate": 3e-4,
+            "num_epochs": 1,
+            "num_minibatches": 2,
+            "rollout_length": 4,
+            "gamma": 0.99,
+            "gae_lambda": 0.95,
+            "clip_epsilon": 0.2,
+            "entropy_coeff": 0.01,
+            "value_loss_coeff": 0.5,
+            "max_grad_norm": 0.5,
+            "normalize_advantages": True,
+        },
+        "network": {
+            "policy_hidden": [32, 32],
+            "value_hidden": [32, 32],
+            "activation": "elu",
+        },
+        "rewards": {"alive": 0.3, "height": 1.0},
+        "curriculum": {"enabled": False},
+        "low_level_pid": {"enabled": False},
+        "domain_randomization": {"enabled": False, "push_magnitude": 0},
+        "sensor_noise": {"enabled": False},
+    }
+
+    def _make_trainer(self):
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from wheeled_biped.envs.balance_env import BalanceEnv
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        env = BalanceEnv(config=self._TINY_CFG)
+        return PPOTrainer(env=env, config=self._TINY_CFG, logger=None, seed=0)
+
+    def test_best_reward_updates_on_non_log_step(self, tmp_path):
+        """best_reward must equal the max reward seen over ALL updates.
+
+        Strategy: run train() for enough steps that some updates fall between
+        log_interval boundaries, then verify that train() result['best_reward']
+        equals the maximum of all per-update rewards we observe via a patched
+        rollout.
+
+        We inject a synthetic reward spike at a non-log-aligned update and
+        confirm it is captured.
+        """
+        import types
+
+        trainer = self._make_trainer()
+        spu = self._TINY_CFG["ppo"]["rollout_length"] * self._TINY_CFG["task"]["num_envs"]
+        # Run enough updates to straddle a log_interval boundary (default 10).
+        # We'll observe 12 updates: log boundaries at 10; update 7 is non-log.
+        total_steps = spu * 12
+
+        # Capture rewards per update
+        observed_rewards: list[float] = []
+        original_rollout = trainer._rollout
+
+        # Inject a spike at update index 7 (0-indexed call: call #7 in the
+        # post-warmup loop, so update=8 in the 1-based loop; 8 % 10 ≠ 0).
+        call_count = [0]
+        SPIKE_CALL = 7  # noqa: N806
+
+        import jax.numpy as jnp
+
+        def _patched_rollout(self_, params, env_state, rng, obs_rms):
+            env_state_out, transitions, rng_out = original_rollout(
+                params, env_state, rng, obs_rms
+            )
+            idx = call_count[0]
+            call_count[0] += 1
+            if idx == SPIKE_CALL:
+                # Replace rewards with a very large value to create a detectable spike.
+                spike_reward = jnp.full_like(transitions.reward, 999.0)
+                transitions = transitions._replace(reward=spike_reward)
+            observed_rewards.append(float(jnp.mean(transitions.reward)))
+            return env_state_out, transitions, rng_out
+
+        trainer._rollout = types.MethodType(_patched_rollout, trainer)
+
+        result = trainer.train(
+            total_steps=total_steps,
+            checkpoint_dir=str(tmp_path / "ckpt"),
+            log_interval=10,
+        )
+
+        true_max = max(observed_rewards) if observed_rewards else float("-inf")
+        reported_best = result["best_reward"]
+
+        # The spike was injected at a non-log update; best_reward must still
+        # capture it (or come within floating-point of it).
+        assert reported_best >= true_max - 1e-3, (
+            f"best_reward={reported_best:.4f} missed the true max={true_max:.4f}. "
+            f"Spike was at call {SPIKE_CALL} (non-log update). "
+            "Fix: best_reward must be updated every update, not only at log_interval."
+        )

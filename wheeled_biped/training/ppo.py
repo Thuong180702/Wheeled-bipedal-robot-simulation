@@ -170,20 +170,26 @@ def compute_gae(
 def _compute_training_fps(
     *,
     steps_per_update: int,
-    updates_since_timer: int,
-    elapsed_total_s: float,
+    updates_done: int,
+    train_time_s: float,
 ) -> float:
-    """Tính FPS cho phiên train hiện tại (không phụ thuộc bước đã resume).
+    """Compute training-only throughput (env-steps per second).
 
-    FPS được định nghĩa theo số bước đã xử lý kể từ khi bắt đầu vòng lặp train
-    của phiên hiện tại (sau warmup update), tránh phình sai khi ``global_step``
-    đã lớn từ checkpoint cũ.
+    Uses only the accumulated wall time spent on rollout + PPO updates
+    (``train_time_s``).  Curriculum eval overhead, checkpoint I/O, and any
+    other non-training work are *excluded* from the denominator so that a
+    brief eval pass does not cause a misleading FPS drop on subsequent updates.
+
+    Args:
+        steps_per_update: env-steps collected per rollout (num_envs × rollout_length).
+        updates_done: number of rollout+update iterations completed so far.
+        train_time_s: cumulative wall-clock seconds spent on training only.
     """
-    if updates_since_timer <= 0 or steps_per_update <= 0:
+    if updates_done <= 0 or steps_per_update <= 0:
         return 0.0
 
-    steps_done = float(steps_per_update * updates_since_timer)
-    return steps_done / max(float(elapsed_total_s), 1e-6)
+    steps_done = float(steps_per_update * updates_done)
+    return steps_done / max(float(train_time_s), 1e-6)
 
 
 # ============================================================
@@ -836,6 +842,11 @@ class PPOTrainer:
 
         global_step = resumed_step + steps_per_update  # Tính cả bước đã resume
         start_time = time.time()
+        # Cumulative wall time spent on rollout + PPO update only.
+        # Curriculum eval_pass(), checkpoint I/O, and print overhead are NOT
+        # added here so that FPS reflects true training throughput and does not
+        # drop misleadingly in the update immediately after an eval.
+        _train_time_total: float = 0.0
         best_reward = self._resumed_best_reward  # Giữ best_reward từ lần trước
         # train_reward_mean: rolling mean of per-step avg_rewards during training.
         # This is a TRAINING metric — used for logging only, NOT for curriculum gating.
@@ -934,7 +945,11 @@ class PPOTrainer:
                 jax.block_until_ready(self.params)
 
                 global_step += steps_per_update
+                # update_elapsed: wall time for this rollout + PPO update only.
+                # Measured before eval_pass() runs (eval is triggered later in
+                # this same iteration), so it genuinely excludes eval overhead.
                 update_elapsed = time.time() - update_start
+                _train_time_total += update_elapsed
 
                 # Progress mỗi update (để người dùng biết còn chạy)
                 avg_reward = float(jnp.mean(transitions.reward))
@@ -942,12 +957,15 @@ class PPOTrainer:
                 _train_rewards.append(avg_reward)
                 if len(_train_rewards) > _TRAIN_WINDOW:
                     _train_rewards.pop(0)
-                elapsed_total = time.time() - start_time
+                # FPS = training-only throughput; excludes eval/checkpoint overhead.
+                # Stays stable after eval updates — denominator never inflates from eval.
                 fps = _compute_training_fps(
                     steps_per_update=steps_per_update,
-                    updates_since_timer=update,
-                    elapsed_total_s=elapsed_total,
+                    updates_done=update,
+                    train_time_s=_train_time_total,
                 )
+                # ETA uses training-only update time; add ~(total_evals × eval_overhead)
+                # mentally if curriculum eval cadence is high.
                 eta_s = (num_updates - update) * update_elapsed
                 eta_m = eta_s / 60
 
@@ -1003,9 +1021,13 @@ class PPOTrainer:
                         self.logger.set_step(global_step)
                         self.logger.log_dict(log_metrics)
 
-                    # Save best
-                    if avg_reward > best_reward:
-                        best_reward = avg_reward
+                # best_reward tracks the true maximum over ALL updates, not just
+                # logged ones.  Keeping it outside the log_interval gate ensures
+                # that a peak reward occurring between two log checkpoints is never
+                # silently dropped.  (Bug: previously inside the gate, so only
+                # log-interval-aligned updates were checked.)
+                if avg_reward > best_reward:
+                    best_reward = avg_reward
 
                 # ====== Curriculum advancement ======
                 if curriculum_enabled and current_min_h > final_min_h:
