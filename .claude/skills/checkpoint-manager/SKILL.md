@@ -1,11 +1,13 @@
 ---
 name: checkpoint-manager
 description: >
-  Dùng skill này để liệt kê, kiểm tra, so sánh và chọn checkpoint tốt nhất
-  trong wheeled biped project. Biết cấu trúc outputs/<stage>/rl/seed<N>/checkpoints/,
-  đọc checkpoint.pkl metadata, kết hợp với JSONL log để tìm metrics tại mỗi step.
-  Output: bảng checkpoint × metrics, gợi ý checkpoint nào dùng để resume/eval/paper.
-  Không thay thế eval-analyzer — chỉ quản lý và so sánh checkpoints có sẵn.
+  LUÔN dùng skill này khi user hỏi "checkpoint nào tốt nhất?", "tôi có những
+  checkpoint nào?", "resume từ đâu?", "seed nào đang ở step bao nhiêu?", hay
+  cần tìm checkpoint cụ thể trong wheeled biped project. Biết cấu trúc
+  outputs/STAGE/rl/seedN/checkpoints/, đọc checkpoint.pkl metadata không load
+  params vào RAM, kết hợp JSONL log để lấy metrics theo step. Output: bảng
+  checkpoint x metrics, gợi ý checkpoint tốt nhất để resume/eval/paper.
+  Dùng trước eval-analyzer khi chưa biết checkpoint nào cần review.
 license: Project-internal skill
 ---
 
@@ -14,6 +16,7 @@ license: Project-internal skill
 ## Tổng quan
 
 Skill này giải quyết các câu hỏi:
+
 - "Tôi có những checkpoint nào?"
 - "Checkpoint nào tốt nhất để resume?"
 - "Checkpoint nào nên dùng cho paper?"
@@ -399,6 +402,7 @@ for info in infos:
 ```
 
 Mapping phases:
+
 - `curriculum_min_height >= 0.65` → **Phase A** (levels 1–5): narrow band `[0.65, 0.70]`
 - `0.50 <= curriculum_min_height < 0.65` → **Phase B** (levels 6–20): widening
 - `curriculum_min_height < 0.50` → **Phase C** (levels 21–29): full range `[0.40, 0.70]`

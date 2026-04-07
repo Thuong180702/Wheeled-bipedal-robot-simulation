@@ -1,12 +1,12 @@
 ---
 name: paper-updater
 description: >
-  Dùng skill này để cập nhật paper/main.tex khi có kết quả training/eval mới.
-  Biết cách tìm và điền tất cả placeholder [TODO], [TODO-RESULT], [TODO-TABLE],
-  [TODO-FIGURE], [TODO-CLAIM], [TODO-ABLATION] trong file LaTeX.
-  Input: eval_results.json hoặc metrics cụ thể. Output: diff LaTeX minimal,
-  chỉ thay đổi đúng placeholder, không đụng đến text khác.
-  Luôn preview diff trước khi apply. Không bao giờ tự xóa TODO-CLAIM còn pending.
+  LUÔN dùng skill này khi user muốn cập nhật paper/main.tex, điền số liệu vào
+  bảng LaTeX, hay hỏi "còn bao nhiêu TODO trong paper?". Biết tìm và điền tất cả
+  placeholder: [TODO] (table cells), [TODO-RESULT], [TODO-TABLE], [TODO-FIGURE],
+  [TODO-CLAIM], [TODO-ABLATION]. Đọc trực tiếp từ eval_results.json để điền đúng
+  giá trị. Output: diff LaTeX minimal — chỉ thay đúng placeholder, không đụng text khác.
+  Luôn preview diff trước khi apply. Tuyệt đối không tự xóa TODO-CLAIM còn pending.
 license: Project-internal skill
 ---
 
@@ -16,15 +16,15 @@ license: Project-internal skill
 
 `paper/main.tex` có các loại placeholder cần xử lý khác nhau:
 
-| Loại | Vị trí trong file | Khi nào điền |
-|---|---|---|
-| `[TODO]` bare | Trong table cell | Sau khi có eval_results.json |
-| `% [TODO-RESULT: ...]` | Comment block | Sau khi có số liệu cụ thể |
-| `% [TODO-TABLE: ...]` | Comment block | Sau khi có đủ data cho bảng |
-| `% [TODO-FIGURE: ...]` | Comment block | Sau khi figure được generate |
-| `% [TODO-CLAIM: ...]` | Comment block | **Không tự xóa** — cần experimental evidence |
-| `% [TODO-ABLATION: ...]` | Comment block | Chỉ điền khi ablation đã chạy |
-| `\textit{[TODO-...]}` | Inline visible | Thay bằng text thực hoặc xóa khi done |
+| Loại                     | Vị trí trong file | Khi nào điền                                 |
+| ------------------------ | ----------------- | -------------------------------------------- |
+| `[TODO]` bare            | Trong table cell  | Sau khi có eval_results.json                 |
+| `% [TODO-RESULT: ...]`   | Comment block     | Sau khi có số liệu cụ thể                    |
+| `% [TODO-TABLE: ...]`    | Comment block     | Sau khi có đủ data cho bảng                  |
+| `% [TODO-FIGURE: ...]`   | Comment block     | Sau khi figure được generate                 |
+| `% [TODO-CLAIM: ...]`    | Comment block     | **Không tự xóa** — cần experimental evidence |
+| `% [TODO-ABLATION: ...]` | Comment block     | Chỉ điền khi ablation đã chạy                |
+| `\textit{[TODO-...]}`    | Inline visible    | Thay bằng text thực hoặc xóa khi done        |
 
 ---
 

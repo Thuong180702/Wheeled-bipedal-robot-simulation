@@ -1,11 +1,12 @@
 ---
 name: readme-updater
 description: >
-  Dùng skill này để cập nhật README.md của wheeled biped project khi có thay đổi:
-  stage mới được train, eval results mới, task status thay đổi, command mới thêm vào.
-  Biết cấu trúc từng section của README hiện tại, quy tắc edit minimal diff,
-  và cách giữ nguyên các section không liên quan.
-  Luôn tạo diff rõ ràng trước khi apply — không overwrite nguyên file.
+  LUÔN dùng skill này bất cứ khi nào cần cập nhật README.md của wheeled biped project:
+  stage mới train xong, eval results mới có, status task thay đổi, command mới,
+  hay user nói "update README", "đánh dấu stage này là done", "thêm kết quả vào README".
+  Biết chính xác cấu trúc từng section của README hiện tại (status table, quick reference,
+  3-seed protocol, known limitations). Luôn tạo diff rõ ràng trước khi apply —
+  không overwrite nguyên file. Sau khi update README, đề xuất sync paper/main.tex nếu liên quan.
 license: Project-internal skill
 ---
 
@@ -15,14 +16,14 @@ license: Project-internal skill
 
 README có các section cần update định kỳ:
 
-| Section | Update khi nào |
-|---|---|
-| **Status badge** (dòng đầu) | Stage mới được train/eval |
-| **Overview table** | Task status thay đổi |
-| **Quick reference** | Command mới, path thay đổi |
-| **3-seed experiment protocol** | Sau khi train xong seeds |
-| **Known limitations** | Khi limitation được giải quyết |
-| **Paper artifact generation** | Sau khi có paper eval results |
+| Section                        | Update khi nào                 |
+| ------------------------------ | ------------------------------ |
+| **Status badge** (dòng đầu)    | Stage mới được train/eval      |
+| **Overview table**             | Task status thay đổi           |
+| **Quick reference**            | Command mới, path thay đổi     |
+| **3-seed experiment protocol** | Sau khi train xong seeds       |
+| **Known limitations**          | Khi limitation được giải quyết |
+| **Paper artifact generation**  | Sau khi có paper eval results  |
 
 ---
 
@@ -280,7 +281,7 @@ def add_quick_reference_command(readme_path: str,
 
 ### 2e. 3-seed experiment protocol — update sau khi có results
 
-```python
+````python
 THREE_SEED_PROTOCOL_TEMPLATE = """\
 ### 3-seed experiment protocol
 
@@ -310,7 +311,7 @@ python scripts/eval_balance.py \\
 python scripts/export_results.py latex \\
     outputs/balance/rl/paper_eval/eval_results.json \\
     --output outputs/tables/balance_eval.tex
-```
+````
 
 **Seed status:**
 {seed_status_table}
@@ -320,15 +321,14 @@ aggregated (mean ± std) post-hoc; the three runs are never mixed during trainin
 """
 
 def update_three_seed_protocol(readme_path: str,
-                                 seed_statuses: dict[int, str]) -> str:
-    """
-    seed_statuses: {42: "✅ Trained (50M steps)", 113: "⏳ Training", 999: "⏸ Not started"}
-    """
-    # Format seed status table
-    table_lines = ["| Seed | Status |", "|------|--------|"]
-    for seed in sorted(seed_statuses):
-        table_lines.append(f"| {seed} | {seed_statuses[seed]} |")
-    seed_table = "\n".join(table_lines)
+seed_statuses: dict[int, str]) -> str:
+"""
+seed_statuses: {42: "✅ Trained (50M steps)", 113: "⏳ Training", 999: "⏸ Not started"}
+""" # Format seed status table
+table_lines = ["| Seed | Status |", "|------|--------|"]
+for seed in sorted(seed_statuses):
+table_lines.append(f"| {seed} | {seed_statuses[seed]} |")
+seed_table = "\n".join(table_lines)
 
     new_section = THREE_SEED_PROTOCOL_TEMPLATE.format(seed_status_table=seed_table)
 
@@ -341,7 +341,8 @@ def update_three_seed_protocol(readme_path: str,
     if old_section_match:
         return content[:old_section_match.start()] + new_section + content[old_section_match.end():]
     return content
-```
+
+````
 
 ---
 
@@ -389,7 +390,7 @@ def apply_readme_update(readme_path: str,
     diff_lines = [l for l in preview_diff(old_content, new_content).splitlines()
                   if l.startswith("+") or l.startswith("-")]
     print(f"README updated: {len(diff_lines)} lines changed.")
-```
+````
 
 ---
 

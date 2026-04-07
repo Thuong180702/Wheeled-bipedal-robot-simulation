@@ -1,11 +1,13 @@
 ---
 name: training-decision
 description: >
-  Dùng skill này SAU KHI đã có output từ eval-analyzer skill.
-  Nhận metrics + flags → đưa ra quyết định train cụ thể: tiếp tục, resume từ checkpoint,
-  train lại từ đầu, thay đổi config, hoặc advance stage.
-  Output: quyết định có lý do + command sẵn sàng chạy + config diff nếu cần.
-  Luôn dùng eval-analyzer trước skill này.
+  LUÔN dùng skill này ngay sau eval-analyzer khi user hỏi "train tiếp hay dừng?",
+  "có nên resume không?", "cần thay đổi gì?", hay bất cứ câu hỏi nào liên quan
+  đến quyết định training của wheeled biped project. Nhận report từ eval-analyzer
+  (validation signals + training trend) → đưa ra 1 trong 6 quyết định cụ thể:
+  CONTINUE, RESUME_TWEAK, RESUME_CKPT, RETRAIN_STAGE, RETRAIN_SCRATCH, ADVANCE_STAGE.
+  Output: quyết định có lý do + command sẵn sàng chạy + config diff YAML nếu cần.
+  Không dùng skill này khi chưa có output từ eval-analyzer.
 license: Project-internal skill
 ---
 
@@ -90,6 +92,11 @@ eval_report = {
 ---
 
 ## Bước 2 — Decision tree
+
+> **Note về helper functions**: Các hàm `_decide_continue()`, `_decide_resume_tweak()`,
+> `_decide_retrain_scratch()`, `_decide_retrain_stage()`, `_decide_advance_stage()`
+> là **pseudocode** — Claude tự xây dựng response dict phù hợp khi gặp từng case.
+> Mỗi hàm trả về `{"action": "<ACTION>", "reason": "...", "commands": [...], "next_eval": "..."}`.
 
 ### Tree chính
 
@@ -429,93 +436,31 @@ Lý do: Exploit patterns phát hiện bởi validate_checkpoint: ['wheel_spin', 
 
 ## Bước 5 — Command templates
 
-### CONTINUE
-
-```bash
-python scripts/train.py single --stage {stage} --seed {seed} \
-    --resume {checkpoint_dir}
-```
-
-### RESUME_TWEAK (sau khi sửa config)
-
-```bash
-git diff configs/training/{stage}.yaml   # kiểm tra diff trước
-
-python scripts/train.py single --stage {stage} --seed {seed} \
-    --resume {last_checkpoint}
-```
-
-### RESUME_CKPT (quay về checkpoint cũ hơn)
-
-```bash
-ls outputs/{stage}/rl/seed{seed}/checkpoints/
-
-python scripts/train.py single --stage {stage} --seed {seed} \
-    --resume outputs/{stage}/rl/seed{seed}/checkpoints/step_{N}
-```
-
-### RETRAIN_STAGE
-
-```bash
-python scripts/train.py single --stage {stage} --seed {new_seed} \
-    --steps {steps}
-# Dùng seed mới để tránh lặp lại path cũ
-```
-
-### RETRAIN_SCRATCH
-
-```bash
-python scripts/train.py single --stage balance --seed {new_seed} \
-    --steps 50000000
-# Không dùng --resume
-```
-
-### ADVANCE_STAGE
-
-```bash
-python scripts/train.py curriculum --steps-per-stage 10000000
-
-# Hoặc chạy stage cụ thể với warm-start
-python scripts/train.py single --stage balance_robust --seed 42 \
-    --steps 5000000 \
-    --resume outputs/balance/rl/seed42/checkpoints/final
-```
+| Action          | Command                                                                                                                                                   |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CONTINUE        | `python scripts/train.py single --stage {stage} --seed {seed} --resume {ckpt}`                                                                            |
+| RESUME_TWEAK    | `git diff configs/training/{stage}.yaml` rồi same resume command                                                                                          |
+| RESUME_CKPT     | `--resume outputs/{stage}/rl/seed{seed}/checkpoints/step_{N}`                                                                                             |
+| RETRAIN_STAGE   | Same command, **seed mới** (tránh overwrite path cũ), không `--resume`                                                                                    |
+| RETRAIN_SCRATCH | `--stage balance --seed {new_seed} --steps 50000000` — không `--resume`                                                                                   |
+| ADVANCE_STAGE   | `python scripts/train.py curriculum --steps-per-stage 10000000` hoặc `single --stage balance_robust --resume outputs/balance/rl/seed42/checkpoints/final` |
 
 ---
 
 ## Bước 6 — Special cases
 
-### Chỉ có validation, chưa có eval_balance
+**Chỉ có validation, chưa có eval_balance**: Vẫn ra được quyết định từ `validation.benchmark`. Note trong output: "chưa có multi-scenario eval".
 
-```python
-# Vẫn ra được quyết định — dùng validation.benchmark cho fall_rate/success_rate
-# Không thể đánh giá friction/push robustness nhưng có thể detect exploit
-# Decision sẽ note: "chưa có multi-scenario eval, chỉ dựa trên validation"
+**Curriculum stuck** (`max_retries reached` trong log):
+
+```yaml
+curriculum.success_value: <current - 0.5>
+curriculum.max_retries_per_stage: <current + 2>
 ```
 
-### Curriculum stuck (max_retries reached)
+**3-seed divergence**: Bỏ seed outlier (> 2σ từ mean), train seed mới. Không average outlier vào paper.
 
-```python
-config_changes = {
-    "curriculum.success_value": current_success_value - 0.5,
-    "curriculum.max_retries_per_stage": current_max + 2,
-    "comment": "Curriculum stuck — giảm success_value hoặc tăng max_retries"
-}
-```
-
-### 3-seed divergence
-
-Nếu so sánh 3 seeds và 1 seed outlier:
-
-- Bỏ seed đó, train lại với seed mới
-- Không average kết quả outlier vào paper metrics
-
-### Eval_per_step tính sai
-
-Luôn kiểm tra: `eval_per_step = eval_reward_mean / episode_length`
-
-- `episode_length` default = 1000 nếu không có trong result dict
-- Nếu eval_per_step < 1.0, kiểm tra lại episode_length
+**eval_per_step sai**: Kiểm tra `eval_per_step = eval_reward_mean / episode_length` — nếu < 1.0 thì episode_length đang dùng sai default.
 
 ---
 

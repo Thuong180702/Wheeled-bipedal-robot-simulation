@@ -1,11 +1,13 @@
 ---
 name: config-advisor
 description: >
-  Dùng skill này để đọc, hiểu và gợi ý thay đổi configs/ của wheeled biped project.
-  Biết cấu trúc balance.yaml, balance_robust.yaml, curriculum.yaml và tất cả
-  training configs. Nhận symptom từ eval/training → đề xuất config diff cụ thể
-  với lý do rõ ràng và dự đoán tác động. Luôn output YAML diff nhỏ, không overhaul toàn bộ.
-  Dùng sau eval-analyzer và training-decision để biết symptom trước khi gọi skill này.
+  LUÔN dùng skill này khi user hỏi "config nào cần thay đổi?", "tại sao wheel spin?",
+  "curriculum stuck phải làm gì?", hay có bất kỳ WARN/exploit flag nào từ eval-analyzer
+  trong wheeled biped project. Biết cấu trúc balance.yaml, balance_robust.yaml,
+  curriculum.yaml. Nhận symptom từ eval/training → đề xuất YAML diff cụ thể với lý do
+  và dự đoán tác động. Luôn output minimal diff (1-2 params), không overhaul toàn bộ.
+  Trigger ngay khi thấy: wheel_spin, xy_drift, ctrl_jitter, curriculum stuck,
+  plateau, poor_friction, poor_push_recovery, high fall rate.
 license: Project-internal skill
 ---
 
@@ -14,6 +16,7 @@ license: Project-internal skill
 ## Tổng quan
 
 Skill này giải quyết câu hỏi:
+
 - "Tôi nên thay đổi config gì để fix symptom X?"
 - "Tăng/giảm tham số nào khi curriculum stuck?"
 - "Config nào khác nhau giữa balance và balance_robust, và tại sao?"
@@ -42,55 +45,63 @@ Catalog các triệu chứng phổ biến và config fix tương ứng:
 ### EXPLOIT PATTERNS
 
 **wheel_spin_exploit** — wheel spin liên tục thay vì dùng posture
+
 ```yaml
 # configs/training/balance.yaml
 rewards:
-  wheel_velocity: -0.012   # was: -0.006 | tăng penalty x2
-  no_motion: 0.7            # was: 0.5   | thưởng đứng yên mạnh hơn
+  wheel_velocity: -0.012 # was: -0.006 | tăng penalty x2
+  no_motion: 0.7 # was: 0.5   | thưởng đứng yên mạnh hơn
 # ⚠️ KHÔNG áp dụng cho balance_robust (wheel cần spin để recover)
 ```
+
 Tác động: giảm wheel_spin sau 2–5M steps. Có thể tạm giảm reward khi policy relearn.
 
 ---
 
 **xy_drift_exploit** — robot từ từ drift ra khỏi vị trí ban đầu
+
 ```yaml
 # configs/training/balance.yaml
 rewards:
-  position_drift: 2.5    # was: 1.5 | tăng 67%
+  position_drift: 2.5 # was: 1.5 | tăng 67%
   wheel_velocity: -0.010 # was: -0.006 | bổ sung penalty
 ```
+
 Tác động: giảm drift sau 3–7M steps.
 Cẩn thận: tăng quá mạnh → robot rigid, không recover được từ push.
 
 ---
 
 **ctrl_jitter** — action thay đổi đột ngột giữa các steps
+
 ```yaml
 # configs/training/balance.yaml
 rewards:
-  action_rate: -0.10    # was: -0.06 | tăng penalty 67%
+  action_rate: -0.10 # was: -0.06 | tăng penalty 67%
 ```
+
 Tác động: smooth action sau 2–4M steps. Limit: không vượt -0.15.
 
 ---
 
 **leg_asymmetry** — một chân cao hơn chân kia
+
 ```yaml
 # configs/training/balance.yaml
 rewards:
-  symmetry: 1.5    # was: 1.0 | tăng 50%
+  symmetry: 1.5 # was: 1.0 | tăng 50%
 ```
 
 ---
 
 **height_oscillation** — robot bouncing lên xuống
+
 ```yaml
 # configs/training/balance.yaml
 rewards:
-  height: 3.0                # was: 2.5
+  height: 3.0 # was: 2.5
 ppo:
-  entropy_coeff: 0.002       # was: 0.004 | giảm exploration
+  entropy_coeff: 0.002 # was: 0.004 | giảm exploration
 ```
 
 ---
@@ -98,35 +109,40 @@ ppo:
 ### CURRICULUM ISSUES
 
 **curriculum_stuck_level** — within-stage curriculum không advance (min_height không giảm)
+
 ```yaml
 # configs/training/balance.yaml
 curriculum:
-  reward_threshold: 0.68    # was: 0.75 | giảm ngưỡng advance
-  eval_interval: 20          # was: 50   | eval thường xuyên hơn
+  reward_threshold: 0.68 # was: 0.75 | giảm ngưỡng advance
+  eval_interval: 20 # was: 50   | eval thường xuyên hơn
 ```
+
 Tác động: advance nhanh hơn. Không giảm dưới 0.55 (advance sớm quá).
 
 ---
 
 **curriculum_stuck_stage** — multi-stage max_retries reached, không promote
+
 ```yaml
 # configs/curriculum.yaml
 curriculum:
   stages:
     - name: balance
-      success_value: 6.5    # was: 7.0 | giảm 0.5 reward/step
-  max_retries_per_stage: 5  # was: 3   | thêm 2 attempts
+      success_value: 6.5 # was: 7.0 | giảm 0.5 reward/step
+  max_retries_per_stage: 5 # was: 3   | thêm 2 attempts
 ```
+
 Cẩn thận: không giảm success_value xuống < 6.0 cho balance.
 
 ---
 
 **curriculum_demotion_loop** — oscillating promote/demote liên tục
+
 ```yaml
 # configs/curriculum.yaml
 curriculum:
-  demotion_threshold: 0.2    # was: 0.3  | chỉ demote khi thực sự rất tệ
-  promotion_window: 150       # was: 100  | window dài hơn → stable signal
+  demotion_threshold: 0.2 # was: 0.3  | chỉ demote khi thực sự rất tệ
+  promotion_window: 150 # was: 100  | window dài hơn → stable signal
 ```
 
 ---
@@ -134,34 +150,39 @@ curriculum:
 ### ROBUSTNESS ISSUES
 
 **poor_friction_generalization** — performance giảm mạnh trên friction_low/high
+
 ```yaml
 # configs/training/balance.yaml
 domain_randomization:
-  friction_range: [0.5, 1.5]   # was: [0.7, 1.3] | mở rộng từ ±30% → ±50%
+  friction_range: [0.5, 1.5] # was: [0.7, 1.3] | mở rộng từ ±30% → ±50%
 ```
+
 Nominal performance có thể giảm nhẹ. Không giảm dưới 0.4 (không còn realistic).
 
 ---
 
 **poor_push_recovery** — max_recoverable_push_n thấp (< 40N)
+
 ```yaml
 # configs/training/balance.yaml (thêm push nhỏ vào balance stage)
 domain_randomization:
-  push_magnitude: 20     # was: 0   | push nhỏ để quen với disturbance
-  push_interval: 300     # was: 500 | push thường xuyên hơn
+  push_magnitude: 20 # was: 0   | push nhỏ để quen với disturbance
+  push_interval: 300 # was: 500 | push thường xuyên hơn
 ```
+
 Chỉ thêm sau khi balance đã converge tốt. Cho push recovery mạnh → train balance_robust.
 
 ---
 
 **high_fall_rate_nominal** — fall rate > 20% trên nominal
+
 ```yaml
 # configs/training/balance.yaml
 rewards:
-  body_level: 2.0     # was: 1.5
-  alive: 0.5          # was: 0.3
+  body_level: 2.0 # was: 1.5
+  alive: 0.5 # was: 0.3
 ppo:
-  entropy_coeff: 0.002  # was: 0.004
+  entropy_coeff: 0.002 # was: 0.004
 ```
 
 ---
@@ -169,20 +190,22 @@ ppo:
 ### CONVERGENCE ISSUES
 
 **reward_plateau_early** — plateau sớm (< 10M steps)
+
 ```yaml
 # configs/training/balance.yaml
 ppo:
-  learning_rate: 3.0e-4   # was: 2.0e-4 | tăng LR nhẹ
-  entropy_coeff: 0.003    # was: 0.004  | giảm nhẹ entropy
+  learning_rate: 3.0e-4 # was: 2.0e-4 | tăng LR nhẹ
+  entropy_coeff: 0.003 # was: 0.004  | giảm nhẹ entropy
 ```
 
 **reward_plateau_late** — plateau muộn (> 30M steps)
+
 ```yaml
 # configs/training/balance.yaml
 ppo:
-  entropy_coeff: 0.006    # was: 0.004 | tăng exploration để thoát local min
+  entropy_coeff: 0.006 # was: 0.004 | tăng exploration để thoát local min
 curriculum:
-  reward_threshold: 0.65  # was: 0.75  | mở rộng training distribution
+  reward_threshold: 0.65 # was: 0.75  | mở rộng training distribution
 ```
 
 ---
@@ -190,13 +213,15 @@ curriculum:
 ### BALANCE ROBUST SPECIFIC
 
 **balance_robust_wont_recover** — không recover sau push mặc dù warm-start tốt
+
 ```yaml
 # configs/training/balance_robust.yaml
 rewards:
-  natural_pose: 2.0          # was: 1.5 | tăng return-to-stance
+  natural_pose: 2.0 # was: 1.5 | tăng return-to-stance
 domain_randomization:
-  push_magnitude: 30         # was: 40  | giảm push để học dần
+  push_magnitude: 30 # was: 40  | giảm push để học dần
 ```
+
 Verify: no_motion=0.0 và wheel_velocity=0.0 (phải đúng rồi, không thay đổi).
 
 ---

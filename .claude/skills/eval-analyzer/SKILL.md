@@ -1,15 +1,15 @@
 ---
 name: eval-analyzer
 description: >
-  Dùng skill này để đọc, parse và tóm tắt kết quả validation của wheeled biped project.
-  Kích hoạt khi user nhắc đến: checkpoint, eval results, training trend, fall rate,
-  exploit pattern, wheel spin, friction score, push recovery, WARN flag, metrics,
-  hay bất cứ lúc nào cần hiểu policy đang tốt/xấu thế nào.
-  Biết xử lý 4 loại file: validation_report.json (validate_checkpoint.py — PRIMARY),
-  *_metrics.jsonl (training log — PRIMARY), eval_results_*.json (evaluate.py),
-  eval_results.json (eval_balance.py — paper metrics). Tự tìm file, tìm
-  validation_report.json trước. Không ra quyết định train — đó là việc của
-  training-decision skill.
+  LUÔN dùng skill này bất cứ khi nào user hỏi về trạng thái checkpoint, kết quả
+  eval, training trend, hoặc policy có vấn đề gì không — kể cả khi user chỉ hỏi
+  chung chung như "seed42 đang thế nào?" hay "fall rate cao quá". Parse và tóm tắt
+  kết quả từ 4 loại file của wheeled biped project: validation_report.json
+  (validate_checkpoint.py — PRIMARY cho exploit detection), *_metrics.jsonl
+  (training log — PRIMARY cho reward trend), eval_results_*.json (evaluate.py),
+  eval_results.json (eval_balance.py — paper metrics). Tự động tìm file đúng,
+  ưu tiên validation_report.json. Output: bảng WARN/OK/CRITICAL, exploit signals,
+  training trend. Không ra quyết định train — đó là việc của training-decision skill.
 license: Project-internal skill
 ---
 
@@ -291,108 +291,59 @@ def flag_metric(value: float, metric_name: str) -> str:
 
 ## Bước 3 — So sánh nhiều checkpoints
 
+Khi so sánh nhiều checkpoints (ví dụ `step_5M` vs `final`):
+
 ```python
-def compare_checkpoints(reports: list[dict], label_key: str = "checkpoint") -> dict:
-    if len(reports) < 2:
-        return {"error": "Cần ít nhất 2 checkpoints để so sánh"}
-
-    by_scenario = {}
-    for r in reports:
-        scen = r["scenario"]
-        by_scenario.setdefault(scen, []).append(r)
-
-    comparison  = {}
-    regressions = []
+def compare_checkpoints(reports: list[dict]) -> dict:
+    """Group by scenario, tính delta base→curr, phân loại regression/improvement."""
+    regressions  = []
     improvements = []
-
-    for scenario, rows in by_scenario.items():
-        if len(rows) < 2:
-            continue
+    for scenario, rows in group_by_scenario(reports).items():
+        if len(rows) < 2: continue
         base, curr = rows[0], rows[-1]
-        deltas = {}
-        for metric in BALANCE_THRESHOLDS:
-            bval = base.get(metric, float("nan"))
-            cval = curr.get(metric, float("nan"))
-            if math.isnan(bval) or math.isnan(cval):
-                continue
-            delta = cval - bval
-            direction = BALANCE_THRESHOLDS[metric]["direction"]
-            is_better = delta < 0 if direction == "lower_is_better" else delta > 0
-            deltas[metric] = {"base": bval, "curr": cval, "delta": delta, "better": is_better}
-            if not is_better and abs(delta) > 0.01:
-                regressions.append(f"{scenario}.{metric}: {bval:.3f} → {cval:.3f}")
-            elif is_better and abs(delta) > 0.01:
-                improvements.append(f"{scenario}.{metric}: {bval:.3f} → {cval:.3f} ✅")
-        comparison[scenario] = deltas
+        for metric, thresh in BALANCE_THRESHOLDS.items():
+            bval, cval = base.get(metric, nan), curr.get(metric, nan)
+            if isnan(bval) or isnan(cval): continue
+            better = (cval < bval) if thresh["direction"] == "lower_is_better" else (cval > bval)
+            if not better and abs(cval-bval) > 0.01:
+                regressions.append(f"{scenario}.{metric}: {bval:.3f}→{cval:.3f}")
+            elif better and abs(cval-bval) > 0.01:
+                improvements.append(f"{scenario}.{metric}: {bval:.3f}→{cval:.3f} ✅")
 
-    reg_count = len(regressions)
-    imp_count = len(improvements)
-    recommend = (
-        "Dùng checkpoint mới nhất (không có regression)" if reg_count == 0
-        else f"Dùng checkpoint mới ({imp_count} improvements vs {reg_count} regressions)"
-             if imp_count > reg_count
-        else f"⚠️ Dùng checkpoint cũ hơn ({reg_count} regressions trong checkpoint mới)"
-    )
-
-    return {
-        "by_scenario":    comparison,
-        "regressions":    regressions,
-        "improvements":   improvements,
-        "verdict":        "REGRESSION" if regressions else "IMPROVEMENT" if improvements else "UNCHANGED",
-        "recommendation": recommend,
-    }
+    n_reg, n_imp = len(regressions), len(improvements)
+    verdict = "REGRESSION" if regressions else "IMPROVEMENT" if improvements else "UNCHANGED"
+    recommend = ("Dùng checkpoint cũ hơn" if n_reg > n_imp
+                 else "Dùng checkpoint mới" if n_imp >= n_reg
+                 else "Không thay đổi đáng kể")
+    return {"regressions": regressions, "improvements": improvements,
+            "verdict": verdict, "recommendation": recommend}
 ```
 
 ---
 
 ## Bước 4 — Curriculum phase và advance check
 
+Map `curriculum_min_height` → phase:
+
+| min_height  | Phase            | Range                   |
+| ----------- | ---------------- | ----------------------- |
+| `≥ 0.65`    | Phase A          | `[min_h, 0.70]m` narrow |
+| `0.50–0.65` | Phase B          | moderate widening       |
+| `0.41–0.50` | Phase C          | full range approach     |
+| `≤ 0.40`    | **✅ Completed** | `[0.40, 0.70]m`         |
+
+Advance readiness checklist (theo `STAGE_SUCCESS_VALUES`):
+
 ```python
 STAGE_SUCCESS_VALUES = {"balance": 7.0, "balance_robust": 6.0, "stand_up": 5.0}
 
-def curriculum_phase(min_height: float | None) -> str:
-    if min_height is None:       return "unknown"
-    if min_height >= 0.65:       return f"Phase A — narrow [{min_height:.2f}, 0.70]m"
-    elif min_height >= 0.50:     return f"Phase B — moderate [{min_height:.2f}, 0.70]m"
-    elif min_height > 0.40:      return f"Phase C — full range [{min_height:.2f}, 0.70]m"
-    else:                        return "✅ Completed [0.40, 0.70]m"
-
-def check_advance_readiness(eval_per_step: float,
-                             stage: str = "balance",
-                             curriculum_min_height: float | None = None,
-                             eval_success_rate: float | None = None,
-                             fall_rate: float | None = None) -> dict:
-    success_val = STAGE_SUCCESS_VALUES.get(stage, 7.0)
-    checks = {}
-
-    checks["eval_per_step"] = {
-        "value": eval_per_step, "threshold": success_val,
-        "passed": eval_per_step >= success_val,
-        "note": f"{eval_per_step:.2f} {'≥' if eval_per_step >= success_val else '<'} {success_val}",
-    }
-    if stage == "balance" and curriculum_min_height is not None:
-        checks["curriculum"] = {
-            "value": curriculum_min_height, "threshold": 0.41,
-            "passed": curriculum_min_height <= 0.41,
-            "note": curriculum_phase(curriculum_min_height),
-        }
-    if eval_success_rate is not None:
-        checks["success_rate"] = {
-            "value": eval_success_rate, "threshold": 0.80,
-            "passed": eval_success_rate >= 0.80,
-        }
-    if fall_rate is not None:
-        checks["fall_rate"] = {
-            "value": fall_rate, "threshold": 0.15,
-            "passed": fall_rate <= 0.15,
-        }
-
-    all_passed = all(c["passed"] for c in checks.values())
-    return {
-        "stage": stage, "checks": checks, "ready_to_advance": all_passed,
-        "verdict": "✅ Đủ điều kiện advance stage" if all_passed
-                   else "⏳ Chưa đủ điều kiện — xem chi tiết bên dưới",
-    }
+# Check tất cả điều kiện:
+# 1. eval_per_step >= success_val  (eval_reward_mean / episode_length)
+# 2. curriculum_min_height <= 0.41 (chỉ balance stage)
+# 3. eval_success_rate >= 0.80
+# 4. fall_rate <= 0.15
+# 5. validation.num_suspicious == 0  (không có exploit)
+# Tất cả pass → ADVANCE_STAGE. Bất kỳ fail → xác định lý do cụ thể.
 ```
 
 ---
