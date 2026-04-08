@@ -302,7 +302,7 @@ while the policy is queried at \SI{50}{Hz},
 \Delta t_{\pi} = \SI{0.02}{s}.
 \end{equation}
 Each policy action is therefore held constant for ten simulation substeps.
-Training is parallelized across 4096 environments on GPU.
+Training is parallelized across 4096 environments on GPU~\cite{rudin2022walk}.
 
 Domain randomization~\cite{tobin2017domain} is applied during training
 to improve robustness: body masses are perturbed by $\pm 15\%$,
