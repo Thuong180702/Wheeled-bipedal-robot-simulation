@@ -234,7 +234,7 @@ randomization for robust quadruped locomotion on physical hardware.
 Tan~\emph{et al.}~\cite{tan2018simtoreal} showed that randomizing actuator
 parameters and adding observation noise enables Minitaur to transfer
 sim-trained trotting gaits to the real robot without fine-tuning.
-Our framework adopts these established protocols---randomizing friction,
+Our framework adopts these established protocols~\cite{tobin2017domain,peng2018simtoreal,tan2018simtoreal}---randomizing friction,
 mass properties, motor strength, and adding IMU/encoder noise and
 action delay---to prepare the trained policy for future hardware deployment.
 
@@ -748,7 +748,7 @@ r_{\mathrm{nat}} =
 r_{\mathrm{knee}},
 \label{eq:natural_pose}
 \end{equation}
-where $\sigma_{nat} = 0.8\,\mathrm{rad}$ and $r_{\mathrm{knee}}$
+where $\sigma_{\mathrm{nat}} = 0.5\,\mathrm{rad}$ and $r_{\mathrm{knee}}$
 penalizes knee hyperextension:
 \begin{equation}
 r_{\mathrm{knee}}=
