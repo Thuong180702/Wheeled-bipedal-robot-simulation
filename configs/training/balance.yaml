@@ -131,11 +131,11 @@ rewards:
   yaw_rate: 0.5 # phạt trực tiếp tốc độ quay yaw
   # === Standing-specific (zero in balance_robust) ===
   no_motion: 0.5 # rewards stationary stance — conflicts with push recovery
-  wheel_velocity: -0.006 # penalises wheel spin — conflicts with push recovery
+  wheel_velocity: -0.01 # penalises wheel spin — conflicts with push recovery
   # === Penalties ===
   joint_torque: -0.0005 # phạt mô-men lớn
   joint_velocity: -0.0007 # phạt tốc độ khớp
-  action_rate: -0.06 # anti-jitter for standing; tighter than robust (see note above)
+  action_rate: -0.1 # anti-jitter for standing; tighter than robust (see note above)
 
 # --- Termination ---
 termination:
