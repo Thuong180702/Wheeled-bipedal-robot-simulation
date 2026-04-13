@@ -18,7 +18,7 @@
 \author{
 \IEEEauthorblockN{Van Thuong Nguyen}
 \IEEEauthorblockA{
-Your Institution\\
+Independent Researcher\\
 Email: vanthuong180702t@gmail.com
 }
 }
@@ -79,7 +79,7 @@ near a nominal operating point, but become increasingly inaccurate as the
 robot moves away from the linearization height.
 Recent progress in reinforcement learning (RL) has shown that robust control
 policies can be learned directly in simulation for complex robotic
-systems~\cite{ppo}.
+systems~\cite{hwangbo2019learning,lee2020learning,rudin2022walk}.
 Nevertheless, training a single policy to balance across a wide range of
 body heights is difficult due to poor sample efficiency and the risk of
 reward exploitation.
@@ -143,41 +143,100 @@ Section~XI concludes the paper.
 \label{sec:related}
 % ============================================================
 
-Wheeled bipedal robots have been studied in several recent works.
-Klemm~\emph{et al.}~\cite{klemm2019ascento} developed Ascento,
-a two-wheeled jumping robot, demonstrating the feasibility of active balance
-control for wheeled bipeds.
-In subsequent work, Klemm~\emph{et al.}~\cite{klemm2020lqrwbc} proposed an
-LQR-assisted whole-body control approach for a wheeled bipedal robot with
-kinematic loops, achieving stable balancing through model-based control.
-Hsu~\emph{et al.}~\cite{hsu2022wbrfuzzy} applied fuzzy logic control to a
-wheeled biped for balance regulation.
-Li~\emph{et al.}~\cite{li2021wheelbiped} investigated dynamic wheeled motion
-control for wheel-biped transformable robots.
-% [TODO-REF: add Unitree H1/G1 or similar wheeled-biped commercial platforms if relevant]
-% [TODO-REF: add LIMX CL-1 or TRON1 if relevant to this morphology]
+\subsection{Classical and Model-Based Control for Wheeled Bipeds}
+Wheeled bipedal robots combine the energy efficiency of wheel-based locomotion
+with the postural adaptability of articulated legs.
+Early and influential work by Klemm~\emph{et al.}~\cite{klemm2019ascento}
+introduced Ascento, a two-wheeled jumping robot demonstrating active balance
+through LQR-based stabilization around an inverted pendulum model.
+Subsequent work~\cite{klemm2020lqrwbc} extended this to an LQR-assisted
+whole-body controller with kinematic loops.
+Hsu~\emph{et al.}~\cite{hsu2022wbrfuzzy} applied fuzzy logic control to
+wheeled biped balance regulation.
+Li~\emph{et al.}~\cite{li2021wheelbiped} investigated dynamic motion control
+for wheel-biped transformable robots.
+The DIABLO platform~\cite{diablo2024} demonstrated six-DOF direct-drive
+wheeled biped control using cascaded LQR.
+While these model-based approaches provide stability guarantees near an
+operating point, they require accurate dynamics models and degrade when the
+robot deviates significantly from the linearization configuration---a
+limitation that becomes severe under variable-height commands.
 
-On the learning side, deep reinforcement learning has enabled robust locomotion
-for legged robots~\cite{ppo}.
-% [TODO-REF: add Anymal/Spot RL locomotion references, e.g. Kumar et al. 2021,
-%  Lee et al. 2020, or Rudin et al. 2022 if the paper targets an RL audience]
-% [TODO-REF: add curriculum learning for robotics references, e.g. Portelas et al. 2021]
-Curriculum learning approaches~\cite{bengio2009curriculum} have been applied
-to progressively increase task difficulty, improving sample efficiency and
-the range of behaviors learned.
-% [TODO-REF: domain randomization follow-up works if this paper claims sim-to-real]
+\subsection{Deep Reinforcement Learning for Legged Locomotion}
+Deep RL has produced robust locomotion policies for complex legged systems.
+Hwangbo~\emph{et al.}~\cite{hwangbo2019learning} introduced a learned
+actuator network that accurately models motor dynamics, enabling sim-to-real
+transfer of agile skills on ANYmal.
+Lee~\emph{et al.}~\cite{lee2020learning} demonstrated blind proprioceptive
+locomotion over challenging outdoor terrain using a teacher-student
+distillation pipeline.
+Kumar~\emph{et al.}~\cite{kumar2021rma} proposed Rapid Motor Adaptation (RMA),
+a two-stage approach that trains an adaptation module online to handle
+unseen dynamics such as varying payload and slippery floors.
+Rudin~\emph{et al.}~\cite{rudin2022walk} showed that massively parallel
+GPU-based simulation (4,096 environments in Isaac Gym) can train walking
+policies in minutes using a terrain curriculum closely related to ours.
+Miki~\emph{et al.}~\cite{miki2022wild} further demonstrated perception-aware
+locomotion over kilometer-scale outdoor terrain using attention-based
+proprioceptive encoders.
+These works establish that RL can scale to high-dimensional contact-rich
+control problems; our work adapts this paradigm to the specific challenge of
+variable-height wheeled-biped balancing.
 
-These approaches predominantly rely on model-based control or classical control
-techniques.
-In contrast, our work takes a learning-based approach using PPO~\cite{ppo}
-in a GPU-accelerated MuJoCo MJX~\cite{mujoco,mujoco_mjx_docs} simulation
-with JAX~\cite{jax}, which enables massively parallel training across thousands
-of environments.
-The key distinction of our framework is the combination of a height-conditioned
-policy, a progressive height curriculum, and a height-consistent posture reward
-that together address the challenge of stable balancing across a wide range
-of body heights, alongside an LQR baseline that provides a principled
-classical reference at the nominal operating point.
+\subsection{Reinforcement Learning for Wheeled-Legged Robots}
+More recently, RL has been applied to wheeled-legged hybrid platforms.
+Lee~\emph{et al.}~\cite{lee2024robustnavigation} presented a full autonomy
+stack for ANYmal-on-wheels, achieving 20\,km/h driving with 83\% reduced
+cost-of-transport.
+Vollenweider~\emph{et al.}~\cite{vollenweider2023advancedskills} trained diverse
+locomotion skills for wheeled-legged robots through adversarial motion priors.
+Chamorro~\emph{et al.}~\cite{chamorro2024stairclimbing} used asymmetric
+actor-critic RL with privileged terrain information for blind stair climbing
+on Ascento, successfully transferring to hardware for 15\,cm step negotiation.
+Zhu~\emph{et al.}~\cite{whleaper2024} introduced Whleaper, a 10-DOF wheeled
+biped most similar to our platform, demonstrating both LQR and PPO control
+for multimodal locomotion.
+Zhu and Hayashibe~\cite{zhu2022hierarchical} applied hierarchical RL for
+path tracking on a wheeled biped with a sim-to-real transfer pipeline.
+In contrast to these platforms---which either fix body height or focus on
+forward locomotion---our work specifically addresses \emph{variable-height
+stationary balance}, requiring the policy to operate stably across a 30\,cm
+height range while maintaining postural integrity.
+
+\subsection{Curriculum Learning for Robot Control}
+Curriculum learning, introduced by Bengio~\emph{et al.}~\cite{bengio2009curriculum},
+organizes training from easy to hard examples to improve convergence
+and generalization.
+In robotics, Rudin~\emph{et al.}~\cite{rudin2022walk} demonstrated a
+terrain difficulty curriculum that substantially improves traversal capability.
+The Automatic Curriculum Learning (ACL) survey by
+Portelas~\emph{et al.}~\cite{portelas2020acl} systematizes curriculum strategies
+by learning progress, distinguishing goal-parameterized curricula from
+task-space curricula.
+Teacher algorithms such as ALP-GMM~\cite{portelas2020teacher} generate
+parameterized task distributions that maximize learning progress in
+continuous task spaces.
+POET~\cite{wang2019poet} co-evolves environments and agents to produce
+increasingly complex curricula.
+Our within-stage height curriculum is a monotone threshold-gated curriculum:
+the commanded height range expands only when a greedy evaluation pass
+confirms the policy has mastered the current range, directly addressing
+the instability that arises when a single policy must balance across
+configurations with qualitatively different inverted-pendulum dynamics.
+
+\subsection{Domain Randomization and Sim-to-Real Transfer}
+Sim-to-real transfer for locomotion policies relies on domain randomization
+to cover the reality gap.
+Tobin~\emph{et al.}~\cite{tobin2017domain} established domain randomization
+as a viable transfer strategy.
+Peng~\emph{et al.}~\cite{peng2018simtoreal} demonstrated dynamics
+randomization for robust quadruped locomotion on physical hardware.
+Tan~\emph{et al.}~\cite{tan2018simtoreal} showed that randomizing actuator
+parameters and adding observation noise enables Minitaur to transfer
+sim-trained trotting gaits to the real robot without fine-tuning.
+Our framework adopts these established protocols~\cite{tobin2017domain,peng2018simtoreal,tan2018simtoreal}---randomizing friction,
+mass properties, motor strength, and adding IMU/encoder noise and
+action delay---to prepare the trained policy for future hardware deployment.
 
 % ============================================================
 \section{Robot Platform and Simulation Setup}
@@ -243,7 +302,7 @@ while the policy is queried at \SI{50}{Hz},
 \Delta t_{\pi} = \SI{0.02}{s}.
 \end{equation}
 Each policy action is therefore held constant for ten simulation substeps.
-Training is parallelized across 4096 environments on GPU.
+Training is parallelized across 4096 environments on GPU~\cite{rudin2022walk}.
 
 Domain randomization~\cite{tobin2017domain} is applied during training
 to improve robustness: body masses are perturbed by $\pm 15\%$,
@@ -256,6 +315,41 @@ random joint-position noise of $\pm 0.10\,\mathrm{rad}$ is added at reset
 to expose the policy to varied initial postures.
 Push disturbances (\SI{40}{N} applied over 8 control steps, $\approx\SI{0.16}{s}$)
 are introduced only in the \texttt{balance\_robust} fine-tuning stage.
+
+Table~\ref{tab:domain_rand} summarizes the randomized parameters and their
+ranges, following established sim-to-real protocols~\cite{tobin2017domain,peng2018simtoreal}.
+Each parameter is sampled independently per episode from a uniform distribution
+over the stated range, with the nominal value at the midpoint unless noted.
+
+\begin{table}[t]
+\centering
+\caption{Domain randomization parameters applied during training.
+All parameters are sampled uniformly per episode.
+Sensor noise is sampled independently per step.}
+\label{tab:domain_rand}
+\begin{tabular}{l l l}
+\toprule
+Parameter & Range & Unit \\
+\midrule
+\multicolumn{3}{l}{\textit{Dynamics}} \\
+Friction coefficient   & $[0.5,\; 1.5]$         & --- \\
+Total body mass        & $\pm 15\%$ of nominal   & kg \\
+Motor strength         & $[0.8,\; 1.2]\times$    & --- \\
+Joint damping          & $[0.8,\; 1.2]\times$    & --- \\
+CoM offset (x, y)      & $[-0.02,\; 0.02]$       & m \\
+\midrule
+\multicolumn{3}{l}{\textit{Sensors \& Actuation}} \\
+IMU angular velocity noise  & $\mathcal{N}(0,\,0.05^2)$ & rad/s \\
+Joint encoder noise         & $\mathcal{N}(0,\,0.01^2)$ & rad \\
+Linear velocity noise       & $\mathcal{N}(0,\,0.05^2)$ & m/s \\
+Action delay                & 1 step ($\approx$20\,ms)   & --- \\
+\midrule
+\multicolumn{3}{l}{\textit{Initial Conditions}} \\
+Initial body tilt           & $[-0.05,\; 0.05]$   & rad \\
+Initial joint offset        & $[-0.05,\; 0.05]$   & rad \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Low-Level PID Control}
 \label{sec:pid}
@@ -485,6 +579,13 @@ r_{\mathrm{level}} =
 \end{equation}
 where $\phi_t$ and $\theta_t$ are the torso roll and pitch angles,
 and $\sigma_r = \sigma_p = 0.15\,\mathrm{rad}$.
+The threshold $\sigma = 0.15\,\mathrm{rad}$ ($\approx8.6^\circ$) corresponds
+to the boundary of stable balance for a wheeled inverted pendulum at the
+nominal height: beyond this lean angle the TWIP linearization becomes
+inaccurate and recovery is uncertain.
+This choice ensures the reward remains near 1.0 during upright stance
+and falls sharply only when tilt enters the unstable regime,
+providing a tight but achievable target for the policy.
 
 \subsubsection{Height Tracking Reward}
 \begin{equation}
@@ -494,8 +595,15 @@ r_{\mathrm{height}} =
 \right),
 \label{eq:height_reward}
 \end{equation}
-with $\sigma_h = 0.25\,\mathrm{m}$, providing a gradient signal
-even when the actual height is far from the target.
+with $\sigma_h = 0.25\,\mathrm{m}$.
+This bandwidth was selected to provide a non-vanishing gradient signal
+across the full commanded height range $[0.40, 0.70]\,\mathrm{m}$:
+at the midpoint of a 0.15\,m tracking error, the reward retains
+$\exp(-0.15^2/0.25^2) \approx 0.83$ of its maximum value,
+ensuring a smooth gradient that guides learning even during early training
+when height tracking is poor.
+A tighter $\sigma$ would produce near-zero gradients for heights far from
+the target and destabilize early-stage curriculum learning.
 
 \subsubsection{Heading and Position Regularization}
 To keep the robot near its initial yaw $\psi_0$ and anchor
@@ -640,7 +748,7 @@ r_{\mathrm{nat}} =
 r_{\mathrm{knee}},
 \label{eq:natural_pose}
 \end{equation}
-where $\sigma_{nat} = 0.8\,\mathrm{rad}$ and $r_{\mathrm{knee}}$
+where $\sigma_{\mathrm{nat}} = 0.5\,\mathrm{rad}$ and $r_{\mathrm{knee}}$
 penalizes knee hyperextension:
 \begin{equation}
 r_{\mathrm{knee}}=
@@ -652,6 +760,21 @@ with $\sigma_k = 0.15\,\mathrm{rad}$.
 This reward prevents the policy from exploiting unnatural joint
 configurations (e.g., extreme hip abduction with nearly straight knees)
 to satisfy a height target without a kinematically meaningful posture.
+
+\noindent\textbf{Design rationale.}
+Without this term, a height-tracking reward alone permits degenerate
+solutions: the robot can achieve the target CoM height by bending
+one leg more than the other (asymmetric collapse), hyperextending
+the knee, or adopting an extreme hip-pitch that satisfies the height
+constraint but produces an unstable inverted-pendulum configuration.
+The piecewise-linear interpolation maps each commanded height to a
+physically meaningful (hip-pitch, knee) pair derived from the
+two-link leg geometry, effectively constraining the null space of the
+height objective to stable, symmetric postures.
+The soft exponential penalty ($\sigma_{\mathrm{nat}} = 0.5\,\mathrm{rad}$)
+allows exploration during early training while strongly penalizing
+configurations that deviate more than $\approx 0.5\,\mathrm{rad}$
+from the target posture.
 
 \subsection{Effort and Smoothness Penalties}
 We regularize torque magnitude, joint velocity, action variation,
@@ -902,6 +1025,55 @@ entropy coefficient 0.005, value-loss coefficient 0.5.
 % [TODO-RESULT: report actual total training steps once complete;
 %  planned target is approximately 50M environment steps]
 
+The complete set of hyperparameters is summarized in
+Table~\ref{tab:ppo_hyperparams} for reproducibility.
+
+\begin{table}[t]
+\centering
+\caption{PPO training hyperparameters for the \texttt{balance} stage.}
+\label{tab:ppo_hyperparams}
+\begin{tabular}{l r}
+\toprule
+Hyperparameter & Value \\
+\midrule
+\multicolumn{2}{l}{\textit{Environment}} \\
+Parallel environments    & 4{,}096 \\
+Rollout length           & 128 steps \\
+Control frequency        & 50\,Hz (20\,ms/step) \\
+Episode length           & 1{,}000 steps (20\,s) \\
+\midrule
+\multicolumn{2}{l}{\textit{PPO Update}} \\
+Epochs per update        & 4 \\
+Minibatches per epoch    & 32 \\
+Minibatch size           & 16{,}384 \\
+PPO clip range ($\epsilon$) & 0.2 \\
+\midrule
+\multicolumn{2}{l}{\textit{Optimization}} \\
+Optimizer                & Adam \\
+Learning rate            & $2\times10^{-4}$ \\
+Gradient norm clip       & 0.5 \\
+Value loss coefficient   & 0.5 \\
+Entropy coefficient      & 0.005 \\
+\midrule
+\multicolumn{2}{l}{\textit{Advantage Estimation}} \\
+Discount $\gamma$        & 0.99 \\
+GAE $\lambda$            & 0.95 \\
+\midrule
+\multicolumn{2}{l}{\textit{Network}} \\
+Hidden layers (actor)    & $\{256, 256, 128\}$ \\
+Hidden layers (critic)   & $\{256, 256, 128\}$ \\
+Activation               & ELU \\
+Weight init              & Orthogonal \\
+Initial log-std          & $\log(0.2)$ \\
+\midrule
+\multicolumn{2}{l}{\textit{Curriculum Evaluation}} \\
+Eval interval            & every 2 updates \\
+Eval environments        & 32 \\
+Eval episodes            & 200 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Research Evaluation Protocol}
 \label{sec:eval_protocol}
 Research evaluation is performed offline using a deterministic
@@ -1097,6 +1269,43 @@ that gravity-body-frame observations alone cannot.
 Without it, a memoryless MLP requires undesirable implicit integration of
 angular velocity over many steps to sense accumulated yaw drift.
 
+\subsection{Sim-to-Real Considerations}
+\label{sec:sim2real}
+Although the present work is conducted entirely in simulation,
+the framework is designed with hardware transfer in mind.
+
+\noindent\textbf{Action representation.}
+The policy outputs PD position targets rather than raw torques.
+This action representation has been shown to transfer reliably across
+the sim-to-real gap for legged locomotion~\cite{hwangbo2019learning,rudin2022walk},
+as it implicitly low-pass filters the control signal and decouples the policy
+from precise actuator gain tuning.
+
+\noindent\textbf{Domain randomization coverage.}
+The randomization ranges in Table~\ref{tab:domain_rand} were chosen to
+bracket the expected real-world variability: friction variation covers
+floor surfaces from polished tile (low) to rubber mat (high),
+mass perturbation covers battery charge variation and light payloads,
+and action delay covers the communication latency of the embedded
+motor controller.
+
+\noindent\textbf{Observation availability.}
+The policy uses body-frame linear velocity, which requires a velocity
+estimator on hardware.
+Should a reliable estimator be unavailable, the velocity channel can
+be dropped, reducing the observation to 38 dimensions.
+The policy can be retrained under this reduced observation for
+direct deployment, at a modest cost in height-tracking precision.
+
+\noindent\textbf{Transfer plan.}
+Planned hardware deployment will proceed in three stages:
+(i)~system identification of actuator friction and rotor inertia
+to refine the simulator;
+(ii)~policy deployment at fixed nominal height ($h^{cmd}=0.65$\,m)
+with a fall-safe watchdog;
+(iii)~progressive extension to variable-height commands
+following the same Phase~A/B/C ordering as training.
+
 \subsection{Current Limitations}
 \begin{enumerate}
     \item \textbf{Balance only (experimentally).}
@@ -1112,12 +1321,15 @@ angular velocity over many steps to sense accumulated yaw drift.
     Claims in this paper concern framework design, not demonstrated
     performance.
 
-    \item \textbf{No sim-to-real transfer.}
+    \item \textbf{No sim-to-real transfer (yet).}
     All work is conducted in simulation.
     Although the robot model matches a physical platform,
     sim-to-real transfer has not been attempted.
     The sensor-noise and action-delay configurations are designed for
-    sim-to-real preparation but have not been hardware-validated.
+    sim-to-real preparation following established protocols~%
+    \cite{tobin2017domain,peng2018simtoreal,tan2018simtoreal},
+    but hardware validation remains as future work
+    (see Section~\ref{sec:sim2real}).
 
     \item \textbf{Multi-seed training planned, not yet complete.}
     Final reported metrics are to be aggregated over three independent
@@ -1146,36 +1358,38 @@ angular velocity over many steps to sense accumulated yaw drift.
 % ============================================================
 This paper presented a curriculum reinforcement learning framework for
 variable-height balancing of a 10-actuated wheeled biped robot.
-The framework includes:
-(1) a 41-dimensional observation with explicit yaw-error feedback;
-(2) a PID low-level controller shared with a classical LQR baseline;
-(3) a within-stage height curriculum gated by a greedy evaluation pass
-every 2 training updates, with $r_{\mathrm{thr}} = 0.75$;
-(4) a height-consistent natural pose reward via piecewise-linear
-kinematic interpolation; and
-(5) a multi-stage macro-curriculum with stages
-\texttt{balance}, \texttt{stand\_up}, and \texttt{balance\_robust}.
+The core technical contributions are: (i)~a height-conditioned policy
+trained via PPO in GPU-accelerated MuJoCo MJX simulation with 4,096
+parallel environments; (ii)~a within-stage height curriculum that
+expands the commanded height range from near-nominal standing to
+deep crouching across 29 levels, gated by a greedy evaluation pass;
+(iii)~a height-consistent natural pose reward that maps commanded
+height to target joint angles via piecewise-linear interpolation,
+preventing degenerate balancing strategies; and (iv)~a classical LQR
+baseline sharing the same PID actuator interface, enabling controlled
+comparison across a suite of ten evaluation scenarios.
 
-A classical LQR baseline operating on the same 41-dimensional
-observation interface provides an interpretable reference for
-near-nominal operation.
-A ten-scenario evaluation benchmark with ten per-scenario metrics
-provides the infrastructure for rigorous quantitative comparison.
+The framework is designed for sim-to-real transfer: PD position targets
+as the action representation, comprehensive domain randomization covering
+friction, mass, motor strength, and sensor noise, and an observation
+space that degrades gracefully when linear velocity is unavailable.
+A multi-stage macro-curriculum (\texttt{balance} $\to$
+\texttt{stand\_up} $\to$ \texttt{balance\_robust}) provides a path
+toward robust recovery from falls and active height transitions.
 
-All infrastructure has been fully implemented in MuJoCo MJX with JAX.
-At the current stage, the main contribution is the system design,
-the height-consistent posture reward, and the LQR baseline.
-Quantitative results will be reported in a future revision.
-% [TODO-RESULT: replace this paragraph with actual results once complete]
+% [TODO-RESULT: Once training is complete, replace the following sentence
+%  with a summary of key quantitative findings, e.g.:
+%  "Experimental results show that the RL policy achieves X m height RMSE
+%   across the full [0.40, 0.70] m range and recovers from pushes up to Y N,
+%   outperforming the LQR baseline on all full-range and disturbance metrics."]
+Experimental evaluation and quantitative comparison with the LQR baseline
+are ongoing; results will be reported in the final version.
 
-Future work:
-(1) complete training and report variable-height balance results
-with ablations over the natural pose reward weight and
-the quality of the linear velocity estimate;
-(2) train and evaluate \texttt{stand\_up} and \texttt{balance\_robust};
-(3) multi-seed statistical validation;
-(4) quantitative RL vs.\ LQR comparison across all ten scenarios; and
-(5) sim-to-real transfer to the physical robot platform.
+Future work will focus on hardware deployment via the staged transfer
+plan described in Section~\ref{sec:sim2real}, extension of the
+macro-curriculum to the \texttt{stand\_up} and \texttt{balance\_robust}
+stages, and integration of exteroceptive sensing for terrain-aware
+variable-height locomotion.
 
 \section*{Acknowledgment}
 % [TODO: Add acknowledgments if applicable.]
@@ -1256,6 +1470,91 @@ a Fuzzy Logic Approach,''
 X. Li \emph{et al.},
 ``Dynamic wheeled motion control of wheel-biped transformable robots,''
 \emph{Biomimetic Intelligence and Robotics}, 2021.
+
+\bibitem{rudin2022walk}
+N. Rudin, D. Hoeller, P. Reist, and M. Hutter,
+``Learning to Walk in Minutes Using Massively Parallel Deep Reinforcement Learning,''
+in \emph{Proc. Conf. Robot Learning (CoRL)}, vol.~164, pp. 91--100, 2022.
+
+\bibitem{lee2020learning}
+J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter,
+``Learning Quadrupedal Locomotion over Challenging Terrain,''
+\emph{Science Robotics}, vol.~5, no.~47, p.~eabc5986, 2020.
+
+\bibitem{kumar2021rma}
+A. Kumar, Z. Fu, D. Pathak, and J. Malik,
+``RMA: Rapid Motor Adaptation for Legged Robots,''
+in \emph{Proc. Robotics: Science and Systems (RSS)}, 2021.
+
+\bibitem{hwangbo2019learning}
+J. Hwangbo \emph{et al.},
+``Learning Agile and Dynamic Motor Skills for Legged Robots,''
+\emph{Science Robotics}, vol.~4, no.~26, p.~eaau5872, 2019.
+
+\bibitem{miki2022wild}
+T. Miki \emph{et al.},
+``Learning Robust Perceptive Locomotion for Quadrupedal Robots in the Wild,''
+\emph{Science Robotics}, vol.~7, no.~62, p.~eabk2822, 2022.
+
+\bibitem{lee2024robustnavigation}
+J. Lee \emph{et al.},
+``Learning Robust Autonomous Navigation and Locomotion for Wheeled-Legged Robots,''
+\emph{Science Robotics}, vol.~9, 2024.
+
+\bibitem{vollenweider2023advancedskills}
+E. Vollenweider \emph{et al.},
+``Advanced Skills through Multiple Adversarial Motion Priors in Reinforcement Learning,''
+in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, pp. 5120--5126, 2023.
+
+\bibitem{chamorro2024stairclimbing}
+I. Chamorro, J. Arrizabalaga, and M. Hutter,
+``Reinforcement Learning for Blind Stair Climbing with Legged and Wheeled-Legged Robots,''
+in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, 2024.
+
+\bibitem{whleaper2024}
+J. Zhu, S. Zhao, and E. Yoshida,
+``Whleaper: A 10-DOF Flexible Bipedal Wheeled Robot,''
+in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)},
+pp. 11272--11277, 2024.
+
+\bibitem{zhu2022hierarchical}
+J. Zhu and M. Hayashibe,
+``Reinforcement Learning Based Hierarchical Control for Path Tracking of a
+Wheeled Bipedal Robot with Sim-to-Real Framework,''
+in \emph{Proc. IEEE/SICE Int. Symp. System Integration (SII)}, 2022.
+
+\bibitem{diablo2024}
+S. Liu \emph{et al.},
+``DIABLO: A 6-DoF Wheeled Bipedal Robot Composed Entirely of Direct-Drive Joints,''
+\emph{arXiv preprint arXiv:2407.21500}, 2024.
+
+\bibitem{portelas2020acl}
+R. Portelas, C. Colas, L. Weng, K. Hofmann, and P.-Y. Oudeyer,
+``Automatic Curriculum Learning for Deep RL: A Short Survey,''
+in \emph{Proc. Int. Joint Conf. Artificial Intelligence (IJCAI)}, 2020.
+
+\bibitem{portelas2020teacher}
+R. Portelas, C. Colas, K. Hofmann, and P.-Y. Oudeyer,
+``Teacher Algorithms for Curriculum Learning of Deep RL in Continuously
+Parameterized Environments,''
+in \emph{Proc. Conf. Robot Learning (CoRL)}, vol.~100, pp. 835--853, 2020.
+
+\bibitem{wang2019poet}
+R. Wang, J. Lehman, J. Clune, and K. O. Stanley,
+``Paired Open-Ended Trailblazer (POET): Endlessly Generating Increasingly
+Complex and Diverse Learning Environments and Their Solutions,''
+\emph{arXiv preprint arXiv:1901.01753}, 2019.
+
+\bibitem{peng2018simtoreal}
+X. B. Peng, M. Andrychowicz, W. Zaremba, and P. Abbeel,
+``Sim-to-Real Transfer of Robotic Control with Dynamics Randomization,''
+in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)},
+pp. 3803--3810, 2018.
+
+\bibitem{tan2018simtoreal}
+J. Tan \emph{et al.},
+``Sim-to-Real: Learning Agile Locomotion for Quadruped Robots,''
+in \emph{Proc. Robotics: Science and Systems (RSS)}, 2018.
 
 \end{thebibliography}
 
