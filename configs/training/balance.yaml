@@ -147,8 +147,8 @@ termination:
 domain_randomization:
   enabled: true
   mass_range: [0.85, 1.15] # 15% variation in mass (matches hardware variation better than 10%)
-  friction_range: [0.7, 1.3] # ±30% variation — covers tile/carpet/concrete variation
-  joint_damping_range: [0.8, 1.2] # ±20% variation — covers actuator wear variation
+  friction_range: [0.6, 1.4] # ±40% variation — covers tile/carpet/concrete variation
+  joint_damping_range: [0.7, 1.3] # ±30% variation — covers actuator wear variation
   push_interval: 500 # đẩy ngẫu nhiên mỗi 500 steps (~10s)
   push_magnitude: 0 # Stage 1: không push — robot học balance thuần trước
   push_duration: 5 # số steps giữ lực (5 × 0.02s = 0.1 giây mỗi lần đẩy)

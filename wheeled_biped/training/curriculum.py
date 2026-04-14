@@ -211,9 +211,7 @@ class CurriculumManager:
             trainer, logger = self._create_trainer_for_stage(self.current_stage_idx)
 
             # Train — checkpoints under outputs/<stage_name>/rl/checkpoints/
-            checkpoint_dir = str(
-                self.output_dir / stage_name / "rl" / "checkpoints"
-            )
+            checkpoint_dir = str(self.output_dir / stage_name / "rl" / "checkpoints")
             train_result = trainer.train(
                 total_steps=stage_steps,
                 checkpoint_dir=checkpoint_dir,

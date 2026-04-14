@@ -2,9 +2,12 @@
 Script đánh giá model đã train.
 
 Cách dùng:
-  python scripts/evaluate.py --checkpoint outputs/balance/rl/seed42/checkpoints/final --stage balance
-  python scripts/evaluate.py --checkpoint outputs/balance/rl/seed42/checkpoints/final --mode push_recovery
-  python scripts/evaluate.py --checkpoint outputs/balance/rl/seed42/checkpoints/final --mode command_tracking
+  python scripts/evaluate.py \
+      --checkpoint outputs/balance/rl/seed42/checkpoints/final --stage balance
+  python scripts/evaluate.py \
+      --checkpoint outputs/balance/rl/seed42/checkpoints/final --mode push_recovery
+  python scripts/evaluate.py \
+      --checkpoint outputs/balance/rl/seed42/checkpoints/final --mode command_tracking
 
 Results are saved alongside the checkpoint dir by default:
   outputs/balance/rl/seed42/checkpoints/final/eval_results_<mode>.json

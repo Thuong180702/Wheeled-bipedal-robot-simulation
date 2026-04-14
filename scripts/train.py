@@ -24,7 +24,8 @@ Cách dùng:
   python scripts/train.py single --stage balance --steps 50000000 --seed 113
 
   # Tiếp tục từ checkpoint
-  python scripts/train.py single --stage balance --resume outputs/balance/rl/seed42/checkpoints/step_1000000
+  python scripts/train.py single --stage balance \
+      --resume outputs/balance/rl/seed42/checkpoints/step_1000000
 """
 
 from __future__ import annotations

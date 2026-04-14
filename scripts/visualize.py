@@ -101,9 +101,7 @@ def policy(
     checkpoint: str = typer.Option(..., help="Đường dẫn checkpoint."),
     num_steps: int = typer.Option(2000, help="Số bước mô phỏng."),
     slow_factor: float = typer.Option(1.0, help="Hệ số chậm (>1 = chậm hơn)."),
-    log: bool = typer.Option(
-        False, help="Ghi telemetry CSV + hiển thị biểu đồ sau khi chạy."
-    ),
+    log: bool = typer.Option(False, help="Ghi telemetry CSV + hiển thị biểu đồ sau khi chạy."),
     log_dir: str = typer.Option(
         "",
         help="Thư mục lưu log (mặc định: <run_root>/telemetry theo checkpoint).",
@@ -249,9 +247,7 @@ def policy(
             )
 
             torso_quat = jnp.array(mj_data.qpos[3:7])
-            yaw_error = jnp.array(
-                [wrap_angle(float(quat_to_euler(torso_quat)[2]) - _initial_yaw)]
-            )
+            yaw_error = jnp.array([wrap_angle(float(quat_to_euler(torso_quat)[2]) - _initial_yaw)])
             gravity_body = get_gravity_in_body_frame(torso_quat)
 
             # Body-frame velocity (giống training)
@@ -289,14 +285,10 @@ def policy(
             if pid_enabled:
                 joint_pos = jnp.array(mj_data.qpos[7:17])
                 joint_vel = jnp.array(mj_data.qvel[6:16])
-                pos_target = joint_mins + (control_action + 1.0) * 0.5 * (
-                    joint_maxs - joint_mins
-                )
+                pos_target = joint_mins + (control_action + 1.0) * 0.5 * (joint_maxs - joint_mins)
                 vel_target_wheel = control_action * wheel_vel_limit
                 pos_err = pos_target - joint_pos
-                error = (1.0 - wheel_mask) * pos_err + wheel_mask * (
-                    vel_target_wheel - joint_vel
-                )
+                error = (1.0 - wheel_mask) * pos_err + wheel_mask * (vel_target_wheel - joint_vel)
                 d_error = -joint_vel
                 pid_integral = jnp.clip(
                     pid_integral + error * control_dt,
@@ -473,9 +465,7 @@ def render(
 
     for step in range(num_steps):
         torso_quat = jnp.array(mj_data.qpos[3:7])
-        yaw_error = jnp.array(
-            [wrap_angle(float(quat_to_euler(torso_quat)[2]) - _initial_yaw)]
-        )
+        yaw_error = jnp.array([wrap_angle(float(quat_to_euler(torso_quat)[2]) - _initial_yaw)])
         gravity_body = get_gravity_in_body_frame(torso_quat)
 
         # Body-frame velocity (giống training)
@@ -508,14 +498,10 @@ def render(
         if pid_enabled:
             joint_pos = jnp.array(mj_data.qpos[7:17])
             joint_vel = jnp.array(mj_data.qvel[6:16])
-            pos_target = joint_mins + (control_action + 1.0) * 0.5 * (
-                joint_maxs - joint_mins
-            )
+            pos_target = joint_mins + (control_action + 1.0) * 0.5 * (joint_maxs - joint_mins)
             vel_target_wheel = control_action * wheel_vel_limit
             pos_err = pos_target - joint_pos
-            error = (1.0 - wheel_mask) * pos_err + wheel_mask * (
-                vel_target_wheel - joint_vel
-            )
+            error = (1.0 - wheel_mask) * pos_err + wheel_mask * (vel_target_wheel - joint_vel)
             d_error = -joint_vel
             pid_integral = jnp.clip(
                 pid_integral + error * control_dt,
@@ -569,9 +555,7 @@ def interactive(
         None,
         help="Checkpoint policy để giữ thăng bằng (nếu có).",
     ),
-    log: bool = typer.Option(
-        False, help="Ghi telemetry CSV + biểu đồ khi đóng viewer."
-    ),
+    log: bool = typer.Option(False, help="Ghi telemetry CSV + biểu đồ khi đóng viewer."),
     log_dir: str = typer.Option(
         "",
         help="Thư mục lưu log (mặc định: <run_root>/telemetry theo checkpoint).",
@@ -640,9 +624,7 @@ def interactive(
     # ---------- PD standing gains ----------
     # Khi không có checkpoint, sử dụng PD controller đơn giản để giữ thăng bằng
     # Target joint positions (standing keyframe)
-    standing_qpos = (
-        np.array(mj_data.qpos[7:17], copy=True) if mj_model.nkey > 0 else np.zeros(10)
-    )
+    standing_qpos = np.array(mj_data.qpos[7:17], copy=True) if mj_model.nkey > 0 else np.zeros(10)
     kp_joints = np.array(
         [8.0, 6.0, 20.0, 18.0, 0, 8.0, 6.0, 20.0, 18.0, 0]
     )  # hip_roll, hip_yaw, hip_pitch, knee, wheel (0 cho bánh)
@@ -683,9 +665,7 @@ def interactive(
 
             _interactive_prev_action = jnp.zeros(10)
             _interactive_pid_integral = jnp.zeros(10)
-            _interactive_height_cmd_norm = (default_height_cmd - MIN_H) / (
-                MAX_H - MIN_H
-            )
+            _interactive_height_cmd_norm = (default_height_cmd - MIN_H) / (MAX_H - MIN_H)
             _initial_yaw[0] = float(quat_to_euler(jnp.array(mj_data.qpos[3:7]))[2])
 
             pid_cfg = config.get("low_level_pid", {})
@@ -764,8 +744,7 @@ def interactive(
 
                 if pid_enabled and pid_alpha > 0.0:
                     control_action = (
-                        pid_alpha * _interactive_prev_action
-                        + (1.0 - pid_alpha) * action
+                        pid_alpha * _interactive_prev_action + (1.0 - pid_alpha) * action
                     )
                 else:
                     control_action = action
@@ -788,16 +767,12 @@ def interactive(
                         pid_i_limit,
                     )
                     ctrl = jnp.clip(
-                        pid_kp * error
-                        + pid_kd * d_error
-                        + pid_ki * _interactive_pid_integral,
+                        pid_kp * error + pid_kd * d_error + pid_ki * _interactive_pid_integral,
                         ctrl_min,
                         ctrl_max,
                     )
                 else:
-                    ctrl = ctrl_min + (control_action + 1.0) * 0.5 * (
-                        ctrl_max - ctrl_min
-                    )
+                    ctrl = ctrl_min + (control_action + 1.0) * 0.5 * (ctrl_max - ctrl_min)
 
                 _interactive_prev_action = control_action
                 return np.array(ctrl)
@@ -865,9 +840,7 @@ def interactive(
     decay = 0.85
 
     # Smooth height interpolation — tránh giật khi thay đổi chiều cao
-    smooth_h_cmd = (
-        default_height_cmd  # giá trị thực tế dùng để tính target (nội suy mượt, mét)
-    )
+    smooth_h_cmd = default_height_cmd  # giá trị thực tế dùng để tính target (nội suy mượt, mét)
     height_smooth_rate = 0.1  # tốc độ nội suy mỗi step (nhỏ = mượt hơn)
 
     # Telemetry recorder
@@ -878,9 +851,7 @@ def interactive(
         telemetry_dir.mkdir(parents=True, exist_ok=True)
         console.print(f"  [cyan]Telemetry: ON → {telemetry_dir}/[/cyan]")
 
-    with mujoco.viewer.launch_passive(
-        mj_model, mj_data, key_callback=key_callback
-    ) as viewer:
+    with mujoco.viewer.launch_passive(mj_model, mj_data, key_callback=key_callback) as viewer:
         while viewer.is_running():
             step_start = time.time()
 
@@ -978,14 +949,11 @@ def interactive(
                         blend = min((KEY_H - h_eff) / max(KEY_H - MIN_H, 1e-6), 1.0)
                     for idx in [2, 3, 7, 8]:  # hip_pitch, knee (2 bên)
                         pd_torque = (
-                            kp_h * (height_target[idx] - joint_pos[idx])
-                            - kd_h * joint_vel[idx]
+                            kp_h * (height_target[idx] - joint_pos[idx]) - kd_h * joint_vel[idx]
                         )
                         pd_torque = np.clip(pd_torque, -10, 10)
                         # Blend: policy*(1-blend) + PD*blend
-                        base_ctrl[idx] = (1 - blend) * base_ctrl[
-                            idx
-                        ] + blend * pd_torque
+                        base_ctrl[idx] = (1 - blend) * base_ctrl[idx] + blend * pd_torque
                 mj_data.ctrl[:] = np.clip(
                     base_ctrl,
                     mj_model.actuator_ctrlrange[:, 0],
@@ -995,9 +963,7 @@ def interactive(
                 # PD controller giữ tư thế + height control
                 joint_pos = np.array(mj_data.qpos[7:17])
                 joint_vel = np.array(mj_data.qvel[6:16])
-                pd_ctrl = (
-                    kp_joints * (height_target - joint_pos) - kd_joints * joint_vel
-                )
+                pd_ctrl = kp_joints * (height_target - joint_pos) - kd_joints * joint_vel
 
                 # Overlay keyboard
                 desired_left = fwd * spd - trn * spd * 0.5
@@ -1180,9 +1146,7 @@ def unified(
     smooth_h_cmd_uni = 0.71  # smooth height cho unified mode (mét)
     height_smooth_rate_uni = 0.1
 
-    with mujoco.viewer.launch_passive(
-        mj_model, mj_data, key_callback=key_callback
-    ) as viewer:
+    with mujoco.viewer.launch_passive(mj_model, mj_data, key_callback=key_callback) as viewer:
         while viewer.is_running():
             step_start = time.time()
 

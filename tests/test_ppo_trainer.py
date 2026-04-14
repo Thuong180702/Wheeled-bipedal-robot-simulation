@@ -2221,9 +2221,7 @@ class TestBestRewardTracking:
         import jax.numpy as jnp
 
         def _patched_rollout(self_, params, env_state, rng, obs_rms):
-            env_state_out, transitions, rng_out = original_rollout(
-                params, env_state, rng, obs_rms
-            )
+            env_state_out, transitions, rng_out = original_rollout(params, env_state, rng, obs_rms)
             idx = call_count[0]
             call_count[0] += 1
             if idx == SPIKE_CALL:
