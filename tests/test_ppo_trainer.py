@@ -1866,27 +1866,32 @@ class TestBalanceCurriculumFixes:
     Test B requires running train() with a monkeypatched eval_pass() — marked @pytest.mark.slow.
     """
 
+    def _effective_eval_interval(self, cfg, num_envs, rollout_length):
+        """Mirrors ppo.py logic: eval_interval_steps takes priority over eval_interval."""
+        steps_per_update = num_envs * rollout_length
+        curr = cfg["curriculum"]
+        if "eval_interval_steps" in curr:
+            return max(1, int(curr["eval_interval_steps"]) // steps_per_update), steps_per_update
+        return int(curr.get("eval_interval", 50)), steps_per_update
+
     def test_eval_interval_compatible_with_5m_gpu_run(self):
-        """balance.yaml eval_interval must allow at least one eval in a 5M-step GPU run.
+        """balance.yaml eval cadence must fire at least once in a 5M-step GPU run.
 
         With num_envs=4096, rollout_length=128 → steps_per_update=524,288.
-        eval_interval=2 → first eval at 2 × 524,288 = 1,048,576 steps ≤ 5M. ✓
-        Old value of 50 → first eval at 26M steps > 5M. ✗
+        eval_interval_steps=1_000_000 → eval_interval=max(1,1M//524K)=1 update → ~524K steps ≤ 5M. ✓
         """
         from wheeled_biped.utils.config import load_yaml
 
         cfg = load_yaml("configs/training/balance.yaml")
-        num_envs = cfg["task"]["num_envs"]
-        rollout_length = cfg["ppo"]["rollout_length"]
-        eval_interval = cfg["curriculum"]["eval_interval"]
-
-        steps_per_update = num_envs * rollout_length
+        eval_interval, steps_per_update = self._effective_eval_interval(
+            cfg, cfg["task"]["num_envs"], cfg["ppo"]["rollout_length"]
+        )
         steps_for_first_eval = eval_interval * steps_per_update
 
         assert steps_for_first_eval <= 5_000_000, (
             f"eval_interval={eval_interval} × steps_per_update={steps_per_update:,}"
             f" = {steps_for_first_eval:,} > 5M steps: curriculum eval never fires "
-            "in a standard 5M-step GPU run. Reduce eval_interval in balance.yaml."
+            "in a standard 5M-step GPU run. Reduce eval_interval_steps in balance.yaml."
         )
 
     def test_eval_interval_allows_multiple_evals_in_50m_run(self):
@@ -1897,11 +1902,9 @@ class TestBalanceCurriculumFixes:
         from wheeled_biped.utils.config import load_yaml
 
         cfg = load_yaml("configs/training/balance.yaml")
-        num_envs = cfg["task"]["num_envs"]
-        rollout_length = cfg["ppo"]["rollout_length"]
-        eval_interval = cfg["curriculum"]["eval_interval"]
-
-        steps_per_update = num_envs * rollout_length
+        eval_interval, steps_per_update = self._effective_eval_interval(
+            cfg, cfg["task"]["num_envs"], cfg["ppo"]["rollout_length"]
+        )
         num_updates_50m = 50_000_000 // steps_per_update
         num_evals_50m = num_updates_50m // eval_interval
 

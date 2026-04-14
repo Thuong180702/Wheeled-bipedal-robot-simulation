@@ -87,7 +87,7 @@ Joints per leg (5 × 2 = 10 total):
 │   └── <stage>/rl/seed<N>/
 ├── paper/                             # LaTeX manuscript
 │   ├── main.tex
-│   ├── refs.bib
+│   ├── refs.bib.backup      # BibTeX-format backup (paper uses embedded bibliography)
 │   └── figures/
 │       └── annotated_robot_joints.png
 ├── wheeled_biped/                     # Main package
@@ -188,6 +188,35 @@ python -c "import mujoco; import jax; print(mujoco.__version__, jax.__version__)
 python scripts/visualize.py model          # open robot in MuJoCo viewer
 pytest tests/ -v --ignore=tests/test_env.py  # run CPU-safe tests
 ```
+
+### Reproducibility / compute stack
+
+The table below records the environment used for the experiments reported in the paper.
+Fill in the actual values from your own run with `pip freeze` and `nvidia-smi`.
+
+| Component | Minimum required | Tested version |
+|---|---|---|
+| Python | 3.10 | 3.10.11 |
+| JAX | 0.4.25 | 0.6.2 |
+| jaxlib | 0.4.25 | 0.6.2 |
+| MuJoCo | 3.1.0 | 3.5.0 |
+| mujoco-mjx | 3.1.0 | 3.5.0 |
+| Flax | 0.8.0 | 0.10.7 |
+| Optax | 0.2.0 | 0.2.7 |
+| NumPy | 1.26.0 | 2.2.6 |
+| CUDA toolkit | 12.x | <!-- fill: e.g. 12.4 — run `nvcc --version` --> |
+| NVIDIA driver | — | <!-- fill: e.g. 550.90.07 — run `nvidia-smi` --> |
+| GPU model | — | <!-- fill: training GPU, e.g. NVIDIA RTX 3090 24 GB --> |
+| OS | — | <!-- fill: e.g. Ubuntu 22.04 LTS or Windows 10 --> |
+
+To capture your exact environment after a successful install:
+
+```bash
+pip freeze > requirements-lock.txt
+```
+
+Commit `requirements-lock.txt` alongside any final experiment checkpoints for full
+reproducibility.
 
 ---
 
@@ -724,6 +753,27 @@ python scripts/validate_checkpoint.py --checkpoint outputs/balance/rl/seed42/che
 ---
 
 ## Paper artifact generation
+
+### Building the paper PDF
+
+The manuscript is in `paper/main.tex` and uses an **embedded bibliography**
+(`\begin{thebibliography}`) — no external `.bib` file or BibTeX/biber step is needed.
+Build with a single `pdflatex` pass (or two passes for correct cross-references):
+
+```bash
+cd paper
+pdflatex main.tex
+pdflatex main.tex   # second pass resolves \ref and \cite labels
+```
+
+Required LaTeX packages: `IEEEtran` document class, `amsmath`, `graphicx`, `booktabs`,
+`siunitx`, `url`, `xcolor`, `cite`, `multirow`, `array`, `balance`.
+All are included in a standard TeX Live / MiKTeX full installation.
+
+> **Note:** `paper/refs.bib.backup` is a BibTeX-format backup of the embedded citations
+> kept for reference. It is **not** loaded by the paper build.
+
+### Exporting training results
 
 After a successful run, use `scripts/export_results.py` to produce paper-ready outputs
 from the training log and benchmark JSON without additional dependencies (matplotlib is
