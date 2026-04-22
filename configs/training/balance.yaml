@@ -44,14 +44,14 @@ curriculum:
 
 # --- PPO Hyperparameters ---
 ppo:
-  learning_rate: 2.0e-4
+  learning_rate: 3.0e-4
   num_epochs: 4
   num_minibatches: 32
   rollout_length: 128
   gamma: 0.99
   gae_lambda: 0.95
   clip_epsilon: 0.2
-  entropy_coeff: 0.004
+  entropy_coeff: 0.008
   value_loss_coeff: 0.5
   max_grad_norm: 0.5
   normalize_advantages: true
@@ -72,8 +72,8 @@ network:
 #    using -joint_vel would be a unit mismatch; see low_level_control.py)
 low_level_pid:
   enabled: true
-  action_smoothing_alpha: 0.5 # 0 = không lọc, 0.4~0.6 giúp giảm rung rõ
-  anti_windup_limit: 0.35 # giới hạn tích phân lỗi
+  action_smoothing_alpha: 0.4 # 0 = không lọc, 0.4~0.6 giúp giảm rung rõ
+  anti_windup_limit: 0.4 # giới hạn tích phân lỗi
   wheel_vel_limit: 20.0 # rad/s khi action = ±1 cho bánh xe
   # Theo thứ tự JOINT_NAMES:
   # [l_hip_roll, l_hip_yaw, l_hip_pitch, l_knee, l_wheel,

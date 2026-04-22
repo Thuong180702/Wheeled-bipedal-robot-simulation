@@ -143,6 +143,35 @@ class BalanceEnv(WheeledBipedEnv):
         ]
         self._wheel_mask = jnp.array(wheel_mask, dtype=jnp.float32)
 
+        # PID action bias: shifts policy action space so action=0 targets the
+        # keyframe joint positions instead of the joint-range midpoints.
+        #
+        # Problem without this: action=0 drives joints to range midpoints:
+        #   hip_pitch → 0.65 rad (midpoint of [-0.5, 1.8])
+        #   knee      → 1.10 rad (midpoint of [-0.5, 2.7])
+        # But the keyframe (0.71 m standing height) requires:
+        #   hip_pitch → 0.30 rad, knee → 0.50 rad
+        # This 0.35/0.60 rad mismatch causes the robot to deep-squat and lose
+        # balance immediately at episode start (every episode), making training fail.
+        #
+        # With bias: action=0 → pos_target = keyframe → robot holds standing pose.
+        # bias_i = 2*(kf_i - min_i) / (max_i - min_i) - 1  (wheel joints → 0)
+        # hip_pitch: 2*(0.3 - (-0.5)) / (1.8 - (-0.5)) - 1 = -0.304
+        # knee:      2*(0.5 - (-0.5)) / (2.7 - (-0.5)) - 1 = -0.375
+        _kf = jnp.array(
+            [0.0, 0.0, 0.3, 0.5, 0.0, 0.0, 0.0, 0.3, 0.5, 0.0], dtype=jnp.float32
+        )
+        # Wheel joints are unlimited (range=[0,0] in model) → avoid div-by-zero NaN.
+        # Replace range with 1.0 for wheels; the result is zeroed by (1-wheel_mask) anyway.
+        _jrange = jnp.where(
+            self._wheel_mask > 0.5,
+            1.0,
+            self._joint_maxs - self._joint_mins,
+        )
+        self._pid_action_bias = (
+            2.0 * (_kf - self._joint_mins) / _jrange - 1.0
+        ) * (1.0 - self._wheel_mask)
+
         # PID gains (vector theo 10 joints), có fallback an toàn
         default_kp = [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
         default_ki = [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
@@ -327,9 +356,11 @@ class BalanceEnv(WheeledBipedEnv):
 
         # Step 3 — Direct torque mode (cũ) hoặc PID low-level mode
         if self._pid_enabled:
+            # Apply keyframe bias so policy action=0 → PID targets keyframe pose.
+            biased_action = jnp.clip(control_action + self._pid_action_bias, -1.0, 1.0)
             scaled_action, pid_integral = self._pid_low_level_ctrl(
                 state.mjx_data,
-                control_action,
+                biased_action,
                 state.info["pid_integral"],
             )
         else:
