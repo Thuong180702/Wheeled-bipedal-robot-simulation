@@ -4,7 +4,7 @@ Balance Environment - Huấn luyện robot đứng vững ở nhiều chiều ca
 Task: Giữ thân robot nằm ngang, duy trì chiều cao theo lệnh (height_command),
 2 chân đối xứng, đứng yên ổn định, chống chịu nhiễu loạn.
 
-Observation: 41 dims = base (39 or 36) + height_command (1) + yaw_error (1)
+Observation: 42 dims = base (39 or 36) + height_command (1) + current_height (1) + yaw_error (1)
 Height command ngẫu nhiên mỗi episode trong khoảng [min_height_cmd, max_height_cmd].
 
 Đây là stage đầu tiên trong curriculum learning.
@@ -57,9 +57,10 @@ class BalanceEnv(WheeledBipedEnv):
     mở rộng dần → [0.40, 0.70] khi reward đạt ngưỡng (trainer quản lý).
     Robot phải giữ chiều cao theo lệnh, thân ngang, 2 chân đối xứng, đứng yên.
 
-    Observation (41 dims when lin_vel_mode != "disabled", 38 dims when "disabled"):
+    Observation (42 dims when lin_vel_mode != "disabled", 39 dims when "disabled"):
         - base obs (39 or 36): gravity_body, [lin_vel,] ang_vel, joint_pos, joint_vel, prev_action
         - height_command (1): chiều cao mục tiêu (normalized về [0, 1] theo [MIN=0.40, MAX=0.70])
+        - current_height (1): chiều cao torso thực tế (normalized về [0, 1] theo [MIN=0.40, MAX=0.70])
         - yaw_error (1): góc lệch yaw so với hướng mục tiêu (radians, wrapped to [-π, π])
     """
 
@@ -229,12 +230,12 @@ class BalanceEnv(WheeledBipedEnv):
         )
 
     def _compute_obs_size(self) -> int:
-        """Observation = base (39 or 36) + height_command (1) + yaw_error (1).
+        """Observation = base (39 or 36) + height_command (1) + current_height (1) + yaw_error (1).
 
-        Default (clean lin_vel mode): 39 + 1 + 1 = 41
-        Disabled lin_vel mode:        36 + 1 + 1 = 38
+        Default (clean lin_vel mode): 39 + 1 + 1 + 1 = 42
+        Disabled lin_vel mode:        36 + 1 + 1 + 1 = 39
         """
-        return super()._compute_obs_size() + 2
+        return super()._compute_obs_size() + 3
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def reset(self, rng: jax.Array) -> EnvState:
@@ -279,11 +280,15 @@ class BalanceEnv(WheeledBipedEnv):
         height_norm = (height_command - self.MIN_HEIGHT_CMD) / (
             self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
         )
+        # current_height_norm: actual torso height normalized to [0, 1]
+        current_height_norm = (mjx_data.qpos[2] - self.MIN_HEIGHT_CMD) / (
+            self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
+        )
         # yaw_error = 0 at episode start (robot begins at initial heading).
         # This extra dim makes heading control observable to the MLP policy:
         # gravity_body is yaw-invariant, so without yaw_error the policy cannot
         # sense accumulated heading drift.
-        obs = jnp.concatenate([base_obs, jnp.array([height_norm, 0.0])])
+        obs = jnp.concatenate([base_obs, jnp.array([height_norm, current_height_norm, 0.0])])
 
         # Lưu vị trí XY neo và yaw ban đầu để tính reward
         anchor_xy = mjx_data.qpos[:2]
@@ -399,9 +404,12 @@ class BalanceEnv(WheeledBipedEnv):
         noise_key, new_noise_rng = jax.random.split(state.info["noise_rng"])
         base_obs = self._extract_obs(mjx_data, control_action, noise_key)
 
-        # Append height_command (normalized) and yaw_error.
+        # Append height_command (normalized), current_height (normalized), and yaw_error.
         height_command = state.info["height_command"]
         height_norm = (height_command - self.MIN_HEIGHT_CMD) / (
+            self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
+        )
+        current_height_norm = (mjx_data.qpos[2] - self.MIN_HEIGHT_CMD) / (
             self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
         )
         # yaw_error: wrap_angle produces a value in [-π, π].
@@ -410,7 +418,7 @@ class BalanceEnv(WheeledBipedEnv):
         # that ang_vel alone cannot close in a memoryless MLP policy.
         current_yaw = quat_to_euler(mjx_data.qpos[3:7])[2]
         yaw_error = wrap_angle(current_yaw - state.info["initial_yaw"])
-        obs = jnp.concatenate([base_obs, jnp.array([height_norm, yaw_error])])
+        obs = jnp.concatenate([base_obs, jnp.array([height_norm, current_height_norm, yaw_error])])
 
         # Reward
         reward = self._compute_reward(mjx_data, control_action, state)
@@ -474,8 +482,8 @@ class BalanceEnv(WheeledBipedEnv):
         height_norm = (curriculum_height - self.MIN_HEIGHT_CMD) / (
             self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
         )
-        # obs[-2] = height_norm, obs[-1] = yaw_error (stays 0 from fresh reset)
-        new_obs = new_state.obs.at[-2].set(height_norm)
+        # obs[-3] = height_norm, obs[-2] = current_height_norm (set by reset()), obs[-1] = yaw_error
+        new_obs = new_state.obs.at[-3].set(height_norm)
         new_info = {
             **new_state.info,
             "height_command": curriculum_height,

@@ -44,9 +44,9 @@ is at the policy level, not the actuator level.
 
 FAIRNESS / ASSUMPTIONS
 -----------------------
-Requires the 41-dim observation format (lin_vel_mode="clean" or "noisy").
-lin_vel_mode="disabled" (38-dim obs) is NOT supported: the controller reads
-forward velocity from obs[4] (body_lin_vel[1]) which is absent in 38-dim obs.
+Requires the 42-dim observation format (lin_vel_mode="clean" or "noisy").
+lin_vel_mode="disabled" (39-dim obs) is NOT supported: the controller reads
+forward velocity from obs[4] (body_lin_vel[1]) which is absent in 39-dim obs.
 Passes through the same action-smoothing and PID layer as RL.
 The controller is STATEFUL: it integrates forward velocity to track position
 drift.  RL can in principle achieve the same through memory (the policy sees
@@ -128,15 +128,16 @@ _WHEEL_VEL_LIMIT = 20.0  # rad/s — same as low_level_pid.wheel_vel_limit
 _MIN_H = 0.40
 _MAX_H = 0.70
 
-# Observation indices (41-dim BalanceEnv obs)
+# Observation indices (42-dim BalanceEnv obs)
 _OBS_GRAV_Y = 1  # g_body[1] ≈ -sin(forward_lean); used for pitch balance
 _OBS_GRAV_X = 0  # g_body[0] ≈ sin(left_lean); used for roll balance
 _OBS_LIN_VEL_Y = 4  # body_lin_vel[1]; fwd_vel = -obs[4]
 _OBS_ANG_VEL_X = 6  # body_ang_vel[0] = forward lean rate
 _OBS_ANG_VEL_Y = 7  # body_ang_vel[1] = lateral lean rate
 _OBS_ANG_VEL_Z = 8  # body_ang_vel[2] = yaw rate
-_OBS_HEIGHT_CMD = 39  # normalised height command ∈ [0, 1]
-_OBS_YAW_ERROR = 40  # yaw drift from episode start [rad]
+_OBS_HEIGHT_CMD = 39       # normalised height command ∈ [0, 1]
+_OBS_CURRENT_HEIGHT = 40   # actual normalised torso height ∈ [0, 1]
+_OBS_YAW_ERROR = 41        # yaw drift from episode start [rad]
 
 
 # ---------------------------------------------------------------------------
@@ -316,7 +317,7 @@ class LQRBalanceController:
         ctrl.reset(height_cmd_m=0.65)
 
         # At each control step (50 Hz):
-        action = ctrl.compute_action(obs)   # obs is 41-dim numpy array
+        action = ctrl.compute_action(obs)   # obs is 42-dim numpy array
 
     Parameters
     ----------
@@ -398,13 +399,13 @@ class LQRBalanceController:
         ----------
         height_cmd_m : float
             Target standing height in metres (e.g. 0.65).  This is the
-            *un-normalised* height command, not the obs[-2] value.
+            *un-normalised* height command, not the obs[-3] value.
         """
         self._height_cmd_m = float(np.clip(height_cmd_m, _MIN_H, _MAX_H))
         self._fwd_pos_drift = 0.0
 
     def compute_action(self, obs: np.ndarray) -> np.ndarray:
-        """Map a 41-dim BalanceEnv observation to a 10-dim normalised action.
+        """Map a 42-dim BalanceEnv observation to a 10-dim normalised action.
 
         The output action vector has the same format as the RL policy output:
         values in [-1, 1], ordered as::
@@ -414,10 +415,10 @@ class LQRBalanceController:
 
         Parameters
         ----------
-        obs : np.ndarray, shape (41,)
+        obs : np.ndarray, shape (42,)
             BalanceEnv observation (raw, not normalised).
-            Requires lin_vel_mode="clean" or "noisy" (41-dim).
-            lin_vel_mode="disabled" (38-dim) is NOT supported.
+            Requires lin_vel_mode="clean" or "noisy" (42-dim).
+            lin_vel_mode="disabled" (39-dim) is NOT supported.
 
         Returns
         -------
@@ -426,11 +427,11 @@ class LQRBalanceController:
         """
         obs = np.asarray(obs, dtype=np.float64)
 
-        if obs.shape != (41,):
+        if obs.shape != (42,):
             raise ValueError(
-                f"LQRBalanceController requires a 41-dim observation "
+                f"LQRBalanceController requires a 42-dim observation "
                 f"(lin_vel_mode='clean' or 'noisy') but received shape {obs.shape}. "
-                f"If lin_vel_mode='disabled' (38-dim obs), forward velocity (obs[4]) "
+                f"If lin_vel_mode='disabled' (39-dim obs), forward velocity (obs[4]) "
                 f"is absent and the LQR sagittal loop cannot function. "
                 f"Set lin_vel_mode='clean' in baseline_lqr.yaml."
             )

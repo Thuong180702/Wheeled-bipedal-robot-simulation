@@ -466,10 +466,9 @@ class PPOTrainer:
                 h_key, shape=(num_eval_envs,), minval=curr_min, maxval=max_h
             )
             height_norm = (new_h_cmd - abs_min) / (max_h - abs_min)
-            # obs[-2] = height_norm, obs[-1] = yaw_error (added in BalanceEnv).
-            # Patch height_norm at index -2; leave yaw_error at -1 as-is
-            # (reset() already initialises yaw_error to 0.0 for new episodes).
-            new_obs = env_state.obs.at[:, -2].set(height_norm)
+            # obs[-3] = height_norm, obs[-2] = current_height_norm, obs[-1] = yaw_error.
+            # Patch height_norm at index -3; current_height_norm and yaw_error come from reset().
+            new_obs = env_state.obs.at[:, -3].set(height_norm)
             new_info = {
                 **env_state.info,
                 "height_command": new_h_cmd,

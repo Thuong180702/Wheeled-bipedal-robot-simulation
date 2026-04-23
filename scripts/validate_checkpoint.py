@@ -96,6 +96,7 @@ def _build_headless_obs(
     mj_data,
     prev_action: jnp.ndarray,
     height_cmd_norm: jnp.ndarray,
+    current_height_norm: jnp.ndarray,
     yaw_error: jnp.ndarray,
     lin_vel_mode: str,
     apply_noise: bool,
@@ -105,28 +106,30 @@ def _build_headless_obs(
     quat_conjugate_fn,
     quat_rotate_fn,
 ) -> jnp.ndarray:
-    """Build obs matching BalanceEnv._extract_obs() + height_cmd + yaw_error.
+    """Build obs matching BalanceEnv._extract_obs() + height_cmd + current_height + yaw_error.
 
     Obs layout (mirrors base_env._extract_obs docstring):
 
-    lin_vel_mode "clean" / "noisy"  → 39-dim base + 2 extras = 41 dims total:
+    lin_vel_mode "clean" / "noisy"  → 39-dim base + 3 extras = 42 dims total:
       [0:3]   gravity_body
       [3:6]   base_lin_vel  ("clean": simulator-exact; "noisy": + Gaussian noise)
       [6:9]   base_ang_vel  (noised when apply_noise=True)
       [9:19]  joint_pos
       [19:29] joint_vel
       [29:39] prev_action
-      [39]    height_cmd_norm
-      [40]    yaw_error
+      [39]    height_cmd_norm    (obs[-3])
+      [40]    current_height_norm (obs[-2])
+      [41]    yaw_error          (obs[-1])
 
-    lin_vel_mode "disabled"  → 36-dim base + 2 extras = 38 dims total:
+    lin_vel_mode "disabled"  → 36-dim base + 3 extras = 39 dims total:
       [0:3]   gravity_body
       [3:6]   base_ang_vel  ← shifts; lin_vel excluded
       [6:16]  joint_pos
       [16:26] joint_vel
       [26:36] prev_action
-      [36]    height_cmd_norm
-      [37]    yaw_error
+      [36]    height_cmd_norm    (obs[-3])
+      [37]    current_height_norm (obs[-2])
+      [38]    yaw_error          (obs[-1])
 
     Noise is applied with numpy.random (not jax.random) — magnitudes and
     structure are identical to _extract_obs().  prev_action is never noised.
@@ -195,7 +198,7 @@ def _build_headless_obs(
             base_obs = base_obs + jnp.array(noise)
 
     # Append task-specific extras (same as balance_env reset/step)
-    return jnp.concatenate([base_obs, height_cmd_norm, yaw_error])
+    return jnp.concatenate([base_obs, height_cmd_norm, current_height_norm, yaw_error])
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +293,7 @@ def validate(
 
     # Expected base obs dim from lin_vel_mode (mirrors base_env._compute_obs_size)
     base_obs_dim = 36 if lin_vel_mode == "disabled" else 39
-    expected_obs_size = base_obs_dim + 2  # + height_cmd_norm + yaw_error
+    expected_obs_size = base_obs_dim + 3  # + height_cmd_norm + current_height_norm + yaw_error
 
     # ── Obs size sanity check ─────────────────────────────────────────────────
     if obs_size != expected_obs_size:
@@ -423,16 +426,20 @@ def validate(
     initial_yaw = float(quat_to_euler(_init_quat)[2])
 
     for _ in range(num_steps):
-        # ── Current yaw error ─────────────────────────────────────────────────
+        # ── Current yaw error and actual height ───────────────────────────────
         torso_quat = jnp.array(mj_data.qpos[3:7])
         current_yaw = float(quat_to_euler(torso_quat)[2])
         yaw_error = jnp.array([wrap_angle(current_yaw - initial_yaw)])
+        current_height_norm = jnp.array(
+            [float(np.clip((float(mj_data.qpos[2]) - min_h) / (max_h - min_h), 0.0, 1.0))]
+        )
 
         # ── Build observation (matches _extract_obs + balance_env extras) ──────
         obs = _build_headless_obs(
             mj_data=mj_data,
             prev_action=prev_action,
             height_cmd_norm=height_cmd_norm,
+            current_height_norm=current_height_norm,
             yaw_error=yaw_error,
             lin_vel_mode=lin_vel_mode,
             apply_noise=apply_noise,

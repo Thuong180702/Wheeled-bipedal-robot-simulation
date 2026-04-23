@@ -276,7 +276,7 @@ def _get_pid_params(config: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Observation builder (41 dims — must match BalanceEnv)
+# Observation builder (42 dims — must match BalanceEnv)
 # ---------------------------------------------------------------------------
 
 
@@ -292,8 +292,8 @@ def _build_obs(
     """Build BalanceEnv observation from MuJoCo state.
 
     Observation dimension depends on lin_vel_mode:
-        "clean" or "noisy" → 41 dims (base 39 + height_cmd + yaw_error)
-        "disabled"         → 38 dims (base 36 + height_cmd + yaw_error; no lin_vel)
+        "clean" or "noisy" → 42 dims (base 39 + height_cmd + current_height + yaw_error)
+        "disabled"         → 39 dims (base 36 + height_cmd + current_height + yaw_error; no lin_vel)
 
     Layout for "clean"/"noisy" (matches BalanceEnv._extract_obs + appended dims):
         [0:3]   gravity in body frame
@@ -302,8 +302,9 @@ def _build_obs(
         [9:19]  joint positions
         [19:29] joint velocities
         [29:39] previous action
-        [39]    height_cmd_norm  (obs[-2])
-        [40]    yaw_error        (obs[-1])
+        [39]    height_cmd_norm     (obs[-3])
+        [40]    current_height_norm (obs[-2])
+        [41]    yaw_error           (obs[-1])
 
     For "disabled", body linear velocity is omitted; remaining indices shift by −3.
 
@@ -359,31 +360,39 @@ def _build_obs(
                 rng.normal(0.0, lv_std, size=3).astype(np.float32)
             )
 
+    # current_height_norm: actual torso height normalized to [0, 1]
+    min_h, max_h = 0.40, 0.70
+    current_height_norm = jnp.array(
+        [float(jnp.clip((jnp.array(mj_data.qpos[2]) - min_h) / (max_h - min_h), 0.0, 1.0))]
+    )
+
     if lin_vel_mode == "disabled":
-        # 38-dim: lin_vel channel excluded (base 36 + height_cmd + yaw_error)
+        # 39-dim: lin_vel channel excluded (base 36 + height_cmd + current_height + yaw_error)
         obs = jnp.concatenate(
             [
-                gravity_body,  # 3
-                body_ang_vel,  # 3
-                joint_pos,  # 10
-                joint_vel,  # 10
-                prev_action,  # 10
-                height_cmd_norm,  # 1  (obs[-2])
-                yaw_error,  # 1  (obs[-1])
+                gravity_body,        # 3
+                body_ang_vel,        # 3
+                joint_pos,           # 10
+                joint_vel,           # 10
+                prev_action,         # 10
+                height_cmd_norm,     # 1  (obs[-3])
+                current_height_norm, # 1  (obs[-2])
+                yaw_error,           # 1  (obs[-1])
             ]
         )
     else:
-        # 41-dim: lin_vel included ("clean" = sim-exact, "noisy" = with noise)
+        # 42-dim: lin_vel included ("clean" = sim-exact, "noisy" = with noise)
         obs = jnp.concatenate(
             [
-                gravity_body,  # 3
-                body_lin_vel,  # 3
-                body_ang_vel,  # 3
-                joint_pos,  # 10
-                joint_vel,  # 10
-                prev_action,  # 10
-                height_cmd_norm,  # 1  (obs[-2])
-                yaw_error,  # 1  (obs[-1])
+                gravity_body,        # 3
+                body_lin_vel,        # 3
+                body_ang_vel,        # 3
+                joint_pos,           # 10
+                joint_vel,           # 10
+                prev_action,         # 10
+                height_cmd_norm,     # 1  (obs[-3])
+                current_height_norm, # 1  (obs[-2])
+                yaw_error,           # 1  (obs[-1])
             ]
         )
     return obs
@@ -499,9 +508,9 @@ def _run_episode(
             When set, replaces the RL model.apply() call.  The controller
             receives the *raw* (un-normalised) obs and returns a normalised
             action in [-1, 1].  obs_rms / model / params are unused.
-        lin_vel_mode: observation mode — "clean"/"noisy" (41-dim) or "disabled"
-            (38-dim).  Must match the checkpoint config or baseline_lqr.yaml.
-            LQRBalanceController requires "clean" or "noisy" (41-dim).
+        lin_vel_mode: observation mode — "clean"/"noisy" (42-dim) or "disabled"
+            (39-dim).  Must match the checkpoint config or baseline_lqr.yaml.
+            LQRBalanceController requires "clean" or "noisy" (42-dim).
     """
     from wheeled_biped.training.ppo import normalize_obs
     from wheeled_biped.utils.math_utils import quat_to_euler
@@ -856,7 +865,7 @@ def _run_scenario(
     appropriate push/friction parameters.
     """
     # Read lin_vel_mode from config so obs dimension matches training / baseline config.
-    # Defaults to "clean" (41-dim) when key is absent (e.g. older checkpoints).
+    # Defaults to "clean" (42-dim) when key is absent (e.g. older checkpoints).
     lin_vel_mode = config.get("sensor_noise", {}).get("lin_vel_mode", "clean")
 
     # Resolve height_cmd: sweep sub-scenarios inherit from their parent
@@ -1306,14 +1315,14 @@ def evaluate(
         with open(bl_cfg_path) as f:
             bl_cfg = yaml.safe_load(f)
 
-        # Validate obs mode: LQR requires 41-dim obs (lin_vel must be present)
+        # Validate obs mode: LQR requires 42-dim obs (lin_vel must be present)
         _bl_lv_mode = bl_cfg.get("sensor_noise", {}).get("lin_vel_mode", "clean")
         if _bl_lv_mode == "disabled":
             console.print(
-                "[red]LQR baseline requires lin_vel_mode='clean' or 'noisy' (41-dim obs), "
+                "[red]LQR baseline requires lin_vel_mode='clean' or 'noisy' (42-dim obs), "
                 f"but {baseline_config} has lin_vel_mode='disabled'. "
                 "LQRBalanceController reads forward velocity from obs[4] which is absent "
-                "in the 38-dim 'disabled' observation. Update baseline_lqr.yaml.[/red]"
+                "in the 39-dim 'disabled' observation. Update baseline_lqr.yaml.[/red]"
             )
             raise typer.Exit(1)
 
@@ -1335,7 +1344,7 @@ def evaluate(
             "is_stateful": True,
             "lin_vel_mode": _bl_lv_mode,
             "assumptions": (
-                "Requires lin_vel_mode='clean' or 'noisy' (41-dim obs). "
+                "Requires lin_vel_mode='clean' or 'noisy' (42-dim obs). "
                 "Reads forward velocity from obs[4] (body_lin_vel[1]). "
                 "Stateful: integrates forward position drift per episode. "
                 "Valid for Stages 1-3 (standing balance up to variable height). "

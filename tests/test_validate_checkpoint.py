@@ -8,9 +8,9 @@ These tests do NOT run the full CLI (which requires a real checkpoint and MuJoCo
 Instead they unit-test the shared _build_headless_obs() function imported from
 the script, and check that:
 
-  1. lin_vel_mode "clean" → 41-dim obs, lin_vel always present, no noise on lin_vel
-  2. lin_vel_mode "noisy" → 41-dim obs, lin_vel present, noise on lin_vel when enabled
-  3. lin_vel_mode "disabled" → 38-dim obs, lin_vel excluded
+  1. lin_vel_mode "clean" → 42-dim obs, lin_vel always present, no noise on lin_vel
+  2. lin_vel_mode "noisy" → 42-dim obs, lin_vel present, noise on lin_vel when enabled
+  3. lin_vel_mode "disabled" → 39-dim obs, lin_vel excluded
   4. Noise is applied to the right channels and not to prev_action
   5. Noise is zero when apply_noise=False
   6. Action delay buffer semantics: oldest action applied first (FIFO queue)
@@ -94,16 +94,19 @@ def _kwargs(lin_vel_mode="clean", apply_noise=False, noise_stds=None):
 
         prev_action = jnp.zeros(10)
         height_cmd_norm = jnp.array([0.5])
+        current_height_norm = jnp.array([0.5])
         yaw_error = jnp.array([0.0])
     except ImportError:
         prev_action = np.zeros(10)
         height_cmd_norm = np.array([0.5])
+        current_height_norm = np.array([0.5])
         yaw_error = np.array([0.0])
 
     return dict(
         mj_data=_make_mj_data_stub(),
         prev_action=prev_action,
         height_cmd_norm=height_cmd_norm,
+        current_height_norm=current_height_norm,
         yaw_error=yaw_error,
         lin_vel_mode=lin_vel_mode,
         apply_noise=apply_noise,
@@ -123,20 +126,20 @@ def _kwargs(lin_vel_mode="clean", apply_noise=False, noise_stds=None):
 class TestObsDimensions:
     """_build_headless_obs must produce the right number of dims per lin_vel_mode."""
 
-    def test_clean_mode_produces_41_dims(self):
+    def test_clean_mode_produces_42_dims(self):
         obs = _build_headless_obs(**_kwargs(lin_vel_mode="clean"))
-        assert obs.shape == (41,), f"Expected (41,), got {obs.shape}"
+        assert obs.shape == (42,), f"Expected (42,), got {obs.shape}"
 
-    def test_noisy_mode_produces_41_dims(self):
+    def test_noisy_mode_produces_42_dims(self):
         obs = _build_headless_obs(**_kwargs(lin_vel_mode="noisy"))
-        assert obs.shape == (41,), f"Expected (41,), got {obs.shape}"
+        assert obs.shape == (42,), f"Expected (42,), got {obs.shape}"
 
-    def test_disabled_mode_produces_38_dims(self):
+    def test_disabled_mode_produces_39_dims(self):
         obs = _build_headless_obs(**_kwargs(lin_vel_mode="disabled"))
-        assert obs.shape == (38,), f"Expected (38,), got {obs.shape}"
+        assert obs.shape == (39,), f"Expected (39,), got {obs.shape}"
 
-    def test_height_cmd_is_last_minus_one(self):
-        """obs[-2] must equal height_cmd_norm regardless of lin_vel_mode."""
+    def test_height_cmd_is_last_minus_two(self):
+        """obs[-3] must equal height_cmd_norm regardless of lin_vel_mode."""
         try:
             import jax.numpy as jnp
 
@@ -148,8 +151,8 @@ class TestObsDimensions:
             kw = _kwargs(lin_vel_mode=mode)
             kw["height_cmd_norm"] = height
             obs = _build_headless_obs(**kw)
-            assert float(obs[-2]) == pytest.approx(0.75), (
-                f"lin_vel_mode='{mode}': obs[-2] should be height_cmd_norm=0.75, got {obs[-2]}"
+            assert float(obs[-3]) == pytest.approx(0.75), (
+                f"lin_vel_mode='{mode}': obs[-3] should be height_cmd_norm=0.75, got {obs[-3]}"
             )
 
     def test_yaw_error_is_last(self):

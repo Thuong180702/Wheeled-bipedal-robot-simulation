@@ -38,8 +38,8 @@ class TestBaseEnv:
     """Kiểm tra base environment."""
 
     def test_obs_size(self, balance_env):
-        """Observation size phải = 41 (cho balance: 39 base + height_command + yaw_error)."""
-        assert balance_env.obs_size == 41
+        """Observation size phải = 42 (cho balance: 39 base + height_command + current_height + yaw_error)."""
+        assert balance_env.obs_size == 42
 
     def test_num_actions(self, balance_env):
         """Phải có 10 actions."""

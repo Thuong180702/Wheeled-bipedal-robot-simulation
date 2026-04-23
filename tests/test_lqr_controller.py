@@ -9,7 +9,7 @@ What IS tested:
   - Controller construction (default + custom gains)
   - reset() clears episode state
   - compute_action() output shape and range
-  - Obs-size assertion (38-dim → ValueError; 41-dim → ok)
+  - Obs-size assertion (39-dim → ValueError; 42-dim → ok)
   - Sign conventions (forward lean → positive wheel; yaw error → correct diff)
   - kd_yaw damping contribution
   - Lateral lean → antisymmetric hip-roll
@@ -68,9 +68,10 @@ def _make_obs(
     joint_vel: np.ndarray | None = None,
     prev_action: np.ndarray | None = None,
     height_cmd_norm: float = 0.5,
+    current_height_norm: float = 0.5,
     yaw_error: float = 0.0,
 ) -> np.ndarray:
-    """Build a synthetic 41-dim BalanceEnv observation."""
+    """Build a synthetic 42-dim BalanceEnv observation."""
     if joint_pos is None:
         joint_pos = np.zeros(10)
     if joint_vel is None:
@@ -88,11 +89,12 @@ def _make_obs(
             ang_vel_x,  # [6]
             ang_vel_y,  # [7]
             ang_vel_z,  # [8]
-            *joint_pos,  # [9:19]
-            *joint_vel,  # [19:29]
-            *prev_action,  # [29:39]
-            height_cmd_norm,  # [39]
-            yaw_error,  # [40]
+            *joint_pos,          # [9:19]
+            *joint_vel,          # [19:29]
+            *prev_action,        # [29:39]
+            height_cmd_norm,     # [39]
+            current_height_norm, # [40]
+            yaw_error,           # [41]
         ],
         dtype=np.float32,
     )
@@ -245,20 +247,20 @@ class TestComputeActionShapeRange:
 
 
 class TestObsSizeAssertion:
-    def test_41_dim_obs_accepted(self):
+    def test_42_dim_obs_accepted(self):
         ctrl = _make_controller()
         ctrl.reset()
         obs = _make_obs()
-        assert obs.shape == (41,)
+        assert obs.shape == (42,)
         action = ctrl.compute_action(obs)  # should not raise
         assert action.shape == (10,)
 
-    def test_38_dim_obs_raises_value_error(self):
-        """38-dim obs (lin_vel_mode='disabled') must raise a clear ValueError."""
+    def test_39_dim_obs_raises_value_error(self):
+        """39-dim obs (lin_vel_mode='disabled') must raise a clear ValueError."""
         ctrl = _make_controller()
         ctrl.reset()
-        bad_obs = np.zeros(38, dtype=np.float32)
-        with pytest.raises(ValueError, match="41-dim"):
+        bad_obs = np.zeros(39, dtype=np.float32)
+        with pytest.raises(ValueError, match="42-dim"):
             ctrl.compute_action(bad_obs)
 
     def test_wrong_dim_raises_with_helpful_message(self):

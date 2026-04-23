@@ -239,7 +239,7 @@ def policy(
 
             step_start = time.time()
 
-            # Trích xuất observation - PHẢI GIỐNG CHÍNH XÁC balance_env obs (41 dims)
+            # Trích xuất observation - PHẢI GIỐNG CHÍNH XÁC balance_env obs (42 dims)
             from wheeled_biped.utils.math_utils import (
                 get_gravity_in_body_frame,
                 quat_conjugate,
@@ -257,16 +257,20 @@ def policy(
             body_lin_vel = quat_rotate(quat_inv, world_lin_vel)
             body_ang_vel = quat_rotate(quat_inv, world_ang_vel)
 
+            current_height_norm = jnp.array(
+                [float(jnp.clip((jnp.array(mj_data.qpos[2]) - min_h) / (max_h - min_h), 0.0, 1.0))]
+            )
             obs = jnp.concatenate(
                 [
-                    gravity_body,  # 3
-                    body_lin_vel,  # 3 (body frame)
-                    body_ang_vel,  # 3 (body frame)
+                    gravity_body,         # 3
+                    body_lin_vel,         # 3 (body frame)
+                    body_ang_vel,         # 3 (body frame)
                     jnp.array(mj_data.qpos[7:17]),  # 10
                     jnp.array(mj_data.qvel[6:16]),  # 10
-                    prev_action,  # 10 (normalized [-1,1])
-                    height_cmd_norm,  # 1 (height command normalized)
-                    yaw_error,  # 1
+                    prev_action,          # 10 (normalized [-1,1])
+                    height_cmd_norm,      # 1 (height command normalized)
+                    current_height_norm,  # 1 (actual height normalized)
+                    yaw_error,            # 1
                 ]
             )
 
@@ -473,6 +477,9 @@ def render(
         body_lin_vel = quat_rotate(quat_inv, jnp.array(mj_data.qvel[:3]))
         body_ang_vel = quat_rotate(quat_inv, jnp.array(mj_data.qvel[3:6]))
 
+        current_height_norm = jnp.array(
+            [float(jnp.clip((jnp.array(mj_data.qpos[2]) - min_h) / (max_h - min_h), 0.0, 1.0))]
+        )
         obs = jnp.concatenate(
             [
                 gravity_body,
@@ -481,8 +488,9 @@ def render(
                 jnp.array(mj_data.qpos[7:17]),
                 jnp.array(mj_data.qvel[6:16]),
                 prev_action,
-                height_cmd_norm,  # height command normalized
-                yaw_error,  # 1
+                height_cmd_norm,      # height command normalized
+                current_height_norm,  # actual height normalized
+                yaw_error,            # 1
             ]
         )
 
@@ -726,6 +734,9 @@ def interactive(
                 body_ang_vel = quat_rotate(quat_inv, jnp.array(data.qvel[3:6]))
                 _cur_yaw = float(quat_to_euler(torso_quat)[2])
                 yaw_error = jnp.array([wrap_angle(_cur_yaw - _initial_yaw[0])])
+                _cur_height_norm = float(jnp.clip(
+                    (jnp.array(data.qpos[2]) - MIN_H) / (MAX_H - MIN_H), 0.0, 1.0
+                ))
                 obs = jnp.concatenate(
                     [
                         gravity_body,
@@ -735,6 +746,7 @@ def interactive(
                         jnp.array(data.qvel[6:16]),
                         _interactive_prev_action,
                         jnp.array([_interactive_height_cmd_norm]),
+                        jnp.array([_cur_height_norm]),
                         yaw_error,  # 1
                     ]
                 )

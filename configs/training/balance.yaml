@@ -72,7 +72,7 @@ network:
 #    using -joint_vel would be a unit mismatch; see low_level_control.py)
 low_level_pid:
   enabled: true
-  action_smoothing_alpha: 0.4 # 0 = không lọc, 0.4~0.6 giúp giảm rung rõ
+  action_smoothing_alpha: 0.3 # 0 = không lọc, 0.3~0.5 giúp giảm rung rõ
   anti_windup_limit: 0.4 # giới hạn tích phân lỗi
   wheel_vel_limit: 20.0 # rad/s khi action = ±1 cho bánh xe
   # Theo thứ tự JOINT_NAMES:
