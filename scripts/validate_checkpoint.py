@@ -392,6 +392,14 @@ def validate(
     joint_mins = jnp.array(j_mins, dtype=jnp.float32)
     joint_maxs = jnp.array(j_maxs, dtype=jnp.float32)
     wheel_mask = jnp.array([1.0 if "wheel" in n else 0.0 for n in joint_names])
+    keyframe = jnp.array(
+        [0.0, 0.0, 0.3, 0.5, 0.0, 0.0, 0.0, 0.3, 0.5, 0.0],
+        dtype=jnp.float32,
+    )
+    joint_range = jnp.where(wheel_mask > 0.5, 1.0, joint_maxs - joint_mins)
+    pid_action_bias = (2.0 * (keyframe - joint_mins) / joint_range - 1.0) * (
+        1.0 - wheel_mask
+    )
 
     _kp_def = [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
     _ki_def = [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
@@ -479,10 +487,11 @@ def validate(
         # Mirrors BalanceEnv._pid_low_level_ctrl() / direct torque path.
         # kd is masked to 0 for wheels inside this computation (d_error=0 for wheels).
         if pid_enabled:
+            biased_action = jnp.clip(control_action + pid_action_bias, -1.0, 1.0)
             joint_pos = jnp.array(mj_data.qpos[7:17])
             joint_vel = jnp.array(mj_data.qvel[6:16])
-            pos_target = joint_mins + (control_action + 1.0) * 0.5 * (joint_maxs - joint_mins)
-            vel_target_whl = control_action * whl_vel_lim
+            pos_target = joint_mins + (biased_action + 1.0) * 0.5 * (joint_maxs - joint_mins)
+            vel_target_whl = biased_action * whl_vel_lim
             pos_err = pos_target - joint_pos
             error = (1.0 - wheel_mask) * pos_err + wheel_mask * (vel_target_whl - joint_vel)
             d_error = (1.0 - wheel_mask) * (-joint_vel)  # zero for wheels (kd masked)

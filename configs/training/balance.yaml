@@ -72,7 +72,7 @@ network:
 #    using -joint_vel would be a unit mismatch; see low_level_control.py)
 low_level_pid:
   enabled: true
-  action_smoothing_alpha: 0.3 # 0 = không lọc, 0.3~0.5 giúp giảm rung rõ
+  action_smoothing_alpha: 0.4 # 0 = không lọc, 0.3~0.5 giúp giảm rung rõ
   anti_windup_limit: 0.4 # giới hạn tích phân lỗi
   wheel_vel_limit: 20.0 # rad/s khi action = ±1 cho bánh xe
   # Theo thứ tự JOINT_NAMES:
@@ -129,11 +129,11 @@ rewards:
   yaw_rate: 0.5 # phạt trực tiếp tốc độ quay yaw
   # === Standing-specific (zero in balance_robust) ===
   no_motion: 0.5 # rewards stationary stance — conflicts with push recovery
-  wheel_velocity: -0.01 # penalises wheel spin — conflicts with push recovery
+  wheel_velocity: -0.002 # penalises wheel spin — conflicts with push recovery
   # === Penalties ===
   joint_torque: -0.0005 # phạt mô-men lớn
   joint_velocity: -0.0007 # phạt tốc độ khớp
-  action_rate: -0.1 # anti-jitter for standing; tighter than robust (see note above)
+  action_rate: -0.05 # anti-jitter for standing; tighter than robust (see note above)
 
 # --- Termination ---
 termination:

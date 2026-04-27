@@ -402,9 +402,9 @@ class TestObsSizeInvariant:
     @pytest.mark.parametrize(
         "mode,expected",
         [
-            ("clean", 41),
-            ("noisy", 41),
-            ("disabled", 38),
+            ("clean", 42),
+            ("noisy", 42),
+            ("disabled", 39),
         ],
     )
     def test_obs_size_matches_expected(self, mode, expected):
@@ -427,4 +427,4 @@ class TestObsSizeInvariant:
         computed = 36 if mode == "disabled" else 39
         assert computed == expected_base, f"_compute_obs_size formula broken for mode='{mode}'"
         obs = _build_headless_obs(**_kwargs(lin_vel_mode=mode))
-        assert obs.shape[0] == expected_base + 2  # + height_cmd_norm + yaw_error
+        assert obs.shape[0] == expected_base + 3  # + height_cmd_norm + current_height + yaw_error

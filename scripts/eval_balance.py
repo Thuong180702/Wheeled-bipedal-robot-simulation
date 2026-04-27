@@ -403,6 +403,20 @@ def _build_obs(
 # ---------------------------------------------------------------------------
 
 
+def _compute_pid_action_bias(
+    joint_mins: jnp.ndarray,
+    joint_maxs: jnp.ndarray,
+    wheel_mask: jnp.ndarray,
+) -> jnp.ndarray:
+    """Return the normalized keyframe bias used by BalanceEnv's PID path."""
+    keyframe = jnp.array(
+        [0.0, 0.0, 0.3, 0.5, 0.0, 0.0, 0.0, 0.3, 0.5, 0.0],
+        dtype=jnp.float32,
+    )
+    joint_range = jnp.where(wheel_mask > 0.5, 1.0, joint_maxs - joint_mins)
+    return (2.0 * (keyframe - joint_mins) / joint_range - 1.0) * (1.0 - wheel_mask)
+
+
 def _compute_ctrl(
     mj_model: mujoco.MjModel,
     mj_data: mujoco.MjData,
@@ -414,9 +428,12 @@ def _compute_ctrl(
     wheel_mask: jnp.ndarray,
     ctrl_min: jnp.ndarray,
     ctrl_max: jnp.ndarray,
+    pid_action_bias: jnp.ndarray | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute actuator ctrl from normalized policy action via PID or direct torque."""
     if pid_params["enabled"]:
+        if pid_action_bias is not None:
+            control_action = jnp.clip(control_action + pid_action_bias, -1.0, 1.0)
         joint_pos = jnp.array(mj_data.qpos[7:17])
         joint_vel = jnp.array(mj_data.qvel[6:16])
         whl_vel_lim = pid_params["wheel_vel_limit"]
@@ -544,6 +561,7 @@ def _run_episode(
     joint_mins = jnp.array(j_mins, dtype=jnp.float32)
     joint_maxs = jnp.array(j_maxs, dtype=jnp.float32)
     wheel_mask = jnp.array([1.0 if "wheel" in n else 0.0 for n in JOINT_NAMES], dtype=jnp.float32)
+    pid_action_bias = _compute_pid_action_bias(joint_mins, joint_maxs, wheel_mask)
 
     # Number of physics substeps per control step (mirrors base_env.py)
     n_substeps = max(1, int(round(CONTROL_DT / float(mj_model.opt.timestep))))
@@ -632,6 +650,7 @@ def _run_episode(
                 wheel_mask,
                 ctrl_min,
                 ctrl_max,
+                pid_action_bias,
             )
 
             # ── Apply push (single impulse) ────────────────────────────────
