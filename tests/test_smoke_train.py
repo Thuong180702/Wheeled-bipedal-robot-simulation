@@ -87,7 +87,7 @@ _SMOKE_CONFIG = {
     },
 }
 
-# 3 updates worth of steps: warmup counts as update 0, loop runs 1..2
+# 3 real updates worth of steps. The JIT warmup is compile-only and discarded.
 _NUM_ENVS = 4
 _ROLLOUT = 4
 _TOTAL_STEPS = _NUM_ENVS * _ROLLOUT * 3  # = 48
@@ -173,7 +173,16 @@ class TestSmokeTrainBalance:
         with open(ckpt_path, "rb") as f:
             ckpt = pickle.load(f)
 
-        required = {"params", "opt_state", "obs_rms", "config", "global_step", "best_reward"}
+        required = {
+            "params",
+            "opt_state",
+            "obs_rms",
+            "rng",
+            "env_state",
+            "config",
+            "global_step",
+            "best_reward",
+        }
         for k in required:
             assert k in ckpt, f"Missing checkpoint key: {k}"
 

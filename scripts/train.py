@@ -25,7 +25,8 @@ Cách dùng:
 
   # Tiếp tục từ checkpoint
   python scripts/train.py single --stage balance \
-      --resume outputs/balance/rl/seed42/checkpoints/step_1000000
+      --resume outputs/balance/rl/seed42/checkpoints/step_1000000 \
+      --additional-steps 5000000
 """
 
 from __future__ import annotations
@@ -43,6 +44,25 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 app = typer.Typer(help="Wheeled Bipedal Robot - Training Script")
 console = Console()
+
+
+def _resolve_target_total_steps(
+    *,
+    steps: int,
+    additional_steps: int | None,
+    resumed_step: int,
+) -> int:
+    """Resolve CLI step semantics to PPOTrainer's total-step target."""
+    if additional_steps is None:
+        if resumed_step > 0 and steps <= resumed_step:
+            raise ValueError(
+                "--steps is a total target and must be greater than the checkpoint step; "
+                "use --additional-steps to train a relative number of extra env-steps"
+            )
+        return steps
+    if additional_steps <= 0:
+        raise ValueError("--additional-steps must be > 0")
+    return resumed_step + additional_steps
 
 
 @app.command()
@@ -98,6 +118,11 @@ def single(
     steps: int = typer.Option(
         50_000_000,
         help="Tổng số bước training.",
+    ),
+    additional_steps: int | None = typer.Option(
+        None,
+        "--additional-steps",
+        help="Extra env-steps to train from the checkpoint; overrides --steps.",
     ),
     num_envs: int = typer.Option(
         4096,
@@ -330,6 +355,22 @@ def single(
         console.print(f"[green]Đã tải checkpoint: {resume}[/green]")
 
     # Train — checkpoints nested inside the run root
+    try:
+        target_total_steps = _resolve_target_total_steps(
+            steps=steps,
+            additional_steps=additional_steps,
+            resumed_step=trainer._resumed_global_step,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    if additional_steps is not None:
+        console.print(
+            f"  Target total steps: {target_total_steps:,} "
+            f"(resume {trainer._resumed_global_step:,} + additional {additional_steps:,})"
+        )
+
     checkpoint_dir = os.path.join(run_root, "checkpoints")
 
     if live_view:
@@ -339,13 +380,13 @@ def single(
         result = run_training_with_viewer(
             trainer,
             env.mj_model,
-            total_steps=steps,
+            total_steps=target_total_steps,
             checkpoint_dir=checkpoint_dir,
             view_interval=view_interval,
         )
     else:
         result = trainer.train(
-            total_steps=steps,
+            total_steps=target_total_steps,
             checkpoint_dir=checkpoint_dir,
         )
 

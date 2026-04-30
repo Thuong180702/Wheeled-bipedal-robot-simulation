@@ -269,7 +269,8 @@ Common options:
 --num-envs 8192         # parallel environments (default 4096)
 --output-dir my_outputs # output root (default: outputs/)
 --seed 42               # random seed — determines output subdirectory
---resume <checkpoint>   # resume from a saved checkpoint directory
+--resume <checkpoint>   # exact same-run resume from a checkpoint directory
+--additional-steps N    # when resuming, train N extra env-steps from checkpoint
 ```
 
 #### Training with live viewer
@@ -296,8 +297,16 @@ Each stage warm-starts from the previous stage's checkpoint.
 
 ```bash
 python scripts/train.py single --stage balance --seed 42 \
-    --resume outputs/balance/rl/seed42/checkpoints/step_1000000
+    --resume outputs/balance/rl/seed42/checkpoints/step_1000000 \
+    --additional-steps 5000000
 ```
+
+`--steps` is an absolute target total. If a checkpoint is already at step
+1,000,000, `--steps 5000000` trains until roughly 5,000,000 total env-steps,
+not 5,000,000 additional steps. Use `--additional-steps` for relative resume
+training. Current checkpoints store policy parameters, optimizer state,
+observation normalization, RNG, compact environment state, curriculum state,
+and best-checkpoint trackers; older checkpoints still load but reset envs once.
 
 Press **Ctrl+C** to stop at any time. The latest checkpoint is saved automatically.
 
@@ -551,7 +560,8 @@ python scripts/train.py curriculum --steps-per-stage 5000000
 
 # ── Resume ────────────────────────────────────────────────────────────────────
 python scripts/train.py single --stage balance --seed 42 \
-    --resume outputs/balance/rl/seed42/checkpoints/step_1000000
+    --resume outputs/balance/rl/seed42/checkpoints/step_1000000 \
+    --additional-steps 5000000
 
 # ── Evaluate (benchmark) ──────────────────────────────────────────────────────
 python scripts/evaluate.py --checkpoint outputs/balance/rl/seed42/checkpoints/final --mode nominal
@@ -636,6 +646,12 @@ Without PID: output is scaled directly to actuator torque range.
 - Vectorised rollout using `jax.vmap` over 4096 parallel MJX environments.
 - Observation running mean/std normalisation (Welford online update).
 - GAE advantage estimation with γ=0.99, λ=0.95.
+- Checkpoints save full same-run resume state: policy parameters, optimizer
+  state, observation normalization, RNG, compact `EnvState`, curriculum state,
+  and best-checkpoint trackers. Cross-stage curriculum warm-starts intentionally
+  reset optimizer, training counters, and env state while reusing learned weights.
+- Optional destructive-update guard: `ppo.max_policy_kl > 0` rejects a PPO
+  update whose measured approximate KL exceeds the configured limit.
 
 Two curriculum systems operate independently:
 
@@ -705,6 +721,7 @@ Key knobs:
 |---|---|---|
 | `task.num_envs` | `<stage>.yaml` | Parallel environments (GPU memory bound) |
 | `ppo.learning_rate` | `<stage>.yaml` | Step size |
+| `ppo.max_policy_kl` | `<stage>.yaml` | Reject overly large PPO policy updates (`0` disables) |
 | `rewards.*` | `<stage>.yaml` | Per-component reward weights |
 | `domain_randomization.push_magnitude` | `<stage>.yaml` | Push force (0 = disabled) |
 | `termination.max_tilt_rad` | `<stage>.yaml` | Fall threshold (~0.8 rad = 46°) |

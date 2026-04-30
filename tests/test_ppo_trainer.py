@@ -277,6 +277,50 @@ class TestSingleUpdate:
         assert np.isfinite(total_loss), f"Loss not finite: {total_loss}"
 
 
+class TestPolicyKlGuard:
+    pytestmark = pytest.mark.slow
+
+    def test_train_rejects_update_when_policy_kl_exceeds_limit(self, env, tmp_path):
+        """A destructive PPO update is rolled back when approx_kl exceeds max_policy_kl."""
+        import copy
+        import types
+
+        import jax.tree_util as jtu
+
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        cfg = copy.deepcopy(_TINY_CONFIG)
+        cfg["ppo"]["max_policy_kl"] = 0.01
+        trainer = PPOTrainer(env=env, config=cfg, logger=None, seed=0)
+        trainer.num_envs = NUM_ENVS
+
+        initial_leaves = [
+            np.array(leaf) for leaf in jtu.tree_leaves(jax.device_get(trainer.params))
+        ]
+
+        def _fake_high_kl_update(self_, params, opt_state, transitions, last_value, rng):
+            del self_, transitions, last_value
+            new_params = jtu.tree_map(lambda x: x + jnp.ones_like(x), params)
+            metrics = {"policy/approx_kl": jnp.array(1.0, dtype=jnp.float32)}
+            return new_params, opt_state, metrics, rng
+
+        trainer._update_step = types.MethodType(_fake_high_kl_update, trainer)
+        steps_per_update = trainer._rollout_length * trainer.num_envs
+
+        trainer.train(
+            total_steps=steps_per_update,
+            checkpoint_dir=str(tmp_path / "ckpt"),
+            log_interval=99,
+            save_interval=99,
+        )
+
+        final_leaves = [
+            np.array(leaf) for leaf in jtu.tree_leaves(jax.device_get(trainer.params))
+        ]
+        for before, after in zip(initial_leaves, final_leaves):
+            np.testing.assert_allclose(after, before, atol=1e-6)
+
+
 # ---------------------------------------------------------------------------
 # Tests: checkpoint save / load
 # ---------------------------------------------------------------------------
@@ -294,7 +338,16 @@ class TestCheckpoint:
         with open(pkl_path, "rb") as f:
             ckpt = pickle.load(f)
 
-        required_keys = {"params", "opt_state", "obs_rms", "config", "global_step", "best_reward"}
+        required_keys = {
+            "params",
+            "opt_state",
+            "obs_rms",
+            "rng",
+            "env_state",
+            "config",
+            "global_step",
+            "best_reward",
+        }
         for k in required_keys:
             assert k in ckpt, f"Missing checkpoint key: {k}"
 
@@ -349,6 +402,167 @@ class TestCheckpoint:
         restored_leaves = [np.array(lf) for lf in jtu.tree_leaves(jax.device_get(trainer.params))]
         for orig, rest in zip(original_leaves, restored_leaves):
             assert np.allclose(orig, rest, atol=1e-6), "Params differ after checkpoint round-trip"
+
+    def test_checkpoint_rng_roundtrip(self, env, tmp_path):
+        """RNG is saved and restored so resume does not restart the random stream."""
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        trainer = PPOTrainer(env=env, config=_TINY_CONFIG, logger=None, seed=0)
+        trainer.rng = jax.random.PRNGKey(123)
+
+        ckpt_dir = str(tmp_path / "ckpt_rng")
+        trainer._save_checkpoint(ckpt_dir, global_step=0, best_reward=0.0)
+        trainer.rng = jax.random.PRNGKey(999)
+
+        trainer.load_checkpoint(ckpt_dir)
+
+        assert np.array_equal(np.array(trainer.rng), np.array(jax.random.PRNGKey(123)))
+
+    def test_checkpoint_env_state_roundtrip(self, env, tmp_path):
+        """EnvState is saved compactly and restored into a step-able JAX state."""
+        from wheeled_biped.training.ppo import (
+            _COMPACT_MJX_MODEL_MARKER,
+            PPOTrainer,
+        )
+
+        trainer = PPOTrainer(env=env, config=_TINY_CONFIG, logger=None, seed=0)
+        trainer.num_envs = NUM_ENVS
+        env_state = env.v_reset(jax.random.PRNGKey(5), NUM_ENVS)
+        jax.block_until_ready(env_state.obs)
+
+        ckpt_dir = str(tmp_path / "ckpt_env_state")
+        trainer._save_checkpoint(
+            ckpt_dir,
+            global_step=0,
+            best_reward=0.0,
+            env_state=env_state,
+        )
+
+        with open(Path(ckpt_dir) / "checkpoint.pkl", "rb") as f:
+            ckpt = pickle.load(f)
+        dr_payload = ckpt["env_state"].info.get("dr_mjx_model")
+        assert isinstance(dr_payload, dict)
+        assert dr_payload.get(_COMPACT_MJX_MODEL_MARKER) is True
+
+        trainer.load_checkpoint(ckpt_dir)
+        restored = trainer._resumed_env_state
+        assert restored is not None
+        np.testing.assert_allclose(np.array(restored.obs), np.array(env_state.obs), atol=1e-6)
+
+        next_state = env.v_step(restored, jnp.zeros((NUM_ENVS, env.num_actions)))
+        jax.block_until_ready(next_state.obs)
+        assert next_state.obs.shape == env_state.obs.shape
+
+    def test_curriculum_reset_patch_updates_command_and_obs(self, env):
+        """Legacy resume reset is patched to the saved curriculum height range."""
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        trainer = PPOTrainer(env=env, config=_TINY_CONFIG, logger=None, seed=0)
+        env_state = env.v_reset(jax.random.PRNGKey(11), NUM_ENVS)
+
+        patched, _ = trainer._patch_curriculum_reset_state(
+            env_state,
+            jax.random.PRNGKey(12),
+            current_min_h=0.40,
+        )
+
+        height_command = np.array(patched.info["height_command"])
+        obs_height = np.array(patched.obs[:, -3])
+        expected_obs_height = (height_command - env.MIN_HEIGHT_CMD) / (
+            env.MAX_HEIGHT_CMD - env.MIN_HEIGHT_CMD
+        )
+
+        assert np.all(height_command >= 0.40)
+        assert np.all(height_command <= env.MAX_HEIGHT_CMD)
+        np.testing.assert_allclose(obs_height, expected_obs_height, atol=1e-6)
+        np.testing.assert_allclose(
+            np.array(patched.info["curriculum_min_height"]),
+            np.full(NUM_ENVS, 0.40),
+            atol=1e-6,
+        )
+
+    def test_checkpoint_warm_start_resets_training_state(self, env, tmp_path):
+        """Cross-stage warm-start loads weights but does not exact-resume training state."""
+        from wheeled_biped.training.ppo import PPOTrainer
+
+        source = PPOTrainer(env=env, config=_TINY_CONFIG, logger=None, seed=0)
+        source.num_envs = NUM_ENVS
+        env_state = env.v_reset(jax.random.PRNGKey(21), NUM_ENVS)
+        source._curriculum_min_height = 0.40
+
+        ckpt_dir = str(tmp_path / "ckpt_warm_start")
+        source._save_checkpoint(
+            ckpt_dir,
+            global_step=12345,
+            best_reward=9.0,
+            best_eval_per_step=8.0,
+            best_eval_success=0.9,
+            best_train_reward=7.0,
+            env_state=env_state,
+        )
+        with open(Path(ckpt_dir) / "checkpoint.pkl", "rb") as f:
+            ckpt = pickle.load(f)
+        ckpt["opt_state"] = "stale optimizer state"
+        with open(Path(ckpt_dir) / "checkpoint.pkl", "wb") as f:
+            pickle.dump(ckpt, f)
+
+        target = PPOTrainer(env=env, config=_TINY_CONFIG, logger=None, seed=999)
+        target.load_checkpoint(ckpt_dir, resume_training=False)
+
+        assert target.opt_state != "stale optimizer state"
+        assert target._resumed_global_step == 0
+        assert target._resumed_best_reward == float("-inf")
+        assert target._resumed_curriculum_min is None
+        assert target._resumed_env_state is None
+        assert target._resumed_best_eval_per_step == float("-inf")
+        assert target._resumed_best_eval_success == float("-inf")
+        assert target._resumed_best_train_reward == float("-inf")
+
+
+class TestTrainCliStepResolution:
+    def test_steps_default_is_absolute_target(self):
+        from scripts.train import _resolve_target_total_steps
+
+        assert (
+            _resolve_target_total_steps(
+                steps=100,
+                additional_steps=None,
+                resumed_step=60,
+            )
+            == 100
+        )
+
+    def test_additional_steps_offsets_from_resume_step(self):
+        from scripts.train import _resolve_target_total_steps
+
+        assert (
+            _resolve_target_total_steps(
+                steps=100,
+                additional_steps=40,
+                resumed_step=60,
+            )
+            == 100
+        )
+
+    def test_additional_steps_must_be_positive(self):
+        from scripts.train import _resolve_target_total_steps
+
+        with pytest.raises(ValueError, match="additional-steps"):
+            _resolve_target_total_steps(
+                steps=100,
+                additional_steps=0,
+                resumed_step=60,
+            )
+
+    def test_absolute_steps_must_exceed_resume_step(self):
+        from scripts.train import _resolve_target_total_steps
+
+        with pytest.raises(ValueError, match="total target"):
+            _resolve_target_total_steps(
+                steps=60,
+                additional_steps=None,
+                resumed_step=60,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -1097,7 +1311,7 @@ class TestEvalTriggeredCheckpoints:
         t.eval_pass = types.MethodType(_constant_eval, t)
         spu = t._rollout_length * t.num_envs  # 4 * 4 = 16
 
-        # 4 updates: warmup (implicit) + loop updates 1,2,3
+        # 4 real updates; compile warmup is discarded and must not count.
         t.train(total_steps=spu * 4, checkpoint_dir=str(tmp_path / "ckpt"))
 
         ckpt_file = tmp_path / "ckpt" / "best_eval_per_step" / "checkpoint.pkl"
@@ -1107,11 +1321,11 @@ class TestEvalTriggeredCheckpoints:
             ckpt = pickle.load(f)
 
         # global_step timeline:
-        #   after warmup:   global_step = spu (16)
-        #   update 1 done:  global_step = 2*spu (32) → eval fires → SAVE (first improvement)
-        #   update 2 done:  global_step = 3*spu (48) → eval fires → no save (same value)
-        #   update 3 done:  global_step = 4*spu (64) → eval fires → no save (same value)
-        first_eval_step = 2 * spu
+        #   after compile:  global_step = 0
+        #   update 1 done: global_step = spu (16) → eval fires → SAVE (first improvement)
+        #   update 2 done: global_step = 2*spu (32) → eval fires → no save (same value)
+        #   update 3 done: global_step = 3*spu (48) → eval fires → no save (same value)
+        first_eval_step = spu
         assert ckpt["global_step"] == first_eval_step, (
             f"Checkpoint should record global_step={first_eval_step} (first eval), "
             f"got {ckpt['global_step']} — suggests spurious re-save on stagnant metric"
@@ -1384,11 +1598,11 @@ class TestEvalTriggeredCheckpointHardening:
         """Improvements below _EVAL_CKPT_MIN_DELTA (1e-3) must not trigger a second save.
 
         Timeline (eval_interval=1, 4 loop updates):
-          update 1: eval_per_step=5.0  → saves (> -inf+1e-3)    step=2*spu
+          update 1: eval_per_step=5.0  → saves (> -inf+1e-3)    step=spu
           update 2: eval_per_step=5.0005 → 5.0005 > 5.0+0.001=5.001? No. No save.
           update 3: same → no save
           update 4: same → no save
-        Verify: saved checkpoint has global_step==2*spu (first and only save).
+        Verify: saved checkpoint has global_step==spu (first and only save).
         """
         import types
 
@@ -1425,7 +1639,7 @@ class TestEvalTriggeredCheckpointHardening:
         with open(ckpt_file, "rb") as f:
             ckpt = pickle.load(f)
 
-        first_eval_step = 2 * spu
+        first_eval_step = spu
         assert ckpt["global_step"] == first_eval_step, (
             f"expected global_step={first_eval_step} (first eval only), "
             f"got {ckpt['global_step']} — delta guard not working"
@@ -1436,9 +1650,9 @@ class TestEvalTriggeredCheckpointHardening:
         """Improvement >= _EVAL_CKPT_MIN_DELTA triggers a new save at the later step.
 
         Timeline (eval_interval=1, 3 loop updates):
-          update 1: eval_per_step=5.0  → saves at step=2*spu
-          update 2: eval_per_step=6.5  → 6.5 > 5.0+0.001 → saves at step=3*spu
-        Verify: saved checkpoint has global_step==3*spu.
+          update 1: eval_per_step=5.0  → saves at step=spu
+          update 2: eval_per_step=6.5  → 6.5 > 5.0+0.001 → saves at step=2*spu
+        Verify: saved checkpoint has global_step==2*spu.
         """
         import types
 
@@ -1474,7 +1688,7 @@ class TestEvalTriggeredCheckpointHardening:
         with open(ckpt_file, "rb") as f:
             ckpt = pickle.load(f)
 
-        second_eval_step = 3 * spu
+        second_eval_step = 2 * spu
         assert ckpt["global_step"] == second_eval_step, (
             f"expected global_step={second_eval_step} (second eval after big improvement), "
             f"got {ckpt['global_step']}"
@@ -1535,11 +1749,11 @@ class TestImprovedCheckpointSaving:
         """With ckpt_cooldown_evals=2, a save at eval N must block eval N+1.
 
         Timeline (eval_interval=1, cooldown=2):
-          update 1 (step=2*spu): counter starts at 2, +=1→3, 3>=2 → saves.
-          update 2 (step=3*spu): counter=0+1=1, 1<2 → blocked (even with improvement).
-          update 3 (step=4*spu): counter=1+1=2, 2>=2 → saves again.
+          update 1 (step=spu): counter starts at 2, +=1→3, 3>=2 → saves.
+          update 2 (step=2*spu): counter=0+1=1, 1<2 → blocked (even with improvement).
+          update 3 (step=3*spu): counter=1+1=2, 2>=2 → saves again.
 
-        Verify that ckpt_best/eval_per_step_s{3*spu:010d}/ does NOT exist.
+        Verify that ckpt_best/eval_per_step_s{2*spu:010d}/ does NOT exist.
         """
         import types
 
@@ -1563,7 +1777,7 @@ class TestImprovedCheckpointSaving:
         ckpt_dir = str(tmp_path / "ckpt")
         t.train(total_steps=spu * 5, checkpoint_dir=ckpt_dir)
 
-        blocked_step = spu * 3  # update 2 — eval 2 — must be blocked
+        blocked_step = spu * 2  # update 2 — eval 2 — must be blocked
         blocked_dir = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{blocked_step:010d}"
         assert not blocked_dir.exists(), (
             f"cooldown should block save at eval 2 (step {blocked_step}), "
@@ -1574,7 +1788,7 @@ class TestImprovedCheckpointSaving:
         """After the cooldown has passed, a genuine improvement must save.
 
         Same timeline as test_cooldown_prevents_save_within_n_evals.
-        Update 3 (step=4*spu) is eval 3 — cooldown satisfied — must save.
+        Update 3 (step=3*spu) is eval 3 — cooldown satisfied — must save.
         """
         import types
 
@@ -1597,7 +1811,7 @@ class TestImprovedCheckpointSaving:
         ckpt_dir = str(tmp_path / "ckpt")
         t.train(total_steps=spu * 5, checkpoint_dir=ckpt_dir)
 
-        allowed_step = spu * 4  # update 3 — eval 3 — cooldown satisfied
+        allowed_step = spu * 3  # update 3 — eval 3 — cooldown satisfied
         allowed_dir = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{allowed_step:010d}"
         assert allowed_dir.exists(), (
             f"save at step {allowed_step} (eval 3, after cooldown) should have been created"
@@ -1630,9 +1844,9 @@ class TestImprovedCheckpointSaving:
         ckpt_dir = str(tmp_path / "ckpt")
         t.train(total_steps=spu * 3, checkpoint_dir=ckpt_dir)
 
-        # Both eval 1 (step=2*spu) and eval 2 (step=3*spu) should save
-        dir1 = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{spu * 2:010d}"
-        dir2 = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{spu * 3:010d}"
+        # At least eval 1 (step=spu) and eval 2 (step=2*spu) should save.
+        dir1 = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{spu:010d}"
+        dir2 = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{spu * 2:010d}"
         assert dir1.exists(), f"eval 1 versioned dir missing: {dir1}"
         assert dir2.exists(), f"eval 2 versioned dir missing: {dir2}"
 
@@ -1658,8 +1872,8 @@ class TestImprovedCheckpointSaving:
         ckpt_dir = str(tmp_path / "ckpt")
         t.train(total_steps=spu * 3, checkpoint_dir=ckpt_dir)
 
-        # First eval fires at update 1 → global_step = 2*spu
-        first_step = spu * 2
+        # First eval fires at update 1 → global_step = spu
+        first_step = spu
         versioned = tmp_path / "ckpt" / "ckpt_best" / f"eval_per_step_s{first_step:010d}"
         assert versioned.exists(), f"expected versioned dir: {versioned}"
         assert (versioned / "checkpoint.pkl").exists()
@@ -1714,7 +1928,7 @@ class TestImprovedCheckpointSaving:
         assert stable_path.exists()
         with open(stable_path, "rb") as f:
             ckpt = pickle.load(f)
-        # Two evals saved (steps 2*spu and 3*spu); stable must reflect the later one
+        # Three evals saved (steps spu, 2*spu, 3*spu); stable must reflect the later one
         assert ckpt["global_step"] == spu * 3, (
             f"stable pointer should reflect latest save at step {spu * 3}, "
             f"got {ckpt['global_step']}"
@@ -1872,7 +2086,8 @@ class TestBalanceCurriculumFixes:
         curr = cfg["curriculum"]
         if "eval_interval_steps" in curr:
             target_steps = int(curr["eval_interval_steps"])
-            return max(1, (target_steps + steps_per_update - 1) // steps_per_update), steps_per_update
+            interval = max(1, (target_steps + steps_per_update - 1) // steps_per_update)
+            return interval, steps_per_update
         return int(curr.get("eval_interval", 50)), steps_per_update
 
     def test_eval_interval_compatible_with_5m_gpu_run(self):
@@ -1959,8 +2174,6 @@ class TestBalanceCurriculumFixes:
         curriculum_min_height is forwarded on every eval call.
         """
         import types
-
-        import jax
 
         from wheeled_biped.envs.balance_env import BalanceEnv
         from wheeled_biped.training.ppo import PPOTrainer
@@ -2214,8 +2427,8 @@ class TestBestRewardTracking:
         observed_rewards: list[float] = []
         original_rollout = trainer._rollout
 
-        # Inject a spike at update index 7 (0-indexed call: call #7 in the
-        # post-warmup loop, so update=8 in the 1-based loop; 8 % 10 ≠ 0).
+        # Inject a spike at actual update 7. Call #0 is compile-only and is
+        # discarded by train(), so call #7 maps to update 7; 7 % 10 ≠ 0.
         call_count = [0]
         SPIKE_CALL = 7  # noqa: N806
 

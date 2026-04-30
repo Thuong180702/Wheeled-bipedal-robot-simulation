@@ -1035,6 +1035,8 @@ PPO with 4096 parallel environments, rollout length 128 steps,
 4 epochs per update, 32 minibatches, learning rate
 $3\!\times\!10^{-4}$ (Adam), gradient norm clipping 0.5,
 entropy coefficient 0.015, value-loss coefficient 0.5.
+To avoid rare destructive policy jumps during long resumed runs, an update is
+rejected if its approximate policy KL exceeds 0.05.
 % [TODO-RESULT: report actual total training steps once complete;
 %  planned target is approximately 50M environment steps]
 
@@ -1060,6 +1062,7 @@ Epochs per update        & 4 \\
 Minibatches per epoch    & 32 \\
 Minibatch size           & 16{,}384 \\
 PPO clip range ($\epsilon$) & 0.10 \\
+Approx. KL reject threshold & 0.05 \\
 \midrule
 \multicolumn{2}{l}{\textit{Optimization}} \\
 Optimizer                & Adam \\

@@ -33,8 +33,11 @@ from wheeled_biped.utils.logger import TrainingLogger
 # Version history:
 #   1 — initial versioned format (params, opt_state, obs_rms, config,
 #         global_step, best_reward, curriculum_min_height,
-#         best_eval_per_step, best_eval_success, best_train_reward)
+#         best_eval_per_step, best_eval_success, best_train_reward;
+#         newer v1 checkpoints may also contain rng and compact env_state)
 CHECKPOINT_VERSION: int = 1
+
+_COMPACT_MJX_MODEL_MARKER = "__wheeled_biped_compact_mjx_model__"
 
 # ============================================================
 # Data Structures
@@ -224,6 +227,7 @@ class PPOTrainer:
         self._resumed_global_step = 0  # Sẽ được set khi load_checkpoint
         self._resumed_best_reward = float("-inf")
         self._resumed_curriculum_min = None  # Curriculum min height từ checkpoint
+        self._resumed_env_state: EnvState | None = None
         self._curriculum_min_height = None  # Giá trị hiện tại (cập nhật trong train())
         # Eval-triggered checkpoint trackers — restored from checkpoint on resume.
         # Default to -inf so first eval always saves when no prior checkpoint exists.
@@ -243,6 +247,7 @@ class PPOTrainer:
         self.value_coeff = ppo_cfg.get("value_loss_coeff", 0.5)
         self.max_grad_norm = ppo_cfg.get("max_grad_norm", 0.5)
         self.normalize_adv = ppo_cfg.get("normalize_advantages", True)
+        self.max_policy_kl = float(ppo_cfg.get("max_policy_kl", 0.0))
 
         # Task params
         task_cfg = config.get("task", {})
@@ -271,6 +276,95 @@ class PPOTrainer:
 
         # Observation normalization
         self.obs_rms = init_running_mean_std((env.obs_size,))
+
+    def _pack_env_state_for_checkpoint(self, env_state: EnvState | None) -> EnvState | None:
+        """Return a CPU checkpoint payload for EnvState.
+
+        BalanceEnv stores a batched ``dr_mjx_model`` in ``info``. Pickling that
+        full MJX model is extremely large because every static model field is
+        batched. Only the randomized fields are needed to reconstruct it.
+        """
+        if env_state is None:
+            return None
+
+        state = jax.device_get(env_state)
+        info = dict(state.info)
+        dr_model = info.get("dr_mjx_model")
+        if dr_model is not None and hasattr(dr_model, "body_mass"):
+            info["dr_mjx_model"] = {
+                _COMPACT_MJX_MODEL_MARKER: True,
+                "body_mass": jax.device_get(dr_model.body_mass),
+                "geom_friction": jax.device_get(dr_model.geom_friction),
+                "dof_damping": jax.device_get(dr_model.dof_damping),
+            }
+
+        return state._replace(info=info)
+
+    def _restore_env_state_from_checkpoint(self, payload: EnvState | None) -> EnvState | None:
+        """Restore an EnvState payload written by _pack_env_state_for_checkpoint."""
+        if payload is None:
+            return None
+
+        state = payload
+        info = dict(state.info)
+        dr_payload = info.get("dr_mjx_model")
+        if isinstance(dr_payload, dict) and dr_payload.get(_COMPACT_MJX_MODEL_MARKER):
+            body_mass = jnp.asarray(dr_payload["body_mass"])
+            geom_friction = jnp.asarray(dr_payload["geom_friction"])
+            dof_damping = jnp.asarray(dr_payload["dof_damping"])
+
+            def _make_model(bm, gf, dd):
+                return self.env.mjx_model.replace(
+                    body_mass=bm,
+                    geom_friction=gf,
+                    dof_damping=dd,
+                )
+
+            if body_mass.ndim > self.env.mjx_model.body_mass.ndim:
+                info["dr_mjx_model"] = jax.vmap(_make_model)(
+                    body_mass, geom_friction, dof_damping
+                )
+            else:
+                info["dr_mjx_model"] = _make_model(body_mass, geom_friction, dof_damping)
+
+            state = state._replace(info=info)
+
+        return jax.device_put(state)
+
+    def _patch_curriculum_reset_state(
+        self,
+        env_state: EnvState,
+        rng: jax.Array,
+        current_min_h: float,
+    ) -> tuple[EnvState, jax.Array]:
+        """Patch a freshly reset BalanceEnv state to the current curriculum range."""
+        if (
+            not hasattr(self.env, "MIN_HEIGHT_CMD")
+            or not hasattr(self.env, "MAX_HEIGHT_CMD")
+            or "curriculum_min_height" not in env_state.info
+            or "height_command" not in env_state.info
+        ):
+            return env_state, rng
+
+        rng, h_key = jax.random.split(rng)
+        abs_min = float(self.env.MIN_HEIGHT_CMD)
+        max_h = float(self.env.MAX_HEIGHT_CMD)
+        height_command = jax.random.uniform(
+            h_key,
+            shape=env_state.info["height_command"].shape,
+            minval=float(current_min_h),
+            maxval=max_h,
+        )
+        height_norm = (height_command - abs_min) / (max_h - abs_min)
+        obs = env_state.obs.at[:, -3].set(height_norm)
+        info = {
+            **env_state.info,
+            "height_command": height_command,
+            "curriculum_min_height": jnp.full_like(
+                env_state.info["curriculum_min_height"], float(current_min_h)
+            ),
+        }
+        return env_state._replace(obs=obs, info=info), rng
 
     def _ppo_loss(
         self,
@@ -687,9 +781,24 @@ class PPOTrainer:
             print("      GPU (jax[cuda12]) mới thật sự song song 4096 envs")
             print()
 
-        # Reset environments
-        self.rng, reset_key = jax.random.split(self.rng)
-        env_state = self.env.v_reset(reset_key, self.num_envs)
+        # Restore environments when the checkpoint has a full training state.
+        # Older checkpoints do not have env_state, so they fall back to a clean reset.
+        env_state_reset_from_resume = False
+        if self._resumed_env_state is not None:
+            env_state = self._resumed_env_state
+            restored_num_envs = int(env_state.done.shape[0])
+            if restored_num_envs != self.num_envs:
+                print(
+                    "  ⚠️  Checkpoint env_state num_envs="
+                    f"{restored_num_envs} != current num_envs={self.num_envs}; resetting envs."
+                )
+                self.rng, reset_key = jax.random.split(self.rng)
+                env_state = self.env.v_reset(reset_key, self.num_envs)
+                env_state_reset_from_resume = self._resumed_global_step > 0
+        else:
+            self.rng, reset_key = jax.random.split(self.rng)
+            env_state = self.env.v_reset(reset_key, self.num_envs)
+            env_state_reset_from_resume = self._resumed_global_step > 0
 
         steps_per_update = self._rollout_length * self.num_envs
 
@@ -732,10 +841,15 @@ class PPOTrainer:
 
         # Set curriculum_min_height cho tất cả envs
         if curriculum_enabled and "curriculum_min_height" in env_state.info:
-            new_min_arr = jnp.full_like(env_state.info["curriculum_min_height"], current_min_h)
-            env_state = env_state._replace(
-                info={**env_state.info, "curriculum_min_height": new_min_arr}
-            )
+            if env_state_reset_from_resume:
+                env_state, self.rng = self._patch_curriculum_reset_state(
+                    env_state, self.rng, current_min_h
+                )
+            else:
+                new_min_arr = jnp.full_like(env_state.info["curriculum_min_height"], current_min_h)
+                env_state = env_state._replace(
+                    info={**env_state.info, "curriculum_min_height": new_min_arr}
+                )
 
         reward_window: list[float] = []  # Reward window cho curriculum
         curriculum_level = (
@@ -744,8 +858,15 @@ class PPOTrainer:
 
         # Tính số updates còn lại (trừ bước đã train trước đó nếu resume)
         resumed_step = self._resumed_global_step
-        remaining_steps = max(steps_per_update, total_steps - resumed_step)
-        num_updates = remaining_steps // steps_per_update
+        remaining_steps = total_steps - resumed_step
+        if resumed_step > 0 and remaining_steps <= 0:
+            raise ValueError(
+                f"total_steps ({total_steps:,}) must be greater than the resumed "
+                f"checkpoint step ({resumed_step:,}). Use --additional-steps for "
+                "relative resume training."
+            )
+        remaining_steps = max(steps_per_update, remaining_steps)
+        num_updates = (remaining_steps + steps_per_update - 1) // steps_per_update
 
         print("═══ PPO Training ═══")
         print(f"  Backend: {backend.upper()}")
@@ -768,9 +889,11 @@ class PPOTrainer:
 
         compile_start = time.time()
 
-        # Warmup rollout
+        # Compile-only warmup. This intentionally discards all outputs so JIT
+        # compilation does not perform a hidden training update or advance envs/RNG.
+        rng_before_compile = self.rng
         self.rng, warmup_key = jax.random.split(self.rng)
-        env_state, warmup_transitions, self.rng = self._rollout(
+        compile_env_state, warmup_transitions, _compile_rng = self._rollout(
             self.params,
             env_state,
             warmup_key,
@@ -779,23 +902,19 @@ class PPOTrainer:
         # Force JAX to finish compilation
         jax.block_until_ready(warmup_transitions.reward)
 
-        # Warmup update — un-normalize để lấy raw obs cho obs_rms
-        # (transitions.obs đã normalized trong _rollout, cần raw data cho Welford)
-        raw_obs = warmup_transitions.obs * jnp.sqrt(self.obs_rms.var + 1e-8) + self.obs_rms.mean
-        all_obs = raw_obs.reshape(-1, self.env.obs_size)
-        self.obs_rms = update_running_mean_std(self.obs_rms, all_obs)
-        last_obs = normalize_obs(env_state.obs, self.obs_rms)
+        last_obs = normalize_obs(compile_env_state.obs, self.obs_rms)
         _, last_value = self.model.apply(self.params, last_obs)
 
         self.rng, warmup_update_key = jax.random.split(self.rng)
-        self.params, self.opt_state, _, self.rng = self._update_step(
+        compile_params, _, _, _ = self._update_step(
             self.params,
             self.opt_state,
             warmup_transitions,
             last_value,
             warmup_update_key,
         )
-        jax.block_until_ready(self.params)
+        jax.block_until_ready(compile_params)
+        self.rng = rng_before_compile
 
         compile_time = time.time() - compile_start
         print(f"  ✅ JIT compile xong! ({compile_time:.1f}s)")
@@ -805,7 +924,7 @@ class PPOTrainer:
         # Kiểm tra stop ngay sau warmup (có thể bị Ctrl+C trong lúc compile)
         if self._stop_requested:
             print("\n  🛑 Training dừng theo yêu cầu (trong lúc JIT compile)")
-            gs = resumed_step + steps_per_update
+            gs = resumed_step
             self._save_checkpoint(
                 os.path.join(checkpoint_dir, "final"),
                 global_step=gs,
@@ -813,6 +932,7 @@ class PPOTrainer:
                 best_eval_per_step=self._resumed_best_eval_per_step,
                 best_eval_success=self._resumed_best_eval_success,
                 best_train_reward=self._resumed_best_train_reward,
+                env_state=env_state,
             )
             if viewer is not None:
                 viewer.request_stop()
@@ -822,7 +942,7 @@ class PPOTrainer:
                 "total_steps": gs,
             }
 
-        global_step = resumed_step + steps_per_update  # Tính cả bước đã resume
+        global_step = resumed_step
         # Cumulative wall time spent on rollout + PPO update only.
         # Curriculum eval_pass(), checkpoint I/O, and print overhead are NOT
         # added here so that FPS reflects true training throughput and does not
@@ -865,13 +985,13 @@ class PPOTrainer:
                 viewer.update(
                     env_state.mjx_data,
                     env_idx=0,
-                    info={"step": str(global_step), "status": "warmup done"},
+                    info={"step": str(global_step), "status": "compile done"},
                 )
             except Exception:
                 pass
 
         try:
-            for update in range(1, num_updates):  # Bắt đầu từ 1 (đã warmup update 0)
+            for update in range(1, num_updates + 1):
                 # Kiểm tra stop flag (Ctrl+C hoặc viewer đóng)
                 if self._stop_requested:
                     print(f"\n  🛑 Training dừng theo yêu cầu tại update {update}/{num_updates}")
@@ -905,6 +1025,8 @@ class PPOTrainer:
 
                 # PPO Update
                 self.rng, update_key = jax.random.split(self.rng)
+                old_params = self.params
+                old_opt_state = self.opt_state
                 self.params, self.opt_state, metrics, self.rng = self._update_step(
                     self.params,
                     self.opt_state,
@@ -912,7 +1034,16 @@ class PPOTrainer:
                     last_value,
                     update_key,
                 )
-                jax.block_until_ready(self.params)
+                update_rejected = 0.0
+                if self.max_policy_kl > 0.0:
+                    approx_kl = float(metrics["policy/approx_kl"])
+                    if approx_kl > self.max_policy_kl:
+                        self.params = old_params
+                        self.opt_state = old_opt_state
+                        update_rejected = 1.0
+                if update_rejected == 0.0:
+                    jax.block_until_ready(self.params)
+                metrics = {**metrics, "policy/update_rejected": jnp.float32(update_rejected)}
 
                 global_step += steps_per_update
                 # update_elapsed: wall time for this rollout + PPO update only.
@@ -1064,6 +1195,7 @@ class PPOTrainer:
                                     best_eval_per_step=_best_eval_per_step,
                                     best_eval_success=_best_eval_success,
                                     best_train_reward=_best_train_reward,
+                                    env_state=env_state,
                                 )
                                 _stable = os.path.join(checkpoint_dir, "best_eval_per_step")
                                 os.makedirs(_stable, exist_ok=True)
@@ -1095,6 +1227,7 @@ class PPOTrainer:
                                     best_eval_per_step=_best_eval_per_step,
                                     best_eval_success=_best_eval_success,
                                     best_train_reward=_best_train_reward,
+                                    env_state=env_state,
                                 )
                                 _stable = os.path.join(checkpoint_dir, "best_eval_success")
                                 os.makedirs(_stable, exist_ok=True)
@@ -1169,6 +1302,7 @@ class PPOTrainer:
                                     best_eval_per_step=_best_eval_per_step,
                                     best_eval_success=_best_eval_success,
                                     best_train_reward=_best_train_reward,
+                                    env_state=env_state,
                                 )
                                 _stable = os.path.join(checkpoint_dir, "best_train_reward")
                                 os.makedirs(_stable, exist_ok=True)
@@ -1233,6 +1367,7 @@ class PPOTrainer:
                         best_eval_per_step=_best_eval_per_step,
                         best_eval_success=_best_eval_success,
                         best_train_reward=_best_train_reward,
+                        env_state=env_state,
                     )
                     # Flush logger buffer to disk alongside checkpoint
                     if self.logger:
@@ -1251,6 +1386,7 @@ class PPOTrainer:
             best_eval_per_step=_best_eval_per_step,
             best_eval_success=_best_eval_success,
             best_train_reward=_best_train_reward,
+            env_state=env_state,
         )
 
         # ====== Curriculum Report ======
@@ -1331,6 +1467,7 @@ class PPOTrainer:
         best_eval_per_step: float = float("-inf"),
         best_eval_success: float = float("-inf"),
         best_train_reward: float = float("-inf"),
+        env_state: EnvState | None = None,
     ) -> None:
         """Lưu checkpoint (params + obs_rms + training state).
 
@@ -1349,6 +1486,8 @@ class PPOTrainer:
             "params": jax.device_get(self.params),
             "opt_state": jax.device_get(self.opt_state),
             "obs_rms": jax.device_get(self.obs_rms),
+            "rng": jax.device_get(self.rng),
+            "env_state": self._pack_env_state_for_checkpoint(env_state),
             "config": self.config,
             "global_step": int(global_step),
             "best_reward": float(best_reward),
@@ -1367,8 +1506,14 @@ class PPOTrainer:
         with open(os.path.join(path, "checkpoint.pkl"), "wb") as f:
             pickle.dump(checkpoint, f)
 
-    def load_checkpoint(self, path: str) -> None:
-        """Tải checkpoint."""
+    def load_checkpoint(self, path: str, *, resume_training: bool = True) -> None:
+        """Tải checkpoint.
+
+        Args:
+            path: checkpoint directory containing ``checkpoint.pkl``.
+            resume_training: True for exact same-run resume; False for
+                cross-stage warm-start where only model weights and obs stats are reused.
+        """
         import os
         import pickle
         import warnings
@@ -1395,21 +1540,51 @@ class PPOTrainer:
         # ckpt_version == CHECKPOINT_VERSION or None (pre-versioned, handled above): proceed.
 
         self.params = jax.device_put(checkpoint["params"])
-        self.opt_state = jax.device_put(checkpoint["opt_state"])
+        if resume_training:
+            self.opt_state = jax.device_put(checkpoint["opt_state"])
+        else:
+            self.opt_state = self.optimizer.init(self.params)
         self.obs_rms = jax.device_put(checkpoint["obs_rms"])
+        has_rng = "rng" in checkpoint
+        if resume_training and has_rng:
+            self.rng = jax.device_put(checkpoint["rng"])
+        self._resumed_env_state = (
+            self._restore_env_state_from_checkpoint(checkpoint.get("env_state"))
+            if resume_training
+            else None
+        )
 
         # Khôi phục training state (tương thích checkpoint cũ)
-        self._resumed_global_step = checkpoint.get("global_step", 0)
-        self._resumed_best_reward = checkpoint.get("best_reward", float("-inf"))
-        self._resumed_curriculum_min = checkpoint.get("curriculum_min_height", None)
+        self._resumed_global_step = checkpoint.get("global_step", 0) if resume_training else 0
+        self._resumed_best_reward = (
+            checkpoint.get("best_reward", float("-inf")) if resume_training else float("-inf")
+        )
+        self._resumed_curriculum_min = (
+            checkpoint.get("curriculum_min_height", None) if resume_training else None
+        )
         # Eval-triggered tracker values — absent in older checkpoints; fall back
         # to -inf so the first post-resume eval saves unconditionally (safe).
-        self._resumed_best_eval_per_step = checkpoint.get("best_eval_per_step", float("-inf"))
-        self._resumed_best_eval_success = checkpoint.get("best_eval_success", float("-inf"))
-        self._resumed_best_train_reward = checkpoint.get("best_train_reward", float("-inf"))
+        self._resumed_best_eval_per_step = (
+            checkpoint.get("best_eval_per_step", float("-inf"))
+            if resume_training
+            else float("-inf")
+        )
+        self._resumed_best_eval_success = (
+            checkpoint.get("best_eval_success", float("-inf")) if resume_training else float("-inf")
+        )
+        self._resumed_best_train_reward = (
+            checkpoint.get("best_train_reward", float("-inf")) if resume_training else float("-inf")
+        )
+        if not resume_training:
+            print("  \U0001f4c2 Warm-started checkpoint weights; optimizer/training state reset")
+            return
         print(
             f"  \U0001f4c2 Checkpoint: step={self._resumed_global_step:,},"
             f" best_reward={self._resumed_best_reward:.4f}"
         )
         if self._resumed_curriculum_min is not None:
             print(f"  \U0001f4c2 Curriculum min_height: {self._resumed_curriculum_min:.2f}")
+        if self._resumed_env_state is not None and has_rng:
+            print("  \U0001f4c2 Restored env_state + RNG for exact resume")
+        elif self._resumed_global_step > 0:
+            print("  ⚠️  Legacy checkpoint has no full env_state/RNG; envs will reset once")

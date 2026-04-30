@@ -108,7 +108,7 @@ class CurriculumManager:
             prev_checkpoint = self.output_dir / prev_stage_name / "rl" / "checkpoints" / "final"
             if prev_checkpoint.exists():
                 print(f"  ⟶ Warm-start từ: {prev_checkpoint}")
-                trainer.load_checkpoint(str(prev_checkpoint))
+                trainer.load_checkpoint(str(prev_checkpoint), resume_training=False)
 
         return trainer, logger
 

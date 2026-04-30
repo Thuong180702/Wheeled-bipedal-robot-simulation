@@ -54,6 +54,7 @@ ppo:
   entropy_coeff: 0.015
   value_loss_coeff: 0.5
   max_grad_norm: 0.5
+  max_policy_kl: 0.05 # reject overly large PPO updates; 0 disables
   normalize_advantages: true
   seed: 42
 

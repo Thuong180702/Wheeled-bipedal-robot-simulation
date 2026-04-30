@@ -233,6 +233,37 @@ class TestStateMachine:
         assert mgr.current_stage_idx == 1
 
 
+class TestStageWarmStart:
+    def test_stage_warm_start_resets_training_state(self, tmp_path):
+        """Cross-stage warm-start must not exact-resume global_step/env_state."""
+        from wheeled_biped.training.curriculum import CurriculumManager
+
+        mgr = CurriculumManager.__new__(CurriculumManager)
+        mgr.stages = [
+            {"name": "balance", "config": "configs/training/balance.yaml"},
+            {
+                "name": "stand_up",
+                "config": "configs/training/stand_up.yaml",
+                "pretrained_from": "balance",
+            },
+        ]
+        mgr.output_dir = tmp_path
+        prev_ckpt = tmp_path / "balance" / "rl" / "checkpoints" / "final"
+        prev_ckpt.mkdir(parents=True)
+
+        trainer = MagicMock()
+
+        with patch(
+            "wheeled_biped.training.curriculum.load_training_config",
+            return_value={"task": {"env": "BalanceEnv"}},
+        ), patch("wheeled_biped.training.curriculum.make_env", return_value=MagicMock()), patch(
+            "wheeled_biped.training.curriculum.TrainingLogger", return_value=MagicMock()
+        ), patch("wheeled_biped.training.curriculum.PPOTrainer", return_value=trainer):
+            mgr._create_trainer_for_stage(1)
+
+        trainer.load_checkpoint.assert_called_once_with(str(prev_ckpt), resume_training=False)
+
+
 # ---------------------------------------------------------------------------
 # Tests: run() — performance-gated main loop
 # ---------------------------------------------------------------------------
