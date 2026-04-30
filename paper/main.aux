@@ -56,46 +56,47 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}State, Observation, and Action}{4}{}\protected@file@percent }
 \newlabel{eq:obs}{{6}{4}{}{equation.6}{}}
 \newlabel{eq:height_norm}{{7}{4}{}{equation.7}{}}
-\newlabel{eq:yaw_error}{{8}{4}{}{equation.8}{}}
+\newlabel{eq:current_height_norm}{{8}{4}{}{equation.8}{}}
+\newlabel{eq:yaw_error}{{9}{4}{}{equation.9}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Learning Objective}{4}{}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Reward components and weights for the variable-height \texttt  {balance} task. Weights for the \texttt  {balance\_robust} fine-tuning stage differ: $w_{\mathrm  {still}}=0$, $w_{\mathrm  {wh}}=0$, $w_{\mathrm  {nat}}=1.5$, $w_{\mathrm  {alive}}=0.5$, $w_{\Delta a}=-0.005$, to accommodate wheel-based push recovery motion.}}{5}{}\protected@file@percent }
 \newlabel{tab:reward_weights}{{III}{5}{}{table.3}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {V}Reward Design}{5}{}\protected@file@percent }
 \newlabel{sec:reward}{{V}{5}{}{section.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Reward Structure}{5}{}\protected@file@percent }
-\newlabel{eq:reward_total}{{11}{5}{}{equation.11}{}}
+\newlabel{eq:reward_total}{{12}{5}{}{equation.12}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Primary Reward Terms}{5}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}1}Body-Level Reward}{5}{}\protected@file@percent }
-\newlabel{eq:body_level}{{12}{5}{}{equation.12}{}}
+\newlabel{eq:body_level}{{13}{5}{}{equation.13}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}2}Height Tracking Reward}{5}{}\protected@file@percent }
-\newlabel{eq:height_reward}{{13}{5}{}{equation.13}{}}
+\newlabel{eq:height_reward}{{14}{5}{}{equation.14}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}3}Heading and Position Regularization}{5}{}\protected@file@percent }
-\newlabel{eq:heading_reward}{{14}{5}{}{equation.14}{}}
-\newlabel{eq:drift_reward}{{15}{5}{}{equation.15}{}}
+\newlabel{eq:heading_reward}{{15}{5}{}{equation.15}{}}
+\newlabel{eq:drift_reward}{{16}{5}{}{equation.16}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}4}Orientation and Yaw Stability}{5}{}\protected@file@percent }
-\newlabel{eq:orient_reward}{{16}{5}{}{equation.16}{}}
-\newlabel{eq:yaw_reward}{{17}{5}{}{equation.17}{}}
+\newlabel{eq:orient_reward}{{17}{5}{}{equation.17}{}}
+\newlabel{eq:yaw_reward}{{18}{5}{}{equation.18}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}5}Leg Symmetry}{5}{}\protected@file@percent }
-\newlabel{eq:symmetry_reward}{{18}{5}{}{equation.18}{}}
+\newlabel{eq:symmetry_reward}{{19}{5}{}{equation.19}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}6}Leg Alignment Rewards}{5}{}\protected@file@percent }
-\newlabel{eq:legs_forward}{{19}{5}{}{equation.19}{}}
-\newlabel{eq:legs_vertical}{{20}{5}{}{equation.20}{}}
+\newlabel{eq:legs_forward}{{20}{5}{}{equation.20}{}}
+\newlabel{eq:legs_vertical}{{21}{5}{}{equation.21}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}7}No-Motion Reward}{5}{}\protected@file@percent }
-\newlabel{eq:no_motion}{{21}{5}{}{equation.21}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Height-Consistent Natural Pose Reward}{5}{}\protected@file@percent }
-\newlabel{sec:natural_pose}{{\mbox  {V-C}}{5}{}{subsection.5.3}{}}
+\newlabel{eq:no_motion}{{22}{5}{}{equation.22}{}}
 \citation{bengio2009curriculum}
-\newlabel{eq:natural_pose}{{25}{6}{}{equation.25}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Height-Consistent Natural Pose Reward}{6}{}\protected@file@percent }
+\newlabel{sec:natural_pose}{{\mbox  {V-C}}{6}{}{subsection.5.3}{}}
+\newlabel{eq:natural_pose}{{26}{6}{}{equation.26}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Effort and Smoothness Penalties}{6}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-E}}Termination Conditions}{6}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {VI}Curriculum Learning Strategy}{6}{}\protected@file@percent }
 \newlabel{sec:curriculum}{{VI}{6}{}{section.6}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Within-Stage Height Curriculum}{6}{}\protected@file@percent }
-\newlabel{eq:height_curriculum}{{29}{6}{}{equation.29}{}}
-\newlabel{eq:eval_per_step}{{30}{6}{}{equation.30}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Multi-Stage Macro-Curriculum}{6}{}\protected@file@percent }
-\newlabel{sec:multi_stage}{{\mbox  {VI-B}}{6}{}{subsection.6.2}{}}
+\newlabel{eq:height_curriculum}{{30}{6}{}{equation.30}{}}
+\newlabel{eq:eval_per_step}{{31}{6}{}{equation.31}{}}
 \citation{flax}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Multi-Stage Macro-Curriculum}{7}{}\protected@file@percent }
+\newlabel{sec:multi_stage}{{\mbox  {VI-B}}{7}{}{subsection.6.2}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {VII}Classical LQR Baseline}{7}{}\protected@file@percent }
 \newlabel{sec:lqr}{{VII}{7}{}{section.7}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Motivation}{7}{}\protected@file@percent }
@@ -106,21 +107,21 @@
 \@writefile{toc}{\contentsline {section}{\numberline {VIII}Training Pipeline and Evaluation Protocol}{7}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-A}}Network Architecture}{7}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-B}}Training Configuration}{7}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-C}}Research Evaluation Protocol}{7}{}\protected@file@percent }
-\newlabel{sec:eval_protocol}{{\mbox  {VIII-C}}{7}{}{subsection.8.3}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces PPO training hyperparameters for the \texttt  {balance} stage.}}{8}{}\protected@file@percent }
 \newlabel{tab:ppo_hyperparams}{{IV}{8}{}{table.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-C}}Research Evaluation Protocol}{8}{}\protected@file@percent }
+\newlabel{sec:eval_protocol}{{\mbox  {VIII-C}}{8}{}{subsection.8.3}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces RL policy vs.\ LQR baseline comparison (planned). All result cells to be filled after training.}}{8}{}\protected@file@percent }
 \newlabel{tab:rl_vs_lqr}{{V}{8}{}{table.5}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {IX}Experimental Results}{8}{}\protected@file@percent }
 \newlabel{sec:results}{{IX}{8}{}{section.9}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-A}}Learning Curves}{8}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-B}}Nominal Balance and Variable-Height Results}{8}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Variable-height balancing: performance vs.\ commanded height. All values pending training completion.}}{8}{}\protected@file@percent }
-\newlabel{tab:balance_results}{{VI}{8}{}{table.6}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-C}}Push Robustness}{8}{}\protected@file@percent }
 \citation{hwangbo2019learning,rudin2022walk}
 \citation{tobin2017domain,peng2018simtoreal,tan2018simtoreal}
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Variable-height balancing: performance vs.\ commanded height. All values pending training completion.}}{9}{}\protected@file@percent }
+\newlabel{tab:balance_results}{{VI}{9}{}{table.6}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-D}}Friction Robustness}{9}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-E}}Ablation: Natural Pose Reward}{9}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-F}}Ablation: Observation Design}{9}{}\protected@file@percent }

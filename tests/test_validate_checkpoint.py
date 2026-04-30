@@ -200,7 +200,7 @@ class TestLinVelPlacement:
         # obs[3:6] must be ang_vel, not lin_vel
         np.testing.assert_allclose(obs[3:6], ang_vel, atol=1e-5)
         # lin_vel must not appear anywhere in the base obs
-        base = obs[:-2]  # strip height_cmd + yaw_error
+        base = obs[:-3]  # strip height_cmd + current_height + yaw_error
         for v in lin_vel:
             assert not any(np.isclose(base, v)), (
                 f"lin_vel value {v} found in disabled-mode base obs"

@@ -11,7 +11,7 @@ Simulation and reinforcement learning training for a wheeled bipedal robot using
 
 | Task               | Description                                    | Status       |
 |--------------------|------------------------------------------------|--------------|
-| **Balance**        | Stand upright, hold target height, resist push | Implemented  |
+| **Balance**        | Stand upright and hold commanded height         | Implemented  |
 | **Balance Robust** | Push-recovery fine-tuning (40 N disturbances)  | Config ready |
 | **Wheeled Locomotion** | Wheel-driven forward/backward/turn          | Config ready |
 | **Walking**        | Leg-stepping locomotion                        | Config ready |
@@ -93,7 +93,7 @@ Joints per leg (5 × 2 = 10 total):
 ├── wheeled_biped/                     # Main package
 │   ├── envs/
 │   │   ├── base_env.py                # MJX base environment
-│   │   ├── balance_env.py             # Balance task (41-dim obs: 39-base + height_cmd + yaw_error)
+│   │   ├── balance_env.py             # Balance task (42-dim obs: 39-base + height_cmd + current_height + yaw_error)
 │   │   └── ...                        # Other env stubs
 │   ├── eval/
 │   │   ├── benchmark.py               # 4 benchmark modes
@@ -289,7 +289,7 @@ and exits gracefully (the background thread is given up to 60 s to finish).
 python scripts/train.py curriculum --steps-per-stage 5000000
 ```
 
-Stages run in order: Balance → Wheeled Locomotion → Walking → Stair Climbing → Rough Terrain.
+Stages run in order: Balance → Stand Up → Balance Robust.
 Each stage warm-starts from the previous stage's checkpoint.
 
 #### Resume from checkpoint
@@ -601,7 +601,7 @@ python scripts/eval_balance.py --controller baseline_lqr \
 
 ## Architecture
 
-### Observation space (41 dims for BalanceEnv)
+### Observation space (42 dims for BalanceEnv)
 
 | Component | Dims | Description |
 |---|---|---|
@@ -612,11 +612,13 @@ python scripts/eval_balance.py --controller baseline_lqr \
 | Joint velocities | 10 | All 10 joint velocities |
 | Previous action | 10 | Last control output (policy's intended target, pre-delay) |
 | Height command | 1 | Target height, normalised to [0, 1] over [0.40, 0.70] m |
+| Current height | 1 | Current torso height, normalised to [0, 1] over [0.40, 0.70] m |
 | Yaw error | 1 | Heading drift from episode start, wrapped to [−π, π] |
 
 > Base 39-dim observation (`lin_vel_mode="clean"`) is shared across skills.
-> `height_command` and `yaw_error` are BalanceEnv extensions (dims 40–41).
-> With `lin_vel_mode="disabled"` the base shrinks to 36 dims → total 38.
+> `height_command`, `current_height`, and `yaw_error` are BalanceEnv extensions
+> (dims 40–42).
+> With `lin_vel_mode="disabled"` the base shrinks to 36 dims → total 39.
 > The unified controller provides per-skill observation adapters with explicit
 > schemas; generic zero-padding is an escape hatch that logs a warning.
 
@@ -639,11 +641,13 @@ Two curriculum systems operate independently:
 
 **Within-stage height curriculum** (`PPOTrainer`, balance only): expands
 `curriculum_min_height` from 0.69 → 0.40 m over 29 levels. Default mode
-(`use_eval_signal: true` in `balance.yaml`): `eval_pass()` is called every
-`eval_interval=2` updates using the greedy policy (32 envs × 200 episodes,
+(`use_eval_signal: true` in `balance.yaml`): on the default GPU config,
+`eval_pass()` is called every 2 updates using the greedy policy (32 envs × 200 episodes,
 obs_rms frozen). With `num_envs=4096 × rollout_length=128 = 524,288 steps/update`,
 this fires the first eval at ~1 M env-steps — compatible with a 5 M-step run.
 Advancement fires when `eval_reward_mean / episode_length >= reward_threshold`.
+In `balance.yaml`, `reward_threshold: 0.65` means 65% of the positive reward
+budget, i.e. about `6.825` reward/step from a `10.5` reward/step maximum.
 Progress is logged as `curriculum/eval_per_step`, `curriculum/eval_success_rate`,
 and `curriculum/eval_fall_rate`. Backward-compatible fallback (`use_eval_signal:
 false`): rolling window of per-update `avg_reward` from training rollouts (noisier
@@ -660,7 +664,7 @@ Two training configs serve different objectives:
 | Term | `balance.yaml` | `balance_robust.yaml` | Note |
 |---|---|---|---|
 | `no_motion` | 0.5 | **0.0** | Wheels must spin to recover from push |
-| `wheel_velocity` | −0.005 | **0.0** | Wheels are primary balancing actuators under push |
+| `wheel_velocity` | −0.002 | **0.0** | Wheels are primary balancing actuators under push |
 | `action_rate` | −0.05 | **−0.005** | Rapid wheel burst needed immediately after impact |
 | `body_level` | 1.5 | 1.5 | Unchanged — consistent standing objective |
 | `height` | 2.5 | 1.5 | Reduced — push survival outweighs strict height tracking |

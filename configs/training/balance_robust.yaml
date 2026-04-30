@@ -3,8 +3,8 @@
 # ============================================================
 # Robot chịu lực ngẫu nhiên mạnh ở bất kì chiều cao nào.
 # Warm-start từ stand_up checkpoint.
-# Full height range [0.38, 0.72] ngay từ đầu (không curriculum).
-# Push mạnh hơn: 40N, mỗi 3s.
+# Full height range [0.38, 0.70] ngay từ đầu (không curriculum).
+# Push mạnh hơn: 40N, mỗi 4s.
 
 task:
   name: "balance_robust"
@@ -13,7 +13,7 @@ task:
   num_envs: 4096
   # Không curriculum — full range ngay từ đầu
   height_curriculum_steps: 0
-  initial_min_height: 0.38 # full range [0.38, 0.72] từ episode đầu tiên
+  initial_min_height: 0.38 # full range [0.38, 0.70] từ episode đầu tiên
 
 # --- PPO Hyperparameters ---
 ppo:
@@ -46,7 +46,7 @@ network:
 low_level_pid:
   enabled: true
   action_smoothing_alpha: 0.4
-  anti_windup_limit: 0.35
+  anti_windup_limit: 0.4
   wheel_vel_limit: 20.0
   kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
   ki: [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
@@ -63,7 +63,7 @@ low_level_pid:
 #     Reason: During/after a push the robot *must* move wheels to prevent falling.
 #     Rewarding stillness would directly fight the recovery reflex.
 #
-#   wheel_velocity → 0.0  (was -0.005 in balance)
+#   wheel_velocity → 0.0  (was -0.002 in balance)
 #     Reason: The wheels are the primary balancing actuators under push.
 #     Penalising wheel speed would punish the exact behaviour needed for recovery.
 #
@@ -75,7 +75,7 @@ low_level_pid:
 #     anti-jitter at steady state while not punishing the recovery burst.
 #     NOTE: Do NOT zero this fully — small anti-jitter is still useful at rest.
 #
-#   natural_pose → 1.5  (increased from 0.4 in balance; both σ=0.8)
+#   natural_pose → 1.5  (increased from 0.4 in balance; both use σ=0.5 in BalanceEnv)
 #     Reason: The policy should return to a natural stance AFTER recovery, and this
 #     stronger weight encourages convergence to a consistent resting posture.
 #     σ=0.8 is permissive enough that transient recovery lean is not heavily penalised.
@@ -92,7 +92,7 @@ low_level_pid:
 #   legs_vertical 0.5 → 0.3    (relaxed posture tolerance during recovery)
 #   position_drift 1.5 → 1.0   (push displaces robot; allow slightly more drift)
 #   joint_torque  -0.0005 → -0.001   (tighter torque budget in robust mode)
-#   joint_velocity -0.00061 → -0.0005 (looser joint velocity budget under push)
+#   joint_velocity -0.0007 → -0.0005 (looser joint velocity budget under push)
 rewards:
   body_level: 1.5
   height: 1.5
@@ -134,7 +134,7 @@ domain_randomization:
 sensor_noise:
   enabled: true
   lin_vel_mode: "clean"   # keep consistent with balance.yaml
-  lin_vel_std: 0.3
+  lin_vel_std: 0.2
   ang_vel_std: 0.05
   gravity_std: 0.02
   joint_pos_std: 0.005

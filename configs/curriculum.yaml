@@ -26,9 +26,9 @@ curriculum:
     # Bat dau range [0.69, 0.70] → mo rong dan → [0.40, 0.70]
     #
     # Stage 1 bao gom 3 pha noi tai (internal height curriculum, 29 levels):
-    #   Phase A (levels 1–5):   [0.69, 0.70]  narrow band — learn stable standing
-    #   Phase B (levels 6–20):  [0.64–0.50, 0.70] — widen height command range
-    #   Phase C (levels 21–29): [0.49–0.40, 0.70] — full commanded height variation
+    #   Phase A (levels 1–5):   [~0.69–0.65, 0.70] — learn stable standing
+    #   Phase B (levels 6–20):  [~0.64–0.50, 0.70] — widen height command range
+    #   Phase C (levels 21–29): [~0.49–0.40, 0.70] — full commanded height variation
     # Each phase is unlocked when eval_per_step >= reward_threshold (see balance.yaml).
     # The macro curriculum gates advancement to Stage 2 only after Phase C completes
     # and eval_per_step >= success_value below.
@@ -55,8 +55,8 @@ curriculum:
 
     # -------------------------------------------------------
     # Stage 3: Balance vung o bat ki chieu cao + chiu luc manh
-    # Warm-start tu stand_up. Full range [0.38, 0.72] ngay tu dau.
-    # Push disturbance manh hon (40N, moi 3s).
+    # Warm-start tu stand_up. Full range [0.38, 0.70] ngay tu dau.
+    # Push disturbance manh hon (40N, moi 4s).
     # -------------------------------------------------------
     - name: "balance_robust"
       description: "Balance vung + chiu luc manh o bat ki chieu cao"

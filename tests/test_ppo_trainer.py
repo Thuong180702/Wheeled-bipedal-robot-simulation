@@ -1871,14 +1871,15 @@ class TestBalanceCurriculumFixes:
         steps_per_update = num_envs * rollout_length
         curr = cfg["curriculum"]
         if "eval_interval_steps" in curr:
-            return max(1, int(curr["eval_interval_steps"]) // steps_per_update), steps_per_update
+            target_steps = int(curr["eval_interval_steps"])
+            return max(1, (target_steps + steps_per_update - 1) // steps_per_update), steps_per_update
         return int(curr.get("eval_interval", 50)), steps_per_update
 
     def test_eval_interval_compatible_with_5m_gpu_run(self):
         """balance.yaml eval cadence must fire at least once in a 5M-step GPU run.
 
         With num_envs=4096, rollout_length=128 → steps_per_update=524,288.
-        eval_interval_steps=1_000_000 → eval_interval=max(1,1M//524K)=1 update → ~524K steps ≤ 5M. ✓
+        eval_interval_steps=1_000_000 → eval_interval=ceil(1M/524K)=2 updates → ~1.05M steps ≤ 5M. ✓
         """
         from wheeled_biped.utils.config import load_yaml
 
@@ -2013,7 +2014,7 @@ class TestBalanceCurriculumFixes:
         }
 
         env = BalanceEnv(tiny_cfg)
-        trainer = PPOTrainer(env=env, config=tiny_cfg, rng=jax.random.PRNGKey(0))
+        trainer = PPOTrainer(env=env, config=tiny_cfg, seed=0)
 
         eval_call_kwargs: list[dict] = []
 

@@ -705,7 +705,8 @@ class PPOTrainer:
         # (greedy policy, complete episodes) instead of the noisy per-rollout avg_reward.
         use_eval_signal = bool(curriculum_cfg.get("use_eval_signal", False))
         if "eval_interval_steps" in curriculum_cfg:
-            _eval_interval = max(1, int(curriculum_cfg["eval_interval_steps"]) // steps_per_update)
+            target_steps = int(curriculum_cfg["eval_interval_steps"])
+            _eval_interval = max(1, (target_steps + steps_per_update - 1) // steps_per_update)
         else:
             _eval_interval = int(curriculum_cfg.get("eval_interval", window_size))
         _curriculum_eval_envs = min(32, self.num_envs)

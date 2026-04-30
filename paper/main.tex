@@ -32,9 +32,10 @@ This paper presents a curriculum reinforcement learning framework for training a
 Each leg has five actuated joints: hip roll, hip yaw, hip pitch, knee, and wheel.
 The control policy is trained in MuJoCo MJX with JAX-accelerated vectorized simulation
 using proximal policy optimization (PPO).
-The policy receives a 41-dimensional observation that includes proprioceptive state,
-a normalized height command, and a yaw-error signal, and outputs joint-level targets
-that are converted to actuator torques through a PID low-level controller.
+The policy receives a 42-dimensional observation that includes proprioceptive state,
+a normalized height command, normalized current torso height, and a yaw-error
+signal, and outputs joint-level targets that are converted to actuator torques
+through a PID low-level controller.
 To stabilize learning across a wide range of body heights, we employ a within-stage
 height curriculum that progressively expands the commanded height range from
 near the nominal standing posture toward deep crouching configurations, gated
@@ -235,8 +236,8 @@ Tan~\emph{et al.}~\cite{tan2018simtoreal} showed that randomizing actuator
 parameters and adding observation noise enables Minitaur to transfer
 sim-trained trotting gaits to the real robot without fine-tuning.
 Our framework adopts these established protocols~\cite{tobin2017domain,peng2018simtoreal,tan2018simtoreal}---randomizing friction,
-mass properties, motor strength, and adding IMU/encoder noise and
-action delay---to prepare the trained policy for future hardware deployment.
+mass properties, joint damping, and adding IMU/encoder noise and
+optional action delay---to prepare the trained policy for future hardware deployment.
 
 % ============================================================
 \section{Robot Platform and Simulation Setup}
@@ -332,21 +333,20 @@ Sensor noise is sampled independently per step.}
 Parameter & Range & Unit \\
 \midrule
 \multicolumn{3}{l}{\textit{Dynamics}} \\
-Friction coefficient   & $[0.5,\; 1.5]$         & --- \\
-Total body mass        & $\pm 15\%$ of nominal   & kg \\
-Motor strength         & $[0.8,\; 1.2]\times$    & --- \\
-Joint damping          & $[0.8,\; 1.2]\times$    & --- \\
-CoM offset (x, y)      & $[-0.02,\; 0.02]$       & m \\
+Friction coefficient   & $[0.6,\; 1.4]\times$   & --- \\
+Total body mass        & $[0.85,\; 1.15]\times$ & --- \\
+Joint damping          & $[0.7,\; 1.3]\times$    & --- \\
 \midrule
 \multicolumn{3}{l}{\textit{Sensors \& Actuation}} \\
 IMU angular velocity noise  & $\mathcal{N}(0,\,0.05^2)$ & rad/s \\
-Joint encoder noise         & $\mathcal{N}(0,\,0.01^2)$ & rad \\
-Linear velocity noise       & $\mathcal{N}(0,\,0.05^2)$ & m/s \\
-Action delay                & 1 step ($\approx$20\,ms)   & --- \\
+Gravity-vector noise        & $\mathcal{N}(0,\,0.02^2)$ & normalized \\
+Joint position noise        & $\mathcal{N}(0,\,0.005^2)$ & rad \\
+Joint velocity noise        & $\mathcal{N}(0,\,0.01^2)$ & rad/s \\
+Linear velocity mode        & clean; optional noisy ($\sigma=0.2$) & m/s \\
+Action delay                & 0 default; optional 1 step & --- \\
 \midrule
 \multicolumn{3}{l}{\textit{Initial Conditions}} \\
-Initial body tilt           & $[-0.05,\; 0.05]$   & rad \\
-Initial joint offset        & $[-0.05,\; 0.05]$   & rad \\
+Initial joint offset        & $[-0.10,\; 0.10]$   & rad \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -374,7 +374,7 @@ depending on the joint type:
     measured joint position and velocity, and $K_p^j$, $K_d^j$, $K_i^j$
     are per-joint gains.
     The integral term includes anti-windup clamping
-    ($\pm 0.35\,\mathrm{rad}{\cdot}\mathrm{s}$).
+    ($\pm 0.4\,\mathrm{rad}{\cdot}\mathrm{s}$).
     \item \textbf{Wheel joints}: the policy output is interpreted as a
     velocity target.
     A PI controller computes the torque:
@@ -427,7 +427,7 @@ At time step $t$, the robot state is $x_t = \{q_t, \dot{q}_t\}$,
 where $q_t$ and $\dot{q}_t$ are the generalized coordinates
 and velocities.
 
-The policy receives a \textbf{41-dimensional} observation vector
+The policy receives a \textbf{42-dimensional} observation vector
 \begin{equation}
 o_t = \big[
   g_t^b,\;
@@ -437,8 +437,9 @@ o_t = \big[
   \dot{q}_{j,t},\;
   a_{t-1},\;
   \bar{h}_t^{cmd},\;
+  \bar{z}_t,\;
   e_{\psi,t}
-\big] \in \mathbb{R}^{41},
+\big] \in \mathbb{R}^{42},
 \label{eq:obs}
 \end{equation}
 where:
@@ -451,6 +452,7 @@ where:
     \item $\dot{q}_{j,t} \in \mathbb{R}^{10}$: joint velocities;
     \item $a_{t-1} \in \mathbb{R}^{10}$: previous smoothed policy action;
     \item $\bar{h}_t^{cmd} \in \mathbb{R}$: normalized height command;
+    \item $\bar{z}_t \in \mathbb{R}$: normalized current torso height;
     \item $e_{\psi,t} \in \mathbb{R}$: yaw error (heading drift from
     episode start).
 \end{itemize}
@@ -458,7 +460,7 @@ where:
 The base 39-dimensional observation
 $[g_t^b,\, v_t^b,\, \omega_t^b,\, q_{j,t},\, \dot{q}_{j,t},\, a_{t-1}]$
 is inherited from the base environment.
-The two task-specific extensions are:
+The three task-specific extensions are:
 
 \noindent\textbf{Normalized height command.}
 \begin{equation}
@@ -468,6 +470,14 @@ The two task-specific extensions are:
 where $h_{\min} = \SI{0.40}{m}$ and $h_{\max} = \SI{0.70}{m}$.
 The normalization always uses the full task range, so the value is in
 $[0, 1]$ regardless of the current curriculum level.
+
+\noindent\textbf{Normalized current torso height.}
+\begin{equation}
+\bar{z}_t = \frac{z_t - h_{\min}}{h_{\max} - h_{\min}},
+\label{eq:current_height_norm}
+\end{equation}
+where $z_t$ is the current torso height.  This term exposes instantaneous
+height-tracking error directly to the memoryless policy.
 
 \noindent\textbf{Yaw error.}
 \begin{equation}
@@ -483,7 +493,7 @@ accumulated heading drift from $g^b$ and $\omega^b$ alone.
 
 When linear velocity is unavailable (e.g., in sim-to-real preparation
 without a reliable velocity estimator), $v_t^b$ can be removed,
-reducing the observation to 38 dimensions.
+reducing the observation to 39 dimensions.
 All results in this paper use simulator-exact linear velocity,
 which corresponds to the upper bound on velocity-estimate quality.
 
@@ -514,9 +524,9 @@ L^{\mathrm{PPO}}(\theta) =
 \right],
 \end{equation}
 where $\rho_t(\theta)=\pi_\theta(a_t|o_t)/\pi_{\theta_{\mathrm{old}}}(a_t|o_t)$
-and $\epsilon=0.2$.
+and $\epsilon=0.10$.
 The full objective adds a clipped value loss (coefficient 0.5) and
-entropy regularization (coefficient 0.005).
+entropy regularization (coefficient 0.015).
 Advantages $\hat{A}_t$ are computed using Generalized Advantage
 Estimation (GAE)~\cite{gae} with $\lambda=0.95$.
 
@@ -560,9 +570,9 @@ Yaw suppression ($r_{\mathrm{yaw}}$)       & Positive & 0.5    \\
 Natural pose ($r_{\mathrm{nat}}$)          & Positive & 0.4    \\
 Alive bonus ($r_{\mathrm{alive}}$)         & Positive & 0.3    \\
 Action rate ($p_{\Delta a}$)               & Penalty  & $-0.05$    \\
-Wheel velocity ($p_{\mathrm{wh}}$)         & Penalty  & $-0.005$   \\
+Wheel velocity ($p_{\mathrm{wh}}$)         & Penalty  & $-0.002$   \\
 Joint torque ($p_\tau$)                    & Penalty  & $-0.0005$  \\
-Joint velocity ($p_{\dot{q}}$)             & Penalty  & $-0.00061$ \\
+Joint velocity ($p_{\dot{q}}$)             & Penalty  & $-0.0007$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -831,7 +841,10 @@ The per-step return is
 \end{equation}
 where $R_{\mathrm{mean}}$ is the mean episode return
 and $T = 1000$ is the episode length.
-Advancement fires when $\bar{r}_{\mathrm{eval}} \geq r_{\mathrm{thr}} = 0.75$.
+Advancement fires when
+$\bar{r}_{\mathrm{eval}} \geq r_{\mathrm{thr}} = 0.65\,r_{\max}$,
+where $r_{\max}=10.5$ is the sum of positive \texttt{balance} reward
+weights, giving $r_{\mathrm{thr}} = 6.825$ reward/step.
 Using a greedy evaluation pass rather than the noisy per-update training
 reward produces a more reliable signal for curriculum decisions.
 
@@ -840,7 +853,7 @@ Initial lower bound: $h_{\min}^{\mathrm{init}} = \SI{0.69}{m}$;
 final lower bound: $h_{\min}^{\mathrm{final}} = \SI{0.40}{m}$;
 $N_c = 29$ discrete levels;
 $\delta_h \approx \SI{0.01}{m}$;
-threshold $r_{\mathrm{thr}} = 0.75$.
+threshold ratio $0.65$ ($r_{\mathrm{thr}}=6.825$ reward/step).
 At each level $k$:
 \begin{equation}
 h_t^{cmd} \sim \mathcal{U}\!\big(h_{\min}^{(k)},\; h_{\max}\big),
@@ -917,7 +930,7 @@ but have not yet been trained; their results are not reported here.
 Classical control methods provide an interpretable reference
 for evaluating RL policies.
 We implement an LQR baseline that operates on
-the same 41-dimensional observation interface and shares the same
+the same 42-dimensional observation interface and shares the same
 PID low-level controller as the RL policy, enabling a
 controlled comparison without confounding actuator-interface differences.
 
@@ -1020,8 +1033,8 @@ learned log-standard-deviation initialized to $\log(0.2)$.
 \subsection{Training Configuration}
 PPO with 4096 parallel environments, rollout length 128 steps,
 4 epochs per update, 32 minibatches, learning rate
-$2\!\times\!10^{-4}$ (Adam), gradient norm clipping 0.5,
-entropy coefficient 0.005, value-loss coefficient 0.5.
+$3\!\times\!10^{-4}$ (Adam), gradient norm clipping 0.5,
+entropy coefficient 0.015, value-loss coefficient 0.5.
 % [TODO-RESULT: report actual total training steps once complete;
 %  planned target is approximately 50M environment steps]
 
@@ -1046,14 +1059,14 @@ Episode length           & 1{,}000 steps (20\,s) \\
 Epochs per update        & 4 \\
 Minibatches per epoch    & 32 \\
 Minibatch size           & 16{,}384 \\
-PPO clip range ($\epsilon$) & 0.2 \\
+PPO clip range ($\epsilon$) & 0.10 \\
 \midrule
 \multicolumn{2}{l}{\textit{Optimization}} \\
 Optimizer                & Adam \\
-Learning rate            & $2\times10^{-4}$ \\
+Learning rate            & $3\times10^{-4}$ \\
 Gradient norm clip       & 0.5 \\
 Value loss coefficient   & 0.5 \\
-Entropy coefficient      & 0.005 \\
+Entropy coefficient      & 0.015 \\
 \midrule
 \multicolumn{2}{l}{\textit{Advantage Estimation}} \\
 Discount $\gamma$        & 0.99 \\
@@ -1293,7 +1306,7 @@ motor controller.
 The policy uses body-frame linear velocity, which requires a velocity
 estimator on hardware.
 Should a reliable estimator be unavailable, the velocity channel can
-be dropped, reducing the observation to 38 dimensions.
+be dropped, reducing the observation to 39 dimensions.
 The policy can be retrained under this reduced observation for
 direct deployment, at a modest cost in height-tracking precision.
 
@@ -1371,7 +1384,7 @@ comparison across a suite of ten evaluation scenarios.
 
 The framework is designed for sim-to-real transfer: PD position targets
 as the action representation, comprehensive domain randomization covering
-friction, mass, motor strength, and sensor noise, and an observation
+friction, mass, joint damping, and sensor noise, and an observation
 space that degrades gracefully when linear velocity is unavailable.
 A multi-stage macro-curriculum (\texttt{balance} $\to$
 \texttt{stand\_up} $\to$ \texttt{balance\_robust}) provides a path
