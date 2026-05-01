@@ -38,6 +38,11 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+# Avoid UnicodeEncodeError in Windows shells that default to cp1252.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 # Thêm project root vào path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -135,6 +140,11 @@ def single(
     output_dir: str = typer.Option(
         "outputs",
         help="Thư mục output.",
+    ),
+    warm_start: str = typer.Option(
+        None,
+        "--warm-start",
+        help="Checkpoint de nap weights/obs_rms cho stage moi; reset optimizer/env/global_step.",
     ),
     seed: int = typer.Option(42, help="Random seed."),
     live_view: bool = typer.Option(
@@ -321,9 +331,15 @@ def single(
     console.print(f"  Steps: {steps:,}")
     if resume:
         console.print(f"  Resume: {resume}")
+    if warm_start:
+        console.print(f"  Warm-start: {warm_start}")
     console.print()
 
     # Tạo env
+    if resume and warm_start:
+        console.print("[red]Chi duoc dung mot trong hai: --resume hoac --warm-start.[/red]")
+        raise typer.Exit(1)
+
     env_name = training_config.get("task", {}).get("env", "BalanceEnv")
     env = make_env(env_name, config=training_config)
 
@@ -349,8 +365,11 @@ def single(
     # Trainer
     trainer = PPOTrainer(env=env, config=training_config, logger=logger, seed=seed)
 
-    # Resume
-    if resume:
+    # Resume exact same run, or warm-start a new stage from pretrained weights.
+    if warm_start:
+        trainer.load_checkpoint(warm_start, resume_training=False)
+        console.print(f"[green]Da warm-start checkpoint: {warm_start}[/green]")
+    elif resume:
         trainer.load_checkpoint(resume)
         console.print(f"[green]Đã tải checkpoint: {resume}[/green]")
 

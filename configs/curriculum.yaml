@@ -55,7 +55,7 @@ curriculum:
 
     # -------------------------------------------------------
     # Stage 3: Balance vung o bat ki chieu cao + chiu luc manh
-    # Warm-start tu stand_up. Full range [0.38, 0.70] ngay tu dau.
+    # Warm-start tu stand_up. Full BalanceEnv range [0.40, 0.70] ngay tu dau.
     # Push disturbance manh hon (40N, moi 4s).
     # -------------------------------------------------------
     - name: "balance_robust"

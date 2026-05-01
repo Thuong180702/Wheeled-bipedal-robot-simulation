@@ -1539,6 +1539,15 @@ class PPOTrainer:
             )
         # ckpt_version == CHECKPOINT_VERSION or None (pre-versioned, handled above): proceed.
 
+        ckpt_obs_size = int(checkpoint["obs_rms"].mean.shape[0])
+        if ckpt_obs_size != self.env.obs_size:
+            mode = "resume" if resume_training else "warm-start"
+            raise ValueError(
+                f"Cannot {mode} checkpoint at '{path}': checkpoint obs_size={ckpt_obs_size}, "
+                f"current env obs_size={self.env.obs_size}. Use matching stage/config "
+                "or retrain the source checkpoint with compatible observations."
+            )
+
         self.params = jax.device_put(checkpoint["params"])
         if resume_training:
             self.opt_state = jax.device_put(checkpoint["opt_state"])
@@ -1576,15 +1585,15 @@ class PPOTrainer:
             checkpoint.get("best_train_reward", float("-inf")) if resume_training else float("-inf")
         )
         if not resume_training:
-            print("  \U0001f4c2 Warm-started checkpoint weights; optimizer/training state reset")
+            print("  Checkpoint warm-started: weights/obs_rms loaded; optimizer/env/global_step reset")
             return
         print(
-            f"  \U0001f4c2 Checkpoint: step={self._resumed_global_step:,},"
+            f"  Checkpoint: step={self._resumed_global_step:,},"
             f" best_reward={self._resumed_best_reward:.4f}"
         )
         if self._resumed_curriculum_min is not None:
-            print(f"  \U0001f4c2 Curriculum min_height: {self._resumed_curriculum_min:.2f}")
+            print(f"  Curriculum min_height: {self._resumed_curriculum_min:.2f}")
         if self._resumed_env_state is not None and has_rng:
-            print("  \U0001f4c2 Restored env_state + RNG for exact resume")
+            print("  Restored env_state + RNG for exact resume")
         elif self._resumed_global_step > 0:
-            print("  ⚠️  Legacy checkpoint has no full env_state/RNG; envs will reset once")
+            print("  Warning: legacy checkpoint has no full env_state/RNG; envs will reset once")

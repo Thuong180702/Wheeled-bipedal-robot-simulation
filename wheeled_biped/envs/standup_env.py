@@ -4,11 +4,12 @@ Stand-Up & Height Transition Environment - Stage 2 Training.
 Task: Robot học chuyển đổi chiều cao (đứng lên/ngồi xuống) và phục hồi từ ngã.
 
 Mỗi episode:
-  - 70% starts: đứng ở random height ∈ [0.38, 0.72m] → chuyển sang height_command mới
+  - 70% starts: đứng/ngồi ở random pose khoảng [0.38, 0.72m] → chuyển sang height_command mới
   - 30% starts: bắt đầu từ tư thế ngã → phục hồi về height_command
 
-Stage 2 trong curriculum. Obs = 40 dims (39 base + height_command 1).
-Khớp kích thước với balance_env → warm-start từ balance checkpoint.
+Stage 2 trong curriculum. Obs matches BalanceEnv:
+base + height_command + current_height + yaw_error.
+This keeps balance -> stand_up -> balance_robust warm-start shape-compatible.
 """
 
 from __future__ import annotations
@@ -21,7 +22,8 @@ import jax.numpy as jnp
 import mujoco
 from mujoco import mjx
 
-from wheeled_biped.envs.base_env import EnvState, WheeledBipedEnv
+from wheeled_biped.envs.balance_env import BalanceEnv
+from wheeled_biped.envs.base_env import EnvState
 from wheeled_biped.rewards.reward_functions import (
     compute_total_reward,
     penalty_action_rate,
@@ -34,29 +36,35 @@ from wheeled_biped.rewards.reward_functions import (
     reward_heading,
     reward_height,
     reward_leg_symmetry,
+    reward_legs_forward,
+    reward_legs_vertical,
     reward_natural_pose,
     reward_upright,
 )
+from wheeled_biped.sim.domain_randomization import randomize_mjx_model
 from wheeled_biped.utils.math_utils import quat_to_euler
 
 
-class StandUpEnv(WheeledBipedEnv):
+class StandUpEnv(BalanceEnv):
     """Environment cho task đứng lên/ngồi xuống và phục hồi từ ngã.
 
-    Stage 2: Warm-start từ balance checkpoint (obs=40, cùng kích thước).
+    Stage 2: Warm-start from a balance checkpoint with the same obs/action semantics.
 
     Mỗi episode:
       - Start: 70% đứng ở random height, 30% ngã
-      - Target: random height_command ∈ [0.38, 0.72m]
+      - Target: random height_command ∈ [0.40, 0.70m] (khớp BalanceEnv)
       - Robot phải chuyển đến height_command và giữ ổn định
 
-    Obs (40 dims) = base 39 + height_command_norm 1 → khớp balance_env.
+    Obs = BalanceEnv obs contract: base + height_command + current_height + yaw_error.
     Reward = balance-like + upright bonus (tín hiệu recovery từ ngã).
     Termination: chỉ khi torso_height < 0.05m (không check tilt).
     """
 
-    MIN_HEIGHT_CMD = 0.38  # ngồi thấp nhất
-    MAX_HEIGHT_CMD = 0.72  # đứng thẳng nhất
+    # Command range is kept identical to BalanceEnv so the height observation
+    # semantics match the balance checkpoint during warm-start.  Reset poses can
+    # still start slightly outside this range (0.38/0.72) as recovery perturbations.
+    MIN_HEIGHT_CMD = 0.40
+    MAX_HEIGHT_CMD = 0.70
 
     # (hip_pitch, knee, approx_torso_z) cho 7 tư thế đứng
     _STANDING_POSES = [
@@ -79,6 +87,8 @@ class StandUpEnv(WheeledBipedEnv):
             "upright": reward_cfg.get("upright", 1.0),
             "natural_pose": reward_cfg.get("natural_pose", 1.5),
             "symmetry": reward_cfg.get("symmetry", 0.3),
+            "legs_forward": reward_cfg.get("legs_forward", 0.3),
+            "legs_vertical": reward_cfg.get("legs_vertical", 0.3),
             "alive": reward_cfg.get("alive", 0.5),
             "heading": reward_cfg.get("heading", 0.5),
             "position_drift": reward_cfg.get("position_drift", 0.3),
@@ -99,8 +109,8 @@ class StandUpEnv(WheeledBipedEnv):
         self._base_mjx_data = self._create_base_mjx_data()
 
     def _compute_obs_size(self) -> int:
-        """Obs = base 39 + height_command 1 = 40. Khớp balance_env."""
-        return super()._compute_obs_size() + 1
+        """Use the same observation contract as BalanceEnv for warm-starting."""
+        return super()._compute_obs_size()
 
     def _precompute_standing_qpos(self) -> jnp.ndarray:
         """7 tư thế đứng từ thẳng cao (~0.72m) đến ngồi thấp (~0.38m).
@@ -227,20 +237,53 @@ class StandUpEnv(WheeledBipedEnv):
         )
         mjx_data = mjx_data.replace(qpos=mjx_data.qpos.at[7:].add(joint_noise))
 
+        if self._dr_enabled:
+            rng, dr_key = jax.random.split(rng)
+            dr_mjx_model, _ = randomize_mjx_model(
+                self.mjx_model, dr_key, self._dr_config
+            )
+        else:
+            dr_mjx_model = self.mjx_model
+
         # Random height_command: full range ngay từ đầu (không cần curriculum)
         height_command = jax.random.uniform(
             height_key, shape=(), minval=self.MIN_HEIGHT_CMD, maxval=self.MAX_HEIGHT_CMD
         )
 
+        rng, obs_noise_key = jax.random.split(rng)
         prev_action = jnp.zeros(self.num_actions)
-        base_obs = self._extract_obs(mjx_data, prev_action)
+        base_obs = self._extract_obs(mjx_data, prev_action, obs_noise_key)
         height_norm = (height_command - self.MIN_HEIGHT_CMD) / (
             self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
         )
-        obs = jnp.concatenate([base_obs, jnp.array([height_norm])])
+        current_height_norm = (mjx_data.qpos[2] - self.MIN_HEIGHT_CMD) / (
+            self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
+        )
+        obs = jnp.concatenate(
+            [base_obs, jnp.array([height_norm, current_height_norm, 0.0])]
+        )
 
         anchor_xy = mjx_data.qpos[:2]
         initial_yaw = quat_to_euler(mjx_data.qpos[3:7])[2]
+        rng, push_key = jax.random.split(rng)
+
+        info = {
+            "is_fallen": jnp.bool_(False),
+            "time_limit": jnp.bool_(False),
+            "height_command": height_command,
+            "anchor_xy": anchor_xy,
+            "initial_yaw": initial_yaw,
+            "push_rng": push_key,
+            "noise_rng": obs_noise_key,
+            "dr_mjx_model": dr_mjx_model,
+            "lifetime_steps": jnp.int32(0),
+            "curriculum_min_height": jnp.float32(self.MIN_HEIGHT_CMD),
+            "pid_integral": jnp.zeros(self.num_actions, dtype=jnp.float32),
+        }
+        if self._action_delay_steps > 0:
+            info["action_delay_buffer"] = jnp.zeros(
+                (self._action_delay_steps, self.num_actions), dtype=jnp.float32
+            )
 
         return EnvState(
             mjx_data=mjx_data,
@@ -249,59 +292,7 @@ class StandUpEnv(WheeledBipedEnv):
             done=jnp.bool_(False),
             step_count=jnp.int32(0),
             prev_action=prev_action,
-            info={
-                "is_fallen": jnp.bool_(False),
-                "time_limit": jnp.bool_(False),
-                "height_command": height_command,
-                "anchor_xy": anchor_xy,
-                "initial_yaw": initial_yaw,
-            },
-        )
-
-    @functools.partial(jax.jit, static_argnums=(0,))
-    def step(self, state: EnvState, action: jnp.ndarray) -> EnvState:
-        """Step: physics + reward + termination (không có push disturbance)."""
-        action = jnp.clip(action, -1.0, 1.0)
-
-        ctrl_range = self.mjx_model.actuator_ctrlrange
-        scaled_action = ctrl_range[:, 0] + (action + 1.0) * 0.5 * (
-            ctrl_range[:, 1] - ctrl_range[:, 0]
-        )
-        mjx_data = state.mjx_data.replace(ctrl=scaled_action)
-
-        def physics_step(data, _):
-            data = mjx.step(self.mjx_model, data)
-            return data, None
-
-        mjx_data, _ = jax.lax.scan(physics_step, mjx_data, None, length=self._n_substeps)
-
-        base_obs = self._extract_obs(mjx_data, action)
-        height_command = state.info["height_command"]
-        height_norm = (height_command - self.MIN_HEIGHT_CMD) / (
-            self.MAX_HEIGHT_CMD - self.MIN_HEIGHT_CMD
-        )
-        obs = jnp.concatenate([base_obs, jnp.array([height_norm])])
-
-        reward = self._compute_reward(mjx_data, action, state)
-        is_fallen = self._check_termination(mjx_data)
-        step_count = state.step_count + 1
-        time_limit = step_count >= self._episode_length
-        done = is_fallen | time_limit
-
-        return EnvState(
-            mjx_data=mjx_data,
-            obs=obs,
-            reward=reward,
-            done=done,
-            step_count=step_count,
-            prev_action=action,
-            info={
-                "is_fallen": is_fallen,
-                "time_limit": time_limit,
-                "height_command": height_command,
-                "anchor_xy": state.info["anchor_xy"],
-                "initial_yaw": state.info["initial_yaw"],
-            },
+            info=info,
         )
 
     @functools.partial(jax.jit, static_argnums=(0,))
@@ -342,6 +333,9 @@ class StandUpEnv(WheeledBipedEnv):
             "natural_pose": reward_natural_pose(joint_pos, height_command, sigma=0.8),
             # 2 chân đối xứng
             "symmetry": reward_leg_symmetry(joint_pos, sigma=0.5),
+            # Noi hon balance de recovery con dung duoc hip roll/yaw khi can.
+            "legs_forward": reward_legs_forward(joint_pos, sigma=0.25),
+            "legs_vertical": reward_legs_vertical(joint_pos, sigma=0.25),
             # Bonus sống sót
             "alive": reward_alive(~is_fallen),
             # Giữ hướng ban đầu (nới lỏng hơn balance)

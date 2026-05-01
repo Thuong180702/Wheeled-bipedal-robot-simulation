@@ -3,7 +3,7 @@
 # ============================================================
 # Robot chịu lực ngẫu nhiên mạnh ở bất kì chiều cao nào.
 # Warm-start từ stand_up checkpoint.
-# Full height range [0.38, 0.70] ngay từ đầu (không curriculum).
+# Full BalanceEnv height range [0.40, 0.70] ngay từ đầu (không curriculum).
 # Push mạnh hơn: 40N, mỗi 4s.
 
 task:
@@ -12,8 +12,7 @@ task:
   episode_length: 1000 # 1000 × 0.02s = 20s
   num_envs: 4096
   # Không curriculum — full range ngay từ đầu
-  height_curriculum_steps: 0
-  initial_min_height: 0.38 # full range [0.38, 0.70] từ episode đầu tiên
+  initial_min_height: 0.40 # full BalanceEnv range [0.40, 0.70] từ episode đầu tiên
 
 # --- PPO Hyperparameters ---
 ppo:
@@ -27,6 +26,7 @@ ppo:
   entropy_coeff: 0.03 # giảm xuống để khai thác tốt hơn (vs 0.05 balance)
   value_loss_coeff: 0.5
   max_grad_norm: 0.5
+  max_policy_kl: 0.05 # same guard as balance; useful for checkpoint fine-tuning
   normalize_advantages: true
 
 # --- Network ---
@@ -78,7 +78,7 @@ low_level_pid:
 #   natural_pose → 1.5  (increased from 0.4 in balance; both use σ=0.5 in BalanceEnv)
 #     Reason: The policy should return to a natural stance AFTER recovery, and this
 #     stronger weight encourages convergence to a consistent resting posture.
-#     σ=0.8 is permissive enough that transient recovery lean is not heavily penalised.
+#     σ=0.5 in BalanceEnv keeps final posture consistent after recovery.
 #
 # Terms unchanged from balance (identical value):
 #   body_level (1.5), orientation (0.8), yaw_rate (0.5)
