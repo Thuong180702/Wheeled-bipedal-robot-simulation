@@ -244,15 +244,21 @@ python scripts/train.py single --stage balance --steps 50000000 --seed 42
 python scripts/train.py single --stage balance --steps 50000000 --seed 113
 python scripts/train.py single --stage balance --steps 50000000 --seed 999
 
-# Push-recovery fine-tune (warm-start from balance checkpoint)
-python scripts/train.py single --stage balance_robust --steps 3000000
+# Stand-up / height-transition fine-tune (cross-stage warm-start from balance)
+python scripts/train.py single --stage stand_up \
+    --warm-start outputs/balance/rl/seed42/checkpoints/final \
+    --steps 50000000 --seed 42
+
+# Push-recovery fine-tune (cross-stage warm-start from stand_up)
+python scripts/train.py single --stage balance_robust \
+    --warm-start outputs/stand_up/rl/seed42/checkpoints/final \
+    --steps 50000000 --seed 42
 
 # Other stages
 python scripts/train.py single --stage wheeled_locomotion --steps 5000000
 python scripts/train.py single --stage walking           --steps 5000000
 python scripts/train.py single --stage stair_climbing    --steps 5000000
 python scripts/train.py single --stage rough_terrain     --steps 5000000
-python scripts/train.py single --stage stand_up          --steps 5000000
 ```
 
 Outputs land in `outputs/<stage>/rl/seed<N>/`:
@@ -269,6 +275,7 @@ Common options:
 --num-envs 8192         # parallel environments (default 4096)
 --output-dir my_outputs # output root (default: outputs/)
 --seed 42               # random seed — determines output subdirectory
+--warm-start <checkpoint> # cross-stage fine-tune; load weights/obs RMS only
 --resume <checkpoint>   # exact same-run resume from a checkpoint directory
 --additional-steps N    # when resuming, train N extra env-steps from checkpoint
 ```
@@ -292,6 +299,14 @@ python scripts/train.py curriculum --steps-per-stage 5000000
 
 Stages run in order: Balance → Stand Up → Balance Robust.
 Each stage warm-starts from the previous stage's checkpoint.
+
+#### Cross-stage warm-start
+
+Use `--warm-start` for staged fine-tuning (`balance → stand_up → balance_robust`).
+It loads policy parameters and observation normalization from the source
+checkpoint, then starts a fresh optimizer, RNG, environment state, and
+destination-stage step counter. Use `--resume` only when continuing the exact
+same stage/run.
 
 #### Resume from checkpoint
 
@@ -554,7 +569,10 @@ python scripts/visualize.py unified    --checkpoint-dir outputs
 # ── Train ─────────────────────────────────────────────────────────────────────
 python scripts/train.py single     --stage balance        --steps 5000000  --seed 42
 python scripts/train.py single     --stage balance        --steps 50000000 --seed 113
-python scripts/train.py single     --stage balance_robust --steps 3000000  --seed 42
+python scripts/train.py single     --stage stand_up       --steps 50000000 --seed 42 \
+    --warm-start outputs/balance/rl/seed42/checkpoints/final
+python scripts/train.py single     --stage balance_robust --steps 50000000 --seed 42 \
+    --warm-start outputs/stand_up/rl/seed42/checkpoints/final
 python scripts/train.py single     --stage balance        --live-view
 python scripts/train.py curriculum --steps-per-stage 5000000
 
@@ -631,6 +649,12 @@ python scripts/eval_balance.py --controller baseline_lqr \
 > With `lin_vel_mode="disabled"` the base shrinks to 36 dims → total 39.
 > The unified controller provides per-skill observation adapters with explicit
 > schemas; generic zero-padding is an escape hatch that logs a warning.
+
+`StandUpEnv` and `balance_robust` keep the same BalanceEnv-compatible 42-dim
+observation contract and PID action semantics, so checkpoints can be
+cross-stage warm-started without changing the policy architecture. The
+commanded height range is `[0.40, 0.70]` m; stand-up reset poses may start
+slightly outside this range as initial-state perturbations.
 
 ### Action space (10 dims, normalised to [−1, 1])
 
