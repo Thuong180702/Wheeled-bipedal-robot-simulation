@@ -409,9 +409,22 @@ def single(
             checkpoint_dir=checkpoint_dir,
         )
 
-    console.print(
-        f"\n[bold green]Done![/bold green] Best reward: {result.get('best_reward', 'N/A')}"
-    )
+    if result.get("interrupted"):
+        console.print(
+            f"\n[bold yellow]Stopped early.[/bold yellow] "
+            f"Final checkpoint saved. Best reward: {result.get('best_reward', 'N/A')}"
+        )
+        console.print("[yellow]End-of-stage eval skipped because training was interrupted.[/yellow]")
+    elif result.get("completed") is False:
+        console.print(
+            f"\n[bold yellow]Stopped before target steps.[/bold yellow] "
+            f"Final checkpoint saved. Best reward: {result.get('best_reward', 'N/A')}"
+        )
+        console.print("[yellow]End-of-stage eval skipped because target steps were not reached.[/yellow]")
+    else:
+        console.print(
+            f"\n[bold green]Done![/bold green] Best reward: {result.get('best_reward', 'N/A')}"
+        )
 
     # Curriculum report tóm tắt
     cur_min = result.get("curriculum_min_height")

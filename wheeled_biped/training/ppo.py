@@ -940,6 +940,8 @@ class PPOTrainer:
                 "best_reward": self._resumed_best_reward,
                 "eval_reward_mean": self._resumed_best_reward,
                 "total_steps": gs,
+                "interrupted": True,
+                "completed": False,
             }
 
         global_step = resumed_step
@@ -977,6 +979,7 @@ class PPOTrainer:
         _evals_since_per_step_save: int = _EVAL_CKPT_COOLDOWN
         _evals_since_success_save: int = _EVAL_CKPT_COOLDOWN
         _windows_since_train_save: int = _TRAIN_CKPT_COOLDOWN
+        training_interrupted = False
         # ─────────────────────────────────────────────────────────────────────
 
         # Cập nhật viewer ngay sau warmup
@@ -994,9 +997,11 @@ class PPOTrainer:
             for update in range(1, num_updates + 1):
                 # Kiểm tra stop flag (Ctrl+C hoặc viewer đóng)
                 if self._stop_requested:
+                    training_interrupted = True
                     print(f"\n  🛑 Training dừng theo yêu cầu tại update {update}/{num_updates}")
                     break
                 if viewer is not None and not viewer.is_running:
+                    training_interrupted = True
                     print(f"\n  🛑 Viewer đã đóng, dừng training tại update {update}/{num_updates}")
                     break
 
@@ -1374,6 +1379,7 @@ class PPOTrainer:
                         self.logger.flush()
 
         except KeyboardInterrupt:
+            training_interrupted = True
             print("\n\n⚠️  Training bị dừng bởi người dùng (Ctrl+C)")
             print(f"   Đã train {global_step:,} steps, best_reward={best_reward:.4f}")
             print("   Đang lưu checkpoint cuối...")
@@ -1411,6 +1417,37 @@ class PPOTrainer:
         train_reward_mean = (
             float(sum(_train_rewards) / len(_train_rewards)) if _train_rewards else best_reward
         )
+
+        training_completed = (not training_interrupted) and global_step >= total_steps
+        if not training_completed:
+            if training_interrupted:
+                print("  Skipping end-of-stage eval pass because training was interrupted.")
+            else:
+                print("  Skipping end-of-stage eval pass because target steps were not reached.")
+            if self.logger:
+                self.logger.set_step(global_step)
+                self.logger.log_dict(
+                    {
+                        "train/reward_mean_recent": train_reward_mean,
+                        "train/interrupted": float(training_interrupted),
+                    }
+                )
+                self.logger.close()
+
+            return {
+                "best_reward": best_reward,
+                "train_reward_mean": train_reward_mean,
+                "eval_reward_mean": 0.0,
+                "eval_fall_rate": 1.0,
+                "eval_success_rate": 0.0,
+                "total_steps": global_step,
+                "episode_length": self.episode_length,
+                "curriculum_min_height": current_min_h if curriculum_enabled else None,
+                "curriculum_level": curriculum_level if curriculum_enabled else None,
+                "curriculum_num_levels": num_levels if curriculum_enabled else None,
+                "interrupted": training_interrupted,
+                "completed": False,
+            }
 
         # ── Real evaluation pass ──────────────────────────────────────────────
         # Run a lightweight held-out evaluation (no gradient updates) to produce
@@ -1457,6 +1494,8 @@ class PPOTrainer:
             "curriculum_min_height": current_min_h if curriculum_enabled else None,
             "curriculum_level": curriculum_level if curriculum_enabled else None,
             "curriculum_num_levels": num_levels if curriculum_enabled else None,
+            "interrupted": False,
+            "completed": True,
         }
 
     def _save_checkpoint(
