@@ -40,6 +40,11 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+# Avoid UnicodeEncodeError in Windows shells that default to cp1252.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------

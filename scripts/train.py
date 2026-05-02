@@ -25,7 +25,7 @@ Cách dùng:
 
   # Tiếp tục từ checkpoint
   python scripts/train.py single --stage balance \
-      --resume outputs/balance/rl/seed42/checkpoints/step_1000000 \
+      --resume outputs/balance/rl/seed42/checkpoints/final \
       --additional-steps 5000000
 """
 

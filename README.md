@@ -145,7 +145,7 @@ Each RL run directory is self-contained:
 ```
 outputs/balance/rl/seed42/
 ├── checkpoints/
-│   ├── step_1000000/checkpoint.pkl
+│   ├── step_<env_steps>/checkpoint.pkl
 │   └── final/checkpoint.pkl
 ├── balance_seed42_metrics.jsonl   ← training metrics (JSONL)
 ├── run_metadata.json              ← seed, config, git hash
@@ -312,7 +312,7 @@ same stage/run.
 
 ```bash
 python scripts/train.py single --stage balance --seed 42 \
-    --resume outputs/balance/rl/seed42/checkpoints/step_1000000 \
+    --resume outputs/balance/rl/seed42/checkpoints/final \
     --additional-steps 5000000
 ```
 
@@ -423,7 +423,8 @@ python scripts/eval_balance.py \
 # Selected scenarios
 python scripts/eval_balance.py \
   --checkpoint outputs/balance/rl/seed42/checkpoints/final \
-  --scenarios nominal push_recovery friction_low friction_high
+  --scenarios nominal --scenarios push_recovery \
+  --scenarios friction_low --scenarios friction_high
 
 # Push magnitude sweep (8 points: 20–200 N)
 python scripts/eval_balance.py \
@@ -438,15 +439,15 @@ python scripts/eval_balance.py \
 # Paper evaluation: 3 seeds, 50 episodes each, results written to paper_eval/
 python scripts/eval_balance.py \
   --checkpoint outputs/balance/rl/seed42/checkpoints/final \
-               outputs/balance/rl/seed113/checkpoints/final \
-               outputs/balance/rl/seed999/checkpoints/final \
-  --num-episodes 50 --seeds 0 42 123 \
+  --checkpoint outputs/balance/rl/seed113/checkpoints/final \
+  --checkpoint outputs/balance/rl/seed999/checkpoints/final \
+  --num-episodes 50 --seeds 0 --seeds 42 --seeds 123 \
   --output-dir outputs/balance/rl/paper_eval
 
 # Classical LQR baseline (no checkpoint required)
 python scripts/eval_balance.py \
   --controller baseline_lqr \
-  --scenarios nominal push_recovery \
+  --scenarios nominal --scenarios push_recovery \
   --num-episodes 20 \
   --output-dir outputs/balance/lqr
 ```
@@ -578,7 +579,7 @@ python scripts/train.py curriculum --steps-per-stage 5000000
 
 # ── Resume ────────────────────────────────────────────────────────────────────
 python scripts/train.py single --stage balance --seed 42 \
-    --resume outputs/balance/rl/seed42/checkpoints/step_1000000 \
+    --resume outputs/balance/rl/seed42/checkpoints/final \
     --additional-steps 5000000
 
 # ── Evaluate (benchmark) ──────────────────────────────────────────────────────
@@ -592,14 +593,16 @@ python scripts/validate_checkpoint.py --checkpoint outputs/balance/rl/seed42/che
 python scripts/eval_balance.py --checkpoint outputs/balance/rl/seed42/checkpoints/final
 python scripts/eval_balance.py \
     --checkpoint outputs/balance/rl/seed42/checkpoints/final \
-                 outputs/balance/rl/seed113/checkpoints/final \
-                 outputs/balance/rl/seed999/checkpoints/final \
-    --scenarios nominal push_recovery push_sweep --num-episodes 50 \
+    --checkpoint outputs/balance/rl/seed113/checkpoints/final \
+    --checkpoint outputs/balance/rl/seed999/checkpoints/final \
+    --scenarios nominal --scenarios push_recovery --scenarios push_sweep \
+    --num-episodes 50 \
     --output-dir outputs/balance/rl/paper_eval
 python scripts/eval_balance.py --controller baseline_lqr --scenarios nominal \
     --output-dir outputs/balance/lqr
 
 # ── Baseline comparison ───────────────────────────────────────────────────────
+# Requires baselines/nominal_v1.json from a previous nominal eval snapshot.
 python scripts/compare_baseline.py --baseline baselines/nominal_v1.json \
     --current outputs/balance/rl/seed42/checkpoints/final/eval_results_nominal.json
 
@@ -621,7 +624,8 @@ python scripts/export_results.py latex \
 
 # ── LQR baseline evaluation ───────────────────────────────────────────────────
 python scripts/eval_balance.py --controller baseline_lqr \
-    --scenarios nominal push_recovery friction_low friction_high \
+    --scenarios nominal --scenarios push_recovery \
+    --scenarios friction_low --scenarios friction_high \
     --num-episodes 20 --output-dir outputs/balance/lqr
 ```
 
@@ -873,15 +877,16 @@ python scripts/train.py single --stage balance --steps 50000000 --seed 999
 # 2. Evaluate all three seeds
 python scripts/eval_balance.py \
     --checkpoint outputs/balance/rl/seed42/checkpoints/final \
-                 outputs/balance/rl/seed113/checkpoints/final \
-                 outputs/balance/rl/seed999/checkpoints/final \
-    --num-episodes 50 --num-steps 2000 --seeds 0 42 123 \
+    --checkpoint outputs/balance/rl/seed113/checkpoints/final \
+    --checkpoint outputs/balance/rl/seed999/checkpoints/final \
+    --num-episodes 50 --num-steps 2000 --seeds 0 --seeds 42 --seeds 123 \
     --output-dir outputs/balance/rl/paper_eval
 
 # 3. Evaluate LQR baseline
 python scripts/eval_balance.py \
     --controller baseline_lqr \
-    --scenarios nominal push_recovery friction_low friction_high \
+    --scenarios nominal --scenarios push_recovery \
+    --scenarios friction_low --scenarios friction_high \
     --num-episodes 50 --output-dir outputs/balance/lqr
 
 # 4. Export to LaTeX table

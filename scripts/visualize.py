@@ -22,6 +22,11 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+# Avoid UnicodeEncodeError in Windows shells that default to cp1252.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 

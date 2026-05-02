@@ -24,8 +24,9 @@ Usage
     # Compare two checkpoints, selected scenarios
     python scripts/eval_balance.py \\
         --checkpoint outputs/balance/rl/seed42/checkpoints/final \\
-                     outputs/balance/rl/seed113/checkpoints/final \\
-        --scenarios nominal push_recovery friction_low friction_high
+        --checkpoint outputs/balance/rl/seed113/checkpoints/final \\
+        --scenarios nominal --scenarios push_recovery \\
+        --scenarios friction_low --scenarios friction_high
 
     # Push magnitude sweep (paper Figure: degradation vs force)
     python scripts/eval_balance.py \\
@@ -40,16 +41,16 @@ Usage
     # Paper evaluation: 3 seeds, more episodes
     python scripts/eval_balance.py \\
         --checkpoint outputs/balance/rl/seed42/checkpoints/final \\
-                     outputs/balance/rl/seed113/checkpoints/final \\
-                     outputs/balance/rl/seed999/checkpoints/final \\
+        --checkpoint outputs/balance/rl/seed113/checkpoints/final \\
+        --checkpoint outputs/balance/rl/seed999/checkpoints/final \\
         --num-episodes 50 --num-steps 2000 \\
-        --seeds 0 42 123 \\
+        --seeds 0 --seeds 42 --seeds 123 \\
         --output-dir outputs/balance/rl/paper_eval
 
     # Classical LQR baseline (no checkpoint required)
     python scripts/eval_balance.py \\
         --controller baseline_lqr \\
-        --scenarios nominal push_recovery \\
+        --scenarios nominal --scenarios push_recovery \\
         --num-episodes 20 \\
         --output-dir outputs/balance/lqr
 
@@ -114,6 +115,11 @@ import typer
 from rich import box
 from rich.console import Console
 from rich.table import Table
+
+# Avoid UnicodeEncodeError in Windows shells that default to cp1252.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -1260,12 +1266,12 @@ def evaluate(
         # Evaluate trained RL checkpoint
         python scripts/eval_balance.py \\
             --checkpoint outputs/checkpoints/balance/final \\
-            --scenarios nominal push_recovery
+            --scenarios nominal --scenarios push_recovery
 
         # Evaluate classical LQR baseline (no checkpoint needed)
         python scripts/eval_balance.py \\
             --controller baseline_lqr \\
-            --scenarios nominal push_recovery
+            --scenarios nominal --scenarios push_recovery
 
     The two runs produce identically structured CSV/JSON output that can
     be directly compared in a paper table.
@@ -1451,6 +1457,10 @@ def evaluate(
         console.print(_rich_table(ckpt_results, title=f"Results — {ckpt_label}"))
 
     # ── Save outputs ──────────────────────────────────────────────────────────
+    if not all_results:
+        console.print("[red]No evaluation results produced. Check checkpoint paths and scenario filters.[/red]")
+        raise typer.Exit(1)
+
     csv_path = out_dir / "eval_results.csv"
     _save_csv(all_results, csv_path)
     console.print(f"\n[dim]CSV    → {csv_path}[/dim]")
