@@ -12,6 +12,11 @@ task:
   num_envs: 4096
   fallen_ratio: 0.3 # 30% episodes bat dau tu tu the nga, 70% dung
 
+evaluation:
+  mode: "jit_fixed_horizon"
+  eval_envs: 256
+  eval_episodes: 256
+
 # --- PPO Hyperparameters ---
 ppo:
   learning_rate: 2.0e-4 # lower than balance for warm-start fine-tuning

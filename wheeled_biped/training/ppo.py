@@ -499,6 +499,92 @@ class PPOTrainer:
 
         return final_state, transitions, rng
 
+    @functools.partial(jax.jit, static_argnums=(0, 4, 5, 7))
+    def _eval_fixed_horizon_scan(
+        self,
+        params: Any,
+        obs_rms: RunningMeanStd,
+        rng: jax.Array,
+        num_eval_envs: int,
+        horizon: int,
+        curriculum_min_height: jnp.ndarray,
+        patch_curriculum: bool,
+    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        """Vectorized greedy eval over one fixed-horizon episode per env.
+
+        Unlike the legacy Python eval loop, this keeps the whole rollout on the
+        accelerator with ``lax.scan`` and transfers only final scalar metrics.
+        Each eval env contributes at most one episode return: rewards after the
+        first terminal state are masked out, while the env is auto-reset only to
+        keep simulation state numerically well behaved inside the scan.
+        """
+        rng, reset_key = jax.random.split(rng)
+        env_state = self.env.v_reset(reset_key, num_eval_envs)
+
+        if patch_curriculum:
+            rng, h_key = jax.random.split(rng)
+            abs_min = float(self.env.MIN_HEIGHT_CMD)
+            max_h = float(self.env.MAX_HEIGHT_CMD)
+            height_command = jax.random.uniform(
+                h_key,
+                shape=(num_eval_envs,),
+                minval=curriculum_min_height,
+                maxval=max_h,
+            )
+            height_norm = (height_command - abs_min) / (max_h - abs_min)
+            env_state = env_state._replace(
+                obs=env_state.obs.at[:, -3].set(height_norm),
+                info={
+                    **env_state.info,
+                    "height_command": height_command,
+                    "curriculum_min_height": jnp.full_like(
+                        env_state.info["curriculum_min_height"], curriculum_min_height
+                    ),
+                },
+            )
+
+        episode_return = jnp.zeros((num_eval_envs,), dtype=jnp.float32)
+        episode_done = jnp.zeros((num_eval_envs,), dtype=bool)
+        episode_fallen = jnp.zeros((num_eval_envs,), dtype=bool)
+
+        def _eval_step(carry, _):
+            env_state, rng, returns, done, fallen = carry
+            rng, reset_key = jax.random.split(rng)
+
+            obs = normalize_obs(env_state.obs, obs_rms)
+            dist, _ = self.model.apply(params, obs)
+            action = jnp.clip(dist.mode(), -1.0, 1.0)
+            action = jnp.where(done[:, None], 0.0, action)
+
+            next_state = self.env.v_step(env_state, action)
+
+            active = ~done
+            step_reward = jnp.where(active, next_state.reward, 0.0)
+            returns = returns + step_reward
+
+            step_fallen = next_state.info.get("is_fallen", next_state.done)
+            fallen = fallen | (active & step_fallen)
+            done = done | next_state.done
+
+            # Reset terminal envs inside the scan so later masked steps do not
+            # keep integrating badly fallen physics states.
+            next_state = self.env.v_reset_if_done(next_state, reset_key)
+            return (next_state, rng, returns, done, fallen), None
+
+        (_, _, episode_return, episode_done, episode_fallen), _ = jax.lax.scan(
+            _eval_step,
+            (env_state, rng, episode_return, episode_done, episode_fallen),
+            None,
+            length=horizon,
+        )
+
+        mean_ret = jnp.mean(episode_return)
+        std_ret = jnp.std(episode_return)
+        fall_rate = jnp.mean(episode_fallen.astype(jnp.float32))
+        success_rate = jnp.mean((episode_done & ~episode_fallen).astype(jnp.float32))
+        n = jnp.asarray(num_eval_envs, dtype=jnp.int32)
+        return mean_ret, std_ret, fall_rate, success_rate, n
+
     def eval_pass(
         self,
         num_eval_envs: int = 64,
@@ -508,16 +594,16 @@ class PPOTrainer:
     ) -> dict[str, float]:
         """Run a held-out evaluation pass using the current policy.
 
-        This produces a real evaluation metric suitable for curriculum gating:
-          - Runs ``num_eval_envs`` independent environments in parallel.
-          - Accumulates per-episode returns (sum of rewards) until ``num_episodes``
-            complete episodes have been observed across all envs.
-          - Policy acts *greedily* (mean action, no exploration noise).
-          - Does NOT update ``obs_rms``, ``params``, or any training state.
+        This produces a real evaluation metric suitable for curriculum gating.
+        Default mode is ``jit_fixed_horizon``: run one full greedy episode per
+        eval env with a JIT-compiled ``lax.scan`` and transfer only final scalar
+        metrics.  Set ``evaluation.mode: "python"`` (or ``curriculum.eval_mode``)
+        to use the legacy Python loop that accumulates up to ``num_episodes``.
 
         Args:
             num_eval_envs: parallel evaluation environments.
-            num_episodes: minimum completed episodes to average over.
+            num_episodes: legacy Python-loop target.  In default JIT mode, set
+                ``num_eval_envs`` to the desired number of fixed-horizon episodes.
             rng: optional JAX key; defaults to a new split from self.rng.
             curriculum_min_height: when the in-env height curriculum is active,
                 pass the current ``current_min_h`` from the training loop here.
@@ -537,6 +623,40 @@ class PPOTrainer:
         """
         if rng is None:
             self.rng, rng = jax.random.split(self.rng)
+
+        eval_cfg = self.config.get("evaluation", {})
+        curriculum_cfg = self.config.get("curriculum", {})
+        eval_mode = eval_cfg.get("mode", curriculum_cfg.get("eval_mode", "jit_fixed_horizon"))
+        if eval_mode != "python":
+            eval_start = time.time()
+            patch_curriculum = (
+                curriculum_min_height is not None
+                and hasattr(self.env, "MAX_HEIGHT_CMD")
+                and hasattr(self.env, "MIN_HEIGHT_CMD")
+            )
+            mean_ret, std_ret, fall_rate, success_rate, n = self._eval_fixed_horizon_scan(
+                self.params,
+                self.obs_rms,
+                rng,
+                int(num_eval_envs),
+                int(self.episode_length),
+                jnp.asarray(
+                    0.0 if curriculum_min_height is None else float(curriculum_min_height),
+                    dtype=jnp.float32,
+                ),
+                patch_curriculum,
+            )
+            mean_ret, std_ret, fall_rate, success_rate, n = jax.device_get(
+                (mean_ret, std_ret, fall_rate, success_rate, n)
+            )
+            return {
+                "eval_reward_mean": float(mean_ret),
+                "eval_reward_std": float(std_ret),
+                "eval_fall_rate": float(fall_rate),
+                "eval_success_rate": float(success_rate),
+                "eval_num_episodes": int(n),
+                "eval_time_s": time.time() - eval_start,
+            }
 
         rng, reset_key = jax.random.split(rng)
         env_state = self.env.v_reset(reset_key, num_eval_envs)
@@ -818,8 +938,11 @@ class PPOTrainer:
             _eval_interval = max(1, (target_steps + steps_per_update - 1) // steps_per_update)
         else:
             _eval_interval = int(curriculum_cfg.get("eval_interval", window_size))
-        _curriculum_eval_envs = min(32, self.num_envs)
         _curriculum_eval_episodes = int(curriculum_cfg.get("eval_episodes", 20))
+        _curriculum_eval_envs = int(
+            curriculum_cfg.get("eval_envs", min(_curriculum_eval_episodes, self.num_envs))
+        )
+        _curriculum_eval_envs = min(max(1, _curriculum_eval_envs), self.num_envs)
 
         # Tính max reward có thể đạt (tổng trọng số dương)
         reward_weights = self.config.get("rewards", {})
@@ -1164,13 +1287,17 @@ class PPOTrainer:
                                         "curriculum/eval_per_step": _eval_per_step,
                                         "curriculum/eval_success_rate": _ceval["eval_success_rate"],
                                         "curriculum/eval_fall_rate": _ceval["eval_fall_rate"],
+                                        "curriculum/eval_time_s": _ceval.get(
+                                            "eval_time_s", 0.0
+                                        ),
                                     }
                                 )
                             print(
                                 f"  [Curriculum eval] per_step={_eval_per_step:.3f} "
                                 f"threshold={reward_threshold:.3f} "
                                 f"success={_ceval['eval_success_rate']:.2f} "
-                                f"fall={_ceval['eval_fall_rate']:.2f}",
+                                f"fall={_ceval['eval_fall_rate']:.2f} "
+                                f"time={_ceval.get('eval_time_s', 0.0):.1f}s",
                                 flush=True,
                             )
                             # ── Eval-triggered checkpoints ─────────────────────────────
@@ -1455,9 +1582,12 @@ class PPOTrainer:
         # is cheap relative to the training budget but gives a clean signal.
         print("  📊 Running end-of-stage eval pass...")
         self.rng, eval_key = jax.random.split(self.rng)
+        eval_cfg = self.config.get("evaluation", {})
+        final_eval_envs = min(max(1, int(eval_cfg.get("eval_envs", 64))), self.num_envs)
+        final_eval_episodes = int(eval_cfg.get("eval_episodes", 50))
         eval_metrics = self.eval_pass(
-            num_eval_envs=min(64, self.num_envs),
-            num_episodes=50,
+            num_eval_envs=final_eval_envs,
+            num_episodes=final_eval_episodes,
             rng=eval_key,
             curriculum_min_height=current_min_h if curriculum_enabled else None,
         )
@@ -1465,7 +1595,8 @@ class PPOTrainer:
         print(
             f"  📊 Eval: reward_mean={eval_reward_mean:.4f} "
             f"fall_rate={eval_metrics['eval_fall_rate']:.3f} "
-            f"n={eval_metrics['eval_num_episodes']}"
+            f"n={eval_metrics['eval_num_episodes']} "
+            f"time={eval_metrics.get('eval_time_s', 0.0):.1f}s"
         )
         if self.logger:
             self.logger.set_step(global_step)
@@ -1476,6 +1607,7 @@ class PPOTrainer:
                     "eval/fall_rate": eval_metrics["eval_fall_rate"],
                     "eval/success_rate": eval_metrics["eval_success_rate"],
                     "eval/num_episodes": float(eval_metrics["eval_num_episodes"]),
+                    "eval/time_s": eval_metrics.get("eval_time_s", 0.0),
                     "train/reward_mean_recent": train_reward_mean,
                 }
             )

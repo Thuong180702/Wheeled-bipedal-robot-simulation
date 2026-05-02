@@ -210,8 +210,8 @@ def _build_headless_obs(
 def validate(
     checkpoint: str = typer.Option(..., help="Path to checkpoint directory."),
     stage: str = typer.Option("balance", help="Stage name (for labelling)."),
-    num_episodes: int = typer.Option(128, help="Episodes for nominal benchmark."),
-    num_envs: int = typer.Option(128, help="Parallel envs for benchmark."),
+    num_episodes: int = typer.Option(256, help="Episodes for nominal benchmark."),
+    num_envs: int = typer.Option(256, help="Parallel envs for benchmark."),
     num_steps: int = typer.Option(1000, help="Steps for headless telemetry rollout (1 env, CPU)."),
     height_cmd: float = typer.Option(0.69, help="Height command (m) for the headless rollout."),
     seed: int = typer.Option(0, help="Random seed."),
@@ -348,7 +348,7 @@ def validate(
         rng=rng,
         num_episodes=num_episodes,
         num_envs=num_envs,
-        max_steps=2000,
+        max_steps=int(config.get("task", {}).get("episode_length", 2000)),
     )
 
     # ── Step 2: headless CPU rollout → telemetry ──────────────────────────────

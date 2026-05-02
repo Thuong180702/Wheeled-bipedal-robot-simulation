@@ -41,8 +41,8 @@ console = Console()
 def evaluate(
     checkpoint: str = typer.Option(..., help="Đường dẫn checkpoint."),
     stage: str = typer.Option("balance", help="Tên stage."),
-    num_episodes: int = typer.Option(128, help="Số episode đánh giá."),
-    num_envs: int = typer.Option(128, help="Số env song song."),
+    num_episodes: int = typer.Option(256, help="Số episode đánh giá."),
+    num_envs: int = typer.Option(256, help="Số env song song."),
     seed: int = typer.Option(0, help="Random seed."),
     output: str = typer.Option(
         "",
@@ -98,7 +98,7 @@ def evaluate(
     console.print(f"  Checkpoint: {checkpoint}")
     console.print(f"  Episodes: {num_episodes} | Envs: {num_envs}\n")
 
-    max_steps = 2000  # tối đa mỗi episode
+    max_steps = int(config.get("task", {}).get("episode_length", 2000))
 
     # --- Dispatch to benchmark suite ---
     result = run_benchmark(

@@ -24,8 +24,9 @@ task:
 #
 # Advancement: eval_per_step >= reward_threshold × max_reward_possible (see below).
 # Level step: (0.69 - 0.40) / 29 ≈ 0.01 m per level.
-# Completing all 29 levels requires ~29 × eval_interval updates at threshold.
-# With eval_interval=2 and 524K steps/update: ~30M steps to advance all 29 levels.
+# Completing all 29 levels requires one eval-gated promotion per level.
+# With V100 config (4096 envs × 128 rollout = 524K steps/update) and
+# eval_interval_steps=10M, curriculum checks run about every 20 updates.
 curriculum:
   enabled: true
   reward_threshold: 0.65 # 65% tổng reward tối đa → cần ~6.825/step để curriculum advance
@@ -35,12 +36,21 @@ curriculum:
   # every eval_interval updates.  More trustworthy than the noisy per-rollout avg_reward.
   # eval_per_step = eval_reward_mean / episode_length is compared against reward_threshold.
   use_eval_signal: true
+  # JIT fixed-horizon eval runs one full episode per eval env on the accelerator.
+  # This avoids the old Python per-step loop/device_get bottleneck on GPU.
+  eval_mode: "jit_fixed_horizon"
   # Eval cadence: target number of env-steps between curriculum evals.
   # Trainer computes: eval_interval = ceil(eval_interval_steps / steps_per_update).
-  # GPU (4096 envs × 128 steps = 524,288 steps/update): ~2 updates → first eval at ~1 M steps.
-  # CPU ( 128 envs × 128 steps =  16,384 steps/update): ~62 updates → first eval at ~1 M steps.
-  eval_interval_steps: 1_000_000
-  eval_episodes: 200 # episodes per check — 32 envs × ~6 restarts; ±7% CI at 95%
+  # GPU (4096 envs × 128 steps = 524,288 steps/update): ~20 updates → ~10 M steps/check.
+  # CPU ( 128 envs × 128 steps =  16,384 steps/update): ~611 updates → ~10 M steps/check.
+  eval_interval_steps: 10_000_000
+  eval_envs: 256 # one fixed-horizon episode per eval env; V100-SXM2-32GB friendly
+  eval_episodes: 256 # kept for metric intent/backward compatibility
+
+evaluation:
+  mode: "jit_fixed_horizon"
+  eval_envs: 256
+  eval_episodes: 256
 
 # --- PPO Hyperparameters ---
 ppo:

@@ -2090,11 +2090,11 @@ class TestBalanceCurriculumFixes:
             return interval, steps_per_update
         return int(curr.get("eval_interval", 50)), steps_per_update
 
-    def test_eval_interval_compatible_with_5m_gpu_run(self):
-        """balance.yaml eval cadence must fire at least once in a 5M-step GPU run.
+    def test_eval_interval_compatible_with_long_gpu_run(self):
+        """balance.yaml eval cadence must fire regularly in a long GPU run.
 
         With num_envs=4096, rollout_length=128 → steps_per_update=524,288.
-        eval_interval_steps=1_000_000 → eval_interval=ceil(1M/524K)=2 updates → ~1.05M steps ≤ 5M. ✓
+        eval_interval_steps=10_000_000 → eval_interval=ceil(10M/524K)=20 updates.
         """
         from wheeled_biped.utils.config import load_yaml
 
@@ -2104,10 +2104,10 @@ class TestBalanceCurriculumFixes:
         )
         steps_for_first_eval = eval_interval * steps_per_update
 
-        assert steps_for_first_eval <= 5_000_000, (
+        assert steps_for_first_eval <= 12_000_000, (
             f"eval_interval={eval_interval} × steps_per_update={steps_per_update:,}"
-            f" = {steps_for_first_eval:,} > 5M steps: curriculum eval never fires "
-            "in a standard 5M-step GPU run. Reduce eval_interval_steps in balance.yaml."
+            f" = {steps_for_first_eval:,} > 12M steps: curriculum eval cadence is "
+            "too sparse for the intended long GPU run."
         )
 
     def test_eval_interval_allows_multiple_evals_in_50m_run(self):

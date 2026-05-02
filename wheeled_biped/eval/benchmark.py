@@ -33,6 +33,7 @@ print(result.to_dict())
 from __future__ import annotations
 
 import copy
+import functools
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -53,6 +54,12 @@ except Exception:  # pragma: no cover
 
     def normalize_obs(obs, rms):  # type: ignore[misc]  # noqa: E731
         return obs
+
+
+def _static_jit(*static_argnums):
+    if jax is None:  # pragma: no cover
+        return lambda fn: fn
+    return functools.partial(jax.jit, static_argnums=static_argnums)
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +177,216 @@ def _rollout(
     return episode_rewards, episode_lengths, episode_fallen, episode_timed_out, episode_info_last
 
 
+@_static_jit(0, 1, 5, 6, 7, 9, 10)
+def _rollout_fixed_horizon_jit(
+    env,
+    model,
+    params,
+    obs_rms,
+    rng,
+    num_envs: int,
+    max_steps: int,
+    track_height_error: bool,
+    height_command_override,
+    override_height_command: bool,
+    cache_token,
+):
+    """Run one fixed-horizon greedy episode per env entirely on accelerator."""
+    rng, reset_key = jax.random.split(rng)
+    env_states = env.v_reset(reset_key, num_envs)
+
+    if (
+        override_height_command
+        and hasattr(env, "MIN_HEIGHT_CMD")
+        and hasattr(env, "MAX_HEIGHT_CMD")
+        and "height_command" in env_states.info
+    ):
+        h_cmd = jnp.full((num_envs,), height_command_override, dtype=jnp.float32)
+        height_norm = (h_cmd - float(env.MIN_HEIGHT_CMD)) / (
+            float(env.MAX_HEIGHT_CMD) - float(env.MIN_HEIGHT_CMD)
+        )
+        env_states = env_states._replace(
+            obs=env_states.obs.at[:, -3].set(height_norm),
+            info={**env_states.info, "height_command": h_cmd},
+        )
+
+    returns = jnp.zeros((num_envs,), dtype=jnp.float32)
+    lengths = jnp.zeros((num_envs,), dtype=jnp.int32)
+    done = jnp.zeros((num_envs,), dtype=bool)
+    fallen = jnp.zeros((num_envs,), dtype=bool)
+    timed_out = jnp.zeros((num_envs,), dtype=bool)
+    height_error_sum = jnp.zeros((num_envs,), dtype=jnp.float32)
+    height_error_sq_sum = jnp.zeros((num_envs,), dtype=jnp.float32)
+    height_error_count = jnp.zeros((num_envs,), dtype=jnp.float32)
+
+    def _step(carry, _):
+        (
+            env_states,
+            rng,
+            returns,
+            lengths,
+            done,
+            fallen,
+            timed_out,
+            h_sum,
+            h_sq_sum,
+            h_count,
+        ) = carry
+        rng, reset_key = jax.random.split(rng)
+
+        obs = normalize_obs(env_states.obs, obs_rms)
+        dist, _ = model.apply(params, obs)
+        actions = jnp.clip(dist.loc, -1.0, 1.0)
+        actions = jnp.where(done[:, None], 0.0, actions)
+
+        next_states = env.v_step(env_states, actions)
+        active = ~done
+        returns = returns + jnp.where(active, next_states.reward, 0.0)
+        lengths = lengths + active.astype(jnp.int32)
+
+        step_fallen = next_states.info.get("is_fallen", next_states.done)
+        step_timed_out = next_states.info.get("time_limit", next_states.done & ~step_fallen)
+        fallen = fallen | (active & step_fallen)
+        timed_out = timed_out | (active & step_timed_out)
+
+        if track_height_error and "height_command" in next_states.info:
+            heights = next_states.mjx_data.qpos[:, 2]
+            h_cmd = next_states.info["height_command"]
+            h_err = heights - h_cmd
+            h_sum = h_sum + jnp.where(active, jnp.abs(h_err), 0.0)
+            h_sq_sum = h_sq_sum + jnp.where(active, jnp.square(h_err), 0.0)
+            h_count = h_count + active.astype(jnp.float32)
+
+        done = done | next_states.done
+        next_states = env.v_reset_if_done(next_states, reset_key)
+        return (
+            next_states,
+            rng,
+            returns,
+            lengths,
+            done,
+            fallen,
+            timed_out,
+            h_sum,
+            h_sq_sum,
+            h_count,
+        ), None
+
+    (
+        _,
+        _,
+        returns,
+        lengths,
+        done,
+        fallen,
+        timed_out,
+        height_error_sum,
+        height_error_sq_sum,
+        height_error_count,
+    ), _ = jax.lax.scan(
+            _step,
+            (
+                env_states,
+                rng,
+                returns,
+                lengths,
+                done,
+                fallen,
+                timed_out,
+                height_error_sum,
+                height_error_sq_sum,
+                height_error_count,
+            ),
+            None,
+            length=max_steps,
+        )
+
+    return (
+        returns,
+        lengths,
+        fallen,
+        timed_out,
+        height_error_sum,
+        height_error_sq_sum,
+        height_error_count,
+    )
+
+
+def _rollout_fast(
+    env,
+    model,
+    params,
+    obs_rms,
+    rng,
+    num_episodes: int,
+    num_envs: int,
+    max_steps: int,
+    *,
+    track_height_error: bool = False,
+    height_command_override: float | None = None,
+):
+    """Run benchmark episodes in JIT fixed-horizon batches.
+
+    This preserves the public benchmark contract (``num_episodes`` requested)
+    while avoiding the old Python-per-step/device-sync loop.  The final batch
+    may produce extra env episodes; extras are discarded on the host.
+    """
+    episode_rewards: list[float] = []
+    episode_lengths: list[int] = []
+    episode_fallen: list[bool] = []
+    episode_timed_out: list[bool] = []
+    height_error_sums: list[float] = []
+    height_error_sq_sums: list[float] = []
+    height_error_counts: list[float] = []
+
+    batch_envs = max(1, min(int(num_envs), int(num_episodes)))
+    while len(episode_rewards) < num_episodes:
+        rng, batch_key = jax.random.split(rng)
+        cache_token = (
+            bool(getattr(env, "_push_enabled", False)),
+            float(getattr(env, "_push_magnitude", 0.0)),
+            bool(getattr(env, "_dr_enabled", False)),
+            id(getattr(env, "mjx_model", None)),
+        )
+        batch = _rollout_fixed_horizon_jit(
+            env,
+            model,
+            params,
+            obs_rms,
+            batch_key,
+            batch_envs,
+            int(max_steps),
+            bool(track_height_error),
+            jnp.asarray(
+                0.0 if height_command_override is None else float(height_command_override),
+                dtype=jnp.float32,
+            ),
+            height_command_override is not None,
+            cache_token,
+        )
+        returns, lengths, fallen, timed_out, h_sum, h_sq_sum, h_count = jax.device_get(batch)
+        take = min(batch_envs, num_episodes - len(episode_rewards))
+        episode_rewards.extend(np.asarray(returns[:take], dtype=float).tolist())
+        episode_lengths.extend(np.asarray(lengths[:take], dtype=int).tolist())
+        episode_fallen.extend(np.asarray(fallen[:take], dtype=bool).tolist())
+        episode_timed_out.extend(np.asarray(timed_out[:take], dtype=bool).tolist())
+        if track_height_error:
+            height_error_sums.extend(np.asarray(h_sum[:take], dtype=float).tolist())
+            height_error_sq_sums.extend(np.asarray(h_sq_sum[:take], dtype=float).tolist())
+            height_error_counts.extend(np.asarray(h_count[:take], dtype=float).tolist())
+
+    return (
+        episode_rewards,
+        episode_lengths,
+        episode_fallen,
+        episode_timed_out,
+        [],
+        height_error_sums,
+        height_error_sq_sums,
+        height_error_counts,
+    )
+
+
 def _base_metrics(
     episode_rewards: list[float],
     episode_lengths: list[int],
@@ -214,11 +431,18 @@ def _base_metrics(
 # ---------------------------------------------------------------------------
 
 
-def _run_nominal(env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps):
+def _run_nominal(
+    env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps, use_jit: bool = True
+):
     """Standard evaluation — env default settings."""
-    ep_r, ep_l, ep_f, ep_t, _ = _rollout(
-        env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps
-    )
+    if use_jit:
+        ep_r, ep_l, ep_f, ep_t, _, _, _, _ = _rollout_fast(
+            env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps
+        )
+    else:
+        ep_r, ep_l, ep_f, ep_t, _ = _rollout(
+            env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps
+        )
     base = _base_metrics(ep_r, ep_l, ep_f, ep_t)
     result = BenchmarkResult(mode="nominal", **base)
     return result
@@ -239,6 +463,7 @@ def _run_push_recovery(
     num_envs,
     max_steps,
     push_magnitude: float = 80.0,
+    use_jit: bool = True,
 ):
     """Evaluation under larger forced push disturbances.
 
@@ -259,9 +484,14 @@ def _run_push_recovery(
     env._push_magnitude = push_magnitude
 
     try:
-        ep_r, ep_l, ep_f, ep_t, _ = _rollout(
-            env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps
-        )
+        if use_jit:
+            ep_r, ep_l, ep_f, ep_t, _, _, _, _ = _rollout_fast(
+                env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps
+            )
+        else:
+            ep_r, ep_l, ep_f, ep_t, _ = _rollout(
+                env, model, params, obs_rms, rng, num_episodes, num_envs, max_steps
+            )
     finally:
         env._push_enabled = orig_push_enabled
         env._push_magnitude = orig_push_magnitude
@@ -294,6 +524,7 @@ def _run_domain_randomized(
     mass_perturb: float = 0.30,
     friction_perturb: float = 0.50,
     disable_env_dr: bool = True,
+    use_jit: bool = True,
 ):
     """Evaluation with randomised mass and friction — single perturbation layer by default.
 
@@ -371,8 +602,8 @@ def _run_domain_randomized(
     env.mj_model.geom_friction[:] = friction_perturbed
     env.mjx_model = mjx.put_model(env.mj_model)
 
-    # Collect per-step height error via hook
     height_errors: list[float] = []
+    height_error_mean = float("nan")
 
     def _height_hook(env_states, _step_idx):
         heights = np.array(env_states.mjx_data.qpos[:, 2])  # (num_envs,)
@@ -380,17 +611,35 @@ def _run_domain_randomized(
         height_errors.extend(np.abs(heights - h_cmds).tolist())
 
     try:
-        ep_r, ep_l, ep_f, ep_t, ep_info = _rollout(
-            env,
-            model,
-            params,
-            obs_rms,
-            rng,
-            num_episodes,
-            num_envs,
-            max_steps,
-            step_hook=_height_hook,
-        )
+        if use_jit:
+            ep_r, ep_l, ep_f, ep_t, ep_info, h_sum, _, h_count = _rollout_fast(
+                env,
+                model,
+                params,
+                obs_rms,
+                rng,
+                num_episodes,
+                num_envs,
+                max_steps,
+                track_height_error=True,
+            )
+            denom = float(np.sum(h_count))
+            height_error_mean = float(np.sum(h_sum) / denom) if denom > 0 else float("nan")
+        else:
+            ep_r, ep_l, ep_f, ep_t, ep_info = _rollout(
+                env,
+                model,
+                params,
+                obs_rms,
+                rng,
+                num_episodes,
+                num_envs,
+                max_steps,
+                step_hook=_height_hook,
+            )
+            height_error_mean = (
+                float(np.mean(height_errors)) if height_errors else float("nan")
+            )
     finally:
         # Restore model and env DR flag unconditionally (even on exception).
         env.mj_model.body_mass[:] = orig_mass
@@ -403,7 +652,7 @@ def _run_domain_randomized(
         "mass_perturb_pct": mass_perturb,
         "friction_perturb_pct": friction_perturb,
         "env_dr_disabled": disable_env_dr,
-        "height_error_mean": float(np.mean(height_errors)) if height_errors else float("nan"),
+        "height_error_mean": height_error_mean,
     }
     result = BenchmarkResult(mode="domain_randomized", mode_metrics=mode_metrics, **base)
     return result
@@ -424,11 +673,12 @@ def _run_command_tracking(
     num_envs,
     max_steps,
     height_commands: list[float] | None = None,
+    use_jit: bool = True,
 ):
     """Evaluation sweeping fixed height commands.
 
-    For each command value, patches ``env._initial_min_height`` so that reset()
-    samples a height close to the target, then collects per-command metrics.
+    For each command value, the JIT path patches the reset state to the fixed
+    height command.  The legacy Python path patches env sampling attributes.
 
     Extra metrics (all per command, keyed by command value)
     --------------------------------------------------------
@@ -452,15 +702,18 @@ def _run_command_tracking(
 
     per_command_results: list[dict] = []
     all_height_errors: list[float] = []
+    all_height_sq_sum = 0.0
+    all_height_count = 0.0
 
     for cmd in height_commands:
         # Clamp cmd inside valid range
         cmd_clamped = float(np.clip(cmd, min_h, max_h))
-        env._initial_min_height = max(min_h, cmd_clamped - epsilon)
-        orig_class_max = env.MAX_HEIGHT_CMD
-        # Temporarily allow wider sampling inside BalanceEnv.reset by patching class attr
-        # We do this via instance attr override
-        env.MAX_HEIGHT_CMD = min(max_h, cmd_clamped + epsilon)  # type: ignore[assignment]
+        orig_class_max = getattr(env, "MAX_HEIGHT_CMD", max_h)
+        if not use_jit:
+            env._initial_min_height = max(min_h, cmd_clamped - epsilon)
+            # Temporarily allow wider sampling inside BalanceEnv.reset by patching class attr
+            # We do this via instance attr override.
+            env.MAX_HEIGHT_CMD = min(max_h, cmd_clamped + epsilon)  # type: ignore[assignment]
 
         height_errors_cmd: list[float] = []
 
@@ -472,27 +725,46 @@ def _run_command_tracking(
         rng, cmd_key = jax.random.split(rng)
 
         try:
-            ep_r, ep_l, ep_f, ep_t, _ = _rollout(
-                env,
-                model,
-                params,
-                obs_rms,
-                cmd_key,
-                num_episodes,
-                num_envs,
-                max_steps,
-                step_hook=_track_hook,
-            )
+            if use_jit:
+                ep_r, ep_l, ep_f, ep_t, _, _, h_sq_sum, h_count = _rollout_fast(
+                    env,
+                    model,
+                    params,
+                    obs_rms,
+                    cmd_key,
+                    num_episodes,
+                    num_envs,
+                    max_steps,
+                    track_height_error=True,
+                    height_command_override=cmd_clamped,
+                )
+                sq_sum = float(np.sum(h_sq_sum))
+                count = float(np.sum(h_count))
+                rmse = float(np.sqrt(sq_sum / count)) if count > 0 else float("nan")
+                all_height_sq_sum += sq_sum
+                all_height_count += count
+            else:
+                ep_r, ep_l, ep_f, ep_t, _ = _rollout(
+                    env,
+                    model,
+                    params,
+                    obs_rms,
+                    cmd_key,
+                    num_episodes,
+                    num_envs,
+                    max_steps,
+                    step_hook=_track_hook,
+                )
+                rmse = (
+                    float(np.sqrt(np.mean(np.array(height_errors_cmd) ** 2)))
+                    if height_errors_cmd
+                    else float("nan")
+                )
+                all_height_errors.extend(height_errors_cmd)
         finally:
-            env._initial_min_height = orig_min_h
-            env.MAX_HEIGHT_CMD = orig_class_max  # type: ignore[assignment]
-
-        rmse = (
-            float(np.sqrt(np.mean(np.array(height_errors_cmd) ** 2)))
-            if height_errors_cmd
-            else float("nan")
-        )
-        all_height_errors.extend(height_errors_cmd)
+            if not use_jit:
+                env._initial_min_height = orig_min_h
+                env.MAX_HEIGHT_CMD = orig_class_max  # type: ignore[assignment]
 
         per_command_results.append(
             {
@@ -505,11 +777,18 @@ def _run_command_tracking(
             }
         )
 
-    overall_rmse = (
-        float(np.sqrt(np.mean(np.array(all_height_errors) ** 2)))
-        if all_height_errors
-        else float("nan")
-    )
+    if use_jit:
+        overall_rmse = (
+            float(np.sqrt(all_height_sq_sum / all_height_count))
+            if all_height_count > 0
+            else float("nan")
+        )
+    else:
+        overall_rmse = (
+            float(np.sqrt(np.mean(np.array(all_height_errors) ** 2)))
+            if all_height_errors
+            else float("nan")
+        )
 
     # Aggregate across all commands for BenchmarkResult base fields
     all_r = [ep["reward_mean"] for ep in per_command_results]
