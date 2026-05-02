@@ -21,17 +21,17 @@ evaluation:
 
 # --- PPO Hyperparameters ---
 ppo:
-  learning_rate: 1.0e-4 # nhỏ hơn để fine-tune từ checkpoint (vs 2e-4 balance)
+  learning_rate: 3.0e-4
   num_epochs: 4
-  num_minibatches: 8
-  rollout_length: 64
+  num_minibatches: 4
+  rollout_length: 32
   gamma: 0.99
   gae_lambda: 0.95
   clip_epsilon: 0.2
   entropy_coeff: 0.03 # giảm xuống để khai thác tốt hơn (vs 0.05 balance)
-  value_loss_coeff: 0.5
+  value_loss_coeff: 1.0
   max_grad_norm: 0.5
-  max_policy_kl: 0.05 # same guard as balance; useful for checkpoint fine-tuning
+  max_policy_kl: 0.03 # same guard as balance; useful for checkpoint fine-tuning
   normalize_advantages: true
 
 # --- Network ---
@@ -50,7 +50,7 @@ network:
 # only action_delay_steps is kept at 0 (match sim_prototyping mode in stage 1).
 low_level_pid:
   enabled: true
-  action_smoothing_alpha: 0.4
+  action_smoothing_alpha: 0.5
   anti_windup_limit: 0.4
   wheel_vel_limit: 20.0
   kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
@@ -64,18 +64,18 @@ low_level_pid:
 #
 # Separation note — differences versus balance.yaml explained:
 #
-#   no_motion    → 0.0   (was 0.5 in balance)
+#   no_motion    → 0.0   (was 1.0 in balance)
 #     Reason: During/after a push the robot *must* move wheels to prevent falling.
 #     Rewarding stillness would directly fight the recovery reflex.
 #
-#   wheel_velocity → 0.0  (was -0.002 in balance)
+#   wheel_velocity → 0.0  (was -0.006 in balance)
 #     Reason: The wheels are the primary balancing actuators under push.
 #     Penalising wheel speed would punish the exact behaviour needed for recovery.
 #
-#   action_rate  → -0.005  (was -0.05 in balance)
+#   action_rate  → -0.005  (was -0.08 in balance)
 #     Reason: The step immediately after push impact requires a rapid correction
-#     (wheel velocity changes from 0 → large in one step). action_rate=-0.05
-#     was fighting that correction with ~10× the effect of balance.yaml's penalty
+#     (wheel velocity changes from 0 → large in one step). action_rate=-0.08
+#     would fight that correction much more strongly than this robust-stage penalty
 #     relative to the typical single-step reward. Reducing to -0.005 keeps
 #     anti-jitter at steady state while not punishing the recovery burst.
 #     NOTE: Do NOT zero this fully — small anti-jitter is still useful at rest.
@@ -86,7 +86,7 @@ low_level_pid:
 #     σ=0.5 in BalanceEnv keeps final posture consistent after recovery.
 #
 # Terms unchanged from balance (identical value):
-#   body_level (1.5), orientation (0.8), yaw_rate (0.5)
+#   body_level (1.5), yaw_rate (0.5)
 #
 # Terms changed (balance → robust):
 #   height        2.5 → 1.5    (push survival risk outweighs strict height tracking)
@@ -95,9 +95,10 @@ low_level_pid:
 #   heading       0.5 → 1.0    (push can spin robot; stronger yaw correction)
 #   legs_forward  0.5 → 0.3    (relaxed posture tolerance during recovery)
 #   legs_vertical 0.5 → 0.3    (relaxed posture tolerance during recovery)
-#   position_drift 1.5 → 1.0   (push displaces robot; allow slightly more drift)
-#   joint_torque  -0.0005 → -0.001   (tighter torque budget in robust mode)
-#   joint_velocity -0.0007 → -0.0005 (looser joint velocity budget under push)
+#   orientation   1.0 → 0.8    (allow transient tilt during recovery)
+#   position_drift 2.5 → 1.0   (push displaces robot; allow more drift)
+#   joint_torque  -0.0008 → -0.001   (tighter torque budget in robust mode)
+#   joint_velocity -0.001 → -0.0005  (looser joint velocity budget under push)
 rewards:
   body_level: 1.5
   height: 1.5
@@ -116,7 +117,7 @@ rewards:
   # === Penalties ===
   joint_torque: -0.001
   joint_velocity: -0.0005
-  action_rate: -0.005  # reduced 10× vs balance (-0.05): allows fast post-push corrections
+  action_rate: -0.005  # much lower than balance (-0.08): allows fast post-push corrections
 
 # --- Termination ---
 termination:
@@ -126,9 +127,9 @@ termination:
 # --- Domain Randomization ---
 domain_randomization:
   enabled: true
-  mass_range: [0.85, 1.15] # biến động ±15% (đồng nhất với stage 1)
-  friction_range: [0.6, 1.4] # biến động ±40% (cao hơn stage 1: ±30%)
-  joint_damping_range: [0.7, 1.3]
+  mass_range: [0.85, 1.15] # widen after balance has learned clean standing
+  friction_range: [0.6, 1.4] # robust stage covers tile/carpet/concrete variation
+  joint_damping_range: [0.7, 1.3] # wider actuator damping variation for robustness
   push_interval: 200 # push mỗi 4s
   push_magnitude: 40 # lực mạnh hơn (40N; Stage 1 uses push_magnitude=0)
   push_duration: 8 # kéo dài hơn (8 steps = 0.16s vs 5 steps = 0.1s)

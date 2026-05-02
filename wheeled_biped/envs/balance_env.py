@@ -73,6 +73,7 @@ class BalanceEnv(WheeledBipedEnv):
 
         # Lấy trọng số reward
         reward_cfg = self.config.get("rewards", {})
+        reward_params_cfg = self.config.get("reward_params", {})
         # Defaults mirror configs/training/balance.yaml so partial configs behave
         # consistently with the production config.  Any key present in the config
         # overrides the default via .get(); keys absent in the config use these values.
@@ -81,19 +82,20 @@ class BalanceEnv(WheeledBipedEnv):
             "height": reward_cfg.get("height", 2.5),
             "legs_forward": reward_cfg.get("legs_forward", 0.5),
             "legs_vertical": reward_cfg.get("legs_vertical", 0.5),
-            "joint_torque": reward_cfg.get("joint_torque", -0.0005),
-            "joint_velocity": reward_cfg.get("joint_velocity", -0.0007),
-            "action_rate": reward_cfg.get("action_rate", -0.05),
-            "orientation": reward_cfg.get("orientation", 0.8),
+            "joint_torque": reward_cfg.get("joint_torque", -0.0008),
+            "joint_velocity": reward_cfg.get("joint_velocity", -0.001),
+            "action_rate": reward_cfg.get("action_rate", -0.08),
+            "orientation": reward_cfg.get("orientation", 1.0),
             "alive": reward_cfg.get("alive", 0.3),
-            "no_motion": reward_cfg.get("no_motion", 0.5),
+            "no_motion": reward_cfg.get("no_motion", 1.0),
             "symmetry": reward_cfg.get("symmetry", 1.0),
-            "wheel_velocity": reward_cfg.get("wheel_velocity", -0.002),
-            "position_drift": reward_cfg.get("position_drift", 1.5),
+            "wheel_velocity": reward_cfg.get("wheel_velocity", -0.006),
+            "position_drift": reward_cfg.get("position_drift", 2.5),
             "heading": reward_cfg.get("heading", 0.5),
             "natural_pose": reward_cfg.get("natural_pose", 0.4),
             "yaw_rate": reward_cfg.get("yaw_rate", 0.5),
         }
+        self._position_drift_sigma = float(reward_params_cfg.get("position_drift_sigma", 0.5))
 
         # Height curriculum config
         # Trainer sẽ quản lý curriculum_min_height dựa trên reward threshold
@@ -565,10 +567,11 @@ class BalanceEnv(WheeledBipedEnv):
             "action_rate": penalty_action_rate(action, prev_state.prev_action),
             # Phạt bánh xe quay (giữ robot đứng yên tại chỗ)
             "wheel_velocity": penalty_wheel_velocity(joint_vel),
-            # Giữ vị trí neo — sigma=0.5m: gradient active from ~0.5m drift,
-            # reward halved at ~0.5m.  Previous sigma=1.0 was too permissive:
-            # the robot could drift ~1m before seeing meaningful signal.
-            "position_drift": penalty_position_drift(current_xy, anchor_xy, sigma=0.5),
+            # Giữ vị trí neo.  balance.yaml tightens sigma to 0.25m for
+            # stationary standing; robust/recovery configs can keep it wider.
+            "position_drift": penalty_position_drift(
+                current_xy, anchor_xy, sigma=self._position_drift_sigma
+            ),
             # Giữ hướng ban đầu — sigma=0.5 rad: gradient tới ~80° (thay vì 12° với sigma=0.1)
             "heading": reward_heading(torso_quat, initial_yaw, sigma=0.5),
             # Tư thế khớp tự nhiên — hp/kn phù hợp với chiều cao mục tiêu

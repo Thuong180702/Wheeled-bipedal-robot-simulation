@@ -41,7 +41,7 @@ To stabilize learning across a wide range of body heights, we employ a within-st
 height curriculum that progressively expands the commanded height range from
 near the nominal standing posture toward deep crouching configurations, gated
 by a reward-threshold criterion evaluated on a dedicated greedy evaluation pass
-every $I_{\mathrm{eval}} = 2$ training updates.
+approximately every $10^7$ environment steps.
 A key component of the reward design is a height-consistent natural pose term
 that maps commanded height to target hip-pitch and knee angles via
 piecewise-linear interpolation, preventing degenerate postures that satisfy
@@ -309,9 +309,13 @@ Each policy action is therefore held constant for ten simulation substeps.
 Training is parallelized across 4096 environments on GPU~\cite{rudin2022walk}.
 
 Domain randomization~\cite{tobin2017domain} is applied during training
-to improve robustness: body masses are perturbed by $\pm 15\%$,
-ground friction coefficients by $\pm 40\%$, and joint damping
-coefficients by $\pm 30\%$ relative to their nominal values.
+to improve robustness.
+The base \texttt{balance} stage uses moderate perturbations
+to first learn clean stationary balance: body masses are perturbed by
+$\pm 10\%$, ground friction by $\pm 30\%$, and joint damping by
+$\pm 20\%$ relative to their nominal values.
+The later \texttt{balance\_robust} stage widens these ranges to
+$\pm 15\%$, $\pm 40\%$, and $\pm 30\%$, respectively.
 Randomization is applied per episode at reset time.
 In the base \texttt{balance} stage, no external push disturbances are applied
 ($F_{\mathrm{push}} = 0$);
@@ -321,7 +325,7 @@ Push disturbances (\SI{40}{N} applied over 8 control steps, $\approx\SI{0.16}{s}
 are introduced only in the \texttt{balance\_robust} fine-tuning stage.
 
 Table~\ref{tab:domain_rand} summarizes the randomized parameters and their
-ranges, following established sim-to-real protocols~\cite{tobin2017domain,peng2018simtoreal}.
+stage-specific ranges, following established sim-to-real protocols~\cite{tobin2017domain,peng2018simtoreal}.
 Each parameter is sampled independently per episode from a uniform distribution
 over the stated range, with the nominal value at the midpoint unless noted.
 
@@ -340,9 +344,9 @@ Sensor noise is sampled independently per step.}
 Parameter & Range & Unit \\
 \midrule
 \multicolumn{3}{l}{\textit{Dynamics}} \\
-Friction coefficient   & $[0.6,\; 1.4]\times$   & --- \\
-Total body mass        & $[0.85,\; 1.15]\times$ & --- \\
-Joint damping          & $[0.7,\; 1.3]\times$    & --- \\
+Friction coefficient   & Balance: $[0.7,\;1.3]\times$; robust: $[0.6,\;1.4]\times$ & --- \\
+Total body mass        & Balance: $[0.9,\;1.1]\times$; robust: $[0.85,\;1.15]\times$ & --- \\
+Joint damping          & Balance: $[0.8,\;1.2]\times$; robust: $[0.7,\;1.3]\times$ & --- \\
 \midrule
 \multicolumn{3}{l}{\textit{Sensors \& Actuation}} \\
 IMU angular velocity noise  & $\mathcal{N}(0,\,0.05^2)$ & rad/s \\
@@ -530,9 +534,9 @@ L^{\mathrm{PPO}}(\theta) =
 \right],
 \end{equation}
 where $\rho_t(\theta)=\pi_\theta(a_t|o_t)/\pi_{\theta_{\mathrm{old}}}(a_t|o_t)$
-and $\epsilon=0.10$.
-The full objective adds a clipped value loss (coefficient 0.5) and
-entropy regularization (coefficient 0.015).
+and $\epsilon=0.20$.
+The full objective adds a clipped value loss (coefficient 1.0) and
+entropy regularization (coefficient 0.005 for the \texttt{balance} stage).
 Advantages $\hat{A}_t$ are computed using Generalized Advantage
 Estimation (GAE)~\cite{gae} with $\lambda=0.95$.
 
@@ -557,7 +561,8 @@ task are given in Table~\ref{tab:reward_weights}.
 Weights for the \texttt{balance\_robust} fine-tuning stage differ:
 $w_{\mathrm{still}}=0$, $w_{\mathrm{wh}}=0$,
 $w_{\mathrm{nat}}=1.5$, $w_{\mathrm{alive}}=0.5$,
-$w_{\Delta a}=-0.005$, to accommodate wheel-based push recovery motion.}
+$w_{\mathrm{drift}}=1.0$, and $w_{\Delta a}=-0.005$,
+to accommodate wheel-based push recovery motion.}
 \label{tab:reward_weights}
 \begin{tabular}{l l r}
 \toprule
@@ -565,20 +570,20 @@ Component & Type & Weight \\
 \midrule
 Height tracking ($r_{\mathrm{height}}$)    & Positive & 2.5    \\
 Body level ($r_{\mathrm{level}}$)          & Positive & 1.5    \\
-Position drift ($r_{\mathrm{drift}}$)      & Positive & 1.5    \\
-Orientation ($r_{\mathrm{orient}}$)        & Positive & 0.8    \\
+Position drift ($r_{\mathrm{drift}}$)      & Positive & 2.5    \\
+Orientation ($r_{\mathrm{orient}}$)        & Positive & 1.0    \\
 Symmetry ($r_{\mathrm{sym}}$)              & Positive & 1.0    \\
 Heading ($r_{\mathrm{heading}}$)           & Positive & 0.5    \\
 Legs forward ($r_{\mathrm{fwd}}$)          & Positive & 0.5    \\
 Legs vertical ($r_{\mathrm{vert}}$)        & Positive & 0.5    \\
-No motion ($r_{\mathrm{still}}$)           & Positive & 0.5    \\
+No motion ($r_{\mathrm{still}}$)           & Positive & 1.0    \\
 Yaw suppression ($r_{\mathrm{yaw}}$)       & Positive & 0.5    \\
 Natural pose ($r_{\mathrm{nat}}$)          & Positive & 0.4    \\
 Alive bonus ($r_{\mathrm{alive}}$)         & Positive & 0.3    \\
-Action rate ($p_{\Delta a}$)               & Penalty  & $-0.05$    \\
-Wheel velocity ($p_{\mathrm{wh}}$)         & Penalty  & $-0.002$   \\
-Joint torque ($p_\tau$)                    & Penalty  & $-0.0005$  \\
-Joint velocity ($p_{\dot{q}}$)             & Penalty  & $-0.0007$ \\
+Action rate ($p_{\Delta a}$)               & Penalty  & $-0.08$    \\
+Wheel velocity ($p_{\mathrm{wh}}$)         & Penalty  & $-0.006$   \\
+Joint torque ($p_\tau$)                    & Penalty  & $-0.0008$  \\
+Joint velocity ($p_{\dot{q}}$)             & Penalty  & $-0.001$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -638,7 +643,10 @@ r_{\mathrm{drift}} =
 \right),
 \label{eq:drift_reward}
 \end{equation}
-with $\sigma_\psi = 0.5\,\mathrm{rad}$ and $\sigma_d = 0.5\,\mathrm{m}$.
+with $\sigma_\psi = 0.5\,\mathrm{rad}$.
+For the \texttt{balance} stage we set $\sigma_d = 0.25\,\mathrm{m}$
+to penalize rolling drift early; recovery-oriented stages may use a
+wider drift scale.
 
 \subsubsection{Orientation and Yaw Stability}
 Linear orientation stability (avoids saturation at high angular rates):
@@ -836,20 +844,23 @@ Rather than sampling the commanded height from the full feasible range
 from the beginning, we employ a within-stage curriculum~\cite{bengio2009curriculum}
 that progressively expands the lower bound of the height command distribution.
 
-The height lower bound is decreased by a fixed step $\delta_h$ whenever
-performance exceeds a threshold:
+The height lower bound is decreased by a fixed step $\delta_h$ only when
+all curriculum gate conditions pass:
 \begin{equation}
 h_{\min}^{(k+1)} = \max\!\big(h_{\min}^{(k)} - \delta_h,\;
 h_{\min}^{\mathrm{final}}\big),
 \quad
-\text{if } \bar{r}_{\mathrm{eval}} \geq r_{\mathrm{thr}}.
+\text{if } \mathcal{G}_{\mathrm{curr}} = 1.
 \label{eq:height_curriculum}
 \end{equation}
 
 \noindent\textbf{Advancement signal.}
-Every $I_{\mathrm{eval}} = 2$ training updates, the current policy is
-evaluated greedily (no exploration noise) over 200 complete episodes
-using 32 parallel environments, with the observation normalizer held fixed.
+Every $10^7$ environment steps, corresponding to 77 PPO updates under the
+4096-environment, 32-step rollout configuration, the current policy is
+evaluated greedily (no exploration noise) using a JIT-compiled fixed-horizon
+rollout with 256 parallel evaluation environments.
+Each environment contributes one complete 1000-step episode, and the
+observation normalizer is held fixed.
 The per-step return is
 \begin{equation}
 \bar{r}_{\mathrm{eval}} = \frac{R_{\mathrm{mean}}}{T},
@@ -857,10 +868,20 @@ The per-step return is
 \end{equation}
 where $R_{\mathrm{mean}}$ is the mean episode return
 and $T = 1000$ is the episode length.
-Advancement fires when
-$\bar{r}_{\mathrm{eval}} \geq r_{\mathrm{thr}} = 0.65\,r_{\max}$,
-where $r_{\max}=10.5$ is the sum of positive \texttt{balance} reward
-weights, giving $r_{\mathrm{thr}} = 6.825$ reward/step.
+Advancement fires only when all gates pass:
+\begin{align}
+\bar{r}_{\mathrm{train}} &\geq 7.0, \nonumber\\
+\bar{r}_{\mathrm{eval}} &\geq 0.70\,r_{\max}, \label{eq:curr_gate}\\
+s_{\mathrm{eval}} &\geq 0.99, \nonumber\\
+f_{\mathrm{eval}} &\leq 0.01. \nonumber
+\end{align}
+Here $\mathcal{G}_{\mathrm{curr}}=1$ denotes that the conjunction in
+Eq.~\eqref{eq:curr_gate} holds.
+where $s_{\mathrm{eval}}$ and $f_{\mathrm{eval}}$ are the evaluation success
+and fall rates.
+The sum of positive \texttt{balance} reward weights is $r_{\max}=12.2$,
+so the per-step evaluation threshold is
+$r_{\mathrm{thr}} = 0.70r_{\max} = 8.54$ reward/step.
 Using a greedy evaluation pass rather than the noisy per-update training
 reward produces a more reliable signal for curriculum decisions.
 
@@ -869,7 +890,8 @@ Initial lower bound: $h_{\min}^{\mathrm{init}} = \SI{0.69}{m}$;
 final lower bound: $h_{\min}^{\mathrm{final}} = \SI{0.40}{m}$;
 $N_c = 29$ discrete levels;
 $\delta_h \approx \SI{0.01}{m}$;
-threshold ratio $0.65$ ($r_{\mathrm{thr}}=6.825$ reward/step).
+threshold ratio $0.70$ ($r_{\mathrm{thr}}=8.54$ reward/step), with the
+additional train-reward, success-rate, and fall-rate gates above.
 At each level $k$:
 \begin{equation}
 h_t^{cmd} \sim \mathcal{U}\!\big(h_{\min}^{(k)},\; h_{\max}\big),
@@ -1053,12 +1075,15 @@ The policy outputs the mean of a Gaussian action distribution with a
 learned log-standard-deviation initialized to $\log(0.2)$.
 
 \subsection{Training Configuration}
-PPO with 4096 parallel environments, rollout length 128 steps,
-4 epochs per update, 32 minibatches, learning rate
+PPO with 4096 parallel environments, rollout length 32 steps,
+4 epochs per update, 4 minibatches, learning rate
 $3\!\times\!10^{-4}$ (Adam), gradient norm clipping 0.5,
-entropy coefficient 0.015, value-loss coefficient 0.5.
+entropy coefficient 0.005, value-loss coefficient 1.0.
 To avoid rare destructive policy jumps during long resumed runs, an update is
-rejected if its approximate policy KL exceeds 0.05.
+rejected if its approximate policy KL exceeds 0.03.
+Long training runs use a single NVIDIA Tesla V100-SXM2 GPU with
+\SI{32}{GB} memory, an Intel Xeon Gold 6248 CPU at \SI{2.50}{GHz},
+and \SI{94}{GB} of system RAM.
 % [TODO-RESULT: report actual total training steps once complete;
 %  planned target is approximately 50M environment steps]
 
@@ -1069,29 +1094,32 @@ Table~\ref{tab:ppo_hyperparams} for reproducibility.
 \centering
 \caption{PPO training hyperparameters for the \texttt{balance} stage.}
 \label{tab:ppo_hyperparams}
-\begin{tabular}{l r}
+\begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}p{0.58\columnwidth}
+>{\raggedright\arraybackslash}X@{}}
 \toprule
 Hyperparameter & Value \\
 \midrule
 \multicolumn{2}{l}{\textit{Environment}} \\
+Training GPU             & NVIDIA Tesla V100-SXM2, 32\,GB \\
+CPU / system RAM         & Intel Xeon Gold 6248, 2.50\,GHz / 94\,GB \\
 Parallel environments    & 4{,}096 \\
-Rollout length           & 128 steps \\
+Rollout length           & 32 steps \\
 Control frequency        & 50\,Hz (20\,ms/step) \\
 Episode length           & 1{,}000 steps (20\,s) \\
 \midrule
 \multicolumn{2}{l}{\textit{PPO Update}} \\
 Epochs per update        & 4 \\
-Minibatches per epoch    & 32 \\
-Minibatch size           & 16{,}384 \\
-PPO clip range ($\epsilon$) & 0.10 \\
-Approx. KL reject threshold & 0.05 \\
+Minibatches per epoch    & 4 \\
+Minibatch size           & 32{,}768 \\
+PPO clip range ($\epsilon$) & 0.20 \\
+Approx. KL reject threshold & 0.03 \\
 \midrule
 \multicolumn{2}{l}{\textit{Optimization}} \\
 Optimizer                & Adam \\
 Learning rate            & $3\times10^{-4}$ \\
 Gradient norm clip       & 0.5 \\
-Value loss coefficient   & 0.5 \\
-Entropy coefficient      & 0.015 \\
+Value loss coefficient   & 1.0 \\
+Entropy coefficient      & 0.005 \\
 \midrule
 \multicolumn{2}{l}{\textit{Advantage Estimation}} \\
 Discount $\gamma$        & 0.99 \\
@@ -1105,11 +1133,11 @@ Weight init              & Orthogonal \\
 Initial log-std          & $\log(0.2)$ \\
 \midrule
 \multicolumn{2}{l}{\textit{Curriculum Evaluation}} \\
-Eval interval            & every 2 updates \\
-Eval environments        & 32 \\
-Eval episodes            & 200 \\
+Eval interval            & every $10^7$ env steps ($\approx77$ updates) \\
+Eval environments        & 256 \\
+Eval episodes            & 256 \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \subsection{Research Evaluation Protocol}
@@ -1324,11 +1352,14 @@ from precise actuator gain tuning.
 
 \noindent\textbf{Domain randomization coverage.}
 The randomization ranges in Table~\ref{tab:domain_rand} were chosen to
-bracket the expected real-world variability: friction variation covers
-floor surfaces from polished tile (low) to rubber mat (high),
-mass perturbation covers battery charge variation and light payloads,
-and action delay covers the communication latency of the embedded
-motor controller.
+separate nominal balance learning from later robustness fine-tuning.
+The \texttt{balance} stage uses moderate perturbations to avoid learning
+spurious wheel-spin or drift strategies before a clean stationary posture is
+established.
+The \texttt{balance\_robust} stage then widens friction, mass, and damping
+variation to cover floor surfaces from polished tile to rubber mat, battery
+charge variation and light payloads, actuator damping uncertainty, and
+communication latency through optional action delay.
 
 \noindent\textbf{Observation availability.}
 The policy uses body-frame linear velocity, which requires a velocity
@@ -1384,11 +1415,13 @@ following the same Phase~A/B/C ordering as training.
     % [TODO-CLAIM: only state LQR inferiority at large disturbances after
     %  push_recovery and full_range scenarios are evaluated]
 
-    \item \textbf{Curriculum advancement signal noise.}
-    The within-stage height curriculum fires every 2 training updates
-    using 32 envs $\times$ 200 episodes.
-    Early-training evaluations may produce noisy advancement signals
-    before the policy stabilizes.
+    \item \textbf{Conservative curriculum advancement.}
+    The within-stage height curriculum evaluates roughly every
+    $10^7$ environment steps using 256 fixed-horizon greedy episodes.
+    Advancement additionally requires training reward, evaluation return,
+    success rate, and fall-rate gates to pass.
+    This reduces premature range expansion but may slow progress when a
+    policy is close to satisfying the next curriculum level.
 \end{enumerate}
 
 % ============================================================

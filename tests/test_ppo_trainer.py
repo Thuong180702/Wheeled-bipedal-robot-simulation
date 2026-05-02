@@ -43,7 +43,7 @@ _TINY_CONFIG = {
         "gae_lambda": 0.95,
         "clip_epsilon": 0.2,
         "entropy_coeff": 0.01,
-        "value_loss_coeff": 0.5,
+        "value_loss_coeff": 1.0,
         "max_grad_norm": 0.5,
         "normalize_advantages": True,
         "rollout_length": 4,
@@ -708,11 +708,28 @@ class TestBalanceEnvRewardWeightDefaults:
         )
 
     def test_joint_velocity_default_matches_yaml(self):
-        """Focused check: joint_velocity default must be -0.0007 (matches balance.yaml)."""
+        """Focused check: joint_velocity default must be -0.001 (matches balance.yaml)."""
         env = self._make_env_no_rewards_cfg()
-        assert abs(env._reward_weights["joint_velocity"] - (-0.0007)) < 1e-9, (
-            f"joint_velocity default={env._reward_weights['joint_velocity']}, expected -0.0007"
+        assert abs(env._reward_weights["joint_velocity"] - (-0.001)) < 1e-9, (
+            f"joint_velocity default={env._reward_weights['joint_velocity']}, expected -0.001"
         )
+
+    def test_position_drift_sigma_default_and_override(self):
+        """position_drift_sigma is a reward parameter, not a reward weight."""
+        from wheeled_biped.envs.balance_env import BalanceEnv
+
+        env_default = self._make_env_no_rewards_cfg()
+        assert abs(env_default._position_drift_sigma - 0.5) < 1e-9
+
+        config = {
+            "task": {"episode_length": 10, "initial_min_height": 0.68},
+            "low_level_pid": {"enabled": False},
+            "domain_randomization": {"enabled": False},
+            "curriculum": {"enabled": False},
+            "reward_params": {"position_drift_sigma": 0.25},
+        }
+        env_override = BalanceEnv(config=config)
+        assert abs(env_override._position_drift_sigma - 0.25) < 1e-9
 
     def test_explicit_config_overrides_default(self):
         """A reward key present in config must override the default."""
@@ -867,7 +884,7 @@ class TestControlPathSemantics:
                     "gae_lambda": 0.95,
                     "clip_epsilon": 0.2,
                     "entropy_coeff": 0.01,
-                    "value_loss_coeff": 0.5,
+                    "value_loss_coeff": 1.0,
                     "max_grad_norm": 0.5,
                     "normalize_advantages": True,
                     "rollout_length": 4,
@@ -2146,7 +2163,7 @@ class TestLoggerLifecycle:
 class TestBalanceCurriculumFixes:
     """Tests for the three blocking curriculum fixes identified in the pre-flight audit.
 
-    Fix A: eval_interval now compatible with GPU batch size (was 50, now 2).
+    Fix A: eval_interval now targets elapsed env steps instead of a fixed update count.
     Fix B: curriculum_min_height is passed to in-training eval_pass() in ppo.py.
     Fix C: eval_pass() max_steps cap now reaches configured eval_episodes for stable policies.
 
@@ -2167,8 +2184,8 @@ class TestBalanceCurriculumFixes:
     def test_eval_interval_compatible_with_long_gpu_run(self):
         """balance.yaml eval cadence must fire regularly in a long GPU run.
 
-        With num_envs=4096, rollout_length=128 → steps_per_update=524,288.
-        eval_interval_steps=10_000_000 → eval_interval=ceil(10M/524K)=20 updates.
+        With num_envs=4096, rollout_length=32 -> steps_per_update=131,072.
+        eval_interval_steps=10_000_000 -> eval_interval=ceil(10M/131K)=77 updates.
         """
         from wheeled_biped.utils.config import load_yaml
 
@@ -2278,7 +2295,7 @@ class TestBalanceCurriculumFixes:
                 "gae_lambda": 0.95,
                 "clip_epsilon": 0.2,
                 "entropy_coeff": 0.0,
-                "value_loss_coeff": 0.5,
+                "value_loss_coeff": 1.0,
                 "max_grad_norm": 0.5,
                 "normalize_advantages": True,
                 "seed": 0,
@@ -2451,7 +2468,7 @@ class TestBestRewardTracking:
             "gae_lambda": 0.95,
             "clip_epsilon": 0.2,
             "entropy_coeff": 0.01,
-            "value_loss_coeff": 0.5,
+            "value_loss_coeff": 1.0,
             "max_grad_norm": 0.5,
             "normalize_advantages": True,
         },

@@ -29,12 +29,12 @@ task:
 #   eval_fall_rate <= eval_max_fall_rate
 # Level step: (0.69 - 0.40) / 29 ≈ 0.01 m per level.
 # Completing all 29 levels requires one eval-gated promotion per level.
-# With V100 config (4096 envs × 128 rollout = 524K steps/update) and
-# eval_interval_steps=10M, curriculum checks run about every 20 updates.
+# With V100 refinement config (4096 envs x 32 rollout = 131K steps/update) and
+# eval_interval_steps=10M, curriculum checks run about every 77 updates.
 curriculum:
   enabled: true
-  train_reward_threshold: 6.0 # dùng chính dòng train reward=...; chặn promote khi policy còn rung/drift mạnh
-  reward_threshold: 0.75 # 75% tổng reward tối đa → cần ~7.56/step để curriculum advance
+  train_reward_threshold: 7 # dùng chính dòng train reward=...; chặn promote khi policy còn rung/drift mạnh
+  reward_threshold: 0.7 # 70% tổng reward tối đa → cần ~12.2*0.7=8.54/step để curriculum advance
   eval_success_threshold: 0.99 # không mở range nếu policy còn ngã đáng kể trong eval
   eval_max_fall_rate: 0.01 # với eval_envs=256: tối đa ~2 episode ngã/check
   num_levels: 29 # 29 cấp: mỗi cấp giảm min_height 0.01m (0.69 → 0.40)
@@ -50,8 +50,8 @@ curriculum:
   eval_mode: "jit_fixed_horizon"
   # Eval cadence: target number of env-steps between curriculum evals.
   # Trainer computes: eval_interval = ceil(eval_interval_steps / steps_per_update).
-  # GPU (4096 envs × 128 steps = 524,288 steps/update): ~20 updates → ~10 M steps/check.
-  # CPU ( 128 envs × 128 steps =  16,384 steps/update): ~611 updates → ~10 M steps/check.
+  # GPU (4096 envs x 32 steps = 131,072 steps/update): ~77 updates -> ~10 M steps/check.
+  # CPU ( 128 envs x 32 steps =   4,096 steps/update): ~2442 updates -> ~10 M steps/check.
   eval_interval_steps: 10_000_000
   eval_envs: 256 # one fixed-horizon episode per eval env; V100-SXM2-32GB friendly
   eval_episodes: 256 # kept for metric intent/backward compatibility
@@ -65,15 +65,15 @@ evaluation:
 ppo:
   learning_rate: 3.0e-4
   num_epochs: 4
-  num_minibatches: 32
-  rollout_length: 128
+  num_minibatches: 4
+  rollout_length: 32
   gamma: 0.99
   gae_lambda: 0.95
-  clip_epsilon: 0.10
-  entropy_coeff: 0.015
-  value_loss_coeff: 0.5
+  clip_epsilon: 0.2
+  entropy_coeff: 0.005
+  value_loss_coeff: 1.0
   max_grad_norm: 0.5
-  max_policy_kl: 0.05 # reject overly large PPO updates; 0 disables
+  max_policy_kl: 0.03 # reject overly large PPO updates; 0 disables
   normalize_advantages: true
   seed: 42
 
@@ -92,7 +92,7 @@ network:
 #    using -joint_vel would be a unit mismatch; see low_level_control.py)
 low_level_pid:
   enabled: true
-  action_smoothing_alpha: 0.4 # 0 = không lọc, 0.3~0.5 giúp giảm rung rõ
+  action_smoothing_alpha: 0.5 # lọc mạnh hơn để giảm control jitter trong pure balance
   anti_windup_limit: 0.4 # giới hạn tích phân lỗi
   wheel_vel_limit: 20.0 # rad/s khi action = ±1 cho bánh xe
   # Theo thứ tự JOINT_NAMES:
@@ -115,15 +115,15 @@ low_level_pid:
 # Separation note — terms that are STANDING-SPECIFIC and would conflict with
 # push-recovery training if push_magnitude > 0:
 #
-#   no_motion      (+0.5)  Rewards zero linear velocity.
+#   no_motion      (+1.0)  Rewards zero linear velocity.
 #                           → Would punish the wheel spin needed to absorb a push.
 #                           Set to 0 in balance_robust.yaml.
 #
-#   wheel_velocity (-0.002)  Penalises wheel angular speed to keep robot stationary.
+#   wheel_velocity (-0.006)  Penalises wheel angular speed to keep robot stationary.
 #                           → Would punish wheels acting as stabilisers during recovery.
 #                           Set to 0 in balance_robust.yaml.
 #
-#   action_rate    (-0.05)  Penalises rapid action changes.
+#   action_rate    (-0.08)  Penalises rapid action changes.
 #                           → For pure standing, this prevents jitter.
 #                           → For push recovery, this penalises the fast wheel
 #                             corrections fired immediately after impact.
@@ -134,7 +134,7 @@ low_level_pid:
 #   legs_forward, legs_vertical, position_drift, orientation, yaw_rate,
 #   joint_torque, joint_velocity
 #
-# Max reward ≈ 10.5 at perfect stance, mild penalties.
+# Max positive reward ~= 12.2 after anti-exploit standing terms.
 rewards:
   body_level: 1.5 # thưởng thân nằm ngang (exp σ_roll=0.15, σ_pitch=0.15)
   height: 2.5 # thưởng giữ chiều cao theo height_command (exp σ=0.25)
@@ -144,16 +144,19 @@ rewards:
   heading: 0.5 # phá local optimum "spinning balance"
   legs_forward: 0.5
   legs_vertical: 0.5
-  position_drift: 1.5 # phạt mạnh hơn khi robot drift
-  orientation: 0.8
+  position_drift: 2.5 # phạt mạnh khi robot drift khỏi vị trí ban đầu
+  orientation: 1.0
   yaw_rate: 0.5 # phạt trực tiếp tốc độ quay yaw
   # === Standing-specific (zero in balance_robust) ===
-  no_motion: 0.5 # rewards stationary stance — conflicts with push recovery
-  wheel_velocity: -0.002 # penalises wheel spin — conflicts with push recovery
+  no_motion: 1.0 # rewards stationary stance; chống rolling/drift exploit
+  wheel_velocity: -0.006 # penalises wheel spin; chống wheel-momentum exploit
   # === Penalties ===
-  joint_torque: -0.0005 # phạt mô-men lớn
-  joint_velocity: -0.0007 # phạt tốc độ khớp
-  action_rate: -0.05 # anti-jitter for standing; tighter than robust (see note above)
+  joint_torque: -0.0008 # phạt mô-men lớn
+  joint_velocity: -0.001 # phạt tốc độ khớp
+  action_rate: -0.08 # anti-jitter mạnh hơn cho pure standing
+
+reward_params:
+  position_drift_sigma: 0.25 # phạt drift sớm hơn; 0.5m quá rộng cho standing tại chỗ
 
 # --- Termination ---
 termination:
@@ -162,13 +165,13 @@ termination:
 
 # --- Domain Randomization ---
 # mass/friction/damping applied per-episode via randomize_mjx_model() in BalanceEnv.reset().
-# Ranges widened vs. original (±10%/±20%) to match hardware variation and close the
-# training-vs-eval gap identified in the audit.
+# Keep nominal balance randomization moderate; balance_robust widens the ranges
+# after the robot has learned a clean stationary stance.
 domain_randomization:
   enabled: true
-  mass_range: [0.85, 1.15] # 15% variation in mass (matches hardware variation better than 10%)
-  friction_range: [0.6, 1.4] # ±40% variation — covers tile/carpet/concrete variation
-  joint_damping_range: [0.7, 1.3] # ±30% variation — covers actuator wear variation
+  mass_range: [0.9, 1.1] # nominal balance foundation; robust stage widens this
+  friction_range: [0.7, 1.3] # avoid early friction exploit; widen in balance_robust
+  joint_damping_range: [0.8, 1.2] # moderate damping variation for stable stance first
   push_interval: 500 # đẩy ngẫu nhiên mỗi 500 steps (~10s)
   push_magnitude: 0 # Stage 1: không push — robot học balance thuần trước
   push_duration: 5 # số steps giữ lực (5 × 0.02s = 0.1 giây mỗi lần đẩy)

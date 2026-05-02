@@ -19,17 +19,17 @@ evaluation:
 
 # --- PPO Hyperparameters ---
 ppo:
-  learning_rate: 2.0e-4 # lower than balance for warm-start fine-tuning
+  learning_rate: 3.0e-4
   num_epochs: 4
-  num_minibatches: 8 # 4096x64/8 = 32768 samples/batch
-  rollout_length: 64 # 1.28s rollout; reward is dense, episode still 30s
+  num_minibatches: 4 # 4096x32/4 = 32768 samples/batch
+  rollout_length: 32 # 0.64s rollout; reward is dense, episode still 30s
   gamma: 0.99
   gae_lambda: 0.95
   clip_epsilon: 0.2 # looser than balance because task changes from static standing
   entropy_coeff: 0.05 # higher than balance to explore recovery/height transitions
-  value_loss_coeff: 0.5
+  value_loss_coeff: 1.0
   max_grad_norm: 0.5
-  max_policy_kl: 0.05 # same guard as balance; rejects destructive warm-start updates
+  max_policy_kl: 0.03 # same guard as balance; rejects destructive warm-start updates
   normalize_advantages: true
 
 # --- Network ---
@@ -44,7 +44,7 @@ network:
 # action semantics: policy action [-1, 1] -> PID target -> actuator torque.
 low_level_pid:
   enabled: true
-  action_smoothing_alpha: 0.4
+  action_smoothing_alpha: 0.5
   anti_windup_limit: 0.4
   wheel_vel_limit: 20.0
   kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]

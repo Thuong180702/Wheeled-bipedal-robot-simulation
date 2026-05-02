@@ -57,29 +57,26 @@ def fake_mjx_data(mj_model):
 
 
 class TestDRConfigRanges:
-    """balance.yaml DR ranges should match the widened targets from the audit fix."""
+    """balance.yaml DR ranges should match the nominal balance foundation targets."""
 
     def _load_dr(self):
         config = load_yaml("configs/training/balance.yaml")
         return config["domain_randomization"]
 
-    def test_mass_range_widened(self):
+    def test_mass_range_moderate_for_balance_foundation(self):
         dr = self._load_dr()
         lo, hi = dr["mass_range"]
-        assert lo <= 0.85, f"mass_range[0]={lo} should be ≤ 0.85 (was 0.9)"
-        assert hi >= 1.15, f"mass_range[1]={hi} should be ≥ 1.15 (was 1.1)"
+        assert (lo, hi) == (0.9, 1.1)
 
-    def test_friction_range_widened(self):
+    def test_friction_range_moderate_for_balance_foundation(self):
         dr = self._load_dr()
         lo, hi = dr["friction_range"]
-        assert lo <= 0.6, f"friction_range[0]={lo} should be ≤ 0.6 (was 0.8)"
-        assert hi >= 1.4, f"friction_range[1]={hi} should be ≥ 1.4 (was 1.2)"
+        assert (lo, hi) == (0.7, 1.3)
 
-    def test_damping_range_widened(self):
+    def test_damping_range_moderate_for_balance_foundation(self):
         dr = self._load_dr()
         lo, hi = dr["joint_damping_range"]
-        assert lo <= 0.7, f"joint_damping_range[0]={lo} should be ≤ 0.7 (was 0.8)"
-        assert hi >= 1.3, f"joint_damping_range[1]={hi} should be ≥ 1.3 (was 1.2)"
+        assert (lo, hi) == (0.8, 1.2)
 
     def test_sensor_noise_section_present(self):
         config = load_yaml("configs/training/balance.yaml")

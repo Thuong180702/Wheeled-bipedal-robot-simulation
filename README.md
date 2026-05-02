@@ -686,12 +686,13 @@ Two curriculum systems operate independently:
 **Within-stage height curriculum** (`PPOTrainer`, balance only): expands
 `curriculum_min_height` from 0.69 → 0.40 m over 29 levels. Default mode
 (`use_eval_signal: true` in `balance.yaml`): on the default GPU config,
-`eval_pass()` is called every 2 updates using the greedy policy (32 envs × 200 episodes,
-obs_rms frozen). With `num_envs=4096 × rollout_length=128 = 524,288 steps/update`,
-this fires the first eval at ~1 M env-steps — compatible with a 5 M-step run.
-Advancement fires when `eval_reward_mean / episode_length >= reward_threshold`.
-In `balance.yaml`, `reward_threshold: 0.65` means 65% of the positive reward
-budget, i.e. about `6.825` reward/step from a `10.5` reward/step maximum.
+JIT fixed-horizon eval is called every ~10 M env-steps using the greedy policy
+(256 envs × one full episode each, obs_rms frozen). With
+`num_envs=4096 × rollout_length=32 = 131,072 steps/update`, this is about one
+curriculum check every 77 PPO updates. Advancement requires all gates to pass:
+train reward, eval per-step reward, success rate, and fall rate. In
+`balance.yaml`, `reward_threshold: 0.7` means about `8.54` reward/step from a
+`12.2` positive reward/step budget.
 Progress is logged as `curriculum/eval_per_step`, `curriculum/eval_success_rate`,
 and `curriculum/eval_fall_rate`. Backward-compatible fallback (`use_eval_signal:
 false`): rolling window of per-update `avg_reward` from training rollouts (noisier
@@ -707,9 +708,9 @@ Two training configs serve different objectives:
 
 | Term | `balance.yaml` | `balance_robust.yaml` | Note |
 |---|---|---|---|
-| `no_motion` | 0.5 | **0.0** | Wheels must spin to recover from push |
-| `wheel_velocity` | −0.002 | **0.0** | Wheels are primary balancing actuators under push |
-| `action_rate` | −0.05 | **−0.005** | Rapid wheel burst needed immediately after impact |
+| `no_motion` | 1.0 | **0.0** | Wheels must spin to recover from push |
+| `wheel_velocity` | −0.006 | **0.0** | Wheels are primary balancing actuators under push |
+| `action_rate` | −0.08 | **−0.005** | Rapid wheel burst needed immediately after impact |
 | `body_level` | 1.5 | 1.5 | Unchanged — consistent standing objective |
 | `height` | 2.5 | 1.5 | Reduced — push survival outweighs strict height tracking |
 | `natural_pose` | 0.4 | 1.5 | Increased — stronger return-to-stance after recovery |

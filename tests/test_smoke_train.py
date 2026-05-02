@@ -57,7 +57,7 @@ _SMOKE_CONFIG = {
         "gae_lambda": 0.95,
         "clip_epsilon": 0.2,
         "entropy_coeff": 0.01,
-        "value_loss_coeff": 0.5,
+        "value_loss_coeff": 1.0,
         "max_grad_norm": 0.5,
         "normalize_advantages": True,
     },

@@ -41,13 +41,11 @@
 \@writefile{toc}{\contentsline {section}{\numberline {III}Robot Platform and Simulation Setup}{3}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Robot Morphology}{3}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Simulation Environment}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Low-Level PID Control}{3}{}\protected@file@percent }
-\newlabel{sec:pid}{{\mbox  {III-C}}{3}{}{subsection.3.3}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Mechanical structure and joint layout of the wheeled biped robot. Each leg has five actuated joints: hip roll (HR), hip yaw (HY), hip pitch (HP), knee (KN), and drive wheel (WH). The left leg is annotated; the right leg is mirror-symmetric. The hip and knee joints enable variable-height posture regulation; the wheel joints provide balancing torque.}}{3}{}\protected@file@percent }
 \newlabel{fig:robot_joint_layout}{{1}{3}{}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Low-Level PID Control}{3}{}\protected@file@percent }
+\newlabel{sec:pid}{{\mbox  {III-C}}{3}{}{subsection.3.3}{}}
 \citation{welford1962}
-\citation{ppo}
-\citation{gae}
 \@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Domain randomization parameters applied during training. All parameters are sampled uniformly per episode. Sensor noise is sampled independently per step.}}{4}{}\protected@file@percent }
 \newlabel{tab:domain_rand}{{I}{4}{}{table.1}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Per-joint PID gains. Joint order: hip roll (HR), hip yaw (HY), hip pitch (HP), knee (KN), wheel (WH). Gains are identical for left and right legs. The wheel $K_d$ is masked to zero internally regardless of the table value.}}{4}{}\protected@file@percent }
@@ -59,7 +57,9 @@
 \newlabel{eq:current_height_norm}{{8}{4}{}{equation.8}{}}
 \newlabel{eq:yaw_error}{{9}{4}{}{equation.9}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Learning Objective}{4}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Reward components and weights for the variable-height \texttt  {balance} task. Weights for the \texttt  {balance\_robust} fine-tuning stage differ: $w_{\mathrm  {still}}=0$, $w_{\mathrm  {wh}}=0$, $w_{\mathrm  {nat}}=1.5$, $w_{\mathrm  {alive}}=0.5$, $w_{\Delta a}=-0.005$, to accommodate wheel-based push recovery motion.}}{5}{}\protected@file@percent }
+\citation{ppo}
+\citation{gae}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Reward components and weights for the variable-height \texttt  {balance} task. Weights for the \texttt  {balance\_robust} fine-tuning stage differ: $w_{\mathrm  {still}}=0$, $w_{\mathrm  {wh}}=0$, $w_{\mathrm  {nat}}=1.5$, $w_{\mathrm  {alive}}=0.5$, $w_{\mathrm  {drift}}=1.0$, and $w_{\Delta a}=-0.005$, to accommodate wheel-based push recovery motion.}}{5}{}\protected@file@percent }
 \newlabel{tab:reward_weights}{{III}{5}{}{table.3}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {V}Reward Design}{5}{}\protected@file@percent }
 \newlabel{sec:reward}{{V}{5}{}{section.5}{}}
@@ -94,7 +94,7 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Within-Stage Height Curriculum}{6}{}\protected@file@percent }
 \newlabel{eq:height_curriculum}{{30}{6}{}{equation.30}{}}
 \newlabel{eq:eval_per_step}{{31}{6}{}{equation.31}{}}
-\citation{flax}
+\newlabel{eq:curr_gate}{{32}{6}{}{equation.32}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Multi-Stage Macro-Curriculum}{7}{}\protected@file@percent }
 \newlabel{sec:multi_stage}{{\mbox  {VI-B}}{7}{}{subsection.6.2}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {VII}Classical LQR Baseline}{7}{}\protected@file@percent }
@@ -104,23 +104,23 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Height-Dependent Inverse Kinematics}{7}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-D}}Multi-Axis Control}{7}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-E}}Assumptions and Limitations}{7}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces PPO training hyperparameters for the \texttt  {balance} stage.}}{8}{}\protected@file@percent }
-\newlabel{tab:ppo_hyperparams}{{IV}{8}{}{table.4}{}}
+\citation{flax}
 \@writefile{toc}{\contentsline {section}{\numberline {VIII}Training Pipeline and Evaluation Protocol}{8}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-A}}Network Architecture}{8}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-B}}Training Configuration}{8}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-C}}Research Evaluation Protocol}{8}{}\protected@file@percent }
 \newlabel{sec:eval_protocol}{{\mbox  {VIII-C}}{8}{}{subsection.8.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {IX}Experimental Results}{8}{}\protected@file@percent }
-\newlabel{sec:results}{{IX}{8}{}{section.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-A}}Learning Curves}{8}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces PPO training hyperparameters for the \texttt  {balance} stage.}}{8}{}\protected@file@percent }
+\newlabel{tab:ppo_hyperparams}{{IV}{8}{}{table.4}{}}
 \citation{hwangbo2019learning,rudin2022walk}
-\citation{tobin2017domain,peng2018simtoreal,tan2018simtoreal}
 \@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces RL policy vs.\ LQR baseline comparison (planned). All result cells to be filled after training.}}{9}{}\protected@file@percent }
 \newlabel{tab:rl_vs_lqr}{{V}{9}{}{table.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Experimental Results}{9}{}\protected@file@percent }
+\newlabel{sec:results}{{IX}{9}{}{section.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-A}}Learning Curves}{9}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-B}}Nominal Balance and Variable-Height Results}{9}{}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Variable-height balancing: performance vs.\ commanded height. All values pending training completion.}}{9}{}\protected@file@percent }
 \newlabel{tab:balance_results}{{VI}{9}{}{table.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-B}}Nominal Balance and Variable-Height Results}{9}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-C}}Push Robustness}{9}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-D}}Friction Robustness}{9}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-E}}Ablation: Natural Pose Reward}{9}{}\protected@file@percent }
@@ -131,6 +131,7 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-B}}Sim-to-Real Considerations}{9}{}\protected@file@percent }
 \newlabel{sec:sim2real}{{\mbox  {X-B}}{9}{}{subsection.10.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-C}}Current Limitations}{9}{}\protected@file@percent }
+\citation{tobin2017domain,peng2018simtoreal,tan2018simtoreal}
 \bibstyle{IEEEtran}
 \bibcite{ppo}{1}
 \bibcite{mujoco}{2}
@@ -155,12 +156,12 @@
 \bibcite{chamorro2024stairclimbing}{21}
 \bibcite{whleaper2024}{22}
 \bibcite{zhu2022hierarchical}{23}
+\@writefile{toc}{\contentsline {section}{\numberline {XI}Conclusion}{10}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{10}{}\protected@file@percent }
 \bibcite{diablo2024}{24}
 \bibcite{portelas2020acl}{25}
 \bibcite{portelas2020teacher}{26}
 \bibcite{wang2019poet}{27}
 \bibcite{peng2018simtoreal}{28}
 \bibcite{tan2018simtoreal}{29}
-\@writefile{toc}{\contentsline {section}{\numberline {XI}Conclusion}{10}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{References}{10}{}\protected@file@percent }
-\gdef \@abspage@last{10}
+\gdef \@abspage@last{11}
