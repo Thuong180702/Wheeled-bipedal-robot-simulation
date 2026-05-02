@@ -22,19 +22,28 @@ task:
 #   Phase C — full range      (levels 21–29): height ∈ [~0.49–0.40, 0.70] m
 #     Goal: track any commanded height in [0.40, 0.70] — full operating range.
 #
-# Advancement: eval_per_step >= reward_threshold × max_reward_possible (see below).
+# Advancement requires all gates below:
+#   training rollout reward >= train_reward_threshold
+#   eval_per_step >= reward_threshold × max_reward_possible
+#   eval_success_rate >= eval_success_threshold
+#   eval_fall_rate <= eval_max_fall_rate
 # Level step: (0.69 - 0.40) / 29 ≈ 0.01 m per level.
 # Completing all 29 levels requires one eval-gated promotion per level.
 # With V100 config (4096 envs × 128 rollout = 524K steps/update) and
 # eval_interval_steps=10M, curriculum checks run about every 20 updates.
 curriculum:
   enabled: true
-  reward_threshold: 0.65 # 65% tổng reward tối đa → cần ~6.825/step để curriculum advance
+  train_reward_threshold: 6.0 # dùng chính dòng train reward=...; chặn promote khi policy còn rung/drift mạnh
+  reward_threshold: 0.75 # 75% tổng reward tối đa → cần ~7.56/step để curriculum advance
+  eval_success_threshold: 0.99 # không mở range nếu policy còn ngã đáng kể trong eval
+  eval_max_fall_rate: 0.01 # với eval_envs=256: tối đa ~2 episode ngã/check
   num_levels: 29 # 29 cấp: mỗi cấp giảm min_height 0.01m (0.69 → 0.40)
   window: 50 # (legacy) rolling training-reward window — only used when use_eval_signal: false
   # Eval-gated curriculum signal: runs eval_pass() (greedy policy, complete episodes)
   # every eval_interval updates.  More trustworthy than the noisy per-rollout avg_reward.
+  # The latest training reward=... line must also pass train_reward_threshold.
   # eval_per_step = eval_reward_mean / episode_length is compared against reward_threshold.
+  # Then success/fall gates prevent promotion when the robot only survives marginally.
   use_eval_signal: true
   # JIT fixed-horizon eval runs one full episode per eval env on the accelerator.
   # This avoids the old Python per-step loop/device_get bottleneck on GPU.

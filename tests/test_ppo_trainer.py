@@ -1185,6 +1185,80 @@ class TestEvalGatedCurriculum:
         assert abs(computed - expected) < 1e-9
 
 
+class TestCurriculumEvalGate:
+    """Unit tests for the eval-gated curriculum promotion predicate."""
+
+    def test_gate_passes_only_when_all_metrics_pass(self):
+        from wheeled_biped.training.ppo import _curriculum_eval_gate_passed
+
+        assert _curriculum_eval_gate_passed(
+            train_reward=4.8,
+            train_reward_threshold=4.5,
+            eval_per_step=7.6,
+            reward_threshold=7.5,
+            eval_success_rate=0.996,
+            success_threshold=0.99,
+            eval_fall_rate=0.004,
+            max_fall_rate=0.01,
+        )
+
+    def test_gate_blocks_high_reward_with_low_success(self):
+        from wheeled_biped.training.ppo import _curriculum_eval_gate_passed
+
+        assert not _curriculum_eval_gate_passed(
+            train_reward=4.8,
+            train_reward_threshold=4.5,
+            eval_per_step=8.0,
+            reward_threshold=7.5,
+            eval_success_rate=0.98,
+            success_threshold=0.99,
+            eval_fall_rate=0.02,
+            max_fall_rate=0.01,
+        )
+
+    def test_gate_blocks_high_success_with_low_reward(self):
+        from wheeled_biped.training.ppo import _curriculum_eval_gate_passed
+
+        assert not _curriculum_eval_gate_passed(
+            train_reward=4.8,
+            train_reward_threshold=4.5,
+            eval_per_step=7.4,
+            reward_threshold=7.5,
+            eval_success_rate=1.0,
+            success_threshold=0.99,
+            eval_fall_rate=0.0,
+            max_fall_rate=0.01,
+        )
+
+    def test_gate_blocks_fall_rate_above_limit(self):
+        from wheeled_biped.training.ppo import _curriculum_eval_gate_passed
+
+        assert not _curriculum_eval_gate_passed(
+            train_reward=4.8,
+            train_reward_threshold=4.5,
+            eval_per_step=8.0,
+            reward_threshold=7.5,
+            eval_success_rate=0.992,
+            success_threshold=0.99,
+            eval_fall_rate=0.012,
+            max_fall_rate=0.01,
+        )
+
+    def test_gate_blocks_low_training_reward(self):
+        from wheeled_biped.training.ppo import _curriculum_eval_gate_passed
+
+        assert not _curriculum_eval_gate_passed(
+            train_reward=4.1,
+            train_reward_threshold=4.5,
+            eval_per_step=8.0,
+            reward_threshold=7.5,
+            eval_success_rate=1.0,
+            success_threshold=0.99,
+            eval_fall_rate=0.0,
+            max_fall_rate=0.01,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Tests: logger lifecycle (log before close)
 # ---------------------------------------------------------------------------

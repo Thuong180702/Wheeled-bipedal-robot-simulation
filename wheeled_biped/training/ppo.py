@@ -195,6 +195,26 @@ def _compute_training_fps(
     return steps_done / max(float(train_time_s), 1e-6)
 
 
+def _curriculum_eval_gate_passed(
+    *,
+    train_reward: float,
+    train_reward_threshold: float,
+    eval_per_step: float,
+    reward_threshold: float,
+    eval_success_rate: float,
+    success_threshold: float,
+    eval_fall_rate: float,
+    max_fall_rate: float,
+) -> bool:
+    """Return whether eval metrics are strong enough to advance curriculum."""
+    return (
+        float(train_reward) >= float(train_reward_threshold)
+        and float(eval_per_step) >= float(reward_threshold)
+        and float(eval_success_rate) >= float(success_threshold)
+        and float(eval_fall_rate) <= float(max_fall_rate)
+    )
+
+
 # ============================================================
 # PPO Trainer
 # ============================================================
@@ -925,7 +945,10 @@ class PPOTrainer:
         # ====== Reward-based Curriculum ======
         curriculum_cfg = self.config.get("curriculum", {})
         curriculum_enabled = curriculum_cfg.get("enabled", False)
+        train_reward_threshold = float(curriculum_cfg.get("train_reward_threshold", float("-inf")))
         threshold_ratio = float(curriculum_cfg.get("reward_threshold", 0.92))
+        eval_success_threshold = float(curriculum_cfg.get("eval_success_threshold", 0.0))
+        eval_max_fall_rate = float(curriculum_cfg.get("eval_max_fall_rate", 1.0))
         num_levels = int(curriculum_cfg.get("num_levels", 10))
         window_size = int(curriculum_cfg.get("window", 50))
 
@@ -1240,6 +1263,13 @@ class PPOTrainer:
                         # reward_threshold = threshold_ratio × max_reward_possible (per step).
                         # Required to reconstruct why curriculum did/did not advance.
                         log_metrics["curriculum/reward_threshold"] = float(reward_threshold)
+                        log_metrics["curriculum/train_reward_threshold"] = float(
+                            train_reward_threshold
+                        )
+                        log_metrics["curriculum/eval_success_threshold"] = float(
+                            eval_success_threshold
+                        )
+                        log_metrics["curriculum/eval_max_fall_rate"] = float(eval_max_fall_rate)
                         log_metrics["curriculum/max_reward_possible"] = float(max_reward_possible)
 
                     if self.logger:
@@ -1280,13 +1310,27 @@ class PPOTrainer:
                             _eval_per_step = _ceval["eval_reward_mean"] / max(
                                 1, self.episode_length
                             )
+                            _eval_success_rate = float(_ceval["eval_success_rate"])
+                            _eval_fall_rate = float(_ceval["eval_fall_rate"])
+                            _gate_passed = _curriculum_eval_gate_passed(
+                                train_reward=avg_reward,
+                                train_reward_threshold=train_reward_threshold,
+                                eval_per_step=_eval_per_step,
+                                reward_threshold=reward_threshold,
+                                eval_success_rate=_eval_success_rate,
+                                success_threshold=eval_success_threshold,
+                                eval_fall_rate=_eval_fall_rate,
+                                max_fall_rate=eval_max_fall_rate,
+                            )
                             if self.logger:
                                 self.logger.set_step(global_step)
                                 self.logger.log_dict(
                                     {
                                         "curriculum/eval_per_step": _eval_per_step,
-                                        "curriculum/eval_success_rate": _ceval["eval_success_rate"],
-                                        "curriculum/eval_fall_rate": _ceval["eval_fall_rate"],
+                                        "curriculum/train_reward_at_eval": avg_reward,
+                                        "curriculum/eval_success_rate": _eval_success_rate,
+                                        "curriculum/eval_fall_rate": _eval_fall_rate,
+                                        "curriculum/eval_gate_passed": float(_gate_passed),
                                         "curriculum/eval_time_s": _ceval.get(
                                             "eval_time_s", 0.0
                                         ),
@@ -1295,8 +1339,10 @@ class PPOTrainer:
                             print(
                                 f"  [Curriculum eval] per_step={_eval_per_step:.3f} "
                                 f"threshold={reward_threshold:.3f} "
-                                f"success={_ceval['eval_success_rate']:.2f} "
-                                f"fall={_ceval['eval_fall_rate']:.2f} "
+                                f"train_reward={avg_reward:.3f}/{train_reward_threshold:.3f} "
+                                f"success={_eval_success_rate:.2f}/{eval_success_threshold:.2f} "
+                                f"fall={_eval_fall_rate:.2f}/{eval_max_fall_rate:.2f} "
+                                f"gate={'pass' if _gate_passed else 'hold'} "
                                 f"time={_ceval.get('eval_time_s', 0.0):.1f}s",
                                 flush=True,
                             )
@@ -1370,7 +1416,7 @@ class PPOTrainer:
                                 if self.logger:
                                     self.logger.flush()
                             # ───────────────────────────────────────────────────────────
-                            if _eval_per_step >= reward_threshold:
+                            if _gate_passed:
                                 current_min_h = max(
                                     round(current_min_h - level_step, 4), final_min_h
                                 )
@@ -1391,8 +1437,14 @@ class PPOTrainer:
                                     f"  \U0001f4c8 Curriculum Level"
                                     f" {curriculum_level}/{num_levels}:"
                                     f" height range [{current_min_h:.2f}, {max_h:.2f}]"
-                                    f" (eval_per_step={_eval_per_step:.3f}"
-                                    f" >= {reward_threshold:.3f})"
+                                    f" (train_reward={avg_reward:.3f}"
+                                    f" >= {train_reward_threshold:.3f}, "
+                                    f"eval_per_step={_eval_per_step:.3f}"
+                                    f" >= {reward_threshold:.3f}, "
+                                    f"success={_eval_success_rate:.2f}"
+                                    f" >= {eval_success_threshold:.2f}, "
+                                    f"fall={_eval_fall_rate:.2f}"
+                                    f" <= {eval_max_fall_rate:.2f})"
                                 )
                                 if current_min_h <= final_min_h:
                                     print(
