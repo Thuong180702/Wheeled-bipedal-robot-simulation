@@ -3,6 +3,7 @@
 from wheeled_biped.envs.balance_env import BalanceEnv
 from wheeled_biped.envs.base_env import WheeledBipedEnv
 from wheeled_biped.envs.locomotion_env import LocomotionEnv
+from wheeled_biped.envs.residual_balance_env import ResidualBalanceEnv
 from wheeled_biped.envs.stair_env import StairEnv
 from wheeled_biped.envs.standup_env import StandUpEnv
 from wheeled_biped.envs.terrain_env import TerrainEnv
@@ -11,6 +12,7 @@ from wheeled_biped.envs.walking_env import WalkingEnv
 # Registry cho dễ tra cứu
 ENV_REGISTRY: dict[str, type] = {
     "BalanceEnv": BalanceEnv,
+    "ResidualBalanceEnv": ResidualBalanceEnv,
     "LocomotionEnv": LocomotionEnv,
     "WalkingEnv": WalkingEnv,
     "StairEnv": StairEnv,

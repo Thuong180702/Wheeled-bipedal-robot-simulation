@@ -303,6 +303,7 @@ def single(
     stage_configs = {
         "balance": "configs/training/balance.yaml",
         "balance_robust": "configs/training/balance_robust.yaml",
+        "balance_residual": "configs/training/balance_residual.yaml",
         "wheeled_locomotion": "configs/training/wheeled_locomotion.yaml",
         "walking": "configs/training/walking.yaml",
         "stair_climbing": "configs/training/stair_climbing.yaml",

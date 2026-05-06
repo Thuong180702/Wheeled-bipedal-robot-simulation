@@ -667,6 +667,65 @@ def reward_natural_pose(
 
 
 # ============================================================
+# Residual-specific penalties
+# ============================================================
+
+
+@jax.jit
+def penalty_residual_magnitude(
+    residual_scaled: jnp.ndarray,
+) -> jnp.ndarray:
+    """Penalize large residual corrections.
+
+    Args:
+        residual_scaled: Scaled residual action (residual_scale * residual_action).
+
+    Returns:
+        Penalty (negative, larger magnitude = more negative).
+    """
+    # L2 norm of residual correction
+    magnitude = jnp.linalg.norm(residual_scaled, axis=-1)
+    return magnitude
+
+
+@jax.jit
+def penalty_residual_rate(
+    residual_action: jnp.ndarray,
+    prev_residual_action: jnp.ndarray,
+) -> jnp.ndarray:
+    """Penalize rapid changes in residual action.
+
+    Args:
+        residual_action: Current residual action.
+        prev_residual_action: Previous residual action.
+
+    Returns:
+        Penalty (negative, larger rate = more negative).
+    """
+    diff = residual_action - prev_residual_action
+    rate = jnp.linalg.norm(diff, axis=-1)
+    return rate
+
+
+@jax.jit
+def penalty_residual_saturation(
+    final_action_abs: jnp.ndarray,
+) -> jnp.ndarray:
+    """Penalize residual corrections that saturate (hit ±1 limits).
+
+    Args:
+        final_action_abs: Final composed action after clipping.
+
+    Returns:
+        Penalty (negative, higher saturation rate = more negative).
+    """
+    # Fraction of joints at ±1 after clipping
+    saturated = jnp.abs(final_action_abs) >= 0.999
+    saturation_rate = jnp.mean(saturated.astype(jnp.float32), axis=-1)
+    return saturation_rate
+
+
+# ============================================================
 # Tổng hợp: Hàm tính tổng reward
 # ============================================================
 

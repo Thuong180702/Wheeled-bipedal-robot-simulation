@@ -1,0 +1,108 @@
+# ============================================================
+# configs/controllers/gain_scheduled_lqr.yaml
+# ============================================================
+# Configuration for height-dependent gain-scheduled LQR/IK prior.
+#
+# This prior provides structured nominal balance control across
+# the full height range [0.40, 0.70] m and will be used as the
+# base controller for residual PPO training.
+#
+# The prior outputs base_action_abs ∈ [-1, 1]^10 in canonical
+# action semantics (see wheeled_biped/controllers/action_codec.py).
+# ============================================================
+
+# --- Controller Metadata ---
+metadata:
+  controller_type: height_dependent_lqr_ik_prior
+  action_semantics: absolute_normalized
+  prior_status: limited_prior
+  sign_conventions_verified: true
+  validation_date: 2026-05-05
+  known_limitations:
+    - IK is geometric (FK scan + polynomial fit) and not CoM-balanced
+    - Standalone fixed-height balance is not achieved (100% fall rate, 16-25° pitch RMS)
+    - Residual PPO is expected to learn CoM positioning and dynamic balance corrections
+    - Height transitions require residual learning for smooth CoM management
+  final_tuning:
+    lqr_pitch_cost: 100.0
+    lqr_pitch_rate_cost: 10.0
+    lqr_input_cost: 0.1
+    roll_kp: 1.5
+    roll_kd: 0.3
+  bugs_fixed:
+    - 2026-05-05: Fixed sagittal LQR sign errors (pitch_rate was using roll axis, fwd_vel was using lateral axis)
+    - 2026-05-05: Fixed forward velocity axis (was using body_lin_vel[0] X-axis, now correctly uses body_lin_vel[1] Y-axis)
+    - 2026-05-05: Verified forward axis empirically via wheel rolling test (confirmed +Y is forward)
+    - 2026-05-05: Enabled roll stabilization (was disabled with kp=0, kd=0)
+    - 2026-05-05: Increased LQR aggressiveness (pitch cost 10.0→100.0, input cost 0.8→0.1)
+
+# ============================================================
+
+# --- Height range and grid ---
+height:
+  min: 0.40  # meters
+  max: 0.70  # meters
+  # Height grid for gain scheduling (interpolation between these points)
+  grid: [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70]
+
+# --- Joint limits (from wheeled_biped_real.xml) ---
+joint_limits:
+  hip_roll: [-0.7, 0.7]    # rad
+  hip_yaw: [-0.4, 0.4]     # rad
+  hip_pitch: [-0.5, 1.8]   # rad
+  knee: [-0.5, 2.7]        # rad
+  wheel: [-1.0e6, 1.0e6]   # unlimited (velocity target)
+
+# --- Wheel velocity limit ---
+wheel_vel_limit: 20.0  # rad/s (must match low_level_pid config)
+
+# --- LQR sagittal balance gains ---
+# These are the cost matrix parameters for the continuous-time LQR.
+# Actual gains K are computed via scipy.linalg.solve_continuous_are.
+lqr:
+  # State cost diagonal: [pitch, pitch_rate, fwd_vel, fwd_pos]
+  q_diag: [100.0, 10.0, 3.0, 0.3]
+  # Input cost (wheel velocity command)
+  r_val: 0.1
+  # Physical parameters for TWIP model
+  com_height_nom: 0.54  # CoM height above wheel axis at nominal stance [m]
+  wheel_radius: 0.06    # wheel radius [m]
+
+# --- Roll stabilization (lateral balance via hip_roll) ---
+roll:
+  kp: 1.5   # proportional gain (normalized hip_roll per unit g_body[0])
+  kd: 0.3   # derivative gain (normalized hip_roll per unit ang_vel[1])
+  max_correction: 0.3  # max roll correction before normalization [rad]
+
+# --- Yaw hold (differential wheel correction) ---
+yaw:
+  kp: 2.5  # proportional gain (rad/s per rad of yaw error)
+  kd: 0.2  # derivative gain (rad/s per rad/s of yaw rate)
+  max_diff: 2.0  # max differential wheel velocity [rad/s]
+
+# --- Action semantics ---
+action:
+  mode: "absolute_normalized"  # output is base_action_abs ∈ [-1, 1]^10
+  dim: 10
+  # Joint order (must match action_codec.py):
+  # [l_hip_roll, l_hip_yaw, l_hip_pitch, l_knee, l_wheel,
+  #  r_hip_roll, r_hip_yaw, r_hip_pitch, r_knee, r_wheel]
+
+# --- Height IK ---
+# The IK mapping is built via MuJoCo FK scan at controller init.
+# This config documents the approach but does not specify the polynomial
+# coefficients (those are computed at runtime).
+ik:
+  method: "fk_scan_polynomial"  # FK scan + polynomial fit
+  scan_points: 25  # number of FK samples
+  symmetric_fold: true  # knee ≈ 2 * hip_pitch
+  polynomial_degree: 2  # quadratic fit
+
+# --- Notes ---
+# This is a structured LQR/IK prior, not "exact gain-scheduled LQR"
+# unless per-height linearization and Riccati solves are implemented.
+# Current implementation uses a single LQR gain computed at nominal height
+# and applies it across all heights (conservative but functional).
+#
+# For true gain scheduling, compute K(h) for each height in the grid
+# and interpolate at runtime. This is a future enhancement.

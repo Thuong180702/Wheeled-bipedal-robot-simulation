@@ -1726,6 +1726,23 @@ class PPOTrainer:
             "best_train_reward": float(best_train_reward),
         }
 
+        # Add residual-specific metadata if using ResidualBalanceEnv
+        env_name = self.config.get("task", {}).get("env", "BalanceEnv")
+        if env_name == "ResidualBalanceEnv":
+            residual_cfg = self.config.get("residual", {})
+            low_level_cfg = self.config.get("low_level_pid", {})
+            checkpoint["policy_type"] = "residual_ppo"
+            checkpoint["action_mode"] = "residual"
+            checkpoint["obs_dim"] = int(self.env.obs_size)
+            checkpoint["action_dim"] = int(self.env.num_actions)
+            checkpoint["base_action_in_obs"] = True
+            checkpoint["residual_scale"] = residual_cfg.get("residual_scale")
+            checkpoint["base_controller_config"] = residual_cfg.get(
+                "prior_config", "configs/controllers/gain_scheduled_lqr.yaml"
+            )
+            checkpoint["smoothing_alpha"] = low_level_cfg.get("action_smoothing_alpha")
+            checkpoint["action_delay_steps"] = low_level_cfg.get("action_delay_steps")
+
         with open(os.path.join(path, "checkpoint.pkl"), "wb") as f:
             pickle.dump(checkpoint, f)
 

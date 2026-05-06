@@ -28,6 +28,7 @@ outputs/
 runs/
 wandb/
 logs/
+outputs_residual_smoke/
 
 # ─── MuJoCo runtime logs ─────────────────────────────────────────────────────
 MUJOCO_LOG.TXT

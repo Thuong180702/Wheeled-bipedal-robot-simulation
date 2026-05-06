@@ -1,0 +1,166 @@
+# ============================================================
+# Training config: Balance Residual (Bounded residual PPO over LQR/IK prior)
+# ============================================================
+# This config trains a residual policy that learns dynamic balance corrections
+# over a height-dependent LQR/IK prior. The prior provides geometric height
+# tracking and sagittal stabilization but cannot achieve standalone static
+# balance (Phase B.4 feasibility study: 0.0023% static feasibility).
+#
+# Residual policy must learn:
+# - CoM correction (shift CoM toward wheel contact)
+# - Dynamic balance (inverted pendulum control via wheels)
+# - Height-CoM tradeoff (sacrifice exact height for balance)
+# - Push recovery (corrective wheel motion and leg adjustments)
+
+task:
+  name: "balance_residual"
+  env: "ResidualBalanceEnv"
+  episode_length: 1000 # 1000 steps × 0.02s = 20s
+  num_envs: 4096
+  initial_min_height: 0.68 # Start easier than pure PPO (0.69) since prior is weak
+
+# --- Residual-specific config ---
+residual:
+  prior_config: "configs/controllers/gain_scheduled_lqr.yaml"
+  # Per-joint residual scale: higher authority for wheels (dynamic balance),
+  # moderate for hip_pitch/knee (CoM correction), low for hip_yaw (avoid twisting)
+  residual_scale: [
+    0.10,  # l_hip_roll
+    0.05,  # l_hip_yaw
+    0.20,  # l_hip_pitch
+    0.20,  # l_knee
+    0.40,  # l_wheel
+    0.10,  # r_hip_roll
+    0.05,  # r_hip_yaw
+    0.20,  # r_hip_pitch
+    0.20,  # r_knee
+    0.40,  # r_wheel
+  ]
+
+# --- Height Curriculum (easier progression for residual learning) ---
+# Since the LQR/IK prior is a LIMITED PRIOR (not standalone stable), start
+# with a narrower height range near the best-case h=0.70m where the prior
+# has minimal CoM misalignment (4.6cm vs 18-33cm at lower heights).
+#
+# Progression:
+#   Phase A (levels 1-10):  [0.68, 0.70] → [0.60, 0.70]  (0.008m/level)
+#   Phase B (levels 11-20): [0.59, 0.70] → [0.50, 0.70]  (0.009m/level)
+#   Phase C (levels 21-25): [0.49, 0.70] → [0.45, 0.70]  (0.008m/level)
+#   Phase D (levels 26-30): [0.44, 0.70] → [0.40, 0.70]  (0.008m/level)
+#
+# Total: 30 levels to reach full [0.40, 0.70] range.
+# More gradual than pure PPO (29 levels) to account for residual learning difficulty.
+curriculum:
+  enabled: true
+  train_reward_threshold: 6.5 # Lower than pure PPO (7.0) — residual needs more tolerance
+  reward_threshold: 0.65 # 65% of max reward (vs 70% for pure PPO)
+  eval_success_threshold: 0.95 # Allow 5% failure rate (vs 1% for pure PPO)
+  eval_max_fall_rate: 0.05 # More lenient than pure PPO (0.01)
+  num_levels: 30
+  window: 50
+  use_eval_signal: true
+  eval_mode: "jit_fixed_horizon"
+  eval_interval_steps: 10_000_000
+  eval_envs: 256
+  eval_episodes: 256
+
+evaluation:
+  mode: "jit_fixed_horizon"
+  eval_envs: 256
+  eval_episodes: 256
+
+# --- PPO Hyperparameters ---
+ppo:
+  learning_rate: 3.0e-4
+  num_epochs: 4
+  num_minibatches: 4
+  rollout_length: 32
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_epsilon: 0.2
+  entropy_coeff: 0.005
+  value_loss_coeff: 1.0
+  max_grad_norm: 0.5
+  max_policy_kl: 0.03
+  normalize_advantages: true
+  seed: 42
+
+# --- Network ---
+network:
+  policy_hidden: [256, 256, 128]
+  value_hidden: [256, 256, 128]
+  activation: "elu"
+  init_std: 0.2
+
+# --- Low-level controller ---
+low_level_pid:
+  enabled: true
+  action_smoothing_alpha: 0.5
+  anti_windup_limit: 0.4
+  wheel_vel_limit: 20.0
+  kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+  ki: [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
+  kd: [3.0, 2.0, 4.0, 4.0, 0.0, 3.0, 2.0, 4.0, 4.0, 0.0]
+  action_delay_steps: 0
+
+# --- Reward weights ---
+# Prioritize survival and posture stability. Allow height tracking error
+# if needed for balance (residual will learn the height-CoM tradeoff).
+#
+# Key differences from pure PPO balance.yaml:
+# - Lower height weight (2.0 vs 2.5): allow policy to sacrifice height for balance
+# - Lower action_rate penalty (-0.05 vs -0.08): residual needs fast corrections
+# - Add residual-specific penalties: magnitude, rate, saturation
+#
+# Max positive reward ~= 11.7 (slightly lower than pure PPO due to lower height weight)
+rewards:
+  # Core task rewards
+  body_level: 1.5
+  height: 2.0 # Lower than pure PPO — allow height sacrifice for balance
+  natural_pose: 0.4
+  symmetry: 1.0
+  alive: 0.3
+  heading: 0.5
+  legs_forward: 0.5
+  legs_vertical: 0.5
+  position_drift: 2.5
+  orientation: 1.0
+  yaw_rate: 0.5
+  no_motion: 1.0
+  wheel_velocity: -0.006
+  # Effort and smoothness
+  joint_torque: -0.0008
+  joint_velocity: -0.001
+  action_rate: -0.05 # Lower penalty — residual needs fast corrections
+  # Residual-specific regularization
+  residual_magnitude: -0.02 # Penalize large residual corrections
+  residual_rate: -0.03 # Penalize rapid residual changes
+  residual_saturation: -0.05 # Penalize residual hitting limits
+
+reward_params:
+  position_drift_sigma: 0.25
+
+# --- Termination ---
+termination:
+  max_tilt_rad: 0.8
+  min_height: 0.3
+
+# --- Domain Randomization ---
+domain_randomization:
+  enabled: true
+  mass_range: [0.9, 1.1]
+  friction_range: [0.7, 1.3]
+  joint_damping_range: [0.8, 1.2]
+  push_interval: 500
+  push_magnitude: 0 # No push in initial residual training
+  push_duration: 5
+
+# --- Sensor Noise ---
+sensor_noise:
+  enabled: true
+  lin_vel_mode: "clean"
+  lin_vel_std: 0.2
+  ang_vel_std: 0.05
+  gravity_std: 0.02
+  joint_pos_std: 0.005
+  joint_vel_std: 0.01

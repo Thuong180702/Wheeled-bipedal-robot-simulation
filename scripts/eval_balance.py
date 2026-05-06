@@ -1248,12 +1248,13 @@ def evaluate(
         "rl",
         help=(
             "Controller to evaluate. Choices: 'rl' (default, uses checkpoint), "
-            "'baseline_lqr' (classical LQR balance baseline; no checkpoint needed)."
+            "'baseline_lqr' (classical LQR balance baseline; no checkpoint needed), "
+            "'lqr_ik' (height-dependent LQR/IK prior for residual RL; no checkpoint needed)."
         ),
     ),
     baseline_config: str = typer.Option(
         "configs/baseline_lqr.yaml",
-        help="Path to baseline config YAML. Used only when --controller baseline_lqr.",
+        help="Path to baseline config YAML. Used only when --controller baseline_lqr or lqr_ik.",
     ),
 ) -> None:
     """Research evaluation: compute 10 balance metrics across scenario groups.
@@ -1290,8 +1291,8 @@ def evaluate(
     expanded_scenarios = _expand_scenarios(scenarios)
 
     # Validate controller choice
-    if controller not in ("rl", "baseline_lqr"):
-        console.print(f"[red]Unknown controller '{controller}'. Choices: rl, baseline_lqr[/red]")
+    if controller not in ("rl", "baseline_lqr", "lqr_ik"):
+        console.print(f"[red]Unknown controller '{controller}'. Choices: rl, baseline_lqr, lqr_ik[/red]")
         raise typer.Exit(1)
 
     if controller == "rl" and not checkpoint:
@@ -1402,6 +1403,85 @@ def evaluate(
 
         console.print(_rich_table(all_results, title="Results — LQR Baseline"))
 
+    # ── LQR/IK prior controller path ──────────────────────────────────────────
+    if controller == "lqr_ik":
+        from wheeled_biped.controllers.lqr_ik_prior import create_lqr_ik_prior
+        from wheeled_biped.utils.config import get_model_path
+
+        # Load gain-scheduled LQR/IK config
+        lqr_ik_cfg_path = PROJECT_ROOT / "configs" / "controllers" / "gain_scheduled_lqr.yaml"
+        if not lqr_ik_cfg_path.exists():
+            console.print(f"[red]LQR/IK config not found: {lqr_ik_cfg_path}[/red]")
+            raise typer.Exit(1)
+
+        # Load baseline config for env settings
+        bl_cfg_path = PROJECT_ROOT / baseline_config
+        if not bl_cfg_path.exists():
+            console.print(f"[red]Baseline config not found: {bl_cfg_path}[/red]")
+            raise typer.Exit(1)
+
+        with open(bl_cfg_path) as f:
+            bl_cfg = yaml.safe_load(f)
+
+        # Validate obs mode: LQR/IK requires 42-dim obs (lin_vel must be present)
+        _lqr_ik_lv_mode = bl_cfg.get("sensor_noise", {}).get("lin_vel_mode", "clean")
+        if _lqr_ik_lv_mode == "disabled":
+            console.print(
+                "[red]LQR/IK prior requires lin_vel_mode='clean' or 'noisy' (42-dim obs), "
+                f"but {baseline_config} has lin_vel_mode='disabled'. "
+                "LQR/IK prior reads forward velocity from obs[4] which is absent "
+                "in the 39-dim 'disabled' observation. Update baseline_lqr.yaml.[/red]"
+            )
+            raise typer.Exit(1)
+
+        # Load MuJoCo model for FK scan
+        lqr_ik_mj_model = _load_mj_model(bl_cfg)
+
+        # Create LQR/IK prior controller
+        lqr_ik_controller = create_lqr_ik_prior(
+            config_path=lqr_ik_cfg_path,
+            model=lqr_ik_mj_model,
+        )
+        console.print(f"[bold]LQR/IK Prior[/bold] initialized with gain-scheduled config\n")
+
+        _lqr_ik_metadata = {
+            "config_path": str(lqr_ik_cfg_path),
+            "is_stateless": True,
+            "lin_vel_mode": _lqr_ik_lv_mode,
+            "assumptions": (
+                "Height-dependent LQR/IK nominal prior for residual RL architecture. "
+                "Requires lin_vel_mode='clean' or 'noisy' (42-dim obs). "
+                "Stateless: no position integration (suitable for JAX env). "
+                "Outputs base_action_abs in canonical action semantics. "
+                "Current implementation uses single LQR gain at nominal height "
+                "(conservative but functional). True per-height gain scheduling "
+                "is a future enhancement."
+            ),
+        }
+
+        ckpt_label_lqr_ik = "lqr_ik"
+
+        for scenario in expanded_scenarios:
+            console.print(f"  [cyan]→[/cyan] {scenario} ({num_episodes} episodes) …")
+            metrics = _run_scenario(
+                scenario=scenario,
+                checkpoint_path=ckpt_label_lqr_ik,
+                mj_model=lqr_ik_mj_model,
+                params=None,
+                obs_rms=None,
+                model=None,
+                config=bl_cfg,
+                num_episodes=num_episodes,
+                num_steps=num_steps,
+                seeds=seeds,
+                controller=lqr_ik_controller,
+            )
+            if no_binary_search:
+                metrics.max_recoverable_push_n = float("nan")
+            all_results.append(metrics)
+
+        console.print(_rich_table(all_results, title="Results — LQR/IK Prior"))
+
     # ── RL checkpoint path ────────────────────────────────────────────────────
     for ckpt_path in checkpoint:
         ckpt_file = Path(ckpt_path) / "checkpoint.pkl"
@@ -1477,6 +1557,8 @@ def evaluate(
     }
     if _lqr_metadata is not None:
         json_data["baseline_lqr"] = _lqr_metadata
+    if controller == "lqr_ik":
+        json_data["lqr_ik"] = _lqr_ik_metadata
     with open(json_path, "w", encoding="utf-8") as jf:
         json.dump(json_data, jf, indent=2)
     console.print(f"[dim]JSON   → {json_path}[/dim]")
