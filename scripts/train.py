@@ -304,6 +304,7 @@ def single(
         "balance": "configs/training/balance.yaml",
         "balance_robust": "configs/training/balance_robust.yaml",
         "balance_residual": "configs/training/balance_residual.yaml",
+        "balance_residual_robust": "configs/training/balance_residual_robust.yaml",
         "wheeled_locomotion": "configs/training/wheeled_locomotion.yaml",
         "walking": "configs/training/walking.yaml",
         "stair_climbing": "configs/training/stair_climbing.yaml",

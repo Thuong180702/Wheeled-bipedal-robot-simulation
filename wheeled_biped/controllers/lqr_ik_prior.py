@@ -85,32 +85,82 @@ class LQRIKConfig:
     ik_polynomial_degree: int
     ik_symmetric_fold: bool
 
+    # Prior variant (Phase B.5)
+    variant_name: str = "geometric_lqr_ik"
+
+    # CoM feedback (Phase B.5)
+    com_feedback_enabled: bool = False
+    com_k_com: float = 0.0
+    com_k_com_dot: float = 0.0
+    com_max_correction: float = 0.0
+    com_use_sim: bool = True
+
+    # Pitch bias (Phase B.5)
+    pitch_bias_enabled: bool = False
+    pitch_bias_table: dict[float, float] = None
+    pitch_bias_max_abs_deg: float = 8.0
+
     @classmethod
-    def from_yaml(cls, config_path: str | Path) -> "LQRIKConfig":
-        """Load config from YAML file."""
+    def from_yaml(cls, config_path: str | Path, variant_config_path: Optional[str | Path] = None) -> "LQRIKConfig":
+        """Load config from YAML file(s).
+
+        Args:
+            config_path: Path to base gain_scheduled_lqr.yaml.
+            variant_config_path: Optional path to prior_variants.yaml for Phase B.5 variants.
+        """
         with open(config_path, "r") as f:
             cfg = yaml.safe_load(f)
 
-        return cls(
-            height_min=cfg["height"]["min"],
-            height_max=cfg["height"]["max"],
-            height_grid=cfg["height"]["grid"],
-            joint_limits=cfg["joint_limits"],
-            wheel_vel_limit=cfg["wheel_vel_limit"],
-            lqr_q_diag=cfg["lqr"]["q_diag"],
-            lqr_r_val=cfg["lqr"]["r_val"],
-            com_height_nom=cfg["lqr"]["com_height_nom"],
-            wheel_radius=cfg["lqr"]["wheel_radius"],
-            roll_kp=cfg["roll"]["kp"],
-            roll_kd=cfg["roll"]["kd"],
-            roll_max_correction=cfg["roll"]["max_correction"],
-            yaw_kp=cfg["yaw"]["kp"],
-            yaw_kd=cfg["yaw"]["kd"],
-            yaw_max_diff=cfg["yaw"]["max_diff"],
-            ik_scan_points=cfg["ik"]["scan_points"],
-            ik_polynomial_degree=cfg["ik"]["polynomial_degree"],
-            ik_symmetric_fold=cfg["ik"]["symmetric_fold"],
-        )
+        # Base config
+        kwargs = {
+            "height_min": cfg["height"]["min"],
+            "height_max": cfg["height"]["max"],
+            "height_grid": cfg["height"]["grid"],
+            "joint_limits": cfg["joint_limits"],
+            "wheel_vel_limit": cfg["wheel_vel_limit"],
+            "lqr_q_diag": cfg["lqr"]["q_diag"],
+            "lqr_r_val": cfg["lqr"]["r_val"],
+            "com_height_nom": cfg["lqr"]["com_height_nom"],
+            "wheel_radius": cfg["lqr"]["wheel_radius"],
+            "roll_kp": cfg["roll"]["kp"],
+            "roll_kd": cfg["roll"]["kd"],
+            "roll_max_correction": cfg["roll"]["max_correction"],
+            "yaw_kp": cfg["yaw"]["kp"],
+            "yaw_kd": cfg["yaw"]["kd"],
+            "yaw_max_diff": cfg["yaw"]["max_diff"],
+            "ik_scan_points": cfg["ik"]["scan_points"],
+            "ik_polynomial_degree": cfg["ik"]["polynomial_degree"],
+            "ik_symmetric_fold": cfg["ik"]["symmetric_fold"],
+        }
+
+        # Load variant config if provided
+        if variant_config_path is not None:
+            with open(variant_config_path, "r") as f:
+                var_cfg = yaml.safe_load(f)
+
+            kwargs["variant_name"] = var_cfg.get("prior_variant", {}).get("name", "geometric_lqr_ik")
+
+            # CoM feedback
+            com_cfg = var_cfg.get("com_feedback", {})
+            kwargs["com_feedback_enabled"] = com_cfg.get("enabled", False)
+            kwargs["com_k_com"] = com_cfg.get("k_com", 0.0)
+            kwargs["com_k_com_dot"] = com_cfg.get("k_com_dot", 0.0)
+            kwargs["com_max_correction"] = com_cfg.get("max_correction", 0.0)
+            kwargs["com_use_sim"] = com_cfg.get("use_sim_com", True)
+
+            # Pitch bias
+            pitch_cfg = var_cfg.get("pitch_bias", {})
+            kwargs["pitch_bias_enabled"] = pitch_cfg.get("enabled", False)
+            if kwargs["pitch_bias_enabled"]:
+                # Convert string keys to float and deg to rad
+                table_deg = pitch_cfg.get("table", {})
+                kwargs["pitch_bias_table"] = {
+                    float(h): np.deg2rad(bias_deg)
+                    for h, bias_deg in table_deg.items()
+                }
+                kwargs["pitch_bias_max_abs_deg"] = pitch_cfg.get("max_abs_pitch_bias_deg", 8.0)
+
+        return cls(**kwargs)
 
 
 @dataclass
@@ -167,6 +217,12 @@ class LQRIKPrior:
 
         # Joint limits for normalization
         self.joint_limits = self._parse_joint_limits()
+
+        # Build pitch bias interpolator if enabled
+        if self.config.pitch_bias_enabled and self.config.pitch_bias_table:
+            self.pitch_bias_interpolator = self._build_pitch_bias_interpolator()
+        else:
+            self.pitch_bias_interpolator = None
 
     def _build_height_ik(self) -> HeightIKMapping:
         """Build height IK mapping via FK scan with contact constraints.
@@ -327,14 +383,21 @@ class LQRIKPrior:
         """
         # Parse observation (42-dim BalanceEnv observation)
         g_body = obs[0:3]
-        body_ang_vel = obs[3:6]
-        body_lin_vel = obs[6:9]
+        body_lin_vel = obs[3:6]
+        body_ang_vel = obs[6:9]
         qpos = obs[9:19]
         qvel = obs[19:29]
         # prev_action = obs[29:39]  # Not used
-        height_cmd = float(obs[39])
+        height_cmd_norm = float(obs[39])  # Normalized [0, 1]
         # current_height = obs[40]  # Not used
         yaw_error = float(obs[41])
+
+        # Denormalize height_cmd from [0, 1] to [height_min, height_max]
+        height_cmd = (
+            self.config.height_min
+            + height_cmd_norm * (self.config.height_max - self.config.height_min)
+        )
+
         # Initialize action
         action = np.zeros(ACTION_DIM)
 
@@ -352,19 +415,53 @@ class LQRIKPrior:
         action[R_KNEE] = knee_norm
 
         # 2. LQR sagittal balance: pitch, pitch_rate, fwd_vel → wheel_vel_cmd
-        # Sign convention: forward lean = -g_body[1], fwd_vel = body_lin_vel[1]
-        # FIXED 2026-05-05: Forward is +Y axis (verified empirically via wheel rolling test)
+        # Sign convention: pitch = -arcsin(g_body[1])
+        # Forward lean → negative g_body[1] → positive pitch
+        # LQR control: u = -K * x, but we need to negate the output
+        # because the PID expects positive wheel velocity = forward rolling
         pitch = -np.arcsin(np.clip(g_body[1], -1.0, 1.0))
+
+        # Apply pitch bias if enabled (Phase B.5)
+        pitch_ref = 0.0
+        if self.config.pitch_bias_enabled and self.pitch_bias_interpolator:
+            pitch_ref = self.pitch_bias_interpolator(height_cmd)
+
+        # LQR stabilizes around pitch_ref instead of zero
+        pitch_error = pitch - pitch_ref
+
         pitch_rate = body_ang_vel[1]  # pitch rate around y-axis
         fwd_vel = body_lin_vel[1]  # forward velocity along y-axis (sagittal)
         fwd_pos = 0.0  # No position tracking in stateless mode
 
-        # LQR state
-        x_lqr = np.array([pitch, pitch_rate, fwd_vel, fwd_pos])
+        # LQR state (using pitch_error instead of pitch)
+        x_lqr = np.array([pitch_error, pitch_rate, fwd_vel, fwd_pos])
 
         # LQR control: u = -K * x
-        wheel_vel_cmd = -self.lqr_gains @ x_lqr
+        wheel_vel_cmd = -(self.lqr_gains @ x_lqr)
         wheel_vel_cmd = float(wheel_vel_cmd[0])
+
+        # Add CoM feedback if enabled (Phase B.5)
+        if self.config.com_feedback_enabled and self.config.com_use_sim:
+            # Compute CoM error
+            com_y = self._compute_com_y(qpos)
+            wheel_contact_y = self._compute_wheel_contact_y(qpos)
+            com_error_y = com_y - wheel_contact_y
+
+            # Compute CoM velocity error (approximate from body velocity)
+            com_vel_y = body_lin_vel[1]
+
+            # CoM feedback correction
+            com_correction = (
+                self.config.com_k_com * com_error_y +
+                self.config.com_k_com_dot * com_vel_y
+            )
+            com_correction = np.clip(
+                com_correction,
+                -self.config.com_max_correction,
+                self.config.com_max_correction,
+            )
+
+            wheel_vel_cmd += com_correction
 
         # Normalize wheel velocity to [-1, 1]
         wheel_vel_norm = np.clip(
@@ -447,6 +544,95 @@ class LQRIKPrior:
         mid = (limits[0] + limits[1]) / 2.0
         half_range = (limits[1] - limits[0]) / 2.0
         return (value - mid) / half_range
+
+    def _build_pitch_bias_interpolator(self) -> callable:
+        """Build pitch bias interpolator from table.
+
+        Returns:
+            Function that maps height_cmd to pitch_bias in radians.
+        """
+        if not self.config.pitch_bias_table:
+            return lambda h: 0.0
+
+        # Sort table by height
+        heights = sorted(self.config.pitch_bias_table.keys())
+        biases = [self.config.pitch_bias_table[h] for h in heights]
+
+        # Linear interpolation
+        def interpolate(height_cmd: float) -> float:
+            h_clipped = np.clip(height_cmd, heights[0], heights[-1])
+            bias = np.interp(h_clipped, heights, biases)
+            # Clip to max abs bias
+            max_bias = np.deg2rad(self.config.pitch_bias_max_abs_deg)
+            return float(np.clip(bias, -max_bias, max_bias))
+
+        return interpolate
+
+    def _compute_com_y(self, qpos: np.ndarray) -> float:
+        """Compute whole-body CoM y-position (sagittal axis).
+
+        Args:
+            qpos: Joint positions, shape (10,).
+
+        Returns:
+            CoM y-position in world frame [m].
+
+        Notes:
+            This uses MuJoCo's subtree_com to compute the whole-body CoM.
+            This is simulator-only and requires a CoM estimator for hardware.
+        """
+        # Create temporary data for FK
+        data = mujoco.MjData(self.model)
+
+        # Set qpos (layout: [base_pos(3), base_quat(4), joints(10)])
+        # We only have joint positions, so use neutral base pose
+        data.qpos[0:3] = [0.0, 0.0, 0.6]  # base position
+        data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]  # base quaternion (identity)
+        data.qpos[7:17] = qpos  # joint positions
+
+        # Run forward kinematics
+        mujoco.mj_kinematics(self.model, data)
+
+        # Compute subtree CoM for torso (includes all bodies)
+        torso_body_id = self.model.body("torso").id
+        com = data.subtree_com[torso_body_id]
+
+        return float(com[1])  # Y-axis is forward/sagittal
+
+    def _compute_wheel_contact_y(self, qpos: np.ndarray) -> float:
+        """Compute wheel contact point y-position (sagittal axis).
+
+        Args:
+            qpos: Joint positions, shape (10,).
+
+        Returns:
+            Wheel contact y-position in world frame [m].
+
+        Notes:
+            Uses the midpoint between left and right wheel centers.
+        """
+        # Create temporary data for FK
+        data = mujoco.MjData(self.model)
+
+        # Set qpos
+        data.qpos[0:3] = [0.0, 0.0, 0.6]
+        data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
+        data.qpos[7:17] = qpos
+
+        # Run forward kinematics
+        mujoco.mj_kinematics(self.model, data)
+
+        # Get wheel positions
+        l_wheel_body_id = self.model.body("l_wheel_link").id
+        r_wheel_body_id = self.model.body("r_wheel_link").id
+
+        l_wheel_y = data.xpos[l_wheel_body_id, 1]
+        r_wheel_y = data.xpos[r_wheel_body_id, 1]
+
+        # Midpoint
+        wheel_contact_y = (l_wheel_y + r_wheel_y) / 2.0
+
+        return float(wheel_contact_y)
 
 
 def create_lqr_ik_prior(

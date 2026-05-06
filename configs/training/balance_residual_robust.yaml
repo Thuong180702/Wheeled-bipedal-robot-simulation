@@ -1,0 +1,149 @@
+# ============================================================
+# Training config: Balance Residual Robust (Push recovery fine-tuning)
+# ============================================================
+# This config is for FUTURE fine-tuning of a trained residual policy with
+# push disturbances, sensor noise, and domain randomization for robustness.
+#
+# Usage:
+#   python scripts/train.py single \
+#     --stage balance_residual_robust \
+#     --steps 10000000 \
+#     --resume outputs/residual_main_50M/seed42/checkpoints/final \
+#     --output-dir outputs/residual_robust_10M/seed42
+#
+# Prerequisites:
+# - Trained balance_residual checkpoint with good nominal performance
+# - Survival rate > 80% on random-height balance
+# - Height RMSE < 0.03m on random-height balance
+
+# --- Metadata ---
+metadata:
+  stage: balance_residual_robust
+  policy_type: residual_ppo
+  action_mode: bounded_residual
+  controller_type: residual_lqr_ik
+  prior: geometric_lqr_ik
+  prior_status: limited_prior
+  obs_dim: 52
+  base_obs_dim: 42
+  base_action_dim: 10
+  action_dim: 10
+  includes_base_action_in_obs: true
+  warm_start_required: true
+  warm_start_from: "TODO_CHECKPOINT_PATH"  # Set to trained balance_residual checkpoint
+
+task:
+  name: "balance_residual_robust"
+  env: "ResidualBalanceEnv"
+  episode_length: 1000
+  num_envs: 4096
+  initial_min_height: 0.40  # Start with full range since policy is pre-trained
+
+# --- Residual-specific config ---
+residual:
+  prior_config: "configs/controllers/gain_scheduled_lqr.yaml"
+  residual_scale: [
+    0.10,  # l_hip_roll
+    0.05,  # l_hip_yaw
+    0.20,  # l_hip_pitch
+    0.20,  # l_knee
+    0.40,  # l_wheel
+    0.10,  # r_hip_roll
+    0.05,  # r_hip_yaw
+    0.20,  # r_hip_pitch
+    0.20,  # r_knee
+    0.40,  # r_wheel
+  ]
+
+# --- Curriculum (disabled for fine-tuning) ---
+curriculum:
+  enabled: false  # No curriculum for fine-tuning
+
+evaluation:
+  mode: "jit_fixed_horizon"
+  eval_envs: 256
+  eval_episodes: 256
+
+# --- PPO Hyperparameters (lower LR for fine-tuning) ---
+ppo:
+  learning_rate: 1.0e-4  # Lower than initial training (3e-4)
+  num_epochs: 4
+  num_minibatches: 4
+  rollout_length: 32
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_epsilon: 0.2
+  entropy_coeff: 0.002  # Lower than initial training (0.005)
+  value_loss_coeff: 1.0
+  max_grad_norm: 0.5
+  max_policy_kl: 0.03
+  normalize_advantages: true
+  seed: 42
+
+# --- Network ---
+network:
+  policy_hidden: [256, 256, 128]
+  value_hidden: [256, 256, 128]
+  activation: "elu"
+  init_std: 0.2
+
+# --- Low-level controller ---
+low_level_pid:
+  enabled: true
+  action_smoothing_alpha: 0.5
+  anti_windup_limit: 0.4
+  wheel_vel_limit: 20.0
+  kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+  ki: [0.8, 0.4, 1.0, 1.0, 0.1, 0.8, 0.4, 1.0, 1.0, 0.1]
+  kd: [3.0, 2.0, 4.0, 4.0, 0.0, 3.0, 2.0, 4.0, 4.0, 0.0]
+  action_delay_steps: 1  # Add 1-step delay for robustness
+
+# --- Reward weights (same as balance_residual) ---
+rewards:
+  body_level: 1.5
+  height: 2.0
+  natural_pose: 0.4
+  symmetry: 1.0
+  alive: 0.3
+  heading: 0.5
+  legs_forward: 0.5
+  legs_vertical: 0.5
+  position_drift: 2.5
+  orientation: 1.0
+  yaw_rate: 0.5
+  no_motion: 1.0
+  wheel_velocity: -0.006
+  joint_torque: -0.0008
+  joint_velocity: -0.001
+  action_rate: -0.05
+  residual_magnitude: -0.02
+  residual_rate: -0.03
+  residual_saturation: -0.05
+
+reward_params:
+  position_drift_sigma: 0.25
+
+# --- Termination ---
+termination:
+  max_tilt_rad: 0.8
+  min_height: 0.3
+
+# --- Domain Randomization (ENABLED for robustness) ---
+domain_randomization:
+  enabled: true
+  mass_range: [0.85, 1.15]  # Wider than initial training
+  friction_range: [0.6, 1.4]  # Wider than initial training
+  joint_damping_range: [0.7, 1.3]  # Wider than initial training
+  push_interval: 200  # Push every 200 steps (4s)
+  push_magnitude: 100  # 100N push disturbances
+  push_duration: 5  # 5 steps = 0.1s
+
+# --- Sensor Noise (ENABLED for robustness) ---
+sensor_noise:
+  enabled: true
+  lin_vel_mode: "clean"
+  lin_vel_std: 0.3  # Higher than initial training (0.2)
+  ang_vel_std: 0.08  # Higher than initial training (0.05)
+  gravity_std: 0.03  # Higher than initial training (0.02)
+  joint_pos_std: 0.008  # Higher than initial training (0.005)
+  joint_vel_std: 0.015  # Higher than initial training (0.01)

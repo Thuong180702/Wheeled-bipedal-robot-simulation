@@ -1,0 +1,81 @@
+# ============================================================
+# configs/controllers/prior_variants.yaml
+# ============================================================
+# Configuration for stronger classical prior variants (Phase B.5).
+#
+# These variants extend the geometric LQR/IK prior with:
+# - CoM feedback: CoM-to-wheel error correction in wheel command
+# - Pitch bias: Height-dependent pitch reference for better CoM positioning
+#
+# Purpose: Provide stronger model-based baselines for reviewer defense
+# and ablation studies. These variants test whether classical control
+# with CoM awareness can achieve standalone balance, or whether residual
+# RL remains necessary.
+# ============================================================
+
+# --- Prior Variant Selection ---
+# Options:
+#   - geometric_lqr_ik: Current limited prior (no CoM feedback, no pitch bias)
+#   - com_feedback_lqr_ik: Geometric + CoM feedback in wheel command
+#   - pitch_bias_lqr_ik: Geometric + height-dependent pitch bias
+#   - com_pitch_lqr_ik: Geometric + CoM feedback + pitch bias
+prior_variant:
+  name: "com_feedback_lqr_ik"
+
+# --- CoM Feedback Configuration ---
+# Adds CoM-to-wheel error correction to wheel velocity command:
+#   wheel_cmd = wheel_cmd_lqr + k_com * com_error_y + k_com_dot * com_error_y_dot
+#   com_error_y = whole_body_CoM_y - wheel_contact_y
+#
+# IMPORTANT: This uses simulator CoM (computed from qpos via MuJoCo FK).
+# Hardware deployment requires a CoM estimator.
+com_feedback:
+  enabled: true
+
+  # Proportional gain: wheel velocity correction per meter of CoM error
+  # Positive k_com: when CoM is ahead of wheels (+com_error_y), increase wheel velocity
+  k_com: 5.0  # [rad/s per meter]
+
+  # Derivative gain: wheel velocity correction per m/s of CoM velocity error
+  k_com_dot: 2.0  # [rad/s per m/s]
+
+  # Maximum CoM correction magnitude (before normalization)
+  max_correction: 5.0  # [rad/s]
+
+  # Whether to use simulator CoM (true) or hardware estimator (false)
+  # Set to true for evaluation-only baselines
+  use_sim_com: true
+
+  # CoM computation method
+  com_method: "subtree"  # "subtree" or "manual"
+
+# --- Pitch Bias Configuration ---
+# Adds height-dependent pitch reference to LQR stabilization.
+# Instead of stabilizing around pitch=0, stabilize around pitch_ref(height).
+#
+# Rationale: At lower heights, a slight forward lean may improve CoM-to-wheel
+# alignment and reduce the need for aggressive wheel corrections.
+pitch_bias:
+  enabled: false
+
+  # Height-dependent pitch bias table [height_m: pitch_bias_deg]
+  # Positive pitch_bias = forward lean
+  # These values are initial guesses and should be tuned via grid search
+  table:
+    0.70: 0.0   # Tall stance: no bias needed
+    0.65: 1.0   # Slight forward lean
+    0.60: 2.0   # More forward lean
+    0.55: 3.0   # Nominal height: moderate lean
+    0.50: 4.0   # Lower stance: more lean
+    0.45: 5.0   # Very low: significant lean
+    0.40: 6.0   # Lowest: maximum lean
+
+  # Maximum absolute pitch bias (safety limit)
+  max_abs_pitch_bias_deg: 8.0
+
+  # Interpolation method for heights between table entries
+  interpolation: "linear"  # "linear" or "nearest"
+
+# --- Inherit base config from gain_scheduled_lqr.yaml ---
+# All other parameters (height range, joint limits, LQR gains, roll/yaw gains)
+# are inherited from the base config unless overridden here.

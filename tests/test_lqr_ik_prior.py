@@ -352,10 +352,10 @@ class TestSignConventions:
         config = LQRIKConfig.from_yaml(config_path)
         prior = LQRIKPrior(config, model)
 
-        # Moving forward
+        # Moving forward (body_lin_vel is at indices 3:6, y-axis is forward)
         obs_fwd_vel = np.zeros(42)
         obs_fwd_vel[0:3] = [0, 0, -1]  # upright
-        obs_fwd_vel[6:9] = [1.0, 0, 0]  # forward velocity
+        obs_fwd_vel[3:6] = [0, 1.0, 0]  # forward velocity (y-axis)
         obs_fwd_vel[39] = 0.55
         obs_fwd_vel[40] = 0.55
 
@@ -365,7 +365,7 @@ class TestSignConventions:
         # Moving backward
         obs_bwd_vel = np.zeros(42)
         obs_bwd_vel[0:3] = [0, 0, -1]  # upright
-        obs_bwd_vel[6:9] = [-1.0, 0, 0]  # backward velocity
+        obs_bwd_vel[3:6] = [0, -1.0, 0]  # backward velocity (y-axis)
         obs_bwd_vel[39] = 0.55
         obs_bwd_vel[40] = 0.55
 

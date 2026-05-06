@@ -12,6 +12,20 @@
 # - Height-CoM tradeoff (sacrifice exact height for balance)
 # - Push recovery (corrective wheel motion and leg adjustments)
 
+# --- Metadata ---
+metadata:
+  stage: balance_residual
+  policy_type: residual_ppo
+  action_mode: bounded_residual
+  controller_type: residual_lqr_ik
+  prior: geometric_lqr_ik
+  prior_status: limited_prior
+  obs_dim: 52
+  base_obs_dim: 42
+  base_action_dim: 10
+  action_dim: 10
+  includes_base_action_in_obs: true
+
 task:
   name: "balance_residual"
   env: "ResidualBalanceEnv"

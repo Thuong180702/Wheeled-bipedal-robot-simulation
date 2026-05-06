@@ -206,6 +206,13 @@ class EpisodeResult:
     torque_rms_nm: float
     # Push recovery (NaN if not applicable)
     recovery_time_s: float = float("nan")
+    # Residual action metrics (NaN if not residual policy)
+    base_action_rms: float = float("nan")
+    residual_action_rms: float = float("nan")
+    final_action_rms: float = float("nan")
+    residual_norm_mean: float = float("nan")
+    residual_saturation_rate: float = float("nan")
+    residual_to_base_ratio: float = float("nan")
 
 
 @dataclass
@@ -228,6 +235,13 @@ class ScenarioMetrics:
     torque_rms_nm: float
     recovery_time_s: float  # NaN if scenario has no pushes
     max_recoverable_push_n: float  # NaN if not push_recovery scenario
+    # Residual action metrics (NaN if not residual policy)
+    base_action_rms: float = float("nan")
+    residual_action_rms: float = float("nan")
+    final_action_rms: float = float("nan")
+    residual_norm_mean: float = float("nan")
+    residual_saturation_rate: float = float("nan")
+    residual_to_base_ratio: float = float("nan")
     # Extras
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -282,7 +296,7 @@ def _get_pid_params(config: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Observation builder (42 dims — must match BalanceEnv)
+# Observation builder (42 or 52 dims — BalanceEnv or ResidualBalanceEnv)
 # ---------------------------------------------------------------------------
 
 
@@ -294,14 +308,20 @@ def _build_obs(
     noise_cfg: dict | None = None,
     rng: np.random.Generator | None = None,
     lin_vel_mode: str = "clean",
+    base_action_abs: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
-    """Build BalanceEnv observation from MuJoCo state.
+    """Build BalanceEnv or ResidualBalanceEnv observation from MuJoCo state.
 
-    Observation dimension depends on lin_vel_mode:
-        "clean" or "noisy" → 42 dims (base 39 + height_cmd + current_height + yaw_error)
-        "disabled"         → 39 dims (base 36 + height_cmd + current_height + yaw_error; no lin_vel)
+    Observation dimension depends on lin_vel_mode and base_action_abs:
+        Pure PPO (base_action_abs=None):
+            "clean" or "noisy" → 42 dims (base 39 + height_cmd + current_height + yaw_error)
+            "disabled"         → 39 dims (base 36 + height_cmd + current_height + yaw_error; no lin_vel)
 
-    Layout for "clean"/"noisy" (matches BalanceEnv._extract_obs + appended dims):
+        Residual PPO (base_action_abs provided):
+            "clean" or "noisy" → 52 dims (42 base + 10 base_action_abs)
+            "disabled"         → 49 dims (39 base + 10 base_action_abs)
+
+    Layout for "clean"/"noisy" pure PPO (matches BalanceEnv._extract_obs):
         [0:3]   gravity in body frame
         [3:6]   body linear velocity (body frame)
         [6:9]   body angular velocity (body frame)
@@ -311,6 +331,10 @@ def _build_obs(
         [39]    height_cmd_norm     (obs[-3])
         [40]    current_height_norm (obs[-2])
         [41]    yaw_error           (obs[-1])
+
+    Layout for "clean"/"noisy" residual PPO (matches ResidualBalanceEnv):
+        [0:42]  base observation (as above)
+        [42:52] base_action_abs (10-dim nominal action from LQR/IK prior)
 
     For "disabled", body linear velocity is omitted; remaining indices shift by −3.
 
@@ -322,6 +346,7 @@ def _build_obs(
         lin_vel_mode: "clean" (sim-exact), "noisy" (noisy lin_vel), or "disabled"
                       (lin_vel excluded). Must match the checkpoint training config
                       (sensor_noise.lin_vel_mode).
+        base_action_abs: if provided, appends base action to observation (residual PPO mode).
     """
     from wheeled_biped.utils.math_utils import (
         get_gravity_in_body_frame,
@@ -373,8 +398,8 @@ def _build_obs(
     )
 
     if lin_vel_mode == "disabled":
-        # 39-dim: lin_vel channel excluded (base 36 + height_cmd + current_height + yaw_error)
-        obs = jnp.concatenate(
+        # 39-dim base: lin_vel channel excluded (base 36 + height_cmd + current_height + yaw_error)
+        obs_base = jnp.concatenate(
             [
                 gravity_body,        # 3
                 body_ang_vel,        # 3
@@ -387,8 +412,8 @@ def _build_obs(
             ]
         )
     else:
-        # 42-dim: lin_vel included ("clean" = sim-exact, "noisy" = with noise)
-        obs = jnp.concatenate(
+        # 42-dim base: lin_vel included ("clean" = sim-exact, "noisy" = with noise)
+        obs_base = jnp.concatenate(
             [
                 gravity_body,        # 3
                 body_lin_vel,        # 3
@@ -401,6 +426,13 @@ def _build_obs(
                 yaw_error,           # 1  (obs[-1])
             ]
         )
+
+    # Append base_action_abs for residual PPO (52-dim or 49-dim)
+    if base_action_abs is not None:
+        obs = jnp.concatenate([obs_base, base_action_abs])
+    else:
+        obs = obs_base
+
     return obs
 
 
@@ -517,6 +549,7 @@ def _run_episode(
     rng_np: np.random.Generator | None = None,
     controller: Any | None = None,
     lin_vel_mode: str = "clean",
+    residual_controller: Any | None = None,
 ) -> EpisodeResult:
     """Run a single evaluation episode; return per-episode metrics.
 
@@ -534,6 +567,9 @@ def _run_episode(
         lin_vel_mode: observation mode — "clean"/"noisy" (42-dim) or "disabled"
             (39-dim).  Must match the checkpoint config or baseline_lqr.yaml.
             LQRBalanceController requires "clean" or "noisy" (42-dim).
+        residual_controller: if not None, an LQR/IK prior controller for residual PPO.
+            Computes base_action_abs which is appended to observation and used for
+            action decomposition. When set, the RL policy outputs residual_action only.
     """
     from wheeled_biped.training.ppo import normalize_obs
     from wheeled_biped.utils.math_utils import quat_to_euler
@@ -588,6 +624,15 @@ def _run_episode(
     if controller is not None:
         controller.reset(height_cmd_m=height_cmd_clamped)
 
+    # Reset residual controller state for this episode (if used)
+    if residual_controller is not None:
+        residual_controller.reset(height_cmd_m=height_cmd_clamped)
+
+    # Residual action tracking (for residual-specific metrics)
+    base_actions: list[np.ndarray] = []
+    residual_actions: list[np.ndarray] = []
+    final_actions: list[np.ndarray] = []
+
     # Push state tracking
     push_active = False
     push_steps_remaining = 0
@@ -610,6 +655,24 @@ def _run_episode(
 
     try:
         for step_i in range(num_steps):
+            # ── Compute base action (residual PPO only) ────────────────────
+            base_action_abs = None
+            if residual_controller is not None:
+                # Build 42-dim base observation for residual controller
+                obs_base = _build_obs(
+                    mj_data,
+                    prev_action,
+                    height_cmd_norm,
+                    initial_yaw,
+                    noise_cfg=noise_cfg if noise_cfg else None,
+                    rng=rng_np if noise_cfg else None,
+                    lin_vel_mode=lin_vel_mode,
+                    base_action_abs=None,
+                )
+                base_action_abs = jnp.array(
+                    residual_controller.compute_action(np.array(obs_base)), dtype=jnp.float32
+                )
+
             # ── Build observation ──────────────────────────────────────────
             obs = _build_obs(
                 mj_data,
@@ -619,16 +682,44 @@ def _run_episode(
                 noise_cfg=noise_cfg if noise_cfg else None,
                 rng=rng_np if noise_cfg else None,
                 lin_vel_mode=lin_vel_mode,
+                base_action_abs=base_action_abs,
             )
 
             # ── Policy inference ───────────────────────────────────────────
             if controller is not None:
                 # Classical baseline: raw obs → normalised action directly
                 raw_action = jnp.array(controller.compute_action(np.array(obs)), dtype=jnp.float32)
+                residual_action = None
+                final_action_abs = raw_action
+            elif residual_controller is not None:
+                # Residual PPO: policy outputs residual_action only
+                obs_norm = normalize_obs(obs, obs_rms)
+                dist, _ = model.apply(params, obs_norm)
+                residual_action = jnp.clip(dist.loc, -1.0, 1.0)
+                # Compose final action from base + residual
+                # Load residual_scale from config
+                residual_scale = jnp.array(
+                    config.get("residual_scale", [0.10, 0.05, 0.15, 0.15, 0.30] * 2),
+                    dtype=jnp.float32,
+                )
+                final_action_abs = jnp.clip(
+                    base_action_abs + residual_scale * residual_action, -1.0, 1.0
+                )
+                raw_action = final_action_abs
             else:
+                # Pure PPO: policy outputs final action directly
                 obs_norm = normalize_obs(obs, obs_rms)
                 dist, _ = model.apply(params, obs_norm)
                 raw_action = jnp.clip(dist.loc, -1.0, 1.0)
+                residual_action = None
+                final_action_abs = raw_action
+
+            # ── Track action decomposition (residual PPO only) ─────────────
+            if residual_controller is not None and base_action_abs is not None:
+                base_actions.append(np.array(base_action_abs))
+                if residual_action is not None:
+                    residual_actions.append(np.array(residual_action))
+                final_actions.append(np.array(final_action_abs))
 
             # ── Action smoothing ───────────────────────────────────────────
             alpha = pid_params["alpha"]
@@ -764,6 +855,33 @@ def _run_episode(
     else:
         recovery_time_s = float("nan")
 
+    # ── Compute residual action metrics ──────────────────────────────────────
+    base_action_rms = float("nan")
+    residual_action_rms = float("nan")
+    final_action_rms = float("nan")
+    residual_norm_mean = float("nan")
+    residual_saturation_rate = float("nan")
+    residual_to_base_ratio = float("nan")
+
+    if residual_controller is not None and len(base_actions) > 0:
+        base_arr = np.array(base_actions)
+        final_arr = np.array(final_actions)
+        base_action_rms = float(np.sqrt(np.mean(base_arr**2)))
+        final_action_rms = float(np.sqrt(np.mean(final_arr**2)))
+
+        if len(residual_actions) > 0:
+            residual_arr = np.array(residual_actions)
+            residual_action_rms = float(np.sqrt(np.mean(residual_arr**2)))
+            # Residual norm: L2 norm per timestep, then mean
+            residual_norms = np.linalg.norm(residual_arr, axis=1)
+            residual_norm_mean = float(np.mean(residual_norms))
+            # Saturation rate: fraction of actions at ±1.0 boundary
+            saturated = np.abs(np.abs(residual_arr) - 1.0) < 1e-4
+            residual_saturation_rate = float(np.mean(saturated))
+            # Residual-to-base ratio
+            if base_action_rms > 1e-6:
+                residual_to_base_ratio = residual_action_rms / base_action_rms
+
     return EpisodeResult(
         height_cmd=height_cmd_clamped,
         fell=fell,
@@ -776,6 +894,12 @@ def _run_episode(
         wheel_speed_rms_rads=wheel_speed_rms_rads,
         torque_rms_nm=torque_rms_nm,
         recovery_time_s=recovery_time_s,
+        base_action_rms=base_action_rms,
+        residual_action_rms=residual_action_rms,
+        final_action_rms=final_action_rms,
+        residual_norm_mean=residual_norm_mean,
+        residual_saturation_rate=residual_saturation_rate,
+        residual_to_base_ratio=residual_to_base_ratio,
     )
 
 
@@ -796,6 +920,7 @@ def _max_recoverable_push(
     n_episodes: int = PUSH_SURVIVAL_EPISODES,
     survival_threshold: float = PUSH_SURVIVAL_THRESHOLD,
     controller: Any | None = None,
+    residual_controller: Any | None = None,
     lin_vel_mode: str = "clean",
 ) -> float:
     """Binary search for max push magnitude (N) with >=threshold survival rate."""
@@ -822,6 +947,7 @@ def _max_recoverable_push(
                 seed=base_seed + ep_i * 100,
                 push_cfg=push_cfg,
                 controller=controller,
+                residual_controller=residual_controller,
                 lin_vel_mode=lin_vel_mode,
             )
             if not result.fell:
@@ -882,6 +1008,7 @@ def _run_scenario(
     num_steps: int,
     seeds: list[int],
     controller: Any | None = None,
+    residual_controller: Any | None = None,
 ) -> ScenarioMetrics:
     """Run all episodes for one scenario and aggregate metrics.
 
@@ -966,6 +1093,7 @@ def _run_scenario(
             action_delay_steps=action_delay_steps,
             rng_np=np.random.default_rng(seed),
             controller=controller,
+            residual_controller=residual_controller,
             lin_vel_mode=lin_vel_mode,
         )
         results.append(ep_result)
@@ -998,12 +1126,21 @@ def _run_scenario(
             num_steps=num_steps,
             base_seed=seeds[0] if seeds else 0,
             controller=controller,
+            residual_controller=residual_controller,
             lin_vel_mode=lin_vel_mode,
         )
 
     # Recovery time: mean over episodes that had a push and recovered
     recovery_times = [r.recovery_time_s for r in results]
     recovery_time_mean = _nanmean(recovery_times)
+
+    # Aggregate residual action metrics (NaN if not residual policy)
+    base_action_rms_agg = _rms_mean("base_action_rms")
+    residual_action_rms_agg = _rms_mean("residual_action_rms")
+    final_action_rms_agg = _rms_mean("final_action_rms")
+    residual_norm_mean_agg = _rms_mean("residual_norm_mean")
+    residual_saturation_rate_agg = _rms_mean("residual_saturation_rate")
+    residual_to_base_ratio_agg = _rms_mean("residual_to_base_ratio")
 
     # Determine sweep metadata
     scenario_group = scenario
@@ -1035,6 +1172,12 @@ def _run_scenario(
         torque_rms_nm=_rms_mean("torque_rms_nm"),
         recovery_time_s=recovery_time_mean,
         max_recoverable_push_n=max_recoverable,
+        base_action_rms=base_action_rms_agg,
+        residual_action_rms=residual_action_rms_agg,
+        final_action_rms=final_action_rms_agg,
+        residual_norm_mean=residual_norm_mean_agg,
+        residual_saturation_rate=residual_saturation_rate_agg,
+        residual_to_base_ratio=residual_to_base_ratio_agg,
         extra={
             "scenario_height_cmd": height_cmd_base,
             "friction_scale": friction_scale,
@@ -1066,6 +1209,12 @@ _TABLE_COLS: list[tuple[str, str, str]] = [
     ("torque_rms_nm", "Torque_RMS", ">10.2f"),
     ("recovery_time_s", "Recov(s)", ">8.2f"),
     ("max_recoverable_push_n", "MaxPush(N)", ">10.1f"),
+    ("base_action_rms", "Base_RMS", ">9.3f"),
+    ("residual_action_rms", "Resid_RMS", ">10.3f"),
+    ("final_action_rms", "Final_RMS", ">10.3f"),
+    ("residual_norm_mean", "Resid_Norm", ">11.3f"),
+    ("residual_saturation_rate", "Resid_Sat", ">9.2%"),
+    ("residual_to_base_ratio", "Res/Base", ">8.3f"),
 ]
 
 
@@ -1125,7 +1274,11 @@ def _build_summary_table(
         "pitch_rate_rms=RMS pitch angular velocity (rad/s), drift_max=max XY displacement (m),\n"
         "height_rmse=height tracking error (m), wheel_rms=wheel speed RMS (rad/s),\n"
         "torque_rms=joint torque RMS (Nm), recov=recovery time after push (s),\n"
-        "max_push=max recoverable push force (N, binary search)."
+        "max_push=max recoverable push force (N, binary search).\n"
+        "Residual metrics (NaN for non-residual policies): base_rms=base action RMS,\n"
+        "resid_rms=residual action RMS, final_rms=final action RMS,\n"
+        "resid_norm=mean L2 norm of residual, resid_sat=saturation rate at ±1.0,\n"
+        "res/base=residual-to-base RMS ratio."
     )
     return "\n".join(lines)
 
@@ -1157,6 +1310,12 @@ def _save_csv(
         "torque_rms_nm",
         "recovery_time_s",
         "max_recoverable_push_n",
+        "base_action_rms",
+        "residual_action_rms",
+        "final_action_rms",
+        "residual_norm_mean",
+        "residual_saturation_rate",
+        "residual_to_base_ratio",
     ]
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
@@ -1512,7 +1671,32 @@ def evaluate(
         mj_model = _load_mj_model(config)
         ckpt_label = Path(ckpt_path).name
 
-        console.print(f"[bold]Checkpoint:[/bold] {ckpt_label}  (obs={env.obs_size})")
+        # Detect residual policy and load base controller if needed
+        residual_controller = None
+        policy_type = config.get("policy_type", "pure_ppo")
+        action_mode = config.get("action_mode", "direct")
+        base_action_in_obs = config.get("base_action_in_obs", False)
+
+        if policy_type == "residual_ppo" or action_mode == "residual" or base_action_in_obs:
+            console.print(f"[bold]Residual policy detected[/bold] (obs={env.obs_size}, policy_type={policy_type})")
+
+            # Load LQR/IK prior as base controller
+            from wheeled_biped.controllers.lqr_ik_prior import create_lqr_ik_prior
+            from wheeled_biped.utils.config import get_model_path
+
+            lqr_ik_cfg_path = PROJECT_ROOT / "configs" / "controllers" / "gain_scheduled_lqr.yaml"
+            if not lqr_ik_cfg_path.exists():
+                console.print(f"[yellow]Warning: LQR/IK config not found at {lqr_ik_cfg_path}[/yellow]")
+                console.print("[yellow]Residual evaluation will fail. Create gain_scheduled_lqr.yaml first.[/yellow]")
+            else:
+                residual_controller = create_lqr_ik_prior(
+                    model_path=str(get_model_path()),
+                    config=config,
+                    lqr_ik_config_path=str(lqr_ik_cfg_path),
+                )
+                console.print(f"[dim]Loaded LQR/IK prior as base controller[/dim]")
+        else:
+            console.print(f"[bold]Checkpoint:[/bold] {ckpt_label}  (obs={env.obs_size})")
 
         for scenario in expanded_scenarios:
             console.print(f"  [cyan]→[/cyan] {scenario} ({num_episodes} episodes) …")
@@ -1527,6 +1711,7 @@ def evaluate(
                 num_episodes=num_episodes,
                 num_steps=num_steps,
                 seeds=seeds,
+                residual_controller=residual_controller,
             )
             if no_binary_search:
                 metrics.max_recoverable_push_n = float("nan")

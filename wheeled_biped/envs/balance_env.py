@@ -118,6 +118,7 @@ class BalanceEnv(WheeledBipedEnv):
         # Low-level PID config: policy -> target, PID -> actuator ctrl
         pid_cfg = self.config.get("low_level_pid", {})
         self._pid_enabled = bool(pid_cfg.get("enabled", False))
+        self._pid_bias_disabled = bool(pid_cfg.get("disable_pid_action_bias", False))
         self._pid_smoothing_alpha = float(pid_cfg.get("action_smoothing_alpha", 0.0))
         self._pid_i_limit = float(pid_cfg.get("anti_windup_limit", 0.3))
         self._wheel_vel_limit = float(pid_cfg.get("wheel_vel_limit", 20.0))
@@ -364,7 +365,12 @@ class BalanceEnv(WheeledBipedEnv):
         # Step 3 — Direct torque mode (cũ) hoặc PID low-level mode
         if self._pid_enabled:
             # Apply keyframe bias so policy action=0 → PID targets keyframe pose.
-            biased_action = jnp.clip(control_action + self._pid_action_bias, -1.0, 1.0)
+            # Model-based controllers (LQR/IK) compute their own targets and should
+            # disable the bias via disable_pid_action_bias=True in config.
+            if self._pid_bias_disabled:
+                biased_action = control_action
+            else:
+                biased_action = jnp.clip(control_action + self._pid_action_bias, -1.0, 1.0)
             scaled_action, pid_integral = self._pid_low_level_ctrl(
                 state.mjx_data,
                 biased_action,

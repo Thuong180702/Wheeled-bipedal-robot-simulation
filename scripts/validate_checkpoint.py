@@ -1,6 +1,14 @@
 """
 Standing validation -- validate a trained balance checkpoint.
 
+SCOPE: This script validates checkpoint metadata and compatibility only.
+It detects pure PPO vs residual PPO checkpoints, validates obs_dim/action_dim/
+metadata/residual_scale, and reports PASS/FAIL.
+
+It does NOT perform full residual environment rollout with LQR/IK prior
+composition. For full residual evaluation with action decomposition and
+residual-specific metrics, use eval_balance.py instead.
+
 Combines a vectorised nominal benchmark with a single-environment headless
 rollout to surface reward exploitation and unstable standing patterns that
 numerical metrics alone cannot detect.
@@ -270,6 +278,16 @@ def validate(
     config = ckpt["config"]
     obs_size = int(obs_rms.mean.shape[0])
 
+    # ── Detect checkpoint type (pure PPO vs residual) ─────────────────────────
+    task_cfg = config.get("task", {})
+    env_name = task_cfg.get("env", "BalanceEnv")
+    residual_cfg = config.get("residual", {})
+    is_residual = (
+        env_name == "ResidualBalanceEnv"
+        or "residual_scale" in residual_cfg
+        or "prior_config" in residual_cfg
+    )
+
     # ── Read obs / control config from checkpoint ─────────────────────────────
     noise_cfg = config.get("sensor_noise", {})
     lin_vel_mode = str(noise_cfg.get("lin_vel_mode", "clean"))
@@ -293,19 +311,66 @@ def validate(
 
     # Expected base obs dim from lin_vel_mode (mirrors base_env._compute_obs_size)
     base_obs_dim = 36 if lin_vel_mode == "disabled" else 39
-    expected_obs_size = base_obs_dim + 3  # + height_cmd_norm + current_height_norm + yaw_error
+    base_obs_size_with_extras = base_obs_dim + 3  # + height_cmd + current_height + yaw_error
 
-    # ── Obs size sanity check ─────────────────────────────────────────────────
-    if obs_size != expected_obs_size:
-        console.print(
-            f"[red]Obs size mismatch: checkpoint obs_rms has shape ({obs_size},) "
-            f"but config lin_vel_mode='{lin_vel_mode}' implies ({expected_obs_size},). "
-            f"The checkpoint config may be inconsistent or corrupted.[/red]"
-        )
-        raise typer.Exit(1)
+    # ── Validate obs size based on checkpoint type ────────────────────────────
+    if is_residual:
+        # Residual checkpoint: obs = base (42 or 39) + base_action (10)
+        expected_obs_size = base_obs_size_with_extras + 10
+        residual_scale = residual_cfg.get("residual_scale", None)
+
+        if obs_size != expected_obs_size:
+            console.print(
+                f"[red]Residual checkpoint obs size mismatch: "
+                f"obs_rms has shape ({obs_size},) but expected ({expected_obs_size},) "
+                f"= base ({base_obs_size_with_extras}) + base_action (10).[/red]"
+            )
+            raise typer.Exit(1)
+
+        # Validate residual metadata
+        if residual_scale is None:
+            console.print("[yellow]Warning: residual checkpoint missing residual_scale in config[/yellow]")
+        elif isinstance(residual_scale, list) and len(residual_scale) != 10:
+            console.print(
+                f"[red]Invalid residual_scale: expected 10 elements, got {len(residual_scale)}[/red]"
+            )
+            raise typer.Exit(1)
+    else:
+        # Pure PPO checkpoint: obs = base (42 or 39)
+        expected_obs_size = base_obs_size_with_extras
+
+        if obs_size != expected_obs_size:
+            console.print(
+                f"[red]Obs size mismatch: checkpoint obs_rms has shape ({obs_size},) "
+                f"but config lin_vel_mode='{lin_vel_mode}' implies ({expected_obs_size},). "
+                f"The checkpoint config may be inconsistent or corrupted.[/red]"
+            )
+            raise typer.Exit(1)
+
+    # ── Print checkpoint type information ──────────────────────────────────────
+    console.print(f"\n[bold cyan]Checkpoint Validation[/bold cyan]: {stage}")
+    console.print(f"  Checkpoint      : {checkpoint}")
+
+    if is_residual:
+        console.print(f"  [bold green]Checkpoint type : residual_lqr_ik[/bold green]")
+        console.print(f"  Obs dim         : {obs_size}")
+        console.print(f"  Base obs dim    : {base_obs_size_with_extras}")
+        console.print(f"  Base action dim : 10")
+        console.print(f"  Action type     : bounded_residual")
+        if residual_scale is not None:
+            if isinstance(residual_scale, list):
+                scale_str = "[" + ", ".join(f"{s:.2f}" for s in residual_scale) + "]"
+            else:
+                scale_str = str(residual_scale)
+            console.print(f"  Residual scale  : {scale_str}")
+        console.print(f"  [bold green]Validation      : PASS[/bold green]")
+    else:
+        console.print(f"  [bold green]Checkpoint type : pure_ppo[/bold green]")
+        console.print(f"  Obs dim         : {obs_size}")
+        console.print(f"  Action type     : direct")
+        console.print(f"  [bold green]Validation      : PASS[/bold green]")
 
     console.print(f"\n[bold cyan]Standing Validation[/bold cyan]: {stage}")
-    console.print(f"  Checkpoint      : {checkpoint}")
     console.print(f"  Obs size        : {obs_size}  (lin_vel_mode='{lin_vel_mode}')")
     console.print(f"  Height cmd      : {height_cmd:.2f} m")
     console.print(

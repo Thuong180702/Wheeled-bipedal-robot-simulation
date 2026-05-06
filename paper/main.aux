@@ -12,6 +12,9 @@
 \citation{kumar2021rma}
 \citation{rudin2022walk}
 \citation{miki2022wild}
+\citation{silver2018residual}
+\citation{johannink2019residual}
+\citation{rana2020bayesianresidual}
 \citation{lee2024robustnavigation}
 \citation{vollenweider2023advancedskills}
 \citation{chamorro2024stairclimbing}
@@ -22,116 +25,154 @@
 \citation{portelas2020acl}
 \citation{portelas2020teacher}
 \citation{wang2019poet}
-\citation{tobin2017domain}
-\citation{peng2018simtoreal}
-\citation{tan2018simtoreal}
-\citation{tobin2017domain,peng2018simtoreal,tan2018simtoreal}
 \@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{2}{}\protected@file@percent }
 \newlabel{sec:related}{{II}{2}{}{section.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Classical and Model-Based Control for Wheeled Bipeds}{2}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Deep Reinforcement Learning for Legged Locomotion}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Reinforcement Learning for Wheeled-Legged Robots}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Curriculum Learning for Robot Control}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-E}}Domain Randomization and Sim-to-Real Transfer}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Residual Reinforcement Learning}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Reinforcement Learning for Wheeled-Legged Robots}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-E}}Curriculum Learning for Robot Control}{2}{}\protected@file@percent }
+\citation{tobin2017domain}
+\citation{peng2018simtoreal}
+\citation{tan2018simtoreal}
+\citation{tobin2017domain,peng2018simtoreal,tan2018simtoreal}
 \citation{mujoco,mujoco_mjx_docs}
 \citation{jax}
 \citation{rudin2022walk}
 \citation{tobin2017domain}
 \citation{tobin2017domain,peng2018simtoreal}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-F}}Domain Randomization and Sim-to-Real Transfer}{3}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {III}Robot Platform and Simulation Setup}{3}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Robot Morphology}{3}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Simulation Environment}{3}{}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Mechanical structure and joint layout of the wheeled biped robot. Each leg has five actuated joints: hip roll (HR), hip yaw (HY), hip pitch (HP), knee (KN), and drive wheel (WH). The left leg is annotated; the right leg is mirror-symmetric. The hip and knee joints enable variable-height posture regulation; the wheel joints provide balancing torque.}}{3}{}\protected@file@percent }
 \newlabel{fig:robot_joint_layout}{{1}{3}{}{figure.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Low-Level PID Control}{3}{}\protected@file@percent }
-\newlabel{sec:pid}{{\mbox  {III-C}}{3}{}{subsection.3.3}{}}
-\citation{welford1962}
 \@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Domain randomization parameters applied during training. All parameters are sampled uniformly per episode. Sensor noise is sampled independently per step.}}{4}{}\protected@file@percent }
 \newlabel{tab:domain_rand}{{I}{4}{}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Low-Level PID Control}{4}{}\protected@file@percent }
+\newlabel{sec:pid}{{\mbox  {III-C}}{4}{}{subsection.3.3}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Per-joint PID gains. Joint order: hip roll (HR), hip yaw (HY), hip pitch (HP), knee (KN), wheel (WH). Gains are identical for left and right legs. The wheel $K_d$ is masked to zero internally regardless of the table value.}}{4}{}\protected@file@percent }
 \newlabel{tab:pid_gains}{{II}{4}{}{table.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {IV}Problem Formulation}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}State, Observation, and Action}{4}{}\protected@file@percent }
-\newlabel{eq:obs}{{6}{4}{}{equation.6}{}}
-\newlabel{eq:height_norm}{{7}{4}{}{equation.7}{}}
-\newlabel{eq:current_height_norm}{{8}{4}{}{equation.8}{}}
-\newlabel{eq:yaw_error}{{9}{4}{}{equation.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Learning Objective}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Bounded Residual RL Architecture}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Overview}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Base Observation Space}{4}{}\protected@file@percent }
+\newlabel{eq:obs_base}{{7}{4}{}{equation.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Residual Observation Space}{4}{}\protected@file@percent }
+\newlabel{sec:residual_obs}{{\mbox  {IV-C}}{4}{}{subsection.4.3}{}}
+\newlabel{eq:obs_residual}{{8}{4}{}{equation.8}{}}
+\citation{welford1962}
 \citation{ppo}
 \citation{gae}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Action Composition}{5}{}\protected@file@percent }
+\newlabel{sec:action_composition}{{\mbox  {IV-D}}{5}{}{subsection.4.4}{}}
+\newlabel{eq:action_composition}{{9}{5}{}{equation.9}{}}
+\newlabel{eq:residual_scale}{{10}{5}{}{equation.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}Learning Objective}{5}{}\protected@file@percent }
+\newlabel{sec:learning_objective}{{\mbox  {IV-E}}{5}{}{subsection.4.5}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Reward components and weights for the variable-height \texttt  {balance} task. Weights for the \texttt  {balance\_robust} fine-tuning stage differ: $w_{\mathrm  {still}}=0$, $w_{\mathrm  {wh}}=0$, $w_{\mathrm  {nat}}=1.5$, $w_{\mathrm  {alive}}=0.5$, $w_{\mathrm  {drift}}=1.0$, and $w_{\Delta a}=-0.005$, to accommodate wheel-based push recovery motion.}}{5}{}\protected@file@percent }
 \newlabel{tab:reward_weights}{{III}{5}{}{table.3}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {V}Reward Design}{5}{}\protected@file@percent }
 \newlabel{sec:reward}{{V}{5}{}{section.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Reward Structure}{5}{}\protected@file@percent }
-\newlabel{eq:reward_total}{{12}{5}{}{equation.12}{}}
+\newlabel{eq:reward_total}{{13}{5}{}{equation.13}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Primary Reward Terms}{5}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}1}Body-Level Reward}{5}{}\protected@file@percent }
-\newlabel{eq:body_level}{{13}{5}{}{equation.13}{}}
+\newlabel{eq:body_level}{{14}{5}{}{equation.14}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}2}Height Tracking Reward}{5}{}\protected@file@percent }
-\newlabel{eq:height_reward}{{14}{5}{}{equation.14}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}3}Heading and Position Regularization}{5}{}\protected@file@percent }
-\newlabel{eq:heading_reward}{{15}{5}{}{equation.15}{}}
-\newlabel{eq:drift_reward}{{16}{5}{}{equation.16}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}4}Orientation and Yaw Stability}{5}{}\protected@file@percent }
-\newlabel{eq:orient_reward}{{17}{5}{}{equation.17}{}}
-\newlabel{eq:yaw_reward}{{18}{5}{}{equation.18}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}5}Leg Symmetry}{5}{}\protected@file@percent }
-\newlabel{eq:symmetry_reward}{{19}{5}{}{equation.19}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}6}Leg Alignment Rewards}{5}{}\protected@file@percent }
-\newlabel{eq:legs_forward}{{20}{5}{}{equation.20}{}}
-\newlabel{eq:legs_vertical}{{21}{5}{}{equation.21}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}7}No-Motion Reward}{5}{}\protected@file@percent }
-\newlabel{eq:no_motion}{{22}{5}{}{equation.22}{}}
-\citation{bengio2009curriculum}
+\newlabel{eq:height_reward}{{15}{5}{}{equation.15}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}3}Heading and Position Regularization}{6}{}\protected@file@percent }
+\newlabel{eq:heading_reward}{{16}{6}{}{equation.16}{}}
+\newlabel{eq:drift_reward}{{17}{6}{}{equation.17}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}4}Orientation and Yaw Stability}{6}{}\protected@file@percent }
+\newlabel{eq:orient_reward}{{18}{6}{}{equation.18}{}}
+\newlabel{eq:yaw_reward}{{19}{6}{}{equation.19}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}5}Leg Symmetry}{6}{}\protected@file@percent }
+\newlabel{eq:symmetry_reward}{{20}{6}{}{equation.20}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}6}Leg Alignment Rewards}{6}{}\protected@file@percent }
+\newlabel{eq:legs_forward}{{21}{6}{}{equation.21}{}}
+\newlabel{eq:legs_vertical}{{22}{6}{}{equation.22}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}7}No-Motion Reward}{6}{}\protected@file@percent }
+\newlabel{eq:no_motion}{{23}{6}{}{equation.23}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Height-Consistent Natural Pose Reward}{6}{}\protected@file@percent }
 \newlabel{sec:natural_pose}{{\mbox  {V-C}}{6}{}{subsection.5.3}{}}
-\newlabel{eq:natural_pose}{{26}{6}{}{equation.26}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Effort and Smoothness Penalties}{6}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-E}}Termination Conditions}{6}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {VI}Curriculum Learning Strategy}{6}{}\protected@file@percent }
-\newlabel{sec:curriculum}{{VI}{6}{}{section.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Within-Stage Height Curriculum}{6}{}\protected@file@percent }
-\newlabel{eq:height_curriculum}{{30}{6}{}{equation.30}{}}
-\newlabel{eq:eval_per_step}{{31}{6}{}{equation.31}{}}
-\newlabel{eq:curr_gate}{{32}{6}{}{equation.32}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Multi-Stage Macro-Curriculum}{7}{}\protected@file@percent }
-\newlabel{sec:multi_stage}{{\mbox  {VI-B}}{7}{}{subsection.6.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {VII}Classical LQR Baseline}{7}{}\protected@file@percent }
-\newlabel{sec:lqr}{{VII}{7}{}{section.7}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Motivation}{7}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Linearized TWIP Model}{7}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Height-Dependent Inverse Kinematics}{7}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-D}}Multi-Axis Control}{7}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-E}}Assumptions and Limitations}{7}{}\protected@file@percent }
+\newlabel{eq:natural_pose}{{27}{6}{}{equation.27}{}}
+\citation{bengio2009curriculum}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Effort and Smoothness Penalties}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-E}}Residual-Specific Regularization}{7}{}\protected@file@percent }
+\newlabel{sec:residual_regularization}{{\mbox  {V-E}}{7}{}{subsection.5.5}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-E}1}Residual Magnitude Penalty}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-E}2}Residual Rate Penalty}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-E}3}Residual Saturation Penalty}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-F}}Termination Conditions}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Curriculum Learning Strategy}{7}{}\protected@file@percent }
+\newlabel{sec:curriculum}{{VI}{7}{}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Within-Stage Height Curriculum}{7}{}\protected@file@percent }
+\newlabel{eq:height_curriculum}{{34}{7}{}{equation.34}{}}
+\newlabel{eq:eval_per_step}{{35}{7}{}{equation.35}{}}
+\newlabel{eq:curr_gate}{{36}{7}{}{equation.36}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Multi-Stage Macro-Curriculum}{8}{}\protected@file@percent }
+\newlabel{sec:multi_stage}{{\mbox  {VI-B}}{8}{}{subsection.6.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Height-Dependent LQR/IK Prior}{8}{}\protected@file@percent }
+\newlabel{sec:lqr_ik_prior}{{VII}{8}{}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Overview}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Linearized TWIP Model}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Height-Dependent Inverse Kinematics}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-D}}Multi-Axis Control}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-E}}Limitations and Motivation for Residual Learning}{8}{}\protected@file@percent }
+\newlabel{sec:prior_limitations}{{\mbox  {VII-E}}{8}{}{subsection.7.5}{}}
 \citation{flax}
-\@writefile{toc}{\contentsline {section}{\numberline {VIII}Training Pipeline and Evaluation Protocol}{8}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-A}}Network Architecture}{8}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-B}}Training Configuration}{8}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-C}}Research Evaluation Protocol}{8}{}\protected@file@percent }
-\newlabel{sec:eval_protocol}{{\mbox  {VIII-C}}{8}{}{subsection.8.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces PPO training hyperparameters for the \texttt  {balance} stage.}}{8}{}\protected@file@percent }
-\newlabel{tab:ppo_hyperparams}{{IV}{8}{}{table.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Residual Policy Training}{9}{}\protected@file@percent }
+\newlabel{sec:training}{{VIII}{9}{}{section.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-A}}Network Architecture}{9}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-B}}Training Configuration}{9}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-C}}Research Evaluation Protocol}{9}{}\protected@file@percent }
+\newlabel{sec:eval_protocol}{{\mbox  {VIII-C}}{9}{}{subsection.8.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces PPO training hyperparameters for the \texttt  {balance} stage.}}{9}{}\protected@file@percent }
+\newlabel{tab:ppo_hyperparams}{{IV}{9}{}{table.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces RL policy vs.\ LQR baseline comparison (planned). All result cells to be filled after training.}}{10}{}\protected@file@percent }
+\newlabel{tab:rl_vs_lqr}{{V}{10}{}{table.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Experimental Results}{10}{}\protected@file@percent }
+\newlabel{sec:results}{{IX}{10}{}{section.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-A}}LQR/IK Prior Verification}{10}{}\protected@file@percent }
+\newlabel{sec:prior_verification}{{\mbox  {IX-A}}{10}{}{subsection.9.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces LQR/IK prior performance at fixed commanded heights. Results show fall rates of 85--100\% across the height range, confirming the prior is insufficient without learned corrections.}}{10}{}\protected@file@percent }
+\newlabel{tab:prior_verification}{{VI}{10}{}{table.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-B}}Training Convergence}{10}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Residual policy training statistics (mean $\pm $ std over 3 seeds).}}{10}{}\protected@file@percent }
+\newlabel{tab:training_stats}{{VII}{10}{}{table.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-C}}Random-Height Balance Performance}{10}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Random-height balance performance comparison. Residual PPO results are mean $\pm $ std over 3 seeds. LQR/IK prior evaluated once (no training required).}}{10}{}\protected@file@percent }
+\newlabel{tab:main_results}{{VIII}{10}{}{table.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-D}}Fixed-Height Balance Sweep}{10}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-E}}Commanded Height Transitions}{10}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-F}}Push-Disturbance Recovery}{10}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {IX}{\ignorespaces Fixed-height balance sweep: performance at seven commanded heights. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
+\newlabel{tab:fixed_height_sweep}{{IX}{11}{}{table.9}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {X}{\ignorespaces Commanded height transition performance: standing-squatting transitions. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
+\newlabel{tab:height_transitions}{{X}{11}{}{table.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-G}}Robustness to Model Uncertainty}{11}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-H}}Residual Action Analysis}{11}{}\protected@file@percent }
+\newlabel{sec:residual_analysis}{{\mbox  {IX-H}}{11}{}{subsection.9.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-I}}Ablation Study}{11}{}\protected@file@percent }
+\newlabel{sec:ablation}{{\mbox  {IX-I}}{11}{}{subsection.9.9}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {XI}{\ignorespaces Push-disturbance recovery performance. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
+\newlabel{tab:push_recovery}{{XI}{11}{}{table.11}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {XII}{\ignorespaces Robustness to model uncertainty: friction, mass, damping, noise, and delay. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
+\newlabel{tab:robustness}{{XII}{11}{}{table.12}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {X}Discussion and Limitations}{11}{}\protected@file@percent }
+\newlabel{sec:discussion}{{X}{11}{}{section.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-A}}Bounded Residual Framework Design}{11}{}\protected@file@percent }
 \citation{hwangbo2019learning,rudin2022walk}
-\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces RL policy vs.\ LQR baseline comparison (planned). All result cells to be filled after training.}}{9}{}\protected@file@percent }
-\newlabel{tab:rl_vs_lqr}{{V}{9}{}{table.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {IX}Experimental Results}{9}{}\protected@file@percent }
-\newlabel{sec:results}{{IX}{9}{}{section.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-A}}Learning Curves}{9}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-B}}Nominal Balance and Variable-Height Results}{9}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Variable-height balancing: performance vs.\ commanded height. All values pending training completion.}}{9}{}\protected@file@percent }
-\newlabel{tab:balance_results}{{VI}{9}{}{table.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-C}}Push Robustness}{9}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-D}}Friction Robustness}{9}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-E}}Ablation: Natural Pose Reward}{9}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-F}}Ablation: Observation Design}{9}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {X}Discussion and Limitations}{9}{}\protected@file@percent }
-\newlabel{sec:discussion}{{X}{9}{}{section.10}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-A}}Framework Design}{9}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-B}}Sim-to-Real Considerations}{9}{}\protected@file@percent }
-\newlabel{sec:sim2real}{{\mbox  {X-B}}{9}{}{subsection.10.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-C}}Current Limitations}{9}{}\protected@file@percent }
 \citation{tobin2017domain,peng2018simtoreal,tan2018simtoreal}
+\@writefile{lot}{\contentsline {table}{\numberline {XIII}{\ignorespaces Residual action decomposition analysis across scenarios. Shows how the residual policy distributes corrections across joint groups. Residual PPO results are mean $\pm $ std over 3 seeds.}}{12}{}\protected@file@percent }
+\newlabel{tab:residual_analysis}{{XIII}{12}{}{table.13}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {XIV}{\ignorespaces Per-joint-group residual action RMS for random-height balance scenario. Shows which joint groups receive the largest residual corrections. Residual PPO results are mean $\pm $ std over 3 seeds.}}{12}{}\protected@file@percent }
+\newlabel{tab:residual_by_joint}{{XIV}{12}{}{table.14}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-B}}Sim-to-Real Considerations}{12}{}\protected@file@percent }
+\newlabel{sec:sim2real}{{\mbox  {X-B}}{12}{}{subsection.10.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {XV}{\ignorespaces Ablation study: impact of key design choices. All ablations trained for 50M steps over 3 seeds. Baseline is the full proposed method.}}{12}{}\protected@file@percent }
+\newlabel{tab:ablation}{{XV}{12}{}{table.15}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-C}}Current Limitations}{12}{}\protected@file@percent }
 \bibstyle{IEEEtran}
 \bibcite{ppo}{1}
 \bibcite{mujoco}{2}
@@ -156,12 +197,12 @@
 \bibcite{chamorro2024stairclimbing}{21}
 \bibcite{whleaper2024}{22}
 \bibcite{zhu2022hierarchical}{23}
-\@writefile{toc}{\contentsline {section}{\numberline {XI}Conclusion}{10}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{References}{10}{}\protected@file@percent }
 \bibcite{diablo2024}{24}
 \bibcite{portelas2020acl}{25}
 \bibcite{portelas2020teacher}{26}
 \bibcite{wang2019poet}{27}
 \bibcite{peng2018simtoreal}{28}
 \bibcite{tan2018simtoreal}{29}
-\gdef \@abspage@last{11}
+\@writefile{toc}{\contentsline {section}{\numberline {XI}Conclusion}{13}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{13}{}\protected@file@percent }
+\gdef \@abspage@last{13}

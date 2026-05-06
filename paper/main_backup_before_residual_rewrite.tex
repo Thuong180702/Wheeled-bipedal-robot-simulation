@@ -14,7 +14,7 @@
 \usepackage{xcolor}
 \usepackage{balance}
 
-\title{Bounded Residual Reinforcement Learning over Limited LQR/IK Prior for Height-Adaptive Wheeled Biped Balance}
+\title{Curriculum Reinforcement Learning for Variable-Height Balancing of a 10-Actuated Wheeled Biped Robot}
 
 \author{
 \IEEEauthorblockN{Van Thuong Nguyen}
@@ -29,22 +29,39 @@ Email: vanthuong180702t@gmail.com
 \maketitle
 
 \begin{abstract}
-Wheeled bipedal robots combine the efficiency of wheeled locomotion with the adaptability of articulated legs, but maintaining balance across varying body heights remains challenging.
-Classical model-based controllers such as LQR with height-dependent inverse kinematics provide structured nominal balance behavior, but are insufficient as standalone solutions---our evaluation shows fall rates of 85--100\% across the feasible height range (0.40--0.70\,m).
-Pure reinforcement learning from scratch can learn robust policies but suffers from poor sample efficiency and lacks the structure that domain knowledge provides.
-We propose a bounded residual reinforcement learning approach that combines a height-dependent LQR/IK prior with a learned PPO residual policy.
-The prior provides nominal balance actions, while the bounded residual learns corrective actions for height-adaptive stabilization, commanded height transitions, and push-disturbance recovery.
-The residual policy receives a 52-dimensional observation that includes the 42-dimensional base observation plus the 10-dimensional base action from the prior, and outputs a bounded residual action that is composed with the base action via $\text{final} = \text{clip}(\text{base} + \text{scale} \times \text{residual}, -1, 1)$.
-We train the policy in MuJoCo MJX with JAX-accelerated vectorized simulation using proximal policy optimization across 4,096 parallel environments.
-We evaluate our approach on random-height balance, commanded height transitions, push recovery up to 200\,N, and robustness to model uncertainty including friction variation, mass perturbations, and sensor noise.
-We compare against the LQR/IK prior alone and a pure PPO baseline trained from scratch.
-% [TODO-RESULT: Once training completes, add one sentence summarizing key quantitative findings]
-Our evaluation demonstrates the benefits of combining structured priors with learned residual corrections for challenging balance tasks.
+This paper presents a curriculum reinforcement learning framework for training a 10-actuated wheeled biped robot to balance at variable commanded torso heights.
+Each leg has five actuated joints: hip roll, hip yaw, hip pitch, knee, and wheel.
+The control policy is trained in MuJoCo MJX with JAX-accelerated vectorized simulation
+using proximal policy optimization (PPO).
+The policy receives a 42-dimensional observation that includes proprioceptive state,
+a normalized height command, normalized current torso height, and a yaw-error
+signal, and outputs joint-level targets that are converted to actuator torques
+through a PID low-level controller.
+To stabilize learning across a wide range of body heights, we employ a within-stage
+height curriculum that progressively expands the commanded height range from
+near the nominal standing posture toward deep crouching configurations, gated
+by a reward-threshold criterion evaluated on a dedicated greedy evaluation pass
+approximately every $10^7$ environment steps.
+A key component of the reward design is a height-consistent natural pose term
+that maps commanded height to target hip-pitch and knee angles via
+piecewise-linear interpolation, preventing degenerate postures that satisfy
+height objectives through unnatural joint configurations.
+We additionally implement a classical LQR baseline built on a linearized
+two-wheeled inverted pendulum (TWIP) model with height-dependent IK,
+providing a fair reference for the near-nominal operating range.
+The framework also includes a multi-stage macro-curriculum structure
+(stages: \texttt{balance}, \texttt{stand\_up}, \texttt{balance\_robust})
+for future extension, though the present work focuses on the variable-height
+balancing stage.
+We describe the full system design, reward formulation, curriculum strategy,
+LQR baseline, and evaluation protocol, and present the framework as a foundation
+for further training and experimental validation.
+% [TODO-RESULT: replace this sentence with quantitative summary once training is complete]
 \end{abstract}
 
 \begin{IEEEkeywords}
-Wheeled biped robot, residual reinforcement learning, bounded residual policy, LQR/IK prior,
-height-adaptive balance, push recovery, MuJoCo MJX.
+Wheeled biped robot, reinforcement learning, curriculum learning, variable-height balancing,
+PID control, LQR baseline, MuJoCo MJX.
 \end{IEEEkeywords}
 
 % ============================================================
@@ -72,51 +89,54 @@ In particular, simple height-tracking rewards may allow policies to satisfy
 torso height objectives through unnatural or unstable joint configurations
 rather than through physically meaningful postures.
 
-To address these challenges, we propose a bounded residual reinforcement learning
-approach that combines a height-dependent LQR/IK prior with a learned PPO residual policy.
-The prior provides structured nominal balance behavior based on linearized dynamics
-and inverse kinematics, while the bounded residual learns corrective actions to
-compensate for modeling errors, handle height transitions, and recover from push disturbances.
-Our evaluation of the LQR/IK prior alone shows fall rates of 85--100\% across the
-feasible height range (0.40--0.70\,m), confirming that the prior is insufficient as
-a standalone controller but provides useful structure for residual learning.
-The residual policy receives a 52-dimensional observation that includes the base
-42-dimensional proprioceptive state plus the 10-dimensional base action from the prior,
-enabling the policy to learn corrections that are aware of the nominal controller's intent.
+To address these challenges, we propose a curriculum reinforcement learning
+framework for a 10-actuated wheeled biped robot.
+The method explicitly conditions the policy on a target torso height and
+uses a within-stage height curriculum to progressively expand the difficulty
+from near-nominal standing to deep crouching.
+A height-consistent posture reward regularizes the joint configuration as a
+function of the commanded height, improving training stability and posture quality.
+We also implement a classical LQR baseline that operates on the same observation
+interface and PID low-level controller as the RL policy, providing an
+interpretable reference for the regime where linear assumptions hold.
 
 The main contributions of this work are:
 \begin{itemize}
-    \item A bounded residual reinforcement learning architecture that combines
-    a height-dependent LQR/IK prior with a learned PPO residual policy for
-    height-adaptive wheeled biped balance.
-    \item Quantitative evaluation showing that the LQR/IK prior alone achieves
-    85--100\% fall rates across the feasible height range (0.40--0.70\,m),
-    establishing it as a limited but structured nominal controller suitable
-    for residual learning.
-    \item A 52-dimensional residual observation space that includes the base
-    42-dimensional proprioceptive state plus the 10-dimensional base action
-    from the prior, enabling the residual policy to learn corrections that
-    are aware of the nominal controller's intent.
-    \item Bounded residual action composition via
-    $\text{final} = \text{clip}(\text{base} + \text{scale} \times \text{residual}, -1, 1)$
-    with per-joint residual scale vectors, preventing the residual from
-    dominating or destabilizing the base controller.
-    \item Comprehensive evaluation across random-height balance, commanded
-    height transitions, push recovery up to 200\,N, and robustness to model
-    uncertainty, comparing the proposed approach against the LQR/IK prior
-    alone and a pure PPO baseline.
-    % [TODO-RESULT: Add quantitative summary once training completes]
+    \item A height-conditioned RL framework for variable-height balancing of
+    a 10-actuated wheeled biped, with PID low-level control bridging policy
+    outputs to actuator torques.
+    \item A within-stage height curriculum that expands the commanded height
+    range based on a greedy evaluation pass gated at a reward-threshold criterion,
+    stabilizing learning across the full feasible height range.
+    \item A height-consistent natural pose reward that ties hip-pitch and knee
+    joint targets to the commanded torso height via piecewise-linear
+    interpolation, preventing degenerate balancing strategies.
+    \item A classical LQR baseline built on a linearized TWIP model with
+    height-dependent inverse kinematics, serving as an interpretable
+    comparison for the near-nominal height regime.
+    \item A quantitative evaluation benchmark with ten scenario groups and
+    ten per-scenario metrics, enabling rigorous comparison between the RL
+    policy and the LQR baseline.
+    % [TODO-CLAIM: the experimental claims above are structural; quantitative
+    % superiority of RL over LQR must only be stated after experiments are complete]
 \end{itemize}
+
+The framework additionally includes a three-stage macro-curriculum:
+\texttt{balance}, \texttt{stand\_up}, and \texttt{balance\_robust}.
+It also includes a quantitative offline evaluation benchmark suite with
+ten scenario groups and ten per-scenario metrics.
+These extensions are described in this paper, though their full experimental
+results remain as future work.
 
 The rest of this paper is organized as follows.
 Section~II reviews related work.
 Section~III presents the robot platform and simulation setup.
-Section~IV describes the bounded residual RL architecture.
-Section~V details the height-dependent LQR/IK prior.
-Section~VI presents the residual policy design and training.
-Section~VII describes the reward formulation.
-Section~VIII details the evaluation protocol and metrics.
-Section~IX presents experimental results.
+Section~IV formulates the learning problem.
+Section~V describes the reward design.
+Section~VI presents the curriculum strategy.
+Section~VII describes the classical LQR baseline.
+Section~VIII details the training pipeline and evaluation protocol.
+Section~IX is reserved for experimental results.
 Section~X discusses limitations and future work.
 Section~XI concludes the paper.
 
@@ -164,25 +184,6 @@ proprioceptive encoders.
 These works establish that RL can scale to high-dimensional contact-rich
 control problems; our work adapts this paradigm to the specific challenge of
 variable-height wheeled-biped balancing.
-
-\subsection{Residual Reinforcement Learning}
-Residual RL combines model-based controllers with learned policies to leverage
-the benefits of both approaches.
-Silver~\emph{et al.}~\cite{silver2018residual} introduced residual policy learning,
-where a learned policy outputs corrections to a fixed base controller.
-Johannink~\emph{et al.}~\cite{johannink2019residual} demonstrated residual RL
-for robotic manipulation, showing that learning on top of a nominal controller
-improves sample efficiency and final performance compared to learning from scratch.
-Rana~\emph{et al.}~\cite{rana2020bayesianresidual} proposed Bayesian residual RL
-for safe exploration by maintaining uncertainty estimates over the residual policy.
-Our work follows this paradigm: we train a bounded PPO residual policy over a
-height-dependent LQR/IK prior, with explicit action composition
-$\text{final} = \text{clip}(\text{base} + \text{scale} \times \text{residual}, -1, 1)$
-that prevents the residual from dominating or destabilizing the base controller.
-Unlike prior work that assumes a strong base controller, we quantitatively
-establish that our LQR/IK prior alone achieves 85--100\% fall rates across
-the feasible height range, confirming it as a limited but structured nominal
-controller suitable for residual learning.
 
 \subsection{Reinforcement Learning for Wheeled-Legged Robots}
 More recently, RL has been applied to wheeled-legged hybrid platforms.
@@ -429,47 +430,28 @@ WH   &  4.0 & 0.1 & (0.0) \\
 \end{table}
 
 % ============================================================
-\section{Bounded Residual RL Architecture}
+\section{Problem Formulation}
 % ============================================================
 
-\subsection{Overview}
-Our approach combines a height-dependent LQR/IK prior with a learned PPO residual policy.
-The prior provides structured nominal balance behavior based on linearized dynamics
-and inverse kinematics, while the bounded residual learns corrective actions.
+\subsection{State, Observation, and Action}
+At time step $t$, the robot state is $x_t = \{q_t, \dot{q}_t\}$,
+where $q_t$ and $\dot{q}_t$ are the generalized coordinates
+and velocities.
 
-The control pipeline is:
+The policy receives a \textbf{42-dimensional} observation vector
 \begin{equation}
-\begin{aligned}
-a_t^{\mathrm{base}} &= \pi_{\mathrm{LQR/IK}}(o_t^{\mathrm{base}}, h_t^{\mathrm{cmd}}), \\
-a_t^{\mathrm{res}} &= \pi_{\mathrm{PPO}}(o_t^{\mathrm{res}}), \\
-a_t^{\mathrm{final}} &= \mathrm{clip}(a_t^{\mathrm{base}} + s \odot a_t^{\mathrm{res}}, -1, 1),
-\end{aligned}
-\end{equation}
-where $o_t^{\mathrm{base}} \in \mathbb{R}^{42}$ is the base observation,
-$o_t^{\mathrm{res}} = [o_t^{\mathrm{base}}, a_t^{\mathrm{base}}] \in \mathbb{R}^{52}$
-is the residual observation that includes the base action,
-$s \in \mathbb{R}^{10}$ is the per-joint residual scale vector,
-and $\odot$ denotes element-wise multiplication.
-
-The final action $a_t^{\mathrm{final}}$ is passed through action smoothing,
-optional delay, and the PID low-level controller described in Section~\ref{sec:pid}.
-
-\subsection{Base Observation Space}
-The base observation $o_t^{\mathrm{base}} \in \mathbb{R}^{42}$ is shared by both
-the LQR/IK prior and the residual policy:
-\begin{equation}
-o_t^{\mathrm{base}} = \big[
+o_t = \big[
   g_t^b,\;
   v_t^b,\;
   \omega_t^b,\;
   q_{j,t},\;
   \dot{q}_{j,t},\;
-  a_{t-1}^{\mathrm{final}},\;
+  a_{t-1},\;
   \bar{h}_t^{cmd},\;
   \bar{z}_t,\;
   e_{\psi,t}
-\big],
-\label{eq:obs_base}
+\big] \in \mathbb{R}^{42},
+\label{eq:obs}
 \end{equation}
 where:
 \begin{itemize}
@@ -486,90 +468,62 @@ where:
     episode start).
 \end{itemize}
 
-\subsection{Residual Observation Space}
-\label{sec:residual_obs}
+The first six entries in Eq.~\eqref{eq:obs} form the base
+39-dimensional observation inherited from the base environment.
+The three task-specific extensions are:
 
-For the bounded residual policy, the observation is extended to include
-the nominal prior's action:
+\noindent\textbf{Normalized height command.}
 \begin{equation}
-o_t^{\mathrm{res}} = \big[
-  o_t^{\mathrm{base}},\;
-  a_t^{\mathrm{base}}
-\big] \in \mathbb{R}^{52},
-\label{eq:obs_residual}
+\bar{h}_t^{cmd} = \frac{h_t^{cmd} - h_{\min}}{h_{\max} - h_{\min}},
+\label{eq:height_norm}
 \end{equation}
-where $o_t^{\mathrm{base}} \in \mathbb{R}^{42}$ is defined in
-Eq.~\eqref{eq:obs_base} and $a_t^{\mathrm{base}} \in [-1,1]^{10}$
-is the normalized action output from the LQR/IK prior (Section~\ref{sec:lqr_ik_prior}).
+where $h_{\min} = \SI{0.40}{m}$ and $h_{\max} = \SI{0.70}{m}$.
+The normalization always uses the full task range, so the value is in
+$[0, 1]$ regardless of the current curriculum level.
 
-Appending the base action to the observation allows the residual policy
-to condition its correction on the nominal controller's intent.
-This design enables the policy to learn when to trust the prior
-(outputting near-zero residuals) and when to override it
-(outputting larger corrections).
+\noindent\textbf{Normalized current torso height.}
+\begin{equation}
+\bar{z}_t = \frac{z_t - h_{\min}}{h_{\max} - h_{\min}},
+\label{eq:current_height_norm}
+\end{equation}
+where $z_t$ is the current torso height.  This term exposes instantaneous
+height-tracking error directly to the memoryless policy.
+
+\noindent\textbf{Yaw error.}
+\begin{equation}
+e_{\psi,t} = \mathrm{wrap}\!\left(\psi_t - \psi_0\right),
+\label{eq:yaw_error}
+\end{equation}
+where $\psi_t$ is the current torso yaw extracted from the base
+quaternion via Euler decomposition, $\psi_0$ is the yaw at episode
+reset, and $\mathrm{wrap}(\cdot)$ maps to $(-\pi, \pi]$.
+This term is necessary because the gravity-body-frame component
+$g_t^b$ is yaw-invariant: a memoryless MLP cannot perceive
+accumulated heading drift from $g^b$ and $\omega^b$ alone.
+
+When linear velocity is unavailable (e.g., in sim-to-real preparation
+without a reliable velocity estimator), $v_t^b$ can be removed,
+reducing the observation to 39 dimensions.
+All results in this paper use simulator-exact linear velocity,
+which corresponds to the upper bound on velocity-estimate quality.
 
 Observations are normalized online using Welford's running mean and
 variance estimator~\cite{welford1962}, updated during training
 rollouts and held fixed during evaluation.
 
-\subsection{Action Composition}
-\label{sec:action_composition}
-
-The residual policy outputs a bounded correction
-$a_t^{\mathrm{res}} = \pi_\theta(o_t^{\mathrm{res}}) \in [-1,1]^{10}$.
-The final action sent to the low-level controller is:
-\begin{equation}
-a_t^{\mathrm{final}} = \mathrm{clip}\!\big(
-  a_t^{\mathrm{base}} + s \odot a_t^{\mathrm{res}},\;
-  -1,\, 1
-\big),
-\label{eq:action_composition}
-\end{equation}
-where $s \in \mathbb{R}^{10}$ is a per-joint residual scale vector
-and $\odot$ denotes element-wise multiplication.
-
-The residual scale $s$ controls the maximum correction magnitude
-per joint. We use joint-specific scales to reflect the varying
-authority needed across the kinematic chain:
-\begin{equation}
-s = \begin{bmatrix}
-  0.10 & 0.05 & 0.15 & 0.15 & 0.30 &
-  0.10 & 0.05 & 0.15 & 0.15 & 0.30
-\end{bmatrix}^\top,
-\label{eq:residual_scale}
-\end{equation}
-corresponding to left and right
-$\{\text{hip\_roll},\, \text{hip\_yaw},\, \text{hip\_pitch},\,
-\text{knee},\, \text{wheel}\}$.
-
-Wheels receive larger residual authority ($s=0.30$) because
-rapid wheel adjustments are critical for balance recovery under
-push disturbances. Hip pitch and knee receive moderate authority
-($s=0.15$) to refine the IK-based posture. Hip yaw is kept small
-($s=0.05$) to prevent excessive twisting, and hip roll receives
-moderate authority ($s=0.10$) for lateral stabilization.
-
-The final action $a_t^{\mathrm{final}}$ is converted to actuator
-torques through the low-level PID controller described in
-Section~\ref{sec:pid}.
+The policy outputs a normalized action
+$a_t = \pi_\theta(o_t) \in [-1,1]^{10}$,
+converted to actuator torques through the PID controller
+described in Section~\ref{sec:pid}.
 
 \subsection{Learning Objective}
-\label{sec:learning_objective}
-
-We seek a residual policy $\pi_\theta$ that maximizes the expected
-discounted return
+We seek a policy $\pi_\theta$ that maximizes the expected discounted return
 \begin{equation}
 J(\theta)=\mathbb{E}_{\pi_\theta}\!\left[\sum_{t=0}^{T-1}\gamma^t r_t\right],
 \end{equation}
 where $\gamma = 0.99$ and $r_t$ is the reward at step $t$.
 
-The policy $\pi_\theta$ maps the residual observation
-$o_t^{\mathrm{res}} \in \mathbb{R}^{52}$ to a bounded residual action
-$a_t^{\mathrm{res}} \in [-1,1]^{10}$. The final action sent to the
-robot is computed via Eq.~\eqref{eq:action_composition}.
-
-Training is performed using Proximal Policy Optimization
-(PPO)~\cite{ppo} with clipped surrogate objective
+Training is performed using PPO~\cite{ppo} with clipped surrogate objective
 \begin{equation}
 L^{\mathrm{PPO}}(\theta) =
 \mathbb{E}_t\!\left[
@@ -579,11 +533,10 @@ L^{\mathrm{PPO}}(\theta) =
 \right)
 \right],
 \end{equation}
-where $\rho_t(\theta)=\pi_\theta(a_t^{\mathrm{res}}|o_t^{\mathrm{res}})/
-\pi_{\theta_{\mathrm{old}}}(a_t^{\mathrm{res}}|o_t^{\mathrm{res}})$
+where $\rho_t(\theta)=\pi_\theta(a_t|o_t)/\pi_{\theta_{\mathrm{old}}}(a_t|o_t)$
 and $\epsilon=0.20$.
 The full objective adds a clipped value loss (coefficient 1.0) and
-entropy regularization (coefficient 0.005).
+entropy regularization (coefficient 0.005 for the \texttt{balance} stage).
 Advantages $\hat{A}_t$ are computed using Generalized Advantage
 Estimation (GAE)~\cite{gae} with $\lambda=0.95$.
 
@@ -858,64 +811,21 @@ configurations that deviate more than $\approx 0.5\,\mathrm{rad}$
 from the target posture.
 
 \subsection{Effort and Smoothness Penalties}
-We regularize torque magnitude, joint velocity, final action variation,
+We regularize torque magnitude, joint velocity, action variation,
 and wheel rotation:
 \begin{equation}
 p_\tau = \sum_{j=1}^{10} \tau_{t,j}^2,
 \quad
 p_{\dot{q}} = \sum_{j=1}^{10} \dot{q}_{j,t}^2,
 \quad
-p_{\Delta a^{\mathrm{final}}} = \sum_{j=1}^{10}(a_{t,j}^{\mathrm{final}} - a_{t-1,j}^{\mathrm{final}})^2,
+p_{\Delta a} = \sum_{j=1}^{10}(a_{t,j} - a_{t-1,j})^2,
 \end{equation}
 \begin{equation}
 p_{\mathrm{wh}} = \dot{q}_{\mathrm{wh},t}^{L\,2} + \dot{q}_{\mathrm{wh},t}^{R\,2}.
 \end{equation}
-The action rate penalty applies to the final composed action
-$a_t^{\mathrm{final}}$ (Eq.~\eqref{eq:action_composition}), not the
-raw residual output, to penalize high-frequency corrections in the
-actual control signal sent to the robot.
-
 The wheel velocity penalty and $r_{\mathrm{still}}$ together enforce
 stationary balance in the \texttt{balance} stage;
 both are set to zero in \texttt{balance\_robust}.
-
-\subsection{Residual-Specific Regularization}
-\label{sec:residual_regularization}
-
-For the bounded residual policy, we add three regularization terms
-to encourage the policy to rely on the nominal prior when possible
-and only apply corrections when necessary.
-
-\subsubsection{Residual Magnitude Penalty}
-\begin{equation}
-p_{\mathrm{res}} = \sum_{j=1}^{10} (a_{t,j}^{\mathrm{res}})^2,
-\end{equation}
-penalizes the squared magnitude of the residual action.
-This encourages the policy to output near-zero residuals when the
-base controller is sufficient, reducing unnecessary corrections.
-
-\subsubsection{Residual Rate Penalty}
-\begin{equation}
-p_{\Delta a^{\mathrm{res}}} = \sum_{j=1}^{10}(a_{t,j}^{\mathrm{res}} - a_{t-1,j}^{\mathrm{res}})^2,
-\end{equation}
-penalizes high-frequency changes in the residual output, promoting
-smooth corrections over time.
-
-\subsubsection{Residual Saturation Penalty}
-\begin{equation}
-p_{\mathrm{sat}} = \frac{1}{10}\sum_{j=1}^{10} \mathbb{1}\!\left[
-|a_{t,j}^{\mathrm{res}}| > 0.95
-\right],
-\end{equation}
-penalizes residual actions near the $[-1, 1]$ bounds.
-Saturation indicates the policy is attempting corrections beyond
-the allowed residual scale, which may signal insufficient base
-controller authority or overly aggressive residual behavior.
-
-The weights for these residual penalties are:
-$w_{\mathrm{res}} = -0.01$,
-$w_{\Delta a^{\mathrm{res}}} = -0.005$,
-$w_{\mathrm{sat}} = -0.10$.
 
 \subsection{Termination Conditions}
 An episode terminates early if the torso tilt exceeds $0.8\,\mathrm{rad}$
@@ -1056,22 +966,17 @@ environment implementations and training configurations
 but have not yet been trained; their results are not reported here.
 
 % ============================================================
-\section{Height-Dependent LQR/IK Prior}
-\label{sec:lqr_ik_prior}
+\section{Classical LQR Baseline}
+\label{sec:lqr}
 % ============================================================
 
-\subsection{Overview}
-The nominal prior controller provides structured balance and posture
-commands that serve as the base action $a_t^{\mathrm{base}}$ in
-Eq.~\eqref{eq:action_composition}.
-The prior combines a linearized two-wheeled inverted pendulum (TWIP)
-LQR controller for sagittal balance with height-dependent inverse
-kinematics (IK) for leg posture and independent PD controllers for
-lateral and yaw stabilization.
-
-The prior operates on the same 42-dimensional observation interface
-and shares the same PID low-level controller as the residual policy,
-enabling direct composition without actuator-interface mismatches.
+\subsection{Motivation}
+Classical control methods provide an interpretable reference
+for evaluating RL policies.
+We implement an LQR baseline that operates on
+the same 42-dimensional observation interface and shares the same
+PID low-level controller as the RL policy, enabling a
+controlled comparison without confounding actuator-interface differences.
 
 \subsection{Linearized TWIP Model}
 The sagittal balance component is based on a linearized
@@ -1134,80 +1039,53 @@ $K_{p,\mathrm{yaw}} = 2.5$, $K_{d,\mathrm{yaw}} = 0.2$.
 The final wheel command is the superposition of sagittal LQR,
 lateral PD, and yaw PD outputs, clipped to $\pm\SI{20.0}{rad/s}$.
 
-\subsection{Limitations and Motivation for Residual Learning}
-\label{sec:prior_limitations}
-
-The LQR/IK prior has several known limitations that motivate the
-bounded residual learning approach:
-
+\subsection{Assumptions and Limitations}
+The LQR baseline has the following known limitations:
 \begin{enumerate}
     \item \textbf{Linear regime only.}
     The TWIP linearization is valid near the nominal standing height
     and small lean angles ($|\theta_{\mathrm{pitch}}| \lesssim 10^\circ$).
     At large lean deviations or very low commanded heights, accuracy degrades.
-
     \item \textbf{No lean integral.}
     Without an integral term on lean error, constant disturbances
     (friction variation, slopes) produce nonzero steady-state lean.
-
     \item \textbf{No large-disturbance recovery.}
     Under strong pushes the state leaves the linear regime;
     the LQR provides no recovery mechanism.
-
     \item \textbf{Decoupled axes.}
     Sagittal, lateral, and yaw dynamics are treated independently,
     ignoring cross-coupling during aggressive maneuvers.
 \end{enumerate}
 
-\noindent\textbf{Empirical validation.}
-Evaluation of the LQR/IK prior alone (Section~\ref{sec:prior_verification})
-shows fall rates of 85--100\% across the commanded height range
-$[0.40, 0.70]\,\mathrm{m}$, confirming that the prior is insufficient
-for robust height-adaptive balance without learned corrections.
-
-These limitations motivate the bounded residual approach: the prior
-provides structured balance and posture commands that are approximately
-correct, while the residual policy learns corrective actions to handle
-nonlinearities, disturbances, and cross-axis coupling.
+The LQR baseline is therefore a fair reference for the \texttt{nominal}
+and \texttt{narrow\_height} scenarios but is expected to degrade at
+full height range, strong pushes, and low friction.
+% [TODO-CLAIM: degradation of LQR under push/full-range must be
+%  verified experimentally before being stated as a confirmed result.]
 
 % ============================================================
-\section{Residual Policy Training}
-\label{sec:training}
+\section{Training Pipeline and Evaluation Protocol}
 % ============================================================
 
 \subsection{Network Architecture}
-The residual policy uses separate MLPs for policy and value function:
-hidden sizes $\{256, 256, 128\}$, ELU activation, orthogonal weight
-initialization, implemented in Flax~\cite{flax}.
-The policy network takes the 52-dimensional residual observation
-$o_t^{\mathrm{res}}$ (Eq.~\eqref{eq:obs_residual}) as input and
-outputs the mean of a Gaussian action distribution with a learned
-log-standard-deviation initialized to $\log(0.2)$.
-
-The value network shares the same architecture and observation input,
-estimating the expected return from the current state.
+Separate MLPs for policy and value function: hidden sizes
+$\{256, 256, 128\}$, ELU activation, orthogonal weight initialization,
+implemented in Flax~\cite{flax}.
+The policy outputs the mean of a Gaussian action distribution with a
+learned log-standard-deviation initialized to $\log(0.2)$.
 
 \subsection{Training Configuration}
-The residual policy is trained using PPO with 4096 parallel environments,
-rollout length 32 steps, 4 epochs per update, 4 minibatches, learning rate
+PPO with 4096 parallel environments, rollout length 32 steps,
+4 epochs per update, 4 minibatches, learning rate
 $3\!\times\!10^{-4}$ (Adam), gradient norm clipping 0.5,
 entropy coefficient 0.005, value-loss coefficient 1.0.
 To avoid rare destructive policy jumps during long resumed runs, an update is
 rejected if its approximate policy KL exceeds 0.03.
-
-At each environment step, the LQR/IK prior computes the base action
-$a_t^{\mathrm{base}}$ from the current observation, which is then
-appended to form the 52-dimensional residual observation
-$o_t^{\mathrm{res}}$. The policy outputs the residual action
-$a_t^{\mathrm{res}}$, which is composed with the base action via
-Eq.~\eqref{eq:action_composition} to produce the final action sent
-to the low-level controller.
-
 Long training runs use a single NVIDIA Tesla V100-SXM2 GPU with
 \SI{32}{GB} memory, an Intel Xeon Gold 6248 CPU at \SI{2.50}{GHz},
 and \SI{94}{GB} of system RAM.
 % [TODO-RESULT: report actual total training steps once complete;
-%  planned target is approximately 50M environment steps for residual policy]
+%  planned target is approximately 50M environment steps]
 
 The complete set of hyperparameters is summarized in
 Table~\ref{tab:ppo_hyperparams} for reproducibility.
@@ -1276,70 +1154,53 @@ Ten scenario groups are defined:
 \begin{enumerate}
     \item \textbf{Nominal}: flat floor, $h^{cmd} = \SI{0.65}{m}$,
     standard domain randomization.
-    \item \textbf{Fixed-height sweep}: evaluate at seven fixed heights
-    $h^{cmd} \in \{0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70\}\,\mathrm{m}$
-    to assess height-adaptive performance.
-    \item \textbf{Random-height balance}: $h^{cmd} \sim \mathcal{U}[0.40, 0.70]$
-    (full commanded range).
-    \item \textbf{Commanded height transitions}: step changes in commanded
-    height to assess standing-squatting transitions.
-    \item \textbf{Push recovery}: single impulse at $t = \SI{3}{s}$;
-    measures recovery time and maximum recoverable disturbance via binary
-    search (range \SIrange{10}{300}{N}, 8 iterations, 50\% survival threshold).
+    \item \textbf{Narrow height}: $h^{cmd} = \SI{0.69}{m}$
+    (Phase A, near-nominal).
+    \item \textbf{Wide height}: $h^{cmd} = \SI{0.60}{m}$
+    (Phase B, moderate crouching).
+    \item \textbf{Full range}: $h^{cmd} \sim \mathcal{U}[0.40, 0.70]$
+    (Phase C, full range).
+    \item \textbf{Push recovery}: single $\SI{50}{N}$ impulse at
+    $t = \SI{3}{s}$; measures recovery time and maximum recoverable
+    disturbance via binary search
+    (range \SIrange{10}{300}{N}, 8 iterations, 50\% survival threshold).
+    \item \textbf{Friction low}: friction multiplier $0.6\times$.
+    \item \textbf{Friction high}: friction multiplier $1.4\times$.
+    \item \textbf{Sensor noise + delay}: IMU/encoder noise plus
+    1-step ($\approx\SI{20}{ms}$) action delay.
     \item \textbf{Push sweep}: parametric sweep over eight push
     magnitudes from \SI{20}{N} to \SI{200}{N} for degradation curves.
     \item \textbf{Friction sweep}: parametric sweep over
     friction multipliers $\{0.3, 0.5, 0.7, 1.0, 1.3, 1.8\}$.
-    \item \textbf{Mass and damping perturbations}: evaluate robustness
-    to model uncertainty.
-    \item \textbf{Sensor noise + delay}: IMU/encoder noise plus
-    1-step ($\approx\SI{20}{ms}$) action delay.
-    \item \textbf{Stand-up recovery}: recovery from fallen or non-nominal
-    initial poses (only if implemented and evaluated).
 \end{enumerate}
 
 \noindent\textbf{Evaluation metrics.}
-Core metrics computed per scenario:
+Ten metrics are computed per scenario:
 \begin{enumerate}
-    \item Survival rate (\%)
-    \item Fall rate (\%)
-    \item Episode survival time [s]
-    \item Height RMSE [m]
+    \item Survival time [s]
     \item Pitch RMS [deg]
     \item Roll RMS [deg]
-    \item Yaw error RMS [deg]
+    \item Pitch-rate RMS [rad/s]
     \item XY drift max [m]
+    \item Height RMSE [m]
     \item Wheel speed RMS [rad/s]
     \item Torque RMS [N$\cdot$m]
-    \item Energy proxy: $\sum_t |\tau_t \odot \dot{q}_t|$
-    \item Recovery time [s] (push scenarios only)
-    \item Max recoverable push [N] (push scenarios only)
+    \item Recovery time [s] (push\_recovery only; NaN otherwise)
+    \item Max recoverable push [N] (push\_recovery only)
 \end{enumerate}
 
-\noindent\textbf{Residual-specific metrics.}
-For residual policies, additional action decomposition metrics:
-\begin{enumerate}
-    \item Base action RMS: $\|a^{\mathrm{base}}\|_{\mathrm{RMS}}$
-    \item Residual action RMS: $\|a^{\mathrm{res}}\|_{\mathrm{RMS}}$
-    \item Final action RMS: $\|a^{\mathrm{final}}\|_{\mathrm{RMS}}$
-    \item Residual-to-base ratio: $\|a^{\mathrm{res}}\|_{\mathrm{RMS}} / \|a^{\mathrm{base}}\|_{\mathrm{RMS}}$
-    \item Residual rate: $\|\Delta a^{\mathrm{res}}\|_{\mathrm{RMS}}$
-    \item Residual saturation rate: fraction of steps where
-    $|a_j^{\mathrm{res}}| > 0.95$ for any joint $j$
-    \item Per-joint-group residual RMS (hip roll, hip yaw, hip pitch/knee, wheels)
-\end{enumerate}
+Aggregate metrics: fall rate, survival rate.
 
 \noindent\textbf{Multi-seed evaluation protocol.}
-Final results are reported as mean $\pm$ standard deviation over three
+Final RL results are reported as mean $\pm$ standard deviation over three
 independent training runs initialized with random seeds 42, 113, and 999.
 Each run is trained from scratch with a distinct random state;
 no parameters, replay data, or normalization statistics are shared between
 runs during training or evaluation.
 The offline evaluation pipeline is applied identically to all three
 trained policies, and scalar metrics are aggregated post-hoc.
-
-The LQR/IK prior requires no training and is evaluated once under the
-same scenario suite for comparison.
+The LQR baseline requires no training and is evaluated once under the
+same scenario suite.
 
 % [TODO-TABLE: RL vs LQR comparison table. Columns: scenario (nominal,
 %  narrow_height, full_range, push_recovery, friction_low, friction_high).
@@ -1382,368 +1243,100 @@ All result cells to be filled after training.}
 
 \textit{Training has not yet been completed.
 This section will be populated with quantitative results after the
-residual policy is fully trained and evaluated over three independent seeds.
+\texttt{balance} policy is fully trained and evaluated.
 All placeholders below indicate planned experiments.}
 
-\subsection{LQR/IK Prior Verification}
-\label{sec:prior_verification}
+\subsection{Learning Curves}
+% [TODO-FIGURE: training curves showing mean episode return,
+%  per-step evaluation reward, and minimum commanded height vs.\ training
+%  steps (three seeds, with shaded variance). Mark Phase A/B/C boundaries
+%  on the x-axis. Also show eval fall rate and survival rate.]
+\textit{[TODO-FIGURE: training curve and curriculum level progression]}
 
-Before training the residual policy, we evaluate the LQR/IK prior alone
-to establish its baseline performance and validate the motivation for
-residual learning.
+\subsection{Nominal Balance and Variable-Height Results}
 
-% [TODO-TABLE-I: LQR/IK Prior Performance at Fixed Heights]
 \begin{table}[ht]
 \centering
-\caption{LQR/IK prior performance at fixed commanded heights.
-Results show fall rates of 85--100\% across the height range,
-confirming the prior is insufficient without learned corrections.}
-\label{tab:prior_verification}
+\caption{Variable-height balancing: performance vs.\ commanded height.
+All values pending training completion.}
+\label{tab:balance_results}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{ccccc}
 \toprule
-$h^{cmd}$ (m) & Fall rate (\%) & Survival (s) & Pitch RMS (deg) & Height RMSE (m) \\
+$h^{cmd}$ (m) & Surv.\ (\%) & $e_h$ (m) & Pitch (deg) & Torque (Nm) \\
 \midrule
-0.70 & 85.0 & 3.2 & 12.4 & 0.08 \\
-0.65 & 90.0 & 2.8 & 14.1 & 0.09 \\
-0.60 & 95.0 & 2.1 & 16.8 & 0.11 \\
-0.55 & 98.0 & 1.5 & 19.2 & 0.13 \\
-0.50 & 100.0 & 1.2 & 21.5 & 0.15 \\
-0.45 & 100.0 & 0.9 & 24.3 & 0.17 \\
-0.40 & 100.0 & 0.7 & 27.1 & 0.19 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-These results are from Phase B.5 evaluation and demonstrate that the
-LQR/IK prior provides structured but insufficient control across the
-commanded height range. The high fall rates motivate the bounded
-residual learning approach.
-
-\subsection{Training Convergence}
-
-% [TODO-FIGURE-1: Training curves showing mean episode return,
-%  per-step evaluation reward, curriculum level progression, and
-%  residual action RMS vs. training steps. Three seeds (42, 113, 999)
-%  with mean ± std shaded regions. Mark Phase A/B/C boundaries.]
-\textit{[TODO-FIGURE-1: Training convergence curves over 3 seeds]}
-
-% [TODO-TABLE-II: Training Statistics]
-\begin{table}[ht]
-\centering
-\caption{Residual policy training statistics (mean $\pm$ std over 3 seeds).}
-\label{tab:training_stats}
-\begin{tabular}{lc}
-\toprule
-Metric & Value \\
-\midrule
-Total training steps & [TODO] \\
-Training time (GPU hours) & [TODO] \\
-Final curriculum level reached & [TODO] / 29 \\
-Final per-step eval reward & [TODO] $\pm$ [TODO] \\
-Final eval success rate (\%) & [TODO] $\pm$ [TODO] \\
-Final eval fall rate (\%) & [TODO] $\pm$ [TODO] \\
-Residual action RMS (final) & [TODO] $\pm$ [TODO] \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Random-Height Balance Performance}
-
-% [TODO-TABLE-III: Main Results - Random Height Balance]
-\begin{table}[ht]
-\centering
-\caption{Random-height balance performance comparison.
-Residual PPO results are mean $\pm$ std over 3 seeds.
-LQR/IK prior evaluated once (no training required).}
-\label{tab:main_results}
-\begin{tabular}{lccccc}
-\toprule
-Method & Surv. (\%) & Fall (\%) & $e_h$ (m) & Pitch (deg) & Torque (Nm) \\
-\midrule
-LQR/IK prior & [TODO] & [TODO] & [TODO] & [TODO] & [TODO] \\
-Residual PPO & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Fixed-Height Balance Sweep}
-
-% [TODO-TABLE-IV: Fixed-Height Sweep Results]
-\begin{table}[ht]
-\centering
-\caption{Fixed-height balance sweep: performance at seven commanded heights.
-Residual PPO results are mean $\pm$ std over 3 seeds.}
-\label{tab:fixed_height_sweep}
-\begin{tabular}{cccccc}
-\toprule
-$h^{cmd}$ (m) & Method & Surv. (\%) & $e_h$ (m) & Pitch (deg) & Torque (Nm) \\
-\midrule
-\multirow{2}{*}{0.70} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{0.65} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{0.60} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{0.55} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{0.50} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{0.45} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{0.40} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-% [TODO-FIGURE-2: Robot posture snapshots at heights 0.40, 0.50, 0.60, 0.70 m]
-\textit{[TODO-FIGURE-2: Posture snapshots across height range]}
-
-\subsection{Commanded Height Transitions}
-
-% [TODO-TABLE-V: Height Transition Performance]
-\begin{table}[ht]
-\centering
-\caption{Commanded height transition performance: standing-squatting transitions.
-Residual PPO results are mean $\pm$ std over 3 seeds.}
-\label{tab:height_transitions}
-\begin{tabular}{lcccc}
-\toprule
-Transition & Method & Success (\%) & Settling (s) & Overshoot (m) \\
-\midrule
-\multirow{2}{*}{0.70 $\to$ 0.40 m} & LQR/IK & [TODO] & [TODO] & [TODO] \\
-                                    & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{0.40 $\to$ 0.70 m} & LQR/IK & [TODO] & [TODO] & [TODO] \\
-                                    & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{0.65 $\to$ 0.50 m} & LQR/IK & [TODO] & [TODO] & [TODO] \\
-                                    & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-% [TODO-FIGURE-3: Height transition time series showing commanded height,
-%  actual height, pitch angle, and wheel velocity for a representative
-%  transition (e.g., 0.70 → 0.40 m). Compare LQR/IK vs Residual PPO.]
-\textit{[TODO-FIGURE-3: Height transition time series]}
-
-\subsection{Push-Disturbance Recovery}
-
-% [TODO-TABLE-VI: Push Recovery Performance]
-\begin{table}[ht]
-\centering
-\caption{Push-disturbance recovery performance.
-Residual PPO results are mean $\pm$ std over 3 seeds.}
-\label{tab:push_recovery}
-\begin{tabular}{lccccc}
-\toprule
-Method & Max push (N) & Recovery (s) & Peak pitch (deg) & Surv. (\%) & Fall (\%) \\
-\midrule
-LQR/IK prior & [TODO] & [TODO] & [TODO] & [TODO] & [TODO] \\
-Residual PPO & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-% [TODO-FIGURE-4: Push recovery time series showing pitch angle, wheel velocity,
-%  and residual action magnitude for a 50N push at t=3s. Compare LQR/IK vs Residual.]
-\textit{[TODO-FIGURE-4: Push recovery time series]}
-
-% [TODO-FIGURE-5: Push magnitude sweep showing survival rate vs. push force
-%  (20N to 200N in 8 steps). Plot LQR/IK prior (single line) and Residual PPO
-%  (mean ± std over 3 seeds).]
-\textit{[TODO-FIGURE-5: Push magnitude sweep degradation curve]}
-
-\subsection{Robustness to Model Uncertainty}
-
-% [TODO-TABLE-VII: Robustness to Model Perturbations]
-\begin{table}[ht]
-\centering
-\caption{Robustness to model uncertainty: friction, mass, damping, noise, and delay.
-Residual PPO results are mean $\pm$ std over 3 seeds.}
-\label{tab:robustness}
-\begin{tabular}{lccc}
-\toprule
-Scenario & Method & Survival (\%) & Height RMSE (m) \\
-\midrule
-\multirow{2}{*}{Friction low (0.6×)} & LQR/IK & [TODO] & [TODO] \\
-                                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{Friction high (1.4×)} & LQR/IK & [TODO] & [TODO] \\
-                                       & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{Mass +20\%} & LQR/IK & [TODO] & [TODO] \\
-                            & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{Damping +50\%} & LQR/IK & [TODO] & [TODO] \\
-                               & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multirow{2}{*}{Noise + 1-step delay} & LQR/IK & [TODO] & [TODO] \\
-                                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Residual Action Analysis}
-\label{sec:residual_analysis}
-
-% [TODO-TABLE-VIII: Residual Action Decomposition]
-\begin{table}[ht]
-\centering
-\caption{Residual action decomposition analysis across scenarios.
-Shows how the residual policy distributes corrections across joint groups.
-Residual PPO results are mean $\pm$ std over 3 seeds.}
-\label{tab:residual_analysis}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{lcccccc}
-\toprule
-Scenario & Base RMS & Res. RMS & Final RMS & Res/Base & Res. rate & Sat. (\%) \\
-\midrule
-Nominal & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-Random height & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-Height trans. & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-Push recovery & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-Friction low & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+0.40 & [TODO] & [TODO] & [TODO] & [TODO] \\
+0.50 & [TODO] & [TODO] & [TODO] & [TODO] \\
+0.60 & [TODO] & [TODO] & [TODO] & [TODO] \\
+0.65 & [TODO] & [TODO] & [TODO] & [TODO] \\
+0.69 & [TODO] & [TODO] & [TODO] & [TODO] \\
 \bottomrule
 \end{tabular}
 }
 \end{table}
+% [TODO-RESULT: insert variable-height benchmark metrics aggregated over
+%  3 independent seeds (seeds 42, 113, 999), scenarios: nominal,
+%  narrow_height, wide_height, full_range; 50 episodes per scenario.
+%  Report mean ± std for survival rate, height RMSE, pitch RMS, torque RMS.]
 
-% [TODO-TABLE-IX: Per-Joint-Group Residual RMS]
-\begin{table}[ht]
-\centering
-\caption{Per-joint-group residual action RMS for random-height balance scenario.
-Shows which joint groups receive the largest residual corrections.
-Residual PPO results are mean $\pm$ std over 3 seeds.}
-\label{tab:residual_by_joint}
-\begin{tabular}{lc}
-\toprule
-Joint group & Residual RMS \\
-\midrule
-Hip roll & [TODO]$\pm$[TODO] \\
-Hip yaw & [TODO]$\pm$[TODO] \\
-Hip pitch + knee & [TODO]$\pm$[TODO] \\
-Wheels & [TODO]$\pm$[TODO] \\
-\bottomrule
-\end{tabular}
-\end{table}
+% [TODO-FIGURE: robot posture snapshots at commanded heights
+%  0.40, 0.55, 0.65, 0.69 m showing variable-height balancing]
 
-% [TODO-FIGURE-7: Residual action distribution histogram showing the
-%  distribution of residual actions across all joints and timesteps for
-%  the random-height scenario. Should show that most residuals are small
-%  (near zero) with occasional larger corrections.]
-\textit{[TODO-FIGURE-7: Residual action distribution histogram]}
+\subsection{Push Robustness}
+% [TODO-FIGURE: push-sweep degradation curve: survival rate vs.\ push magnitude
+%  (8 points, 20--200 N), comparing RL policy (3-seed mean ± std) and LQR
+%  baseline. Indicate the maximum recoverable push force for each controller.]
+% [TODO-RESULT: max_recoverable_push_n for RL policy vs. LQR baseline
+%  from push_recovery scenario]
+\textit{[TODO-FIGURE: push\_sweep degradation curve;
+TODO-RESULT: max recoverable push force]}
 
-\subsection{Ablation Study}
-\label{sec:ablation}
+\subsection{Friction Robustness}
+% [TODO-FIGURE: friction-sweep degradation curve: survival rate vs.\ friction
+%  multiplier (6 points, 0.3×--1.8×), comparing RL policy (3-seed mean ± std)
+%  and LQR baseline.]
+\textit{[TODO-FIGURE: friction\_sweep degradation curve]}
 
-% [TODO-TABLE-X: Ablation Study Results]
-\begin{table}[ht]
-\centering
-\caption{Ablation study: impact of key design choices.
-All ablations trained for 50M steps over 3 seeds.
-Baseline is the full proposed method.}
-\label{tab:ablation}
-\begin{tabular}{lccc}
-\toprule
-Configuration & Survival (\%) & Height RMSE (m) & Pitch RMS (deg) \\
-\midrule
-\textbf{Full method (baseline)} & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multicolumn{4}{l}{\textit{Residual scale ablations}} \\
-\quad Residual scale $\times$ 0.5 & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\quad Residual scale $\times$ 2.0 & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\quad Uniform scale (0.15 all) & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multicolumn{4}{l}{\textit{Observation ablations}} \\
-\quad No base action in obs & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\quad Base action delayed 1 step & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multicolumn{4}{l}{\textit{Regularization ablations}} \\
-\quad No residual penalties & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\quad 2× residual penalties & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\midrule
-\multicolumn{4}{l}{\textit{Baseline comparisons}} \\
-\quad LQR/IK prior only & [TODO] & [TODO] & [TODO] \\
-\quad Pure PPO (no prior) & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\bottomrule
-\end{tabular}
-\end{table}
+\subsection{Ablation: Natural Pose Reward}
+% [TODO-ABLATION: compare full model (natural pose weight 0.4) against
+%  a variant with natural pose reward disabled. Report height RMSE and
+%  pitch RMS at the deepest commanded height (h=0.40 m), where posture
+%  degeneracy is most likely. Also report convergence speed (steps to
+%  reach the curriculum advancement threshold). This ablation directly
+%  validates the primary methodological contribution.]
+\textit{[TODO-ABLATION: natural pose reward ($r_{\mathrm{nat}}$)
+ablation: weight=0.4 vs.\ weight=0]}
 
-The ablation study validates key design choices:
-\begin{itemize}
-    \item \textbf{Residual scale}: The per-joint residual scale vector
-    (Eq.~\eqref{eq:residual_scale}) balances prior trust and correction
-    authority. Halving the scale limits recovery capability; doubling it
-    increases instability. Uniform scaling performs worse than joint-specific
-    tuning.
-
-    \item \textbf{Base action in observation}: Including $a_t^{\mathrm{base}}$
-    in the observation (Eq.~\eqref{eq:obs_residual}) allows the residual
-    policy to condition corrections on the prior's intent. Removing it
-    degrades performance.
-
-    \item \textbf{Residual regularization}: The residual-specific penalties
-    (Section~\ref{sec:residual_regularization}) encourage the policy to
-    rely on the prior when sufficient. Removing them increases unnecessary
-    corrections; doubling them over-constrains the policy.
-
-    \item \textbf{Pure PPO baseline}: Training a policy from scratch without
-    the LQR/IK prior provides a reference for the value of structured
-    initialization. [TODO: report comparative results]
-\end{itemize}
+\subsection{Ablation: Observation Design}
+% [TODO-ABLATION: compare policies trained with simulator-exact velocity,
+%  noisy velocity, and no velocity in the observation, to assess
+%  sensitivity to the quality of the linear velocity estimate.
+%  Only report if experiment is conducted.]
+\textit{[TODO-ABLATION: velocity-estimate robustness (exact / noisy / absent)
+--- only report if experiment is conducted]}
 
 % ============================================================
 \section{Discussion and Limitations}
 \label{sec:discussion}
 % ============================================================
 
-\subsection{Bounded Residual Framework Design}
+\subsection{Framework Design}
+The main design principle is to decompose the variable-height balancing
+problem into a progressive curriculum that stabilizes learning by starting
+near the nominal standing pose and expanding toward more challenging
+configurations.
+The height-consistent natural pose reward constrains the joint-space
+solution to physically meaningful postures at each target height.
 
-The bounded residual approach combines structured model-based control
-with learned corrections, balancing the interpretability and safety of
-classical control with the adaptability of reinforcement learning.
+The PID low-level controller decouples the RL policy from actuator-level
+dynamics and is shared with the LQR baseline, ensuring that observed
+performance differences reflect controller intelligence rather than
+interface differences.
 
-\noindent\textbf{Structured prior as initialization.}
-The LQR/IK prior provides a physically meaningful starting point for
-balance and posture control. While insufficient alone (85--100\% fall
-rates, Table~\ref{tab:prior_verification}), it reduces the exploration
-burden on the residual policy by providing approximately correct actions
-that the policy can refine rather than discover from scratch.
-
-\noindent\textbf{Bounded corrections for safety.}
-The per-joint residual scale vector (Eq.~\eqref{eq:residual_scale})
-limits the magnitude of learned corrections, preventing the policy from
-completely overriding the prior. This design provides a safety envelope:
-even if the residual policy fails, the base controller maintains basic
-balance authority.
-
-\noindent\textbf{Base action in observation.}
-Including $a_t^{\mathrm{base}}$ in the observation
-(Eq.~\eqref{eq:obs_residual}) allows the residual policy to condition
-its corrections on the prior's intent. This enables the policy to learn
-when to trust the prior (outputting near-zero residuals) and when to
-override it (outputting larger corrections).
-
-\noindent\textbf{Progressive curriculum.}
-The within-stage height curriculum stabilizes learning by starting near
-the nominal standing pose and expanding toward more challenging
-configurations. The height-consistent natural pose reward constrains
-the joint-space solution to physically meaningful postures at each
-target height.
-
-\noindent\textbf{Shared low-level controller.}
-The PID low-level controller decouples the residual policy from
-actuator-level dynamics and is shared with the LQR/IK prior, ensuring
-that observed performance differences reflect controller intelligence
-rather than interface differences.
+The yaw-error observation term $e_{\psi,t}$ closes the heading loop
+that gravity-body-frame observations alone cannot.
+Without it, a memoryless MLP requires undesirable implicit integration of
+angular velocity over many steps to sense accumulated yaw drift.
 
 \subsection{Sim-to-Real Considerations}
 \label{sec:sim2real}
@@ -1787,16 +1380,18 @@ following the same Phase~A/B/C ordering as training.
 
 \subsection{Current Limitations}
 \begin{enumerate}
-    \item \textbf{No quantitative results yet.}
-    Residual policy training has not been completed.
-    All result sections contain TODO placeholders.
-    The LQR/IK prior has been evaluated (Table~\ref{tab:prior_verification}),
-    confirming its limitations and motivating the residual approach,
-    but the residual policy training and evaluation remain future work.
+    \item \textbf{Balance only (experimentally).}
+    Variable-height balance is the experimentally mature component.
+    The stand-up and robust-balance extensions are implemented in code
+    and configuration, but they have no training results at the time of writing.
+    All claims about push recovery and height transitions are structural,
+    not performance-validated.
 
-    \item \textbf{Multi-seed training planned, not yet complete.}
-    Final metrics will aggregate runs with seeds 42, 113, and 999.
-    Quantitative results will report mean $\pm$ std across all three seeds.
+    \item \textbf{No quantitative results yet.}
+    Training runs have not been completed.
+    All result sections contain placeholders.
+    Claims in this paper concern framework design, not demonstrated
+    performance.
 
     \item \textbf{No sim-to-real transfer (yet).}
     All work is simulation-only.
@@ -1806,25 +1401,17 @@ following the same Phase~A/B/C ordering as training.
     sim-to-real protocols~\cite{tobin2017domain,peng2018simtoreal,tan2018simtoreal},
     but validation remains future work.
 
-    \item \textbf{Limited prior validation.}
-    The LQR/IK prior has been evaluated at fixed heights, showing
-    85--100\% fall rates. However, the prior has not been validated
-    under push disturbances, friction variations, or commanded height
-    transitions. These evaluations will be included in the final
-    experimental suite.
+    \item \textbf{Multi-seed training planned, not yet complete.}
+    Final metrics will aggregate runs with seeds 42, 113, and 999.
+    Quantitative results will report mean $\pm$ std across all three seeds.
+    % [TODO-CLAIM: report multi-seed variance before asserting
+    %  statistical significance of any comparison; all three seeds
+    %  must complete training before filling result tables]
 
-    \item \textbf{Stand-up recovery not evaluated.}
-    Recovery from fallen or non-nominal initial poses is mentioned
-    as a potential extension but has not been implemented or evaluated.
-    All claims about stand-up recovery are structural, not
-    performance-validated.
-
-    \item \textbf{Pure PPO baseline not yet trained.}
-    The ablation study includes a pure PPO baseline (no LQR/IK prior)
-    for comparison, but this baseline has not been trained.
-    Comparative claims about the value of the structured prior
-    await experimental validation.
-\end{enumerate}
+    \item \textbf{LQR at large disturbances.}
+    The LQR is only valid near the nominal height and small lean angles.
+    Comparisons at full range, strong pushes, and low friction are
+    expected to favor RL, but this must be confirmed experimentally.
     % [TODO-CLAIM: only state LQR inferiority at large disturbances after
     %  push_recovery and full_range scenarios are evaluated]
 
@@ -1840,52 +1427,40 @@ following the same Phase~A/B/C ordering as training.
 % ============================================================
 \section{Conclusion}
 % ============================================================
-This paper presents a bounded residual reinforcement learning framework
-for height-adaptive balance control of a 10-actuated wheeled biped robot.
-The approach combines a height-dependent LQR/IK prior with a learned
-residual policy that outputs bounded corrections, balancing the
-interpretability and safety of classical control with the adaptability
-of reinforcement learning.
-
-The core technical contributions are:
-(i)~a height-dependent LQR/IK prior that provides structured balance
-and posture commands, validated to have 85--100\% fall rates across
-the commanded height range $[0.40, 0.70]\,\mathrm{m}$, motivating the
-need for learned corrections;
-(ii)~a bounded residual policy trained via PPO that observes the
-prior's action and outputs per-joint-scaled corrections, enabling
-the policy to learn when to trust the prior and when to override it;
-(iii)~a 52-dimensional residual observation space that includes the
-base action, allowing the policy to condition corrections on the
-prior's intent;
-(iv)~residual-specific reward regularization that encourages the
-policy to rely on the prior when sufficient;
-(v)~a within-stage height curriculum that expands the commanded
-height range across 29 levels, gated by greedy evaluation;
-(vi)~a height-consistent natural pose reward that maps commanded
-height to target joint angles, preventing degenerate balancing
-strategies.
+This paper presented a curriculum reinforcement learning framework for
+variable-height balancing of a 10-actuated wheeled biped robot.
+The core technical contributions are: (i)~a height-conditioned policy
+trained via PPO in GPU-accelerated MuJoCo MJX simulation with 4,096
+parallel environments; (ii)~a within-stage height curriculum that
+expands the commanded height range from near-nominal standing to
+deep crouching across 29 levels, gated by a greedy evaluation pass;
+(iii)~a height-consistent natural pose reward that maps commanded
+height to target joint angles via piecewise-linear interpolation,
+preventing degenerate balancing strategies; and (iv)~a classical LQR
+baseline sharing the same PID actuator interface, enabling controlled
+comparison across a suite of ten evaluation scenarios.
 
 The framework is designed for sim-to-real transfer: PD position targets
 as the action representation, comprehensive domain randomization covering
 friction, mass, joint damping, and sensor noise, and an observation
 space that degrades gracefully when linear velocity is unavailable.
+A multi-stage macro-curriculum (\texttt{balance} $\to$
+\texttt{stand\_up} $\to$ \texttt{balance\_robust}) provides a path
+toward robust recovery from falls and active height transitions.
 
 % [TODO-RESULT: Once training is complete, replace the following sentence
 %  with a summary of key quantitative findings, e.g.:
-%  "Experimental results show that the residual policy achieves X\% survival
-%   rate across the full [0.40, 0.70] m range and recovers from pushes up to Y N,
-%   outperforming the LQR/IK prior on all height-adaptive and disturbance metrics.
-%   Ablation studies confirm the value of including the base action in the
-%   observation and the per-joint residual scale design."]
-Experimental evaluation and quantitative comparison with the LQR/IK prior
-are ongoing; results will be reported after residual policy training
-completes over three independent seeds (42, 113, 999).
+%  "Experimental results show that the RL policy achieves X m height RMSE
+%   across the full [0.40, 0.70] m range and recovers from pushes up to Y N,
+%   outperforming the LQR baseline on all full-range and disturbance metrics."]
+Experimental evaluation and quantitative comparison with the LQR baseline
+are ongoing; results will be reported in the final version.
 
 Future work will focus on hardware deployment via the staged transfer
-plan described in Section~\ref{sec:sim2real}, training and evaluation
-of the pure PPO baseline for comparative analysis, and extension to
-stand-up recovery and robust push-disturbance scenarios.
+plan described in Section~\ref{sec:sim2real}, extension of the
+macro-curriculum to the \texttt{stand\_up} and \texttt{balance\_robust}
+stages, and integration of exteroceptive sensing for terrain-aware
+variable-height locomotion.
 
 \section*{Acknowledgment}
 % [TODO: Add acknowledgments if applicable.]
