@@ -1,0 +1,168 @@
+variant: height_scheduled_com_lqr_ik
+description: Height-scheduled LQR with CoM feedback for stronger classical baseline
+com_feedback:
+  enabled: true
+  use_sim: true
+  com_error_mode: whole_body_minus_wheel_contact
+  max_correction: 0.15
+  com_error_rate_filter_alpha: 0.3
+height_grid:
+- 0.7
+- 0.65
+- 0.6
+- 0.55
+- 0.5
+lqr_gains:
+  h_0.70:
+    k_pitch: 210.3710645601859
+    k_pitch_rate: -18.5432351409749
+    k_com: -712.838569986212
+    k_com_rate: -712.8070053387419
+    k_wheel_pos: 1.0000000000580798
+    k_wheel_vel: 3.563466302393266
+  h_0.65:
+    k_pitch: 210.47317824556012
+    k_pitch_rate: -18.36296806182156
+    k_com: -711.448307895178
+    k_com_rate: -711.416681563569
+    k_wheel_pos: 1.0000000000253095
+    k_wheel_vel: 3.5614228586370587
+  h_0.60:
+    k_pitch: 210.5741657898434
+    k_pitch_rate: -18.183389313764224
+    k_com: -710.0553353781324
+    k_com_rate: -710.0236469998381
+    k_wheel_pos: 0.9999999999934062
+    k_wheel_vel: 3.559371362040423
+  h_0.55:
+    k_pitch: 210.6740194932736
+    k_pitch_rate: -18.004499302210206
+    k_com: -708.6596154571744
+    k_com_rate: -708.627864665159
+    k_wheel_pos: 1.0000000000214015
+    k_wheel_vel: 3.557311721589798
+  h_0.50:
+    k_pitch: 210.77273148752283
+    k_pitch_rate: -17.826298453750155
+    k_com: -707.2611104690368
+    k_com_rate: -707.2292968916772
+    k_wheel_pos: 1.0000000000505764
+    k_wheel_vel: 3.555243844324565
+interpolation:
+  method: linear
+  extrapolation: clamp
+height_ik:
+  heights:
+  - 0.4
+  - 0.45
+  - 0.5
+  - 0.55
+  - 0.6
+  - 0.65
+  - 0.7
+  targets:
+    h_0.40:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.95
+      l_knee: 1.9
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.95
+      r_knee: 1.9
+      r_wheel: 0.0
+    h_0.45:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.8
+      l_knee: 1.6
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.8
+      r_knee: 1.6
+      r_wheel: 0.0
+    h_0.50:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.65
+      l_knee: 1.3
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.65
+      r_knee: 1.3
+      r_wheel: 0.0
+    h_0.55:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.5
+      l_knee: 1.0
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.5
+      r_knee: 1.0
+      r_wheel: 0.0
+    h_0.60:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.35
+      l_knee: 0.7
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.35
+      r_knee: 0.7
+      r_wheel: 0.0
+    h_0.65:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.2
+      l_knee: 0.4
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.2
+      r_knee: 0.4
+      r_wheel: 0.0
+    h_0.70:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.05
+      l_knee: 0.1
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.05
+      r_knee: 0.1
+      r_wheel: 0.0
+wheel_distribution:
+  mode: symmetric
+  yaw_correction:
+    enabled: true
+    k_yaw: 0.5
+    k_yaw_rate: 0.1
+action_limits:
+  clip_base_action: true
+  max_wheel_torque: 10.0
+  max_leg_joint_torque: 50.0
+tuning:
+  method: lqr_twip_model
+  description: Gains derived from LQR on TWIP model with CoM feedback
+  tuning_script: scripts/tune_height_scheduled_com_lqr.py
+  last_tuned: '2026-05-06'
+  status: tuned
+  q_diag:
+  - 100.0
+  - 10.0
+  - 50.0
+  - 5.0
+  - 1.0
+  - 1.0
+  r_val: 1.0
+evaluation:
+  baseline_comparison: gain_scheduled_lqr
+  expected_improvement: Better CoM correction at low heights
+  hardware_ready: false

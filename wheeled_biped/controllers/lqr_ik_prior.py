@@ -100,65 +100,116 @@ class LQRIKConfig:
     pitch_bias_table: dict[float, float] = None
     pitch_bias_max_abs_deg: float = 8.0
 
+    # Height-scheduled LQR gains (Phase B.6)
+    height_scheduled_gains_enabled: bool = False
+    height_scheduled_gains: dict[float, dict[str, float]] = None  # {height: {k_pitch, k_pitch_rate, ...}}
+
     @classmethod
     def from_yaml(cls, config_path: str | Path, variant_config_path: Optional[str | Path] = None) -> "LQRIKConfig":
         """Load config from YAML file(s).
 
         Args:
-            config_path: Path to base gain_scheduled_lqr.yaml.
+            config_path: Path to base gain_scheduled_lqr.yaml or height_scheduled_com_lqr.yaml.
             variant_config_path: Optional path to prior_variants.yaml for Phase B.5 variants.
         """
         with open(config_path, "r") as f:
             cfg = yaml.safe_load(f)
 
+        # Detect if this is a height-scheduled CoM LQR config (Phase B.6)
+        is_height_scheduled = cfg.get("variant") == "height_scheduled_com_lqr_ik"
+
         # Base config
-        kwargs = {
-            "height_min": cfg["height"]["min"],
-            "height_max": cfg["height"]["max"],
-            "height_grid": cfg["height"]["grid"],
-            "joint_limits": cfg["joint_limits"],
-            "wheel_vel_limit": cfg["wheel_vel_limit"],
-            "lqr_q_diag": cfg["lqr"]["q_diag"],
-            "lqr_r_val": cfg["lqr"]["r_val"],
-            "com_height_nom": cfg["lqr"]["com_height_nom"],
-            "wheel_radius": cfg["lqr"]["wheel_radius"],
-            "roll_kp": cfg["roll"]["kp"],
-            "roll_kd": cfg["roll"]["kd"],
-            "roll_max_correction": cfg["roll"]["max_correction"],
-            "yaw_kp": cfg["yaw"]["kp"],
-            "yaw_kd": cfg["yaw"]["kd"],
-            "yaw_max_diff": cfg["yaw"]["max_diff"],
-            "ik_scan_points": cfg["ik"]["scan_points"],
-            "ik_polynomial_degree": cfg["ik"]["polynomial_degree"],
-            "ik_symmetric_fold": cfg["ik"]["symmetric_fold"],
-        }
+        if is_height_scheduled:
+            # Phase B.6: height-scheduled CoM LQR config
+            kwargs = {
+                "height_min": min(cfg["height_grid"]),
+                "height_max": max(cfg["height_grid"]),
+                "height_grid": cfg["height_grid"],
+                "joint_limits": {
+                    "hip_roll": [-0.5, 0.5],
+                    "hip_yaw": [-0.5, 0.5],
+                    "hip_pitch": [-1.57, 0.5],
+                    "knee": [0.0, 2.0],
+                },
+                "wheel_vel_limit": 20.0,
+                "lqr_q_diag": [100.0, 10.0, 1.0, 1.0],  # Placeholder, not used with height-scheduled gains
+                "lqr_r_val": 1.0,
+                "com_height_nom": 0.55,
+                "wheel_radius": 0.0762,
+                "roll_kp": 0.5,
+                "roll_kd": 0.1,
+                "roll_max_correction": 0.2,
+                "yaw_kp": cfg.get("wheel_distribution", {}).get("yaw_correction", {}).get("k_yaw", 0.5),
+                "yaw_kd": cfg.get("wheel_distribution", {}).get("yaw_correction", {}).get("k_yaw_rate", 0.1),
+                "yaw_max_diff": 2.0,
+                "ik_scan_points": 50,
+                "ik_polynomial_degree": 3,
+                "ik_symmetric_fold": True,
+                "variant_name": "height_scheduled_com_lqr_ik",
+                "com_feedback_enabled": cfg["com_feedback"]["enabled"],
+                "com_use_sim": cfg["com_feedback"]["use_sim"],
+                "com_max_correction": cfg["com_feedback"]["max_correction"],
+                "height_scheduled_gains_enabled": True,
+            }
 
-        # Load variant config if provided
-        if variant_config_path is not None:
-            with open(variant_config_path, "r") as f:
-                var_cfg = yaml.safe_load(f)
+            # Parse height-scheduled LQR gains
+            lqr_gains_cfg = cfg["lqr_gains"]
+            height_scheduled_gains = {}
+            for height in cfg["height_grid"]:
+                key = f"h_{height:.2f}"
+                if key in lqr_gains_cfg:
+                    height_scheduled_gains[height] = lqr_gains_cfg[key]
+            kwargs["height_scheduled_gains"] = height_scheduled_gains
 
-            kwargs["variant_name"] = var_cfg.get("prior_variant", {}).get("name", "geometric_lqr_ik")
+        else:
+            # Original gain_scheduled_lqr.yaml format
+            kwargs = {
+                "height_min": cfg["height"]["min"],
+                "height_max": cfg["height"]["max"],
+                "height_grid": cfg["height"]["grid"],
+                "joint_limits": cfg["joint_limits"],
+                "wheel_vel_limit": cfg["wheel_vel_limit"],
+                "lqr_q_diag": cfg["lqr"]["q_diag"],
+                "lqr_r_val": cfg["lqr"]["r_val"],
+                "com_height_nom": cfg["lqr"]["com_height_nom"],
+                "wheel_radius": cfg["lqr"]["wheel_radius"],
+                "roll_kp": cfg["roll"]["kp"],
+                "roll_kd": cfg["roll"]["kd"],
+                "roll_max_correction": cfg["roll"]["max_correction"],
+                "yaw_kp": cfg["yaw"]["kp"],
+                "yaw_kd": cfg["yaw"]["kd"],
+                "yaw_max_diff": cfg["yaw"]["max_diff"],
+                "ik_scan_points": cfg["ik"]["scan_points"],
+                "ik_polynomial_degree": cfg["ik"]["polynomial_degree"],
+                "ik_symmetric_fold": cfg["ik"]["symmetric_fold"],
+            }
 
-            # CoM feedback
-            com_cfg = var_cfg.get("com_feedback", {})
-            kwargs["com_feedback_enabled"] = com_cfg.get("enabled", False)
-            kwargs["com_k_com"] = com_cfg.get("k_com", 0.0)
-            kwargs["com_k_com_dot"] = com_cfg.get("k_com_dot", 0.0)
-            kwargs["com_max_correction"] = com_cfg.get("max_correction", 0.0)
-            kwargs["com_use_sim"] = com_cfg.get("use_sim_com", True)
+            # Load variant config if provided (Phase B.5)
+            if variant_config_path is not None:
+                with open(variant_config_path, "r") as f:
+                    var_cfg = yaml.safe_load(f)
 
-            # Pitch bias
-            pitch_cfg = var_cfg.get("pitch_bias", {})
-            kwargs["pitch_bias_enabled"] = pitch_cfg.get("enabled", False)
-            if kwargs["pitch_bias_enabled"]:
-                # Convert string keys to float and deg to rad
-                table_deg = pitch_cfg.get("table", {})
-                kwargs["pitch_bias_table"] = {
-                    float(h): np.deg2rad(bias_deg)
-                    for h, bias_deg in table_deg.items()
-                }
-                kwargs["pitch_bias_max_abs_deg"] = pitch_cfg.get("max_abs_pitch_bias_deg", 8.0)
+                kwargs["variant_name"] = var_cfg.get("prior_variant", {}).get("name", "geometric_lqr_ik")
+
+                # CoM feedback
+                com_cfg = var_cfg.get("com_feedback", {})
+                kwargs["com_feedback_enabled"] = com_cfg.get("enabled", False)
+                kwargs["com_k_com"] = com_cfg.get("k_com", 0.0)
+                kwargs["com_k_com_dot"] = com_cfg.get("k_com_dot", 0.0)
+                kwargs["com_max_correction"] = com_cfg.get("max_correction", 0.0)
+                kwargs["com_use_sim"] = com_cfg.get("use_sim_com", True)
+
+                # Pitch bias
+                pitch_cfg = var_cfg.get("pitch_bias", {})
+                kwargs["pitch_bias_enabled"] = pitch_cfg.get("enabled", False)
+                if kwargs["pitch_bias_enabled"]:
+                    # Convert string keys to float and deg to rad
+                    table_deg = pitch_cfg.get("table", {})
+                    kwargs["pitch_bias_table"] = {
+                        float(h): np.deg2rad(bias_deg)
+                        for h, bias_deg in table_deg.items()
+                    }
+                    kwargs["pitch_bias_max_abs_deg"] = pitch_cfg.get("max_abs_pitch_bias_deg", 8.0)
 
         return cls(**kwargs)
 
@@ -223,6 +274,12 @@ class LQRIKPrior:
             self.pitch_bias_interpolator = self._build_pitch_bias_interpolator()
         else:
             self.pitch_bias_interpolator = None
+
+        # Build height-scheduled gain interpolators if enabled (Phase B.6)
+        if self.config.height_scheduled_gains_enabled and self.config.height_scheduled_gains:
+            self.gain_interpolators = self._build_gain_interpolators()
+        else:
+            self.gain_interpolators = None
 
     def _build_height_ik(self) -> HeightIKMapping:
         """Build height IK mapping via FK scan with contact constraints.
@@ -430,18 +487,9 @@ class LQRIKPrior:
         pitch_error = pitch - pitch_ref
 
         pitch_rate = body_ang_vel[1]  # pitch rate around y-axis
-        fwd_vel = body_lin_vel[1]  # forward velocity along y-axis (sagittal)
-        fwd_pos = 0.0  # No position tracking in stateless mode
 
-        # LQR state (using pitch_error instead of pitch)
-        x_lqr = np.array([pitch_error, pitch_rate, fwd_vel, fwd_pos])
-
-        # LQR control: u = -K * x
-        wheel_vel_cmd = -(self.lqr_gains @ x_lqr)
-        wheel_vel_cmd = float(wheel_vel_cmd[0])
-
-        # Add CoM feedback if enabled (Phase B.5)
-        if self.config.com_feedback_enabled and self.config.com_use_sim:
+        # Height-scheduled CoM feedback LQR (Phase B.6)
+        if self.config.height_scheduled_gains_enabled and self.gain_interpolators:
             # Compute CoM error
             com_y = self._compute_com_y(qpos)
             wheel_contact_y = self._compute_wheel_contact_y(qpos)
@@ -450,18 +498,61 @@ class LQRIKPrior:
             # Compute CoM velocity error (approximate from body velocity)
             com_vel_y = body_lin_vel[1]
 
-            # CoM feedback correction
-            com_correction = (
-                self.config.com_k_com * com_error_y +
-                self.config.com_k_com_dot * com_vel_y
-            )
-            com_correction = np.clip(
-                com_correction,
-                -self.config.com_max_correction,
-                self.config.com_max_correction,
-            )
+            # Wheel state (average of left/right wheels)
+            wheel_pos = (qpos[4] + qpos[9]) / 2.0  # l_wheel, r_wheel
+            wheel_vel = (qvel[4] + qvel[9]) / 2.0
 
-            wheel_vel_cmd += com_correction
+            # 6D state: [pitch_error, pitch_rate, com_y_error, com_y_error_rate, wheel_pos, wheel_vel]
+            x_lqr = np.array([pitch_error, pitch_rate, com_error_y, com_vel_y, wheel_pos, wheel_vel])
+
+            # Interpolate gains at current height
+            K = np.array([
+                self.gain_interpolators["k_pitch"](height_cmd),
+                self.gain_interpolators["k_pitch_rate"](height_cmd),
+                self.gain_interpolators["k_com"](height_cmd),
+                self.gain_interpolators["k_com_rate"](height_cmd),
+                self.gain_interpolators["k_wheel_pos"](height_cmd),
+                self.gain_interpolators["k_wheel_vel"](height_cmd),
+            ])
+
+            # LQR control: u = -K * x
+            wheel_vel_cmd = -(K @ x_lqr)
+            wheel_vel_cmd = float(wheel_vel_cmd)
+
+        else:
+            # Original 4D LQR (Phase B.5 and earlier)
+            fwd_vel = body_lin_vel[1]  # forward velocity along y-axis (sagittal)
+            fwd_pos = 0.0  # No position tracking in stateless mode
+
+            # LQR state (using pitch_error instead of pitch)
+            x_lqr = np.array([pitch_error, pitch_rate, fwd_vel, fwd_pos])
+
+            # LQR control: u = -K * x
+            wheel_vel_cmd = -(self.lqr_gains @ x_lqr)
+            wheel_vel_cmd = float(wheel_vel_cmd[0])
+
+            # Add CoM feedback if enabled (Phase B.5)
+            if self.config.com_feedback_enabled and self.config.com_use_sim:
+                # Compute CoM error
+                com_y = self._compute_com_y(qpos)
+                wheel_contact_y = self._compute_wheel_contact_y(qpos)
+                com_error_y = com_y - wheel_contact_y
+
+                # Compute CoM velocity error (approximate from body velocity)
+                com_vel_y = body_lin_vel[1]
+
+                # CoM feedback correction
+                com_correction = (
+                    self.config.com_k_com * com_error_y +
+                    self.config.com_k_com_dot * com_vel_y
+                )
+                com_correction = np.clip(
+                    com_correction,
+                    -self.config.com_max_correction,
+                    self.config.com_max_correction,
+                )
+
+                wheel_vel_cmd += com_correction
 
         # Normalize wheel velocity to [-1, 1]
         wheel_vel_norm = np.clip(
@@ -567,6 +658,35 @@ class LQRIKPrior:
             return float(np.clip(bias, -max_bias, max_bias))
 
         return interpolate
+
+    def _build_gain_interpolators(self) -> dict[str, callable]:
+        """Build height-scheduled gain interpolators (Phase B.6).
+
+        Returns:
+            Dict mapping gain name to interpolation function.
+            Each function maps height_cmd to gain value.
+        """
+        if not self.config.height_scheduled_gains:
+            return {}
+
+        # Extract heights and gain values
+        heights = sorted(self.config.height_scheduled_gains.keys())
+        gain_names = list(self.config.height_scheduled_gains[heights[0]].keys())
+
+        interpolators = {}
+        for gain_name in gain_names:
+            gain_values = [self.config.height_scheduled_gains[h][gain_name] for h in heights]
+
+            # Linear interpolation with clamping
+            def make_interpolator(h_arr, g_arr):
+                def interpolate(height_cmd: float) -> float:
+                    h_clipped = np.clip(height_cmd, h_arr[0], h_arr[-1])
+                    return float(np.interp(h_clipped, h_arr, g_arr))
+                return interpolate
+
+            interpolators[gain_name] = make_interpolator(heights, gain_values)
+
+        return interpolators
 
     def _compute_com_y(self, qpos: np.ndarray) -> float:
         """Compute whole-body CoM y-position (sagittal axis).

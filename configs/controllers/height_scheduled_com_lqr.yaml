@@ -1,0 +1,229 @@
+# ============================================================
+# Height-Scheduled CoM-Feedback LQR/IK Prior (Phase B.6)
+# ============================================================
+# Literature-informed stronger classical baseline with CoM feedback.
+#
+# State vector (6D):
+#   x = [pitch, pitch_rate, com_y_error, com_y_error_rate, wheel_pos, wheel_vel]
+#
+# where:
+#   com_y_error = whole_body_CoM_y - wheel_contact_y
+#   com_y_error_rate = d(com_y_error)/dt
+#
+# Height-scheduled gains K(h) for heights [0.70, 0.65, 0.60, 0.55, 0.50].
+# Gains tuned via LQR on TWIP model with CoM feedback.
+#
+# IMPORTANT: This uses simulator CoM (not hardware-ready).
+# Hardware deployment requires CoM estimator (e.g., momentum observer).
+
+variant: "height_scheduled_com_lqr_ik"
+description: "Height-scheduled LQR with CoM feedback for stronger classical baseline"
+
+# --- CoM Feedback Configuration ---
+com_feedback:
+  enabled: true
+  use_sim: true  # Uses simulator CoM (not hardware-ready)
+
+  # CoM error definition
+  com_error_mode: "whole_body_minus_wheel_contact"  # com_y_error = CoM_y - wheel_y
+
+  # Safety limits
+  max_correction: 0.15  # Maximum CoM correction (rad or m depending on joint)
+
+  # Derivative estimation
+  com_error_rate_filter_alpha: 0.3  # Low-pass filter for com_y_error_rate
+
+# --- Height Grid ---
+# Gains scheduled over these heights (m)
+height_grid: [0.70, 0.65, 0.60, 0.55, 0.50]
+
+# --- Height-Scheduled LQR Gains ---
+# K(h) for each height in height_grid
+# State: [pitch, pitch_rate, com_y_error, com_y_error_rate, wheel_pos, wheel_vel]
+# Action: [wheel_torque] (single output, distributed to both wheels)
+#
+# Gains are 1x6 vectors: K = [k_pitch, k_pitch_rate, k_com, k_com_rate, k_wheel_pos, k_wheel_vel]
+#
+# Initial gains (to be tuned via scripts/tune_height_scheduled_com_lqr.py):
+# - Higher k_com at lower heights (larger CoM misalignment)
+# - Higher k_pitch_rate for damping
+# - Moderate k_wheel_vel for stability
+
+lqr_gains:
+  # h = 0.70m (best-case, minimal CoM error ~4.6cm)
+  h_0.70:
+    k_pitch: 180.0
+    k_pitch_rate: 25.0
+    k_com: 120.0          # Moderate CoM feedback
+    k_com_rate: 15.0
+    k_wheel_pos: -8.0
+    k_wheel_vel: -2.5
+
+  # h = 0.65m (CoM error ~8cm)
+  h_0.65:
+    k_pitch: 200.0
+    k_pitch_rate: 28.0
+    k_com: 150.0          # Increased CoM feedback
+    k_com_rate: 18.0
+    k_wheel_pos: -10.0
+    k_wheel_vel: -3.0
+
+  # h = 0.60m (CoM error ~12cm)
+  h_0.60:
+    k_pitch: 220.0
+    k_pitch_rate: 32.0
+    k_com: 180.0          # Higher CoM feedback
+    k_com_rate: 22.0
+    k_wheel_pos: -12.0
+    k_wheel_vel: -3.5
+
+  # h = 0.55m (CoM error ~18cm)
+  h_0.55:
+    k_pitch: 250.0
+    k_pitch_rate: 36.0
+    k_com: 220.0          # Much higher CoM feedback
+    k_com_rate: 26.0
+    k_wheel_pos: -15.0
+    k_wheel_vel: -4.0
+
+  # h = 0.50m (CoM error ~25cm, worst-case)
+  h_0.50:
+    k_pitch: 280.0
+    k_pitch_rate: 40.0
+    k_com: 260.0          # Maximum CoM feedback
+    k_com_rate: 30.0
+    k_wheel_pos: -18.0
+    k_wheel_vel: -4.5
+
+# --- Gain Interpolation ---
+interpolation:
+  method: "linear"  # Linear interpolation between height grid points
+  extrapolation: "clamp"  # Clamp to nearest grid point outside range
+
+# --- Height-Dependent IK (same as gain_scheduled_lqr.yaml) ---
+height_ik:
+  # Height grid for IK targets (m)
+  heights: [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70]
+
+  # Per-height joint targets (rad)
+  # Order: [l_hip_roll, l_hip_yaw, l_hip_pitch, l_knee, l_wheel,
+  #         r_hip_roll, r_hip_yaw, r_hip_pitch, r_knee, r_wheel]
+  targets:
+    h_0.40:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.95
+      l_knee: 1.90
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.95
+      r_knee: 1.90
+      r_wheel: 0.0
+
+    h_0.45:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.80
+      l_knee: 1.60
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.80
+      r_knee: 1.60
+      r_wheel: 0.0
+
+    h_0.50:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.65
+      l_knee: 1.30
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.65
+      r_knee: 1.30
+      r_wheel: 0.0
+
+    h_0.55:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.50
+      l_knee: 1.00
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.50
+      r_knee: 1.00
+      r_wheel: 0.0
+
+    h_0.60:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.35
+      l_knee: 0.70
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.35
+      r_knee: 0.70
+      r_wheel: 0.0
+
+    h_0.65:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.20
+      l_knee: 0.40
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.20
+      r_knee: 0.40
+      r_wheel: 0.0
+
+    h_0.70:
+      l_hip_roll: 0.0
+      l_hip_yaw: 0.0
+      l_hip_pitch: -0.05
+      l_knee: 0.10
+      l_wheel: 0.0
+      r_hip_roll: 0.0
+      r_hip_yaw: 0.0
+      r_hip_pitch: -0.05
+      r_knee: 0.10
+      r_wheel: 0.0
+
+# --- Wheel Command Distribution ---
+wheel_distribution:
+  # How to distribute LQR wheel torque to left/right wheels
+  mode: "symmetric"  # Both wheels get same command
+
+  # Yaw correction (optional, for heading stabilization)
+  yaw_correction:
+    enabled: true
+    k_yaw: 0.5  # Differential wheel torque for yaw error
+    k_yaw_rate: 0.1
+
+# --- Action Limits ---
+action_limits:
+  # Normalized action bounds [-1, 1]
+  # These are applied BEFORE residual composition
+  clip_base_action: true
+
+  # Physical limits (for reference, not enforced here)
+  max_wheel_torque: 10.0  # Nm
+  max_leg_joint_torque: 50.0  # Nm
+
+# --- Tuning Metadata ---
+tuning:
+  method: "lqr_twip_model"
+  description: "Gains derived from LQR on TWIP model with CoM feedback"
+  tuning_script: "scripts/tune_height_scheduled_com_lqr.py"
+  last_tuned: "2026-05-06"
+  status: "initial_guess"  # Will be updated to "tuned" after optimization
+
+# --- Evaluation Metadata ---
+evaluation:
+  baseline_comparison: "gain_scheduled_lqr"
+  expected_improvement: "Better CoM correction at low heights"
+  hardware_ready: false  # Requires CoM estimator for hardware
