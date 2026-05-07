@@ -58,6 +58,16 @@ Thumbs.db
 
 # ─── LaTeX build artifacts ───────────────────────────────────────────────────
 *.aux
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.lof
+*.lot
+*.run.xml
+*.bcf
 *.synctex.gz
 *_backup_*.tex
 *_backup_*.pdf

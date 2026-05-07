@@ -54,6 +54,14 @@ class ResidualBalanceEnv(BalanceEnv):
     def __init__(self, config: dict[str, Any] | None = None, **kwargs):
         super().__init__(config=config, **kwargs)
 
+        # Defensive check: residual control requires PID bias disabled
+        if not self.config.get("low_level_pid", {}).get("disable_pid_action_bias", False):
+            raise ValueError(
+                "ResidualBalanceEnv requires disable_pid_action_bias=true in "
+                "low_level_pid config to prevent double-addition of PID bias "
+                "in residual action composition."
+            )
+
         # Load residual-specific config
         residual_cfg = self.config.get("residual", {})
 

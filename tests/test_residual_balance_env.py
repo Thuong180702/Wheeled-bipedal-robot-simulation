@@ -22,6 +22,7 @@ def residual_env():
         "low_level_pid": {
             "enabled": True,
             "action_smoothing_alpha": 0.5,
+            "disable_pid_action_bias": True,
         },
         "rewards": {
             "body_level": 1.5,
@@ -198,3 +199,109 @@ def test_residual_env_residual_scale(residual_env):
 
     assert jnp.allclose(residual_scaled, expected_scale, atol=1e-6), \
         f"residual_scaled={residual_scaled}, expected={expected_scale}"
+
+
+def test_residual_env_requires_pid_bias_disabled():
+    """Test that ResidualBalanceEnv raises ValueError if disable_pid_action_bias is not true."""
+    config_without_bias_disabled = {
+        "task": {
+            "episode_length": 100,
+            "initial_min_height": 0.68,
+        },
+        "residual": {
+            "prior_config": "configs/controllers/gain_scheduled_lqr.yaml",
+            "residual_scale": [0.10, 0.05, 0.20, 0.20, 0.40, 0.10, 0.05, 0.20, 0.20, 0.40],
+        },
+        "low_level_pid": {
+            "enabled": True,
+            "action_smoothing_alpha": 0.5,
+            "disable_pid_action_bias": False,  # Explicitly false
+        },
+        "rewards": {
+            "body_level": 1.5,
+            "height": 2.0,
+            "alive": 0.3,
+        },
+        "termination": {
+            "max_tilt_rad": 0.8,
+            "min_height": 0.3,
+        },
+    }
+
+    with pytest.raises(ValueError, match="ResidualBalanceEnv requires disable_pid_action_bias=true"):
+        ResidualBalanceEnv(config=config_without_bias_disabled)
+
+
+def test_residual_env_reward_uses_current_actions():
+    """Test that reward computation uses current residual actions, not stale prev_state.info.
+
+    This verifies that residual-specific reward terms (residual_magnitude, residual_rate,
+    residual_saturation) are computed from the current step's residual actions, not from
+    stale info carried over from the previous state.
+    """
+    rng = jax.random.PRNGKey(42)
+
+    config = {
+        "task": {
+            "episode_length": 100,
+            "initial_min_height": 0.68,
+        },
+        "residual": {
+            "prior_config": "configs/controllers/gain_scheduled_lqr.yaml",
+            "residual_scale": [0.10, 0.05, 0.20, 0.20, 0.40, 0.10, 0.05, 0.20, 0.20, 0.40],
+        },
+        "low_level_pid": {
+            "enabled": True,
+            "action_smoothing_alpha": 0.5,
+            "disable_pid_action_bias": True,
+        },
+        "rewards": {
+            "body_level": 1.5,
+            "height": 2.0,
+            "alive": 0.3,
+            "residual_magnitude": -0.02,
+            "residual_rate": -0.03,
+            "residual_saturation": -0.05,
+        },
+        "termination": {
+            "max_tilt_rad": 0.8,
+            "min_height": 0.3,
+        },
+    }
+
+    env = ResidualBalanceEnv(config=config)
+    state = env.reset(rng)
+
+    # Step 1: zero residual action
+    residual_action_1 = jnp.zeros(10)
+    state_1 = env.step(state, residual_action_1)
+
+    # Step 2: large residual action
+    residual_action_2 = jnp.ones(10) * 0.8
+    state_2 = env.step(state_1, residual_action_2)
+
+    # Verify that state_2.info contains the large residual action, not zeros
+    assert jnp.allclose(state_2.info["residual_action"], residual_action_2, atol=1e-6), \
+        "state_2.info should contain current residual_action, not stale zeros"
+
+    # Verify that residual_norm reflects the large action (scaled)
+    residual_norm_2 = state_2.info["residual_norm"]
+    residual_scale = jnp.array([0.10, 0.05, 0.20, 0.20, 0.40, 0.10, 0.05, 0.20, 0.20, 0.40])
+    expected_scaled_2 = residual_scale * residual_action_2
+    expected_norm_2 = jnp.linalg.norm(expected_scaled_2)
+    assert jnp.allclose(residual_norm_2, expected_norm_2, atol=1e-5), \
+        f"residual_norm should reflect current scaled action: expected {expected_norm_2}, got {residual_norm_2}"
+
+    # Step 3: back to zero residual action
+    residual_action_3 = jnp.zeros(10)
+    state_3 = env.step(state_2, residual_action_3)
+
+    # Verify that state_3.info contains zeros, not the previous large action
+    assert jnp.allclose(state_3.info["residual_action"], residual_action_3, atol=1e-6), \
+        "state_3.info should contain current zero residual_action, not stale large action"
+
+    # Verify that residual_norm is near zero
+    residual_norm_3 = state_3.info["residual_norm"]
+    assert residual_norm_3 < 1e-5, \
+        f"residual_norm should be near zero for zero action: got {residual_norm_3}"
+

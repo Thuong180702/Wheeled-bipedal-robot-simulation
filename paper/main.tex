@@ -17,6 +17,10 @@
 % Compact TODO macro for tables
 \newcommand{\tbd}{---}
 
+% Table typography macros
+\newcommand{\tablesize}{\footnotesize}
+\newcommand{\tablecolsep}{3pt}
+
 \title{Bounded Residual Reinforcement Learning over Limited LQR/IK Prior for Height-Adaptive Wheeled Biped Balance}
 
 \author{
@@ -534,8 +538,8 @@ per joint. We use joint-specific scales to reflect the varying
 authority needed across the kinematic chain:
 \begin{equation}
 s = \begin{bmatrix}
-  0.10 & 0.05 & 0.15 & 0.15 & 0.30 \\
-  0.10 & 0.05 & 0.15 & 0.15 & 0.30
+  0.10 & 0.05 & 0.20 & 0.20 & 0.40 \\
+  0.10 & 0.05 & 0.20 & 0.20 & 0.40
 \end{bmatrix}^\top,
 \label{eq:residual_scale}
 \end{equation}
@@ -543,10 +547,10 @@ corresponding to left and right
 $\{\text{hip\_roll},\, \text{hip\_yaw},\, \text{hip\_pitch},\,
 \text{knee},\, \text{wheel}\}$.
 
-Wheels receive larger residual authority ($s=0.30$) because
+Wheels receive larger residual authority ($s=0.40$) because
 rapid wheel adjustments are critical for balance recovery under
 push disturbances. Hip pitch and knee receive moderate authority
-($s=0.15$) to refine the IK-based posture. Hip yaw is kept small
+($s=0.20$) to refine the IK-based posture. Hip yaw is kept small
 ($s=0.05$) to prevent excessive twisting, and hip roll receives
 moderate authority ($s=0.10$) for lateral stabilization.
 

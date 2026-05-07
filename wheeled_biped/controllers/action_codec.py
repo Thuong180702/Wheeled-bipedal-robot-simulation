@@ -24,6 +24,10 @@ where:
 - residual_scale: scalar or per-joint scaling factor
 - final_action_abs: composed action sent to env (absolute normalized)
 
+CRITICAL: The residual composition pipeline does NOT add pid_action_bias. For residual
+control, disable_pid_action_bias must be true to prevent double-addition of bias.
+The base_action_abs from the LQR/IK prior is already in absolute normalized space.
+
 Joint control modes:
 - Leg joints (8): position targets
 - Wheel joints (2): velocity targets
