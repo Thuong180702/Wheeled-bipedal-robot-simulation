@@ -158,7 +158,18 @@ class ResidualBalanceEnv(BalanceEnv):
 
         # Create temporary state with base obs for parent step()
         # Parent step() expects 42-dim obs and will compute new 42-dim obs
-        temp_state = state._replace(obs=base_obs_42)
+        # Store current action breakdown in temp_state.info so _compute_reward()
+        # can access current residual actions instead of stale prev_state.info
+        temp_state = state._replace(
+            obs=base_obs_42,
+            info={
+                **state.info,
+                "current_base_action_abs": base_action_abs,
+                "current_residual_action": action,
+                "current_residual_scaled": action_breakdown.residual_scaled,
+                "current_final_action_abs": final_action_abs,
+            }
+        )
 
         # Call parent step with final_action_abs
         new_base_state = super().step(temp_state, final_action_abs)
@@ -190,6 +201,23 @@ class ResidualBalanceEnv(BalanceEnv):
 
         Returns:
             base_action_abs: Prior output, shape (10,).
+
+        Performance Warning:
+            This uses jax.pure_callback with vmap_method='sequential' to call
+            a NumPy-based LQR/IK prior. This is a KNOWN PERFORMANCE BOTTLENECK:
+            - Breaks JAX's parallelization across the batch dimension
+            - Forces sequential execution for each environment
+            - Prevents XLA optimization of the prior computation
+            - May become the dominant cost in large-scale training (4096+ envs)
+
+            Future optimization paths:
+            1. Rewrite LQR/IK prior as pure JAX (preferred for performance)
+            2. Profile actual training throughput impact before optimizing
+            3. Consider caching if prior is deterministic for given obs
+            4. Benchmark vmap_method='broadcast_all' if prior is vectorizable
+
+            Current choice: Accept the performance cost for Phase C prototype.
+            Revisit if training throughput becomes a blocker for 1M+ step runs.
         """
         # Use pure_callback to call NumPy-based prior from JIT context
         def _prior_callback(obs_array):
@@ -235,10 +263,11 @@ class ResidualBalanceEnv(BalanceEnv):
 
         # Only compute residual penalties if any weight is non-zero
         if any(abs(w) > 1e-6 for w in residual_weights.values()):
-            # Extract residual info from prev_state
-            residual_scaled = prev_state.info.get("residual_scaled", jnp.zeros(self.num_actions))
-            residual_action = prev_state.info.get("residual_action", jnp.zeros(self.num_actions))
-            final_action_abs = prev_state.info.get("final_action_abs", action)
+            # Extract CURRENT residual info from prev_state.info
+            # (step() stores current action breakdown in temp_state.info before calling parent)
+            residual_scaled = prev_state.info.get("current_residual_scaled", jnp.zeros(self.num_actions))
+            residual_action = prev_state.info.get("current_residual_action", jnp.zeros(self.num_actions))
+            final_action_abs = prev_state.info.get("current_final_action_abs", action)
 
             # Compute residual penalties
             residual_components = {}
@@ -249,7 +278,7 @@ class ResidualBalanceEnv(BalanceEnv):
                 )
 
             if abs(residual_weights["residual_rate"]) > 1e-6:
-                # Get previous residual action from prev_state
+                # Get PREVIOUS residual action for rate computation
                 # For first step, use zeros
                 prev_residual = jnp.zeros(self.num_actions)
                 if "residual_action" in prev_state.info:

@@ -699,7 +699,7 @@ def _run_episode(
                 # Compose final action from base + residual
                 # Load residual_scale from config
                 residual_scale = jnp.array(
-                    config.get("residual_scale", [0.10, 0.05, 0.15, 0.15, 0.30] * 2),
+                    config.get("residual_scale", [0.10, 0.05, 0.20, 0.20, 0.40] * 2),
                     dtype=jnp.float32,
                 )
                 final_action_abs = jnp.clip(

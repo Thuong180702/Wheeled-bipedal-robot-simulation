@@ -56,6 +56,15 @@ Thumbs.db
 *.avi
 *.gif
 
+# ─── LaTeX build artifacts ───────────────────────────────────────────────────
+*.aux
+*.synctex.gz
+*_backup_*.tex
+*_backup_*.pdf
+*_backup_*.aux
+*_backup_*.log
+*_backup_*.synctex.gz
+
 # ─── Misc ─────────────────────────────────────────────────────────────────────
 *.log
 *.bak

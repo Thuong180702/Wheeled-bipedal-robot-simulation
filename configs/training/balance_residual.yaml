@@ -109,6 +109,7 @@ network:
 # --- Low-level controller ---
 low_level_pid:
   enabled: true
+  disable_pid_action_bias: true
   action_smoothing_alpha: 0.5
   anti_windup_limit: 0.4
   wheel_vel_limit: 20.0

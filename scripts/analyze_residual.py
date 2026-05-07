@@ -203,7 +203,7 @@ def _analyze_scenario(
     all_final_actions = []
     all_residual_rates = []
 
-    residual_scale = jnp.array(config.get("residual_scale", [0.10, 0.05, 0.15, 0.15, 0.30] * 2), dtype=jnp.float32)
+    residual_scale = jnp.array(config.get("residual_scale", [0.10, 0.05, 0.20, 0.20, 0.40] * 2), dtype=jnp.float32)
 
     for ep_i in range(num_episodes):
         ep_seed = seed + ep_i

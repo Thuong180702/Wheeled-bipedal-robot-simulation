@@ -1,9 +1,8 @@
 # Wheeled Bipedal Robot Simulation
 
-Simulation and reinforcement learning training for a wheeled bipedal robot using **MuJoCo MJX + JAX**, with PPO and curriculum learning.
+Simulation and reinforcement learning training for a wheeled bipedal robot using **MuJoCo MJX + JAX**, with bounded residual PPO over a height-dependent LQR/IK prior.
 
-> **Status:** Active research prototype. Only the `balance` stage has been trained and
-> evaluated to date. Sim-to-real transfer has not been validated on hardware.
+> **Status:** Active research prototype. Implementation complete through Phase C (residual environment + configs). Ready for Phase D (1M+ step residual training runs). Pure PPO balance baseline has been trained. Sim-to-real transfer has not been validated on hardware.
 
 ---
 

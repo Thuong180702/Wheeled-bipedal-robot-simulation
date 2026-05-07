@@ -49,15 +49,14 @@ This is not a generic robotics sandbox.
 
 ## Current repo status and truth
 
-- The current repo is still mostly a **pure PPO balance prototype**.
-- `BalanceEnv` is the implemented balance task with 42-dimensional observation.
-- Existing `baseline_lqr.yaml` / LQR controller is currently an **evaluation baseline**, not yet a validated nominal prior for residual RL.
-- `balance_robust`, `stand_up`, `wheeled_locomotion`, `walking`, `stair_climbing`, and `rough_terrain` may exist as configs/stubs, but they must not be claimed as completed unless trained and evaluated.
-- Sim-to-real transfer has not been validated on hardware.
-- Do not rewrite the project to PyTorch unless explicitly asked.
-- Preserve MJX/JAX-first design.
-- Preserve existing PPO/checkpoint/logging flow unless the task explicitly targets it.
-- Prefer minimal, testable diffs over broad rewrites.
+- **Phase C complete:** `ResidualBalanceEnv` implemented with 52-dim observation (42 base + 10 base_action).
+- **Configs ready:** `balance_residual.yaml` and `balance_residual_robust.yaml` configured with correct residual scale [0.10, 0.05, 0.20, 0.20, 0.40] and `disable_pid_action_bias: true`.
+- **Ready for Phase D:** 1M+ step residual training runs can begin. Action semantics, reward timing, and performance warnings documented.
+- **Pure PPO baseline:** `BalanceEnv` (42-dim obs) remains available as the pure PPO reference baseline.
+- **LQR/IK prior:** Implemented as a limited structured prior (Phase B.4: 0.0023% static feasibility). Used for residual base actions, not standalone control.
+- **Untrained stages:** `balance_robust`, `stand_up`, `wheeled_locomotion`, `walking`, `stair_climbing`, and `rough_terrain` exist as configs/stubs but must not be claimed as completed unless trained and evaluated.
+- **Sim-to-real:** Not validated on hardware.
+- **Design principles:** Preserve MJX/JAX-first design. Preserve existing PPO/checkpoint/logging flow unless the task explicitly targets it. Prefer minimal, testable diffs over broad rewrites.
 
 ---
 
