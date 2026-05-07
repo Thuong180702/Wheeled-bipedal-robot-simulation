@@ -1075,6 +1075,10 @@ LQR controller for sagittal balance with height-dependent inverse
 kinematics (IK) for leg posture and independent PD controllers for
 lateral and yaw stabilization.
 
+This specific configuration was selected after quantitative evaluation
+of multiple prior variants, achieving 121\% survival time improvement
+over a geometric baseline while maintaining comparable pitch stability.
+
 The prior operates on the same 42-dimensional observation interface
 and shares the same PID low-level controller as the residual policy,
 enabling direct composition without actuator-interface mismatches.

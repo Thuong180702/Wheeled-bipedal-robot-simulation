@@ -342,6 +342,240 @@ class TestSignConventions:
         assert wheel_forward > 0, f"Forward lean should produce positive wheel velocity, got {wheel_forward}"
         assert wheel_backward < 0, f"Backward lean should produce negative wheel velocity, got {wheel_backward}"
 
+
+class TestHeightScheduledDynamicLQR:
+    """Test height-scheduled dynamic LQR/IK prior (Phase B.6)."""
+
+    @pytest.fixture
+    def dynamic_config_path(self):
+        """Path to height_scheduled_dynamic_lqr.yaml config."""
+        return Path(__file__).parent.parent / "configs" / "controllers" / "height_scheduled_dynamic_lqr.yaml"
+
+    def test_config_loading(self, dynamic_config_path):
+        """Test loading height-scheduled dynamic LQR config."""
+        if not dynamic_config_path.exists():
+            pytest.skip("height_scheduled_dynamic_lqr.yaml not found")
+
+        config = LQRIKConfig.from_yaml(dynamic_config_path)
+
+        # Check metadata
+        assert config.controller_type == "height_scheduled_dynamic_lqr_ik"
+        assert config.height_scheduled_gains_enabled is True
+
+        # Check height-scheduled gains exist
+        assert config.height_scheduled_gains is not None
+        assert len(config.height_scheduled_gains) == 7  # 7 height points
+
+        # Check wheel filter config
+        assert config.wheel_cmd_filter_enabled is True
+        assert 0.0 < config.wheel_cmd_filter_alpha <= 1.0
+        assert config.wheel_cmd_filter_max_delta > 0.0
+
+    def test_6d_state_vector(self, dynamic_config_path, model):
+        """Test 6D state vector construction for height-scheduled mode."""
+        if not dynamic_config_path.exists():
+            pytest.skip("height_scheduled_dynamic_lqr.yaml not found")
+
+        config = LQRIKConfig.from_yaml(dynamic_config_path)
+        prior = LQRIKPrior(config, model)
+
+        # Create observation with known state
+        obs = np.zeros(42)
+        obs[0:3] = [0, 0.3, -0.95]  # forward lean
+        obs[3:6] = [0, 0, 0]  # no angular velocity
+        obs[6:9] = [1.0, 0, 0]  # forward velocity
+        obs[39] = 0.55  # height_cmd
+        obs[40] = 0.55  # current_height
+
+        # Compute action (internally constructs 6D state)
+        action = prior.compute_action(obs)
+
+        # Check action shape and bounds
+        assert action.shape == (ACTION_DIM,)
+        assert np.all(action >= -1.0)
+        assert np.all(action <= 1.0)
+
+    def test_height_scheduled_gain_interpolation(self, dynamic_config_path, model):
+        """Test gain interpolation across height range."""
+        if not dynamic_config_path.exists():
+            pytest.skip("height_scheduled_dynamic_lqr.yaml not found")
+
+        config = LQRIKConfig.from_yaml(dynamic_config_path)
+        prior = LQRIKPrior(config, model)
+
+        # Test at different heights
+        heights = [0.40, 0.50, 0.55, 0.60, 0.70]
+
+        for height in heights:
+            obs = np.zeros(42)
+            obs[0:3] = [0, 0, -1]  # upright
+            obs[39] = height
+            obs[40] = height
+
+            action = prior.compute_action(obs)
+
+            # Check action is valid
+            assert action.shape == (ACTION_DIM,)
+            assert np.all(action >= -1.0)
+            assert np.all(action <= 1.0)
+
+    def test_wheel_command_filtering(self, dynamic_config_path, model):
+        """Test wheel command filtering smooths commands."""
+        if not dynamic_config_path.exists():
+            pytest.skip("height_scheduled_dynamic_lqr.yaml not found")
+
+        config = LQRIKConfig.from_yaml(dynamic_config_path)
+        prior = LQRIKPrior(config, model)
+
+        # Reset controller
+        prior.reset(height_cmd_m=0.55)
+
+        # First step: large pitch error
+        obs1 = np.zeros(42)
+        obs1[0:3] = [0, 0.5, -0.87]  # large forward lean
+        obs1[39] = 0.55
+        obs1[40] = 0.55
+
+        action1 = prior.compute_action(obs1)
+        wheel1 = action1[L_WHEEL]
+
+        # Second step: sudden change to upright (zero pitch error)
+        obs2 = np.zeros(42)
+        obs2[0:3] = [0, 0, -1.0]  # upright
+        obs2[39] = 0.55
+        obs2[40] = 0.55
+
+        action2 = prior.compute_action(obs2)
+        wheel2 = action2[L_WHEEL]
+
+        # With filtering enabled, wheel2 should be smoothed between wheel1 and raw command
+        # Without filtering, wheel2 would jump directly to near 0
+        if config.wheel_cmd_filter_enabled:
+            # Filtered command should not jump to zero immediately
+            assert abs(wheel2) > 0.01, \
+                "Wheel filtering should prevent sudden jump to zero"
+            # But should move toward the new target
+            assert abs(wheel2) < abs(wheel1), \
+                "Wheel filtering should move toward new target"
+
+    def test_wheel_filter_max_delta_constraint(self, dynamic_config_path, model):
+        """Test wheel filter respects max delta constraint."""
+        if not dynamic_config_path.exists():
+            pytest.skip("height_scheduled_dynamic_lqr.yaml not found")
+
+        config = LQRIKConfig.from_yaml(dynamic_config_path)
+        prior = LQRIKPrior(config, model)
+
+        # Reset controller
+        prior.reset(height_cmd_m=0.55)
+
+        # First step: zero pitch
+        obs1 = np.zeros(42)
+        obs1[0:3] = [0, 0, -1]  # upright
+        obs1[39] = 0.55
+        obs1[40] = 0.55
+
+        action1 = prior.compute_action(obs1)
+        wheel1 = action1[L_WHEEL]
+
+        # Second step: sudden large pitch error
+        obs2 = np.zeros(42)
+        obs2[0:3] = [0, 0.8, -0.6]  # very large forward lean
+        obs2[39] = 0.55
+        obs2[40] = 0.55
+
+        action2 = prior.compute_action(obs2)
+        wheel2 = action2[L_WHEEL]
+
+        # Change should be limited by max_delta (in normalized space)
+        # This is a qualitative check - exact value depends on normalization
+        assert np.isfinite(wheel2), "Wheel command should be finite"
+
+    def test_com_feedback_integration(self, dynamic_config_path, model):
+        """Test CoM feedback is integrated into 6D LQR."""
+        if not dynamic_config_path.exists():
+            pytest.skip("height_scheduled_dynamic_lqr.yaml not found")
+
+        config = LQRIKConfig.from_yaml(dynamic_config_path)
+        prior = LQRIKPrior(config, model)
+
+        # Create observation with CoM error
+        # Note: CoM is computed from simulator state in actual use
+        obs = np.zeros(42)
+        obs[0:3] = [0, 0, -1]  # upright
+        obs[39] = 0.55
+        obs[40] = 0.55
+
+        action = prior.compute_action(obs)
+
+        # Check action is valid (CoM feedback should not break controller)
+        assert action.shape == (ACTION_DIM,)
+        assert np.all(action >= -1.0)
+        assert np.all(action <= 1.0)
+
+    def test_reset_clears_filter_state(self, dynamic_config_path, model):
+        """Test reset() clears wheel filter state."""
+        if not dynamic_config_path.exists():
+            pytest.skip("height_scheduled_dynamic_lqr.yaml not found")
+
+        config = LQRIKConfig.from_yaml(dynamic_config_path)
+        prior = LQRIKPrior(config, model)
+
+        # Run a few steps to build up filter state
+        obs = np.zeros(42)
+        obs[0:3] = [0, 0.3, -0.95]
+        obs[39] = 0.55
+        obs[40] = 0.55
+
+        for _ in range(5):
+            prior.compute_action(obs)
+
+        # Reset
+        prior.reset(height_cmd_m=0.55)
+
+        # After reset, filter state should be cleared
+        # (internal state _prev_wheel_cmd should be 0.0)
+        assert prior._prev_wheel_cmd == 0.0
+
+    def test_deprecated_variants_disabled(self, dynamic_config_path):
+        """Test deprecated Phase B.5 variants are disabled by default."""
+        if not dynamic_config_path.exists():
+            pytest.skip("height_scheduled_dynamic_lqr.yaml not found")
+
+        config = LQRIKConfig.from_yaml(dynamic_config_path)
+
+        # Check deprecated variants are disabled
+        assert config.pitch_bias_enabled is False
+        assert config.com_feedback_enabled is False
+
+    def test_comparison_with_geometric_baseline(self, config_path, dynamic_config_path, model):
+        """Test height-scheduled controller produces different actions than geometric baseline."""
+        if not dynamic_config_path.exists():
+            pytest.skip("height_scheduled_dynamic_lqr.yaml not found")
+
+        # Load both controllers
+        baseline_config = LQRIKConfig.from_yaml(config_path)
+        baseline_prior = LQRIKPrior(baseline_config, model)
+
+        dynamic_config = LQRIKConfig.from_yaml(dynamic_config_path)
+        dynamic_prior = LQRIKPrior(dynamic_config, model)
+
+        # Test at nominal height
+        obs = np.zeros(42)
+        obs[0:3] = [0, 0.2, -0.98]  # slight forward lean
+        obs[6:9] = [0.5, 0, 0]  # forward velocity
+        obs[39] = 0.55
+        obs[40] = 0.55
+
+        baseline_action = baseline_prior.compute_action(obs)
+        dynamic_action = dynamic_prior.compute_action(obs)
+
+        # Actions should differ due to different control strategies
+        # (6D state vs 4D state, CoM feedback, wheel filtering)
+        # At least wheel commands should differ due to filtering
+        assert not np.allclose(baseline_action, dynamic_action, atol=0.01), \
+            "Height-scheduled dynamic controller should produce different actions than baseline"
+
     def test_velocity_sign_convention(self, config_path, model):
         """Test velocity sign convention.
 

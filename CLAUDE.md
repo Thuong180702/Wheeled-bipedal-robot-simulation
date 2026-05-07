@@ -49,11 +49,12 @@ This is not a generic robotics sandbox.
 
 ## Current repo status and truth
 
+- **Phase B.6 complete:** Height-scheduled dynamic LQR/IK prior adopted after quantitative evaluation showing +121% survival time improvement over geometric baseline.
 - **Phase C complete:** `ResidualBalanceEnv` implemented with 52-dim observation (42 base + 10 base_action).
-- **Configs ready:** `balance_residual.yaml` and `balance_residual_robust.yaml` configured with correct residual scale [0.10, 0.05, 0.20, 0.20, 0.40] and `disable_pid_action_bias: true`.
+- **Configs ready:** `balance_residual.yaml` and `balance_residual_robust.yaml` configured with height-scheduled dynamic LQR prior, residual scale [0.10, 0.05, 0.20, 0.20, 0.40], and `disable_pid_action_bias: true`.
 - **Ready for Phase D:** 1M+ step residual training runs can begin. Action semantics, reward timing, and performance warnings documented.
 - **Pure PPO baseline:** `BalanceEnv` (42-dim obs) remains available as the pure PPO reference baseline.
-- **LQR/IK prior:** Implemented as a limited structured prior (Phase B.4: 0.0023% static feasibility). Used for residual base actions, not standalone control.
+- **LQR/IK prior:** Height-scheduled dynamic LQR/IK with 6D state (pitch, fwd, CoM), gain scheduling across 7 heights, and wheel filtering. Provides +121% survival time vs geometric baseline but limited standalone capability (97% fall rate). Used for residual base actions, not standalone control.
 - **Untrained stages:** `balance_robust`, `stand_up`, `wheeled_locomotion`, `walking`, `stair_climbing`, and `rough_terrain` exist as configs/stubs but must not be claimed as completed unless trained and evaluated.
 - **Sim-to-real:** Not validated on hardware.
 - **Design principles:** Preserve MJX/JAX-first design. Preserve existing PPO/checkpoint/logging flow unless the task explicitly targets it. Prefer minimal, testable diffs over broad rewrites.

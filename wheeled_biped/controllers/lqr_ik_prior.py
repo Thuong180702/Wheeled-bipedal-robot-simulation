@@ -85,6 +85,9 @@ class LQRIKConfig:
     ik_polynomial_degree: int
     ik_symmetric_fold: bool
 
+    # Controller metadata
+    controller_type: str = "geometric_lqr_ik"
+
     # Prior variant (Phase B.5)
     variant_name: str = "geometric_lqr_ik"
 
@@ -104,6 +107,11 @@ class LQRIKConfig:
     height_scheduled_gains_enabled: bool = False
     height_scheduled_gains: dict[float, dict[str, float]] = None  # {height: {k_pitch, k_pitch_rate, ...}}
 
+    # Wheel command filtering (Phase B.6)
+    wheel_cmd_filter_enabled: bool = False
+    wheel_cmd_filter_alpha: float = 0.7  # Exponential smoothing coefficient
+    wheel_cmd_filter_max_delta: float = 2.0  # Max change per step [rad/s]
+
     @classmethod
     def from_yaml(cls, config_path: str | Path, variant_config_path: Optional[str | Path] = None) -> "LQRIKConfig":
         """Load config from YAML file(s).
@@ -115,11 +123,49 @@ class LQRIKConfig:
         with open(config_path, "r") as f:
             cfg = yaml.safe_load(f)
 
-        # Detect if this is a height-scheduled CoM LQR config (Phase B.6)
-        is_height_scheduled = cfg.get("variant") == "height_scheduled_com_lqr_ik"
+        # Detect config type
+        metadata = cfg.get("metadata", {})
+        controller_type = metadata.get("controller_type", "")
+
+        # Check for Phase B.6 height-scheduled dynamic LQR
+        is_height_scheduled_dynamic = controller_type == "height_scheduled_dynamic_lqr_ik"
+        # Legacy Phase B.6 format
+        is_height_scheduled_legacy = cfg.get("variant") == "height_scheduled_com_lqr_ik"
 
         # Base config
-        if is_height_scheduled:
+        if is_height_scheduled_dynamic:
+            # Phase B.6: new height_scheduled_dynamic_lqr.yaml format
+            kwargs = {
+                "height_min": cfg["height"]["min"],
+                "height_max": cfg["height"]["max"],
+                "height_grid": cfg["height"]["grid"],
+                "joint_limits": cfg["joint_limits"],
+                "wheel_vel_limit": cfg["wheel_vel_limit"],
+                "lqr_q_diag": [100.0, 10.0, 3.0, 0.3],  # Placeholder, not used with height-scheduled gains
+                "lqr_r_val": 0.1,
+                "com_height_nom": 0.54,
+                "wheel_radius": 0.06,
+                "roll_kp": cfg["roll"]["kp"],
+                "roll_kd": cfg["roll"]["kd"],
+                "roll_max_correction": cfg["roll"]["max_correction"],
+                "yaw_kp": cfg["yaw"]["kp"],
+                "yaw_kd": cfg["yaw"]["kd"],
+                "yaw_max_diff": cfg["yaw"]["max_diff"],
+                "ik_scan_points": cfg["ik"]["scan_points"],
+                "ik_polynomial_degree": cfg["ik"]["polynomial_degree"],
+                "ik_symmetric_fold": cfg["ik"]["symmetric_fold"],
+                "controller_type": controller_type,
+                "variant_name": "height_scheduled_dynamic_lqr_ik",
+                "height_scheduled_gains_enabled": cfg.get("height_scheduled_gains_enabled", True),
+                "height_scheduled_gains": cfg.get("height_scheduled_gains", {}),
+                "com_feedback_enabled": False,  # Integrated into 6D LQR, not additive
+                "com_use_sim": cfg.get("com_state", {}).get("use_sim", True),
+                "pitch_bias_enabled": cfg.get("pitch_bias_enabled", False),
+                "wheel_cmd_filter_enabled": cfg.get("wheel_cmd_filter", {}).get("enabled", False),
+                "wheel_cmd_filter_alpha": cfg.get("wheel_cmd_filter", {}).get("alpha", 0.7),
+                "wheel_cmd_filter_max_delta": cfg.get("wheel_cmd_filter", {}).get("max_delta_per_step", 2.0),
+            }
+        elif is_height_scheduled_legacy:
             # Phase B.6: height-scheduled CoM LQR config
             kwargs = {
                 "height_min": min(cfg["height_grid"]),
@@ -280,6 +326,9 @@ class LQRIKPrior:
             self.gain_interpolators = self._build_gain_interpolators()
         else:
             self.gain_interpolators = None
+
+        # Wheel command filtering state (Phase B.6)
+        self._prev_wheel_cmd = 0.0  # Previous wheel velocity command [rad/s]
 
     def _build_height_ik(self) -> HeightIKMapping:
         """Build height IK mapping via FK scan with contact constraints.
@@ -478,7 +527,7 @@ class LQRIKPrior:
         # because the PID expects positive wheel velocity = forward rolling
         pitch = -np.arcsin(np.clip(g_body[1], -1.0, 1.0))
 
-        # Apply pitch bias if enabled (Phase B.5)
+        # Apply pitch bias if enabled (DEPRECATED Phase B.5 variant)
         pitch_ref = 0.0
         if self.config.pitch_bias_enabled and self.pitch_bias_interpolator:
             pitch_ref = self.pitch_bias_interpolator(height_cmd)
@@ -488,8 +537,13 @@ class LQRIKPrior:
 
         pitch_rate = body_ang_vel[1]  # pitch rate around y-axis
 
-        # Height-scheduled CoM feedback LQR (Phase B.6)
+        # Controller mode selection
         if self.config.height_scheduled_gains_enabled and self.gain_interpolators:
+            # ===================================================================
+            # Mode: height_scheduled_dynamic_lqr_ik (Phase B.6)
+            # 6D state with height-scheduled gains and CoM feedback
+            # ===================================================================
+
             # Compute CoM error
             com_y = self._compute_com_y(qpos)
             wheel_contact_y = self._compute_wheel_contact_y(qpos)
@@ -498,21 +552,21 @@ class LQRIKPrior:
             # Compute CoM velocity error (approximate from body velocity)
             com_vel_y = body_lin_vel[1]
 
-            # Wheel state (average of left/right wheels)
-            wheel_pos = (qpos[4] + qpos[9]) / 2.0  # l_wheel, r_wheel
-            wheel_vel = (qvel[4] + qvel[9]) / 2.0
+            # Forward velocity and position
+            fwd_vel = body_lin_vel[1]
+            fwd_pos = 0.0  # No position tracking in stateless mode
 
-            # 6D state: [pitch_error, pitch_rate, com_y_error, com_y_error_rate, wheel_pos, wheel_vel]
-            x_lqr = np.array([pitch_error, pitch_rate, com_error_y, com_vel_y, wheel_pos, wheel_vel])
+            # 6D state: [pitch_error, pitch_rate, fwd_vel, fwd_pos, com_y_error, com_y_error_rate]
+            x_lqr = np.array([pitch_error, pitch_rate, fwd_vel, fwd_pos, com_error_y, com_vel_y])
 
             # Interpolate gains at current height
             K = np.array([
                 self.gain_interpolators["k_pitch"](height_cmd),
                 self.gain_interpolators["k_pitch_rate"](height_cmd),
+                self.gain_interpolators["k_fwd_vel"](height_cmd),
+                self.gain_interpolators["k_fwd_pos"](height_cmd),
                 self.gain_interpolators["k_com"](height_cmd),
                 self.gain_interpolators["k_com_rate"](height_cmd),
-                self.gain_interpolators["k_wheel_pos"](height_cmd),
-                self.gain_interpolators["k_wheel_vel"](height_cmd),
             ])
 
             # LQR control: u = -K * x
@@ -520,7 +574,10 @@ class LQRIKPrior:
             wheel_vel_cmd = float(wheel_vel_cmd)
 
         else:
-            # Original 4D LQR (Phase B.5 and earlier)
+            # ===================================================================
+            # Mode: geometric_lqr_ik (default baseline)
+            # 4D state with single gain matrix, no CoM feedback
+            # ===================================================================
             fwd_vel = body_lin_vel[1]  # forward velocity along y-axis (sagittal)
             fwd_pos = 0.0  # No position tracking in stateless mode
 
@@ -531,7 +588,7 @@ class LQRIKPrior:
             wheel_vel_cmd = -(self.lqr_gains @ x_lqr)
             wheel_vel_cmd = float(wheel_vel_cmd[0])
 
-            # Add CoM feedback if enabled (Phase B.5)
+            # DEPRECATED Phase B.5 variant: additive CoM feedback
             if self.config.com_feedback_enabled and self.config.com_use_sim:
                 # Compute CoM error
                 com_y = self._compute_com_y(qpos)
@@ -553,6 +610,22 @@ class LQRIKPrior:
                 )
 
                 wheel_vel_cmd += com_correction
+
+        # Apply wheel command filtering if enabled (Phase B.6)
+        if self.config.wheel_cmd_filter_enabled:
+            # Exponential smoothing: cmd_filtered = alpha * cmd_prev + (1-alpha) * cmd_raw
+            alpha = self.config.wheel_cmd_filter_alpha
+            wheel_vel_cmd_filtered = alpha * self._prev_wheel_cmd + (1.0 - alpha) * wheel_vel_cmd
+
+            # Apply max delta constraint
+            max_delta = self.config.wheel_cmd_filter_max_delta
+            delta = wheel_vel_cmd_filtered - self._prev_wheel_cmd
+            delta_clipped = np.clip(delta, -max_delta, max_delta)
+            wheel_vel_cmd_filtered = self._prev_wheel_cmd + delta_clipped
+
+            # Update state for next step
+            self._prev_wheel_cmd = wheel_vel_cmd_filtered
+            wheel_vel_cmd = wheel_vel_cmd_filtered
 
         # Normalize wheel velocity to [-1, 1]
         wheel_vel_norm = np.clip(
@@ -609,17 +682,19 @@ class LQRIKPrior:
         return action
 
     def reset(self, height_cmd_m: float = 0.55) -> None:
-        """Reset controller state (no-op for stateless controller).
+        """Reset controller state.
 
         Args:
             height_cmd_m: Desired height command [m]. Unused for stateless controller.
 
         Notes:
-            This method exists for compatibility with the evaluation framework.
-            The LQR/IK prior is stateless and does not maintain internal state
-            across episodes, so reset is a no-op.
+            Resets wheel command filter state if enabled.
+            The LQR/IK prior is otherwise stateless and does not maintain
+            internal state across episodes.
         """
-        pass  # Stateless controller, nothing to reset
+        # Reset wheel command filter state
+        if self.config.wheel_cmd_filter_enabled:
+            self._prev_wheel_cmd = 0.0
 
     def _normalize_joint(self, value: float, joint_type: str) -> float:
         """Normalize joint value to [-1, 1].

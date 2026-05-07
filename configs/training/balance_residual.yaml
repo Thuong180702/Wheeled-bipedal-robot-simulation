@@ -35,7 +35,7 @@ task:
 
 # --- Residual-specific config ---
 residual:
-  prior_config: "configs/controllers/gain_scheduled_lqr.yaml"
+  prior_config: "configs/controllers/height_scheduled_dynamic_lqr.yaml"
   # Per-joint residual scale: higher authority for wheels (dynamic balance),
   # moderate for hip_pitch/knee (CoM correction), low for hip_yaw (avoid twisting)
   residual_scale: [

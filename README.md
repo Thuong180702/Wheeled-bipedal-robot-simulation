@@ -668,6 +668,26 @@ With `low_level_pid.enabled: true` (default in `balance.yaml`):
 
 Without PID: output is scaled directly to actuator torque range.
 
+### Height-scheduled dynamic LQR/IK prior (Phase B.6)
+
+The residual PPO training uses a **height-scheduled dynamic LQR/IK prior** as the base controller, selected after quantitative evaluation showing **+121% survival time improvement** over the geometric LQR/IK baseline.
+
+**Key features:**
+- **6D LQR state:** [pitch_error, pitch_rate, fwd_vel, fwd_pos, com_y_error, com_y_error_rate]
+- **Height-scheduled gains:** Linear interpolation across 7 height points (0.40-0.70m)
+- **Integrated CoM feedback:** Lateral stabilization via CoM error in LQR (not additive)
+- **Wheel command filtering:** Exponential smoothing (alpha=0.7) + max delta constraint (2.0 rad/s/step)
+
+**Performance (Phase B.6 evaluation):**
+- Survival time: 0.52s (baseline) → 1.15s (adopted) = **+121.1%**
+- Pitch RMS: 23.2° → 21.9° = -5.6%
+- Fall rate: 100% → 97.1% (both controllers have limited standalone capability)
+
+The prior provides structured action initialization for residual learning but cannot achieve robust standalone balance (97% fall rate). Residual PPO learns dynamic balance corrections, CoM adjustments, and push recovery over this prior.
+
+**Config:** `configs/controllers/height_scheduled_dynamic_lqr.yaml`  
+**Report:** `docs/phase_b6_stronger_prior_report.md`
+
 ### PPO training
 
 - Vectorised rollout using `jax.vmap` over 4096 parallel MJX environments.
