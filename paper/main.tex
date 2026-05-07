@@ -14,6 +14,9 @@
 \usepackage{xcolor}
 \usepackage{balance}
 
+% Compact TODO macro for tables
+\newcommand{\tbd}{---}
+
 \title{Bounded Residual Reinforcement Learning over Limited LQR/IK Prior for Height-Adaptive Wheeled Biped Balance}
 
 \author{
@@ -30,16 +33,15 @@ Email: vanthuong180702t@gmail.com
 
 \begin{abstract}
 Wheeled bipedal robots combine the efficiency of wheeled locomotion with the adaptability of articulated legs, but maintaining balance across varying body heights remains challenging.
-Classical model-based controllers such as LQR with height-dependent inverse kinematics provide structured nominal balance behavior, but are insufficient as standalone solutions---our evaluation shows fall rates of 85--100\% across the feasible height range (0.40--0.70\,m).
+Classical model-based controllers such as LQR with height-dependent inverse kinematics provide limited structured action priors, but are insufficient as standalone solutions---our evaluation shows fall rates of 85--100\% across the feasible height range (0.40--0.70\,m).
 Pure reinforcement learning from scratch can learn robust policies but suffers from poor sample efficiency and lacks the structure that domain knowledge provides.
 We propose a bounded residual reinforcement learning approach that combines a height-dependent LQR/IK prior with a learned PPO residual policy.
-The prior provides nominal balance actions, while the bounded residual learns corrective actions for height-adaptive stabilization, commanded height transitions, and push-disturbance recovery.
+The prior provides limited structured action priors, while the bounded residual learns corrective actions for height-adaptive stabilization, commanded height transitions, and push-disturbance recovery.
 The residual policy receives a 52-dimensional observation that includes the 42-dimensional base observation plus the 10-dimensional base action from the prior, and outputs a bounded residual action that is composed with the base action via $\text{final} = \text{clip}(\text{base} + \text{scale} \times \text{residual}, -1, 1)$.
 We train the policy in MuJoCo MJX with JAX-accelerated vectorized simulation using proximal policy optimization across 4,096 parallel environments.
-We evaluate our approach on random-height balance, commanded height transitions, push recovery up to 200\,N, and robustness to model uncertainty including friction variation, mass perturbations, and sensor noise.
-We compare against the LQR/IK prior alone and a pure PPO baseline trained from scratch.
-% [TODO-RESULT: Once training completes, add one sentence summarizing key quantitative findings]
-Our evaluation demonstrates the benefits of combining structured priors with learned residual corrections for challenging balance tasks.
+Our evaluation of the LQR/IK prior alone shows fall rates of 85--100\% across the feasible height range, confirming its role as a limited structured prior.
+% [TODO-RESULT: Once residual training completes, add evaluation results for random-height balance, height transitions, push recovery, and robustness scenarios]
+The proposed approach will be evaluated against the LQR/IK prior alone and a pure PPO baseline trained from scratch.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -74,7 +76,7 @@ rather than through physically meaningful postures.
 
 To address these challenges, we propose a bounded residual reinforcement learning
 approach that combines a height-dependent LQR/IK prior with a learned PPO residual policy.
-The prior provides structured nominal balance behavior based on linearized dynamics
+The prior provides limited structured action priors based on linearized dynamics
 and inverse kinematics, while the bounded residual learns corrective actions to
 compensate for modeling errors, handle height transitions, and recover from push disturbances.
 Our evaluation of the LQR/IK prior alone shows fall rates of 85--100\% across the
@@ -91,7 +93,7 @@ The main contributions of this work are:
     height-adaptive wheeled biped balance.
     \item Quantitative evaluation showing that the LQR/IK prior alone achieves
     85--100\% fall rates across the feasible height range (0.40--0.70\,m),
-    establishing it as a limited but structured nominal controller suitable
+    establishing it as a limited structured prior suitable
     for residual learning.
     \item A 52-dimensional residual observation space that includes the base
     42-dimensional proprioceptive state plus the 10-dimensional base action
@@ -101,11 +103,10 @@ The main contributions of this work are:
     $\text{final} = \text{clip}(\text{base} + \text{scale} \times \text{residual}, -1, 1)$
     with per-joint residual scale vectors, preventing the residual from
     dominating or destabilizing the base controller.
-    \item Comprehensive evaluation across random-height balance, commanded
+    \item Evaluation protocol for random-height balance, commanded
     height transitions, push recovery up to 200\,N, and robustness to model
-    uncertainty, comparing the proposed approach against the LQR/IK prior
-    alone and a pure PPO baseline.
-    % [TODO-RESULT: Add quantitative summary once training completes]
+    uncertainty, with comparison against the LQR/IK prior alone and a pure PPO baseline.
+    % [TODO-RESULT: Add quantitative summary once residual training completes]
 \end{itemize}
 
 The rest of this paper is organized as follows.
@@ -434,7 +435,7 @@ WH   &  4.0 & 0.1 & (0.0) \\
 
 \subsection{Overview}
 Our approach combines a height-dependent LQR/IK prior with a learned PPO residual policy.
-The prior provides structured nominal balance behavior based on linearized dynamics
+The prior provides limited structured action priors based on linearized dynamics
 and inverse kinematics, while the bounded residual learns corrective actions.
 
 The control pipeline is:
@@ -533,7 +534,7 @@ per joint. We use joint-specific scales to reflect the varying
 authority needed across the kinematic chain:
 \begin{equation}
 s = \begin{bmatrix}
-  0.10 & 0.05 & 0.15 & 0.15 & 0.30 &
+  0.10 & 0.05 & 0.15 & 0.15 & 0.30 \\
   0.10 & 0.05 & 0.15 & 0.15 & 0.30
 \end{bmatrix}^\top,
 \label{eq:residual_scale}
@@ -864,7 +865,8 @@ and wheel rotation:
 p_\tau = \sum_{j=1}^{10} \tau_{t,j}^2,
 \quad
 p_{\dot{q}} = \sum_{j=1}^{10} \dot{q}_{j,t}^2,
-\quad
+\end{equation}
+\begin{equation}
 p_{\Delta a^{\mathrm{final}}} = \sum_{j=1}^{10}(a_{t,j}^{\mathrm{final}} - a_{t-1,j}^{\mathrm{final}})^2,
 \end{equation}
 \begin{equation}
@@ -1341,40 +1343,6 @@ trained policies, and scalar metrics are aggregated post-hoc.
 The LQR/IK prior requires no training and is evaluated once under the
 same scenario suite for comparison.
 
-% [TODO-TABLE: RL vs LQR comparison table. Columns: scenario (nominal,
-%  narrow_height, full_range, push_recovery, friction_low, friction_high).
-%  Rows: RL policy and LQR baseline.
-%  Report: survival_rate, height_rmse_m, pitch_rms_deg,
-%  torque_rms_nm, max_recoverable_push_n.]
-\begin{table}[t]
-\centering
-\caption{RL policy vs.\ LQR baseline comparison (planned).
-All result cells to be filled after training.}
-\label{tab:rl_vs_lqr}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llccccc@{}}
-\toprule
-& Scenario & Surv.\ & $e_h$ & Pitch & Torque & Push \\
-& & (\%) & (m) & (deg) & (Nm) & (N) \\
-\midrule
-\multirow{5}{*}{RL}
-& Nominal       & [TODO] & [TODO] & [TODO] & [TODO] & [TODO] \\
-& Narrow        & [TODO] & [TODO] & [TODO] & [TODO] & --- \\
-& Full range    & [TODO] & [TODO] & [TODO] & [TODO] & --- \\
-& Push recov.   & [TODO] & [TODO] & [TODO] & [TODO] & [TODO] \\
-& Friction low  & [TODO] & [TODO] & [TODO] & [TODO] & --- \\
-\midrule
-\multirow{5}{*}{LQR}
-& Nominal       & [TODO] & [TODO] & [TODO] & [TODO] & [TODO] \\
-& Narrow        & [TODO] & [TODO] & [TODO] & [TODO] & --- \\
-& Full range    & [TODO] & [TODO] & [TODO] & [TODO] & --- \\
-& Push recov.   & [TODO] & [TODO] & [TODO] & [TODO] & [TODO] \\
-& Friction low  & [TODO] & [TODO] & [TODO] & [TODO] & --- \\
-\bottomrule
-\end{tabular}
-}
-\end{table}
-
 % ============================================================
 \section{Experimental Results}
 \label{sec:results}
@@ -1399,6 +1367,7 @@ residual learning.
 Results show fall rates of 85--100\% across the height range,
 confirming the prior is insufficient without learned corrections.}
 \label{tab:prior_verification}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{ccccc}
 \toprule
 $h^{cmd}$ (m) & Fall rate (\%) & Survival (s) & Pitch RMS (deg) & Height RMSE (m) \\
@@ -1412,6 +1381,7 @@ $h^{cmd}$ (m) & Fall rate (\%) & Survival (s) & Pitch RMS (deg) & Height RMSE (m
 0.40 & 100.0 & 0.7 & 27.1 & 0.19 \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 These results are from Phase B.5 evaluation and demonstrate that the
@@ -1436,13 +1406,13 @@ residual learning approach.
 \toprule
 Metric & Value \\
 \midrule
-Total training steps & [TODO] \\
-Training time (GPU hours) & [TODO] \\
-Final curriculum level reached & [TODO] / 29 \\
-Final per-step eval reward & [TODO] $\pm$ [TODO] \\
-Final eval success rate (\%) & [TODO] $\pm$ [TODO] \\
-Final eval fall rate (\%) & [TODO] $\pm$ [TODO] \\
-Residual action RMS (final) & [TODO] $\pm$ [TODO] \\
+Total training steps & \tbd \\
+Training time (GPU hours) & \tbd \\
+Final curriculum level reached & \tbd / 29 \\
+Final per-step eval reward & \tbd \\
+Final eval success rate (\%) & \tbd \\
+Final eval fall rate (\%) & \tbd \\
+Residual action RMS (final) & \tbd \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1456,14 +1426,16 @@ Residual action RMS (final) & [TODO] $\pm$ [TODO] \\
 Residual PPO results are mean $\pm$ std over 3 seeds.
 LQR/IK prior evaluated once (no training required).}
 \label{tab:main_results}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lccccc}
 \toprule
 Method & Surv. (\%) & Fall (\%) & $e_h$ (m) & Pitch (deg) & Torque (Nm) \\
 \midrule
-LQR/IK prior & [TODO] & [TODO] & [TODO] & [TODO] & [TODO] \\
-Residual PPO & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+LQR/IK prior & \tbd & \tbd & \tbd & \tbd & \tbd \\
+Residual PPO & \tbd & \tbd & \tbd & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 \subsection{Fixed-Height Balance Sweep}
@@ -1474,32 +1446,34 @@ Residual PPO & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO
 \caption{Fixed-height balance sweep: performance at seven commanded heights.
 Residual PPO results are mean $\pm$ std over 3 seeds.}
 \label{tab:fixed_height_sweep}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{cccccc}
 \toprule
 $h^{cmd}$ (m) & Method & Surv. (\%) & $e_h$ (m) & Pitch (deg) & Torque (Nm) \\
 \midrule
-\multirow{2}{*}{0.70} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{0.70} & LQR/IK & \tbd & \tbd & \tbd & \tbd \\
+                      & Residual & \tbd & \tbd & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{0.65} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{0.65} & LQR/IK & \tbd & \tbd & \tbd & \tbd \\
+                      & Residual & \tbd & \tbd & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{0.60} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{0.60} & LQR/IK & \tbd & \tbd & \tbd & \tbd \\
+                      & Residual & \tbd & \tbd & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{0.55} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{0.55} & LQR/IK & \tbd & \tbd & \tbd & \tbd \\
+                      & Residual & \tbd & \tbd & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{0.50} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{0.50} & LQR/IK & \tbd & \tbd & \tbd & \tbd \\
+                      & Residual & \tbd & \tbd & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{0.45} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{0.45} & LQR/IK & \tbd & \tbd & \tbd & \tbd \\
+                      & Residual & \tbd & \tbd & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{0.40} & LQR/IK & [TODO] & [TODO] & [TODO] & [TODO] \\
-                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{0.40} & LQR/IK & \tbd & \tbd & \tbd & \tbd \\
+                      & Residual & \tbd & \tbd & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 % [TODO-FIGURE-2: Robot posture snapshots at heights 0.40, 0.50, 0.60, 0.70 m]
@@ -1513,20 +1487,22 @@ $h^{cmd}$ (m) & Method & Surv. (\%) & $e_h$ (m) & Pitch (deg) & Torque (Nm) \\
 \caption{Commanded height transition performance: standing-squatting transitions.
 Residual PPO results are mean $\pm$ std over 3 seeds.}
 \label{tab:height_transitions}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lcccc}
 \toprule
 Transition & Method & Success (\%) & Settling (s) & Overshoot (m) \\
 \midrule
-\multirow{2}{*}{0.70 $\to$ 0.40 m} & LQR/IK & [TODO] & [TODO] & [TODO] \\
-                                    & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{0.70 $\to$ 0.40 m} & LQR/IK & \tbd & \tbd & \tbd \\
+                                    & Residual & \tbd & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{0.40 $\to$ 0.70 m} & LQR/IK & [TODO] & [TODO] & [TODO] \\
-                                    & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{0.40 $\to$ 0.70 m} & LQR/IK & \tbd & \tbd & \tbd \\
+                                    & Residual & \tbd & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{0.65 $\to$ 0.50 m} & LQR/IK & [TODO] & [TODO] & [TODO] \\
-                                    & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{0.65 $\to$ 0.50 m} & LQR/IK & \tbd & \tbd & \tbd \\
+                                    & Residual & \tbd & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 % [TODO-FIGURE-3: Height transition time series showing commanded height,
@@ -1542,14 +1518,16 @@ Transition & Method & Success (\%) & Settling (s) & Overshoot (m) \\
 \caption{Push-disturbance recovery performance.
 Residual PPO results are mean $\pm$ std over 3 seeds.}
 \label{tab:push_recovery}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lccccc}
 \toprule
 Method & Max push (N) & Recovery (s) & Peak pitch (deg) & Surv. (\%) & Fall (\%) \\
 \midrule
-LQR/IK prior & [TODO] & [TODO] & [TODO] & [TODO] & [TODO] \\
-Residual PPO & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+LQR/IK prior & \tbd & \tbd & \tbd & \tbd & \tbd \\
+Residual PPO & \tbd & \tbd & \tbd & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 % [TODO-FIGURE-4: Push recovery time series showing pitch angle, wheel velocity,
@@ -1573,20 +1551,20 @@ Residual PPO results are mean $\pm$ std over 3 seeds.}
 \toprule
 Scenario & Method & Survival (\%) & Height RMSE (m) \\
 \midrule
-\multirow{2}{*}{Friction low (0.6×)} & LQR/IK & [TODO] & [TODO] \\
-                                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{Friction low (0.6×)} & LQR/IK & \tbd & \tbd \\
+                                      & Residual & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{Friction high (1.4×)} & LQR/IK & [TODO] & [TODO] \\
-                                       & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{Friction high (1.4×)} & LQR/IK & \tbd & \tbd \\
+                                       & Residual & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{Mass +20\%} & LQR/IK & [TODO] & [TODO] \\
-                            & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{Mass +20\%} & LQR/IK & \tbd & \tbd \\
+                            & Residual & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{Damping +50\%} & LQR/IK & [TODO] & [TODO] \\
-                               & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{Damping +50\%} & LQR/IK & \tbd & \tbd \\
+                               & Residual & \tbd & \tbd \\
 \midrule
-\multirow{2}{*}{Noise + 1-step delay} & LQR/IK & [TODO] & [TODO] \\
-                                      & Residual & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\multirow{2}{*}{Noise + 1-step delay} & LQR/IK & \tbd & \tbd \\
+                                      & Residual & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1606,11 +1584,11 @@ Residual PPO results are mean $\pm$ std over 3 seeds.}
 \toprule
 Scenario & Base RMS & Res. RMS & Final RMS & Res/Base & Res. rate & Sat. (\%) \\
 \midrule
-Nominal & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-Random height & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-Height trans. & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-Push recovery & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-Friction low & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+Nominal & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+Random height & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+Height trans. & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+Push recovery & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+Friction low & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
 }
@@ -1627,10 +1605,10 @@ Residual PPO results are mean $\pm$ std over 3 seeds.}
 \toprule
 Joint group & Residual RMS \\
 \midrule
-Hip roll & [TODO]$\pm$[TODO] \\
-Hip yaw & [TODO]$\pm$[TODO] \\
-Hip pitch + knee & [TODO]$\pm$[TODO] \\
-Wheels & [TODO]$\pm$[TODO] \\
+Hip roll & \tbd \\
+Hip yaw & \tbd \\
+Hip pitch + knee & \tbd \\
+Wheels & \tbd \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1651,30 +1629,32 @@ Wheels & [TODO]$\pm$[TODO] \\
 All ablations trained for 50M steps over 3 seeds.
 Baseline is the full proposed method.}
 \label{tab:ablation}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lccc}
 \toprule
 Configuration & Survival (\%) & Height RMSE (m) & Pitch RMS (deg) \\
 \midrule
-\textbf{Full method (baseline)} & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\textbf{Full method (baseline)} & \tbd & \tbd & \tbd \\
 \midrule
 \multicolumn{4}{l}{\textit{Residual scale ablations}} \\
-\quad Residual scale $\times$ 0.5 & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\quad Residual scale $\times$ 2.0 & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\quad Uniform scale (0.15 all) & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\quad Residual scale $\times$ 0.5 & \tbd & \tbd & \tbd \\
+\quad Residual scale $\times$ 2.0 & \tbd & \tbd & \tbd \\
+\quad Uniform scale (0.15 all) & \tbd & \tbd & \tbd \\
 \midrule
 \multicolumn{4}{l}{\textit{Observation ablations}} \\
-\quad No base action in obs & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\quad Base action delayed 1 step & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\quad No base action in obs & \tbd & \tbd & \tbd \\
+\quad Base action delayed 1 step & \tbd & \tbd & \tbd \\
 \midrule
 \multicolumn{4}{l}{\textit{Regularization ablations}} \\
-\quad No residual penalties & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
-\quad 2× residual penalties & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\quad No residual penalties & \tbd & \tbd & \tbd \\
+\quad 2× residual penalties & \tbd & \tbd & \tbd \\
 \midrule
 \multicolumn{4}{l}{\textit{Baseline comparisons}} \\
-\quad LQR/IK prior only & [TODO] & [TODO] & [TODO] \\
-\quad Pure PPO (no prior) & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] & [TODO]$\pm$[TODO] \\
+\quad LQR/IK prior only & \tbd & \tbd & \tbd \\
+\quad Pure PPO (no prior) & \tbd & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 The ablation study validates key design choices:
@@ -1824,7 +1804,6 @@ following the same Phase~A/B/C ordering as training.
     for comparison, but this baseline has not been trained.
     Comparative claims about the value of the structured prior
     await experimental validation.
-\end{enumerate}
     % [TODO-CLAIM: only state LQR inferiority at large disturbances after
     %  push_recovery and full_range scenarios are evaluated]
 

@@ -37,7 +37,7 @@ robot
 
 The new research thesis is:
 
-> A height-dependent LQR/IK controller provides a structured nominal balance and posture prior, while a bounded PPO residual policy learns corrective actions for height-adaptive stabilization, commanded standing-squatting transitions, and push-disturbance recovery.
+> A height-dependent LQR/IK controller provides a limited structured action prior, while a bounded PPO residual policy learns corrective actions for height-adaptive stabilization, commanded standing-squatting transitions, and push-disturbance recovery.
 
 Keep the mental model of this repo as:
 
@@ -261,7 +261,7 @@ Phase A pass criteria:
 
 ### Phase B — Validate LQR/IK prior
 
-Goal: implement/validate a height-dependent nominal controller before training residual PPO.
+Goal: implement/validate a height-dependent LQR/IK prior before training residual PPO.
 
 Tasks:
 

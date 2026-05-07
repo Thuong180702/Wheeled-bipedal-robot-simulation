@@ -107,9 +107,9 @@
 \@writefile{toc}{\contentsline {section}{\numberline {VI}Curriculum Learning Strategy}{7}{}\protected@file@percent }
 \newlabel{sec:curriculum}{{VI}{7}{}{section.6}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Within-Stage Height Curriculum}{7}{}\protected@file@percent }
-\newlabel{eq:height_curriculum}{{34}{7}{}{equation.34}{}}
-\newlabel{eq:eval_per_step}{{35}{7}{}{equation.35}{}}
-\newlabel{eq:curr_gate}{{36}{7}{}{equation.36}{}}
+\newlabel{eq:height_curriculum}{{35}{7}{}{equation.35}{}}
+\newlabel{eq:eval_per_step}{{36}{7}{}{equation.36}{}}
+\newlabel{eq:curr_gate}{{37}{7}{}{equation.37}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Multi-Stage Macro-Curriculum}{8}{}\protected@file@percent }
 \newlabel{sec:multi_stage}{{\mbox  {VI-B}}{8}{}{subsection.6.2}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {VII}Height-Dependent LQR/IK Prior}{8}{}\protected@file@percent }
@@ -129,50 +129,49 @@
 \newlabel{sec:eval_protocol}{{\mbox  {VIII-C}}{9}{}{subsection.8.3}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces PPO training hyperparameters for the \texttt  {balance} stage.}}{9}{}\protected@file@percent }
 \newlabel{tab:ppo_hyperparams}{{IV}{9}{}{table.4}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces RL policy vs.\ LQR baseline comparison (planned). All result cells to be filled after training.}}{10}{}\protected@file@percent }
-\newlabel{tab:rl_vs_lqr}{{V}{10}{}{table.5}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {IX}Experimental Results}{10}{}\protected@file@percent }
 \newlabel{sec:results}{{IX}{10}{}{section.9}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-A}}LQR/IK Prior Verification}{10}{}\protected@file@percent }
 \newlabel{sec:prior_verification}{{\mbox  {IX-A}}{10}{}{subsection.9.1}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces LQR/IK prior performance at fixed commanded heights. Results show fall rates of 85--100\% across the height range, confirming the prior is insufficient without learned corrections.}}{10}{}\protected@file@percent }
-\newlabel{tab:prior_verification}{{VI}{10}{}{table.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces LQR/IK prior performance at fixed commanded heights. Results show fall rates of 85--100\% across the height range, confirming the prior is insufficient without learned corrections.}}{10}{}\protected@file@percent }
+\newlabel{tab:prior_verification}{{V}{10}{}{table.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-B}}Training Convergence}{10}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Residual policy training statistics (mean $\pm $ std over 3 seeds).}}{10}{}\protected@file@percent }
-\newlabel{tab:training_stats}{{VII}{10}{}{table.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Residual policy training statistics (mean $\pm $ std over 3 seeds).}}{10}{}\protected@file@percent }
+\newlabel{tab:training_stats}{{VI}{10}{}{table.6}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-C}}Random-Height Balance Performance}{10}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Random-height balance performance comparison. Residual PPO results are mean $\pm $ std over 3 seeds. LQR/IK prior evaluated once (no training required).}}{10}{}\protected@file@percent }
-\newlabel{tab:main_results}{{VIII}{10}{}{table.8}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Random-height balance performance comparison. Residual PPO results are mean $\pm $ std over 3 seeds. LQR/IK prior evaluated once (no training required).}}{10}{}\protected@file@percent }
+\newlabel{tab:main_results}{{VII}{10}{}{table.7}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-D}}Fixed-Height Balance Sweep}{10}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Fixed-height balance sweep: performance at seven commanded heights. Residual PPO results are mean $\pm $ std over 3 seeds.}}{10}{}\protected@file@percent }
+\newlabel{tab:fixed_height_sweep}{{VIII}{10}{}{table.8}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-E}}Commanded Height Transitions}{10}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-F}}Push-Disturbance Recovery}{10}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {IX}{\ignorespaces Fixed-height balance sweep: performance at seven commanded heights. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
-\newlabel{tab:fixed_height_sweep}{{IX}{11}{}{table.9}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {X}{\ignorespaces Commanded height transition performance: standing-squatting transitions. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
-\newlabel{tab:height_transitions}{{X}{11}{}{table.10}{}}
+\citation{hwangbo2019learning,rudin2022walk}
+\@writefile{lot}{\contentsline {table}{\numberline {IX}{\ignorespaces Commanded height transition performance: standing-squatting transitions. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
+\newlabel{tab:height_transitions}{{IX}{11}{}{table.9}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {X}{\ignorespaces Push-disturbance recovery performance. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
+\newlabel{tab:push_recovery}{{X}{11}{}{table.10}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-G}}Robustness to Model Uncertainty}{11}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-H}}Residual Action Analysis}{11}{}\protected@file@percent }
 \newlabel{sec:residual_analysis}{{\mbox  {IX-H}}{11}{}{subsection.9.8}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-I}}Ablation Study}{11}{}\protected@file@percent }
 \newlabel{sec:ablation}{{\mbox  {IX-I}}{11}{}{subsection.9.9}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {XI}{\ignorespaces Push-disturbance recovery performance. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
-\newlabel{tab:push_recovery}{{XI}{11}{}{table.11}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {XII}{\ignorespaces Robustness to model uncertainty: friction, mass, damping, noise, and delay. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
-\newlabel{tab:robustness}{{XII}{11}{}{table.12}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {X}Discussion and Limitations}{11}{}\protected@file@percent }
 \newlabel{sec:discussion}{{X}{11}{}{section.10}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-A}}Bounded Residual Framework Design}{11}{}\protected@file@percent }
-\citation{hwangbo2019learning,rudin2022walk}
+\@writefile{lot}{\contentsline {table}{\numberline {XI}{\ignorespaces Robustness to model uncertainty: friction, mass, damping, noise, and delay. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
+\newlabel{tab:robustness}{{XI}{11}{}{table.11}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {XII}{\ignorespaces Residual action decomposition analysis across scenarios. Shows how the residual policy distributes corrections across joint groups. Residual PPO results are mean $\pm $ std over 3 seeds.}}{11}{}\protected@file@percent }
+\newlabel{tab:residual_analysis}{{XII}{11}{}{table.12}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-B}}Sim-to-Real Considerations}{11}{}\protected@file@percent }
+\newlabel{sec:sim2real}{{\mbox  {X-B}}{11}{}{subsection.10.2}{}}
 \citation{tobin2017domain,peng2018simtoreal,tan2018simtoreal}
-\@writefile{lot}{\contentsline {table}{\numberline {XIII}{\ignorespaces Residual action decomposition analysis across scenarios. Shows how the residual policy distributes corrections across joint groups. Residual PPO results are mean $\pm $ std over 3 seeds.}}{12}{}\protected@file@percent }
-\newlabel{tab:residual_analysis}{{XIII}{12}{}{table.13}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {XIV}{\ignorespaces Per-joint-group residual action RMS for random-height balance scenario. Shows which joint groups receive the largest residual corrections. Residual PPO results are mean $\pm $ std over 3 seeds.}}{12}{}\protected@file@percent }
-\newlabel{tab:residual_by_joint}{{XIV}{12}{}{table.14}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-B}}Sim-to-Real Considerations}{12}{}\protected@file@percent }
-\newlabel{sec:sim2real}{{\mbox  {X-B}}{12}{}{subsection.10.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {XV}{\ignorespaces Ablation study: impact of key design choices. All ablations trained for 50M steps over 3 seeds. Baseline is the full proposed method.}}{12}{}\protected@file@percent }
-\newlabel{tab:ablation}{{XV}{12}{}{table.15}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {XIII}{\ignorespaces Per-joint-group residual action RMS for random-height balance scenario. Shows which joint groups receive the largest residual corrections. Residual PPO results are mean $\pm $ std over 3 seeds.}}{12}{}\protected@file@percent }
+\newlabel{tab:residual_by_joint}{{XIII}{12}{}{table.13}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {XIV}{\ignorespaces Ablation study: impact of key design choices. All ablations trained for 50M steps over 3 seeds. Baseline is the full proposed method.}}{12}{}\protected@file@percent }
+\newlabel{tab:ablation}{{XIV}{12}{}{table.14}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {X-C}}Current Limitations}{12}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {XI}Conclusion}{12}{}\protected@file@percent }
 \bibstyle{IEEEtran}
 \bibcite{ppo}{1}
 \bibcite{mujoco}{2}
@@ -203,6 +202,5 @@
 \bibcite{wang2019poet}{27}
 \bibcite{peng2018simtoreal}{28}
 \bibcite{tan2018simtoreal}{29}
-\@writefile{toc}{\contentsline {section}{\numberline {XI}Conclusion}{13}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{References}{13}{}\protected@file@percent }
 \gdef \@abspage@last{13}
