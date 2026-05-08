@@ -1,0 +1,86 @@
+# Ablation 7: IK only (no active wheel control)
+# Minimal controller: just height IK, zero wheel commands
+
+height_min: 0.40
+height_max: 0.70
+
+# Layer 1: Height IK
+ik_hip_pitch_range: [-0.8, 0.2]
+ik_knee_range: [0.0, 2.0]
+ik_num_samples: 50
+
+# Layer 2: CoM VMC - DISABLED
+vmc_enabled: false
+vmc_k_com: 150.0
+vmc_k_com_dot: 30.0
+vmc_max_force: 50.0
+vmc_force_to_hip_pitch_gain: 0.02
+vmc_force_to_knee_gain: 0.015
+
+# Layer 3: Wheel LQR - DISABLED (all gains zero)
+lqr_height_scheduled: true
+lqr_gains:
+  0.40:
+    k_pitch: 0.0
+    k_pitch_rate: 0.0
+    k_fwd_vel: 0.0
+    k_fwd_pos: 0.0
+    k_com: 0.0
+    k_com_rate: 0.0
+  0.45:
+    k_pitch: 0.0
+    k_pitch_rate: 0.0
+    k_fwd_vel: 0.0
+    k_fwd_pos: 0.0
+    k_com: 0.0
+    k_com_rate: 0.0
+  0.50:
+    k_pitch: 0.0
+    k_pitch_rate: 0.0
+    k_fwd_vel: 0.0
+    k_fwd_pos: 0.0
+    k_com: 0.0
+    k_com_rate: 0.0
+  0.55:
+    k_pitch: 0.0
+    k_pitch_rate: 0.0
+    k_fwd_vel: 0.0
+    k_fwd_pos: 0.0
+    k_com: 0.0
+    k_com_rate: 0.0
+  0.60:
+    k_pitch: 0.0
+    k_pitch_rate: 0.0
+    k_fwd_vel: 0.0
+    k_fwd_pos: 0.0
+    k_com: 0.0
+    k_com_rate: 0.0
+  0.65:
+    k_pitch: 0.0
+    k_pitch_rate: 0.0
+    k_fwd_vel: 0.0
+    k_fwd_pos: 0.0
+    k_com: 0.0
+    k_com_rate: 0.0
+  0.70:
+    k_pitch: 0.0
+    k_pitch_rate: 0.0
+    k_fwd_vel: 0.0
+    k_fwd_pos: 0.0
+    k_com: 0.0
+    k_com_rate: 0.0
+
+wheel_cmd_filter_enabled: false
+wheel_cmd_filter_alpha: 0.7
+wheel_cmd_filter_max_delta: 2.0
+
+# Layer 4: Roll/Yaw - DISABLED
+roll_kp: 0.0
+roll_kd: 0.0
+roll_max_correction: 0.0
+yaw_kp: 0.0
+yaw_kd: 0.0
+yaw_max_diff: 0.0
+
+wheel_vel_limit: 20.0
+com_use_sim: true

@@ -331,80 +331,94 @@ class LQRIKPrior:
         self._prev_wheel_cmd = 0.0  # Previous wheel velocity command [rad/s]
 
     def _build_height_ik(self) -> HeightIKMapping:
-        """Build height IK mapping via FK scan with contact constraints.
+        """Build height IK mapping from corrected empirical targets.
 
-        Uses MuJoCo's dynamics to compute torso height for different leg
-        configurations while maintaining ground contact.
+        Loads pre-computed contact-aware IK targets from Phase B.9 Task 6.
+        Falls back to FK scan if empirical targets are not available.
 
         Returns:
             HeightIKMapping with polynomial coefficients.
         """
+        # Try to load corrected empirical IK targets (standing configurations only)
+        empirical_path = Path("outputs/phase_b9_task6_empirical_ik_standing_only/empirical_ik_targets.json")
+
+        if empirical_path.exists():
+            import json
+            with open(empirical_path, 'r') as f:
+                empirical_data = json.load(f)
+
+            # Extract achievable targets only
+            targets = [t for t in empirical_data['targets'] if t['achievable']]
+
+            if targets:
+                # Sort by height
+                targets.sort(key=lambda t: t['target_height'])
+
+                heights = np.array([t['target_height'] for t in targets])
+                hip_pitches = np.array([t['hip_pitch'] for t in targets])
+                knees = np.array([t['knee'] for t in targets])
+
+                # Polynomial fit: height → joint angles
+                degree = self.config.ik_polynomial_degree
+                hip_pitch_poly = np.polyfit(heights, hip_pitches, degree)
+                knee_poly = np.polyfit(heights, knees, degree)
+
+                return HeightIKMapping(
+                    height_range=(float(heights.min()), float(heights.max())),
+                    hip_pitch_poly=hip_pitch_poly,
+                    knee_poly=knee_poly,
+                )
+
+        # Fallback: contact-aware FK scan
         n_samples = self.config.ik_scan_points
 
-        # Constrain joint ranges to realistic standing configurations
-        # Full ranges from config include non-standing poses (negative angles = leaning back)
-        # For standing: hip_pitch and knee should be non-negative
         hip_pitch_min = 0.0
         hip_pitch_max = min(1.5, self.config.joint_limits["hip_pitch"][1])
         knee_min = 0.0
         knee_max = min(2.5, self.config.joint_limits["knee"][1])
 
-        # Sample joint angles
         hip_pitch_samples = np.linspace(hip_pitch_min, hip_pitch_max, n_samples)
         knee_samples = np.linspace(knee_min, knee_max, n_samples)
 
-        # If symmetric fold, enforce knee ≈ 2 * hip_pitch
         if self.config.ik_symmetric_fold:
             knee_samples = 2.0 * hip_pitch_samples
             knee_samples = np.clip(knee_samples, knee_min, knee_max)
 
-        # FK scan: compute torso height for each configuration
         heights = []
         data = mujoco.MjData(self.model)
 
-        # qpos layout: [base_pos(3), base_quat(4), joints(10)]
-        L_HIP_PITCH_QPOS = 7 + 2  # l_hip_pitch
-        L_KNEE_QPOS = 7 + 3       # l_knee
-        R_HIP_PITCH_QPOS = 7 + 7  # r_hip_pitch
-        R_KNEE_QPOS = 7 + 8       # r_knee
+        L_HIP_PITCH_QPOS = 7 + 2
+        L_KNEE_QPOS = 7 + 3
+        R_HIP_PITCH_QPOS = 7 + 7
+        R_KNEE_QPOS = 7 + 8
 
         for hip_pitch, knee in zip(hip_pitch_samples, knee_samples):
-            # Reset simulation
             mujoco.mj_resetData(self.model, data)
 
-            # Set joint positions (symmetric left/right)
             data.qpos[L_HIP_PITCH_QPOS] = hip_pitch
             data.qpos[L_KNEE_QPOS] = knee
             data.qpos[R_HIP_PITCH_QPOS] = hip_pitch
             data.qpos[R_KNEE_QPOS] = knee
+            data.qpos[2] = 1.0
 
-            # Initial base height guess
-            data.qpos[2] = 0.6
+            mujoco.mj_forward(self.model, data)
 
-            # Run forward kinematics to compute body positions
-            mujoco.mj_kinematics(self.model, data)
-
-            # Get left wheel position in world frame
             l_wheel_body_id = self.model.body("l_wheel_link").id
-            wheel_z = data.xpos[l_wheel_body_id, 2]
+            r_wheel_body_id = self.model.body("r_wheel_link").id
+            l_wheel_z = data.xpos[l_wheel_body_id, 2]
+            r_wheel_z = data.xpos[r_wheel_body_id, 2]
+            lowest_wheel_z = min(l_wheel_z, r_wheel_z)
 
-            # Wheel radius from config
-            wheel_radius = self.config.wheel_radius
+            root_z_correction = -lowest_wheel_z
+            data.qpos[2] += root_z_correction
 
-            # Adjust base z so wheel touches ground (wheel_z should equal wheel_radius)
-            base_z_adjustment = wheel_radius - wheel_z
-            data.qpos[2] += base_z_adjustment
+            mujoco.mj_forward(self.model, data)
 
-            # Recompute kinematics with adjusted base height
-            mujoco.mj_kinematics(self.model, data)
-
-            # Measure torso height (base z position)
             torso_height = data.qpos[2]
             heights.append(torso_height)
 
         heights = np.array(heights)
 
-        # Polynomial fit: height → joint angles
         degree = self.config.ik_polynomial_degree
         hip_pitch_poly = np.polyfit(heights, hip_pitch_samples, degree)
         knee_poly = np.polyfit(heights, knee_samples, degree)

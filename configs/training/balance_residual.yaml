@@ -18,7 +18,7 @@ metadata:
   policy_type: residual_ppo
   action_mode: bounded_residual
   controller_type: residual_lqr_ik
-  prior: geometric_lqr_ik
+  prior: height_scheduled_dynamic_lqr_ik
   prior_status: limited_prior
   obs_dim: 52
   base_obs_dim: 42
