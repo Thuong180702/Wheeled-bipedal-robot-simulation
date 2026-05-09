@@ -24,12 +24,12 @@ dist/
 MANIFEST
 
 # ─── Training outputs (checkpoints, logs, telemetry) ─────────────────────────
-# outputs/
-# runs/
-# wandb/
-# logs/
-# outputs_residual_smoke/
-# outputs_residual_test/
+outputs/
+runs/
+wandb/
+logs/
+outputs_residual_smoke/
+outputs_residual_test/
 
 # ─── MuJoCo runtime logs ─────────────────────────────────────────────────────
 MUJOCO_LOG.TXT
