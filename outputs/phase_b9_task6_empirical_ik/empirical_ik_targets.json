@@ -1,0 +1,48 @@
+{
+  "min_height": 0.71,
+  "max_height": 0.71,
+  "targets": [
+    {
+      "target_height": 0.7,
+      "achievable": false,
+      "hip_pitch": -0.5,
+      "knee": -0.5
+    },
+    {
+      "target_height": 0.65,
+      "achievable": false,
+      "hip_pitch": -0.5,
+      "knee": -0.5
+    },
+    {
+      "target_height": 0.6,
+      "achievable": false,
+      "hip_pitch": -0.5,
+      "knee": -0.5
+    },
+    {
+      "target_height": 0.55,
+      "achievable": false,
+      "hip_pitch": -0.5,
+      "knee": -0.5
+    },
+    {
+      "target_height": 0.5,
+      "achievable": false,
+      "hip_pitch": -0.5,
+      "knee": -0.5
+    },
+    {
+      "target_height": 0.45,
+      "achievable": false,
+      "hip_pitch": -0.5,
+      "knee": -0.5
+    },
+    {
+      "target_height": 0.4,
+      "achievable": false,
+      "hip_pitch": -0.5,
+      "knee": -0.5
+    }
+  ]
+}

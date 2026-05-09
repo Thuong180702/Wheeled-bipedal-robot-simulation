@@ -1,0 +1,144 @@
+# ============================================================
+# Dual-Rate Controller B9 - Fixed Version
+# ============================================================
+# Fixes for immediate fall issue:
+# 1. Reduced CoM gains by 60% (k_com: 9.0 -> 3.6, k_com_rate: 2.8 -> 1.1)
+# 2. Relaxed pitch gate from 6° to 10° to allow recovery
+# 3. Reduced emergency gain multiplier from 1.25 to 1.1
+#
+# Root cause: CoM feedback dominated pitch correction, creating
+# positive feedback loop (pitch back -> CoM forward -> wheels back)
+
+metadata:
+  controller_type: dual_rate_balance_controller_b9_fixed
+  action_semantics: absolute_normalized
+  prior_status: diagnostic_fix
+  validation_date: 2026-05-09
+  uses_time_scale_separation: true
+  height_posture_updates_are_gated: true
+  fixes_applied:
+    - reduced_com_gains_by_60_percent
+    - relaxed_pitch_gate_to_10_deg
+    - reduced_emergency_multiplier
+
+# --- Time-scale separation ---
+time_scale:
+  fast_loop_rate_hz: 50
+  slow_loop_rate_hz: 5
+  control_dt: 0.02
+
+# --- Valid height range ---
+height:
+  min: 0.40
+  max: 0.65
+  grid: [0.65, 0.60, 0.55, 0.50, 0.45, 0.40]
+
+# --- Joint limits ---
+joint_limits:
+  hip_roll: [-0.7, 0.7]
+  hip_yaw: [-0.4, 0.4]
+  hip_pitch: [-0.5, 1.8]
+  knee: [-0.5, 2.7]
+  wheel: [-1.0e6, 1.0e6]
+
+wheel_vel_limit: 20.0
+
+# --- Slow loop: Height/posture planner ---
+slow_loop:
+  posture_blend_alpha: 0.85
+  max_hip_pitch_delta: 0.03
+  max_knee_delta: 0.03
+
+  # FIXED: Relaxed from 6° to 10° to allow recovery
+  pitch_gate_deg: 10.0
+  pitch_rate_gate_deg_s: 30.0
+
+  height_correction_enabled: true
+  height_correction_gain: 0.02
+  max_height_correction_per_update: 0.01
+
+# --- Fast loop: Wheel balance LQR ---
+fast_loop:
+  height_scheduled_gains_enabled: true
+  height_scheduled_gains:
+    0.65:
+      k_pitch: 16.0
+      k_pitch_rate: 3.2
+      k_fwd_vel: 2.2
+      k_fwd_pos: 0.6
+      # FIXED: Reduced from 9.0 to 3.6 (60% reduction)
+      k_com: 3.6
+      # FIXED: Reduced from 2.8 to 1.1 (60% reduction)
+      k_com_rate: 1.1
+    0.60:
+      k_pitch: 17.0
+      k_pitch_rate: 3.5
+      k_fwd_vel: 2.5
+      k_fwd_pos: 0.7
+      k_com: 4.0
+      k_com_rate: 1.2
+    0.55:
+      k_pitch: 18.0
+      k_pitch_rate: 4.0
+      k_fwd_vel: 3.0
+      k_fwd_pos: 0.8
+      k_com: 4.8
+      k_com_rate: 1.4
+    0.50:
+      k_pitch: 20.0
+      k_pitch_rate: 4.5
+      k_fwd_vel: 3.5
+      k_fwd_pos: 1.0
+      k_com: 5.6
+      k_com_rate: 1.6
+    0.45:
+      k_pitch: 22.0
+      k_pitch_rate: 5.0
+      k_fwd_vel: 4.0
+      k_fwd_pos: 1.2
+      k_com: 6.4
+      k_com_rate: 1.8
+    0.40:
+      k_pitch: 25.0
+      k_pitch_rate: 5.5
+      k_fwd_vel: 4.5
+      k_fwd_pos: 1.5
+      k_com: 7.2
+      k_com_rate: 2.0
+
+  wheel_cmd_filter_enabled: true
+  wheel_cmd_filter_alpha: 0.5
+  wheel_cmd_filter_max_delta: 2.0
+
+  # FIXED: Reduced from 1.25 to 1.1 to avoid amplifying instability
+  emergency_mode_enabled: true
+  emergency_pitch_threshold_deg: 10.0
+  emergency_lqr_gain_multiplier: 1.1
+
+# --- Roll/yaw stabilization (disabled initially) ---
+roll:
+  kp: 10.0
+  kd: 1.2
+  max_correction: 0.5
+
+yaw:
+  kp: 0.0
+  kd: 0.0
+  max_diff: 0.0
+
+# --- CoM state ---
+com_state:
+  mode: "sim_oracle"
+  use_sim: true
+
+# --- Action semantics ---
+action:
+  mode: "absolute_normalized"
+  dim: 10
+
+# --- Height IK ---
+ik:
+  method: "fk_scan_polynomial"
+  scan_points: 25
+  symmetric_fold: true
+  polynomial_degree: 2

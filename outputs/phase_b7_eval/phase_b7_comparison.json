@@ -1,0 +1,239 @@
+{
+  "baseline_config": "configs\\controllers\\height_scheduled_dynamic_lqr.yaml",
+  "candidate_config": "configs\\controllers\\hierarchical_vmc_lqr.yaml",
+  "reference_config": "configs\\controllers\\gain_scheduled_lqr.yaml",
+  "heights": [
+    0.7,
+    0.65,
+    0.6,
+    0.55,
+    0.5,
+    0.45,
+    0.4
+  ],
+  "num_episodes": 20,
+  "baseline_results": {
+    "0.7": {
+      "survival_time_mean": 1.9130000000000003,
+      "survival_time_std": 3.266075779892439,
+      "fall_rate": 0.9,
+      "pitch_rms_deg": 23.200698852539062,
+      "roll_rms_deg": 4.028989791870117,
+      "com_error_rms_m": 0.039842312209516666,
+      "wheel_sat_duration_s": 0.0
+    },
+    "0.65": {
+      "survival_time_mean": 1.475,
+      "survival_time_std": 2.8453602583855706,
+      "fall_rate": 0.9,
+      "pitch_rms_deg": 22.906085968017578,
+      "roll_rms_deg": 4.078262805938721,
+      "com_error_rms_m": 0.03977137246920086,
+      "wheel_sat_duration_s": 0.0
+    },
+    "0.6": {
+      "survival_time_mean": 1.6540000000000004,
+      "survival_time_std": 2.8858489218945613,
+      "fall_rate": 0.9,
+      "pitch_rms_deg": 23.24929428100586,
+      "roll_rms_deg": 4.664280414581299,
+      "com_error_rms_m": 0.038862988709179855,
+      "wheel_sat_duration_s": 0.0
+    },
+    "0.55": {
+      "survival_time_mean": 1.75,
+      "survival_time_std": 2.92803346975406,
+      "fall_rate": 0.9,
+      "pitch_rms_deg": 23.08407974243164,
+      "roll_rms_deg": 4.475947380065918,
+      "com_error_rms_m": 0.03865746469176888,
+      "wheel_sat_duration_s": 0.0
+    },
+    "0.5": {
+      "survival_time_mean": 1.703,
+      "survival_time_std": 2.8947005026427175,
+      "fall_rate": 0.9,
+      "pitch_rms_deg": 23.154735565185547,
+      "roll_rms_deg": 4.572591781616211,
+      "com_error_rms_m": 0.03969887676988485,
+      "wheel_sat_duration_s": 0.0
+    },
+    "0.45": {
+      "survival_time_mean": 1.892,
+      "survival_time_std": 2.9686320081815465,
+      "fall_rate": 0.9,
+      "pitch_rms_deg": 23.68956756591797,
+      "roll_rms_deg": 4.297854423522949,
+      "com_error_rms_m": 0.03981348091013445,
+      "wheel_sat_duration_s": 0.0
+    },
+    "0.4": {
+      "survival_time_mean": 1.5559999999999998,
+      "survival_time_std": 2.82805657652035,
+      "fall_rate": 0.9,
+      "pitch_rms_deg": 22.921016693115234,
+      "roll_rms_deg": 4.43914270401001,
+      "com_error_rms_m": 0.041363497266028615,
+      "wheel_sat_duration_s": 0.0005
+    }
+  },
+  "candidate_results": {
+    "0.7": {
+      "survival_time_mean": 0.315,
+      "survival_time_std": 0.29413432305666065,
+      "fall_rate": 1.0,
+      "pitch_rms_deg": 26.285511016845703,
+      "roll_rms_deg": 3.0334479808807373,
+      "com_error_rms_m": 0.25231182143337894,
+      "wheel_sat_duration_s": 0.1002
+    },
+    "0.65": {
+      "survival_time_mean": 0.30300000000000005,
+      "survival_time_std": 0.2595592417926975,
+      "fall_rate": 1.0,
+      "pitch_rms_deg": 26.434783935546875,
+      "roll_rms_deg": 3.033287525177002,
+      "com_error_rms_m": 0.25271243895752815,
+      "wheel_sat_duration_s": 0.08880000000000002
+    },
+    "0.6": {
+      "survival_time_mean": 0.294,
+      "survival_time_std": 0.23281752511355328,
+      "fall_rate": 1.0,
+      "pitch_rms_deg": 26.421985626220703,
+      "roll_rms_deg": 3.0501770973205566,
+      "com_error_rms_m": 0.2534592364703189,
+      "wheel_sat_duration_s": 0.08600000000000002
+    },
+    "0.55": {
+      "survival_time_mean": 0.27999999999999997,
+      "survival_time_std": 0.19989997498749218,
+      "fall_rate": 1.0,
+      "pitch_rms_deg": 26.492626190185547,
+      "roll_rms_deg": 3.0665383338928223,
+      "com_error_rms_m": 0.2518754502465516,
+      "wheel_sat_duration_s": 0.08120000000000002
+    },
+    "0.5": {
+      "survival_time_mean": 0.321,
+      "survival_time_std": 0.2831589659537554,
+      "fall_rate": 1.0,
+      "pitch_rms_deg": 26.173141479492188,
+      "roll_rms_deg": 3.08082914352417,
+      "com_error_rms_m": 0.25849087906736223,
+      "wheel_sat_duration_s": 0.09800000000000003
+    },
+    "0.45": {
+      "survival_time_mean": 0.33799999999999997,
+      "survival_time_std": 0.21079848196796866,
+      "fall_rate": 1.0,
+      "pitch_rms_deg": 26.509754180908203,
+      "roll_rms_deg": 2.859294891357422,
+      "com_error_rms_m": 0.2575355792722559,
+      "wheel_sat_duration_s": 0.097
+    },
+    "0.4": {
+      "survival_time_mean": 0.32900000000000007,
+      "survival_time_std": 0.17971922546016053,
+      "fall_rate": 1.0,
+      "pitch_rms_deg": 26.9478702545166,
+      "roll_rms_deg": 2.8253188133239746,
+      "com_error_rms_m": 0.25735864406886416,
+      "wheel_sat_duration_s": 0.09680000000000002
+    }
+  },
+  "reference_results": {
+    "0.7": {
+      "survival_time_mean": 1.164,
+      "survival_time_std": 2.071526973032212,
+      "fall_rate": 0.95,
+      "pitch_rms_deg": 24.373397827148438,
+      "roll_rms_deg": 4.359568119049072,
+      "com_error_rms_m": 0.04005283902193411,
+      "wheel_sat_duration_s": 0.051700000000000156
+    },
+    "0.65": {
+      "survival_time_mean": 2.012,
+      "survival_time_std": 3.3681888308110044,
+      "fall_rate": 0.85,
+      "pitch_rms_deg": 24.68511962890625,
+      "roll_rms_deg": 4.074698448181152,
+      "com_error_rms_m": 0.038703950644427984,
+      "wheel_sat_duration_s": 0.11090000000000053
+    },
+    "0.6": {
+      "survival_time_mean": 1.556,
+      "survival_time_std": 2.8257006210849727,
+      "fall_rate": 0.9,
+      "pitch_rms_deg": 23.136966705322266,
+      "roll_rms_deg": 4.2507524490356445,
+      "com_error_rms_m": 0.04226511463827653,
+      "wheel_sat_duration_s": 0.07300000000000027
+    },
+    "0.55": {
+      "survival_time_mean": 1.109,
+      "survival_time_std": 2.058538073488076,
+      "fall_rate": 0.95,
+      "pitch_rms_deg": 23.258779525756836,
+      "roll_rms_deg": 4.994916915893555,
+      "com_error_rms_m": 0.041284566850830186,
+      "wheel_sat_duration_s": 0.04570000000000014
+    },
+    "0.5": {
+      "survival_time_mean": 1.5790000000000002,
+      "survival_time_std": 2.8204217769688276,
+      "fall_rate": 0.9,
+      "pitch_rms_deg": 23.423072814941406,
+      "roll_rms_deg": 4.618378639221191,
+      "com_error_rms_m": 0.041418141519362156,
+      "wheel_sat_duration_s": 0.07430000000000028
+    },
+    "0.45": {
+      "survival_time_mean": 1.498,
+      "survival_time_std": 2.8404077172124427,
+      "fall_rate": 0.9,
+      "pitch_rms_deg": 23.969783782958984,
+      "roll_rms_deg": 4.335192680358887,
+      "com_error_rms_m": 0.039452982071063576,
+      "wheel_sat_duration_s": 0.06970000000000029
+    },
+    "0.4": {
+      "survival_time_mean": 1.918,
+      "survival_time_std": 3.2484143824333747,
+      "fall_rate": 0.9,
+      "pitch_rms_deg": 24.200084686279297,
+      "roll_rms_deg": 4.232032775878906,
+      "com_error_rms_m": 0.03992795671588328,
+      "wheel_sat_duration_s": 0.09830000000000041
+    }
+  },
+  "baseline_aggregate": {
+    "survival_time_mean": 1.7061428571428572,
+    "fall_rate": 0.9000000000000001,
+    "pitch_rms_deg": 23.172211238316127,
+    "com_error_rms_m": 0.039715713289387736
+  },
+  "candidate_aggregate": {
+    "survival_time_mean": 0.31142857142857144,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 26.46652466910226,
+    "com_error_rms_m": 0.2548205785023228
+  },
+  "reference_aggregate": {
+    "survival_time_mean": 1.5479999999999998,
+    "fall_rate": 0.9071428571428573,
+    "pitch_rms_deg": 23.863886424473353,
+    "com_error_rms_m": 0.0404436502088254
+  },
+  "improvements": {
+    "survival_time_pct": -81.74662982500209,
+    "pitch_rms_pct": -14.216655445203525,
+    "fall_rate_pp": -9.999999999999986
+  },
+  "criteria_met": {
+    "survival_time": false,
+    "pitch_rms": false,
+    "fall_rate": false
+  },
+  "decision": "REJECT"
+}

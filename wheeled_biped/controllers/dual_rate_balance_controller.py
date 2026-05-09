@@ -22,9 +22,13 @@ from wheeled_biped.controllers.action_codec import (
     ACTION_DIM,
     HIP_PITCH_KNEE_INDICES,
     L_HIP_PITCH,
+    L_HIP_ROLL,
+    L_HIP_YAW,
     L_KNEE,
     L_WHEEL,
     R_HIP_PITCH,
+    R_HIP_ROLL,
+    R_HIP_YAW,
     R_KNEE,
     R_WHEEL,
     WHEEL_VELOCITY_INDICES,
@@ -148,16 +152,24 @@ class DualRateBalanceController:
         self.last_slow_update_step = -999  # Force first update at step 0
         self.slow_loop_interval = int(config.fast_loop_rate_hz / config.slow_loop_rate_hz)
 
-        # Posture targets (initialized to nominal standing height)
-        nominal_height = (config.height_min + config.height_max) / 2.0
-        ik_targets = self.height_ik.compute_ik_targets(nominal_height)
-        self.target_hip_pitch = ik_targets["hip_pitch"]
-        self.target_knee = ik_targets["knee"]
+        # Posture targets (initialized to keyframe standing posture)
+        # Keyframe: hip_pitch=0.3, knee=0.5 (matches env reset in base_env.py:176)
+        # This prevents immediate mismatch at episode start
+        self.target_hip_pitch = 0.3
+        self.target_knee = 0.5
         self.last_stable_hip_pitch = self.target_hip_pitch
         self.last_stable_knee = self.target_knee
 
         # Wheel command filtering
         self.filtered_wheel_cmd = 0.0
+
+        # Last-step diagnostics
+        self.last_wheel_cmd_raw = 0.0
+        self.last_wheel_cmd_clipped = 0.0
+        self.last_wheel_cmd_norm = 0.0
+        self.last_emergency_active = False
+        self.last_is_stable = True
+        self.last_should_update_slow = False
 
         # Telemetry
         self.num_slow_updates = 0
@@ -174,28 +186,28 @@ class DualRateBalanceController:
             action: Normalized action vector [-1, 1]^10
         """
         # Extract state from observation
-        # Observation structure (BalanceEnv):
-        # [0:3] gravity_body, [3] pitch, [4] roll, [5:8] ang_vel,
-        # [8:18] joint_pos, [18:28] joint_vel, [28:31] prev_action_subset,
-        # [31:34] com_pos_body, [34:37] com_vel_body,
-        # [37] yaw_error, [38] height_cmd, [39] current_height,
-        # [40] height_error, [41] height_rate
+        # Observation structure (BalanceEnv, 42 dims):
+        # [0:3] gravity_body, [3:6] base_lin_vel, [6:9] base_ang_vel,
+        # [9:19] joint_pos, [19:29] joint_vel, [29:39] prev_action,
+        # [39] height_cmd (normalized), [40] current_height (normalized), [41] yaw_error
 
-        pitch = float(obs[3])
-        pitch_rate = float(obs[5])  # ang_vel[0] is pitch rate
+        # Pitch from gravity vector (forward tilt)
+        gravity_body = obs[0:3]
+        pitch = float(np.arcsin(np.clip(-gravity_body[0], -1.0, 1.0)))
+        pitch_rate = float(obs[6])  # ang_vel[0] is pitch rate
 
         # Joint positions and velocities
-        joint_pos = obs[8:18]
-        joint_vel = obs[18:28]
+        joint_pos = obs[9:19]
+        joint_vel = obs[19:29]
 
-        # CoM state (body frame)
-        com_y = float(obs[32])  # Forward CoM position in body frame
-        com_y_dot = float(obs[35])  # Forward CoM velocity in body frame
+        # CoM state (body frame) - approximate from base_lin_vel
+        # BalanceEnv doesn't include explicit CoM in obs, use forward velocity as proxy
+        com_y_dot = float(obs[3])  # base_lin_vel[0] is forward velocity
+        com_y = 0.0  # Not directly observable, set to zero (LQR will use velocity feedback)
 
-        # Height command and current height
-        height_cmd = float(obs[38])
-        current_height = float(obs[39])
-        height_error = float(obs[40])
+        # Height command and current height (both normalized to [0,1])
+        height_cmd_norm = float(obs[39])
+        current_height_norm = float(obs[40])
 
         # Forward position and velocity (from wheel integration)
         # Approximate from wheel velocities
@@ -204,7 +216,7 @@ class DualRateBalanceController:
         fwd_vel = (wheel_vel_l + wheel_vel_r) / 2.0 * 0.06  # wheel_radius = 0.06m
 
         # Denormalize height command (normalized to [0, 1] in obs)
-        height_cmd_m = height_cmd * (self.config.height_max - self.config.height_min) + self.config.height_min
+        height_cmd_m = height_cmd_norm * (self.config.height_max - self.config.height_min) + self.config.height_min
         height_cmd_m = np.clip(height_cmd_m, self.config.height_min, self.config.height_max)
 
         # Check if slow loop should update
@@ -215,6 +227,9 @@ class DualRateBalanceController:
         pitch_rate_deg_s = np.rad2deg(abs(pitch_rate))
         is_stable = (pitch_deg < self.config.pitch_gate_deg and
                     pitch_rate_deg_s < self.config.pitch_rate_gate_deg_s)
+
+        self.last_should_update_slow = should_update_slow
+        self.last_is_stable = is_stable
 
         # Slow loop: Update posture targets
         if should_update_slow:
@@ -283,6 +298,7 @@ class DualRateBalanceController:
             gains["k_com"] * com_y_error +
             gains["k_com_rate"] * com_y_dot
         )
+        self.last_wheel_cmd_raw = float(wheel_cmd)
 
         # Wheel command filtering
         if self.config.wheel_cmd_filter_enabled:
@@ -303,6 +319,9 @@ class DualRateBalanceController:
 
         # Normalize wheel command to [-1, 1]
         wheel_cmd_norm = wheel_cmd / self.config.wheel_vel_limit
+        self.last_wheel_cmd_clipped = float(wheel_cmd)
+        self.last_wheel_cmd_norm = float(wheel_cmd_norm)
+        self.last_emergency_active = bool(emergency_active)
 
         # Construct action vector
         action = np.zeros(ACTION_DIM, dtype=np.float32)
@@ -325,11 +344,26 @@ class DualRateBalanceController:
         action[L_WHEEL] = wheel_cmd_norm
         action[R_WHEEL] = wheel_cmd_norm
 
-        # Roll and yaw (disabled initially)
-        # action[L_HIP_ROLL] = 0.0
-        # action[R_HIP_ROLL] = 0.0
-        # action[L_HIP_YAW] = 0.0
-        # action[R_HIP_YAW] = 0.0
+        # Roll stabilization (PD control on hip_roll differential)
+        if self.config.roll_kp > 0 or self.config.roll_kd > 0:
+            # Roll from gravity vector (lateral tilt)
+            roll = float(np.arcsin(np.clip(gravity_body[1], -1.0, 1.0)))
+            roll_rate = float(obs[7])  # ang_vel[1] is roll rate
+
+            # PD correction
+            roll_correction = -(self.config.roll_kp * roll + self.config.roll_kd * roll_rate)
+            roll_correction = np.clip(roll_correction, -self.config.roll_max_correction, self.config.roll_max_correction)
+
+            # Differential hip roll - SIGN FLIPPED after empirical test showed amplification
+            action[L_HIP_ROLL] = roll_correction
+            action[R_HIP_ROLL] = -roll_correction
+        else:
+            action[L_HIP_ROLL] = 0.0
+            action[R_HIP_ROLL] = 0.0
+
+        # Yaw stabilization (disabled initially)
+        action[L_HIP_YAW] = 0.0
+        action[R_HIP_YAW] = 0.0
 
         # Clip to [-1, 1]
         action = clip_normalized_action(action)
@@ -372,11 +406,10 @@ class DualRateBalanceController:
         self.step_count = 0
         self.last_slow_update_step = -999
 
-        # Reset to nominal standing posture
-        nominal_height = (self.config.height_min + self.config.height_max) / 2.0
-        ik_targets = self.height_ik.compute_ik_targets(nominal_height)
-        self.target_hip_pitch = ik_targets["hip_pitch"]
-        self.target_knee = ik_targets["knee"]
+        # Reset to keyframe standing posture (matches env reset)
+        # Keyframe: hip_pitch=0.3, knee=0.5 (matches base_env.py:176)
+        self.target_hip_pitch = 0.3
+        self.target_knee = 0.5
         self.last_stable_hip_pitch = self.target_hip_pitch
         self.last_stable_knee = self.target_knee
 
@@ -395,4 +428,10 @@ class DualRateBalanceController:
             "target_hip_pitch": self.target_hip_pitch,
             "target_knee": self.target_knee,
             "filtered_wheel_cmd": self.filtered_wheel_cmd,
+            "wheel_cmd_raw": self.last_wheel_cmd_raw,
+            "wheel_cmd_clipped": self.last_wheel_cmd_clipped,
+            "wheel_cmd_norm": self.last_wheel_cmd_norm,
+            "emergency_active": self.last_emergency_active,
+            "is_stable": self.last_is_stable,
+            "should_update_slow": self.last_should_update_slow,
         }

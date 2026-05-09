@@ -1,0 +1,12 @@
+Balance Evaluation Summary  [LQR Baseline]
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+          Scenario  Survival(s)  FallRate  Pitch_RMS(°)  Roll_RMS(°)  PitchRate_RMS  Drift_max(m)  H_RMSE(m)  Wheel_RMS  Torque_RMS  Recov(s)  MaxPush(N)
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+           nominal          0.5    100.00%          0.90        24.00          0.562         0.153      0.042      20.34       17.78         —           —
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Metrics: survival_time=mean episode before fall (s), pitch/roll_rms=RMS angle (deg),
+pitch_rate_rms=RMS pitch angular velocity (rad/s), drift_max=max XY displacement (m),
+height_rmse=height tracking error (m), wheel_rms=wheel speed RMS (rad/s),
+torque_rms=joint torque RMS (Nm), recov=recovery time after push (s),
+max_push=max recoverable push force (N, binary search).
+

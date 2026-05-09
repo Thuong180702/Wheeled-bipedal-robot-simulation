@@ -1,0 +1,2 @@
+checkpoint,scenario,scenario_group,scenario_param_name,scenario_param_value,num_episodes,fall_rate,survival_rate,survival_time_mean_s,survival_time_std_s,pitch_rms_deg,roll_rms_deg,pitch_rate_rms_rads,xy_drift_max_m,height_rmse_m,wheel_speed_rms_rads,torque_rms_nm,recovery_time_s,max_recoverable_push_n
+lqr_ik,nominal,nominal,,,5,1.0,0.0,0.42000000000000004,5.551115123125783e-17,1.223130808466265,23.935966309154377,0.6222015456097653,0.1468362993805138,0.05117836236004823,18.19815671929927,16.84137280816271,,

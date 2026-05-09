@@ -1,0 +1,76 @@
+Failed to import warp: No module named 'warp'
+Failed to import mujoco_warp: No module named 'warp'
+
+=== Observation Structure Comparison ===
+
+Unit test observation structure (42 dims):
+  0:3   - g_body (gravity in body frame)
+  3:6   - body_ang_vel
+  6:16  - qpos (10 joints)
+  16:26 - qvel (10 joints)
+  26:36 - prev_action (10)
+  36    - height_cmd
+  37    - current_height
+  38    - yaw_error
+  Total: 39 dims
+
+BalanceEnv obs_size: 42
+Actual observation shape: (42,)
+Actual observation length: 42
+
+=== Diagnostic Rollout ===
+
+Environment obs_size: 42
+Environment num_actions: 10
+Environment CONTROL_DT: 0.02
+
+Prior config loaded: geometric_lqr_ik
+
+Initial state:
+  obs shape: (42,)
+  obs dtype: float32
+  done: False
+
+Initial observation values:
+  g_body (0:3): [ 0.  0. -1.]
+  body_lin_vel (3:6): [0. 0. 0.]
+  body_ang_vel (6:9): [0. 0. 0.]
+  qpos (9:19): [-0.03070819 -0.03298669  0.22837327  0.41211805  0.09865954  0.05386784
+ -0.0517735   0.35831666  0.595029    0.07702895]
+  qvel (19:29): [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+  prev_action (29:39): [0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+  height_cmd (39): 0.7496498823165894
+  current_height (40): 1.0333331823349
+  yaw_error (41): 0.0
+
+After height override:
+  height_cmd (39): 0.699999988079071
+
+Computing action from prior...
+  obs_np shape: (42,)
+  obs_np dtype: float32
+  action_np shape: (10,)
+  action_np dtype: float64
+  action_np: [ 0.          0.         -0.32346399 -0.33968487  0.         -0.
+  0.         -0.32346399 -0.33968487  0.        ]
+  action_np min/max: [-0.340, 0.000]
+  action_np has NaN: False
+  action_np has Inf: False
+
+Stepping environment...
+  Step successful
+  done: False
+  reward: 8.8480224609375
+
+Post-step observation:
+  g_body (0:3): [-0.04070225  0.04382611 -0.9982098 ]
+  pitch: -2.5°
+  roll: -2.3°
+  current_height (37): -0.340
+
+Running full episode (max 1000 steps)...
+  Step 36: done=True, pitch=37.8°, roll=-11.7°, reward=-520.806
+  Episode terminated at step 36
+
+Survival time: 0.74s
+Fall detected: True (threshold: 10.0s)

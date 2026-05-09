@@ -1,0 +1,68 @@
+Balanced Posture Table Generation Summary
+================================================================================
+
+Generated: 2026-05-05 15:56:55
+
+Feasible solutions: 0/5
+Knee-forward postures: 3/5
+
+CoM alignment:
+  Average |CoM error|: 0.0092 m
+  Maximum |CoM error|: 0.0105 m
+
+Height tracking:
+  Average |height error|: 0.0579 m
+  Maximum |height error|: 0.1122 m
+
+Detailed Results:
+--------------------------------------------------------------------------------
+
+Height 0.75m:
+  hip_pitch: -0.0080 rad (-0.46°)
+  knee: 0.0832 rad (4.77°)
+  torso_pitch_bias: 0.1405 rad (8.05°)
+  knee_forward_margin_left: -0.0087 m
+  knee_forward_margin_right: 0.0130 m
+  com_y_error: -0.0076 m
+  height_error: -0.0692 m
+  feasible: False
+
+Height 0.70m:
+  hip_pitch: -0.0070 rad (-0.40°)
+  knee: 0.0869 rad (4.98°)
+  torso_pitch_bias: 0.0867 rad (4.97°)
+  knee_forward_margin_left: -0.0089 m
+  knee_forward_margin_right: 0.0127 m
+  com_y_error: -0.0080 m
+  height_error: -0.0225 m
+  feasible: False
+
+Height 0.65m:
+  hip_pitch: -0.1108 rad (-6.35°)
+  knee: -0.0927 rad (-5.31°)
+  torso_pitch_bias: -0.0002 rad (-0.01°)
+  knee_forward_margin_left: 0.0180 m
+  knee_forward_margin_right: 0.0396 m
+  com_y_error: -0.0098 m
+  height_error: 0.0179 m
+  feasible: False
+
+Height 0.60m:
+  hip_pitch: -0.1118 rad (-6.41°)
+  knee: -0.0940 rad (-5.39°)
+  torso_pitch_bias: -0.0002 rad (-0.01°)
+  knee_forward_margin_left: 0.0183 m
+  knee_forward_margin_right: 0.0399 m
+  com_y_error: -0.0099 m
+  height_error: 0.0679 m
+  feasible: False
+
+Height 0.55m:
+  hip_pitch: -0.2262 rad (-12.96°)
+  knee: -0.2958 rad (-16.95°)
+  torso_pitch_bias: -0.0002 rad (-0.01°)
+  knee_forward_margin_left: 0.0475 m
+  knee_forward_margin_right: 0.0692 m
+  com_y_error: -0.0105 m
+  height_error: 0.1122 m
+  feasible: False

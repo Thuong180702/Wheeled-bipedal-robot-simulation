@@ -1,0 +1,43 @@
+{
+  "controller": "rl",
+  "checkpoints": [
+    "outputs/balance/rl/seed113/checkpoints/best_eval_per_step"
+  ],
+  "scenarios": [
+    "nominal"
+  ],
+  "num_episodes": 5,
+  "num_steps": 500,
+  "seeds": [
+    0
+  ],
+  "results": [
+    {
+      "scenario": "nominal",
+      "checkpoint": "outputs/balance/rl/seed113/checkpoints/best_eval_per_step",
+      "num_episodes": 5,
+      "fall_rate": 1.0,
+      "survival_rate": 0.0,
+      "survival_time_mean_s": 1.26,
+      "survival_time_std_s": 0.0,
+      "pitch_rms_deg": 7.428599626320269,
+      "roll_rms_deg": 12.82892005770719,
+      "pitch_rate_rms_rads": 0.9192723333834223,
+      "xy_drift_max_m": 0.7933136457704602,
+      "height_rmse_m": 0.04844506333893852,
+      "wheel_speed_rms_rads": 17.23706371660827,
+      "torque_rms_nm": 10.968492356375704,
+      "recovery_time_s": NaN,
+      "max_recoverable_push_n": NaN,
+      "extra": {
+        "scenario_height_cmd": 0.65,
+        "friction_scale": 1.0,
+        "action_delay_steps": 0,
+        "push_magnitude": 0.0,
+        "scenario_group": "nominal",
+        "scenario_param_name": "",
+        "scenario_param_value": ""
+      }
+    }
+  ]
+}

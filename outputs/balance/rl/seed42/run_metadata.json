@@ -1,0 +1,235 @@
+{
+  "experiment_name": "balance_seed42",
+  "timestamp": "2026-04-23T00:40:46.032797+00:00",
+  "python_version": "3.10.11",
+  "platform": "Windows",
+  "jax_version": "0.6.2",
+  "jax_backend": "cpu",
+  "jax_devices": [
+    "TFRT_CPU_0"
+  ],
+  "mujoco_version": "3.5.0",
+  "git_commit": "7e9cf3e",
+  "seed": 42,
+  "env_name": "BalanceEnv",
+  "num_envs": 128,
+  "learning_rate": 0.0003,
+  "rollout_length": 128,
+  "config": {
+    "robot": {
+      "name": "wheeled_biped_real",
+      "total_mass_kg": 8.1,
+      "dimensions": {
+        "thigh_length": 0.26,
+        "shin_length": 0.28,
+        "wheel_radius": 0.06,
+        "wheel_width": 0.05,
+        "hip_width": 0.23,
+        "torso_size": [
+          0.13,
+          0.07,
+          0.04
+        ]
+      },
+      "masses": {
+        "torso": 2.5,
+        "hip_roll_motor": 0.5,
+        "hip_yaw_motor": 0.8,
+        "thigh": 0.8,
+        "shin": 0.6,
+        "wheel_assembly": 0.1
+      },
+      "joint_limits": {
+        "hip_roll": [
+          -0.7,
+          0.7
+        ],
+        "hip_yaw": [
+          -0.4,
+          0.4
+        ],
+        "hip_pitch": [
+          -0.5,
+          1.8
+        ],
+        "knee": [
+          -0.5,
+          2.7
+        ],
+        "wheel": null
+      },
+      "torque_limits": {
+        "hip_roll": 22.0,
+        "hip_yaw": 22.0,
+        "hip_pitch": 44.0,
+        "knee": 44.0,
+        "wheel": 22.0
+      },
+      "default_standing_pose": {
+        "hip_roll": 0.0,
+        "hip_yaw": 0.0,
+        "hip_pitch": 0.3,
+        "knee": 0.5,
+        "wheel": 0.0
+      }
+    },
+    "sensors": {
+      "imu": {
+        "accelerometer": true,
+        "gyroscope": true,
+        "orientation_quat": true,
+        "noise_accel_std": 0.01,
+        "noise_gyro_std": 0.005
+      },
+      "encoders": {
+        "position": true,
+        "velocity": true,
+        "noise_pos_std": 0.001,
+        "noise_vel_std": 0.01
+      }
+    },
+    "simulation": {
+      "timestep": 0.002,
+      "policy_dt": 0.02,
+      "integrator": "implicitfast",
+      "solver_iterations": 4,
+      "solver_ls_iterations": 8
+    },
+    "task": {
+      "name": "balance",
+      "env": "BalanceEnv",
+      "episode_length": 1000,
+      "num_envs": 128,
+      "initial_min_height": 0.69
+    },
+    "curriculum": {
+      "enabled": true,
+      "reward_threshold": 0.75,
+      "num_levels": 29,
+      "window": 50,
+      "use_eval_signal": true,
+      "eval_interval_steps": 1000000,
+      "eval_episodes": 200
+    },
+    "ppo": {
+      "learning_rate": 0.0003,
+      "num_epochs": 4,
+      "num_minibatches": 32,
+      "rollout_length": 128,
+      "gamma": 0.99,
+      "gae_lambda": 0.95,
+      "clip_epsilon": 0.2,
+      "entropy_coeff": 0.008,
+      "value_loss_coeff": 0.5,
+      "max_grad_norm": 0.5,
+      "normalize_advantages": true,
+      "seed": 42
+    },
+    "network": {
+      "policy_hidden": [
+        256,
+        256,
+        128
+      ],
+      "value_hidden": [
+        256,
+        256,
+        128
+      ],
+      "activation": "elu",
+      "init_std": 0.2
+    },
+    "low_level_pid": {
+      "enabled": true,
+      "action_smoothing_alpha": 0.3,
+      "anti_windup_limit": 0.4,
+      "wheel_vel_limit": 20.0,
+      "kp": [
+        55.0,
+        40.0,
+        70.0,
+        70.0,
+        4.0,
+        55.0,
+        40.0,
+        70.0,
+        70.0,
+        4.0
+      ],
+      "ki": [
+        0.8,
+        0.4,
+        1.0,
+        1.0,
+        0.1,
+        0.8,
+        0.4,
+        1.0,
+        1.0,
+        0.1
+      ],
+      "kd": [
+        3.0,
+        2.0,
+        4.0,
+        4.0,
+        0.0,
+        3.0,
+        2.0,
+        4.0,
+        4.0,
+        0.0
+      ],
+      "action_delay_steps": 0
+    },
+    "rewards": {
+      "body_level": 1.5,
+      "height": 2.5,
+      "natural_pose": 0.4,
+      "symmetry": 1.0,
+      "alive": 0.3,
+      "heading": 0.5,
+      "legs_forward": 0.5,
+      "legs_vertical": 0.5,
+      "position_drift": 1.5,
+      "orientation": 0.8,
+      "yaw_rate": 0.5,
+      "no_motion": 0.5,
+      "wheel_velocity": -0.014,
+      "joint_torque": -0.0005,
+      "joint_velocity": -0.0007,
+      "action_rate": -0.12
+    },
+    "termination": {
+      "max_tilt_rad": 0.8,
+      "min_height": 0.3
+    },
+    "domain_randomization": {
+      "enabled": true,
+      "mass_range": [
+        0.85,
+        1.15
+      ],
+      "friction_range": [
+        0.6,
+        1.4
+      ],
+      "joint_damping_range": [
+        0.7,
+        1.3
+      ],
+      "push_interval": 500,
+      "push_magnitude": 0,
+      "push_duration": 5
+    },
+    "sensor_noise": {
+      "enabled": true,
+      "lin_vel_mode": "clean",
+      "lin_vel_std": 0.2,
+      "ang_vel_std": 0.05,
+      "gravity_std": 0.02,
+      "joint_pos_std": 0.005,
+      "joint_vel_std": 0.01
+    }
+  }
+}
