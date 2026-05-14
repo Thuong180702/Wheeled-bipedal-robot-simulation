@@ -1,10 +1,10 @@
 """Centroidal state estimation for dynamic balance control."""
 
-from dataclasses import dataclass
-import numpy as np
+import chex
+from jax import Array
 
 
-@dataclass
+@chex.dataclass(frozen=True)
 class CentroidalState:
     """Centroidal state for dynamic balance control.
 
@@ -20,12 +20,12 @@ class CentroidalState:
         left_wheel_force: Left wheel normal force (N)
         right_wheel_force: Right wheel normal force (N)
     """
-    com_pos: np.ndarray
-    com_vel: np.ndarray
-    capture_point: np.ndarray
-    divergence: np.ndarray
-    linear_momentum: np.ndarray
-    angular_momentum: np.ndarray
+    com_pos: Array  # shape: (3,)
+    com_vel: Array  # shape: (3,)
+    capture_point: Array  # shape: (2,)
+    divergence: Array  # shape: (2,)
+    linear_momentum: Array  # shape: (3,)
+    angular_momentum: Array  # shape: (3,)
     left_wheel_contact: bool
     right_wheel_contact: bool
     left_wheel_force: float
