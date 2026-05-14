@@ -47,6 +47,11 @@ class CentroidalStateEstimator:
         self.config = config
         self.dt = 0.02  # 50Hz control rate
 
+        # Wheel geom IDs (these should match the MuJoCo model)
+        # In wheeled_biped model: left_wheel=5, right_wheel=6
+        self.left_wheel_geom_id = 5
+        self.right_wheel_geom_id = 6
+
     def estimate(self, obs: Array, data, prev_com_pos: Array | None = None) -> tuple[CentroidalState, Array]:
         """Extract centroidal state from observation and MJX data.
 
@@ -68,15 +73,36 @@ class CentroidalStateEstimator:
         else:
             com_vel = (com_pos - prev_com_pos) / self.dt
 
-        # Placeholder values for other fields (will be implemented in later tasks)
-        capture_point = jnp.zeros(2)
-        divergence = jnp.zeros(2)
-        linear_momentum = self.config.robot_mass * com_vel
-        angular_momentum = jnp.zeros(3)
-        left_wheel_contact = True
-        right_wheel_contact = True
+        # Extract contact forces from MJX contact data
+        left_wheel_contact = False
+        right_wheel_contact = False
         left_wheel_force = 0.0
         right_wheel_force = 0.0
+
+        if hasattr(data, 'contact') and hasattr(data.contact, 'force'):
+            for i in range(len(data.contact.geom1)):
+                geom1 = int(data.contact.geom1[i])
+                geom2 = int(data.contact.geom2[i])
+
+                # Check if either geom is a wheel (contact can be geom1 or geom2)
+                if geom1 == self.left_wheel_geom_id or geom2 == self.left_wheel_geom_id:
+                    left_wheel_contact = True
+                    # Normal force is the z-component (index 2)
+                    left_wheel_force = float(abs(data.contact.force[i][2]))
+
+                if geom1 == self.right_wheel_geom_id or geom2 == self.right_wheel_geom_id:
+                    right_wheel_contact = True
+                    right_wheel_force = float(abs(data.contact.force[i][2]))
+
+        # Placeholder values for capture point (will be implemented in Task 4-5)
+        capture_point = jnp.zeros(2)
+        divergence = jnp.zeros(2)
+
+        # Compute linear momentum
+        linear_momentum = self.config.robot_mass * com_vel
+
+        # Placeholder for angular momentum (simplified)
+        angular_momentum = jnp.zeros(3)
 
         state = CentroidalState(
             com_pos=com_pos,

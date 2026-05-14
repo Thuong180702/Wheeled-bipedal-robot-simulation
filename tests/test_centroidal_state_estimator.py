@@ -129,3 +129,44 @@ def test_velocity_computation_via_finite_difference():
     # Verify CoM position is correct
     assert jnp.allclose(state2.com_pos, jnp.array([0.02, 0.01, 0.59]))
     assert jnp.allclose(com_pos2, jnp.array([0.02, 0.01, 0.59]))
+
+
+def test_contact_force_extraction():
+    """Test contact force extraction from MJX contact data."""
+    config = CentroidalStateEstimatorConfig(
+        robot_mass=15.0,
+        torso_inertia=jnp.array([0.5, 0.5, 0.3]),
+    )
+    estimator = CentroidalStateEstimator(config)
+
+    # Mock MJX data with contact information
+    class MockContact:
+        def __init__(self):
+            # Simulate 2 active contacts (left and right wheels)
+            self.force = jnp.array([
+                [0.0, 0.0, 75.0, 0.0, 0.0, 0.0],   # Left wheel: 75N normal force
+                [0.0, 0.0, 80.0, 0.0, 0.0, 0.0],   # Right wheel: 80N normal force
+            ])
+            # geom1 and geom2 identify which geoms are in contact
+            self.geom1 = jnp.array([5, 6])  # Wheel geom IDs
+            self.geom2 = jnp.array([0, 0])  # Ground geom ID
+
+    class MockData:
+        def __init__(self):
+            self.subtree_com = jnp.array([
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.6],
+            ])
+            self.qvel = jnp.zeros(16)
+            self.contact = MockContact()
+
+    obs = jnp.zeros(42)
+    data = MockData()
+
+    state, _ = estimator.estimate(obs, data, prev_com_pos=None)
+
+    # Verify contact extraction
+    assert state.left_wheel_contact == True
+    assert state.right_wheel_contact == True
+    assert abs(state.left_wheel_force - 75.0) < 1e-6
+    assert abs(state.right_wheel_force - 80.0) < 1e-6
