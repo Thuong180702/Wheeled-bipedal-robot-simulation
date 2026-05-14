@@ -59,8 +59,73 @@ def test_com_extraction_from_mjx_data():
     obs = jnp.zeros(42)
 
     data = MockData()
-    state = estimator.estimate(obs, data)
+    state, com_pos = estimator.estimate(obs, data)
 
     # Verify CoM extraction
     assert jnp.allclose(state.com_pos, jnp.array([0.1, 0.05, 0.6]))
+    assert jnp.allclose(com_pos, jnp.array([0.1, 0.05, 0.6]))
     assert state.com_vel.shape == (3,)
+
+
+def test_first_call_zero_velocity():
+    """Test that first call returns zero velocity when prev_com_pos is None."""
+    config = CentroidalStateEstimatorConfig(
+        robot_mass=15.0,
+        torso_inertia=jnp.array([0.5, 0.5, 0.3]),
+    )
+    estimator = CentroidalStateEstimator(config)
+
+    class MockData:
+        def __init__(self):
+            self.subtree_com = jnp.array([
+                [0.0, 0.0, 0.0],
+                [0.1, 0.05, 0.6],
+            ])
+            self.qvel = jnp.zeros(16)
+
+    obs = jnp.zeros(42)
+    data = MockData()
+
+    # First call with prev_com_pos=None should return zero velocity
+    state, com_pos = estimator.estimate(obs, data, prev_com_pos=None)
+
+    assert jnp.allclose(state.com_vel, jnp.zeros(3))
+    assert jnp.allclose(com_pos, jnp.array([0.1, 0.05, 0.6]))
+
+
+def test_velocity_computation_via_finite_difference():
+    """Test that velocity is correctly computed via finite difference."""
+    config = CentroidalStateEstimatorConfig(
+        robot_mass=15.0,
+        torso_inertia=jnp.array([0.5, 0.5, 0.3]),
+    )
+    estimator = CentroidalStateEstimator(config)
+
+    class MockData:
+        def __init__(self, com_pos):
+            self.subtree_com = jnp.array([
+                [0.0, 0.0, 0.0],
+                com_pos,
+            ])
+            self.qvel = jnp.zeros(16)
+
+    obs = jnp.zeros(42)
+
+    # First call at t=0
+    data1 = MockData(jnp.array([0.0, 0.0, 0.6]))
+    state1, com_pos1 = estimator.estimate(obs, data1, prev_com_pos=None)
+
+    # Verify first call returns zero velocity
+    assert jnp.allclose(state1.com_vel, jnp.zeros(3))
+
+    # Second call at t=0.02s with CoM moved by [0.02, 0.01, -0.01] m
+    data2 = MockData(jnp.array([0.02, 0.01, 0.59]))
+    state2, com_pos2 = estimator.estimate(obs, data2, prev_com_pos=com_pos1)
+
+    # Expected velocity: delta_pos / dt = [0.02, 0.01, -0.01] / 0.02 = [1.0, 0.5, -0.5] m/s
+    expected_vel = jnp.array([1.0, 0.5, -0.5])
+    assert jnp.allclose(state2.com_vel, expected_vel, atol=1e-6)
+
+    # Verify CoM position is correct
+    assert jnp.allclose(state2.com_pos, jnp.array([0.02, 0.01, 0.59]))
+    assert jnp.allclose(com_pos2, jnp.array([0.02, 0.01, 0.59]))

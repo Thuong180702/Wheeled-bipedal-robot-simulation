@@ -45,30 +45,28 @@ class CentroidalStateEstimator:
 
     def __init__(self, config: CentroidalStateEstimatorConfig):
         self.config = config
-        self.com_pos_prev = None
         self.dt = 0.02  # 50Hz control rate
 
-    def estimate(self, obs: Array, data) -> CentroidalState:
+    def estimate(self, obs: Array, data, prev_com_pos: Array | None = None) -> tuple[CentroidalState, Array]:
         """Extract centroidal state from observation and MJX data.
 
         Args:
             obs: Observation vector (not used for CoM extraction)
             data: MJX data structure with subtree_com, qvel, contact info
+            prev_com_pos: Previous CoM position for velocity computation (None on first call)
 
         Returns:
-            CentroidalState with all fields populated
+            (state, current_com_pos) - Return current CoM for next call
         """
         # Extract CoM position from MJX data
         # subtree_com[1] is the torso subtree CoM in world frame
         com_pos = data.subtree_com[1]
 
         # Compute CoM velocity via finite difference
-        if self.com_pos_prev is None:
+        if prev_com_pos is None:
             com_vel = jnp.zeros(3)
         else:
-            com_vel = (com_pos - self.com_pos_prev) / self.dt
-
-        self.com_pos_prev = com_pos
+            com_vel = (com_pos - prev_com_pos) / self.dt
 
         # Placeholder values for other fields (will be implemented in later tasks)
         capture_point = jnp.zeros(2)
@@ -80,7 +78,7 @@ class CentroidalStateEstimator:
         left_wheel_force = 0.0
         right_wheel_force = 0.0
 
-        return CentroidalState(
+        state = CentroidalState(
             com_pos=com_pos,
             com_vel=com_vel,
             capture_point=capture_point,
@@ -92,3 +90,5 @@ class CentroidalStateEstimator:
             left_wheel_force=left_wheel_force,
             right_wheel_force=right_wheel_force,
         )
+
+        return state, com_pos
