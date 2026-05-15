@@ -210,3 +210,39 @@ def test_posture_authority_budget_clipping():
     ratio = tau_clipped[0] / tau_clipped[5]
     expected_ratio = tau_desired[0] / tau_desired[5]
     assert jnp.abs(ratio - expected_ratio) < 0.01
+
+
+def test_integrated_posture_regularizer():
+    """Test integrated posture regularizer with two-level gating."""
+    config = PostureRegularizerConfig(
+        k_posture=2.0,
+        hip_roll_deadband=0.05,
+        wbc_error_threshold=0.3,
+        momentum_active_scale=0.5,
+        posture_authority_budget=0.2,
+    )
+    regularizer = PostureRegularizer(config)
+
+    # Joint positions with errors outside deadband
+    joint_pos = jnp.array([0.1, 0.1, 0.1, 0.15, 0.0, 0.1, 0.1, 0.1, 0.15, 0.0])
+
+    # WBC error below threshold, momentum coordinator active
+    wbc_error_magnitude = 0.2
+    momentum_magnitude = 0.8
+
+    tau_posture = regularizer.compute_posture_regularizer_torque(
+        joint_pos, wbc_error_magnitude, momentum_magnitude
+    )
+
+    # Should produce non-zero torques
+    assert jnp.any(jnp.abs(tau_posture) > 0.05)
+
+    # Should respect 20% authority budget
+    assert jnp.max(jnp.abs(tau_posture)) <= 6.0  # 20% of 30 Nm
+
+    # Should be reduced due to momentum coordinator activity
+    tau_full = regularizer.compute_posture_restoration_torque(joint_pos)
+    tau_full_clipped = regularizer.clip_to_authority_budget(tau_full)
+    expected_magnitude = jnp.max(jnp.abs(tau_full_clipped)) * 0.5
+    actual_magnitude = jnp.max(jnp.abs(tau_posture))
+    assert jnp.abs(actual_magnitude - expected_magnitude) < 0.1

@@ -160,3 +160,46 @@ class PostureRegularizer:
         tau_clipped = tau * scale_factor
 
         return tau_clipped
+
+    def compute_posture_regularizer_torque(
+        self,
+        joint_pos: Array,
+        wbc_error_magnitude: float,
+        momentum_magnitude: float,
+    ) -> Array:
+        """Compute integrated posture regularizer torque with two-level gating.
+
+        Combines posture restoration with WBC error gating and momentum coordinator
+        gating, then applies 20% authority budget.
+
+        Args:
+            joint_pos: Joint position array (10,)
+            wbc_error_magnitude: WBC error magnitude (normalized 0-1)
+            momentum_magnitude: Momentum coordinator activity magnitude (0-1)
+
+        Returns:
+            Posture regularizer torque array (10,) with gating and budget clipping
+        """
+        # Compute base posture restoration torque
+        tau_posture = self.compute_posture_restoration_torque(joint_pos)
+
+        # Apply WBC error gate (disable if WBC error > 30%)
+        wbc_gate = jnp.where(
+            wbc_error_magnitude > self.config.wbc_error_threshold,
+            0.0,
+            1.0,
+        )
+        tau_posture = tau_posture * wbc_gate
+
+        # Apply momentum coordinator gate (reduce to 50% if active)
+        momentum_gate = jnp.where(
+            momentum_magnitude > self.config.momentum_activity_threshold,
+            self.config.momentum_active_scale,
+            1.0,
+        )
+        tau_posture = tau_posture * momentum_gate
+
+        # Clip to 20% authority budget
+        tau_posture = self.clip_to_authority_budget(tau_posture)
+
+        return tau_posture
