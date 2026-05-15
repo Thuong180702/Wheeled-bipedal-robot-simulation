@@ -89,3 +89,48 @@ def test_posture_restoration_inside_deadband():
 
     # Should produce near-zero torques
     assert jnp.max(jnp.abs(tau_posture)) < 0.01
+
+
+def test_wbc_error_gating_disabled():
+    """Test posture regularization is disabled when WBC error exceeds threshold."""
+    config = PostureRegularizerConfig(
+        k_posture=2.0,
+        wbc_error_threshold=0.3,
+    )
+    regularizer = PostureRegularizer(config)
+
+    # Joint positions with errors outside deadband
+    joint_pos = jnp.array([0.1, 0.1, 0.1, 0.15, 0.0, 0.1, 0.1, 0.1, 0.15, 0.0])
+
+    # WBC error exceeds 30% threshold (0.4 > 0.3)
+    wbc_error_magnitude = 0.4
+
+    tau_posture = regularizer.apply_wbc_error_gate(
+        joint_pos, wbc_error_magnitude
+    )
+
+    # Should produce zero torques when WBC error is high
+    assert jnp.max(jnp.abs(tau_posture)) < 0.01
+
+
+def test_wbc_error_gating_enabled():
+    """Test posture regularization is enabled when WBC error is low."""
+    config = PostureRegularizerConfig(
+        k_posture=2.0,
+        hip_roll_deadband=0.05,
+        wbc_error_threshold=0.3,
+    )
+    regularizer = PostureRegularizer(config)
+
+    # Joint positions with errors outside deadband
+    joint_pos = jnp.array([0.1, 0.1, 0.1, 0.15, 0.0, 0.1, 0.1, 0.1, 0.15, 0.0])
+
+    # WBC error below 30% threshold (0.2 < 0.3)
+    wbc_error_magnitude = 0.2
+
+    tau_posture = regularizer.apply_wbc_error_gate(
+        joint_pos, wbc_error_magnitude
+    )
+
+    # Should produce non-zero torques when WBC error is low
+    assert jnp.any(jnp.abs(tau_posture) > 0.05)

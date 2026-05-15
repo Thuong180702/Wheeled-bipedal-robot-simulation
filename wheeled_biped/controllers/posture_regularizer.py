@@ -79,3 +79,31 @@ class PostureRegularizer:
         tau = -self.config.k_posture * posture_error * active
 
         return tau
+
+    def apply_wbc_error_gate(self, joint_pos: Array, wbc_error_magnitude: float) -> Array:
+        """Apply WBC error gate to posture restoration.
+
+        If WBC error exceeds threshold, completely disable posture regularization.
+
+        Args:
+            joint_pos: Joint position array (10,)
+            wbc_error_magnitude: WBC error magnitude (normalized 0-1)
+
+        Returns:
+            Gated posture torque array (10,)
+        """
+        # Compute base posture restoration torque
+        tau_posture = self.compute_posture_restoration_torque(joint_pos)
+
+        # JAX-compatible gating using jnp.where
+        # Disable completely if WBC error exceeds threshold
+        gate = jnp.where(
+            wbc_error_magnitude > self.config.wbc_error_threshold,
+            0.0,
+            1.0,
+        )
+
+        # Apply gate
+        tau_gated = tau_posture * gate
+
+        return tau_gated
