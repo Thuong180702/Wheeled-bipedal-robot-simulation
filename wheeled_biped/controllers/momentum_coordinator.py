@@ -211,3 +211,29 @@ class MomentumCoordinator:
         tau_clipped = tau * scale_factor
 
         return tau_clipped
+
+    def compute_momentum_coordinator_torque(self, obs: Array, state: CentroidalState) -> Array:
+        """Compute integrated momentum coordinator torque.
+
+        Combines momentum damping, feedforward compensation, and contact-aware
+        recovery with 20% authority budget.
+
+        Args:
+            obs: Observation array
+            state: CentroidalState with momentum and contact information
+
+        Returns:
+            Momentum coordinator torque array (10,) clipped to 20% authority
+        """
+        # Compute individual components
+        tau_damping = self.compute_momentum_damping_torque(state)
+        tau_feedforward = self.compute_feedforward_compensation_torque(obs, state)
+        tau_recovery = self.compute_contact_aware_recovery_torque(state)
+
+        # Sum all components
+        tau_momentum_desired = tau_damping + tau_feedforward + tau_recovery
+
+        # Clip to 20% authority budget
+        tau_momentum = self.clip_to_authority_budget(tau_momentum_desired)
+
+        return tau_momentum
