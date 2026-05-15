@@ -4,6 +4,8 @@ import chex
 import jax.numpy as jnp
 from jax import Array
 
+from wheeled_biped.controllers.centroidal_state_estimator import CentroidalState
+
 
 @chex.dataclass
 class CentroidalBalanceConfig:
@@ -55,5 +57,47 @@ class CentroidalBalanceController:
         tau = jnp.zeros(10)
         tau = tau.at[0].set(tau_hip_roll)  # left hip roll
         tau = tau.at[5].set(tau_hip_roll)  # right hip roll
+
+        return tau
+
+    def compute_com_regulation_torque(self, state: CentroidalState) -> Array:
+        """Compute CoM regulation torque with deadband control.
+
+        Args:
+            state: CentroidalState with com_pos and com_vel
+
+        Returns:
+            Torque array (10,) with CoM correction on hip roll and wheels
+        """
+        # Extract CoM position and velocity
+        com_x = state.com_pos[0]  # sagittal (forward)
+        com_y = state.com_pos[1]  # lateral (sideways)
+        com_vx = state.com_vel[0]
+        com_vy = state.com_vel[1]
+
+        # Apply deadband to lateral error
+        if jnp.abs(com_y) < self.config.com_deadband_lateral:
+            com_y_error = 0.0
+        else:
+            com_y_error = com_y
+
+        # Apply deadband to sagittal error
+        if jnp.abs(com_x) < self.config.com_deadband_sagittal:
+            com_x_error = 0.0
+        else:
+            com_x_error = com_x
+
+        # Lateral CoM error → hip roll torques (symmetric)
+        tau_lateral = -self.config.k_com_lateral * com_y_error - self.config.k_com_lateral_damping * com_vy
+
+        # Sagittal CoM error → wheel torques (common mode)
+        tau_sagittal = -self.config.k_com_sagittal * com_x_error - self.config.k_com_sagittal_damping * com_vx
+
+        # Build torque vector
+        tau = jnp.zeros(10)
+        tau = tau.at[0].set(tau_lateral)  # left hip roll
+        tau = tau.at[5].set(tau_lateral)  # right hip roll
+        tau = tau.at[4].set(tau_sagittal)  # left wheel
+        tau = tau.at[9].set(tau_sagittal)  # right wheel
 
         return tau

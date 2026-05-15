@@ -5,6 +5,7 @@ from wheeled_biped.controllers.centroidal_balance_controller import (
     CentroidalBalanceController,
     CentroidalBalanceConfig,
 )
+from wheeled_biped.controllers.centroidal_state_estimator import CentroidalState
 
 
 def test_centroidal_balance_controller_creation():
@@ -64,3 +65,76 @@ def test_roll_stabilization_torque():
     # Other joints should be zero
     assert jnp.allclose(tau_roll[1:5], 0.0, atol=1e-6)
     assert jnp.allclose(tau_roll[6:10], 0.0, atol=1e-6)
+
+
+def test_com_regulation_torque_outside_deadband():
+    """Test CoM regulation torque when error exceeds deadband."""
+    config = CentroidalBalanceConfig(
+        k_com_lateral=15.0,
+        k_com_lateral_damping=3.0,
+        k_com_sagittal=10.0,
+        k_com_sagittal_damping=2.0,
+        com_deadband_lateral=0.02,
+        com_deadband_sagittal=0.03,
+    )
+    controller = CentroidalBalanceController(config)
+
+    # CoM error outside deadband
+    state = CentroidalState(
+        com_pos=jnp.array([0.05, 0.04, 0.6]),  # x=5cm, y=4cm (both outside deadband)
+        com_vel=jnp.array([0.1, 0.05, 0.0]),
+        capture_point=jnp.zeros(2),
+        divergence=jnp.zeros(2),
+        linear_momentum=jnp.zeros(3),
+        angular_momentum=jnp.zeros(3),
+        left_wheel_contact=True,
+        right_wheel_contact=True,
+        left_wheel_force=75.0,
+        right_wheel_force=75.0,
+    )
+
+    tau_com = controller.compute_com_regulation_torque(state)
+
+    # Lateral error (y=0.04m) should produce hip roll torque
+    # tau_lateral = -k_com_lateral * error - k_com_lateral_damping * vel
+    # tau_lateral = -15.0 * 0.04 - 3.0 * 0.05 = -0.6 - 0.15 = -0.75
+    assert jnp.abs(tau_com[0]) > 0.5  # left hip roll should have significant torque
+    assert jnp.abs(tau_com[5]) > 0.5  # right hip roll should have significant torque
+
+    # Sagittal error (x=0.05m) should produce wheel torque
+    # tau_sagittal = -k_com_sagittal * error - k_com_sagittal_damping * vel
+    # tau_sagittal = -10.0 * 0.05 - 2.0 * 0.1 = -0.5 - 0.2 = -0.7
+    assert jnp.abs(tau_com[4]) > 0.5  # left wheel should have significant torque
+    assert jnp.abs(tau_com[9]) > 0.5  # right wheel should have significant torque
+
+
+def test_com_regulation_torque_inside_deadband():
+    """Test CoM regulation torque is zero when error inside deadband."""
+    config = CentroidalBalanceConfig(
+        k_com_lateral=15.0,
+        k_com_lateral_damping=3.0,
+        k_com_sagittal=10.0,
+        k_com_sagittal_damping=2.0,
+        com_deadband_lateral=0.02,
+        com_deadband_sagittal=0.03,
+    )
+    controller = CentroidalBalanceController(config)
+
+    # CoM error inside deadband
+    state = CentroidalState(
+        com_pos=jnp.array([0.01, 0.01, 0.6]),  # x=1cm, y=1cm (both inside deadband)
+        com_vel=jnp.array([0.0, 0.0, 0.0]),
+        capture_point=jnp.zeros(2),
+        divergence=jnp.zeros(2),
+        linear_momentum=jnp.zeros(3),
+        angular_momentum=jnp.zeros(3),
+        left_wheel_contact=True,
+        right_wheel_contact=True,
+        left_wheel_force=75.0,
+        right_wheel_force=75.0,
+    )
+
+    tau_com = controller.compute_com_regulation_torque(state)
+
+    # All torques should be zero (within deadband)
+    assert jnp.allclose(tau_com, 0.0, atol=1e-6)
