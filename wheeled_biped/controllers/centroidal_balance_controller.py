@@ -25,6 +25,9 @@ class CentroidalBalanceConfig:
     k_cp_sagittal: float = 20.0
     k_cp_wheel_diff: float = 8.0
 
+    # Height tracking
+    k_height: float = 5.0
+
     # Deadbands
     com_deadband_lateral: float = 0.02  # meters
     com_deadband_sagittal: float = 0.03  # meters
@@ -154,5 +157,37 @@ class CentroidalBalanceController:
         tau = tau.at[5].set(tau_lateral)  # right hip roll
         tau = tau.at[4].set(tau_sagittal + tau_wheel_diff)  # left wheel
         tau = tau.at[9].set(tau_sagittal - tau_wheel_diff)  # right wheel (opposite for differential)
+
+        return tau
+
+    def compute_height_tracking_torque(self, obs: Array, state: CentroidalState) -> Array:
+        """Compute height tracking torque using simplified IK.
+
+        Args:
+            obs: Observation array with height_cmd at index 39
+            state: CentroidalState with current CoM height
+
+        Returns:
+            Torque array (10,) with height correction on hip pitch and knee
+        """
+        # Extract height command and current height
+        height_cmd = obs[39]
+        height_current = state.com_pos[2]
+
+        # Height error
+        height_error = height_cmd - height_current
+
+        # Simplified IK: distribute height correction to hip pitch and knee
+        # Positive error (need to extend) → negative hip pitch, positive knee
+        # This is a simplified mapping; real IK would be more sophisticated
+        tau_hip_pitch = -self.config.k_height * height_error
+        tau_knee = self.config.k_height * height_error * 1.5  # knee has more leverage
+
+        # Build torque vector
+        tau = jnp.zeros(10)
+        tau = tau.at[2].set(tau_hip_pitch)  # left hip pitch
+        tau = tau.at[3].set(tau_knee)  # left knee
+        tau = tau.at[7].set(tau_hip_pitch)  # right hip pitch
+        tau = tau.at[8].set(tau_knee)  # right knee
 
         return tau

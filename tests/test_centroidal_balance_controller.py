@@ -202,3 +202,38 @@ def test_capture_point_tracking_torque_inside_deadband():
 
     # All torques should be zero (within deadband)
     assert jnp.allclose(tau_cp, 0.0, atol=1e-6)
+
+
+def test_height_tracking_torque():
+    """Test height tracking torque computation."""
+    config = CentroidalBalanceConfig(
+        k_height=5.0,
+    )
+    controller = CentroidalBalanceController(config)
+
+    # Mock observation with height command and current height
+    obs = jnp.zeros(42)
+    obs = obs.at[39].set(0.65)  # height_cmd = 0.65m
+
+    # Mock state with current height
+    state = CentroidalState(
+        com_pos=jnp.array([0.0, 0.0, 0.60]),  # current height = 0.60m
+        com_vel=jnp.zeros(3),
+        capture_point=jnp.zeros(2),
+        divergence=jnp.zeros(2),
+        linear_momentum=jnp.zeros(3),
+        angular_momentum=jnp.zeros(3),
+        left_wheel_contact=True,
+        right_wheel_contact=True,
+        left_wheel_force=75.0,
+        right_wheel_force=75.0,
+    )
+
+    tau_height = controller.compute_height_tracking_torque(obs, state)
+
+    # Height error = 0.65 - 0.60 = 0.05m (need to extend legs)
+    # Should produce hip pitch and knee torques
+    assert jnp.abs(tau_height[2]) > 0.1  # left hip pitch
+    assert jnp.abs(tau_height[3]) > 0.1  # left knee
+    assert jnp.abs(tau_height[7]) > 0.1  # right hip pitch
+    assert jnp.abs(tau_height[8]) > 0.1  # right knee
