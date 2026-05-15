@@ -154,3 +154,24 @@ def test_contact_aware_recovery_unloading():
     assert jnp.abs(tau_recovery[0]) > 0.5  # left hip roll
     assert jnp.abs(tau_recovery[5]) > 0.5  # right hip roll
     assert jnp.abs(tau_recovery[4] - tau_recovery[9]) > 0.5  # wheel differential
+
+
+def test_momentum_authority_budget_clipping():
+    """Test authority budget clipping scales torques proportionally."""
+    config = MomentumCoordinatorConfig(
+        momentum_authority_budget=0.2,
+    )
+    coordinator = MomentumCoordinator(config)
+
+    # Create torque vector that exceeds 20% budget
+    tau_desired = jnp.array([10.0, 0.0, 0.0, 0.0, 15.0, 10.0, 0.0, 0.0, 0.0, 15.0])
+
+    tau_clipped = coordinator.clip_to_authority_budget(tau_desired)
+
+    # Should respect 20% authority budget (6 Nm with max_actuator_torque=30)
+    assert jnp.max(jnp.abs(tau_clipped)) <= 6.0
+
+    # Should preserve proportions
+    ratio = tau_clipped[0] / tau_clipped[4]
+    expected_ratio = tau_desired[0] / tau_desired[4]
+    assert jnp.abs(ratio - expected_ratio) < 0.01

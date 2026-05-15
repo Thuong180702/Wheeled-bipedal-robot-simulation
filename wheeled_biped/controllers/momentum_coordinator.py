@@ -187,3 +187,27 @@ class MomentumCoordinator:
         tau = tau.at[9].set(-tau_wheel_diff)  # right wheel (opposite)
 
         return tau
+
+    def clip_to_authority_budget(self, tau: Array) -> Array:
+        """Clip torque to momentum coordinator authority budget.
+
+        Args:
+            tau: Desired torque array (10,)
+
+        Returns:
+            Clipped torque array (10,) within 20% authority budget
+        """
+        # Maximum actuator torque (hardcoded as per Phase 2)
+        max_actuator_torque = 30.0
+
+        # Compute budget limit
+        budget_limit = self.config.momentum_authority_budget * max_actuator_torque
+
+        # Find maximum absolute torque
+        max_tau = jnp.max(jnp.abs(tau))
+
+        # JAX-compatible conditional scaling
+        scale_factor = jnp.where(max_tau <= budget_limit, 1.0, budget_limit / max_tau)
+        tau_clipped = tau * scale_factor
+
+        return tau_clipped
