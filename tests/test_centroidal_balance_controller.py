@@ -5,7 +5,15 @@ from wheeled_biped.controllers.centroidal_balance_controller import (
     CentroidalBalanceController,
     CentroidalBalanceConfig,
 )
-from wheeled_biped.controllers.centroidal_state_estimator import CentroidalState
+from wheeled_biped.controllers.centroidal_state_estimator import (
+    CentroidalState,
+    CentroidalStateEstimator,
+    CentroidalStateEstimatorConfig,
+)
+from wheeled_biped.controllers.capture_point_estimator import (
+    CapturePointEstimator,
+    CapturePointEstimatorConfig,
+)
 
 
 def test_centroidal_balance_controller_creation():
@@ -308,3 +316,68 @@ def test_hierarchical_wbc_fusion():
 
     # Should respect 60% authority budget
     assert jnp.max(jnp.abs(tau_wbc)) <= 18.0  # 60% of 30 Nm
+
+
+def test_controller_integration_no_nan_100_steps():
+    """Integration test: 100-step rollout with full controller produces no NaN."""
+    # Create controller and estimators
+    controller_config = CentroidalBalanceConfig(
+        k_roll=20.0,
+        k_com_lateral=15.0,
+        k_cp_lateral=25.0,
+        k_height=5.0,
+        wbc_authority_budget=0.6,
+    )
+    controller = CentroidalBalanceController(controller_config)
+
+    estimator_config = CentroidalStateEstimatorConfig(
+        robot_mass=15.0,
+        torso_inertia=jnp.array([0.5, 0.5, 0.3]),
+    )
+    state_estimator = CentroidalStateEstimator(estimator_config)
+
+    cp_config = CapturePointEstimatorConfig(gravity=9.81)
+    cp_estimator = CapturePointEstimator(cp_config)
+
+    # Mock MJX data structure
+    class MockContact:
+        def __init__(self):
+            self.geom1 = jnp.array([5, 6])  # left_wheel=5, right_wheel=6
+            self.geom2 = jnp.array([0, 0])  # ground geom
+            self.force = jnp.array([[0.0, 0.0, 75.0], [0.0, 0.0, 75.0]])  # Normal forces
+
+    class MockData:
+        def __init__(self):
+            self.subtree_com = jnp.array([
+                [0.0, 0.0, 0.0],  # dummy
+                [0.0, 0.0, 0.60],  # torso CoM at 0.60m height
+            ])
+            self.contact = MockContact()
+
+    # Run 100-step rollout
+    prev_com_pos = None
+    for step in range(100):
+        # Mock observation with small perturbations
+        obs = jnp.zeros(42)
+        obs = obs.at[1].set(0.01 * jnp.sin(step * 0.1))  # gravity_body_y (small roll)
+        obs = obs.at[2].set(9.81)  # gravity_body_z
+        obs = obs.at[6].set(0.005 * jnp.cos(step * 0.1))  # roll_rate
+        obs = obs.at[39].set(0.60)  # height_cmd
+
+        # Create mock data with slight CoM drift
+        data = MockData()
+        data.subtree_com = data.subtree_com.at[1, 0].set(0.001 * step)  # x drift
+        data.subtree_com = data.subtree_com.at[1, 1].set(0.0005 * jnp.sin(step * 0.05))  # y oscillation
+
+        # Estimate centroidal state
+        centroidal_state, prev_com_pos = state_estimator.estimate(obs, data, prev_com_pos)
+        centroidal_state = cp_estimator.update(centroidal_state)
+
+        # Compute WBC torque
+        tau_wbc = controller.compute_centroidal_wbc_torque(obs, centroidal_state)
+
+        # Verify no NaN
+        assert not jnp.any(jnp.isnan(tau_wbc)), f"NaN in tau_wbc at step {step}"
+
+        # Verify torque is within reasonable bounds
+        assert jnp.max(jnp.abs(tau_wbc)) < 50.0, f"Torque exceeds bounds at step {step}"
