@@ -142,3 +142,48 @@ class MomentumCoordinator:
         tau = tau.at[7].set(tau_hip_ff)  # right hip pitch
 
         return tau
+
+    def compute_contact_aware_recovery_torque(self, state: CentroidalState) -> Array:
+        """Compute contact-aware recovery torque for asymmetric support.
+
+        Args:
+            state: CentroidalState with wheel contact forces
+
+        Returns:
+            Recovery torque array (10,) for contact-based redistribution
+        """
+        tau = jnp.zeros(10)
+
+        # Compute force imbalance
+        total_force = state.left_wheel_force + state.right_wheel_force
+
+        # Avoid division by zero
+        total_force_safe = jnp.where(total_force > 1.0, total_force, 1.0)
+
+        force_ratio_left = state.left_wheel_force / total_force_safe
+        force_ratio_right = state.right_wheel_force / total_force_safe
+
+        # Detect unloading (force asymmetry exceeds threshold)
+        force_imbalance = jnp.abs(force_ratio_left - force_ratio_right)
+        unloading_active = jnp.where(
+            force_imbalance > self.config.unloading_threshold,
+            1.0,
+            0.0,
+        )
+
+        # Recovery direction: shift toward loaded wheel
+        # If left wheel has less force, apply positive hip roll (shift right)
+        # If right wheel has less force, apply negative hip roll (shift left)
+        recovery_direction = force_ratio_right - force_ratio_left
+
+        # Hip roll recovery (symmetric - both legs same direction)
+        tau_hip_roll = self.config.k_contact_recovery * recovery_direction * unloading_active
+        tau = tau.at[0].set(tau_hip_roll)  # left hip roll
+        tau = tau.at[5].set(tau_hip_roll)  # right hip roll
+
+        # Wheel differential recovery
+        tau_wheel_diff = self.config.k_contact_wheel_diff * recovery_direction * unloading_active
+        tau = tau.at[4].set(tau_wheel_diff)  # left wheel
+        tau = tau.at[9].set(-tau_wheel_diff)  # right wheel (opposite)
+
+        return tau

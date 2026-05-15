@@ -123,3 +123,34 @@ def test_feedforward_compensation_height_transition():
     assert jnp.abs(tau_ff[9]) > 0.1  # right wheel
     assert jnp.abs(tau_ff[2]) > 0.05  # left hip pitch
     assert jnp.abs(tau_ff[7]) > 0.05  # right hip pitch
+
+
+def test_contact_aware_recovery_unloading():
+    """Test contact-aware recovery when one wheel is unloading."""
+    config = MomentumCoordinatorConfig(
+        k_contact_recovery=10.0,
+        k_contact_wheel_diff=4.0,
+        unloading_threshold=0.3,
+    )
+    coordinator = MomentumCoordinator(config)
+
+    # State with asymmetric contact forces (left wheel unloading)
+    state = CentroidalState(
+        com_pos=jnp.array([0.0, 0.0, 0.6]),
+        com_vel=jnp.array([0.0, 0.0, 0.0]),
+        capture_point=jnp.zeros(2),
+        divergence=jnp.zeros(2),
+        linear_momentum=jnp.zeros(3),
+        angular_momentum=jnp.zeros(3),
+        left_wheel_contact=True,
+        right_wheel_contact=True,
+        left_wheel_force=30.0,  # 30% of total (unloading)
+        right_wheel_force=70.0,  # 70% of total (loaded)
+    )
+
+    tau_recovery = coordinator.compute_contact_aware_recovery_torque(state)
+
+    # Should produce recovery torques to shift support toward loaded wheel
+    assert jnp.abs(tau_recovery[0]) > 0.5  # left hip roll
+    assert jnp.abs(tau_recovery[5]) > 0.5  # right hip roll
+    assert jnp.abs(tau_recovery[4] - tau_recovery[9]) > 0.5  # wheel differential
