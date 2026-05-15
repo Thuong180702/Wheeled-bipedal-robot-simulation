@@ -76,16 +76,18 @@ class CentroidalBalanceController:
         com_vy = state.com_vel[1]
 
         # Apply deadband to lateral error
-        if jnp.abs(com_y) < self.config.com_deadband_lateral:
-            com_y_error = 0.0
-        else:
-            com_y_error = com_y
+        com_y_error = jnp.where(
+            jnp.abs(com_y) < self.config.com_deadband_lateral,
+            0.0,
+            com_y
+        )
 
         # Apply deadband to sagittal error
-        if jnp.abs(com_x) < self.config.com_deadband_sagittal:
-            com_x_error = 0.0
-        else:
-            com_x_error = com_x
+        com_x_error = jnp.where(
+            jnp.abs(com_x) < self.config.com_deadband_sagittal,
+            0.0,
+            com_x
+        )
 
         # Lateral CoM error → hip roll torques (symmetric)
         tau_lateral = -self.config.k_com_lateral * com_y_error - self.config.k_com_lateral_damping * com_vy
