@@ -246,3 +246,49 @@ def test_integrated_posture_regularizer():
     expected_magnitude = jnp.max(jnp.abs(tau_full_clipped)) * 0.5
     actual_magnitude = jnp.max(jnp.abs(tau_posture))
     assert jnp.abs(actual_magnitude - expected_magnitude) < 0.1
+
+
+def test_posture_regularizer_integration_no_nan():
+    """Integration test: 100-step rollout produces no NaN."""
+    config = PostureRegularizerConfig(
+        k_posture=2.0,
+        hip_roll_deadband=0.05,
+        hip_yaw_deadband=0.03,
+        hip_pitch_deadband=0.08,
+        knee_deadband=0.10,
+        wbc_error_threshold=0.3,
+        momentum_active_scale=0.5,
+        posture_authority_budget=0.2,
+    )
+    regularizer = PostureRegularizer(config)
+
+    # Run 100-step rollout with varying conditions
+    for step in range(100):
+        # Mock joint positions with time-varying errors
+        joint_pos = jnp.array([
+            0.05 * jnp.sin(step * 0.05),  # left hip roll
+            0.03 * jnp.cos(step * 0.06),  # left hip yaw
+            0.08 * jnp.sin(step * 0.04),  # left hip pitch
+            0.10 * jnp.cos(step * 0.07),  # left knee
+            0.0,  # left wheel
+            0.05 * jnp.sin(step * 0.05),  # right hip roll
+            0.03 * jnp.cos(step * 0.06),  # right hip yaw
+            0.08 * jnp.sin(step * 0.04),  # right hip pitch
+            0.10 * jnp.cos(step * 0.07),  # right knee
+            0.0,  # right wheel
+        ])
+
+        # Time-varying WBC error and momentum magnitude
+        wbc_error_magnitude = 0.15 + 0.1 * jnp.sin(step * 0.03)
+        momentum_magnitude = 0.5 + 0.3 * jnp.cos(step * 0.08)
+
+        # Compute posture regularizer torque
+        tau_posture = regularizer.compute_posture_regularizer_torque(
+            joint_pos, wbc_error_magnitude, momentum_magnitude
+        )
+
+        # Verify no NaN
+        assert not jnp.any(jnp.isnan(tau_posture)), f"NaN at step {step}"
+
+        # Verify within authority budget
+        assert jnp.max(jnp.abs(tau_posture)) <= 6.0, f"Budget exceeded at step {step}"
