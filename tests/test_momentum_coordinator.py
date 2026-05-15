@@ -41,7 +41,7 @@ def test_momentum_damping_outside_deadband():
         capture_point=jnp.zeros(2),
         divergence=jnp.zeros(2),
         linear_momentum=jnp.array([2.0, 1.5, 0.0]),  # 2.5 kg*m/s magnitude
-        angular_momentum=jnp.array([0.5, 0.0, 0.0]),  # 0.5 kg*m^2/s roll
+        angular_momentum=jnp.array([0.3, 0.0, 0.0]),  # 0.3 kg*m^2/s roll
         left_wheel_contact=True,
         right_wheel_contact=True,
         left_wheel_force=75.0,
@@ -52,8 +52,8 @@ def test_momentum_damping_outside_deadband():
 
     # Should produce damping torques on hip roll and wheels
     # Note: hip rolls may have partial cancellation between lateral and angular damping
-    assert jnp.abs(tau_damping[0]) > 0.3  # left hip roll
-    assert jnp.abs(tau_damping[5]) > 0.3  # right hip roll (may have cancellation)
+    assert jnp.abs(tau_damping[0]) > 0.5  # left hip roll
+    assert jnp.abs(tau_damping[5]) > 0.5  # right hip roll (may have cancellation)
     assert jnp.abs(tau_damping[4]) > 0.5  # left wheel
     assert jnp.abs(tau_damping[9]) > 0.5  # right wheel
 
