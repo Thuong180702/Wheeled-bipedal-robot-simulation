@@ -142,6 +142,7 @@ def test_momentum_coordinator_gating_reduced():
         k_posture=2.0,
         hip_roll_deadband=0.05,
         momentum_active_scale=0.5,
+        momentum_activity_threshold=0.1,
     )
     regularizer = PostureRegularizer(config)
 

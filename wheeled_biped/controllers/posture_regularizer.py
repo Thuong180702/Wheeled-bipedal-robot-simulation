@@ -26,6 +26,7 @@ class PostureRegularizerConfig:
     # Gating thresholds
     wbc_error_threshold: float = 0.3  # 30% of WBC capacity
     momentum_active_scale: float = 0.5  # 50% authority when momentum active
+    momentum_activity_threshold: float = 0.1  # Threshold to detect momentum coordinator activity
 
     # Authority budget
     posture_authority_budget: float = 0.2  # 20% of actuator range
@@ -124,9 +125,9 @@ class PostureRegularizer:
         tau_posture = self.compute_posture_restoration_torque(joint_pos)
 
         # JAX-compatible gating using jnp.where
-        # Reduce to 50% if momentum coordinator is active (magnitude > small threshold)
+        # Reduce to 50% if momentum coordinator is active (magnitude > threshold)
         gate = jnp.where(
-            momentum_magnitude > 0.1,  # Small threshold to detect activity
+            momentum_magnitude > self.config.momentum_activity_threshold,
             self.config.momentum_active_scale,
             1.0,
         )
