@@ -101,3 +101,44 @@ class MomentumCoordinator:
         tau = tau.at[5].add(tau_angular_right)  # right hip roll (opposite sign)
 
         return tau
+
+    def compute_feedforward_compensation_torque(self, obs: Array, state: CentroidalState) -> Array:
+        """Compute feedforward compensation for height transitions.
+
+        Args:
+            obs: Observation array with height_cmd at index 39
+            state: CentroidalState with current height and velocity
+
+        Returns:
+            Feedforward torque array (10,) for proactive compensation
+        """
+        tau = jnp.zeros(10)
+
+        # Extract height command and current state
+        height_cmd = obs[39]
+        height_current = state.com_pos[2]
+        height_vel = state.com_vel[2]
+
+        # Detect height transition
+        height_error = height_cmd - height_current
+        transition_active = jnp.where(
+            jnp.abs(height_vel) > self.config.height_transition_threshold,
+            1.0,
+            0.0,
+        )
+
+        # Feedforward compensation based on height velocity direction
+        # Rising (positive vel) → anticipate backward pitch, apply forward wheel torque
+        # Squatting (negative vel) → anticipate forward pitch, apply backward wheel torque
+        tau_wheel_ff = self.config.k_feedforward * height_vel * transition_active
+        tau_hip_ff = -self.config.k_feedforward_hip * height_vel * transition_active
+
+        # Apply to wheels (common mode)
+        tau = tau.at[4].set(tau_wheel_ff)  # left wheel
+        tau = tau.at[9].set(tau_wheel_ff)  # right wheel
+
+        # Apply to hip pitch (both legs)
+        tau = tau.at[2].set(tau_hip_ff)  # left hip pitch
+        tau = tau.at[7].set(tau_hip_ff)  # right hip pitch
+
+        return tau
