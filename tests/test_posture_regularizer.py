@@ -134,3 +134,57 @@ def test_wbc_error_gating_enabled():
 
     # Should produce non-zero torques when WBC error is low
     assert jnp.any(jnp.abs(tau_posture) > 0.05)
+
+
+def test_momentum_coordinator_gating_reduced():
+    """Test posture authority is reduced when momentum coordinator is active."""
+    config = PostureRegularizerConfig(
+        k_posture=2.0,
+        hip_roll_deadband=0.05,
+        momentum_active_scale=0.5,
+    )
+    regularizer = PostureRegularizer(config)
+
+    # Joint positions with errors outside deadband
+    joint_pos = jnp.array([0.1, 0.1, 0.1, 0.15, 0.0, 0.1, 0.1, 0.1, 0.15, 0.0])
+
+    # Momentum coordinator is active (magnitude > threshold)
+    momentum_magnitude = 0.8
+
+    tau_posture = regularizer.apply_momentum_gate(
+        joint_pos, momentum_magnitude
+    )
+
+    # Compute expected torque with 50% reduction
+    tau_full = regularizer.compute_posture_restoration_torque(joint_pos)
+    expected_magnitude = jnp.max(jnp.abs(tau_full)) * 0.5
+
+    # Should be reduced to 50% when momentum is active
+    actual_magnitude = jnp.max(jnp.abs(tau_posture))
+    assert jnp.abs(actual_magnitude - expected_magnitude) < 0.01
+
+
+def test_momentum_coordinator_gating_full():
+    """Test posture authority is full when momentum coordinator is inactive."""
+    config = PostureRegularizerConfig(
+        k_posture=2.0,
+        hip_roll_deadband=0.05,
+        momentum_active_scale=0.5,
+    )
+    regularizer = PostureRegularizer(config)
+
+    # Joint positions with errors outside deadband
+    joint_pos = jnp.array([0.1, 0.1, 0.1, 0.15, 0.0, 0.1, 0.1, 0.1, 0.15, 0.0])
+
+    # Momentum coordinator is inactive (magnitude = 0)
+    momentum_magnitude = 0.0
+
+    tau_posture = regularizer.apply_momentum_gate(
+        joint_pos, momentum_magnitude
+    )
+
+    # Compute expected full torque
+    tau_full = regularizer.compute_posture_restoration_torque(joint_pos)
+
+    # Should be at full authority when momentum is inactive
+    assert jnp.allclose(tau_posture, tau_full, atol=0.01)

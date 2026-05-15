@@ -107,3 +107,31 @@ class PostureRegularizer:
         tau_gated = tau_posture * gate
 
         return tau_gated
+
+    def apply_momentum_gate(self, joint_pos: Array, momentum_magnitude: float) -> Array:
+        """Apply momentum coordinator gate to posture restoration.
+
+        Reduces posture authority by 50% when momentum coordinator is active.
+
+        Args:
+            joint_pos: Joint position array (10,)
+            momentum_magnitude: Momentum coordinator activity magnitude (0-1)
+
+        Returns:
+            Gated posture torque array (10,)
+        """
+        # Compute base posture restoration torque
+        tau_posture = self.compute_posture_restoration_torque(joint_pos)
+
+        # JAX-compatible gating using jnp.where
+        # Reduce to 50% if momentum coordinator is active (magnitude > small threshold)
+        gate = jnp.where(
+            momentum_magnitude > 0.1,  # Small threshold to detect activity
+            self.config.momentum_active_scale,
+            1.0,
+        )
+
+        # Apply gate
+        tau_gated = tau_posture * gate
+
+        return tau_gated
