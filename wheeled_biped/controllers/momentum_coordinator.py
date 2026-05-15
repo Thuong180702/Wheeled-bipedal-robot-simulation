@@ -75,7 +75,7 @@ class MomentumCoordinator:
         lateral_momentum = state.linear_momentum[1]
         tau_lateral = -self.config.k_momentum_lateral * lateral_momentum * linear_active
         tau = tau.at[0].set(tau_lateral)  # left hip roll
-        tau = tau.at[5].set(tau_lateral)  # right hip roll
+        tau = tau.at[5].set(-tau_lateral)  # right hip roll (opposite sign for differential roll moment)
 
         # Sagittal momentum → wheel damping
         sagittal_momentum = state.linear_momentum[0]
