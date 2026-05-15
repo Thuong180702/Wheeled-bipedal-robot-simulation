@@ -214,3 +214,49 @@ def test_integrated_momentum_coordinator():
 
     # Should respect 20% authority budget
     assert jnp.max(jnp.abs(tau_momentum)) <= 6.0  # 20% of 30 Nm
+
+
+def test_momentum_coordinator_integration_no_nan():
+    """Integration test: 100-step rollout produces no NaN."""
+    config = MomentumCoordinatorConfig(
+        k_momentum_lateral=0.8,
+        k_momentum_sagittal=1.2,
+        k_angular_roll=1.5,
+        k_feedforward=5.0,
+        k_contact_recovery=10.0,
+        momentum_authority_budget=0.2,
+    )
+    coordinator = MomentumCoordinator(config)
+
+    # Run 100-step rollout with varying conditions
+    for step in range(100):
+        # Mock observation
+        obs = jnp.zeros(42)
+        obs = obs.at[39].set(0.60 + 0.05 * jnp.sin(step * 0.1))  # varying height cmd
+
+        # Mock state with time-varying momentum and contact
+        state = CentroidalState(
+            com_pos=jnp.array([0.0, 0.0, 0.60]),
+            com_vel=jnp.array([0.0, 0.0, 0.05 * jnp.cos(step * 0.1)]),
+            capture_point=jnp.zeros(2),
+            divergence=jnp.zeros(2),
+            linear_momentum=jnp.array([
+                0.5 * jnp.sin(step * 0.05),
+                0.3 * jnp.cos(step * 0.05),
+                0.0
+            ]),
+            angular_momentum=jnp.array([0.1 * jnp.sin(step * 0.08), 0.0, 0.0]),
+            left_wheel_contact=True,
+            right_wheel_contact=True,
+            left_wheel_force=50.0 + 10.0 * jnp.sin(step * 0.06),
+            right_wheel_force=50.0 - 10.0 * jnp.sin(step * 0.06),
+        )
+
+        # Compute momentum coordinator torque
+        tau_momentum = coordinator.compute_momentum_coordinator_torque(obs, state)
+
+        # Verify no NaN
+        assert not jnp.any(jnp.isnan(tau_momentum)), f"NaN at step {step}"
+
+        # Verify within authority budget
+        assert jnp.max(jnp.abs(tau_momentum)) <= 6.0, f"Budget exceeded at step {step}"
