@@ -20,9 +20,15 @@ class CentroidalBalanceConfig:
     k_com_sagittal: float = 10.0
     k_com_sagittal_damping: float = 2.0
 
+    # Capture point tracking
+    k_cp_lateral: float = 25.0
+    k_cp_sagittal: float = 20.0
+    k_cp_wheel_diff: float = 8.0
+
     # Deadbands
     com_deadband_lateral: float = 0.02  # meters
     com_deadband_sagittal: float = 0.03  # meters
+    cp_deadband: float = 0.05  # meters
 
     # Authority budget
     wbc_authority_budget: float = 0.6  # 60% of actuator range
@@ -101,5 +107,52 @@ class CentroidalBalanceController:
         tau = tau.at[5].set(tau_lateral)  # right hip roll
         tau = tau.at[4].set(tau_sagittal)  # left wheel
         tau = tau.at[9].set(tau_sagittal)  # right wheel
+
+        return tau
+
+    def compute_capture_point_tracking_torque(self, state: CentroidalState) -> Array:
+        """Compute capture point tracking torque with deadband control.
+
+        Args:
+            state: CentroidalState with capture_point and divergence
+
+        Returns:
+            Torque array (10,) with CP correction on hip roll and wheels
+        """
+        # Extract capture point error (divergence from support center)
+        cp_x = state.capture_point[0]  # sagittal
+        cp_y = state.capture_point[1]  # lateral
+
+        # Compute magnitude for deadband check
+        cp_error_mag = jnp.sqrt(cp_x**2 + cp_y**2)
+
+        # Apply deadband using JAX-compatible conditional
+        # If error magnitude is below deadband, zero out both components
+        cp_x_active = jnp.where(
+            cp_error_mag < self.config.cp_deadband,
+            0.0,
+            cp_x
+        )
+        cp_y_active = jnp.where(
+            cp_error_mag < self.config.cp_deadband,
+            0.0,
+            cp_y
+        )
+
+        # Lateral divergence → hip roll torques (asymmetric for differential correction)
+        tau_lateral = -self.config.k_cp_lateral * cp_y_active
+
+        # Sagittal divergence → wheel torques (common mode)
+        tau_sagittal = -self.config.k_cp_sagittal * cp_x_active
+
+        # Additional wheel differential for lateral correction
+        tau_wheel_diff = -self.config.k_cp_wheel_diff * cp_y_active
+
+        # Build torque vector
+        tau = jnp.zeros(10)
+        tau = tau.at[0].set(tau_lateral)  # left hip roll
+        tau = tau.at[5].set(tau_lateral)  # right hip roll
+        tau = tau.at[4].set(tau_sagittal + tau_wheel_diff)  # left wheel
+        tau = tau.at[9].set(tau_sagittal - tau_wheel_diff)  # right wheel (opposite for differential)
 
         return tau

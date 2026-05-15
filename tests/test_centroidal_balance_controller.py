@@ -138,3 +138,67 @@ def test_com_regulation_torque_inside_deadband():
 
     # All torques should be zero (within deadband)
     assert jnp.allclose(tau_com, 0.0, atol=1e-6)
+
+
+def test_capture_point_tracking_torque_outside_deadband():
+    """Test capture point tracking torque when error exceeds deadband."""
+    config = CentroidalBalanceConfig(
+        k_cp_lateral=25.0,
+        k_cp_sagittal=20.0,
+        k_cp_wheel_diff=8.0,
+        cp_deadband=0.05,
+    )
+    controller = CentroidalBalanceController(config)
+
+    # Capture point error outside deadband
+    state = CentroidalState(
+        com_pos=jnp.array([0.0, 0.0, 0.6]),
+        com_vel=jnp.array([0.0, 0.0, 0.0]),
+        capture_point=jnp.array([0.10, 0.08]),  # 10cm forward, 8cm lateral
+        divergence=jnp.array([0.10, 0.08]),
+        linear_momentum=jnp.zeros(3),
+        angular_momentum=jnp.zeros(3),
+        left_wheel_contact=True,
+        right_wheel_contact=True,
+        left_wheel_force=75.0,
+        right_wheel_force=75.0,
+    )
+
+    tau_cp = controller.compute_capture_point_tracking_torque(state)
+
+    # Lateral divergence should produce hip roll torque
+    assert jnp.abs(tau_cp[0]) > 1.0  # left hip roll
+    assert jnp.abs(tau_cp[5]) > 1.0  # right hip roll
+
+    # Sagittal divergence should produce wheel torque
+    assert jnp.abs(tau_cp[4]) > 1.0  # left wheel
+    assert jnp.abs(tau_cp[9]) > 1.0  # right wheel
+
+
+def test_capture_point_tracking_torque_inside_deadband():
+    """Test capture point tracking torque is zero when error inside deadband."""
+    config = CentroidalBalanceConfig(
+        k_cp_lateral=25.0,
+        k_cp_sagittal=20.0,
+        cp_deadband=0.05,
+    )
+    controller = CentroidalBalanceController(config)
+
+    # Capture point error inside deadband
+    state = CentroidalState(
+        com_pos=jnp.array([0.0, 0.0, 0.6]),
+        com_vel=jnp.array([0.0, 0.0, 0.0]),
+        capture_point=jnp.array([0.02, 0.03]),  # 2cm forward, 3cm lateral (inside 5cm deadband)
+        divergence=jnp.array([0.02, 0.03]),
+        linear_momentum=jnp.zeros(3),
+        angular_momentum=jnp.zeros(3),
+        left_wheel_contact=True,
+        right_wheel_contact=True,
+        left_wheel_force=75.0,
+        right_wheel_force=75.0,
+    )
+
+    tau_cp = controller.compute_capture_point_tracking_torque(state)
+
+    # All torques should be zero (within deadband)
+    assert jnp.allclose(tau_cp, 0.0, atol=1e-6)
