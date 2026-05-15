@@ -189,3 +189,24 @@ def test_momentum_coordinator_gating_full():
 
     # Should be at full authority when momentum is inactive
     assert jnp.allclose(tau_posture, tau_full, atol=0.01)
+
+
+def test_posture_authority_budget_clipping():
+    """Test authority budget clipping scales torques proportionally."""
+    config = PostureRegularizerConfig(
+        posture_authority_budget=0.2,
+    )
+    regularizer = PostureRegularizer(config)
+
+    # Create torque vector that exceeds 20% budget
+    tau_desired = jnp.array([10.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 0.0])
+
+    tau_clipped = regularizer.clip_to_authority_budget(tau_desired)
+
+    # Should respect 20% authority budget (6 Nm with max_actuator_torque=30)
+    assert jnp.max(jnp.abs(tau_clipped)) <= 6.0
+
+    # Should preserve proportions
+    ratio = tau_clipped[0] / tau_clipped[5]
+    expected_ratio = tau_desired[0] / tau_desired[5]
+    assert jnp.abs(ratio - expected_ratio) < 0.01
