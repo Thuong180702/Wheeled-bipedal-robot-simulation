@@ -41,3 +41,41 @@ class PostureRegularizer:
             config: PostureRegularizerConfig with gains and thresholds
         """
         self.config = config
+
+    def compute_posture_restoration_torque(self, joint_pos: Array) -> Array:
+        """Compute posture restoration torque with per-joint deadbands.
+
+        Args:
+            joint_pos: Joint position array (10,) - current joint angles
+
+        Returns:
+            Posture restoration torque array (10,) opposing posture errors
+        """
+        # Target posture is zero for all joints
+        target_pos = jnp.zeros(10)
+
+        # Compute posture errors
+        posture_error = joint_pos - target_pos
+
+        # Per-joint deadbands
+        deadbands = jnp.array([
+            self.config.hip_roll_deadband,   # 0: left hip roll
+            self.config.hip_yaw_deadband,    # 1: left hip yaw
+            self.config.hip_pitch_deadband,  # 2: left hip pitch
+            self.config.knee_deadband,       # 3: left knee
+            self.config.wheel_deadband,      # 4: left wheel
+            self.config.hip_roll_deadband,   # 5: right hip roll
+            self.config.hip_yaw_deadband,    # 6: right hip yaw
+            self.config.hip_pitch_deadband,  # 7: right hip pitch
+            self.config.knee_deadband,       # 8: right knee
+            self.config.wheel_deadband,      # 9: right wheel
+        ])
+
+        # JAX-compatible deadband using jnp.where
+        # Only apply torque if error exceeds deadband
+        active = jnp.where(jnp.abs(posture_error) > deadbands, 1.0, 0.0)
+
+        # Proportional control with deadband gating
+        tau = -self.config.k_posture * posture_error * active
+
+        return tau
