@@ -237,3 +237,26 @@ def test_height_tracking_torque():
     assert jnp.abs(tau_height[3]) > 0.1  # left knee
     assert jnp.abs(tau_height[7]) > 0.1  # right hip pitch
     assert jnp.abs(tau_height[8]) > 0.1  # right knee
+
+
+def test_wbc_authority_budget_clipping():
+    """Test WBC torque is clipped to 60% authority budget."""
+    config = CentroidalBalanceConfig(
+        wbc_authority_budget=0.6,
+    )
+    controller = CentroidalBalanceController(config)
+
+    # Create large torque vector that exceeds budget
+    tau_desired = jnp.array([10.0, 8.0, 12.0, 15.0, 20.0, 10.0, 8.0, 12.0, 15.0, 20.0])
+
+    tau_clipped = controller.clip_to_authority_budget(tau_desired, budget=0.6)
+
+    # Maximum torque should be scaled to 60% of max actuator range
+    # Assuming max actuator torque is ~30 Nm, 60% budget = 18 Nm
+    # The largest torque (20.0) should be scaled down
+    assert jnp.max(jnp.abs(tau_clipped)) <= 18.0
+
+    # Relative proportions should be preserved
+    ratio_original = tau_desired[0] / tau_desired[4]
+    ratio_clipped = tau_clipped[0] / tau_clipped[4]
+    assert jnp.allclose(ratio_original, ratio_clipped, rtol=0.01)

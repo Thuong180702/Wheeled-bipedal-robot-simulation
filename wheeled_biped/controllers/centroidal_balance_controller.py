@@ -191,3 +191,28 @@ class CentroidalBalanceController:
         tau = tau.at[8].set(tau_knee)  # right knee
 
         return tau
+
+    def clip_to_authority_budget(self, tau: Array, budget: float) -> Array:
+        """Clip torque vector to authority budget while preserving proportions.
+
+        Args:
+            tau: Desired torque array (10,)
+            budget: Authority budget as fraction of max actuator range (0.0-1.0)
+
+        Returns:
+            Clipped torque array (10,) scaled to fit within budget
+        """
+        # Assume max actuator torque is 30 Nm (typical for this robot)
+        max_actuator_torque = 30.0
+
+        # Compute budget limit
+        budget_limit = budget * max_actuator_torque
+
+        # Find maximum absolute torque
+        max_tau = jnp.max(jnp.abs(tau))
+
+        # Use JAX-compatible conditional: scale down if exceeds budget, otherwise return as-is
+        scale_factor = jnp.where(max_tau <= budget_limit, 1.0, budget_limit / max_tau)
+        tau_clipped = tau * scale_factor
+
+        return tau_clipped
