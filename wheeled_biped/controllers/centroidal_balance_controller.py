@@ -28,6 +28,12 @@ class CentroidalBalanceConfig:
     # Height tracking
     k_height: float = 5.0
 
+    # Task weights
+    w_roll: float = 1.0
+    w_com: float = 0.8
+    w_cp: float = 1.2  # Highest priority - divergence is critical
+    w_height: float = 0.6
+
     # Deadbands
     com_deadband_lateral: float = 0.02  # meters
     com_deadband_sagittal: float = 0.03  # meters
@@ -216,3 +222,32 @@ class CentroidalBalanceController:
         tau_clipped = tau * scale_factor
 
         return tau_clipped
+
+    def compute_centroidal_wbc_torque(self, obs: Array, state: CentroidalState) -> Array:
+        """Compute integrated centroidal WBC torque with all objectives.
+
+        Args:
+            obs: Observation array
+            state: CentroidalState with all centroidal quantities
+
+        Returns:
+            WBC torque array (10,) clipped to 60% authority budget
+        """
+        # Compute individual objective torques
+        tau_roll = self.compute_roll_stabilization_torque(obs)
+        tau_com = self.compute_com_regulation_torque(state)
+        tau_cp = self.compute_capture_point_tracking_torque(state)
+        tau_height = self.compute_height_tracking_torque(obs, state)
+
+        # Weighted fusion
+        tau_wbc_desired = (
+            self.config.w_roll * tau_roll +
+            self.config.w_com * tau_com +
+            self.config.w_cp * tau_cp +
+            self.config.w_height * tau_height
+        )
+
+        # Clip to 60% authority budget
+        tau_wbc = self.clip_to_authority_budget(tau_wbc_desired, self.config.wbc_authority_budget)
+
+        return tau_wbc

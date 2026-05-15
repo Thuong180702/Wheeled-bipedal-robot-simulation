@@ -260,3 +260,51 @@ def test_wbc_authority_budget_clipping():
     ratio_original = tau_desired[0] / tau_desired[4]
     ratio_clipped = tau_clipped[0] / tau_clipped[4]
     assert jnp.allclose(ratio_original, ratio_clipped, rtol=0.01)
+
+
+def test_hierarchical_wbc_fusion():
+    """Test hierarchical fusion of all WBC components."""
+    config = CentroidalBalanceConfig(
+        k_roll=20.0,
+        k_roll_rate=4.0,
+        k_com_lateral=15.0,
+        k_com_sagittal=10.0,
+        k_cp_lateral=25.0,
+        k_cp_sagittal=20.0,
+        k_height=5.0,
+        w_roll=1.0,
+        w_com=0.8,
+        w_cp=1.2,
+        w_height=0.6,
+        wbc_authority_budget=0.6,
+    )
+    controller = CentroidalBalanceController(config)
+
+    # Mock observation with roll, height command
+    obs = jnp.zeros(42)
+    obs = obs.at[1].set(0.05)  # gravity_body_y for roll computation
+    obs = obs.at[2].set(0.998)  # gravity_body_z for roll computation
+    obs = obs.at[6].set(0.02)  # roll_rate = 0.02 rad/s
+    obs = obs.at[39].set(0.65)  # height_cmd = 0.65m
+
+    # Mock state with CoM error and capture point error
+    state = CentroidalState(
+        com_pos=jnp.array([0.04, 0.03, 0.60]),  # x=4cm, y=3cm, h=0.60m
+        com_vel=jnp.array([0.05, 0.02, 0.0]),
+        capture_point=jnp.array([0.08, 0.06]),  # 8cm forward, 6cm lateral
+        divergence=jnp.array([0.08, 0.06]),
+        linear_momentum=jnp.zeros(3),
+        angular_momentum=jnp.zeros(3),
+        left_wheel_contact=True,
+        right_wheel_contact=True,
+        left_wheel_force=75.0,
+        right_wheel_force=75.0,
+    )
+
+    tau_wbc = controller.compute_centroidal_wbc_torque(obs, state)
+
+    # Should produce non-zero torques on multiple joints
+    assert jnp.any(jnp.abs(tau_wbc) > 0.1)
+
+    # Should respect 60% authority budget
+    assert jnp.max(jnp.abs(tau_wbc)) <= 18.0  # 60% of 30 Nm
