@@ -11,7 +11,7 @@ from jax import Array
 from wheeled_biped.controllers.centroidal_state_estimator import CentroidalState
 
 
-@chex.dataclass
+@chex.dataclass(frozen=True)
 class MomentumCoordinatorConfig:
     """Configuration for momentum coordinator."""
     # Momentum damping
