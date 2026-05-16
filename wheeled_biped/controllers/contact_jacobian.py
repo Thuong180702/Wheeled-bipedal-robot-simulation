@@ -25,10 +25,6 @@ class ContactJacobian:
         self.l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
         self.r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
 
-        # Find hip roll joint IDs
-        self.l_hip_roll_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_JOINT, "l_hip_roll")
-        self.r_hip_roll_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_JOINT, "r_hip_roll")
-
         # Preallocate Jacobian arrays (3 x nv for translation, 3 x nv for rotation)
         self.jacp = np.zeros((3, mj_model.nv))
         self.jacr = np.zeros((3, mj_model.nv))
@@ -62,9 +58,12 @@ class ContactJacobian:
         Returns:
             Roll moment contribution (scalar)
         """
+        tau_hip_roll_array = jnp.asarray(tau_hip_roll)
+        assert tau_hip_roll_array.shape == (2,), f"Expected shape (2,), got {tau_hip_roll_array.shape}"
+
         # Hip roll torques directly contribute to roll moment about CoM
         # Both left and right hip roll torques add to roll moment
-        mx = tau_hip_roll[0] + tau_hip_roll[1]
+        mx = tau_hip_roll_array[0] + tau_hip_roll_array[1]
         return float(mx)
 
     def map_contact_forces_to_torques(
@@ -84,6 +83,10 @@ class ContactJacobian:
 
         Returns:
             Joint torques (10,) that produce the desired contact forces and hip roll torques
+
+        Note:
+            Hip roll torques are added at hardcoded indices 0 (left) and 5 (right).
+            This assumes the joint ordering defined in the robot XML remains unchanged.
         """
         J_left, J_right = self.compute_wheel_jacobians(mj_data)
 
@@ -97,6 +100,7 @@ class ContactJacobian:
         # Add hip roll torque contributions if provided
         if tau_hip_roll is not None:
             tau_hip_roll_array = jnp.asarray(tau_hip_roll)
+            assert tau_hip_roll_array.shape == (2,), f"Expected shape (2,), got {tau_hip_roll_array.shape}"
             # Hip roll joints are indices 0 (left) and 5 (right)
             tau_total = tau_total.at[0].add(tau_hip_roll_array[0])
             tau_total = tau_total.at[5].add(tau_hip_roll_array[1])

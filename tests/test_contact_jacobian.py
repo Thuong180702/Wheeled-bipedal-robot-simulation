@@ -17,16 +17,6 @@ def mj_data(mj_model):
     return mujoco.MjData(mj_model)
 
 
-def test_hip_roll_joint_ids_exist(mj_model):
-    """Test that hip roll joint IDs are found."""
-    jacobian = ContactJacobian(mj_model)
-
-    assert hasattr(jacobian, 'l_hip_roll_id')
-    assert hasattr(jacobian, 'r_hip_roll_id')
-    assert jacobian.l_hip_roll_id >= 0
-    assert jacobian.r_hip_roll_id >= 0
-
-
 def test_compute_hip_roll_moment_contribution(mj_model, mj_data):
     """Test that hip roll torques map to roll moment (Mx)."""
     jacobian = ContactJacobian(mj_model)
@@ -40,8 +30,9 @@ def test_compute_hip_roll_moment_contribution(mj_model, mj_data):
     # Hip roll torques directly contribute to roll moment
     # Left hip roll positive = positive roll moment
     # Right hip roll positive = positive roll moment
-    # So [1.0, -1.0] should give net moment
+    # So [1.0, -1.0] should give net moment of 0.0
     assert isinstance(mx, (float, np.floating))
+    assert mx == pytest.approx(0.0, abs=1e-6)
 
 
 def test_map_forces_with_hip_roll_torques(mj_model, mj_data):
