@@ -12,7 +12,7 @@ from wheeled_biped.controllers.contact_jacobian import ContactJacobian
 
 
 class UnifiedForceDistributor:
-    """Unified QP force distributor using jaxopt.OSQP."""
+    """Unified QP force distributor using jaxopt.BoxOSQP."""
 
     def __init__(
         self,
