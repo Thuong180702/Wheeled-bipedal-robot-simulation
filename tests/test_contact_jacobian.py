@@ -58,3 +58,105 @@ def test_map_forces_with_hip_roll_torques(mj_model, mj_data):
     # l_hip_roll is joint 0, r_hip_roll is joint 5
     assert tau[0] == pytest.approx(1.0, abs=1e-6)
     assert tau[5] == pytest.approx(2.0, abs=1e-6)
+
+
+def test_build_wrench_matrix_dimensions(mj_model, mj_data):
+    """Test that wrench matrix has correct dimensions."""
+    jacobian = ContactJacobian(mj_model)
+
+    # Compute wheel positions (dummy values for now)
+    wheel_pos_left = np.array([0.135, 0.0, 0.0])
+    wheel_pos_right = np.array([-0.135, 0.0, 0.0])
+
+    # Build wrench matrix
+    A_wrench = jacobian.build_wrench_matrix(
+        mj_data, wheel_pos_left, wheel_pos_right
+    )
+
+    # Should be (6, 8): 6 wrench components, 8 decision variables
+    assert A_wrench.shape == (6, 8)
+
+
+def test_wrench_matrix_force_mapping(mj_model, mj_data):
+    """Test that wrench matrix correctly maps forces."""
+    jacobian = ContactJacobian(mj_model)
+
+    # Wheel positions at CoM height (z=0 relative to CoM)
+    wheel_pos_left = np.array([0.135, 0.0, 0.0])
+    wheel_pos_right = np.array([-0.135, 0.0, 0.0])
+
+    A_wrench = jacobian.build_wrench_matrix(
+        mj_data, wheel_pos_left, wheel_pos_right
+    )
+
+    # Test case: vertical forces only
+    decision_vars = np.array([
+        0.0, 0.0, 50.0,  # f_left: [0, 0, 50N]
+        0.0, 0.0, 50.0,  # f_right: [0, 0, 50N]
+        0.0, 0.0         # tau_hip_roll: [0, 0]
+    ])
+
+    wrench = A_wrench @ decision_vars
+
+    # Expected: Fz = 100N, all other components = 0
+    assert wrench[0] == pytest.approx(0.0, abs=1e-6)  # Fx
+    assert wrench[1] == pytest.approx(0.0, abs=1e-6)  # Fy
+    assert wrench[2] == pytest.approx(100.0, abs=1e-6)  # Fz
+    assert wrench[3] == pytest.approx(0.0, abs=1e-6)  # Mx
+    assert wrench[4] == pytest.approx(0.0, abs=1e-6)  # My
+    assert wrench[5] == pytest.approx(0.0, abs=1e-6)  # Mz
+
+
+def test_wrench_matrix_hip_roll_contribution(mj_model, mj_data):
+    """Test that hip roll torques contribute to roll moment."""
+    jacobian = ContactJacobian(mj_model)
+
+    wheel_pos_left = np.array([0.135, 0.0, 0.0])
+    wheel_pos_right = np.array([-0.135, 0.0, 0.0])
+
+    A_wrench = jacobian.build_wrench_matrix(
+        mj_data, wheel_pos_left, wheel_pos_right
+    )
+
+    # Test case: hip roll torques only
+    decision_vars = np.array([
+        0.0, 0.0, 0.0,  # f_left: zero
+        0.0, 0.0, 0.0,  # f_right: zero
+        5.0, 3.0        # tau_hip_roll: [5Nm, 3Nm]
+    ])
+
+    wrench = A_wrench @ decision_vars
+
+    # Expected: Mx = 8Nm (5 + 3), all other components = 0
+    assert wrench[0] == pytest.approx(0.0, abs=1e-6)  # Fx
+    assert wrench[1] == pytest.approx(0.0, abs=1e-6)  # Fy
+    assert wrench[2] == pytest.approx(0.0, abs=1e-6)  # Fz
+    assert wrench[3] == pytest.approx(8.0, abs=1e-6)  # Mx
+    assert wrench[4] == pytest.approx(0.0, abs=1e-6)  # My
+    assert wrench[5] == pytest.approx(0.0, abs=1e-6)  # Mz
+
+
+def test_wrench_matrix_pitch_moment(mj_model, mj_data):
+    """Test that forward forces at wheel height create pitch moment."""
+    jacobian = ContactJacobian(mj_model)
+
+    # Wheels below CoM (negative z)
+    wheel_pos_left = np.array([0.135, 0.0, -0.3])
+    wheel_pos_right = np.array([-0.135, 0.0, -0.3])
+
+    A_wrench = jacobian.build_wrench_matrix(
+        mj_data, wheel_pos_left, wheel_pos_right
+    )
+
+    # Test case: forward forces
+    decision_vars = np.array([
+        10.0, 0.0, 0.0,  # f_left: [10N forward, 0, 0]
+        10.0, 0.0, 0.0,  # f_right: [10N forward, 0, 0]
+        0.0, 0.0         # tau_hip_roll: zero
+    ])
+
+    wrench = A_wrench @ decision_vars
+
+    # Expected: Fx = 20N, My = r_z * Fx = -0.3 * 20 = -6 Nm
+    assert wrench[0] == pytest.approx(20.0, abs=1e-6)  # Fx
+    assert wrench[4] == pytest.approx(-6.0, abs=1e-6)  # My

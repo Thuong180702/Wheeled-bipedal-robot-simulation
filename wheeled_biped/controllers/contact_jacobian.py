@@ -66,6 +66,73 @@ class ContactJacobian:
         mx = tau_hip_roll_array[0] + tau_hip_roll_array[1]
         return float(mx)
 
+    def build_wrench_matrix(
+        self,
+        mj_data: mujoco.MjData,
+        wheel_pos_left: Array,
+        wheel_pos_right: Array,
+    ) -> Array:
+        """Build A_wrench matrix mapping decision variables to centroidal wrench.
+
+        Decision variables: [f_left (3), f_right (3), tau_hip_roll_L, tau_hip_roll_R]
+        Wrench: [Fx, Fy, Fz, Mx, My, Mz]
+
+        Args:
+            mj_data: MuJoCo data with current robot state
+            wheel_pos_left: Left wheel position relative to CoM (3,) [x, y, z]
+            wheel_pos_right: Right wheel position relative to CoM (3,) [x, y, z]
+
+        Returns:
+            A_wrench matrix (6, 8) mapping decision variables to wrench
+        """
+        # Get wheel Jacobians (3, 10) each
+        J_left, J_right = self.compute_wheel_jacobians(mj_data)
+
+        # Initialize wrench matrix (6, 8)
+        A_wrench = jnp.zeros((6, 8))
+
+        # Force rows (Fx, Fy, Fz): sum of wheel forces
+        # Columns 0-2: left wheel forces, columns 3-5: right wheel forces
+        A_wrench = A_wrench.at[0, 0].set(1.0)  # Fx from f_left_x
+        A_wrench = A_wrench.at[0, 3].set(1.0)  # Fx from f_right_x
+        A_wrench = A_wrench.at[1, 1].set(1.0)  # Fy from f_left_y
+        A_wrench = A_wrench.at[1, 4].set(1.0)  # Fy from f_right_y
+        A_wrench = A_wrench.at[2, 2].set(1.0)  # Fz from f_left_z
+        A_wrench = A_wrench.at[2, 5].set(1.0)  # Fz from f_right_z
+
+        # Moment rows: r × F for each wheel + hip roll contribution
+        r_left = wheel_pos_left
+        r_right = wheel_pos_right
+
+        # Mx (roll moment) row
+        # From left wheel: r_y * Fz - r_z * Fy
+        A_wrench = A_wrench.at[3, 1].set(-r_left[2])  # -r_z * f_left_y
+        A_wrench = A_wrench.at[3, 2].set(r_left[1])   # r_y * f_left_z
+        # From right wheel: r_y * Fz - r_z * Fy
+        A_wrench = A_wrench.at[3, 4].set(-r_right[2])  # -r_z * f_right_y
+        A_wrench = A_wrench.at[3, 5].set(r_right[1])   # r_y * f_right_z
+        # From hip roll torques: direct contribution
+        A_wrench = A_wrench.at[3, 6].set(1.0)  # tau_hip_roll_L
+        A_wrench = A_wrench.at[3, 7].set(1.0)  # tau_hip_roll_R
+
+        # My (pitch moment) row
+        # From left wheel: r_z * Fx - r_x * Fz
+        A_wrench = A_wrench.at[4, 0].set(r_left[2])   # r_z * f_left_x
+        A_wrench = A_wrench.at[4, 2].set(-r_left[0])  # -r_x * f_left_z
+        # From right wheel: r_z * Fx - r_x * Fz
+        A_wrench = A_wrench.at[4, 3].set(r_right[2])   # r_z * f_right_x
+        A_wrench = A_wrench.at[4, 5].set(-r_right[0])  # -r_x * f_right_z
+
+        # Mz (yaw moment) row
+        # From left wheel: r_x * Fy - r_y * Fx
+        A_wrench = A_wrench.at[5, 0].set(-r_left[1])  # -r_y * f_left_x
+        A_wrench = A_wrench.at[5, 1].set(r_left[0])   # r_x * f_left_y
+        # From right wheel: r_x * Fy - r_y * Fx
+        A_wrench = A_wrench.at[5, 3].set(-r_right[1])  # -r_y * f_right_x
+        A_wrench = A_wrench.at[5, 4].set(r_right[0])   # r_x * f_right_y
+
+        return A_wrench
+
     def map_contact_forces_to_torques(
         self,
         mj_data: mujoco.MjData,
