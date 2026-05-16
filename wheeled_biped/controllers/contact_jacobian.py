@@ -85,9 +85,6 @@ class ContactJacobian:
         Returns:
             A_wrench matrix (6, 8) mapping decision variables to wrench
         """
-        # Get wheel Jacobians (3, 10) each
-        J_left, J_right = self.compute_wheel_jacobians(mj_data)
-
         # Initialize wrench matrix (6, 8)
         A_wrench = jnp.zeros((6, 8))
 
