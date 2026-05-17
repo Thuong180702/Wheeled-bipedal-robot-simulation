@@ -33,6 +33,7 @@ class IntegratedWBC:
         robot_mass: float = 15.0,
         gravity: float = 9.81,
         wbc_authority_budget: float = 0.6,
+        max_actuator_torque: float = 30.0,
     ):
         """Initialize integrated WBC.
 
@@ -50,9 +51,11 @@ class IntegratedWBC:
             robot_mass: Robot mass in kg
             gravity: Gravity constant
             wbc_authority_budget: Authority budget as fraction (0.0-1.0)
+            max_actuator_torque: Maximum actuator torque in Nm
         """
         self.mj_model = mj_model
         self.wbc_authority_budget = wbc_authority_budget
+        self.max_actuator_torque = max_actuator_torque
 
         # Initialize components
         self.wrench_computer = CentroidalWrenchComputer(
@@ -72,8 +75,15 @@ class IntegratedWBC:
         self.contact_jacobian = ContactJacobian(mj_model)
 
         # Find wheel body IDs for position computation
+        # Note: ContactJacobian also looks up these IDs for Jacobian computation.
+        # This duplication is intentional - each component uses the IDs for different
+        # purposes and maintains its own state independently.
         self.l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
         self.r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
+
+        # Validate body IDs were found
+        if self.l_wheel_id == -1 or self.r_wheel_id == -1:
+            raise ValueError("Wheel body IDs not found in model. Expected 'l_wheel_link' and 'r_wheel_link'.")
 
     def compute_wbc_torque(
         self,
@@ -161,8 +171,7 @@ class IntegratedWBC:
         Returns:
             Clipped torque array (10,) within authority budget
         """
-        max_actuator_torque = 30.0
-        budget_limit = self.wbc_authority_budget * max_actuator_torque
+        budget_limit = self.wbc_authority_budget * self.max_actuator_torque
 
         max_tau = jnp.max(jnp.abs(tau))
         scale_factor = jnp.where(max_tau <= budget_limit, 1.0, budget_limit / max_tau)
