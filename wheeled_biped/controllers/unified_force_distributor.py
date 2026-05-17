@@ -18,14 +18,13 @@ class UnifiedForceDistributor:
     def __init__(
         self,
         mj_model: mujoco.MjModel,
-        w_force: float = 1.0,
-        w_torque: float = 1.0,
-        w_smoothness: float = 0.1,
-        w_wrench: float = 1000.0,
+        w_force: float = 0.01,
+        w_torque: float = 0.1,
+        w_smoothness: float = 0.5,
         tau_hip_roll_max: float = 10.0,
-        max_iter: int = 200,
-        eps_abs: float = 1e-4,
-        eps_rel: float = 1e-4,
+        max_iter: int = 50,
+        eps_abs: float = 1e-3,
+        eps_rel: float = 1e-3,
     ):
         """Initialize unified force distributor.
 
@@ -34,7 +33,6 @@ class UnifiedForceDistributor:
             w_force: Weight for contact force effort minimization
             w_torque: Weight for hip roll torque effort minimization
             w_smoothness: Weight for temporal smoothness (deviation from previous solution)
-            w_wrench: Weight for wrench tracking (soft constraint)
             tau_hip_roll_max: Maximum hip roll torque magnitude (Nm)
             max_iter: Maximum OSQP iterations (100Hz optimized)
             eps_abs: Absolute tolerance for OSQP convergence
@@ -44,7 +42,6 @@ class UnifiedForceDistributor:
         self.w_force = w_force
         self.w_torque = w_torque
         self.w_smoothness = w_smoothness
-        self.w_wrench = w_wrench
         self.tau_hip_roll_max = tau_hip_roll_max
         self.max_iter = max_iter
         self.eps_abs = eps_abs
@@ -56,88 +53,74 @@ class UnifiedForceDistributor:
         # Previous solution for warm-starting (8D: [f_left(3), f_right(3), tau_hip_roll(2)])
         self.prev_solution = jnp.zeros(8)
 
-    def _build_cost_matrix_p(
-        self,
-        mj_data: mujoco.MjData,
-        wheel_pos_left: Array,
-        wheel_pos_right: Array,
-    ) -> Array:
+    def _build_cost_matrix_p(self) -> Array:
         """Build quadratic cost matrix P for QP.
 
-        P combines effort minimization and soft wrench tracking:
-        P = P_effort + w_wrench * A_wrench^T * A_wrench
-
-        Args:
-            mj_data: MuJoCo data with current robot state
-            wheel_pos_left: Left wheel position relative to CoM (3,)
-            wheel_pos_right: Right wheel position relative to CoM (3,)
+        P is diagonal with weights for effort minimization:
+        - First 6 elements: w_force (wheel contact forces)
+        - Last 2 elements: w_torque (hip roll torques)
 
         Returns:
-            P matrix (8, 8) quadratic cost matrix
+            P matrix (8, 8) diagonal quadratic cost matrix
         """
-        # Build effort minimization diagonal weights
+        # Build diagonal weights
         diagonal = jnp.array([
             self.w_force, self.w_force, self.w_force,  # f_left
             self.w_force, self.w_force, self.w_force,  # f_right
             self.w_torque, self.w_torque               # tau_hip_roll
         ])
-        P_effort = jnp.diag(diagonal)
 
-        # Build wrench matrix for soft constraint
-        A_wrench = self.contact_jacobian.build_wrench_matrix(
-            mj_data, wheel_pos_left, wheel_pos_right
-        )
-
-        # Add soft wrench tracking term: 2 * w_wrench * A^T * A
-        # Factor of 2 accounts for QP form: minimize 0.5*x^T*P*x + q^T*x
-        # To represent w*||Ax-b||^2, we need P = 2*w*A^T*A
-        P_wrench = 2.0 * self.w_wrench * (A_wrench.T @ A_wrench)
-
-        # Combine terms
-        P = P_effort + P_wrench
+        # Create diagonal matrix
+        P = jnp.diag(diagonal)
 
         return P
 
-    def _build_linear_cost_q(
+    def _build_linear_cost_q(self) -> Array:
+        """Build linear cost vector q for QP.
+
+        Implements smoothness penalty by penalizing deviation from previous solution:
+        q = -2 * w_smoothness * P @ x_prev
+
+        Returns:
+            q vector (8,) linear cost vector
+        """
+        P = self._build_cost_matrix_p()
+        q = -2.0 * self.w_smoothness * (P @ self.prev_solution)
+
+        return q
+
+    def _build_equality_constraints(
         self,
         mj_data: mujoco.MjData,
         desired_wrench: Array,
         wheel_pos_left: Array,
         wheel_pos_right: Array,
-    ) -> Array:
-        """Build linear cost vector q for QP.
+    ) -> tuple[Array, Array]:
+        """Build equality constraint matrices for wrench matching.
 
-        Combines smoothness penalty and soft wrench tracking:
-        q = -2 * w_smoothness * P_effort @ x_prev - 2 * w_wrench * A_wrench^T @ b_wrench
+        Constraint: A_eq @ x = b_eq
+        where x = [f_left(3), f_right(3), tau_hip_roll(2)]
 
         Args:
             mj_data: MuJoCo data with current robot state
-            desired_wrench: Desired centroidal wrench (6,)
+            desired_wrench: Desired centroidal wrench (6,) [Fx, Fy, Fz, Mx, My, Mz]
             wheel_pos_left: Left wheel position relative to CoM (3,)
             wheel_pos_right: Right wheel position relative to CoM (3,)
 
         Returns:
-            q vector (8,) linear cost vector
+            Tuple of (A_eq, b_eq) where:
+                - A_eq: Wrench matrix (6, 8)
+                - b_eq: Desired wrench (6,)
         """
-        # Smoothness term: penalize deviation from previous solution
-        diagonal = jnp.array([
-            self.w_force, self.w_force, self.w_force,
-            self.w_force, self.w_force, self.w_force,
-            self.w_torque, self.w_torque
-        ])
-        P_effort = jnp.diag(diagonal)
-        q_smoothness = -2.0 * self.w_smoothness * (P_effort @ self.prev_solution)
-
-        # Soft wrench tracking term: -2 * w_wrench * A^T @ b
-        A_wrench = self.contact_jacobian.build_wrench_matrix(
+        # Build wrench matrix using ContactJacobian
+        A_eq = self.contact_jacobian.build_wrench_matrix(
             mj_data, wheel_pos_left, wheel_pos_right
         )
-        q_wrench = -2.0 * self.w_wrench * (A_wrench.T @ desired_wrench)
 
-        # Combine terms
-        q = q_smoothness + q_wrench
+        # Desired wrench is the equality constraint target
+        b_eq = jnp.asarray(desired_wrench)
 
-        return q
+        return A_eq, b_eq
 
     def _build_inequality_bounds(self) -> tuple[Array, Array]:
         """Build box constraint bounds for decision variables.
@@ -180,10 +163,6 @@ class UnifiedForceDistributor:
     ) -> tuple[Array, Array, Array]:
         """Distribute desired wrench to wheel forces and hip roll torques.
 
-        Uses soft constraint formulation for guaranteed feasibility:
-        - Cost: effort minimization + soft wrench tracking + smoothness
-        - Constraints: only box constraints (fz >= 0, |tau_hip_roll| <= tau_max)
-
         Args:
             mj_data: MuJoCo data with current robot state
             desired_wrench: Desired centroidal wrench (6,) [Fx, Fy, Fz, Mx, My, Mz]
@@ -196,23 +175,30 @@ class UnifiedForceDistributor:
                 - f_right: Right wheel contact force (3,) [fx, fy, fz]
                 - tau_hip_roll: Hip roll torques (2,) [left, right]
         """
-        # Build QP cost matrices with soft wrench tracking
-        P = self._build_cost_matrix_p(mj_data, wheel_pos_left, wheel_pos_right)
-        q = self._build_linear_cost_q(mj_data, desired_wrench, wheel_pos_left, wheel_pos_right)
+        # Build QP cost matrices
+        P = self._build_cost_matrix_p()
+        q = self._build_linear_cost_q()
+
+        # Build equality constraints (wrench matching)
+        A_eq, b_eq = self._build_equality_constraints(
+            mj_data, desired_wrench, wheel_pos_left, wheel_pos_right
+        )
 
         # Build box constraints on decision variables
         lower_box, upper_box = self._build_inequality_bounds()
 
-        # BoxOSQP formulation with only box constraints:
-        # minimize: 0.5*x^T*P*x + q^T*x
-        # subject to: l <= x <= u
+        # BoxOSQP formulation: min 0.5*x^T*P*x + q^T*x
+        #                      s.t. A*x = z, l <= z <= u
+        # We need to stack equality and box constraints:
+        # A = [A_eq; I], l = [b_eq; lower_box], u = [b_eq; upper_box]
 
-        # For BoxOSQP, we need A*x = z with l <= z <= u
-        # For pure box constraints, use A = I (identity)
+        # Stack constraint matrix: [A_eq (6x8); I (8x8)]
         I = jnp.eye(8)
-        A = I  # (8, 8)
-        l = lower_box  # (8,)
-        u = upper_box  # (8,)
+        A = jnp.vstack([A_eq, I])  # (14, 8)
+
+        # Stack bounds: equality constraints have l=u=b_eq, box constraints have l=lower, u=upper
+        l = jnp.concatenate([b_eq, lower_box])  # (14,)
+        u = jnp.concatenate([b_eq, upper_box])  # (14,)
 
         # Initialize BoxOSQP solver
         solver = BoxOSQP(
@@ -220,29 +206,32 @@ class UnifiedForceDistributor:
             tol=self.eps_abs,
         )
 
-        # Solve QP (BoxOSQP will handle initialization internally)
+        # Solve QP (warm-starting will be added in future optimization)
         result = solver.run(
-            init_params=None,  # Let solver initialize (warm-starting requires KKTSolution)
+            init_params=None,  # Let solver initialize
             params_obj=(P, q),
             params_eq=A,
             params_ineq=(l, u),
         )
 
-        # Extract solution from KKTSolution
-        # result.params is a KKTSolution with primal=(x, z), dual_eq, dual_ineq
-        solution = result.params.primal[0]  # Extract x from (x, z) tuple
-
-        # Check solver convergence (warn but don't fallback - solution should be valid)
+        # Check solver convergence
         if hasattr(result.state, 'error') and result.state.error > 1e-2:
+            # Solver did not converge well - use previous solution as fallback
             import warnings
             warnings.warn(
-                f"QP solver converged with moderate error ({result.state.error:.4f}). "
-                f"Solution may be suboptimal but is feasible.",
+                f"QP solver did not converge well (error={result.state.error:.4f}). "
+                f"Using previous solution as fallback.",
                 RuntimeWarning
             )
+            solution = self.prev_solution
+        else:
+            # Extract solution from KKTSolution
+            # result.params is a KKTSolution with primal=(x, z), dual_eq, dual_ineq
+            # We need x, which is the decision variable
+            solution = result.params.primal[0]  # Extract x from (x, z) tuple
 
-        # Update previous solution for next warm start
-        self.prev_solution = solution
+            # Update previous solution for next warm start
+            self.prev_solution = solution
 
         # Extract decision variables
         f_left = solution[0:3]
