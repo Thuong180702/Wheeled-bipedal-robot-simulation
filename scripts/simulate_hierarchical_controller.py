@@ -101,7 +101,7 @@ def main():
     )
     wbc_controller = IntegratedWBC(
         mj_model,
-        k_roll=20.0, k_roll_rate=4.0,
+        k_roll=5.0, k_roll_rate=1.0,
         k_com_lateral=15.0, k_com_lateral_damping=3.0,
         k_com_sagittal=10.0, k_com_sagittal_damping=2.0,
         k_cp_lateral=25.0, k_cp_sagittal=20.0,

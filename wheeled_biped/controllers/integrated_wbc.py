@@ -21,8 +21,8 @@ class IntegratedWBC:
     def __init__(
         self,
         mj_model: mujoco.MjModel,
-        k_roll: float = 20.0,
-        k_roll_rate: float = 4.0,
+        k_roll: float = 5.0,
+        k_roll_rate: float = 1.0,
         k_com_lateral: float = 15.0,
         k_com_lateral_damping: float = 3.0,
         k_com_sagittal: float = 10.0,
