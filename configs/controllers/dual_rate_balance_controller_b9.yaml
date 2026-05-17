@@ -127,6 +127,103 @@ yaw:
   kd: 0.0
   max_diff: 0.0
 
+# --- Minimal lateral balance layer (Step 5.14; disabled by default) ---
+lateral_balance:
+  enabled: false
+  k_roll: 0.0
+  k_roll_rate: 0.0
+  k_com_y: 0.0
+  k_com_y_rate: 0.0
+  k_force_diff: 0.0
+  max_correction: 0.0
+  sign: 1.0
+  roll_target: 0.0
+  com_y_target: 0.0
+
+# --- Minimal VMC / whole-body force distribution layer (Step 5.15; disabled by default) ---
+vmc_whole_body:
+  enabled: false
+  mapping: "combined_weak"
+  k_roll: 0.0
+  k_roll_rate: 0.0
+  k_com_y: 0.0
+  k_com_y_rate: 0.0
+  k_force_diff: 0.0
+  a_roll: 0.0
+  a_com: 0.0
+  a_force: 0.0
+  max_delta_support: 0.0
+  max_hip_roll_correction: 0.0
+  max_leg_length_correction: 0.0
+  sign: 1.0
+  roll_target: 0.0
+  com_y_target: 0.0
+  external_force_diff_error: 0.0
+
+# --- Jacobian-informed WBC/VMC target-offset layer (Step 5.16; disabled by default) ---
+wbc_vmc:
+  enabled: false
+  mode: "jacobian_combined"
+  update_rate_hz: 50
+  use_mujoco_jacobian: true
+  use_finite_difference_fallback: true
+  compose_with_lateral_balance: false
+  compose_with_vmc_whole_body: false
+
+  gains:
+    k_roll: 0.0
+    k_roll_rate: 0.0
+    k_com_y: 0.0
+    k_com_y_rate: 0.0
+    k_height: 0.0
+    k_height_rate: 0.0
+    k_force_balance: 0.0
+
+  limits:
+    max_delta_fz: 0.0
+    max_hip_roll_offset: 0.0
+    max_hip_pitch_offset: 0.0
+    max_knee_offset: 0.0
+    max_wheel_diff_cmd: 0.0
+    max_correction_rate: 0.0
+
+  mappings:
+    use_hip_roll: true
+    use_hip_pitch: true
+    use_knee: true
+    use_wheel_diff: false
+
+  safety:
+    disable_on_wheel_unload: true
+    disable_on_large_pitch: true
+    large_pitch_deg: 8.0
+    disable_on_large_contact_impulse: true
+    large_contact_impulse_n: 2000.0
+
+# --- Diagnostic torque/generalized-force WBC prototype (Step 5.17; disabled by default) ---
+torque_wbc:
+  enabled: false
+  diagnostic_only: true
+  mode: "qfrc_applied"
+  gains:
+    k_roll: 0.0
+    k_roll_rate: 0.0
+    k_com_y: 0.0
+    k_com_y_rate: 0.0
+    k_height: 0.0
+    k_height_rate: 0.0
+  limits:
+    max_joint_torque: 0.0
+    max_wheel_torque: 0.0
+    max_body_wrench: 0.0
+    max_torque_rate: 0.0
+  safety:
+    disable_on_contact_loss: true
+    disable_on_large_pitch: true
+    large_pitch_deg: 8.0
+    disable_on_large_roll: true
+    large_roll_deg: 8.0
+
 # --- CoM state ---
 com_state:
   mode: "sim_oracle"

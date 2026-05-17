@@ -303,6 +303,7 @@ def render_pose(model: mujoco.MjModel, data: mujoco.MjData, output_path: Path, v
         scene_option = mujoco.MjvOption()
         scene_option.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True
         scene_option.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = True
+        scene_option.sitegroup[:] = 0
         renderer.update_scene(data, camera=camera, scene_option=scene_option)
         pixels = renderer.render()
 

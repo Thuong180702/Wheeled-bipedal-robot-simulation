@@ -65,7 +65,8 @@ class CentroidalStateEstimator:
         """
         # Extract CoM position from MJX data
         # subtree_com[1] is the torso subtree CoM in world frame
-        com_pos = data.subtree_com[1]
+        # IMPORTANT: Copy the value to avoid reference issues with in-place updates
+        com_pos = jnp.array(data.subtree_com[1])
 
         # Compute CoM velocity via finite difference
         if prev_com_pos is None:

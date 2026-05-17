@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_context-mode_context-mode__ctx_execute_file",
+      "mcp__plugin_context-mode_context-mode__ctx_search",
+      "mcp__plugin_context-mode_context-mode__ctx_execute",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "mcp__claude_ai_Canva__help",
+      "Skill(superpowers:systematic-debugging)",
+      "Skill(superpowers:systematic-debugging:*)",
+      "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+      "Skill(superpowers:brainstorming)",
+      "Skill(superpowers:brainstorming:*)",
+      "Skill(superpowers:writing-plans)",
+      "Skill(superpowers:writing-plans:*)",
+      "Skill(superpowers:subagent-driven-development)",
+      "Skill(superpowers:subagent-driven-development:*)",
+      "Skill(superpowers:requesting-code-review)",
+      "Skill(superpowers:requesting-code-review:*)",
+      "mcp__plugin_context-mode_context-mode__ctx_upgrade",
+      "mcp__plugin_context-mode_context-mode__ctx_fetch_and_index",
+      "WebSearch"
+    ]
+  }
+}

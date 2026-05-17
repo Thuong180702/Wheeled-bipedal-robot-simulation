@@ -91,7 +91,7 @@ class IntegratedWBC:
         obs: Array,
         state: CentroidalState,
         height_cmd: float,
-    ) -> Array:
+    ) -> tuple[Array, dict]:
         """Compute WBC joint torques via unified QP force distribution.
 
         Integration flow:
@@ -108,8 +108,12 @@ class IntegratedWBC:
             height_cmd: Desired height command
 
         Returns:
-            Joint torques (10,) that achieve desired control objectives
+            Tuple of (tau_wbc, diagnostics) where:
+                - tau_wbc: Joint torques (10,) that achieve desired control objectives
+                - diagnostics: Dict with QP solver metrics
         """
+        import time
+
         # Step 1: Compute desired centroidal wrench (6D vector)
         desired_wrench = self.wrench_computer.compute_desired_wrench_vector(
             obs, state, height_cmd
@@ -120,11 +124,12 @@ class IntegratedWBC:
             mj_data, state.com_pos
         )
 
-        # Step 3: Unified QP force distribution
-        # Distributes wrench to wheel forces and hip roll torques simultaneously
+        # Step 3: Unified QP force distribution (with timing)
+        solve_start = time.perf_counter()
         f_left, f_right, tau_hip_roll = self.force_distributor.distribute_wrench(
             mj_data, desired_wrench, wheel_pos_left, wheel_pos_right
         )
+        solve_time_ms = (time.perf_counter() - solve_start) * 1000.0
 
         # Step 4: Map contact forces and hip roll torques to joint torques via Jacobians
         tau_wbc = self.contact_jacobian.map_contact_forces_to_torques(
@@ -134,7 +139,23 @@ class IntegratedWBC:
         # Step 5: Clip to authority budget
         tau_wbc = self.clip_to_authority_budget(tau_wbc)
 
-        return tau_wbc
+        # Compute diagnostics
+        solution = jnp.concatenate([f_left, f_right, tau_hip_roll])
+        A_wrench = self.contact_jacobian.build_wrench_matrix(
+            mj_data, wheel_pos_left, wheel_pos_right
+        )
+        achieved_wrench = A_wrench @ solution
+        wrench_error = desired_wrench - achieved_wrench
+        wrench_error_norm = float(jnp.linalg.norm(wrench_error))
+
+        diagnostics = {
+            "solve_time_ms": solve_time_ms,
+            "wrench_error_norm": wrench_error_norm,
+            "f_left_z": float(f_left[2]),
+            "f_right_z": float(f_right[2]),
+        }
+
+        return tau_wbc, diagnostics
 
     def _compute_wheel_positions_relative_to_com(
         self,

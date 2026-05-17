@@ -18,13 +18,13 @@ class UnifiedForceDistributor:
     def __init__(
         self,
         mj_model: mujoco.MjModel,
-        w_force: float = 0.01,
-        w_torque: float = 0.1,
-        w_smoothness: float = 0.5,
+        w_force: float = 1.0,
+        w_torque: float = 1.0,
+        w_smoothness: float = 0.1,
         tau_hip_roll_max: float = 10.0,
-        max_iter: int = 50,
-        eps_abs: float = 1e-3,
-        eps_rel: float = 1e-3,
+        max_iter: int = 200,
+        eps_abs: float = 1e-4,
+        eps_rel: float = 1e-4,
     ):
         """Initialize unified force distributor.
 
@@ -34,9 +34,9 @@ class UnifiedForceDistributor:
             w_torque: Weight for hip roll torque effort minimization
             w_smoothness: Weight for temporal smoothness (deviation from previous solution)
             tau_hip_roll_max: Maximum hip roll torque magnitude (Nm)
-            max_iter: Maximum OSQP iterations (100Hz optimized)
-            eps_abs: Absolute tolerance for OSQP convergence
-            eps_rel: Relative tolerance for OSQP convergence
+            max_iter: Maximum OSQP iterations (increased for better convergence)
+            eps_abs: Absolute tolerance for OSQP convergence (relaxed)
+            eps_rel: Relative tolerance for OSQP convergence (relaxed)
         """
         self.mj_model = mj_model
         self.w_force = w_force

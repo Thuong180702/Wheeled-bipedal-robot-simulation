@@ -1,8 +1,8 @@
 # wheeled_biped/controllers/posture_regularizer.py
 """Posture regularization for Level 3 stabilization.
 
-Provides weak posture restoration with two-level gating (WBC error gate,
-momentum coordinator gate) and per-joint deadbands with 20% authority budget.
+Provides weak posture restoration with momentum coordinator gating and per-joint
+deadbands with 20% authority budget. Always available as backup when WBC saturates.
 """
 
 import chex
@@ -167,14 +167,15 @@ class PostureRegularizer:
         wbc_error_magnitude: float,
         momentum_magnitude: float,
     ) -> Array:
-        """Compute integrated posture regularizer torque with two-level gating.
+        """Compute integrated posture regularizer torque with momentum gating.
 
-        Combines posture restoration with WBC error gating and momentum coordinator
-        gating, then applies 20% authority budget.
+        Combines posture restoration with momentum coordinator gating, then applies
+        20% authority budget. Posture provides continuous backup, especially when
+        WBC saturates.
 
         Args:
             joint_pos: Joint position array (10,)
-            wbc_error_magnitude: WBC error magnitude (normalized 0-1)
+            wbc_error_magnitude: WBC error magnitude (normalized 0-1) - unused, kept for API compatibility
             momentum_magnitude: Momentum coordinator activity magnitude (0-1)
 
         Returns:
@@ -182,14 +183,6 @@ class PostureRegularizer:
         """
         # Compute base posture restoration torque
         tau_posture = self.compute_posture_restoration_torque(joint_pos)
-
-        # Apply WBC error gate (disable if WBC error > 30%)
-        wbc_gate = jnp.where(
-            wbc_error_magnitude > self.config.wbc_error_threshold,
-            0.0,
-            1.0,
-        )
-        tau_posture = tau_posture * wbc_gate
 
         # Apply momentum coordinator gate (reduce to 50% if active)
         momentum_gate = jnp.where(

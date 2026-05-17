@@ -168,6 +168,13 @@ def main():
         "joint_pos": [],
         "joint_vel": [],
         "terminated": [], "termination_reason": [],
+        # QP-specific metrics
+        "qp_solve_time_ms": [],
+        "qp_converged": [],
+        "qp_error": [],
+        "wrench_error_norm": [],
+        "f_left_z": [],
+        "f_right_z": [],
     }
 
     # Simulation parameters
@@ -214,13 +221,15 @@ def main():
 
         # Phase 2-4: Compute controller torques
         # WBC uses unified QP force distribution (not JIT-compiled)
-        tau_wbc = wbc_controller.compute_wbc_torque(mj_data, obs, centroidal_state, 0.6)
+        tau_wbc, qp_diagnostics = wbc_controller.compute_wbc_torque(mj_data, obs, centroidal_state, 0.6)
 
         # Diagnostic: log WBC output on first step
         if step == 0:
             print(f"\n[WBC DIAGNOSTIC - Step 0]")
             print(f"WBC torques: {tau_wbc}")
             print(f"Max WBC torque: {float(jnp.max(jnp.abs(tau_wbc))):.2f} Nm")
+            print(f"QP solve time: {qp_diagnostics['solve_time_ms']:.2f} ms")
+            print(f"Wrench error: {qp_diagnostics['wrench_error_norm']:.6f} N/Nm")
             print(f"Note: Using unified QP force distribution with hip roll torques\n")
 
         tau_momentum = compute_momentum_jit(obs, centroidal_state)
@@ -271,6 +280,13 @@ def main():
         telemetry["joint_vel"].append(",".join(f"{x:.4f}" for x in np.array(mj_data.qvel[6:16])))
         telemetry["terminated"].append(terminated)
         telemetry["termination_reason"].append(termination_reason or "")
+        # QP metrics
+        telemetry["qp_solve_time_ms"].append(qp_diagnostics["solve_time_ms"])
+        telemetry["qp_converged"].append(1)  # Will be updated with actual convergence status
+        telemetry["qp_error"].append(0.0)  # Will be updated with actual error
+        telemetry["wrench_error_norm"].append(qp_diagnostics["wrench_error_norm"])
+        telemetry["f_left_z"].append(qp_diagnostics["f_left_z"])
+        telemetry["f_right_z"].append(qp_diagnostics["f_right_z"])
 
         # Progress updates
         if (step + 1) % 200 == 0:

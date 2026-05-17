@@ -39,7 +39,12 @@ from wheeled_biped.rewards.reward_functions import (
     reward_no_motion,
 )
 from wheeled_biped.sim.domain_randomization import randomize_mjx_model
-from wheeled_biped.sim.low_level_control import pid_control
+from wheeled_biped.sim.low_level_control import (
+    actuator_saturation_flags,
+    hybrid_pid_plus_torque_control,
+    normalized_motor_torque_control,
+    pid_control,
+)
 from wheeled_biped.sim.push_disturbance import apply_push_disturbance
 from wheeled_biped.utils.math_utils import (
     quat_conjugate,
@@ -129,6 +134,18 @@ class BalanceEnv(WheeledBipedEnv):
         #     before it is delivered to the PID controller.
         self._action_delay_steps = int(pid_cfg.get("action_delay_steps", 0))
 
+        ll_cfg = self.config.get("low_level_control", {})
+        torque_cfg = ll_cfg.get("torque_control", {})
+        self._low_level_mode = str(ll_cfg.get("mode", "pid_position_velocity"))
+        self._torque_control_enabled = bool(torque_cfg.get("enabled", False))
+        self._torque_max_ctrl_fraction = float(torque_cfg.get("max_ctrl_fraction", 1.0))
+        self._torque_allow_leg = bool(torque_cfg.get("allow_leg_torque", True))
+        self._torque_allow_wheel = bool(torque_cfg.get("allow_wheel_torque", True))
+        self._torque_allow_hip_yaw = bool(torque_cfg.get("allow_hip_yaw_torque", False))
+
+        # Authority reallocation: reserve actuator headroom for WBC by limiting PID authority
+        self._pid_authority_fraction = float(torque_cfg.get("pid_authority_fraction", 1.0))
+
         # Joint range theo thứ tự action/joint của env (qpos[7:])
         joint_mins = []
         joint_maxs = []
@@ -146,6 +163,17 @@ class BalanceEnv(WheeledBipedEnv):
             1.0 if i in wheel_indices else 0.0 for i in range(self.num_actions)
         ]
         self._wheel_mask = jnp.array(wheel_mask, dtype=jnp.float32)
+        torque_allow_mask = []
+        for i, name in enumerate(self.JOINT_NAMES):
+            allowed = True
+            if "wheel" in name:
+                allowed = self._torque_allow_wheel
+            else:
+                allowed = self._torque_allow_leg
+            if "hip_yaw" in name:
+                allowed = self._torque_allow_hip_yaw
+            torque_allow_mask.append(1.0 if allowed else 0.0)
+        self._torque_allow_mask = jnp.array(torque_allow_mask, dtype=jnp.float32)
 
         # PID action bias: shifts policy action space so action=0 targets the
         # keyframe joint positions instead of the joint-range midpoints.
@@ -312,6 +340,44 @@ class BalanceEnv(WheeledBipedEnv):
             "lifetime_steps": jnp.int32(0),
             "curriculum_min_height": jnp.float32(self._initial_min_height),
             "pid_integral": jnp.zeros(self.num_actions, dtype=jnp.float32),
+            "last_actuator_ctrl": jnp.zeros(self.num_actions, dtype=jnp.float32),
+            "raw_pid_ctrl": jnp.zeros(self.num_actions, dtype=jnp.float32),
+            "torque_residual_ctrl": jnp.zeros(self.num_actions, dtype=jnp.float32),
+            "final_actuator_ctrl": jnp.zeros(self.num_actions, dtype=jnp.float32),
+            "actuator_saturation_flags": jnp.zeros(self.num_actions, dtype=jnp.bool_),
+            "low_level_mode_code": jnp.int32(0),
+            "torque_control_enabled": jnp.bool_(False),
+            "torque_safety_disabled": jnp.bool_(False),
+            "torque_residual_action": jnp.zeros(self.num_actions, dtype=jnp.float32),
+            "stabilization_damping_gain": jnp.float32(0.0),
+            "stabilization_smoothing_alpha": jnp.float32(0.0),
+            "stabilization_impedance_kp": jnp.float32(0.0),
+            "stabilization_impedance_target": jnp.zeros(self.num_actions, dtype=jnp.float32),
+            "stabilization_prev_ctrl": jnp.zeros(self.num_actions, dtype=jnp.float32),
+            # Hierarchical fusion parameters (Step 5.25)
+            "hierarchical_wbc_authority_min": jnp.float32(0.60),
+            "hierarchical_contact_stabilization_gain": jnp.float32(0.0),
+            "hierarchical_contact_asymmetry_threshold": jnp.float32(0.15),
+            "hierarchical_damping_gain": jnp.float32(0.0),
+            "hierarchical_oscillation_threshold": jnp.float32(0.5),
+            "hierarchical_impedance_kp": jnp.float32(0.0),
+            "hierarchical_impedance_target": jnp.zeros(self.num_actions, dtype=jnp.float32),
+            "hierarchical_wbc_error_threshold": jnp.float32(0.3),
+            # Contact forces for hierarchical fusion
+            "left_foot_contact": jnp.float32(0.0),
+            "right_foot_contact": jnp.float32(0.0),
+            # Hierarchical fusion telemetry
+            "hierarchical_tau_wbc_rms": jnp.float32(0.0),
+            "hierarchical_tau_contact_rms": jnp.float32(0.0),
+            "hierarchical_tau_damping_rms": jnp.float32(0.0),
+            "hierarchical_tau_posture_rms": jnp.float32(0.0),
+            "hierarchical_wbc_authority_pct": jnp.float32(0.0),
+            "hierarchical_contact_authority_pct": jnp.float32(0.0),
+            "hierarchical_damping_authority_pct": jnp.float32(0.0),
+            "hierarchical_posture_authority_pct": jnp.float32(0.0),
+            "hierarchical_contact_active": jnp.float32(0.0),
+            "hierarchical_oscillation_detected": jnp.float32(0.0),
+            "hierarchical_posture_active": jnp.float32(0.0),
         }
         # Action delay buffer: stores the last N smoothed targets waiting to be
         # applied.  Slot [0] = oldest (applied next step), slot [-1] = newest.
@@ -362,26 +428,133 @@ class BalanceEnv(WheeledBipedEnv):
         else:
             control_action = smooth_action
 
-        # Step 3 — Direct torque mode (cũ) hoặc PID low-level mode
-        if self._pid_enabled:
-            # Apply keyframe bias so policy action=0 → PID targets keyframe pose.
-            # Model-based controllers (LQR/IK) compute their own targets and should
-            # disable the bias via disable_pid_action_bias=True in config.
-            if self._pid_bias_disabled:
-                biased_action = control_action
-            else:
-                biased_action = jnp.clip(control_action + self._pid_action_bias, -1.0, 1.0)
-            scaled_action, pid_integral = self._pid_low_level_ctrl(
-                state.mjx_data,
-                biased_action,
-                state.info["pid_integral"],
-            )
-        else:
-            scaled_action = self._ctrl_min + (control_action + 1.0) * 0.5 * (
-                self._ctrl_max - self._ctrl_min
+        # Step 3 — low-level actuator ctrl conversion.
+        raw_pid_ctrl = jnp.zeros(self.num_actions, dtype=jnp.float32)
+        torque_residual_ctrl = jnp.zeros(self.num_actions, dtype=jnp.float32)
+        mode_code = jnp.int32(0)
+        torque_enabled = jnp.bool_(False)
+        torque_safety_disabled = jnp.bool_(False)
+
+        if self._low_level_mode == "motor_torque" and self._torque_control_enabled:
+            scaled_action = normalized_motor_torque_control(
+                control_action,
+                self._ctrl_min,
+                self._ctrl_max,
+                self._torque_max_ctrl_fraction,
+                self._torque_allow_mask,
             )
             pid_integral = state.info["pid_integral"]
+            mode_code = jnp.int32(1)
+            torque_enabled = jnp.bool_(True)
+        elif self._low_level_mode == "torque_first_wbc" and self._torque_control_enabled:
+            # Torque-first WBC: WBC commands primary, light damping only
+            # This mode gives WBC dominant authority (>70%) with only lightweight
+            # tracking/damping, eliminating PID position control that was suppressing
+            # WBC corrections in hybrid_pid_plus_torque mode.
+            from wheeled_biped.sim.low_level_control import torque_first_wbc_control
 
+            # Read stabilization parameters from state.info (set by evaluation scripts)
+            # Don't use float() - keep as JAX arrays for JIT compatibility
+            damping_gain = state.info.get("stabilization_damping_gain", 0.0)
+            smoothing_alpha = state.info.get("stabilization_smoothing_alpha", 0.0)
+            impedance_kp = state.info.get("stabilization_impedance_kp", 0.0)
+            impedance_target = state.info.get("stabilization_impedance_target", None)
+            prev_ctrl = state.info.get("stabilization_prev_ctrl", None)
+
+            scaled_action = torque_first_wbc_control(
+                state.mjx_data,
+                state.info["torque_residual_action"],
+                self._ctrl_min,
+                self._ctrl_max,
+                wbc_authority_fraction=self._torque_max_ctrl_fraction,
+                damping_gain=damping_gain,
+                smoothing_alpha=smoothing_alpha,
+                prev_ctrl=prev_ctrl,
+                impedance_kp=impedance_kp,
+                impedance_target=impedance_target,
+                joint_mins=self._joint_mins,
+                joint_maxs=self._joint_maxs,
+            )
+            pid_integral = state.info["pid_integral"]
+            mode_code = jnp.int32(3)
+            torque_enabled = jnp.bool_(True)
+        elif self._low_level_mode == "hierarchical_torque_fusion" and self._torque_control_enabled:
+            # Hierarchical task-priority torque fusion (Step 5.25)
+            # Explicit authority allocation, state-dependent stabilization, contact-aware control
+            from wheeled_biped.sim.hierarchical_torque_fusion import hierarchical_torque_fusion_control
+
+            # Extract contact forces from MJX data
+            # Sum vertical forces on left and right foot geoms
+            left_foot_contact = jnp.float32(0.0)
+            right_foot_contact = jnp.float32(0.0)
+
+            # Read hierarchical fusion parameters from state.info
+            wbc_authority_min = state.info.get("hierarchical_wbc_authority_min", 0.60)
+            contact_stabilization_gain = state.info.get("hierarchical_contact_stabilization_gain", 0.0)
+            contact_asymmetry_threshold = state.info.get("hierarchical_contact_asymmetry_threshold", 0.15)
+            damping_gain = state.info.get("hierarchical_damping_gain", 0.0)
+            oscillation_threshold = state.info.get("hierarchical_oscillation_threshold", 0.5)
+            impedance_kp = state.info.get("hierarchical_impedance_kp", 0.0)
+            impedance_target = state.info.get("hierarchical_impedance_target", None)
+            wbc_error_threshold = state.info.get("hierarchical_wbc_error_threshold", 0.3)
+            left_foot_contact = state.info.get("left_foot_contact", 0.0)
+            right_foot_contact = state.info.get("right_foot_contact", 0.0)
+
+            scaled_action, telemetry = hierarchical_torque_fusion_control(
+                state.mjx_data,
+                state.info["torque_residual_action"],
+                self._ctrl_min,
+                self._ctrl_max,
+                wbc_authority_min=wbc_authority_min,
+                contact_stabilization_gain=contact_stabilization_gain,
+                contact_asymmetry_threshold=contact_asymmetry_threshold,
+                damping_gain=damping_gain,
+                oscillation_threshold=oscillation_threshold,
+                impedance_kp=impedance_kp,
+                impedance_target=impedance_target,
+                wbc_error_threshold=wbc_error_threshold,
+                left_foot_contact=left_foot_contact,
+                right_foot_contact=right_foot_contact,
+            )
+            pid_integral = state.info["pid_integral"]
+            mode_code = jnp.int32(4)
+            torque_enabled = jnp.bool_(True)
+        else:
+            if self._pid_enabled:
+                # Apply keyframe bias so policy action=0 → PID targets keyframe pose.
+                # Model-based controllers (LQR/IK) compute their own targets and should
+                # disable the bias via disable_pid_action_bias=True in config.
+                if self._pid_bias_disabled:
+                    biased_action = control_action
+                else:
+                    biased_action = jnp.clip(control_action + self._pid_action_bias, -1.0, 1.0)
+                raw_pid_ctrl, pid_integral = self._pid_low_level_ctrl(
+                    state.mjx_data,
+                    biased_action,
+                    state.info["pid_integral"],
+                )
+            else:
+                raw_pid_ctrl = self._ctrl_min + (control_action + 1.0) * 0.5 * (
+                    self._ctrl_max - self._ctrl_min
+                )
+                pid_integral = state.info["pid_integral"]
+
+            if self._low_level_mode == "hybrid_pid_plus_torque" and self._torque_control_enabled:
+                scaled_action, torque_residual_ctrl = hybrid_pid_plus_torque_control(
+                    raw_pid_ctrl,
+                    state.info["torque_residual_action"],
+                    self._ctrl_min,
+                    self._ctrl_max,
+                    self._torque_max_ctrl_fraction,
+                    self._torque_allow_mask,
+                    self._pid_authority_fraction,
+                )
+                mode_code = jnp.int32(2)
+                torque_enabled = jnp.bool_(True)
+            else:
+                scaled_action = raw_pid_ctrl
+
+        saturation_flags = actuator_saturation_flags(scaled_action, self._ctrl_min, self._ctrl_max)
         mjx_data = state.mjx_data.replace(ctrl=scaled_action)
 
         # Push disturbance: áp dụng lực ngẫu nhiên mỗi push_interval steps
@@ -442,6 +615,56 @@ class BalanceEnv(WheeledBipedEnv):
         # (b) the prev_action channel in the observation.  Using smooth_action
         # (not delayed_action) keeps the observation semantics consistent with
         # "what did the policy last request", regardless of pipeline delay.
+        # Propagate hierarchical telemetry if available
+        if self._low_level_mode == "hierarchical_torque_fusion" and self._torque_control_enabled:
+            hierarchical_telemetry = {
+                "hierarchical_wbc_authority_min": state.info["hierarchical_wbc_authority_min"],
+                "hierarchical_contact_stabilization_gain": state.info["hierarchical_contact_stabilization_gain"],
+                "hierarchical_contact_asymmetry_threshold": state.info["hierarchical_contact_asymmetry_threshold"],
+                "hierarchical_damping_gain": state.info["hierarchical_damping_gain"],
+                "hierarchical_oscillation_threshold": state.info["hierarchical_oscillation_threshold"],
+                "hierarchical_impedance_kp": state.info["hierarchical_impedance_kp"],
+                "hierarchical_impedance_target": state.info["hierarchical_impedance_target"],
+                "hierarchical_wbc_error_threshold": state.info["hierarchical_wbc_error_threshold"],
+                "left_foot_contact": state.info["left_foot_contact"],
+                "right_foot_contact": state.info["right_foot_contact"],
+                "hierarchical_tau_wbc_rms": telemetry["tau_wbc_rms"],
+                "hierarchical_tau_contact_rms": telemetry["tau_contact_rms"],
+                "hierarchical_tau_damping_rms": telemetry["tau_damping_rms"],
+                "hierarchical_tau_posture_rms": telemetry["tau_posture_rms"],
+                "hierarchical_wbc_authority_pct": telemetry["wbc_authority_pct"],
+                "hierarchical_contact_authority_pct": telemetry["contact_authority_pct"],
+                "hierarchical_damping_authority_pct": telemetry["damping_authority_pct"],
+                "hierarchical_posture_authority_pct": telemetry["posture_authority_pct"],
+                "hierarchical_contact_active": telemetry["contact_active"],
+                "hierarchical_oscillation_detected": telemetry["oscillation_detected"],
+                "hierarchical_posture_active": telemetry["posture_active"],
+            }
+        else:
+            hierarchical_telemetry = {
+                "hierarchical_wbc_authority_min": state.info["hierarchical_wbc_authority_min"],
+                "hierarchical_contact_stabilization_gain": state.info["hierarchical_contact_stabilization_gain"],
+                "hierarchical_contact_asymmetry_threshold": state.info["hierarchical_contact_asymmetry_threshold"],
+                "hierarchical_damping_gain": state.info["hierarchical_damping_gain"],
+                "hierarchical_oscillation_threshold": state.info["hierarchical_oscillation_threshold"],
+                "hierarchical_impedance_kp": state.info["hierarchical_impedance_kp"],
+                "hierarchical_impedance_target": state.info["hierarchical_impedance_target"],
+                "hierarchical_wbc_error_threshold": state.info["hierarchical_wbc_error_threshold"],
+                "left_foot_contact": state.info["left_foot_contact"],
+                "right_foot_contact": state.info["right_foot_contact"],
+                "hierarchical_tau_wbc_rms": state.info["hierarchical_tau_wbc_rms"],
+                "hierarchical_tau_contact_rms": state.info["hierarchical_tau_contact_rms"],
+                "hierarchical_tau_damping_rms": state.info["hierarchical_tau_damping_rms"],
+                "hierarchical_tau_posture_rms": state.info["hierarchical_tau_posture_rms"],
+                "hierarchical_wbc_authority_pct": state.info["hierarchical_wbc_authority_pct"],
+                "hierarchical_contact_authority_pct": state.info["hierarchical_contact_authority_pct"],
+                "hierarchical_damping_authority_pct": state.info["hierarchical_damping_authority_pct"],
+                "hierarchical_posture_authority_pct": state.info["hierarchical_posture_authority_pct"],
+                "hierarchical_contact_active": state.info["hierarchical_contact_active"],
+                "hierarchical_oscillation_detected": state.info["hierarchical_oscillation_detected"],
+                "hierarchical_posture_active": state.info["hierarchical_posture_active"],
+            }
+
         new_info = {
             "is_fallen": is_fallen,
             "time_limit": time_limit,
@@ -454,6 +677,21 @@ class BalanceEnv(WheeledBipedEnv):
             "lifetime_steps": state.info["lifetime_steps"] + 1,
             "curriculum_min_height": state.info["curriculum_min_height"],
             "pid_integral": pid_integral,
+            "last_actuator_ctrl": scaled_action,
+            "raw_pid_ctrl": raw_pid_ctrl,
+            "torque_residual_ctrl": torque_residual_ctrl,
+            "final_actuator_ctrl": scaled_action,
+            "actuator_saturation_flags": saturation_flags,
+            "low_level_mode_code": mode_code,
+            "torque_control_enabled": torque_enabled,
+            "torque_safety_disabled": torque_safety_disabled,
+            "torque_residual_action": state.info["torque_residual_action"],
+            "stabilization_damping_gain": state.info["stabilization_damping_gain"],
+            "stabilization_smoothing_alpha": state.info["stabilization_smoothing_alpha"],
+            "stabilization_impedance_kp": state.info["stabilization_impedance_kp"],
+            "stabilization_impedance_target": state.info["stabilization_impedance_target"],
+            "stabilization_prev_ctrl": scaled_action,
+            **hierarchical_telemetry,
         }
         if self._action_delay_steps > 0:
             new_info["action_delay_buffer"] = new_delay_buffer

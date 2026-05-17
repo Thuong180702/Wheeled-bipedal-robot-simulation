@@ -149,3 +149,157 @@ def pid_control(
     ctrl = jnp.clip(ctrl, ctrl_min, ctrl_max)
 
     return ctrl, integral_new
+
+
+def normalized_motor_torque_control(
+    normalized_torque: jnp.ndarray,
+    ctrl_min: jnp.ndarray,
+    ctrl_max: jnp.ndarray,
+    max_ctrl_fraction: float = 1.0,
+    allow_mask: jnp.ndarray | None = None,
+) -> jnp.ndarray:
+    normalized_torque = jnp.clip(normalized_torque, -1.0, 1.0)
+    fraction = jnp.clip(jnp.asarray(max_ctrl_fraction, dtype=ctrl_min.dtype), 0.0, 1.0)
+    ctrl_limit = jnp.minimum(jnp.abs(ctrl_min), jnp.abs(ctrl_max)) * fraction
+    ctrl = normalized_torque * ctrl_limit
+    if allow_mask is not None:
+        ctrl = ctrl * allow_mask
+    return jnp.clip(ctrl, ctrl_min, ctrl_max)
+
+
+def hybrid_pid_plus_torque_control(
+    pid_ctrl: jnp.ndarray,
+    normalized_torque_residual: jnp.ndarray,
+    ctrl_min: jnp.ndarray,
+    ctrl_max: jnp.ndarray,
+    max_ctrl_fraction: float = 1.0,
+    allow_mask: jnp.ndarray | None = None,
+    pid_authority_fraction: float = 1.0,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Hybrid PID + torque control with optional authority reallocation.
+
+    Args:
+        pid_authority_fraction: Fraction of actuator range reserved for PID (0.0-1.0).
+            1.0 = PID can use full range (default, backward compatible)
+            0.7 = PID limited to 70% of range, reserving 30% for WBC residuals
+            Prevents PID saturation from suppressing WBC corrections.
+    """
+    # Clamp PID output to reserved fraction before adding residual
+    pid_fraction = jnp.clip(jnp.asarray(pid_authority_fraction, dtype=ctrl_min.dtype), 0.0, 1.0)
+    pid_limit_min = ctrl_min * pid_fraction
+    pid_limit_max = ctrl_max * pid_fraction
+    pid_clamped = jnp.clip(pid_ctrl, pid_limit_min, pid_limit_max)
+
+    # Compute WBC residual
+    residual = normalized_motor_torque_control(
+        normalized_torque_residual,
+        ctrl_min,
+        ctrl_max,
+        max_ctrl_fraction,
+        allow_mask,
+    )
+
+    # Blend and clip to full range
+    final = jnp.clip(pid_clamped + residual, ctrl_min, ctrl_max)
+    return final, residual
+
+
+def actuator_saturation_flags(
+    ctrl: jnp.ndarray,
+    ctrl_min: jnp.ndarray,
+    ctrl_max: jnp.ndarray,
+    eps: float = 1e-6,
+) -> jnp.ndarray:
+    return (ctrl <= ctrl_min + eps) | (ctrl >= ctrl_max - eps)
+
+
+def torque_first_wbc_control(
+    mjx_data: mjx.Data,
+    normalized_wbc_torque: jnp.ndarray,
+    ctrl_min: jnp.ndarray,
+    ctrl_max: jnp.ndarray,
+    wbc_authority_fraction: float = 1.0,
+    damping_gain: float = 0.0,
+    smoothing_alpha: float = 0.0,
+    prev_ctrl: jnp.ndarray | None = None,
+    impedance_kp: float = 0.0,
+    impedance_target: jnp.ndarray | None = None,
+    joint_mins: jnp.ndarray | None = None,
+    joint_maxs: jnp.ndarray | None = None,
+) -> jnp.ndarray:
+    """Torque-first WBC control: WBC commands primary, light stabilization only.
+
+    Architecture:
+        WBC torque (primary) -> light damping -> weak impedance -> smoothing -> actuators
+
+    This mode gives WBC dominant authority (>70%) with only lightweight
+    stabilization, eliminating PID position control that was suppressing
+    WBC corrections in hybrid_pid_plus_torque mode.
+
+    Args:
+        mjx_data: Current MJX simulation data.
+        normalized_wbc_torque: WBC torque commands in [-1, 1], shape (num_joints,).
+        ctrl_min: Actuator control range lower bound.
+        ctrl_max: Actuator control range upper bound.
+        wbc_authority_fraction: Fraction of actuator range for WBC (0.0-1.0).
+            Default 1.0 = WBC uses full range (100% authority).
+        damping_gain: Optional light damping coefficient (default 0.0 = no damping).
+            Small values (0.5-2.0) add velocity damping without position control.
+        smoothing_alpha: Optional temporal smoothing (default 0.0 = no smoothing).
+            Small values (0.1-0.3) reduce control chatter.
+        prev_ctrl: Previous control output for smoothing (optional).
+        impedance_kp: Optional weak impedance gain (default 0.0 = no impedance).
+            Small values (1.0-5.0) add soft position feedback without dominance.
+        impedance_target: Target joint positions for impedance (optional, radians).
+            If None, uses current position (pure damping, no restoring force).
+        joint_mins: Joint lower limits for impedance target normalization (optional).
+        joint_maxs: Joint upper limits for impedance target normalization (optional).
+
+    Returns:
+        Final actuator control, shape (num_joints,).
+    """
+    # Scale WBC torque to actuator range
+    normalized_wbc_torque = jnp.clip(normalized_wbc_torque, -1.0, 1.0)
+    wbc_fraction = jnp.clip(jnp.asarray(wbc_authority_fraction, dtype=ctrl_min.dtype), 0.0, 1.0)
+    ctrl_limit = jnp.minimum(jnp.abs(ctrl_min), jnp.abs(ctrl_max)) * wbc_fraction
+    wbc_ctrl = normalized_wbc_torque * ctrl_limit
+
+    # Optional light damping (velocity-based, not position-based)
+    # Use jnp.where instead of if statement for JAX JIT compatibility
+    joint_vel = mjx_data.qvel[6:16]
+    damping_ctrl_raw = -jnp.asarray(damping_gain, dtype=ctrl_min.dtype) * joint_vel
+    damping_ctrl_clipped = jnp.clip(damping_ctrl_raw, ctrl_min * 0.2, ctrl_max * 0.2)
+    damping_ctrl = jnp.where(
+        jnp.asarray(damping_gain, dtype=ctrl_min.dtype) > 0.0,
+        damping_ctrl_clipped,
+        jnp.zeros_like(wbc_ctrl)
+    )
+
+    # Optional weak impedance (soft position feedback)
+    # Use jnp.where for JAX JIT compatibility
+    joint_pos = mjx_data.qpos[7:17]
+    impedance_target_safe = jnp.zeros_like(wbc_ctrl) if impedance_target is None else impedance_target
+    pos_error = impedance_target_safe - joint_pos
+    impedance_ctrl_raw = jnp.asarray(impedance_kp, dtype=ctrl_min.dtype) * pos_error
+    impedance_ctrl_clipped = jnp.clip(impedance_ctrl_raw, ctrl_min * 0.15, ctrl_max * 0.15)
+    impedance_ctrl = jnp.where(
+        jnp.asarray(impedance_kp, dtype=ctrl_min.dtype) > 0.0,
+        impedance_ctrl_clipped,
+        jnp.zeros_like(wbc_ctrl)
+    )
+
+    # Combine: WBC (dominant) + damping + impedance
+    ctrl = wbc_ctrl + damping_ctrl + impedance_ctrl
+    ctrl = jnp.clip(ctrl, ctrl_min, ctrl_max)
+
+    # Optional temporal smoothing
+    # Use jnp.where for JAX JIT compatibility
+    prev_ctrl_safe = jnp.zeros_like(ctrl) if prev_ctrl is None else prev_ctrl
+    ctrl_smoothed = jnp.asarray(smoothing_alpha, dtype=ctrl.dtype) * prev_ctrl_safe + (1.0 - jnp.asarray(smoothing_alpha, dtype=ctrl.dtype)) * ctrl
+    ctrl = jnp.where(
+        jnp.asarray(smoothing_alpha, dtype=ctrl.dtype) > 0.0,
+        jnp.clip(ctrl_smoothed, ctrl_min, ctrl_max),
+        ctrl
+    )
+
+    return ctrl

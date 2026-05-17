@@ -81,6 +81,88 @@ class DualRateConfig:
     yaw_kd: float
     yaw_max_diff: float
 
+    # Lateral balance layer (disabled by default)
+    lateral_balance_enabled: bool
+    lateral_k_roll: float
+    lateral_k_roll_rate: float
+    lateral_k_com_y: float
+    lateral_k_com_y_rate: float
+    lateral_k_force_diff: float
+    lateral_max_correction: float
+    lateral_sign: float
+    lateral_roll_target: float
+    lateral_com_y_target: float
+
+    # VMC / whole-body force distribution layer (disabled by default)
+    vmc_enabled: bool
+    vmc_mapping: str
+    vmc_k_roll: float
+    vmc_k_roll_rate: float
+    vmc_k_com_y: float
+    vmc_k_com_y_rate: float
+    vmc_k_force_diff: float
+    vmc_a_roll: float
+    vmc_a_com: float
+    vmc_a_force: float
+    vmc_max_delta_support: float
+    vmc_max_hip_roll_correction: float
+    vmc_max_leg_length_correction: float
+    vmc_sign: float
+    vmc_roll_target: float
+    vmc_com_y_target: float
+    vmc_external_force_diff_error: float
+
+    # Jacobian-informed WBC/VMC target-offset layer (disabled by default)
+    wbc_vmc_enabled: bool
+    wbc_vmc_mode: str
+    wbc_vmc_update_rate_hz: float
+    wbc_vmc_use_mujoco_jacobian: bool
+    wbc_vmc_use_finite_difference_fallback: bool
+    wbc_vmc_compose_with_lateral_balance: bool
+    wbc_vmc_compose_with_vmc_whole_body: bool
+    wbc_vmc_k_roll: float
+    wbc_vmc_k_roll_rate: float
+    wbc_vmc_k_com_y: float
+    wbc_vmc_k_com_y_rate: float
+    wbc_vmc_k_height: float
+    wbc_vmc_k_height_rate: float
+    wbc_vmc_k_force_balance: float
+    wbc_vmc_max_delta_fz: float
+    wbc_vmc_max_hip_roll_offset: float
+    wbc_vmc_max_hip_pitch_offset: float
+    wbc_vmc_max_knee_offset: float
+    wbc_vmc_max_wheel_diff_cmd: float
+    wbc_vmc_max_correction_rate: float
+    wbc_vmc_use_hip_roll: bool
+    wbc_vmc_use_hip_pitch: bool
+    wbc_vmc_use_knee: bool
+    wbc_vmc_use_wheel_diff: bool
+    wbc_vmc_disable_on_wheel_unload: bool
+    wbc_vmc_disable_on_large_pitch: bool
+    wbc_vmc_large_pitch_deg: float
+    wbc_vmc_disable_on_large_contact_impulse: bool
+    wbc_vmc_large_contact_impulse_n: float
+
+    # Diagnostic torque/generalized-force WBC prototype (disabled by default)
+    torque_wbc_enabled: bool
+    torque_wbc_diagnostic_only: bool
+    torque_wbc_mode: str
+    torque_wbc_k_roll: float
+    torque_wbc_k_roll_rate: float
+    torque_wbc_k_com_y: float
+    torque_wbc_k_com_y_rate: float
+    torque_wbc_k_height: float
+    torque_wbc_k_height_rate: float
+    torque_wbc_max_joint_torque: float
+    torque_wbc_max_wheel_torque: float
+    torque_wbc_max_body_wrench: float
+    torque_wbc_max_torque_rate: float
+    torque_wbc_disable_on_contact_loss: bool
+    torque_wbc_disable_on_large_pitch: bool
+    torque_wbc_large_pitch_deg: float
+    torque_wbc_disable_on_large_roll: bool
+    torque_wbc_large_roll_deg: float
+
     # CoM state
     com_use_sim: bool
 
@@ -88,6 +170,17 @@ class DualRateConfig:
     ik_scan_points: int
     ik_polynomial_degree: int
     ik_symmetric_fold: bool
+
+    # Soft dynamic balance mode (disabled by default)
+    soft_dynamic_balance_enabled: bool
+    soft_posture_stiffness_reduction: float
+    soft_posture_deadband_deg: float
+    soft_posture_restore_delay_s: float
+    soft_balance_authority_boost: float
+    soft_allow_torso_lean: bool
+    soft_allow_temporary_asymmetry: bool
+    soft_max_torso_lean_deg: float
+    soft_max_wheel_offset_m: float
 
     @classmethod
     def from_yaml(cls, config_path: str | Path) -> "DualRateConfig":
@@ -125,10 +218,93 @@ class DualRateConfig:
             yaw_kp=cfg["yaw"]["kp"],
             yaw_kd=cfg["yaw"]["kd"],
             yaw_max_diff=cfg["yaw"]["max_diff"],
+            lateral_balance_enabled=cfg.get("lateral_balance", {}).get("enabled", False),
+            lateral_k_roll=cfg.get("lateral_balance", {}).get("k_roll", 0.0),
+            lateral_k_roll_rate=cfg.get("lateral_balance", {}).get("k_roll_rate", 0.0),
+            lateral_k_com_y=cfg.get("lateral_balance", {}).get("k_com_y", 0.0),
+            lateral_k_com_y_rate=cfg.get("lateral_balance", {}).get("k_com_y_rate", 0.0),
+            lateral_k_force_diff=cfg.get("lateral_balance", {}).get("k_force_diff", 0.0),
+            lateral_max_correction=cfg.get("lateral_balance", {}).get("max_correction", 0.0),
+            lateral_sign=cfg.get("lateral_balance", {}).get("sign", 1.0),
+            lateral_roll_target=cfg.get("lateral_balance", {}).get("roll_target", 0.0),
+            lateral_com_y_target=cfg.get("lateral_balance", {}).get("com_y_target", 0.0),
+            vmc_enabled=cfg.get("vmc_whole_body", {}).get("enabled", False),
+            vmc_mapping=cfg.get("vmc_whole_body", {}).get("mapping", "combined_weak"),
+            vmc_k_roll=cfg.get("vmc_whole_body", {}).get("k_roll", 0.0),
+            vmc_k_roll_rate=cfg.get("vmc_whole_body", {}).get("k_roll_rate", 0.0),
+            vmc_k_com_y=cfg.get("vmc_whole_body", {}).get("k_com_y", 0.0),
+            vmc_k_com_y_rate=cfg.get("vmc_whole_body", {}).get("k_com_y_rate", 0.0),
+            vmc_k_force_diff=cfg.get("vmc_whole_body", {}).get("k_force_diff", 0.0),
+            vmc_a_roll=cfg.get("vmc_whole_body", {}).get("a_roll", 0.0),
+            vmc_a_com=cfg.get("vmc_whole_body", {}).get("a_com", 0.0),
+            vmc_a_force=cfg.get("vmc_whole_body", {}).get("a_force", 0.0),
+            vmc_max_delta_support=cfg.get("vmc_whole_body", {}).get("max_delta_support", 0.0),
+            vmc_max_hip_roll_correction=cfg.get("vmc_whole_body", {}).get("max_hip_roll_correction", 0.0),
+            vmc_max_leg_length_correction=cfg.get("vmc_whole_body", {}).get("max_leg_length_correction", 0.0),
+            vmc_sign=cfg.get("vmc_whole_body", {}).get("sign", 1.0),
+            vmc_roll_target=cfg.get("vmc_whole_body", {}).get("roll_target", 0.0),
+            vmc_com_y_target=cfg.get("vmc_whole_body", {}).get("com_y_target", 0.0),
+            vmc_external_force_diff_error=cfg.get("vmc_whole_body", {}).get("external_force_diff_error", 0.0),
+            wbc_vmc_enabled=cfg.get("wbc_vmc", {}).get("enabled", False),
+            wbc_vmc_mode=cfg.get("wbc_vmc", {}).get("mode", "jacobian_combined"),
+            wbc_vmc_update_rate_hz=cfg.get("wbc_vmc", {}).get("update_rate_hz", 50.0),
+            wbc_vmc_use_mujoco_jacobian=cfg.get("wbc_vmc", {}).get("use_mujoco_jacobian", True),
+            wbc_vmc_use_finite_difference_fallback=cfg.get("wbc_vmc", {}).get("use_finite_difference_fallback", True),
+            wbc_vmc_compose_with_lateral_balance=cfg.get("wbc_vmc", {}).get("compose_with_lateral_balance", False),
+            wbc_vmc_compose_with_vmc_whole_body=cfg.get("wbc_vmc", {}).get("compose_with_vmc_whole_body", False),
+            wbc_vmc_k_roll=cfg.get("wbc_vmc", {}).get("gains", {}).get("k_roll", 0.0),
+            wbc_vmc_k_roll_rate=cfg.get("wbc_vmc", {}).get("gains", {}).get("k_roll_rate", 0.0),
+            wbc_vmc_k_com_y=cfg.get("wbc_vmc", {}).get("gains", {}).get("k_com_y", 0.0),
+            wbc_vmc_k_com_y_rate=cfg.get("wbc_vmc", {}).get("gains", {}).get("k_com_y_rate", 0.0),
+            wbc_vmc_k_height=cfg.get("wbc_vmc", {}).get("gains", {}).get("k_height", 0.0),
+            wbc_vmc_k_height_rate=cfg.get("wbc_vmc", {}).get("gains", {}).get("k_height_rate", 0.0),
+            wbc_vmc_k_force_balance=cfg.get("wbc_vmc", {}).get("gains", {}).get("k_force_balance", 0.0),
+            wbc_vmc_max_delta_fz=cfg.get("wbc_vmc", {}).get("limits", {}).get("max_delta_fz", 0.0),
+            wbc_vmc_max_hip_roll_offset=cfg.get("wbc_vmc", {}).get("limits", {}).get("max_hip_roll_offset", 0.0),
+            wbc_vmc_max_hip_pitch_offset=cfg.get("wbc_vmc", {}).get("limits", {}).get("max_hip_pitch_offset", 0.0),
+            wbc_vmc_max_knee_offset=cfg.get("wbc_vmc", {}).get("limits", {}).get("max_knee_offset", 0.0),
+            wbc_vmc_max_wheel_diff_cmd=cfg.get("wbc_vmc", {}).get("limits", {}).get("max_wheel_diff_cmd", 0.0),
+            wbc_vmc_max_correction_rate=cfg.get("wbc_vmc", {}).get("limits", {}).get("max_correction_rate", 0.0),
+            wbc_vmc_use_hip_roll=cfg.get("wbc_vmc", {}).get("mappings", {}).get("use_hip_roll", True),
+            wbc_vmc_use_hip_pitch=cfg.get("wbc_vmc", {}).get("mappings", {}).get("use_hip_pitch", True),
+            wbc_vmc_use_knee=cfg.get("wbc_vmc", {}).get("mappings", {}).get("use_knee", True),
+            wbc_vmc_use_wheel_diff=cfg.get("wbc_vmc", {}).get("mappings", {}).get("use_wheel_diff", False),
+            wbc_vmc_disable_on_wheel_unload=cfg.get("wbc_vmc", {}).get("safety", {}).get("disable_on_wheel_unload", True),
+            wbc_vmc_disable_on_large_pitch=cfg.get("wbc_vmc", {}).get("safety", {}).get("disable_on_large_pitch", True),
+            wbc_vmc_large_pitch_deg=cfg.get("wbc_vmc", {}).get("safety", {}).get("large_pitch_deg", 8.0),
+            wbc_vmc_disable_on_large_contact_impulse=cfg.get("wbc_vmc", {}).get("safety", {}).get("disable_on_large_contact_impulse", True),
+            wbc_vmc_large_contact_impulse_n=cfg.get("wbc_vmc", {}).get("safety", {}).get("large_contact_impulse_n", 2000.0),
+            torque_wbc_enabled=cfg.get("torque_wbc", {}).get("enabled", False),
+            torque_wbc_diagnostic_only=cfg.get("torque_wbc", {}).get("diagnostic_only", True),
+            torque_wbc_mode=cfg.get("torque_wbc", {}).get("mode", "qfrc_applied"),
+            torque_wbc_k_roll=cfg.get("torque_wbc", {}).get("gains", {}).get("k_roll", 0.0),
+            torque_wbc_k_roll_rate=cfg.get("torque_wbc", {}).get("gains", {}).get("k_roll_rate", 0.0),
+            torque_wbc_k_com_y=cfg.get("torque_wbc", {}).get("gains", {}).get("k_com_y", 0.0),
+            torque_wbc_k_com_y_rate=cfg.get("torque_wbc", {}).get("gains", {}).get("k_com_y_rate", 0.0),
+            torque_wbc_k_height=cfg.get("torque_wbc", {}).get("gains", {}).get("k_height", 0.0),
+            torque_wbc_k_height_rate=cfg.get("torque_wbc", {}).get("gains", {}).get("k_height_rate", 0.0),
+            torque_wbc_max_joint_torque=cfg.get("torque_wbc", {}).get("limits", {}).get("max_joint_torque", 0.0),
+            torque_wbc_max_wheel_torque=cfg.get("torque_wbc", {}).get("limits", {}).get("max_wheel_torque", 0.0),
+            torque_wbc_max_body_wrench=cfg.get("torque_wbc", {}).get("limits", {}).get("max_body_wrench", 0.0),
+            torque_wbc_max_torque_rate=cfg.get("torque_wbc", {}).get("limits", {}).get("max_torque_rate", 0.0),
+            torque_wbc_disable_on_contact_loss=cfg.get("torque_wbc", {}).get("safety", {}).get("disable_on_contact_loss", True),
+            torque_wbc_disable_on_large_pitch=cfg.get("torque_wbc", {}).get("safety", {}).get("disable_on_large_pitch", True),
+            torque_wbc_large_pitch_deg=cfg.get("torque_wbc", {}).get("safety", {}).get("large_pitch_deg", 8.0),
+            torque_wbc_disable_on_large_roll=cfg.get("torque_wbc", {}).get("safety", {}).get("disable_on_large_roll", True),
+            torque_wbc_large_roll_deg=cfg.get("torque_wbc", {}).get("safety", {}).get("large_roll_deg", 8.0),
             com_use_sim=cfg["com_state"]["use_sim"],
             ik_scan_points=cfg["ik"]["scan_points"],
             ik_polynomial_degree=cfg["ik"]["polynomial_degree"],
             ik_symmetric_fold=cfg["ik"]["symmetric_fold"],
+            soft_dynamic_balance_enabled=cfg.get("soft_dynamic_balance", {}).get("enabled", False),
+            soft_posture_stiffness_reduction=cfg.get("soft_dynamic_balance", {}).get("posture_stiffness_reduction", 1.0),
+            soft_posture_deadband_deg=cfg.get("soft_dynamic_balance", {}).get("posture_deadband_deg", 0.0),
+            soft_posture_restore_delay_s=cfg.get("soft_dynamic_balance", {}).get("posture_restore_delay_s", 0.0),
+            soft_balance_authority_boost=cfg.get("soft_dynamic_balance", {}).get("balance_authority_boost", 1.0),
+            soft_allow_torso_lean=cfg.get("soft_dynamic_balance", {}).get("allow_torso_lean", False),
+            soft_allow_temporary_asymmetry=cfg.get("soft_dynamic_balance", {}).get("allow_temporary_asymmetry", False),
+            soft_max_torso_lean_deg=cfg.get("soft_dynamic_balance", {}).get("max_torso_lean_deg", 5.0),
+            soft_max_wheel_offset_m=cfg.get("soft_dynamic_balance", {}).get("max_wheel_offset_m", 0.05),
         )
 
 
@@ -170,11 +346,58 @@ class DualRateBalanceController:
         self.last_emergency_active = False
         self.last_is_stable = True
         self.last_should_update_slow = False
+        self.last_lateral_terms = {
+            "enabled": False,
+            "roll_error": 0.0,
+            "roll_rate_error": 0.0,
+            "com_y_error": 0.0,
+            "com_y_rate_error": 0.0,
+            "force_diff_error": 0.0,
+            "correction": 0.0,
+        }
+        self.last_vmc_terms = {
+            "enabled": False,
+            "mapping": "disabled",
+            "roll_error": 0.0,
+            "roll_rate_error": 0.0,
+            "com_y_error": 0.0,
+            "com_y_rate_error": 0.0,
+            "force_diff_error": 0.0,
+            "desired_roll_torque": 0.0,
+            "desired_lateral_correction": 0.0,
+            "desired_force_balance": 0.0,
+            "delta_support": 0.0,
+            "hip_roll_correction": 0.0,
+            "leg_length_correction": 0.0,
+        }
+        self.last_wbc_vmc_terms = self._default_wbc_vmc_terms()
 
         # Telemetry
         self.num_slow_updates = 0
         self.num_frozen_updates = 0
         self.num_emergency_activations = 0
+
+    def _default_wbc_vmc_terms(self) -> dict:
+        return {
+            "enabled": False,
+            "tau_roll_des": 0.0,
+            "Fy_des": 0.0,
+            "Fz_des": 0.0,
+            "delta_Fz_des": 0.0,
+            "Fz_left_des": 0.0,
+            "Fz_right_des": 0.0,
+            "force_error": 0.0,
+            "hip_roll_offset_left": 0.0,
+            "hip_roll_offset_right": 0.0,
+            "hip_pitch_offset_left": 0.0,
+            "hip_pitch_offset_right": 0.0,
+            "knee_offset_left": 0.0,
+            "knee_offset_right": 0.0,
+            "wheel_diff_cmd": 0.0,
+            "clamped": False,
+            "wheel_unload_flag": False,
+            "mapping_mode": "disabled",
+        }
 
     def compute_action(self, obs: np.ndarray) -> np.ndarray:
         """Compute control action from observation.
@@ -275,6 +498,11 @@ class DualRateBalanceController:
         # Interpolate LQR gains based on current height
         gains = self._interpolate_lqr_gains(height_cmd_m)
 
+        # Soft dynamic balance mode: reduce posture stiffness
+        if self.config.soft_dynamic_balance_enabled:
+            stiffness_reduction = self.config.soft_posture_stiffness_reduction
+            gains = {k: v * stiffness_reduction for k, v in gains.items()}
+
         # Check emergency mode
         emergency_active = (self.config.emergency_mode_enabled and
                           pitch_deg > self.config.emergency_pitch_threshold_deg)
@@ -286,6 +514,13 @@ class DualRateBalanceController:
         # 6D LQR state: [pitch_error, pitch_rate, fwd_vel, fwd_pos, com_y_error, com_y_error_rate]
         # Target pitch = 0, target fwd_pos = 0, target com_y = 0
         pitch_error = pitch - 0.0
+
+        # Soft dynamic balance: apply deadband to pitch error
+        if self.config.soft_dynamic_balance_enabled:
+            deadband_rad = np.deg2rad(self.config.soft_posture_deadband_deg)
+            if abs(pitch_error) < deadband_rad:
+                pitch_error = 0.0
+
         fwd_pos_error = 0.0  # Simplified: no position tracking
         com_y_error = com_y - 0.0
 
@@ -344,8 +579,106 @@ class DualRateBalanceController:
         action[L_WHEEL] = wheel_cmd_norm
         action[R_WHEEL] = wheel_cmd_norm
 
-        # Roll stabilization (PD control on hip_roll differential)
-        if self.config.roll_kp > 0 or self.config.roll_kd > 0:
+        # Minimal VMC / whole-body support redistribution layer
+        if self.config.vmc_enabled:
+            roll = float(np.arcsin(np.clip(gravity_body[1], -1.0, 1.0)))
+            roll_rate = float(obs[7])
+            roll_error = roll - self.config.vmc_roll_target
+            roll_rate_error = roll_rate
+            vmc_com_y_error = com_y - self.config.vmc_com_y_target
+            vmc_com_y_rate_error = com_y_dot
+            force_diff_error = self.config.vmc_external_force_diff_error
+            desired_roll_torque = -(self.config.vmc_k_roll * roll_error + self.config.vmc_k_roll_rate * roll_rate_error)
+            desired_lateral_correction = -(self.config.vmc_k_com_y * vmc_com_y_error + self.config.vmc_k_com_y_rate * vmc_com_y_rate_error)
+            desired_force_balance = -(self.config.vmc_k_force_diff * force_diff_error)
+            delta_support = self.config.vmc_sign * (
+                self.config.vmc_a_roll * desired_roll_torque
+                + self.config.vmc_a_com * desired_lateral_correction
+                + self.config.vmc_a_force * desired_force_balance
+            )
+            delta_support = float(np.clip(delta_support, -self.config.vmc_max_delta_support, self.config.vmc_max_delta_support))
+            mapping = self.config.vmc_mapping
+            use_hip_roll = mapping in {"hip_roll_height", "hip_roll_leg_length", "hip_roll_plus_leg_length", "combined_weak"}
+            use_leg_length = mapping in {"leg_length_only", "knee_only", "hip_roll_leg_length", "hip_roll_plus_leg_length", "combined_weak", "force_balance_only"}
+            hip_roll_correction = float(np.clip(delta_support, -self.config.vmc_max_hip_roll_correction, self.config.vmc_max_hip_roll_correction)) if use_hip_roll else 0.0
+            leg_length_correction = float(np.clip(delta_support, -self.config.vmc_max_leg_length_correction, self.config.vmc_max_leg_length_correction)) if use_leg_length else 0.0
+            action[L_HIP_ROLL] = hip_roll_correction
+            action[R_HIP_ROLL] = -hip_roll_correction
+            action[L_KNEE] = np.clip(action[L_KNEE] + leg_length_correction, -1.0, 1.0)
+            action[R_KNEE] = np.clip(action[R_KNEE] - leg_length_correction, -1.0, 1.0)
+            self.last_vmc_terms = {
+                "enabled": True,
+                "mapping": mapping,
+                "roll_error": roll_error,
+                "roll_rate_error": roll_rate_error,
+                "com_y_error": vmc_com_y_error,
+                "com_y_rate_error": vmc_com_y_rate_error,
+                "force_diff_error": force_diff_error,
+                "desired_roll_torque": desired_roll_torque,
+                "desired_lateral_correction": desired_lateral_correction,
+                "desired_force_balance": desired_force_balance,
+                "delta_support": delta_support,
+                "hip_roll_correction": hip_roll_correction,
+                "leg_length_correction": leg_length_correction,
+            }
+            self.last_lateral_terms = {
+                "enabled": False,
+                "roll_error": roll_error,
+                "roll_rate_error": roll_rate_error,
+                "com_y_error": vmc_com_y_error,
+                "com_y_rate_error": vmc_com_y_rate_error,
+                "force_diff_error": force_diff_error,
+                "correction": 0.0,
+            }
+        # Roll stabilization (legacy PD control on hip_roll differential)
+        elif self.config.lateral_balance_enabled:
+            roll = float(np.arcsin(np.clip(gravity_body[1], -1.0, 1.0)))
+            roll_rate = float(obs[7])
+            roll_error = roll - self.config.lateral_roll_target
+            roll_rate_error = roll_rate
+            com_y_error = com_y - self.config.lateral_com_y_target
+            com_y_rate_error = com_y_dot
+            force_diff_error = 0.0
+            lateral_correction = -(
+                self.config.lateral_k_roll * roll_error
+                + self.config.lateral_k_roll_rate * roll_rate_error
+                + self.config.lateral_k_com_y * com_y_error
+                + self.config.lateral_k_com_y_rate * com_y_rate_error
+                + self.config.lateral_k_force_diff * force_diff_error
+            )
+            lateral_correction *= self.config.lateral_sign
+            lateral_correction = float(np.clip(
+                lateral_correction,
+                -self.config.lateral_max_correction,
+                self.config.lateral_max_correction,
+            ))
+            action[L_HIP_ROLL] = lateral_correction
+            action[R_HIP_ROLL] = -lateral_correction
+            self.last_lateral_terms = {
+                "enabled": True,
+                "roll_error": roll_error,
+                "roll_rate_error": roll_rate_error,
+                "com_y_error": com_y_error,
+                "com_y_rate_error": com_y_rate_error,
+                "force_diff_error": force_diff_error,
+                "correction": lateral_correction,
+            }
+        elif self.config.roll_kp > 0 or self.config.roll_kd > 0:
+            self.last_vmc_terms = {
+                "enabled": False,
+                "mapping": "disabled",
+                "roll_error": 0.0,
+                "roll_rate_error": 0.0,
+                "com_y_error": 0.0,
+                "com_y_rate_error": 0.0,
+                "force_diff_error": 0.0,
+                "desired_roll_torque": 0.0,
+                "desired_lateral_correction": 0.0,
+                "desired_force_balance": 0.0,
+                "delta_support": 0.0,
+                "hip_roll_correction": 0.0,
+                "leg_length_correction": 0.0,
+            }
             # Roll from gravity vector (lateral tilt)
             roll = float(np.arcsin(np.clip(gravity_body[1], -1.0, 1.0)))
             roll_rate = float(obs[7])  # ang_vel[1] is roll rate
@@ -357,9 +690,111 @@ class DualRateBalanceController:
             # Differential hip roll - SIGN FLIPPED after empirical test showed amplification
             action[L_HIP_ROLL] = roll_correction
             action[R_HIP_ROLL] = -roll_correction
+            self.last_lateral_terms = {
+                "enabled": False,
+                "roll_error": roll,
+                "roll_rate_error": roll_rate,
+                "com_y_error": 0.0,
+                "com_y_rate_error": 0.0,
+                "force_diff_error": 0.0,
+                "correction": float(roll_correction),
+            }
         else:
             action[L_HIP_ROLL] = 0.0
             action[R_HIP_ROLL] = 0.0
+            self.last_vmc_terms = {
+                "enabled": False,
+                "mapping": "disabled",
+                "roll_error": 0.0,
+                "roll_rate_error": 0.0,
+                "com_y_error": 0.0,
+                "com_y_rate_error": 0.0,
+                "force_diff_error": 0.0,
+                "desired_roll_torque": 0.0,
+                "desired_lateral_correction": 0.0,
+                "desired_force_balance": 0.0,
+                "delta_support": 0.0,
+                "hip_roll_correction": 0.0,
+                "leg_length_correction": 0.0,
+            }
+            self.last_lateral_terms = {
+                "enabled": False,
+                "roll_error": 0.0,
+                "roll_rate_error": 0.0,
+                "com_y_error": 0.0,
+                "com_y_rate_error": 0.0,
+                "force_diff_error": 0.0,
+                "correction": 0.0,
+            }
+
+        if self.config.wbc_vmc_enabled:
+            roll = float(np.arcsin(np.clip(gravity_body[1], -1.0, 1.0)))
+            roll_rate = float(obs[7])
+            height = current_height_norm * (self.config.height_max - self.config.height_min) + self.config.height_min
+            height_rate = float(obs[5])
+            height_error = height - height_cmd_m
+            height_rate_error = height_rate
+            support_width = 0.23
+            mass = 8.1
+            gravity = 9.81
+            force_error = self.config.vmc_external_force_diff_error if self.config.vmc_enabled else 0.0
+            tau_roll_des = -(self.config.wbc_vmc_k_roll * roll + self.config.wbc_vmc_k_roll_rate * roll_rate)
+            Fy_des = -(self.config.wbc_vmc_k_com_y * com_y_error + self.config.wbc_vmc_k_com_y_rate * com_y_dot)
+            Fz_des = mass * gravity - self.config.wbc_vmc_k_height * height_error - self.config.wbc_vmc_k_height_rate * height_rate_error
+            delta_fz_raw = tau_roll_des / max(support_width, 1e-6) - self.config.wbc_vmc_k_force_balance * force_error
+            max_delta_fz = max(abs(self.config.wbc_vmc_max_delta_fz), 0.0)
+            delta_Fz_des = float(np.clip(delta_fz_raw, -max_delta_fz, max_delta_fz)) if max_delta_fz > 0.0 else 0.0
+            Fz_left_des = max(0.0, 0.5 * Fz_des + delta_Fz_des)
+            Fz_right_des = max(0.0, 0.5 * Fz_des - delta_Fz_des)
+            fraction = delta_Fz_des / max(max_delta_fz, 1e-6)
+            hip_roll_base = float(np.clip(fraction, -1.0, 1.0) * self.config.wbc_vmc_max_hip_roll_offset)
+            hip_pitch_base = float(np.clip(fraction, -1.0, 1.0) * self.config.wbc_vmc_max_hip_pitch_offset)
+            knee_base = float(np.clip(fraction, -1.0, 1.0) * self.config.wbc_vmc_max_knee_offset)
+            wheel_diff_cmd = float(np.clip(Fy_des / 80.0, -self.config.wbc_vmc_max_wheel_diff_cmd, self.config.wbc_vmc_max_wheel_diff_cmd)) if self.config.wbc_vmc_use_wheel_diff else 0.0
+            safety_large_pitch = self.config.wbc_vmc_disable_on_large_pitch and pitch_deg > self.config.wbc_vmc_large_pitch_deg
+            wheel_unload_flag = Fz_left_des <= 1e-6 or Fz_right_des <= 1e-6
+            safety_wheel_unload = self.config.wbc_vmc_disable_on_wheel_unload and wheel_unload_flag
+            if safety_large_pitch or safety_wheel_unload:
+                hip_roll_base = 0.0
+                hip_pitch_base = 0.0
+                knee_base = 0.0
+                wheel_diff_cmd = 0.0
+            hip_roll_offset_left = hip_roll_base if self.config.wbc_vmc_use_hip_roll else 0.0
+            hip_roll_offset_right = -hip_roll_base if self.config.wbc_vmc_use_hip_roll else 0.0
+            hip_pitch_offset_left = hip_pitch_base if self.config.wbc_vmc_use_hip_pitch else 0.0
+            hip_pitch_offset_right = hip_pitch_base if self.config.wbc_vmc_use_hip_pitch else 0.0
+            knee_offset_left = knee_base if self.config.wbc_vmc_use_knee else 0.0
+            knee_offset_right = -knee_base if self.config.wbc_vmc_use_knee else 0.0
+            action[L_HIP_ROLL] = np.clip(action[L_HIP_ROLL] + hip_roll_offset_left, -1.0, 1.0)
+            action[R_HIP_ROLL] = np.clip(action[R_HIP_ROLL] + hip_roll_offset_right, -1.0, 1.0)
+            action[L_HIP_PITCH] = np.clip(action[L_HIP_PITCH] + hip_pitch_offset_left, -1.0, 1.0)
+            action[R_HIP_PITCH] = np.clip(action[R_HIP_PITCH] + hip_pitch_offset_right, -1.0, 1.0)
+            action[L_KNEE] = np.clip(action[L_KNEE] + knee_offset_left, -1.0, 1.0)
+            action[R_KNEE] = np.clip(action[R_KNEE] + knee_offset_right, -1.0, 1.0)
+            action[L_WHEEL] = np.clip(action[L_WHEEL] + wheel_diff_cmd, -1.0, 1.0)
+            action[R_WHEEL] = np.clip(action[R_WHEEL] - wheel_diff_cmd, -1.0, 1.0)
+            self.last_wbc_vmc_terms = {
+                "enabled": True,
+                "tau_roll_des": float(tau_roll_des),
+                "Fy_des": float(Fy_des),
+                "Fz_des": float(Fz_des),
+                "delta_Fz_des": float(delta_Fz_des),
+                "Fz_left_des": float(Fz_left_des),
+                "Fz_right_des": float(Fz_right_des),
+                "force_error": float(force_error),
+                "hip_roll_offset_left": float(hip_roll_offset_left),
+                "hip_roll_offset_right": float(hip_roll_offset_right),
+                "hip_pitch_offset_left": float(hip_pitch_offset_left),
+                "hip_pitch_offset_right": float(hip_pitch_offset_right),
+                "knee_offset_left": float(knee_offset_left),
+                "knee_offset_right": float(knee_offset_right),
+                "wheel_diff_cmd": float(wheel_diff_cmd),
+                "clamped": bool(max_delta_fz > 0.0 and abs(delta_fz_raw) > max_delta_fz),
+                "wheel_unload_flag": bool(wheel_unload_flag),
+                "mapping_mode": self.config.wbc_vmc_mode,
+            }
+        else:
+            self.last_wbc_vmc_terms = self._default_wbc_vmc_terms()
 
         # Yaw stabilization (disabled initially)
         action[L_HIP_YAW] = 0.0
@@ -434,4 +869,7 @@ class DualRateBalanceController:
             "emergency_active": self.last_emergency_active,
             "is_stable": self.last_is_stable,
             "should_update_slow": self.last_should_update_slow,
+            "lateral_balance": self.last_lateral_terms,
+            "vmc_whole_body": self.last_vmc_terms,
+            "wbc_vmc": self.last_wbc_vmc_terms,
         }

@@ -1,0 +1,75 @@
+balanced_root_initialization:
+  description: Optimized root poses for B9 postures with balanced wheel contact forces
+  heights:
+    '0.65':
+      root_x: 0.0019469715564336557
+      root_z: 0.6881974428657535
+      root_roll: 0.01766153321876867
+      root_pitch: -8.371207845482985e-05
+      hip_pitch: 0.178181629835088
+      knee: 0.5198583101790746
+      expected_left_clearance: -0.004460339459921019
+      expected_right_clearance: -0.004448907834404409
+      expected_left_force: 886.3712661252302
+      expected_right_force: 883.6888012910745
+      expected_com_lateral_offset: -1.0666542613359514e-06
+    '0.60':
+      root_x: -0.0008017649536770124
+      root_z: 0.6498224831160581
+      root_roll: 0.03
+      root_pitch: -4.077628279103853e-05
+      hip_pitch: 0.48395825016511584
+      knee: 0.9416507982785107
+      expected_left_clearance: -0.004602770094727926
+      expected_right_clearance: -0.004591897691251463
+      expected_left_force: 652.7025412205459
+      expected_right_force: 651.0731061576676
+      expected_com_lateral_offset: -4.703747377277469e-07
+    '0.55':
+      root_x: -2.5567622404704015e-06
+      root_z: 0.5971937817377083
+      root_roll: 0.03
+      root_pitch: -2.449822124638743e-05
+      hip_pitch: 0.719567062725897
+      knee: 1.30643695574579
+      expected_left_clearance: -0.004691557290059115
+      expected_right_clearance: -0.00468099238063463
+      expected_left_force: 534.6248583989416
+      expected_right_force: 533.3869870886747
+      expected_com_lateral_offset: -5.307223127634862e-07
+    '0.50':
+      root_x: -1.653325520084732e-07
+      root_z: 0.5419504283503574
+      root_roll: 0.03
+      root_pitch: -1.722784422898554e-05
+      hip_pitch: 0.8850080675174343
+      knee: 1.6142167825809128
+      expected_left_clearance: -0.0046481530393367235
+      expected_right_clearance: -0.004637767463227506
+      expected_left_force: 458.56278256464833
+      expected_right_force: 457.5191622086598
+      expected_com_lateral_offset: -6.58445157073072e-07
+    '0.45':
+      root_x: -0.001522056036181046
+      root_z: 0.5106931549245204
+      root_roll: 0.028779133237648774
+      root_pitch: -1.3872400456500483e-05
+      hip_pitch: 0.9802812645397263
+      knee: 1.8649902787838784
+      expected_left_clearance: -0.00025770984826437027
+      expected_right_clearance: -0.0002476722227677669
+      expected_left_force: 30.913293666030977
+      expected_right_force: 30.019275038387388
+      expected_com_lateral_offset: -7.075462712905368e-07
+    '0.40':
+      root_x: -7.275623748110941e-07
+      root_z: 0.4657727524222596
+      root_roll: 0.025422805574120785
+      root_pitch: -1.0838647243019436e-05
+      hip_pitch: 1.0053866537927734
+      knee: 2.0587574443546877
+      expected_left_clearance: -0.0002559399783215177
+      expected_right_clearance: -0.00024596113201305614
+      expected_left_force: 27.576771729365877
+      expected_right_force: 26.792435730104298
+      expected_com_lateral_offset: -7.144687034971348e-07

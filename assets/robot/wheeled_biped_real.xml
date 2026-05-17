@@ -244,7 +244,7 @@
                 fromto="-0.005 0 0.005  -0.025 -0.045 -0.03" size="0.025" material="leg_mat"/>
           <geom name="r_hip_yaw_motor" class="motor_visual" pos="0 0 -0.01"/>
 
-          <body name="r_thigh" pos="-0.03 0 -0.01089"
+          <body name="r_thigh" pos="-0.03 0 0.0107637"
                 quat="0.707105 0 -0.707108 0">
             <inertial pos="-8.5149e-07 0.006764 0.096793"
                       quat="0.707108 8.29078e-06 -1.1111e-05 0.707106"
@@ -270,7 +270,7 @@
               <site name="r_shin_center" pos="0 -0.01 0.14" size="0.005"/>
 
               <body name="r_wheel_link" pos="0 -0.0205 0.28"
-                    quat="0.501122 -0.498874 -0.498876 0.501124">
+                    quat="0.40315 -0.580922 -0.580922 0.40315">
                 <inertial pos="-0.038074 0 1.8114e-12"
                           mass="0.1" diaginertia="0.00018832 0.00012247 0.00012247"/>
                 <joint name="r_wheel" type="hinge" axis="1 0 0"

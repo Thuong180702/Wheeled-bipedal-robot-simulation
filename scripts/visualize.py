@@ -1153,7 +1153,7 @@ def unified(
     console.print("[bold cyan]═══ Điều khiển ═══[/bold cyan]")
     console.print("  ↑/↓ : Tiến / Lùi       ←/→ : Rẽ")
     console.print("  U/J : Chiều cao         Space: Dừng")
-    console.print("  [/] : Tốc độ            1-6 : Chọn skill")
+    console.print("  [/] : Tốc độ            1-6 : Chọn skill", markup=False)
     console.print("  0   : Auto\n")
 
     control_dt = 0.02

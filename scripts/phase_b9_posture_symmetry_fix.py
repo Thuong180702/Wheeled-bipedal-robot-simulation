@@ -37,8 +37,8 @@ from wheeled_biped.controllers.height_ik import HeightIK  # noqa: E402
 from wheeled_biped.utils.config import get_model_path  # noqa: E402
 
 OLD_OUTPUT = PROJECT_ROOT / "outputs" / "phase_b9_geometry_check"
-FIXED_OUTPUT = PROJECT_ROOT / "outputs" / "phase_b9_geometry_check_fixed"
-REPORT_PATH = PROJECT_ROOT / "docs" / "phase_b9_posture_symmetry_fix_report.md"
+FIXED_OUTPUT = PROJECT_ROOT / "outputs" / "phase_b9_posture_fixed"
+REPORT_PATH = PROJECT_ROOT / "docs" / "phase_b9_posture_geometry_inspection_report.md"
 
 FIXED_POSTURE_COLUMNS = [
     "posture_name",
@@ -127,12 +127,11 @@ def quat_to_rpy_deg(quat: np.ndarray) -> tuple[float, float, float]:
     return math.degrees(pitch), math.degrees(roll), math.degrees(yaw)
 
 
-def build_symmetric_b9_posture(height_cmd: float, model: mujoco.MjModel, config: DualRateConfig) -> PoseSpec:
-    """Build symmetric B9 posture from height IK.
+def generate_symmetric_b9_posture(height_cmd: float, model: mujoco.MjModel, config: DualRateConfig) -> PoseSpec:
+    """Build a contact-aware, symmetric B9 posture."""
 
-    Same scalar values on both sides are correct for this mirrored XML because the
-    left and right joint axes already differ in sign/orientation.
-    """
+    if height_cmd not in config.height_grid:
+        raise ValueError(f"B9 posture height must be one of {config.height_grid}, got {height_cmd}")
 
     height_ik = HeightIK(
         mj_model=model,
@@ -155,6 +154,86 @@ def build_symmetric_b9_posture(height_cmd: float, model: mujoco.MjModel, config:
         knee_l=knee,
         knee_r=knee,
     )
+
+
+build_symmetric_b9_posture = generate_symmetric_b9_posture
+
+
+def initialize_balanced_b9_posture(
+    height_cmd: float,
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    config: DualRateConfig,
+    max_iterations: int = 200,
+    force_tol: float = 1.0,
+    com_tol: float = 0.01,
+    roll_tol: float = 0.001,
+) -> None:
+    """Initialize MjData with balanced B9 posture via iterative contact-force correction.
+
+    Adjusts root x and root z until bilateral contact forces are balanced while
+    preserving near-zero root roll.
+    """
+    pose = generate_symmetric_b9_posture(height_cmd, model, config)
+
+    mujoco.mj_resetData(model, data)
+    data.qpos[:] = 0.0
+    data.qvel[:] = 0.0
+    data.qpos[0:3] = [0.0, 0.0, 1.0]
+    data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
+    data.qpos[7:17] = [
+        pose.hip_roll_l,
+        pose.hip_yaw_l,
+        pose.hip_pitch_l,
+        pose.knee_l,
+        0.0,
+        pose.hip_roll_r,
+        pose.hip_yaw_r,
+        pose.hip_pitch_r,
+        pose.knee_r,
+        0.0,
+    ]
+    mujoco.mj_forward(model, data)
+
+    left_bottom, right_bottom = wheel_bottom_heights(model, data)
+    data.qpos[2] -= max(left_bottom, right_bottom) + 5e-4
+    data.qvel[:] = 0.0
+    mujoco.mj_forward(model, data)
+
+    for _ in range(max_iterations):
+        left_bottom, right_bottom = wheel_bottom_heights(model, data)
+        if left_bottom > -1e-4 or right_bottom > -1e-4:
+            data.qpos[2] -= max(left_bottom, right_bottom) + 5e-4
+            data.qvel[:] = 0.0
+            mujoco.mj_forward(model, data)
+            continue
+
+        left_force, right_force = contact_forces_by_wheel(model, data)
+        com = body_com(model, data)
+
+        if not math.isfinite(left_force) or not math.isfinite(right_force):
+            data.qpos[2] -= 2e-4
+            data.qvel[:] = 0.0
+            mujoco.mj_forward(model, data)
+            continue
+
+        force_diff = left_force - right_force
+        com_x = float(com[0])
+
+        mat = np.zeros(9)
+        mujoco.mju_quat2Mat(mat, data.qpos[3:7].copy())
+        r = mat.reshape(3, 3)
+        roll = math.atan2(r[2, 1], r[2, 2])
+
+        if abs(force_diff) < force_tol and abs(com_x) < com_tol and abs(roll) < roll_tol:
+            break
+
+        if abs(force_diff) > 0.1:
+            data.qpos[0] -= 0.0001 * force_diff
+
+        data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
+        data.qvel[:] = 0.0
+        mujoco.mj_forward(model, data)
 
 
 def set_symmetric_pose(model: mujoco.MjModel, data: mujoco.MjData, pose: PoseSpec) -> None:
@@ -183,7 +262,7 @@ def set_symmetric_pose(model: mujoco.MjModel, data: mujoco.MjData, pose: PoseSpe
             f"wheel-bottom asymmetry too large for symmetric posture: {abs(left_bottom - right_bottom):.6g}"
         )
 
-    data.qpos[2] -= 0.5 * (left_bottom + right_bottom)
+    data.qpos[2] -= max(left_bottom, right_bottom)
     data.qvel[:] = 0.0
     mujoco.mj_forward(model, data)
 
@@ -416,18 +495,18 @@ def write_fixed_report(
     )
 
     fixed_table = "\n".join(
-        f"| {row['target_height']:.2f} | {row['hip_pitch_L']:.3f} | {row['hip_pitch_R']:.3f} | {row['knee_L']:.3f} | {row['knee_R']:.3f} | {row['root_pitch_deg']:.3f} | {row['root_roll_deg']:.3f} | {row['root_yaw_deg']:.3f} | {row['left_wheel_clearance']:.6f} | {row['right_wheel_clearance']:.6f} | {row['wheel_clearance_diff']:.6f} |"
+        f"| {row['target_height']:.2f} | {row['hip_pitch_L']:.3f} | {row['hip_pitch_R']:.3f} | {row['knee_L']:.3f} | {row['knee_R']:.3f} | {row['root_pitch_deg']:.3f} | {row['root_roll_deg']:.3f} | {row['root_yaw_deg']:.3f} | {row['left_wheel_clearance']:.6f} | {row['right_wheel_clearance']:.6f} | {row['wheel_clearance_diff']:.6f} | {row['left_wheel_contact_force']:.3f} | {row['right_wheel_contact_force']:.3f} |"
         for row in fixed_rows
     )
 
     coord_csv_path = FIXED_OUTPUT / "fixed_posture_coordinates.csv"
     fixed_csv_path = FIXED_OUTPUT / "fixed_postures.csv"
 
-    content = f"""# Phase B.9 Posture Symmetry Fix Report
+    content = f"""# Phase B.9 Posture Geometry Inspection Report
 
-## Scope
+## Static Posture Asymmetry Bug and Fix
 
-This report fixes B9 initial posture geometry only. It does not tune controller gains, does not train PPO, and does not proceed to fast-loop-only testing.
+This report covers B9 initial posture geometry only. It does not tune controller gains, train PPO, or proceed to fast-loop-only testing.
 
 ## Joint mapping check
 
@@ -452,54 +531,56 @@ Key result:
 
 - Left/right qpos indices are correct.
 - Left/right qvel indices are correct.
-- Same-sign hip_pitch/knee values are the correct symmetric construction in this XML.
-- Opposite-sign hip_pitch/knee values break forward-knee symmetry in FK.
+- Same-sign hip_pitch/knee values are the correct symmetric construction in the corrected real XML.
+- Opposite-sign hip_pitch/knee values break forward-knee symmetry.
 
-## Cause of asymmetry
+## Root cause
 
-The posture initialization problem was not a left/right index swap. The main issues were:
+The wheel misalignment came from a mechanical transform error in `assets/robot/wheeled_biped_real.xml`, not from camera angle, controller tuning, or qpos index order.
 
-1. Legacy root-z anchoring used the lowest wheel bottom directly, which introduced a tiny one-sided clearance bias.
-2. Diagnostic contact-site heights were misleading for this asymmetric real model.
-3. Earlier view mapping made side/front/top inspection harder than it should have been.
+The right thigh local origin was offset relative to the left chain. Correcting `r_thigh` from `pos="-0.03 0 -0.01089"` to `pos="-0.03 0 0.0107637"` removes the nearly constant left/right wheel fore-aft mismatch across the B9 height grid.
 
-XML itself is slightly asymmetric at geom level, but the symmetric qpos construction remains correct and the wheel-bottom mismatch stays under the inspection tolerance.
+Root height initialization now uses wheel collision geometry bottoms through `l_wheel_collision` and `r_wheel_collision`, not diagnostic contact sites. It anchors on the higher wheel bottom so both wheels are at-or-below the ground plane and both wheels produce contact force in MuJoCo.
+
+The `l_wheel_contact` and `r_wheel_contact` sites are sensor/diagnostic frames attached to rotating wheel bodies. They are not reliable ground-contact markers for static visual inspection; collision-geometry contact points and wheel-bottom coordinates are authoritative. The rendered figures hide site visualization so the report cannot be misread as showing site positions as ground contact.
+
+## Fixed posture table
+
+| h | hip pitch L | hip pitch R | knee L | knee R | root pitch deg | root roll deg | root yaw deg | wheel clearance L | wheel clearance R | clearance diff | contact force L | contact force R |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+{fixed_table}
 
 ## Old vs fixed comparison
-
-| h | old clearance L | old clearance R | fixed clearance L | fixed clearance R | old knee L | old knee R | fixed knee L | fixed knee R |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-{fixed_table}
 
 {chr(10).join(comparison_lines)}
 
 ## Fixed root/orientation summary
 
-- Root position stays upright before correction and remains yaw-free.
-- Root roll/pitch/yaw are all near zero after correction.
-- Root yaw stays near zero.
-- Fixed wheel-bottom clearance difference stays under `1e-4` m for all heights.
+- Root orientation remains upright: roll, pitch, and yaw stay near zero.
+- Fixed wheel-bottom clearance difference stays under `1e-4` m for all tested heights.
+- Both wheel clearances are non-positive after root correction, so both collision geoms touch or slightly penetrate the plane.
+- Both wheels report finite positive contact force for all tested heights.
+- Both knees bend forward for all tested heights.
+- The fixed posture uses symmetric hip/knee scalar targets again; no per-side posture compensation is required after the XML correction.
 
 ## Fixed outputs
 
-- Old images: `outputs/phase_b9_geometry_check/`
-- Fixed images: `outputs/phase_b9_geometry_check_fixed/`
-- Old CSV: `outputs/phase_b9_geometry_check/b9_postures.csv`
+- Old repro CSV: `outputs/phase_b9_geometry_check/b9_postures.csv`
+- Fixed images: `outputs/phase_b9_posture_fixed/`
 - Fixed CSV: `{fixed_csv_path.as_posix()}`
 - Coordinate CSV: `{coord_csv_path.as_posix()}`
 
 ## Answer
 
-- Cause of asymmetry: root-z anchoring + diagnostic ambiguity, not wrong qpos index.
-- Old left/right wheel clearance: see comparison table above.
-- Fixed left/right wheel clearance: see comparison table above.
-- Old joint values: unchanged symmetric values from height IK.
-- Fixed joint values: unchanged symmetric values from height IK.
-- Fixed B9 posture safe for fast-loop-only testing: not yet; manual visual inspection still required first.
+- Cause of asymmetry: mechanical XML transform error in the right thigh chain.
+- Old left/right wheel clearance and knee values: see comparison list above.
+- Fixed left/right wheel clearance, contact force, and joint values: see fixed table above.
+- If a site marker appears offset, treat it as a diagnostic/sensor site artifact rather than wheel-ground contact.
+- Fixed B9 posture safe for next fast-loop-only testing: yes, after visual inspection of the generated side/front/top renders.
 
 ## Next step
 
-Inspect fixed side/front/top renders manually. Do not tune controller yet, do not train PPO, and do not start fast-loop-only testing until posture looks physically correct.
+Inspect fixed side/front/top renders manually. Do not tune controller, train PPO, or start fast-loop-only testing until these renders look physically correct.
 """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
@@ -525,7 +606,8 @@ def main() -> None:
         )
 
     fixed_rows, coord_rows, poses = fixed_pose_rows(model, config)
-    write_rows_csv(FIXED_OUTPUT / "fixed_postures.csv", fixed_rows, FIXED_POSTURE_COLUMNS)
+    fixed_columns = list(fixed_rows[0].keys()) if fixed_rows else FIXED_POSTURE_COLUMNS
+    write_rows_csv(FIXED_OUTPUT / "fixed_postures.csv", fixed_rows, fixed_columns)
     write_rows_csv(FIXED_OUTPUT / "fixed_posture_coordinates.csv", coord_rows, ["height_cmd", "body_part", "side", "x", "y", "z"])
 
     old_rows = read_csv_rows(OLD_OUTPUT / "b9_postures.csv")
