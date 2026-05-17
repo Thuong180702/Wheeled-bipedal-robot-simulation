@@ -214,13 +214,24 @@ class UnifiedForceDistributor:
             params_ineq=(l, u),
         )
 
-        # Extract solution from KKTSolution
-        # result.params is a KKTSolution with primal=(x, z), dual_eq, dual_ineq
-        # We need x, which is the decision variable
-        solution = result.params.primal[0]  # Extract x from (x, z) tuple
+        # Check solver convergence
+        if hasattr(result.state, 'error') and result.state.error > 1e-2:
+            # Solver did not converge well - use previous solution as fallback
+            import warnings
+            warnings.warn(
+                f"QP solver did not converge well (error={result.state.error:.4f}). "
+                f"Using previous solution as fallback.",
+                RuntimeWarning
+            )
+            solution = self.prev_solution
+        else:
+            # Extract solution from KKTSolution
+            # result.params is a KKTSolution with primal=(x, z), dual_eq, dual_ineq
+            # We need x, which is the decision variable
+            solution = result.params.primal[0]  # Extract x from (x, z) tuple
 
-        # Update previous solution for next warm start
-        self.prev_solution = solution
+            # Update previous solution for next warm start
+            self.prev_solution = solution
 
         # Extract decision variables
         f_left = solution[0:3]
