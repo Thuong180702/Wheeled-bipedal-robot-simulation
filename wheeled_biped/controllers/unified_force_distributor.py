@@ -88,6 +88,71 @@ class UnifiedForceDistributor:
 
         return q
 
+    def _build_equality_constraints(
+        self,
+        mj_data: mujoco.MjData,
+        desired_wrench: Array,
+        wheel_pos_left: Array,
+        wheel_pos_right: Array,
+    ) -> tuple[Array, Array]:
+        """Build equality constraint matrices for wrench matching.
+
+        Constraint: A_eq @ x = b_eq
+        where x = [f_left(3), f_right(3), tau_hip_roll(2)]
+
+        Args:
+            mj_data: MuJoCo data with current robot state
+            desired_wrench: Desired centroidal wrench (6,) [Fx, Fy, Fz, Mx, My, Mz]
+            wheel_pos_left: Left wheel position relative to CoM (3,)
+            wheel_pos_right: Right wheel position relative to CoM (3,)
+
+        Returns:
+            Tuple of (A_eq, b_eq) where:
+                - A_eq: Wrench matrix (6, 8)
+                - b_eq: Desired wrench (6,)
+        """
+        # Build wrench matrix using ContactJacobian
+        A_eq = self.contact_jacobian.build_wrench_matrix(
+            mj_data, wheel_pos_left, wheel_pos_right
+        )
+
+        # Desired wrench is the equality constraint target
+        b_eq = jnp.asarray(desired_wrench)
+
+        return A_eq, b_eq
+
+    def _build_inequality_bounds(self) -> tuple[Array, Array]:
+        """Build box constraint bounds for decision variables.
+
+        Decision variables: [f_left(3), f_right(3), tau_hip_roll(2)]
+
+        Constraints:
+        - Contact forces: fz >= 0 (compressive), fx/fy unbounded
+        - Hip roll torques: -tau_max <= tau <= tau_max
+
+        Returns:
+            Tuple of (lower, upper) where:
+                - lower: Lower bounds (8,)
+                - upper: Upper bounds (8,)
+        """
+        # Lower bounds
+        lower = jnp.array([
+            -jnp.inf, -jnp.inf, 0.0,  # f_left: fx/fy unbounded, fz >= 0
+            -jnp.inf, -jnp.inf, 0.0,  # f_right: fx/fy unbounded, fz >= 0
+            -self.tau_hip_roll_max,   # tau_hip_roll_L
+            -self.tau_hip_roll_max,   # tau_hip_roll_R
+        ])
+
+        # Upper bounds
+        upper = jnp.array([
+            jnp.inf, jnp.inf, jnp.inf,  # f_left: no upper limit
+            jnp.inf, jnp.inf, jnp.inf,  # f_right: no upper limit
+            self.tau_hip_roll_max,      # tau_hip_roll_L
+            self.tau_hip_roll_max,      # tau_hip_roll_R
+        ])
+
+        return lower, upper
+
     def distribute_wrench(
         self,
         mj_data: mujoco.MjData,

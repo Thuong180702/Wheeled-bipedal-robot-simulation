@@ -125,3 +125,66 @@ def test_linear_cost_q_zero_smoothness(mj_model):
 
     # Should be all zeros when w_smoothness = 0
     assert jnp.allclose(q, jnp.zeros(8))
+
+
+def test_build_equality_constraints(mj_model):
+    """Test that equality constraint matrices are built correctly."""
+    distributor = UnifiedForceDistributor(mj_model=mj_model)
+
+    # Create MuJoCo data
+    mj_data = mujoco.MjData(mj_model)
+
+    # Desired wrench
+    desired_wrench = jnp.array([10.0, 5.0, 147.0, 2.0, 3.0, 1.0])
+
+    # Wheel positions
+    wheel_pos_left = jnp.array([0.135, 0.0, -0.3])
+    wheel_pos_right = jnp.array([-0.135, 0.0, -0.3])
+
+    A_eq, b_eq = distributor._build_equality_constraints(
+        mj_data, desired_wrench, wheel_pos_left, wheel_pos_right
+    )
+
+    # A_eq should be wrench matrix (6, 8)
+    assert A_eq.shape == (6, 8)
+
+    # b_eq should be desired wrench (6,)
+    assert b_eq.shape == (6,)
+    assert jnp.allclose(b_eq, desired_wrench)
+
+
+def test_build_inequality_bounds(mj_model):
+    """Test that inequality constraint bounds are built correctly."""
+    distributor = UnifiedForceDistributor(
+        mj_model=mj_model,
+        tau_hip_roll_max=10.0,
+    )
+
+    lower, upper = distributor._build_inequality_bounds()
+
+    # Should be (8,) vectors
+    assert lower.shape == (8,)
+    assert upper.shape == (8,)
+
+    # Contact forces: fz >= 0 (compressive), fx/fy unbounded
+    # First 6 elements (wheel forces): lower = -inf for x/y, 0 for z
+    assert lower[0] == pytest.approx(-jnp.inf)  # f_left_x
+    assert lower[1] == pytest.approx(-jnp.inf)  # f_left_y
+    assert lower[2] == pytest.approx(0.0)       # f_left_z (compressive)
+    assert lower[3] == pytest.approx(-jnp.inf)  # f_right_x
+    assert lower[4] == pytest.approx(-jnp.inf)  # f_right_y
+    assert lower[5] == pytest.approx(0.0)       # f_right_z (compressive)
+
+    # Hip roll torques: -tau_max <= tau <= tau_max
+    assert lower[6] == pytest.approx(-10.0)
+    assert lower[7] == pytest.approx(-10.0)
+
+    # Upper bounds: inf for forces, tau_max for torques
+    assert upper[0] == pytest.approx(jnp.inf)
+    assert upper[1] == pytest.approx(jnp.inf)
+    assert upper[2] == pytest.approx(jnp.inf)
+    assert upper[3] == pytest.approx(jnp.inf)
+    assert upper[4] == pytest.approx(jnp.inf)
+    assert upper[5] == pytest.approx(jnp.inf)
+    assert upper[6] == pytest.approx(10.0)
+    assert upper[7] == pytest.approx(10.0)
