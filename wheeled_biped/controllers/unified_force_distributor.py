@@ -52,6 +52,42 @@ class UnifiedForceDistributor:
         # Previous solution for warm-starting (8D: [f_left(3), f_right(3), tau_hip_roll(2)])
         self.prev_solution = jnp.zeros(8)
 
+    def _build_cost_matrix_p(self) -> Array:
+        """Build quadratic cost matrix P for QP.
+
+        P is diagonal with weights for effort minimization:
+        - First 6 elements: w_force (wheel contact forces)
+        - Last 2 elements: w_torque (hip roll torques)
+
+        Returns:
+            P matrix (8, 8) diagonal quadratic cost matrix
+        """
+        # Build diagonal weights
+        diagonal = jnp.array([
+            self.w_force, self.w_force, self.w_force,  # f_left
+            self.w_force, self.w_force, self.w_force,  # f_right
+            self.w_torque, self.w_torque               # tau_hip_roll
+        ])
+
+        # Create diagonal matrix
+        P = jnp.diag(diagonal)
+
+        return P
+
+    def _build_linear_cost_q(self) -> Array:
+        """Build linear cost vector q for QP.
+
+        Implements smoothness penalty by penalizing deviation from previous solution:
+        q = -2 * w_smoothness * P @ x_prev
+
+        Returns:
+            q vector (8,) linear cost vector
+        """
+        P = self._build_cost_matrix_p()
+        q = -2.0 * self.w_smoothness * (P @ self.prev_solution)
+
+        return q
+
     def distribute_wrench(
         self,
         mj_data: mujoco.MjData,

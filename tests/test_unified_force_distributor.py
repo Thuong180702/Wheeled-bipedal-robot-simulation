@@ -54,3 +54,74 @@ def test_prev_solution_initialization(mj_model):
     # Previous solution should be 8D zeros
     assert distributor.prev_solution.shape == (8,)
     assert jnp.allclose(distributor.prev_solution, jnp.zeros(8))
+
+
+def test_build_cost_matrix_p(mj_model):
+    """Test that cost matrix P has correct structure."""
+    distributor = UnifiedForceDistributor(
+        mj_model=mj_model,
+        w_force=0.01,
+        w_torque=0.1,
+    )
+
+    P = distributor._build_cost_matrix_p()
+
+    # Should be (8, 8) diagonal
+    assert P.shape == (8, 8)
+
+    # Check diagonal values
+    # First 6 elements: w_force for wheel forces
+    assert P[0, 0] == pytest.approx(0.01)
+    assert P[1, 1] == pytest.approx(0.01)
+    assert P[2, 2] == pytest.approx(0.01)
+    assert P[3, 3] == pytest.approx(0.01)
+    assert P[4, 4] == pytest.approx(0.01)
+    assert P[5, 5] == pytest.approx(0.01)
+
+    # Last 2 elements: w_torque for hip roll torques
+    assert P[6, 6] == pytest.approx(0.1)
+    assert P[7, 7] == pytest.approx(0.1)
+
+    # Off-diagonal should be zero
+    assert jnp.allclose(P - jnp.diag(jnp.diag(P)), 0.0)
+
+
+def test_build_linear_cost_q(mj_model):
+    """Test that linear cost q implements smoothness penalty."""
+    distributor = UnifiedForceDistributor(
+        mj_model=mj_model,
+        w_force=0.01,
+        w_torque=0.1,
+        w_smoothness=0.5,
+    )
+
+    # Set previous solution
+    x_prev = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
+    distributor.prev_solution = x_prev
+
+    q = distributor._build_linear_cost_q()
+
+    # Should be (8,) vector
+    assert q.shape == (8,)
+
+    # q = -2 * w_smoothness * P @ x_prev
+    P = distributor._build_cost_matrix_p()
+    expected_q = -2.0 * 0.5 * (P @ x_prev)
+
+    assert jnp.allclose(q, expected_q)
+
+
+def test_linear_cost_q_zero_smoothness(mj_model):
+    """Test that q is zero when smoothness weight is zero."""
+    distributor = UnifiedForceDistributor(
+        mj_model=mj_model,
+        w_smoothness=0.0,
+    )
+
+    # Set non-zero previous solution
+    distributor.prev_solution = jnp.ones(8)
+
+    q = distributor._build_linear_cost_q()
+
+    # Should be all zeros when w_smoothness = 0
+    assert jnp.allclose(q, jnp.zeros(8))
