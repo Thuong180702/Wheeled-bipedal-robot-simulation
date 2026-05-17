@@ -7,6 +7,7 @@ desired centroidal wrench while respecting contact and torque constraints.
 import jax.numpy as jnp
 import mujoco
 from jax import Array
+from jaxopt import BoxOSQP
 
 from wheeled_biped.controllers.contact_jacobian import ContactJacobian
 
@@ -21,7 +22,7 @@ class UnifiedForceDistributor:
         w_torque: float = 0.1,
         w_smoothness: float = 0.5,
         tau_hip_roll_max: float = 10.0,
-        max_iter: int = 10,
+        max_iter: int = 50,
         eps_abs: float = 1e-3,
         eps_rel: float = 1e-3,
     ):
@@ -174,5 +175,56 @@ class UnifiedForceDistributor:
                 - f_right: Right wheel contact force (3,) [fx, fy, fz]
                 - tau_hip_roll: Hip roll torques (2,) [left, right]
         """
-        # TODO: Implement QP formulation and solving in Tasks 5-7
-        raise NotImplementedError("QP solving not yet implemented")
+        # Build QP cost matrices
+        P = self._build_cost_matrix_p()
+        q = self._build_linear_cost_q()
+
+        # Build equality constraints (wrench matching)
+        A_eq, b_eq = self._build_equality_constraints(
+            mj_data, desired_wrench, wheel_pos_left, wheel_pos_right
+        )
+
+        # Build box constraints on decision variables
+        lower_box, upper_box = self._build_inequality_bounds()
+
+        # BoxOSQP formulation: min 0.5*x^T*P*x + q^T*x
+        #                      s.t. A*x = z, l <= z <= u
+        # We need to stack equality and box constraints:
+        # A = [A_eq; I], l = [b_eq; lower_box], u = [b_eq; upper_box]
+
+        # Stack constraint matrix: [A_eq (6x8); I (8x8)]
+        I = jnp.eye(8)
+        A = jnp.vstack([A_eq, I])  # (14, 8)
+
+        # Stack bounds: equality constraints have l=u=b_eq, box constraints have l=lower, u=upper
+        l = jnp.concatenate([b_eq, lower_box])  # (14,)
+        u = jnp.concatenate([b_eq, upper_box])  # (14,)
+
+        # Initialize BoxOSQP solver
+        solver = BoxOSQP(
+            maxiter=self.max_iter,
+            tol=self.eps_abs,
+        )
+
+        # Solve QP (warm-starting will be added in future optimization)
+        result = solver.run(
+            init_params=None,  # Let solver initialize
+            params_obj=(P, q),
+            params_eq=A,
+            params_ineq=(l, u),
+        )
+
+        # Extract solution from KKTSolution
+        # result.params is a KKTSolution with primal=(x, z), dual_eq, dual_ineq
+        # We need x, which is the decision variable
+        solution = result.params.primal[0]  # Extract x from (x, z) tuple
+
+        # Update previous solution for next warm start
+        self.prev_solution = solution
+
+        # Extract decision variables
+        f_left = solution[0:3]
+        f_right = solution[3:6]
+        tau_hip_roll = solution[6:8]
+
+        return f_left, f_right, tau_hip_roll

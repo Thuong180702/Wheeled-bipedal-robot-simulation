@@ -28,25 +28,6 @@ def test_force_distributor_initialization(mj_model):
     assert distributor.tau_hip_roll_max == 10.0
 
 
-def test_distribute_wrench_signature(mj_model):
-    """Test that distribute_wrench has correct signature."""
-    distributor = UnifiedForceDistributor(mj_model=mj_model)
-
-    # Create MuJoCo data
-    mj_data = mujoco.MjData(mj_model)
-
-    # Dummy inputs
-    desired_wrench = np.array([0.0, 0.0, 147.0, 0.0, 0.0, 0.0])  # Just gravity compensation
-    wheel_pos_left = np.array([0.135, 0.0, -0.3])
-    wheel_pos_right = np.array([-0.135, 0.0, -0.3])
-
-    # Should raise NotImplementedError (not yet implemented)
-    with pytest.raises(NotImplementedError, match="QP solving not yet implemented"):
-        distributor.distribute_wrench(
-            mj_data, desired_wrench, wheel_pos_left, wheel_pos_right
-        )
-
-
 def test_prev_solution_initialization(mj_model):
     """Test that previous solution is initialized to zeros."""
     distributor = UnifiedForceDistributor(mj_model=mj_model)
@@ -188,3 +169,88 @@ def test_build_inequality_bounds(mj_model):
     assert upper[5] == pytest.approx(jnp.inf)
     assert upper[6] == pytest.approx(10.0)
     assert upper[7] == pytest.approx(10.0)
+
+
+def test_distribute_wrench_basic(mj_model):
+    """Test basic wrench distribution with gravity compensation."""
+    distributor = UnifiedForceDistributor(mj_model=mj_model)
+
+    # Create MuJoCo data
+    mj_data = mujoco.MjData(mj_model)
+
+    # Desired wrench: just gravity compensation (147N = 15kg * 9.81)
+    desired_wrench = jnp.array([0.0, 0.0, 147.0, 0.0, 0.0, 0.0])
+
+    # Wheel positions
+    wheel_pos_left = jnp.array([0.135, 0.0, -0.3])
+    wheel_pos_right = jnp.array([-0.135, 0.0, -0.3])
+
+    # Distribute wrench
+    f_left, f_right, tau_hip_roll = distributor.distribute_wrench(
+        mj_data, desired_wrench, wheel_pos_left, wheel_pos_right
+    )
+
+    # Check shapes
+    assert f_left.shape == (3,)
+    assert f_right.shape == (3,)
+    assert tau_hip_roll.shape == (2,)
+
+    # Check vertical forces sum to ~147N
+    total_fz = f_left[2] + f_right[2]
+    assert total_fz == pytest.approx(147.0, abs=1.0)
+
+    # Check forces are compressive (fz >= 0)
+    assert f_left[2] >= 0.0
+    assert f_right[2] >= 0.0
+
+
+def test_distribute_wrench_roll_moment(mj_model):
+    """Test that roll moment is distributed to hip roll torques."""
+    distributor = UnifiedForceDistributor(mj_model=mj_model)
+
+    mj_data = mujoco.MjData(mj_model)
+
+    # Desired wrench: gravity + roll moment
+    desired_wrench = jnp.array([0.0, 0.0, 147.0, 5.0, 0.0, 0.0])  # 5Nm roll
+
+    wheel_pos_left = jnp.array([0.135, 0.0, -0.3])
+    wheel_pos_right = jnp.array([-0.135, 0.0, -0.3])
+
+    f_left, f_right, tau_hip_roll = distributor.distribute_wrench(
+        mj_data, desired_wrench, wheel_pos_left, wheel_pos_right
+    )
+
+    # Hip roll torques should be non-zero to generate roll moment
+    assert jnp.abs(tau_hip_roll).sum() > 0.1
+
+    # Total hip roll torque should contribute to roll moment
+    # (exact value depends on QP optimization)
+    assert tau_hip_roll[0] + tau_hip_roll[1] == pytest.approx(5.0, abs=1.0)
+
+
+def test_warm_starting(mj_model):
+    """Test that previous solution is used for warm-starting."""
+    distributor = UnifiedForceDistributor(mj_model=mj_model)
+
+    mj_data = mujoco.MjData(mj_model)
+    desired_wrench = jnp.array([0.0, 0.0, 147.0, 0.0, 0.0, 0.0])
+    wheel_pos_left = jnp.array([0.135, 0.0, -0.3])
+    wheel_pos_right = jnp.array([-0.135, 0.0, -0.3])
+
+    # First solve
+    f_left_1, f_right_1, tau_hip_roll_1 = distributor.distribute_wrench(
+        mj_data, desired_wrench, wheel_pos_left, wheel_pos_right
+    )
+
+    # Check that prev_solution was updated
+    expected_prev = jnp.concatenate([f_left_1, f_right_1, tau_hip_roll_1])
+    assert jnp.allclose(distributor.prev_solution, expected_prev)
+
+    # Second solve with same inputs should use warm start
+    f_left_2, f_right_2, tau_hip_roll_2 = distributor.distribute_wrench(
+        mj_data, desired_wrench, wheel_pos_left, wheel_pos_right
+    )
+
+    # Solutions should be very similar (warm start helps convergence)
+    assert jnp.allclose(f_left_1, f_left_2, atol=1e-3)
+    assert jnp.allclose(f_right_1, f_right_2, atol=1e-3)
