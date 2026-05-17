@@ -81,10 +81,12 @@ class CentroidalWrenchComputer:
 
         # === Force objectives ===
 
-        # NOTE: Gravity already exists in simulation - do NOT add compensation
-        # Only add corrective forces for control objectives
+        # Gravity compensation: WBC must command forces to counteract gravity
+        # The simulation applies gravity automatically, but the controller needs
+        # to command upward forces to maintain equilibrium
+        f_gravity = jnp.array([0.0, 0.0, self.robot_mass * self.gravity])
 
-        # Height tracking: vertical force to correct height error
+        # Height tracking: additional vertical force to correct height error
         height_error = height_cmd - com_pos[2]
         f_height = jnp.array([0.0, 0.0, self.k_height * height_error])
 
@@ -109,8 +111,8 @@ class CentroidalWrenchComputer:
             0.0
         ])
 
-        # Total desired force (no gravity compensation - already in sim)
-        desired_force = f_height + f_com_lateral + f_com_sagittal + f_cp
+        # Total desired force (gravity compensation + control corrections)
+        desired_force = f_gravity + f_height + f_com_lateral + f_com_sagittal + f_cp
 
         # === Moment objectives ===
 

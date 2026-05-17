@@ -175,6 +175,13 @@ def main():
         "wrench_error_norm": [],
         "f_left_z": [],
         "f_right_z": [],
+        # Desired wrench components
+        "desired_wrench_Fx": [],
+        "desired_wrench_Fy": [],
+        "desired_wrench_Fz": [],
+        "desired_wrench_Mx": [],
+        "desired_wrench_My": [],
+        "desired_wrench_Mz": [],
     }
 
     # Simulation parameters
@@ -287,6 +294,13 @@ def main():
         telemetry["wrench_error_norm"].append(qp_diagnostics["wrench_error_norm"])
         telemetry["f_left_z"].append(qp_diagnostics["f_left_z"])
         telemetry["f_right_z"].append(qp_diagnostics["f_right_z"])
+        # Desired wrench components
+        telemetry["desired_wrench_Fx"].append(qp_diagnostics["desired_wrench_Fx"])
+        telemetry["desired_wrench_Fy"].append(qp_diagnostics["desired_wrench_Fy"])
+        telemetry["desired_wrench_Fz"].append(qp_diagnostics["desired_wrench_Fz"])
+        telemetry["desired_wrench_Mx"].append(qp_diagnostics["desired_wrench_Mx"])
+        telemetry["desired_wrench_My"].append(qp_diagnostics["desired_wrench_My"])
+        telemetry["desired_wrench_Mz"].append(qp_diagnostics["desired_wrench_Mz"])
 
         # Progress updates
         if (step + 1) % 200 == 0:

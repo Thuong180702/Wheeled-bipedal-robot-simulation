@@ -153,6 +153,12 @@ class IntegratedWBC:
             "wrench_error_norm": wrench_error_norm,
             "f_left_z": float(f_left[2]),
             "f_right_z": float(f_right[2]),
+            "desired_wrench_Fx": float(desired_wrench[0]),
+            "desired_wrench_Fy": float(desired_wrench[1]),
+            "desired_wrench_Fz": float(desired_wrench[2]),
+            "desired_wrench_Mx": float(desired_wrench[3]),
+            "desired_wrench_My": float(desired_wrench[4]),
+            "desired_wrench_Mz": float(desired_wrench[5]),
         }
 
         return tau_wbc, diagnostics
