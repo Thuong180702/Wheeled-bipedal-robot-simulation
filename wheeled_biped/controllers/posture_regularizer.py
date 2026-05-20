@@ -13,6 +13,7 @@ from jax import Array
 @chex.dataclass(frozen=True)
 class PostureRegularizerConfig:
     """Configuration for posture regularizer."""
+
     # Proportional gain
     k_posture: float = 2.0  # Weak compared to WBC gains
 
@@ -26,7 +27,9 @@ class PostureRegularizerConfig:
     # Gating thresholds
     wbc_error_threshold: float = 0.3  # 30% of WBC capacity
     momentum_active_scale: float = 0.5  # 50% authority when momentum active
-    momentum_activity_threshold: float = 0.1  # Threshold to detect momentum coordinator activity
+    momentum_activity_threshold: float = (
+        0.1  # Threshold to detect momentum coordinator activity
+    )
 
     # Authority budget
     posture_authority_budget: float = 0.2  # 20% of actuator range
@@ -43,34 +46,75 @@ class PostureRegularizer:
         """
         self.config = config
 
-    def compute_posture_restoration_torque(self, joint_pos: Array) -> Array:
+        # Robot geometry (from URDF)
+        self.hip_to_knee_length = 0.25  # hip_pitch joint to knee joint
+        self.knee_to_wheel_length = 0.25  # knee joint to wheel center
+        self.hip_height_offset = 0.05  # hip joint height above base
+
+    def compute_target_posture_from_height(self, height_cmd: float) -> Array:
+        """Return fixed target posture that matches geometrically balanced keyframe.
+
+        The robot's geometry requires forward lean for balance. Using the empirically
+        determined balanced configuration (hip_pitch=0.95, knee=1.70) that centers
+        CoM over wheels at 0.58m height.
+
+        Args:
+            height_cmd: Desired CoM height in meters (currently ignored, uses fixed target)
+
+        Returns:
+            Target joint positions (10,) with balanced leg configuration
+        """
+        # Fixed balanced configuration from keyframe (empirically determined)
+        # This configuration achieves CoM height ~0.58m with CoM centered over wheels
+        # hip_pitch=0.95 rad (54.4°), knee=1.70 rad (97.4°)
+        target_pos = jnp.array([
+            0.0,   # l_hip_roll - neutral
+            0.0,   # l_hip_yaw - neutral
+            0.95,  # l_hip_pitch - forward lean for balance
+            1.70,  # l_knee - bent for height + balance
+            0.0,   # l_wheel - no target
+            0.0,   # r_hip_roll - neutral
+            0.0,   # r_hip_yaw - neutral
+            0.95,  # r_hip_pitch - forward lean for balance
+            1.70,  # r_knee - bent for height + balance
+            0.0,   # r_wheel - no target
+        ])
+
+        return target_pos
+
+    def compute_posture_restoration_torque(self, joint_pos: Array, height_cmd: float | None = None) -> Array:
         """Compute posture restoration torque with per-joint deadbands.
 
         Args:
             joint_pos: Joint position array (10,) - current joint angles
+            height_cmd: Desired height command for adaptive IK
 
         Returns:
             Posture restoration torque array (10,) opposing posture errors
         """
-        # Target posture is zero for all joints
-        target_pos = jnp.zeros(10)
+        if height_cmd is None:
+            target_pos = jnp.zeros(10)
+        else:
+            target_pos = self.compute_target_posture_from_height(height_cmd)
 
         # Compute posture errors
         posture_error = joint_pos - target_pos
 
         # Per-joint deadbands
-        deadbands = jnp.array([
-            self.config.hip_roll_deadband,   # 0: left hip roll
-            self.config.hip_yaw_deadband,    # 1: left hip yaw
-            self.config.hip_pitch_deadband,  # 2: left hip pitch
-            self.config.knee_deadband,       # 3: left knee
-            self.config.wheel_deadband,      # 4: left wheel
-            self.config.hip_roll_deadband,   # 5: right hip roll
-            self.config.hip_yaw_deadband,    # 6: right hip yaw
-            self.config.hip_pitch_deadband,  # 7: right hip pitch
-            self.config.knee_deadband,       # 8: right knee
-            self.config.wheel_deadband,      # 9: right wheel
-        ])
+        deadbands = jnp.array(
+            [
+                self.config.hip_roll_deadband,  # 0: left hip roll
+                self.config.hip_yaw_deadband,  # 1: left hip yaw
+                self.config.hip_pitch_deadband,  # 2: left hip pitch
+                self.config.knee_deadband,  # 3: left knee
+                self.config.wheel_deadband,  # 4: left wheel
+                self.config.hip_roll_deadband,  # 5: right hip roll
+                self.config.hip_yaw_deadband,  # 6: right hip yaw
+                self.config.hip_pitch_deadband,  # 7: right hip pitch
+                self.config.knee_deadband,  # 8: right knee
+                self.config.wheel_deadband,  # 9: right wheel
+            ]
+        )
 
         # JAX-compatible deadband using jnp.where
         # Only apply torque if error exceeds deadband
@@ -81,7 +125,9 @@ class PostureRegularizer:
 
         return tau
 
-    def apply_wbc_error_gate(self, joint_pos: Array, wbc_error_magnitude: float) -> Array:
+    def apply_wbc_error_gate(
+        self, joint_pos: Array, wbc_error_magnitude: float, height_cmd: float | None = None
+    ) -> Array:
         """Apply WBC error gate to posture restoration.
 
         If WBC error exceeds threshold, completely disable posture regularization.
@@ -89,12 +135,13 @@ class PostureRegularizer:
         Args:
             joint_pos: Joint position array (10,)
             wbc_error_magnitude: WBC error magnitude (normalized 0-1)
+            height_cmd: Desired height command for adaptive IK
 
         Returns:
             Gated posture torque array (10,)
         """
         # Compute base posture restoration torque
-        tau_posture = self.compute_posture_restoration_torque(joint_pos)
+        tau_posture = self.compute_posture_restoration_torque(joint_pos, height_cmd)
 
         # JAX-compatible gating using jnp.where
         # Disable completely if WBC error exceeds threshold
@@ -109,7 +156,7 @@ class PostureRegularizer:
 
         return tau_gated
 
-    def apply_momentum_gate(self, joint_pos: Array, momentum_magnitude: float) -> Array:
+    def apply_momentum_gate(self, joint_pos: Array, momentum_magnitude: float, height_cmd: float | None = None) -> Array:
         """Apply momentum coordinator gate to posture restoration.
 
         Reduces posture authority by 50% when momentum coordinator is active.
@@ -117,12 +164,13 @@ class PostureRegularizer:
         Args:
             joint_pos: Joint position array (10,)
             momentum_magnitude: Momentum coordinator activity magnitude (0-1)
+            height_cmd: Desired height command for adaptive IK
 
         Returns:
             Gated posture torque array (10,)
         """
         # Compute base posture restoration torque
-        tau_posture = self.compute_posture_restoration_torque(joint_pos)
+        tau_posture = self.compute_posture_restoration_torque(joint_pos, height_cmd)
 
         # JAX-compatible gating using jnp.where
         # Reduce to 50% if momentum coordinator is active (magnitude > threshold)
@@ -166,6 +214,7 @@ class PostureRegularizer:
         joint_pos: Array,
         wbc_error_magnitude: float,
         momentum_magnitude: float,
+        height_cmd: float | None = None,
     ) -> Array:
         """Compute integrated posture regularizer torque with momentum gating.
 
@@ -177,12 +226,13 @@ class PostureRegularizer:
             joint_pos: Joint position array (10,)
             wbc_error_magnitude: WBC error magnitude (normalized 0-1) - unused, kept for API compatibility
             momentum_magnitude: Momentum coordinator activity magnitude (0-1)
+            height_cmd: Desired height command for adaptive IK
 
         Returns:
             Posture regularizer torque array (10,) with gating and budget clipping
         """
         # Compute base posture restoration torque
-        tau_posture = self.compute_posture_restoration_torque(joint_pos)
+        tau_posture = self.compute_posture_restoration_torque(joint_pos, height_cmd)
 
         # Apply momentum coordinator gate (reduce to 50% if active)
         momentum_gate = jnp.where(

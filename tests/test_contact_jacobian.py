@@ -1,3 +1,4 @@
+import jax.numpy as jnp
 import mujoco
 import numpy as np
 import pytest
@@ -160,3 +161,49 @@ def test_wrench_matrix_pitch_moment(mj_model, mj_data):
     # Expected: Fx = 20N, My = r_z * Fx = -0.3 * 20 = -6 Nm
     assert wrench[0] == pytest.approx(20.0, abs=1e-6)  # Fx
     assert wrench[4] == pytest.approx(-6.0, abs=1e-6)  # My
+
+
+def make_reset_model_data():
+    model = mujoco.MjModel.from_xml_path("assets/robot/wheeled_biped_real.xml")
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_forward(model, data)
+    return model, data
+
+
+def test_wheel_jacobians_have_expected_shape():
+    model, data = make_reset_model_data()
+    contact_jacobian = ContactJacobian(model)
+    j_left, j_right = contact_jacobian.compute_wheel_jacobians(data)
+    assert j_left.shape == (3, 10)
+    assert j_right.shape == (3, 10)
+
+
+def test_symmetric_upward_force_maps_to_nonzero_leg_torque():
+    model, data = make_reset_model_data()
+    contact_jacobian = ContactJacobian(model)
+    tau = contact_jacobian.map_contact_forces_to_torques(
+        data,
+        jnp.array([0.0, 0.0, 40.0]),
+        jnp.array([0.0, 0.0, 40.0]),
+        jnp.array([0.0, 0.0]),
+    )
+    assert tau.shape == (10,)
+    assert abs(float(tau[3])) > 1.0
+    assert abs(float(tau[8])) > 1.0
+    assert np.isfinite(np.array(tau)).all()
+
+
+def test_force_mapping_diagnostics_include_jacobian_and_torque_terms():
+    model, data = make_reset_model_data()
+    contact_jacobian = ContactJacobian(model)
+    diagnostics = contact_jacobian.compute_force_mapping_diagnostics(
+        data,
+        jnp.array([0.0, 0.0, 40.0]),
+        jnp.array([0.0, 0.0, 40.0]),
+    )
+    assert diagnostics["left_jacobian_z_row"].shape == (10,)
+    assert diagnostics["right_jacobian_z_row"].shape == (10,)
+    assert diagnostics["tau_left_from_force"].shape == (10,)
+    assert diagnostics["tau_right_from_force"].shape == (10,)
+    assert diagnostics["tau_total_from_force"].shape == (10,)

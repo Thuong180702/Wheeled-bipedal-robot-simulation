@@ -20,7 +20,13 @@
       "Skill(superpowers:requesting-code-review:*)",
       "mcp__plugin_context-mode_context-mode__ctx_upgrade",
       "mcp__plugin_context-mode_context-mode__ctx_fetch_and_index",
-      "WebSearch"
+      "WebSearch",
+      "Skill(superpowers:executing-plans)",
+      "Skill(superpowers:executing-plans:*)",
+      "Skill(superpowers:using-git-worktrees)",
+      "Skill(superpowers:using-git-worktrees:*)",
+      "Skill(superpowers:test-driven-development)",
+      "Skill(superpowers:test-driven-development:*)"
     ]
   }
 }

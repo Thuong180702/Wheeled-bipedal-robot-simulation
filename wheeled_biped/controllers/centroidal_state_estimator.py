@@ -2,7 +2,11 @@
 
 import chex
 import jax.numpy as jnp
+import mujoco
+import numpy as np
 from jax import Array
+
+from wheeled_biped.controllers.orientation_utils import compute_orientation_from_quaternion
 
 
 @chex.dataclass
@@ -38,19 +42,39 @@ class CentroidalState:
     right_wheel_contact: bool
     left_wheel_force: float
     right_wheel_force: float
+    base_quat: Array = jnp.array([1.0, 0.0, 0.0, 0.0])
+    base_ang_vel: Array = jnp.zeros(3)
+    roll: float = 0.0
+    pitch: float = 0.0
+    yaw: float = 0.0
+    roll_rate: float = 0.0
+    pitch_rate: float = 0.0
+    yaw_rate: float = 0.0
+    left_contact_force_world: Array = jnp.zeros(3)
+    right_contact_force_world: Array = jnp.zeros(3)
+    total_contact_force_z: float = 0.0
 
 
 class CentroidalStateEstimator:
     """Extracts centroidal state from MJX simulation data."""
 
-    def __init__(self, config: CentroidalStateEstimatorConfig):
+    def __init__(self, config: CentroidalStateEstimatorConfig, mj_model=None):
         self.config = config
         self.dt = 0.02  # 50Hz control rate
+        self.mj_model = mj_model
 
-        # Wheel geom IDs (these should match the MuJoCo model)
-        # In wheeled_biped model: left_wheel=5, right_wheel=6
-        self.left_wheel_geom_id = 5
-        self.right_wheel_geom_id = 6
+        if mj_model is not None:
+            self.left_wheel_geom_id = mujoco.mj_name2id(
+                mj_model, mujoco.mjtObj.mjOBJ_GEOM, "l_wheel_collision"
+            )
+            self.right_wheel_geom_id = mujoco.mj_name2id(
+                mj_model, mujoco.mjtObj.mjOBJ_GEOM, "r_wheel_collision"
+            )
+            if self.left_wheel_geom_id == -1 or self.right_wheel_geom_id == -1:
+                raise ValueError("Wheel collision geoms not found")
+        else:
+            self.left_wheel_geom_id = 5
+            self.right_wheel_geom_id = 6
 
     def estimate(self, obs: Array, data, prev_com_pos: Array | None = None) -> tuple[CentroidalState, Array]:
         """Extract centroidal state from observation and MJX data.
@@ -74,26 +98,64 @@ class CentroidalStateEstimator:
         else:
             com_vel = (com_pos - prev_com_pos) / self.dt
 
-        # Extract contact forces from MJX contact data
+        # Extract contact forces from contact data
         left_wheel_contact = False
         right_wheel_contact = False
         left_wheel_force = 0.0
         right_wheel_force = 0.0
+        left_contact_force_world = jnp.zeros(3)
+        right_contact_force_world = jnp.zeros(3)
 
-        if hasattr(data, 'contact') and hasattr(data.contact, 'force'):
+        if self.mj_model is not None and hasattr(data, "ncon"):
+            for i in range(data.ncon):
+                contact = data.contact[i]
+                geom1 = int(contact.geom1)
+                geom2 = int(contact.geom2)
+                force_contact = np.zeros(6)
+                mujoco.mj_contactForce(self.mj_model, data, i, force_contact)
+                frame = np.array(contact.frame).reshape(3, 3)
+                force_world = frame.T @ force_contact[:3]
+
+                if geom1 == self.left_wheel_geom_id or geom2 == self.left_wheel_geom_id:
+                    left_wheel_contact = True
+                    left_contact_force_world = left_contact_force_world + jnp.array(force_world)
+                    left_wheel_force = float(left_contact_force_world[2])
+
+                if geom1 == self.right_wheel_geom_id or geom2 == self.right_wheel_geom_id:
+                    right_wheel_contact = True
+                    right_contact_force_world = right_contact_force_world + jnp.array(force_world)
+                    right_wheel_force = float(right_contact_force_world[2])
+        elif hasattr(data, 'contact') and hasattr(data.contact, 'force'):
             for i in range(len(data.contact.geom1)):
                 geom1 = int(data.contact.geom1[i])
                 geom2 = int(data.contact.geom2[i])
 
-                # Check if either geom is a wheel (contact can be geom1 or geom2)
                 if geom1 == self.left_wheel_geom_id or geom2 == self.left_wheel_geom_id:
                     left_wheel_contact = True
-                    # Normal force is the z-component (index 2)
                     left_wheel_force = float(abs(data.contact.force[i][2]))
+                    left_contact_force_world = left_contact_force_world + jnp.array([0.0, 0.0, left_wheel_force])
 
                 if geom1 == self.right_wheel_geom_id or geom2 == self.right_wheel_geom_id:
                     right_wheel_contact = True
                     right_wheel_force = float(abs(data.contact.force[i][2]))
+                    right_contact_force_world = right_contact_force_world + jnp.array([0.0, 0.0, right_wheel_force])
+
+        total_contact_force_z = float(left_contact_force_world[2] + right_contact_force_world[2])
+
+        if hasattr(data, "qpos"):
+            base_quat = jnp.array(data.qpos[3:7])
+            roll, pitch, yaw = compute_orientation_from_quaternion(np.array(data.qpos[3:7]))
+        else:
+            base_quat = jnp.array([1.0, 0.0, 0.0, 0.0])
+            roll, pitch, yaw = 0.0, 0.0, 0.0
+
+        if hasattr(data, "qvel") and len(data.qvel) >= 6:
+            base_ang_vel = jnp.array(data.qvel[3:6])
+        else:
+            base_ang_vel = jnp.zeros(3)
+        roll_rate = float(base_ang_vel[0])
+        pitch_rate = float(base_ang_vel[1])
+        yaw_rate = float(base_ang_vel[2])
 
         # Placeholder values for capture point (will be implemented in Task 4-5)
         capture_point = jnp.zeros(2)
@@ -116,6 +178,17 @@ class CentroidalStateEstimator:
             right_wheel_contact=right_wheel_contact,
             left_wheel_force=left_wheel_force,
             right_wheel_force=right_wheel_force,
+            base_quat=base_quat,
+            base_ang_vel=base_ang_vel,
+            roll=roll,
+            pitch=pitch,
+            yaw=yaw,
+            roll_rate=roll_rate,
+            pitch_rate=pitch_rate,
+            yaw_rate=yaw_rate,
+            left_contact_force_world=left_contact_force_world,
+            right_contact_force_world=right_contact_force_world,
+            total_contact_force_z=total_contact_force_z,
         )
 
         return state, com_pos

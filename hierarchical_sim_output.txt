@@ -1,0 +1,98 @@
+================================================================================
+Hierarchical Controller Simulation with Telemetry
+Mode: VISUAL
+================================================================================
+
+Loading model: assets/robot/wheeled_biped_real.xml
+[OK] Robot initialized using keyframe 0
+
+Initializing hierarchical controller...
+[OK] Controllers initialized (wheeled biped architecture)
+
+JIT-compiling controller functions...
+[OK] JIT compilation complete - controllers ready for real-time operation
+
+Running simulation for 2000 steps (40.0 seconds)
+================================================================================
+
+Launching MuJoCo viewer...
+Close the viewer window to end simulation and save telemetry.
+Control at 50 Hz, viewer at 30 Hz, maintaining 1:1 real-time display
+
+[WBC DIAGNOSTIC - Step 0]
+Computed orientation from gravity:
+  Roll: -0.00 deg
+  Pitch: 0.00 deg
+  Gravity vector: [0.000, 0.000, -9.810]
+
+Desired wrench: Fx=0.00, Fy=0.65, Fz=79.82, Mx=-0.00, My=-0.00, Mz=0.00
+QP solution:
+  f_left:  [0.00, 0.32, 39.91] N
+  f_right: [0.00, 0.32, 39.91] N
+  tau_hip_roll: [-0.00, -0.00] Nm
+WBC torques: [-0.00663852  0.81813663  0.          0.         -0.01944404  0.00664763
+ -0.81818056  0.          0.         -0.01944404]
+Max WBC torque: 0.82 Nm
+QP solve time: 102.56 ms
+Wrench error: 0.983137 N/Nm
+
+Actual contact forces from MuJoCo:
+  Contact 0: floor - l_wheel_collision, world_fz: 35.03 N
+  Contact 1: floor - l_wheel_collision, world_fz: 39.57 N
+  Contact 2: floor - r_wheel_collision, world_fz: 32.83 N
+  Contact 3: floor - r_wheel_collision, world_fz: 36.41 N
+  Total contact force z: 143.84 N (weight: 79.46 N)
+  Desired Fz: 79.82 N
+
+Force feedback control:
+  Actual Fz: 143.84 N
+  Desired Fz: 79.82 N
+  Force scale: 1.000x
+  Feedback gain: 0.0
+
+Jacobian diagnostics:
+  J_left vertical (z) row: [-1.2555122e-07 -2.0498358e-02  2.0630406e-02  1.9085820e-01
+  0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  0.0000000e+00]
+  J_right vertical (z) row: [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00 -1.2555878e-07  2.0499505e-02  2.0626156e-02
+  1.9086054e-01  0.0000000e+00]
+  Expected torque from 73.71 N vertical force:
+    Left leg: [-9.2543805e-06 -1.5109339e+00  1.5206672e+00  1.4068158e+01
+  0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  0.0000000e+00]
+    Right leg: [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00 -9.2549380e-06  1.5110185e+00  1.5203539e+00
+  1.4068330e+01  0.0000000e+00]
+Note: Using unified QP force distribution with hip roll torques
+
+Step 1: h=0.413m, pitch=-0.0deg (sensed=0.0deg), roll=-0.2deg (sensed=-0.0deg), gravity=[0.000, 0.000, -9.810]
+Step 2: h=0.412m, pitch=-0.0deg (sensed=-0.0deg), roll=-0.7deg (sensed=-0.2deg), gravity=[-0.000, 0.031, -9.810]
+Step 3: h=0.408m, pitch=-0.0deg (sensed=-0.0deg), roll=-1.5deg (sensed=-0.6deg), gravity=[-0.000, 0.110, -9.809]
+Step 4: h=0.403m, pitch=-0.0deg (sensed=-0.0deg), roll=-2.6deg (sensed=-1.4deg), gravity=[-0.001, 0.243, -9.807]
+Step 5: h=0.397m, pitch=-0.0deg (sensed=-0.0deg), roll=-3.9deg (sensed=-2.5deg), gravity=[-0.002, 0.424, -9.801]
+Step 10: h=0.348m, pitch=-1.2deg (sensed=-0.7deg), roll=-12.8deg (sensed=-10.6deg), gravity=[-0.119, 1.804, -9.642]
+
+[TERMINATED] at step 10: height_too_low
+
+================================================================================
+Simulation Summary
+================================================================================
+Total steps: 10
+Simulation time: 0.2 seconds
+Wall clock time: 4.6 seconds
+Terminated: True
+Termination reason: height_too_low
+
+CoM height range: 0.348 - 0.413 m
+Pitch range: -1.2 - -0.0 deg
+Roll range: -12.8 - -0.2 deg
+
+Max torques (wheeled biped architecture):
+  Hip roll: 4.14 Nm
+  Wheels: 0.00 Nm
+  Legs: 17.45 Nm
+  Total: 4.14 Nm
+
+Telemetry saved to: outputs\hierarchical_controller_sim\telemetry_1779181149.csv
+================================================================================

@@ -288,7 +288,7 @@ def test_posture_rate_limiting(controller, config):
 
     # Change should be limited by max_hip_pitch_delta
     hip_pitch_change = abs(controller.target_hip_pitch - initial_hip_pitch)
-    assert hip_pitch_change <= config.max_hip_pitch_delta
+    assert hip_pitch_change <= config.max_hip_pitch_delta + 1e-9
 
 
 def test_reset(controller):
@@ -307,8 +307,8 @@ def test_reset(controller):
 
     assert controller.step_count == 0
     assert controller.last_slow_update_step == 0
-    assert controller.target_hip_pitch == 0.0
-    assert controller.target_knee == 1.0
+    assert controller.target_hip_pitch == 0.3  # Keyframe standing posture
+    assert controller.target_knee == 0.5  # Keyframe standing posture
     assert controller.filtered_wheel_cmd == 0.0
     assert controller.num_slow_updates == 0
     assert controller.num_frozen_updates == 0

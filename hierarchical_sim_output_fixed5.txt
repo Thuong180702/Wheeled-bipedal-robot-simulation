@@ -1,0 +1,164 @@
+================================================================================
+Hierarchical Controller Simulation with Telemetry
+Mode: VISUAL
+================================================================================
+
+Loading model: assets/robot/wheeled_biped_real.xml
+[OK] Robot initialized using keyframe 0
+
+Initializing hierarchical controller...
+[OK] Controllers initialized (wheeled biped architecture)
+
+JIT-compiling controller functions...
+[OK] JIT compilation complete - controllers ready for real-time operation
+
+Running simulation for 2000 steps (40.0 seconds)
+================================================================================
+
+Launching MuJoCo viewer...
+Close the viewer window to end simulation and save telemetry.
+Control at 50 Hz, viewer at 30 Hz, maintaining 1:1 real-time display
+[WBC PIPELINE] Raw torques from Jacobian: [ 6.6385171e-03 -8.1813663e-01  6.8855774e-01  7.7034135e+00
+  1.9444045e-02 -6.6476259e-03  8.1818056e-01  6.8838793e-01
+  7.7035060e+00  1.9444045e-02]
+[WBC PIPELINE] Max raw torque: 7.7035 Nm
+[WBC PIPELINE] After masking (disabled): [ 6.6385171e-03 -8.1813663e-01  6.8855774e-01  7.7034135e+00
+  1.9444045e-02 -6.6476259e-03  8.1818056e-01  6.8838793e-01
+  7.7035060e+00  1.9444045e-02]
+[WBC PIPELINE] Max masked torque: 7.7035 Nm
+[WBC PIPELINE] After authority clipping: [ 5.0414009e-03 -6.2130660e-01  5.2290225e-01  5.8501010e+00
+  1.4766132e-02 -5.0483183e-03  6.2133998e-01  5.2277327e-01
+  5.8501711e+00  1.4766132e-02]
+[WBC PIPELINE] Max final torque: 5.8502 Nm
+
+[WBC DIAGNOSTIC - Step 0]
+Computed orientation from gravity:
+  Roll: -0.00 deg
+  Pitch: 0.00 deg
+  Gravity vector: [0.000, 0.000, -9.810]
+
+Desired wrench: Fx=0.00, Fy=0.65, Fz=79.82, Mx=-0.00, My=-0.00, Mz=0.00
+QP solution:
+  f_left:  [0.00, 0.32, 39.91] N
+  f_right: [0.00, 0.32, 39.91] N
+  tau_hip_roll: [-0.00, -0.00] Nm
+WBC torques: [ 5.0414009e-03 -6.2130660e-01  5.2290225e-01  5.8501010e+00
+  1.4766132e-02 -5.0483183e-03  6.2133998e-01  5.2277327e-01
+  5.8501711e+00  1.4766132e-02]
+Max WBC torque: 5.85 Nm
+QP solve time: 60.22 ms
+Wrench error: 0.983137 N/Nm
+
+Actual contact forces from MuJoCo:
+  Contact 0: floor - l_wheel_collision, world_fz: 35.03 N
+  Contact 1: floor - l_wheel_collision, world_fz: 39.57 N
+  Contact 2: floor - r_wheel_collision, world_fz: 32.83 N
+  Contact 3: floor - r_wheel_collision, world_fz: 36.41 N
+  Total contact force z: 143.84 N (weight: 79.46 N)
+  Desired Fz: 79.82 N
+
+Force feedback control:
+  Actual Fz: 143.84 N
+  Desired Fz: 79.82 N
+  Force scale: 0.759x
+  Feedback gain: 0.3
+
+Jacobian diagnostics:
+  J_left vertical (z) row: [-1.2555122e-07 -2.0498358e-02  2.0630406e-02  1.9085820e-01
+  0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  0.0000000e+00]
+  J_right vertical (z) row: [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00 -1.2555878e-07  2.0499505e-02  2.0626156e-02
+  1.9086054e-01  0.0000000e+00]
+  Expected torque from 73.71 N vertical force:
+    Left leg: [-9.2543805e-06 -1.5109339e+00  1.5206672e+00  1.4068158e+01
+  0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  0.0000000e+00]
+    Right leg: [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00 -9.2549380e-06  1.5110185e+00  1.5203539e+00
+  1.4068330e+01  0.0000000e+00]
+Note: Using unified QP force distribution with hip roll torques
+
+Step 1: h=0.413m, pitch=-0.0deg (sensed=0.0deg), roll=-0.2deg (sensed=-0.0deg), gravity=[0.000, 0.000, -9.810]
+[WBC PIPELINE] Raw torques from Jacobian: [ 0.41973355 -0.8282458   0.61007726  7.8412466   0.02145398  0.41025248
+  0.8271265   0.6104954   7.8394003   0.0214539 ]
+[WBC PIPELINE] Max raw torque: 7.8412 Nm
+[WBC PIPELINE] After masking (disabled): [ 0.41973355 -0.8282458   0.61007726  7.8412466   0.02145398  0.41025248
+  0.8271265   0.6104954   7.8394003   0.0214539 ]
+[WBC PIPELINE] Max masked torque: 7.8412 Nm
+[WBC PIPELINE] After authority clipping: [ 0.5456536  -1.0767195   0.7931004  10.193621    0.02789017  0.53332824
+  1.0752645   0.79364395 10.19122     0.02789006]
+[WBC PIPELINE] Max final torque: 10.1936 Nm
+Step 2: h=0.411m, pitch=-0.0deg (sensed=-0.0deg), roll=-0.7deg (sensed=-0.2deg), gravity=[-0.001, 0.032, -9.810]
+[WBC PIPELINE] Raw torques from Jacobian: [ 0.8344366  -0.8614287   0.36341798  8.23611     0.0218892   0.8370548
+  0.86908185  0.3678217   8.23069     0.02188865]
+[WBC PIPELINE] Max raw torque: 8.2361 Nm
+[WBC PIPELINE] After masking (disabled): [ 0.8344366  -0.8614287   0.36341798  8.23611     0.0218892   0.8370548
+  0.86908185  0.3678217   8.23069     0.02188865]
+[WBC PIPELINE] Max masked torque: 8.2361 Nm
+[WBC PIPELINE] After authority clipping: [ 1.0847676  -1.1198572   0.47244337 10.706943    0.02845597  1.0881712
+  1.1298064   0.4781682  10.699897    0.02845525]
+[WBC PIPELINE] Max final torque: 10.7069 Nm
+Step 3: h=0.406m, pitch=0.0deg (sensed=-0.0deg), roll=-1.4deg (sensed=-0.6deg), gravity=[-0.000, 0.104, -9.809]
+[WBC PIPELINE] Raw torques from Jacobian: [ 1.2610526  -0.919376   -0.04847538  8.848186    0.02212949  1.286888
+  0.9555215  -0.03369435  8.835255    0.02212663]
+[WBC PIPELINE] Max raw torque: 8.8482 Nm
+[WBC PIPELINE] After masking (disabled): [ 1.2610526  -0.919376   -0.04847538  8.848186    0.02212949  1.286888
+  0.9555215  -0.03369435  8.835255    0.02212663]
+[WBC PIPELINE] Max masked torque: 8.8482 Nm
+[WBC PIPELINE] After authority clipping: [ 1.6393683  -1.1951888  -0.06301799 11.502641    0.02876833  1.6729543
+  1.242178   -0.04380266 11.48583     0.02876461]
+[WBC PIPELINE] Max final torque: 11.5026 Nm
+Step 4: h=0.397m, pitch=0.0deg (sensed=0.0deg), roll=-2.4deg (sensed=-1.3deg), gravity=[0.003, 0.225, -9.807]
+[WBC PIPELINE] Raw torques from Jacobian: [ 1.6497259  -0.9971287  -0.56296855  9.574111    0.02238324  1.7129544
+  1.0810367  -0.5328775   9.55076     0.02237354]
+[WBC PIPELINE] Max raw torque: 9.5741 Nm
+[WBC PIPELINE] After masking (disabled): [ 1.6497259  -0.9971287  -0.56296855  9.574111    0.02238324  1.7129544
+  1.0810367  -0.5328775   9.55076     0.02237354]
+[WBC PIPELINE] Max masked torque: 9.5741 Nm
+[WBC PIPELINE] After authority clipping: [ 2.1446435  -1.2962673  -0.7318591  12.446343    0.02909821  2.2268407
+  1.4053476  -0.69274074 12.415988    0.0290856 ]
+[WBC PIPELINE] Max final torque: 12.4463 Nm
+Step 5: h=0.384m, pitch=0.1deg (sensed=0.0deg), roll=-3.5deg (sensed=-2.3deg), gravity=[0.008, 0.389, -9.802]
+[WBC PIPELINE] Raw torques from Jacobian: [ 1.9557551  -1.0872984  -1.1341478  10.346962    0.02265253  2.072868
+  1.2334527  -1.0876759  10.312974    0.02262835]
+[WBC PIPELINE] Max raw torque: 10.3470 Nm
+[WBC PIPELINE] After masking (disabled): [ 1.9557551  -1.0872984  -1.1341478  10.346962    0.02265253  2.072868
+  1.2334527  -1.0876759  10.312974    0.02262835]
+[WBC PIPELINE] Max masked torque: 10.3470 Nm
+[WBC PIPELINE] After authority clipping: [ 2.5424817  -1.4134879  -1.474392   13.45105     0.02944829  2.6947284
+  1.6034884  -1.4139787  13.406866    0.02941685]
+[WBC PIPELINE] Max final torque: 13.4510 Nm
+[WBC PIPELINE] Raw torques from Jacobian: [ 2.111554   -1.1775657  -1.7050188  11.09293     0.02294946  2.2971506
+  1.3916335  -1.6463639  11.051096    0.02289992]
+[WBC PIPELINE] Max raw torque: 11.0929 Nm
+[WBC PIPELINE] After masking (disabled): [ 2.111554   -1.1775657  -1.7050188  11.09293     0.02294946  2.2971506
+  1.3916335  -1.6463639  11.051096    0.02289992]
+[WBC PIPELINE] Max masked torque: 11.0929 Nm
+[WBC PIPELINE] After authority clipping: [ 2.74502    -1.5308354  -2.2165244  14.420808    0.0298343   2.9862957
+  1.8091235  -2.1402729  14.366425    0.02976989]
+[WBC PIPELINE] Max final torque: 14.4208 Nm
+
+[TERMINATED] at step 7: height_too_low
+
+================================================================================
+Simulation Summary
+================================================================================
+Total steps: 7
+Simulation time: 0.1 seconds
+Wall clock time: 2.2 seconds
+Terminated: True
+Termination reason: height_too_low
+
+CoM height range: 0.346 - 0.413 m
+Pitch range: -0.0 - 0.1 deg
+Roll range: -5.9 - -0.2 deg
+
+Max torques (wheeled biped architecture):
+  Hip roll: 14.42 Nm
+  Wheels: 0.00 Nm
+  Legs: 39.66 Nm
+  Total: 14.42 Nm
+
+Telemetry saved to: outputs\hierarchical_controller_sim\telemetry_1779182556.csv
+================================================================================

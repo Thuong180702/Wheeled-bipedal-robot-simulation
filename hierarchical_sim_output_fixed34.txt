@@ -1,0 +1,307 @@
+================================================================================
+Hierarchical Controller Simulation with Telemetry
+Mode: HEADLESS
+================================================================================
+
+Loading model: assets/robot/wheeled_biped_real.xml
+[OK] Robot initialized using keyframe 0
+
+=== INITIALIZATION DIAGNOSTICS ===
+[POINT 1: After keyframe load] Contacts: 0, Left: 0.00 N, Right: 0.00 N, Total: 0.00 N, Asymmetry: 0.00 N
+[POINT 2: After first mj_forward] Contacts: 4, Left: 383.14 N, Right: 214.87 N, Total: 598.01 N, Asymmetry: 168.27 N
+[POINT 3: After velocity zeroing] Contacts: 4, Left: 383.14 N, Right: 214.87 N, Total: 598.01 N, Asymmetry: 168.27 N
+[POINT 4: After second mj_forward] Contacts: 4, Left: 383.14 N, Right: 214.87 N, Total: 598.01 N, Asymmetry: 168.27 N
+[OK] Initial velocities explicitly zeroed to ensure equilibrium
+
+Initializing hierarchical controller...
+[OK] Controllers initialized (wheeled biped architecture)
+
+JIT-compiling controller functions...
+[OK] JIT compilation complete - controllers ready for real-time operation
+
+Running simulation for 2000 steps (40.0 seconds)
+================================================================================
+[DIRECT WHEEL CONTROL] Fy_total=-1.7472 N, active_wheels=2
+[DIRECT WHEEL CONTROL] tau_wheel_left=-0.0437 Nm, tau_wheel_right=-0.0437 Nm
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=-1.75, Fz=84.83, Mx=-0.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[CLIP DEBUG] tau_hip_roll_max=30.0
+[CLIP DEBUG] tau_hip_roll_desired=[-0. -0.]
+[CLIP DEBUG] clip_bounds=[-30.0, +30.0]
+[CLIP DEBUG] tau_hip_roll_after_clip=[-0. -0.]
+[FORCE_DIST] Mx=-0.00, hip_moment=-0.00, remaining=0.00
+[FORCE_DIST] fz_diff=0.00, fz_left=42.42, fz_right=42.42
+[FORCE_DIST] f_left=[ 2.4728839e-05 -8.7358809e-01  4.2415905e+01], f_right=[ 2.4728839e-05 -8.7358809e-01  4.2415905e+01]
+[FORCE_DIST] tau_hip_roll=[-0. -0.]
+[FORCE_DIST] FINAL OUTPUT: f_left_z=42.42, f_right_z=42.42, asymmetry=0.00
+[WBC PIPELINE] Leg torques from Jacobian: [  0.01788147   0.8694294    7.5296593  -10.900868     0.09609469
+  -0.01793297  -0.86949253   7.830307   -10.990667     0.09609469]
+[WBC PIPELINE] Wheel torques (indices 4,9): [0.0961, 0.0961] Nm
+[WBC PIPELINE] Max torque: 10.9907 Nm
+[WBC PIPELINE] After masking (disabled): [  0.01788147   0.8694294    7.5296593  -10.900868     0.09609469
+  -0.01793297  -0.86949253   7.830307   -10.990667     0.09609469]
+[WBC PIPELINE] Max masked torque: 10.9907 Nm
+[FORCE FEEDBACK] Warmup step 0/3, scale=1.0 (no correction)
+[WBC PIPELINE] After authority clipping: [  0.01788147   0.8694294    7.5296593  -10.900868     0.09609469
+  -0.01793297  -0.86949253   7.830307   -10.990667     0.09609469]
+[WBC PIPELINE] Max final torque: 10.9907 Nm
+
+[WBC DIAGNOSTIC - Step 0]
+Computed orientation from gravity:
+  Roll: -0.00 deg
+  Pitch: 0.00 deg
+  Gravity vector: [0.000, 0.000, -9.810]
+
+Desired wrench: Fx=0.00, Fy=-1.75, Fz=84.83, Mx=-0.00, My=0.00, Mz=0.00
+QP solution:
+  f_left:  [0.00, -0.87, 42.42] N
+  f_right: [0.00, -0.87, 42.42] N
+  tau_hip_roll: [-0.00, -0.00] Nm
+WBC torques: [  0.01788147   0.8694294    7.5296593  -10.900868     0.09609469
+  -0.01793297  -0.86949253   7.830307   -10.990667     0.09609469]
+Max WBC torque: 10.99 Nm
+QP solve time: 77.09 ms
+Wrench error: 12.296501 N/Nm
+
+Actual contact forces from MuJoCo:
+  Contact 0: floor - l_wheel_collision, world_fz: 1242.62 N
+  Contact 1: floor - l_wheel_collision, world_fz: 1191.28 N
+  Contact 2: floor - r_wheel_collision, world_fz: 1058.29 N
+  Contact 3: floor - r_wheel_collision, world_fz: 1031.64 N
+  Total contact force z: 4523.83 N (weight: 79.46 N)
+  Desired Fz: 84.83 N
+
+Force feedback control:
+  Actual Fz: 4523.83 N
+  Desired Fz: 84.83 N
+  Force scale: 1.000x
+  Feedback gain: 0.3
+
+Jacobian diagnostics:
+  J_left vertical (z) row: [ 7.0100498e-07 -2.0497529e-02 -1.8600863e-01  2.6035717e-01
+  0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  0.0000000e+00]
+  J_right vertical (z) row: [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  7.2902026e-07  2.0499464e-02 -1.9301862e-01
+  2.6236656e-01  0.0000000e+00]
+  Expected torque from 73.71 N vertical force:
+    Left leg: [ 5.1671075e-05 -1.5108728e+00 -1.3710696e+01  1.9190928e+01
+  0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  0.0000000e+00]
+    Right leg: [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  5.3736083e-05  1.5110155e+00 -1.4227402e+01
+  1.9339039e+01  0.0000000e+00]
+Note: Using unified QP force distribution with hip roll torques
+
+[POINT 5: After first mj_step] Contacts: 4, Left: 385.78 N, Right: 218.90 N, Total: 604.68 N, Asymmetry: 166.88 N
+=== END INITIALIZATION DIAGNOSTICS ===
+
+Step 1: h=0.366m, pitch=-0.3deg (sensed=0.0deg), roll=-2.5deg (sensed=-0.0deg), gravity=[0.000, 0.000, -9.810]
+[DIRECT WHEEL CONTROL] Fy_total=8.9667 N, active_wheels=0
+[DIRECT WHEEL CONTROL] tau_wheel_left=0.2242 Nm, tau_wheel_right=0.2242 Nm
+[WBC PIPELINE] Leg torques from Jacobian: [-16.163847     0.9272616    9.638076   -12.058293    -0.4932716
+ -16.044893    -0.8019966    9.909892   -12.048789    -0.49316022]
+[WBC PIPELINE] Wheel torques (indices 4,9): [-0.4933, -0.4932] Nm
+[WBC PIPELINE] Max torque: 16.1638 Nm
+[WBC PIPELINE] After masking (disabled): [-16.163847     0.9272616    9.638076   -12.058293    -0.4932716
+ -16.044893    -0.8019966    9.909892   -12.048789    -0.49316022]
+[WBC PIPELINE] Max masked torque: 16.1638 Nm
+[FORCE FEEDBACK] Warmup step 1/3, scale=1.0 (no correction)
+[WBC PIPELINE] After authority clipping: [-16.163847     0.9272616    9.638076   -12.058293    -0.4932716
+ -16.044893    -0.8019966    9.909892   -12.048789    -0.49316022]
+[WBC PIPELINE] Max final torque: 16.1638 Nm
+Step 2: h=0.385m, pitch=-0.3deg (sensed=-0.2deg), roll=-1.8deg (sensed=-2.4deg), gravity=[-0.040, 0.418, -9.801]
+[DIRECT WHEEL CONTROL] Fy_total=5.0015 N, active_wheels=0
+[DIRECT WHEEL CONTROL] tau_wheel_left=0.1250 Nm, tau_wheel_right=0.1250 Nm
+[WBC PIPELINE] Leg torques from Jacobian: [ 22.150164     0.91042      8.708074   -11.798322    -0.27571148
+  22.202206    -0.9337655    9.027655   -11.770259    -0.2756394 ]
+[WBC PIPELINE] Wheel torques (indices 4,9): [-0.2757, -0.2756] Nm
+[WBC PIPELINE] Max torque: 22.2022 Nm
+[WBC PIPELINE] After masking (disabled): [ 22.150164     0.91042      8.708074   -11.798322    -0.27571148
+  22.202206    -0.9337655    9.027655   -11.770259    -0.2756394 ]
+[WBC PIPELINE] Max masked torque: 22.2022 Nm
+[FORCE FEEDBACK] Warmup step 2/3, scale=1.0 (no correction)
+[WBC PIPELINE] After authority clipping: [ 22.150164     0.91042      8.708074   -11.798322    -0.27571148
+  22.202206    -0.9337655    9.027655   -11.770259    -0.2756394 ]
+[WBC PIPELINE] Max final torque: 22.2022 Nm
+Step 3: h=0.402m, pitch=-0.7deg (sensed=-0.3deg), roll=0.9deg (sensed=-2.0deg), gravity=[-0.049, 0.347, -9.804]
+[DIRECT WHEEL CONTROL] Fy_total=18.7793 N, active_wheels=0
+[DIRECT WHEEL CONTROL] tau_wheel_left=0.4695 Nm, tau_wheel_right=0.4695 Nm
+[WBC PIPELINE] Leg torques from Jacobian: [ 29.822025     0.81850576  10.926694   -12.457365    -1.032627
+  30.298216    -1.0973983   11.212983   -12.466078    -1.0327802 ]
+[WBC PIPELINE] Wheel torques (indices 4,9): [-1.0326, -1.0328] Nm
+[WBC PIPELINE] Max torque: 30.2982 Nm
+[WBC PIPELINE] After masking (disabled): [ 29.822025     0.81850576  10.926694   -12.457365    -1.032627
+  30.298216    -1.0973983   11.212983   -12.466078    -1.0327802 ]
+[WBC PIPELINE] Max masked torque: 30.2982 Nm
+[FORCE FEEDBACK] Active: actual=0.0N, desired=82.9N, scale=1.300
+[WBC PIPELINE] After authority clipping: [ 38.76863     1.0640575  14.204701  -16.194574   -1.342415   39.38768
+  -1.4266177  14.576878  -16.2059     -1.3426142]
+[WBC PIPELINE] Max final torque: 39.3877 Nm
+Step 4: h=0.415m, pitch=-1.1deg (sensed=-0.6deg), roll=6.0deg (sensed=0.6deg), gravity=[-0.108, -0.098, -9.809]
+[DIRECT WHEEL CONTROL] Fy_total=14.1128 N, active_wheels=0
+[DIRECT WHEEL CONTROL] tau_wheel_left=0.3528 Nm, tau_wheel_right=0.3528 Nm
+[WBC PIPELINE] Leg torques from Jacobian: [ 30.072472     1.5964475    9.895977   -12.094517    -0.7740476
+  30.590708    -0.36913207   9.772392   -11.974737    -0.77404124]
+[WBC PIPELINE] Wheel torques (indices 4,9): [-0.7740, -0.7740] Nm
+[WBC PIPELINE] Max torque: 30.5907 Nm
+[WBC PIPELINE] After masking (disabled): [ 30.072472     1.5964475    9.895977   -12.094517    -0.7740476
+  30.590708    -0.36913207   9.772392   -11.974737    -0.77404124]
+[WBC PIPELINE] Max masked torque: 30.5907 Nm
+[FORCE FEEDBACK] Active: actual=0.0N, desired=83.0N, scale=1.300
+[WBC PIPELINE] After authority clipping: [ 39.09421     2.0753815  12.86477   -15.722871   -1.0062618  39.767918
+  -0.4798717  12.704109  -15.567158   -1.0062536]
+[WBC PIPELINE] Max final torque: 39.7679 Nm
+Step 5: h=0.425m, pitch=0.4deg (sensed=-1.1deg), roll=13.2deg (sensed=5.4deg), gravity=[-0.185, -0.924, -9.765]
+[DIRECT WHEEL CONTROL] Fy_total=-19.8444 N, active_wheels=1
+[DIRECT WHEEL CONTROL] tau_wheel_left=0.0000 Nm, tau_wheel_right=-0.9922 Nm
+[FORCE_DIST] left_contact=False, right_contact=True, active_count=1
+[FORCE_DIST] desired_wrench: Fx=-0.01, Fy=-19.84, Fz=83.41, Mx=-245.05, My=0.00, Mz=0.00
+[FORCE_DIST] SINGLE CONTACT RECOVERY: active_count=1
+[FORCE_DIST] RIGHT CONTACT ONLY: f_left_z=35.00N (recovery), recovery_mx=-857.67
+[FORCE_DIST] FINAL OUTPUT: f_left_z=35.00, f_right_z=83.41, asymmetry=48.41
+[WBC PIPELINE] Leg torques from Jacobian: [ 30.180391    1.6704276   5.269584   -8.720736   -0.         29.968775
+  -3.3999813   3.3882093 -16.324697    2.1301582]
+[WBC PIPELINE] Wheel torques (indices 4,9): [-0.0000, 2.1302] Nm
+[WBC PIPELINE] Max torque: 30.1804 Nm
+[WBC PIPELINE] After masking (disabled): [ 30.180391    1.6704276   5.269584   -8.720736   -0.         29.968775
+  -3.3999813   3.3882093 -16.324697    2.1301582]
+[WBC PIPELINE] Max masked torque: 30.1804 Nm
+[FORCE FEEDBACK] Active: actual=44.5N, desired=118.4N, scale=1.187
+[WBC PIPELINE] After authority clipping: [ 35.831272    1.983193    6.256244  -10.353578   -0.         35.580032
+  -4.036583    4.022607  -19.38128     2.5290022]
+[WBC PIPELINE] Max final torque: 35.8313 Nm
+[DIRECT WHEEL CONTROL] Fy_total=-58.7553 N, active_wheels=1
+[DIRECT WHEEL CONTROL] tau_wheel_left=0.0000 Nm, tau_wheel_right=-2.9378 Nm
+[FORCE_DIST] left_contact=False, right_contact=True, active_count=1
+[FORCE_DIST] desired_wrench: Fx=-0.09, Fy=-58.76, Fz=83.70, Mx=-228.71, My=0.00, Mz=0.00
+[FORCE_DIST] SINGLE CONTACT RECOVERY: active_count=1
+[FORCE_DIST] RIGHT CONTACT ONLY: f_left_z=35.00N (recovery), recovery_mx=-800.48
+[FORCE_DIST] FINAL OUTPUT: f_left_z=35.00, f_right_z=83.70, asymmetry=48.70
+[WBC PIPELINE] Leg torques from Jacobian: [ 30.18479     2.4535692   4.8397026  -8.230247   -0.         28.10455
+ -13.084243  -11.124155   -9.154089    6.0396967]
+[WBC PIPELINE] Wheel torques (indices 4,9): [-0.0000, 6.0397] Nm
+[WBC PIPELINE] Max torque: 30.1848 Nm
+[WBC PIPELINE] After masking (disabled): [ 30.18479     2.4535692   4.8397026  -8.230247   -0.         28.10455
+ -13.084243  -11.124155   -9.154089    6.0396967]
+[WBC PIPELINE] Max masked torque: 30.1848 Nm
+[FORCE FEEDBACK] Active: actual=119.9N, desired=118.7N, scale=0.997
+[WBC PIPELINE] After authority clipping: [ 30.092577    2.4460738   4.824918   -8.205104   -0.         28.018692
+ -13.044271  -11.090172   -9.126124    6.021246 ]
+[WBC PIPELINE] Max final torque: 30.0926 Nm
+[DIRECT WHEEL CONTROL] Fy_total=-64.6207 N, active_wheels=1
+[DIRECT WHEEL CONTROL] tau_wheel_left=-3.2310 Nm, tau_wheel_right=0.0000 Nm
+[FORCE_DIST] left_contact=True, right_contact=False, active_count=1
+[FORCE_DIST] desired_wrench: Fx=1.61, Fy=-64.62, Fz=83.94, Mx=-154.47, My=0.00, Mz=0.00
+[FORCE_DIST] SINGLE CONTACT RECOVERY: active_count=1
+[FORCE_DIST] LEFT CONTACT ONLY: f_right_z=35.00N (recovery), recovery_mx=-540.64
+[FORCE_DIST] FINAL OUTPUT: f_left_z=83.94, f_right_z=35.00, asymmetry=48.94
+[WBC PIPELINE] Leg torques from Jacobian: [ 29.829191   -7.7928114 -12.954077   -8.673993    6.6742597  30.798853
+   1.2249763   5.6952477  -7.988039   -0.       ]
+[WBC PIPELINE] Wheel torques (indices 4,9): [6.6743, -0.0000] Nm
+[WBC PIPELINE] Max torque: 30.7989 Nm
+[WBC PIPELINE] After masking (disabled): [ 29.829191   -7.7928114 -12.954077   -8.673993    6.6742597  30.798853
+   1.2249763   5.6952477  -7.988039   -0.       ]
+[WBC PIPELINE] Max masked torque: 30.7989 Nm
+[FORCE FEEDBACK] Active: actual=28.0N, desired=118.9N, scale=1.229
+[WBC PIPELINE] After authority clipping: [ 36.669445   -9.579813  -15.924629  -10.663062    8.2047615  37.861465
+   1.5058806   7.0012484  -9.819809   -0.       ]
+[WBC PIPELINE] Max final torque: 37.8615 Nm
+[DIRECT WHEEL CONTROL] Fy_total=-26.2421 N, active_wheels=1
+[DIRECT WHEEL CONTROL] tau_wheel_left=-1.3121 Nm, tau_wheel_right=0.0000 Nm
+[FORCE_DIST] left_contact=True, right_contact=False, active_count=1
+[FORCE_DIST] desired_wrench: Fx=1.85, Fy=-26.24, Fz=84.34, Mx=-108.23, My=0.00, Mz=0.00
+[FORCE_DIST] SINGLE CONTACT RECOVERY: active_count=1
+[FORCE_DIST] LEFT CONTACT ONLY: f_right_z=35.00N (recovery), recovery_mx=-378.79
+[FORCE_DIST] FINAL OUTPUT: f_left_z=84.34, f_right_z=35.00, asymmetry=49.34
+[WBC PIPELINE] Leg torques from Jacobian: [ 29.895681    1.8587097   3.2999358 -15.275834    2.7783203  30.542725
+   1.771469    6.528324   -7.851757   -0.       ]
+[WBC PIPELINE] Wheel torques (indices 4,9): [2.7783, -0.0000] Nm
+[WBC PIPELINE] Max torque: 30.5427 Nm
+[WBC PIPELINE] After masking (disabled): [ 29.895681    1.8587097   3.2999358 -15.275834    2.7783203  30.542725
+   1.771469    6.528324   -7.851757   -0.       ]
+[WBC PIPELINE] Max masked torque: 30.5427 Nm
+[FORCE FEEDBACK] Active: actual=94.3N, desired=119.3N, scale=1.063
+[WBC PIPELINE] After authority clipping: [ 31.77823     1.9757538   3.5077348 -16.237762    2.9532728  32.46602
+   1.8830196   6.939417   -8.346188   -0.       ]
+[WBC PIPELINE] Max final torque: 32.4660 Nm
+[DIRECT WHEEL CONTROL] Fy_total=-11.4922 N, active_wheels=1
+[DIRECT WHEEL CONTROL] tau_wheel_left=-0.5746 Nm, tau_wheel_right=0.0000 Nm
+[FORCE_DIST] left_contact=True, right_contact=False, active_count=1
+[FORCE_DIST] desired_wrench: Fx=2.15, Fy=-11.49, Fz=83.74, Mx=-179.97, My=0.00, Mz=0.00
+[FORCE_DIST] SINGLE CONTACT RECOVERY: active_count=1
+[FORCE_DIST] LEFT CONTACT ONLY: f_right_z=35.00N (recovery), recovery_mx=-629.88
+[FORCE_DIST] FINAL OUTPUT: f_left_z=83.74, f_right_z=35.00, asymmetry=48.74
+[WBC PIPELINE] Leg torques from Jacobian: [ 29.683098    5.1181836  10.429912  -17.666222    1.2622154  30.418455
+   1.8186822   6.9894257  -7.658727   -0.       ]
+[WBC PIPELINE] Wheel torques (indices 4,9): [1.2622, -0.0000] Nm
+[WBC PIPELINE] Max torque: 30.4185 Nm
+[WBC PIPELINE] After masking (disabled): [ 29.683098    5.1181836  10.429912  -17.666222    1.2622154  30.418455
+   1.8186822   6.9894257  -7.658727   -0.       ]
+[WBC PIPELINE] Max masked torque: 30.4185 Nm
+[FORCE FEEDBACK] Active: actual=73.3N, desired=118.7N, scale=1.115
+[WBC PIPELINE] After authority clipping: [ 33.093464    5.7062244  11.62823   -19.695938    1.4072344  33.913307
+   2.027635    7.792458   -8.538657   -0.       ]
+[WBC PIPELINE] Max final torque: 33.9133 Nm
+Step 10: h=0.457m, pitch=13.9deg (sensed=14.1deg), roll=34.5deg (sensed=29.1deg), gravity=[2.098, -4.666, -8.370]
+[DIRECT WHEEL CONTROL] Fy_total=-5.2104 N, active_wheels=1
+[DIRECT WHEEL CONTROL] tau_wheel_left=-0.2605 Nm, tau_wheel_right=0.0000 Nm
+[FORCE_DIST] left_contact=True, right_contact=False, active_count=1
+[FORCE_DIST] desired_wrench: Fx=2.56, Fy=-5.21, Fz=83.16, Mx=-269.60, My=0.00, Mz=0.00
+[FORCE_DIST] SINGLE CONTACT RECOVERY: active_count=1
+[FORCE_DIST] LEFT CONTACT ONLY: f_right_z=35.00N (recovery), recovery_mx=-943.59
+[FORCE_DIST] FINAL OUTPUT: f_left_z=83.16, f_right_z=35.00, asymmetry=48.16
+[WBC PIPELINE] Leg torques from Jacobian: [ 29.944443    6.046533   13.996156  -18.553194    0.6015069  30.536688
+   1.7477098   7.1222334  -7.3404675  -0.       ]
+[WBC PIPELINE] Wheel torques (indices 4,9): [0.6015, -0.0000] Nm
+[WBC PIPELINE] Max torque: 30.5367 Nm
+[WBC PIPELINE] After masking (disabled): [ 29.944443    6.046533   13.996156  -18.553194    0.6015069  30.536688
+   1.7477098   7.1222334  -7.3404675  -0.       ]
+[WBC PIPELINE] Max masked torque: 30.5367 Nm
+[FORCE FEEDBACK] Active: actual=79.4N, desired=118.2N, scale=1.099
+[WBC PIPELINE] After authority clipping: [ 32.8943      6.642183   15.37493   -20.380888    0.6607619  33.544888
+   1.9198784   7.8238516  -8.063584   -0.       ]
+[WBC PIPELINE] Max final torque: 33.5449 Nm
+[DIRECT WHEEL CONTROL] Fy_total=-5.5401 N, active_wheels=1
+[DIRECT WHEEL CONTROL] tau_wheel_left=-0.2770 Nm, tau_wheel_right=0.0000 Nm
+[FORCE_DIST] left_contact=True, right_contact=False, active_count=1
+[FORCE_DIST] desired_wrench: Fx=3.11, Fy=-5.54, Fz=82.58, Mx=-347.99, My=0.00, Mz=0.00
+[FORCE_DIST] SINGLE CONTACT RECOVERY: active_count=1
+[FORCE_DIST] LEFT CONTACT ONLY: f_right_z=35.00N (recovery), recovery_mx=-1217.95
+[FORCE_DIST] FINAL OUTPUT: f_left_z=82.58, f_right_z=35.00, asymmetry=47.58
+[WBC PIPELINE] Leg torques from Jacobian: [ 30.636501     5.9436226   14.422428   -18.045498     0.64206034
+  30.793772     1.7693746    7.045873    -6.8907633   -0.        ]
+[WBC PIPELINE] Wheel torques (indices 4,9): [0.6421, -0.0000] Nm
+[WBC PIPELINE] Max torque: 30.7938 Nm
+[WBC PIPELINE] After masking (disabled): [ 30.636501     5.9436226   14.422428   -18.045498     0.64206034
+  30.793772     1.7693746    7.045873    -6.8907633   -0.        ]
+[WBC PIPELINE] Max masked torque: 30.7938 Nm
+[FORCE FEEDBACK] Active: actual=75.6N, desired=117.6N, scale=1.107
+[WBC PIPELINE] After authority clipping: [ 33.919495    6.5805383  15.967928  -19.979244    0.7108632  34.093616
+   1.9589798   7.800905   -7.629174   -0.       ]
+[WBC PIPELINE] Max final torque: 34.0936 Nm
+
+[TERMINATED] at step 12: orientation_fail_pitch_0.29_roll_0.90
+
+================================================================================
+Simulation Summary
+================================================================================
+Total steps: 12
+Simulation time: 0.2 seconds
+Wall clock time: 2.2 seconds
+Terminated: True
+Termination reason: orientation_fail_pitch_0.29_roll_0.90
+
+CoM height range: 0.366 - 0.469 m
+Pitch range: -1.1 - 16.5 deg
+Roll range: -2.5 - 51.5 deg
+
+Max torques (wheeled biped architecture):
+  Hip roll: 39.77 Nm
+  Wheels: 0.00 Nm
+  Legs: 39.71 Nm
+  Total: 30.00 Nm
+
+Telemetry saved to: outputs\hierarchical_controller_sim\telemetry_1779214459.csv
+================================================================================

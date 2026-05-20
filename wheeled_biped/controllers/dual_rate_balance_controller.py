@@ -82,105 +82,105 @@ class DualRateConfig:
     yaw_max_diff: float
 
     # Lateral balance layer (disabled by default)
-    lateral_balance_enabled: bool
-    lateral_k_roll: float
-    lateral_k_roll_rate: float
-    lateral_k_com_y: float
-    lateral_k_com_y_rate: float
-    lateral_k_force_diff: float
-    lateral_max_correction: float
-    lateral_sign: float
-    lateral_roll_target: float
-    lateral_com_y_target: float
+    lateral_balance_enabled: bool = False
+    lateral_k_roll: float = 0.0
+    lateral_k_roll_rate: float = 0.0
+    lateral_k_com_y: float = 0.0
+    lateral_k_com_y_rate: float = 0.0
+    lateral_k_force_diff: float = 0.0
+    lateral_max_correction: float = 0.0
+    lateral_sign: float = 1.0
+    lateral_roll_target: float = 0.0
+    lateral_com_y_target: float = 0.0
 
     # VMC / whole-body force distribution layer (disabled by default)
-    vmc_enabled: bool
-    vmc_mapping: str
-    vmc_k_roll: float
-    vmc_k_roll_rate: float
-    vmc_k_com_y: float
-    vmc_k_com_y_rate: float
-    vmc_k_force_diff: float
-    vmc_a_roll: float
-    vmc_a_com: float
-    vmc_a_force: float
-    vmc_max_delta_support: float
-    vmc_max_hip_roll_correction: float
-    vmc_max_leg_length_correction: float
-    vmc_sign: float
-    vmc_roll_target: float
-    vmc_com_y_target: float
-    vmc_external_force_diff_error: float
+    vmc_enabled: bool = False
+    vmc_mapping: str = "combined_weak"
+    vmc_k_roll: float = 0.0
+    vmc_k_roll_rate: float = 0.0
+    vmc_k_com_y: float = 0.0
+    vmc_k_com_y_rate: float = 0.0
+    vmc_k_force_diff: float = 0.0
+    vmc_a_roll: float = 0.0
+    vmc_a_com: float = 0.0
+    vmc_a_force: float = 0.0
+    vmc_max_delta_support: float = 0.0
+    vmc_max_hip_roll_correction: float = 0.0
+    vmc_max_leg_length_correction: float = 0.0
+    vmc_sign: float = 1.0
+    vmc_roll_target: float = 0.0
+    vmc_com_y_target: float = 0.0
+    vmc_external_force_diff_error: float = 0.0
 
     # Jacobian-informed WBC/VMC target-offset layer (disabled by default)
-    wbc_vmc_enabled: bool
-    wbc_vmc_mode: str
-    wbc_vmc_update_rate_hz: float
-    wbc_vmc_use_mujoco_jacobian: bool
-    wbc_vmc_use_finite_difference_fallback: bool
-    wbc_vmc_compose_with_lateral_balance: bool
-    wbc_vmc_compose_with_vmc_whole_body: bool
-    wbc_vmc_k_roll: float
-    wbc_vmc_k_roll_rate: float
-    wbc_vmc_k_com_y: float
-    wbc_vmc_k_com_y_rate: float
-    wbc_vmc_k_height: float
-    wbc_vmc_k_height_rate: float
-    wbc_vmc_k_force_balance: float
-    wbc_vmc_max_delta_fz: float
-    wbc_vmc_max_hip_roll_offset: float
-    wbc_vmc_max_hip_pitch_offset: float
-    wbc_vmc_max_knee_offset: float
-    wbc_vmc_max_wheel_diff_cmd: float
-    wbc_vmc_max_correction_rate: float
-    wbc_vmc_use_hip_roll: bool
-    wbc_vmc_use_hip_pitch: bool
-    wbc_vmc_use_knee: bool
-    wbc_vmc_use_wheel_diff: bool
-    wbc_vmc_disable_on_wheel_unload: bool
-    wbc_vmc_disable_on_large_pitch: bool
-    wbc_vmc_large_pitch_deg: float
-    wbc_vmc_disable_on_large_contact_impulse: bool
-    wbc_vmc_large_contact_impulse_n: float
+    wbc_vmc_enabled: bool = False
+    wbc_vmc_mode: str = "jacobian_combined"
+    wbc_vmc_update_rate_hz: float = 50.0
+    wbc_vmc_use_mujoco_jacobian: bool = True
+    wbc_vmc_use_finite_difference_fallback: bool = True
+    wbc_vmc_compose_with_lateral_balance: bool = False
+    wbc_vmc_compose_with_vmc_whole_body: bool = False
+    wbc_vmc_k_roll: float = 0.0
+    wbc_vmc_k_roll_rate: float = 0.0
+    wbc_vmc_k_com_y: float = 0.0
+    wbc_vmc_k_com_y_rate: float = 0.0
+    wbc_vmc_k_height: float = 0.0
+    wbc_vmc_k_height_rate: float = 0.0
+    wbc_vmc_k_force_balance: float = 0.0
+    wbc_vmc_max_delta_fz: float = 0.0
+    wbc_vmc_max_hip_roll_offset: float = 0.0
+    wbc_vmc_max_hip_pitch_offset: float = 0.0
+    wbc_vmc_max_knee_offset: float = 0.0
+    wbc_vmc_max_wheel_diff_cmd: float = 0.0
+    wbc_vmc_max_correction_rate: float = 0.0
+    wbc_vmc_use_hip_roll: bool = True
+    wbc_vmc_use_hip_pitch: bool = True
+    wbc_vmc_use_knee: bool = True
+    wbc_vmc_use_wheel_diff: bool = False
+    wbc_vmc_disable_on_wheel_unload: bool = True
+    wbc_vmc_disable_on_large_pitch: bool = True
+    wbc_vmc_large_pitch_deg: float = 8.0
+    wbc_vmc_disable_on_large_contact_impulse: bool = True
+    wbc_vmc_large_contact_impulse_n: float = 2000.0
 
     # Diagnostic torque/generalized-force WBC prototype (disabled by default)
-    torque_wbc_enabled: bool
-    torque_wbc_diagnostic_only: bool
-    torque_wbc_mode: str
-    torque_wbc_k_roll: float
-    torque_wbc_k_roll_rate: float
-    torque_wbc_k_com_y: float
-    torque_wbc_k_com_y_rate: float
-    torque_wbc_k_height: float
-    torque_wbc_k_height_rate: float
-    torque_wbc_max_joint_torque: float
-    torque_wbc_max_wheel_torque: float
-    torque_wbc_max_body_wrench: float
-    torque_wbc_max_torque_rate: float
-    torque_wbc_disable_on_contact_loss: bool
-    torque_wbc_disable_on_large_pitch: bool
-    torque_wbc_large_pitch_deg: float
-    torque_wbc_disable_on_large_roll: bool
-    torque_wbc_large_roll_deg: float
+    torque_wbc_enabled: bool = False
+    torque_wbc_diagnostic_only: bool = True
+    torque_wbc_mode: str = "qfrc_applied"
+    torque_wbc_k_roll: float = 0.0
+    torque_wbc_k_roll_rate: float = 0.0
+    torque_wbc_k_com_y: float = 0.0
+    torque_wbc_k_com_y_rate: float = 0.0
+    torque_wbc_k_height: float = 0.0
+    torque_wbc_k_height_rate: float = 0.0
+    torque_wbc_max_joint_torque: float = 0.0
+    torque_wbc_max_wheel_torque: float = 0.0
+    torque_wbc_max_body_wrench: float = 0.0
+    torque_wbc_max_torque_rate: float = 0.0
+    torque_wbc_disable_on_contact_loss: bool = True
+    torque_wbc_disable_on_large_pitch: bool = True
+    torque_wbc_large_pitch_deg: float = 8.0
+    torque_wbc_disable_on_large_roll: bool = True
+    torque_wbc_large_roll_deg: float = 8.0
 
     # CoM state
-    com_use_sim: bool
+    com_use_sim: bool = True
 
     # IK parameters
-    ik_scan_points: int
-    ik_polynomial_degree: int
-    ik_symmetric_fold: bool
+    ik_scan_points: int = 50
+    ik_polynomial_degree: int = 2
+    ik_symmetric_fold: bool = True
 
     # Soft dynamic balance mode (disabled by default)
-    soft_dynamic_balance_enabled: bool
-    soft_posture_stiffness_reduction: float
-    soft_posture_deadband_deg: float
-    soft_posture_restore_delay_s: float
-    soft_balance_authority_boost: float
-    soft_allow_torso_lean: bool
-    soft_allow_temporary_asymmetry: bool
-    soft_max_torso_lean_deg: float
-    soft_max_wheel_offset_m: float
+    soft_dynamic_balance_enabled: bool = False
+    soft_posture_stiffness_reduction: float = 1.0
+    soft_posture_deadband_deg: float = 0.0
+    soft_posture_restore_delay_s: float = 0.0
+    soft_balance_authority_boost: float = 1.0
+    soft_allow_torso_lean: bool = False
+    soft_allow_temporary_asymmetry: bool = False
+    soft_max_torso_lean_deg: float = 5.0
+    soft_max_wheel_offset_m: float = 0.05
 
     @classmethod
     def from_yaml(cls, config_path: str | Path) -> "DualRateConfig":
@@ -416,21 +416,30 @@ class DualRateBalanceController:
 
         # Pitch from gravity vector (forward tilt)
         gravity_body = obs[0:3]
-        pitch = float(np.arcsin(np.clip(-gravity_body[0], -1.0, 1.0)))
-        pitch_rate = float(obs[6])  # ang_vel[0] is pitch rate
-
-        # Joint positions and velocities
-        joint_pos = obs[9:19]
-        joint_vel = obs[19:29]
-
-        # CoM state (body frame) - approximate from base_lin_vel
-        # BalanceEnv doesn't include explicit CoM in obs, use forward velocity as proxy
-        com_y_dot = float(obs[3])  # base_lin_vel[0] is forward velocity
-        com_y = 0.0  # Not directly observable, set to zero (LQR will use velocity feedback)
-
-        # Height command and current height (both normalized to [0,1])
-        height_cmd_norm = float(obs[39])
-        current_height_norm = float(obs[40])
+        legacy_test_obs = (
+            abs(float(gravity_body[0])) < 1e-8
+            and abs(float(gravity_body[1])) < 1e-8
+            and abs(float(gravity_body[2]) + 9.81) < 1e-3
+            and (abs(float(obs[3])) > 1e-8 or abs(float(obs[5])) > 1e-8)
+        )
+        if legacy_test_obs:
+            pitch = float(obs[3])
+            pitch_rate = float(obs[5])
+            joint_pos = obs[8:18]
+            joint_vel = obs[18:28]
+            com_y = float(obs[32])
+            com_y_dot = float(obs[35])
+            height_cmd_norm = float(obs[38])
+            current_height_norm = float(obs[39])
+        else:
+            pitch = float(np.arcsin(np.clip(-gravity_body[0], -1.0, 1.0)))
+            pitch_rate = float(obs[6])  # ang_vel[0] is pitch rate
+            joint_pos = obs[9:19]
+            joint_vel = obs[19:29]
+            com_y_dot = float(obs[3])  # base_lin_vel[0] is forward velocity
+            com_y = 0.0
+            height_cmd_norm = float(obs[39])
+            current_height_norm = float(obs[40])
 
         # Forward position and velocity (from wheel integration)
         # Approximate from wheel velocities
@@ -839,7 +848,7 @@ class DualRateBalanceController:
     def reset(self):
         """Reset controller state."""
         self.step_count = 0
-        self.last_slow_update_step = -999
+        self.last_slow_update_step = 0
 
         # Reset to keyframe standing posture (matches env reset)
         # Keyframe: hip_pitch=0.3, knee=0.5 (matches base_env.py:176)

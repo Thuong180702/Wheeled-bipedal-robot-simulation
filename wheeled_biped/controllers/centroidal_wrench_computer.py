@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from wheeled_biped.controllers.centroidal_state_estimator import CentroidalState
+from wheeled_biped.controllers.orientation_utils import compute_orientation_from_gravity
 
 
 class CentroidalWrenchComputer:
@@ -17,6 +18,8 @@ class CentroidalWrenchComputer:
         self,
         k_roll: float = 20.0,
         k_roll_rate: float = 4.0,
+        k_pitch: float = 5.0,
+        k_pitch_rate: float = 1.0,
         k_com_lateral: float = 15.0,
         k_com_lateral_damping: float = 3.0,
         k_com_sagittal: float = 10.0,
@@ -32,6 +35,8 @@ class CentroidalWrenchComputer:
         Args:
             k_roll: Roll stabilization gain
             k_roll_rate: Roll rate damping gain
+            k_pitch: Pitch stabilization gain
+            k_pitch_rate: Pitch rate damping gain
             k_com_lateral: CoM lateral position gain
             k_com_lateral_damping: CoM lateral velocity damping
             k_com_sagittal: CoM sagittal position gain
@@ -44,6 +49,8 @@ class CentroidalWrenchComputer:
         """
         self.k_roll = k_roll
         self.k_roll_rate = k_roll_rate
+        self.k_pitch = k_pitch
+        self.k_pitch_rate = k_pitch_rate
         self.k_com_lateral = k_com_lateral
         self.k_com_lateral_damping = k_com_lateral_damping
         self.k_com_sagittal = k_com_sagittal
@@ -72,18 +79,21 @@ class CentroidalWrenchComputer:
                 - desired_force: (3,) [fx, fy, fz] in world frame
                 - desired_moment: (3,) [mx, my, mz] about CoM in world frame
         """
-        # Extract state
-        roll = jnp.arctan2(obs[1], obs[2])
-        roll_rate = obs[6]
+        # Extract state using unified orientation computation
+        gravity_body = obs[0:3]
+        roll, pitch = compute_orientation_from_gravity(gravity_body)
+        pitch_rate = obs[6]
+        roll_rate = obs[7]
         com_pos = state.com_pos
         com_vel = state.com_vel
         cp = state.capture_point
 
         # === Force objectives ===
 
-        # Gravity compensation: WBC must command forces to counteract gravity
-        # The simulation applies gravity automatically, but the controller needs
-        # to command upward forces to maintain equilibrium
+        # Gravity compensation: baseline vertical force to counteract gravity
+        # Use total robot mass (CoM + legs) for proper physics-based compensation
+        # Total mass = 8.1kg (from MuJoCo model includes all segments)
+        # In static equilibrium, vertical force must equal total weight
         f_gravity = jnp.array([0.0, 0.0, self.robot_mass * self.gravity])
 
         # Height tracking: additional vertical force to correct height error
@@ -119,8 +129,64 @@ class CentroidalWrenchComputer:
         # Roll stabilization: moment about x-axis to correct roll
         m_roll = -self.k_roll * roll - self.k_roll_rate * roll_rate
 
-        # No pitch/yaw moments for now (wheels handle pitch via sagittal forces)
-        desired_moment = jnp.array([m_roll, 0.0, 0.0])
+        # Pitch stabilization: for wheeled biped, use inverted pendulum control
+        # Sagittal force should be directly proportional to pitch angle (not scaled by height)
+        # This follows inverted pendulum dynamics: F = m*g*theta for small angles
+        # The k_pitch gain already encodes the appropriate force magnitude
+        pitch_correction_force = -self.k_pitch * pitch - self.k_pitch_rate * pitch_rate
+
+        # Add pitch correction force to sagittal force component
+        # This will drive wheel motion through the contact Jacobian
+        desired_force = desired_force.at[1].add(pitch_correction_force)
+
+        # Keep pitch moment at zero since pitch control is handled by wheel motion
+        m_pitch = 0.0
+
+        desired_moment = jnp.array([m_roll, m_pitch, 0.0])
+
+        return desired_force, desired_moment
+
+    def compute_desired_wrench_from_state(
+        self,
+        state: CentroidalState,
+        height_cmd: float,
+    ) -> tuple[Array, Array]:
+        """Compute desired force and moment from explicit centroidal state."""
+        f_gravity = jnp.array([0.0, 0.0, self.robot_mass * self.gravity])
+        height_error = height_cmd - state.com_pos[2]
+        f_height = jnp.array([0.0, 0.0, self.k_height * height_error])
+
+        f_com_lateral = jnp.array([
+            0.0,
+            -self.k_com_lateral * state.com_pos[1]
+            - self.k_com_lateral_damping * state.com_vel[1],
+            0.0,
+        ])
+        f_com_sagittal = jnp.array([
+            -self.k_com_sagittal * state.com_pos[0]
+            - self.k_com_sagittal_damping * state.com_vel[0],
+            0.0,
+            0.0,
+        ])
+        f_cp = jnp.array([
+            -self.k_cp_sagittal * state.capture_point[0],
+            -self.k_cp_lateral * state.capture_point[1],
+            0.0,
+        ])
+
+        desired_force = f_gravity + f_height + f_com_lateral + f_com_sagittal + f_cp
+
+        m_roll = -self.k_roll * state.roll - self.k_roll_rate * state.roll_rate
+
+        # Pitch stabilization: for wheeled biped, use inverted pendulum control
+        # Sagittal force should be directly proportional to pitch angle (not scaled by height)
+        # This follows inverted pendulum dynamics: F = m*g*theta for small angles
+        # The k_pitch gain already encodes the appropriate force magnitude
+        pitch_correction_force = -self.k_pitch * state.pitch - self.k_pitch_rate * state.pitch_rate
+        desired_force = desired_force.at[1].add(pitch_correction_force)
+
+        m_pitch = 0.0
+        desired_moment = jnp.array([m_roll, m_pitch, 0.0])
 
         return desired_force, desired_moment
 

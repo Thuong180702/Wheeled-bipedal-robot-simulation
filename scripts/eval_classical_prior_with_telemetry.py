@@ -42,73 +42,124 @@ class TelemetrySnapshot:
     time: float
 
     # State
-    pitch_deg: float
-    pitch_rate_deg_s: float
-    roll_deg: float
-    roll_rate_deg_s: float
-    yaw_error_deg: float
-    yaw_rate_deg_s: float
-    height_m: float
-    height_cmd_m: float
+    pitch_deg: float = 0.0
+    pitch_rate_deg_s: float = 0.0
+    roll_deg: float = 0.0
+    roll_rate_deg_s: float = 0.0
+    yaw_error_deg: float = 0.0
+    yaw_rate_deg_s: float = 0.0
+    height_m: float = 0.0
+    height_cmd_m: float = 0.0
+    height_actual_m: float = 0.0
 
     # CoM tracking
-    com_y_m: float
-    wheel_contact_y_m: float
-    com_error_y_m: float
-    com_vel_y_m_s: float
+    com_y_m: float = 0.0
+    wheel_contact_y_m: float = 0.0
+    com_error_y_m: float = 0.0
+    com_vel_y_m_s: float = 0.0
 
     # LQR state components (6D for height-scheduled, 4D for geometric)
-    lqr_state: list[float]
-    lqr_gains: list[float]
-    lqr_contributions: list[float]  # K[i] * x[i] for each component
+    lqr_state: list[float] | None = None
+    lqr_gains: list[float] | None = None
+    lqr_contributions: list[float] | None = None
+    lqr_pitch_contrib: float = 0.0
+    lqr_pitch_rate_contrib: float = 0.0
+    lqr_fwd_vel_contrib: float = 0.0
+    lqr_com_contrib: float = 0.0
+    lqr_com_rate_contrib: float = 0.0
 
     # Wheel commands
-    wheel_vel_cmd_raw: float
-    wheel_vel_cmd_filtered: float
-    wheel_vel_cmd_normalized: float
-    l_wheel_action: float
-    r_wheel_action: float
+    wheel_vel_cmd_raw: float = 0.0
+    wheel_vel_cmd_filtered: float = 0.0
+    wheel_vel_cmd_normalized: float = 0.0
+    wheel_vel_cmd_rad_s: float = 0.0
+    wheel_vel_actual_rad_s: float = 0.0
+    l_wheel_action: float = 0.0
+    r_wheel_action: float = 0.0
 
     # Action components
-    hip_pitch_ik_target: float
-    knee_ik_target: float
-    hip_pitch_actual: float
-    knee_actual: float
-    ik_error_hip_pitch: float
-    ik_error_knee: float
+    hip_pitch_ik_target: float = 0.0
+    knee_ik_target: float = 0.0
+    hip_pitch_cmd_rad: float = 0.0
+    knee_cmd_rad: float = 0.0
+    hip_pitch_actual: float = 0.0
+    knee_actual: float = 0.0
+    ik_error_hip_pitch: float = 0.0
+    ik_error_knee: float = 0.0
+    height_ik_error_m: float = 0.0
 
     # Roll/yaw corrections
-    roll_correction: float
-    yaw_correction: float
+    roll_correction: float = 0.0
+    yaw_correction: float = 0.0
 
     # Saturation indicators
-    wheel_saturated: bool
-    action_saturation_rate: float
+    wheel_saturated: bool = False
+    action_saturation_rate: float = 0.0
+    wheel_saturation_rate: float = 0.0
 
     # Joint torques
-    joint_torques: list[float]
+    joint_torques: list[float] | None = None
+
+    def __post_init__(self):
+        if self.lqr_state is None:
+            self.lqr_state = []
+        if self.lqr_gains is None:
+            self.lqr_gains = []
+        if self.lqr_contributions is None:
+            self.lqr_contributions = []
+        if self.joint_torques is None:
+            self.joint_torques = []
+        if self.height_m == 0.0 and self.height_actual_m != 0.0:
+            self.height_m = self.height_actual_m
+        if self.height_actual_m == 0.0 and self.height_m != 0.0:
+            self.height_actual_m = self.height_m
+        if self.wheel_vel_cmd_raw == 0.0 and self.wheel_vel_cmd_rad_s != 0.0:
+            self.wheel_vel_cmd_raw = self.wheel_vel_cmd_rad_s
+        if self.hip_pitch_ik_target == 0.0 and self.hip_pitch_cmd_rad != 0.0:
+            self.hip_pitch_ik_target = self.hip_pitch_cmd_rad
+        if self.knee_ik_target == 0.0 and self.knee_cmd_rad != 0.0:
+            self.knee_ik_target = self.knee_cmd_rad
+        if self.wheel_saturation_rate > 0.0:
+            self.action_saturation_rate = self.wheel_saturation_rate
+            self.wheel_saturated = self.wheel_saturation_rate > 0.8
 
 
 @dataclass
 class EpisodeTelemetry:
     """Full episode telemetry."""
 
-    height_cmd: float
-    survival_time: float
-    fell: bool
+    height_cmd: float = 0.0
+    survival_time: float = 0.0
+    fell: bool = False
 
-    snapshots: list[TelemetrySnapshot]
+    snapshots: list[TelemetrySnapshot] | None = None
 
     # Failure mode classification
-    failure_mode: str  # "pitch_oscillation", "com_drift", "wheel_saturation", "leg_config", "survived"
-    failure_reason: str
+    failure_mode: str = "unknown"
+    failure_reason: str = ""
 
     # Aggregate metrics
-    pitch_rms_deg: float
-    roll_rms_deg: float
-    com_error_rms_m: float
-    wheel_saturation_duration_s: float
-    ik_error_rms_deg: float
+    pitch_rms_deg: float = 0.0
+    roll_rms_deg: float = 0.0
+    com_error_rms_m: float = 0.0
+    wheel_saturation_duration_s: float = 0.0
+    ik_error_rms_deg: float = 0.0
+
+    episode_id: int = 0
+    height_cmd_m: float = 0.0
+    survival_time_s: float = 0.0
+
+    def __post_init__(self):
+        if self.snapshots is None:
+            self.snapshots = []
+        if self.height_cmd == 0.0 and self.height_cmd_m != 0.0:
+            self.height_cmd = self.height_cmd_m
+        if self.height_cmd_m == 0.0 and self.height_cmd != 0.0:
+            self.height_cmd_m = self.height_cmd
+        if self.survival_time == 0.0 and self.survival_time_s != 0.0:
+            self.survival_time = self.survival_time_s
+        if self.survival_time_s == 0.0 and self.survival_time != 0.0:
+            self.survival_time_s = self.survival_time
 
 
 def classify_failure_mode(snapshots: list[TelemetrySnapshot], survival_time: float, max_time: float) -> tuple[str, str]:
@@ -120,8 +171,11 @@ def classify_failure_mode(snapshots: list[TelemetrySnapshot], survival_time: flo
     if survival_time >= max_time - 0.01:
         return "survived", "Episode completed successfully"
 
-    if len(snapshots) < 5:
-        return "immediate_fall", "Fell within first 5 timesteps"
+    if len(snapshots) == 0:
+        return "unknown", "No telemetry available"
+
+    if len(snapshots) < 20:
+        return "unknown", "Insufficient telemetry for short episode"
 
     # Analyze last 10 snapshots before failure
     window = snapshots[-10:]
@@ -131,23 +185,23 @@ def classify_failure_mode(snapshots: list[TelemetrySnapshot], survival_time: flo
     pitch_range = max(pitch_values) - min(pitch_values)
     pitch_trend = abs(pitch_values[-1]) - abs(pitch_values[0])
 
-    if pitch_range > 30.0 and pitch_trend > 10.0:
+    if pitch_range > 14.0:
         return "pitch_oscillation", f"Pitch oscillation: range={pitch_range:.1f}°, trend={pitch_trend:.1f}°"
+
+    # Check for wheel saturation (prolonged saturation) - check before CoM drift
+    saturation_count = sum(1 for s in window if s.wheel_saturated)
+    saturation_rate = saturation_count / len(window)
+
+    if saturation_rate > 0.7:
+        return "wheel_saturation", f"Wheel saturation: {saturation_rate:.1%} of last 10 steps"
 
     # Check for CoM drift (persistent error)
     com_errors = [abs(s.com_error_y_m) for s in window]
     com_error_mean = np.mean(com_errors)
     com_error_trend = com_errors[-1] - com_errors[0]
 
-    if com_error_mean > 0.15 and com_error_trend > 0.05:
+    if com_error_mean > 0.015 and com_error_trend > 0.0015:
         return "com_drift", f"CoM drift: mean_error={com_error_mean:.3f}m, trend={com_error_trend:.3f}m"
-
-    # Check for wheel saturation (prolonged saturation)
-    saturation_count = sum(1 for s in window if s.wheel_saturated)
-    saturation_rate = saturation_count / len(window)
-
-    if saturation_rate > 0.7:
-        return "wheel_saturation", f"Wheel saturation: {saturation_rate:.1%} of last 10 steps"
 
     # Check for IK error (leg configuration issue)
     ik_errors = [max(abs(s.ik_error_hip_pitch), abs(s.ik_error_knee)) for s in window]

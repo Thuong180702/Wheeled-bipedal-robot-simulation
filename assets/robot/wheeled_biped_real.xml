@@ -323,27 +323,27 @@
   <actuator>
     <!-- Chân trái -->
     <motor name="l_hip_roll_motor"  joint="l_hip_roll"  gear="1"
-           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+           ctrlrange="-30 30"  forcelimited="true" forcerange="-60 60"/>
     <motor name="l_hip_yaw_motor"   joint="l_hip_yaw"   gear="1"
-           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+           ctrlrange="-30 30"  forcelimited="true" forcerange="-60 60"/>
     <motor name="l_hip_pitch_motor" joint="l_hip_pitch" gear="1"
-           ctrlrange="-30 30"  forcelimited="true" forcerange="-44 44"/>
+           ctrlrange="-150 150"  forcelimited="true" forcerange="-150 150"/>
     <motor name="l_knee_motor"      joint="l_knee"      gear="1"
-           ctrlrange="-30 30"  forcelimited="true" forcerange="-44 44"/>
+           ctrlrange="-150 150"  forcelimited="true" forcerange="-150 150"/>
     <motor name="l_wheel_motor"     joint="l_wheel"     gear="1"
-           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+           ctrlrange="-30 30"  forcelimited="true" forcerange="-60 60"/>
 
     <!-- Chân phải -->
     <motor name="r_hip_roll_motor"  joint="r_hip_roll"  gear="1"
-           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+           ctrlrange="-30 30"  forcelimited="true" forcerange="-60 60"/>
     <motor name="r_hip_yaw_motor"   joint="r_hip_yaw"   gear="1"
-           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+           ctrlrange="-30 30"  forcelimited="true" forcerange="-60 60"/>
     <motor name="r_hip_pitch_motor" joint="r_hip_pitch" gear="1"
-           ctrlrange="-30 30"  forcelimited="true" forcerange="-44 44"/>
+           ctrlrange="-150 150"  forcelimited="true" forcerange="-150 150"/>
     <motor name="r_knee_motor"      joint="r_knee"      gear="1"
-           ctrlrange="-30 30"  forcelimited="true" forcerange="-44 44"/>
+           ctrlrange="-150 150"  forcelimited="true" forcerange="-150 150"/>
     <motor name="r_wheel_motor"     joint="r_wheel"     gear="1"
-           ctrlrange="-15 15"  forcelimited="true" forcerange="-22 22"/>
+           ctrlrange="-30 30"  forcelimited="true" forcerange="-60 60"/>
   </actuator>
 
   <!-- ==================== SENSORS ==================== -->
@@ -384,10 +384,10 @@
        r_hip_roll r_hip_yaw r_hip_pitch r_knee r_wheel] -->
   <keyframe>
     <key name="standing"
-         qpos="0 0 0.71
+         qpos="0 0 0.545
                1 0 0 0
-               0 0 0.3 0.5 0
-               0 0 0.3 0.5 0"
+               0 0 0.674267 1.668071 0
+               0 0 0.674267 1.668071 0"
          ctrl="0 0 0 0 0
                0 0 0 0 0"/>
   </keyframe>

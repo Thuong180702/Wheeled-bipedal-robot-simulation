@@ -1,6 +1,7 @@
 """Tests for centroidal state estimation."""
 
 import jax.numpy as jnp
+import mujoco
 import pytest
 from wheeled_biped.controllers.centroidal_state_estimator import (
     CentroidalState,
@@ -170,3 +171,48 @@ def test_contact_force_extraction():
     assert state.right_wheel_contact == True
     assert abs(state.left_wheel_force - 75.0) < 1e-6
     assert abs(state.right_wheel_force - 80.0) < 1e-6
+
+
+MODEL_PATH = "assets/robot/wheeled_biped_real.xml"
+
+
+def make_model_data():
+    model = mujoco.MjModel.from_xml_path(MODEL_PATH)
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_forward(model, data)
+    return model, data
+
+
+def test_wheel_geom_ids_are_resolved_by_name():
+    model, _ = make_model_data()
+    estimator = CentroidalStateEstimator(
+        CentroidalStateEstimatorConfig(
+            robot_mass=8.1,
+            torso_inertia=jnp.array([0.1, 0.1, 0.05]),
+        ),
+        mj_model=model,
+    )
+    assert estimator.left_wheel_geom_id == mujoco.mj_name2id(
+        model, mujoco.mjtObj.mjOBJ_GEOM, "l_wheel_collision"
+    )
+    assert estimator.right_wheel_geom_id == mujoco.mj_name2id(
+        model, mujoco.mjtObj.mjOBJ_GEOM, "r_wheel_collision"
+    )
+
+
+def test_reset_keyframe_detects_wheel_contact_and_force():
+    model, data = make_model_data()
+    estimator = CentroidalStateEstimator(
+        CentroidalStateEstimatorConfig(
+            robot_mass=sum(model.body_mass),
+            torso_inertia=jnp.array([0.1, 0.1, 0.05]),
+        ),
+        mj_model=model,
+    )
+    state, _ = estimator.estimate(jnp.zeros(42), data, None)
+    assert state.left_wheel_contact
+    assert state.right_wheel_contact
+    assert state.left_wheel_force > 0.0
+    assert state.right_wheel_force > 0.0
+    assert state.total_contact_force_z > 0.5 * sum(model.body_mass) * abs(model.opt.gravity[2])

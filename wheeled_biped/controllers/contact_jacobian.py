@@ -25,12 +25,16 @@ class ContactJacobian:
         self.l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
         self.r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
 
+        # Find wheel radius from geom
+        l_wheel_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "l_wheel_collision")
+        self.wheel_radius = mj_model.geom_size[l_wheel_geom_id][0]
+
         # Preallocate Jacobian arrays (3 x nv for translation, 3 x nv for rotation)
         self.jacp = np.zeros((3, mj_model.nv))
         self.jacr = np.zeros((3, mj_model.nv))
 
     def compute_wheel_jacobians(self, mj_data: mujoco.MjData) -> tuple[Array, Array]:
-        """Compute contact Jacobians for both wheels.
+        """Compute contact Jacobians for both wheels at ground contact points.
 
         Args:
             mj_data: MuJoCo data with current robot state
@@ -38,13 +42,17 @@ class ContactJacobian:
         Returns:
             Tuple of (J_left, J_right) where each is (3, 10) mapping contact forces to joint torques
         """
-        # Left wheel Jacobian (translation only, we care about contact forces)
-        mujoco.mj_jacBody(self.mj_model, mj_data, self.jacp, self.jacr, self.l_wheel_id)
-        # Extract only joint DOFs (skip free joint: 6 DOFs for floating base)
+        # Compute Jacobians at ground contact points (wheel center - wheel radius in z)
+        # Left wheel contact point
+        l_wheel_center = mj_data.xpos[self.l_wheel_id]
+        l_contact_point = l_wheel_center - np.array([0.0, 0.0, self.wheel_radius])
+        mujoco.mj_jac(self.mj_model, mj_data, self.jacp, self.jacr, l_contact_point, self.l_wheel_id)
         J_left = jnp.array(self.jacp[:, 6:16])  # (3, 10)
 
-        # Right wheel Jacobian
-        mujoco.mj_jacBody(self.mj_model, mj_data, self.jacp, self.jacr, self.r_wheel_id)
+        # Right wheel contact point
+        r_wheel_center = mj_data.xpos[self.r_wheel_id]
+        r_contact_point = r_wheel_center - np.array([0.0, 0.0, self.wheel_radius])
+        mujoco.mj_jac(self.mj_model, mj_data, self.jacp, self.jacr, r_contact_point, self.r_wheel_id)
         J_right = jnp.array(self.jacp[:, 6:16])  # (3, 10)
 
         return J_left, J_right
@@ -108,9 +116,9 @@ class ContactJacobian:
         # From right wheel: r_y * Fz - r_z * Fy
         A_wrench = A_wrench.at[3, 4].set(-r_right[2])  # -r_z * f_right_y
         A_wrench = A_wrench.at[3, 5].set(r_right[1])   # r_y * f_right_z
-        # From hip roll torques: direct contribution
-        A_wrench = A_wrench.at[3, 6].set(1.0)  # tau_hip_roll_L
-        A_wrench = A_wrench.at[3, 7].set(1.0)  # tau_hip_roll_R
+        # Hip roll torques contribute directly to roll moment
+        A_wrench = A_wrench.at[3, 6].set(1.0)   # tau_hip_roll_L
+        A_wrench = A_wrench.at[3, 7].set(1.0)   # tau_hip_roll_R
 
         # My (pitch moment) row
         # From left wheel: r_z * Fx - r_x * Fz
@@ -130,6 +138,24 @@ class ContactJacobian:
 
         return A_wrench
 
+    def compute_force_mapping_diagnostics(
+        self,
+        mj_data: mujoco.MjData,
+        f_left: Array,
+        f_right: Array,
+    ) -> dict:
+        """Return Jacobian rows and torque contributions for force mapping checks."""
+        J_left, J_right = self.compute_wheel_jacobians(mj_data)
+        tau_left = J_left.T @ f_left
+        tau_right = J_right.T @ f_right
+        return {
+            "left_jacobian_z_row": J_left[2],
+            "right_jacobian_z_row": J_right[2],
+            "tau_left_from_force": tau_left,
+            "tau_right_from_force": tau_right,
+            "tau_total_from_force": tau_left + tau_right,
+        }
+
     def map_contact_forces_to_torques(
         self,
         mj_data: mujoco.MjData,
@@ -141,20 +167,26 @@ class ContactJacobian:
 
         Args:
             mj_data: MuJoCo data with current robot state
-            f_left: Left wheel contact force (3,) in world frame [fx, fy, fz]
-            f_right: Right wheel contact force (3,) in world frame [fx, fy, fz]
+            f_left: Left wheel ground reaction force (3,) in world frame [fx, fy, fz]
+            f_right: Right wheel ground reaction force (3,) in world frame [fx, fy, fz]
             tau_hip_roll: Optional hip roll torques [left, right] (2,)
 
         Returns:
             Joint torques (10,) that produce the desired contact forces and hip roll torques
 
         Note:
+            The QP solves for ground reaction forces (forces ground applies to robot).
+            The Jacobian transpose maps these forces directly to joint torques: tau = J^T @ f
+            No negation is needed - the Jacobian already encodes the correct sign relationship
+            between forces and torques based on the robot's kinematic structure.
             Hip roll torques are added at hardcoded indices 0 (left) and 5 (right).
-            This assumes the joint ordering defined in the robot XML remains unchanged.
         """
         J_left, J_right = self.compute_wheel_jacobians(mj_data)
 
-        # tau = J^T * f (virtual work principle)
+        # tau = J^T * f (no negation - Jacobian encodes correct sign relationship)
+        # The QP produces ground reaction forces (upward positive)
+        # The Jacobian transpose correctly maps these to joint torques
+        # that support the robot against gravity
         tau_left = J_left.T @ f_left  # (10,)
         tau_right = J_right.T @ f_right  # (10,)
 

@@ -1,0 +1,126 @@
+================================================================================
+Hierarchical Controller Simulation with Telemetry
+Mode: HEADLESS
+================================================================================
+
+Loading model: assets/robot/wheeled_biped_real.xml
+[OK] Robot initialized using keyframe 0
+
+=== INITIALIZATION DIAGNOSTICS ===
+[POINT 1: After keyframe load] Contacts: 0, Left: 0.00 N, Right: 0.00 N, Total: 0.00 N, Asymmetry: 0.00 N
+[POINT 2: After first mj_forward] Contacts: 4, Left: 0.00 N, Right: 0.00 N, Total: 0.00 N, Asymmetry: 0.00 N
+[POINT 3: After velocity zeroing] Contacts: 4, Left: 0.00 N, Right: 0.00 N, Total: 0.00 N, Asymmetry: 0.00 N
+[POINT 4: After second mj_forward] Contacts: 4, Left: 0.00 N, Right: 0.00 N, Total: 0.00 N, Asymmetry: 0.00 N
+[OK] Initial velocities explicitly zeroed to ensure equilibrium
+
+Initializing hierarchical controller...
+[OK] Controllers initialized (wheeled biped architecture)
+
+JIT-compiling controller functions...
+[OK] JIT compilation complete - controllers ready for real-time operation
+
+Running simulation for 2000 steps (40.0 seconds)
+================================================================================
+[DIRECT WHEEL CONTROL] Fy_total=-1.7520 N, active_wheels=2
+[DIRECT WHEEL CONTROL] tau_wheel_left=-0.0438 Nm, tau_wheel_right=-0.0438 Nm
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=-1.75, Fz=86.83, Mx=-0.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[CLIP DEBUG] tau_hip_roll_max=30.0
+[CLIP DEBUG] tau_hip_roll_desired=[-0. -0.]
+[CLIP DEBUG] clip_bounds=[-30.0, +30.0]
+[CLIP DEBUG] tau_hip_roll_after_clip=[-0. -0.]
+[FORCE_DIST] Mx=-0.00, hip_moment=-0.00, remaining=0.00
+[FORCE_DIST] fz_diff=0.00, fz_left=43.42, fz_right=43.42
+[FORCE_DIST] f_left=[ 2.4991572e-05 -8.7601399e-01  4.3415367e+01], f_right=[ 2.4991572e-05 -8.7601399e-01  4.3415367e+01]
+[FORCE_DIST] tau_hip_roll=[-0. -0.]
+[FORCE_DIST] FINAL OUTPUT: f_left_z=43.42, f_right_z=43.42, asymmetry=0.00
+[WBC PIPELINE] Leg torques from Jacobian: [  0.01792994   0.88991624   7.8840723  -11.21172      0.09636154
+  -0.01798291  -0.88998115   7.88426    -11.211773     0.09636154]
+[WBC PIPELINE] Wheel torques (indices 4,9): [0.0964, 0.0964] Nm
+[WBC PIPELINE] Max torque: 11.2118 Nm
+[WBC PIPELINE] After masking (disabled): [  0.01792994   0.88991624   7.8840723  -11.21172      0.09636154
+  -0.01798291  -0.88998115   7.88426    -11.211773     0.09636154]
+[WBC PIPELINE] Max masked torque: 11.2118 Nm
+[FORCE FEEDBACK] Warmup step 0/3, scale=1.0 (no correction)
+[WBC PIPELINE] After authority clipping: [  0.01792994   0.88991624   7.8840723  -11.21172      0.09636154
+  -0.01798291  -0.88998115   7.88426    -11.211773     0.09636154]
+[WBC PIPELINE] Max final torque: 11.2118 Nm
+
+[WBC DIAGNOSTIC - Step 0]
+Computed orientation from gravity:
+  Roll: -0.00 deg
+  Pitch: 0.00 deg
+  Gravity vector: [0.000, 0.000, -9.810]
+
+Desired wrench: Fx=0.00, Fy=-1.75, Fz=86.83, Mx=-0.00, My=0.00, Mz=0.00
+QP solution:
+  f_left:  [0.00, -0.88, 43.42] N
+  f_right: [0.00, -0.88, 43.42] N
+  tau_hip_roll: [-0.00, -0.00] Nm
+WBC torques: [  0.01792994   0.88991624   7.8840723  -11.21172      0.09636154
+  -0.01798291  -0.88998115   7.88426    -11.211773     0.09636154]
+Max WBC torque: 11.21 Nm
+QP solve time: 69.36 ms
+Wrench error: 12.623487 N/Nm
+
+Actual contact forces from MuJoCo:
+  Contact 0: floor - l_shin_collision, world_fz: 0.00 N
+  Contact 1: floor - l_wheel_collision, world_fz: 1895.70 N
+  Contact 2: floor - l_wheel_collision, world_fz: 1823.99 N
+  Contact 3: floor - r_shin_collision, world_fz: 0.00 N
+  Contact 4: floor - r_wheel_collision, world_fz: 1893.42 N
+  Contact 5: floor - r_wheel_collision, world_fz: 1822.37 N
+  Total contact force z: 7435.47 N (weight: 79.46 N)
+  Desired Fz: 86.83 N
+
+Force feedback control:
+  Actual Fz: 7435.47 N
+  Desired Fz: 86.83 N
+  Force scale: 1.000x
+  Feedback gain: 0.3
+
+Jacobian diagnostics:
+  J_left vertical (z) row: [ 7.1645502e-07 -2.0497534e-02 -1.8987116e-01  2.6147467e-01
+  0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  0.0000000e+00]
+  J_right vertical (z) row: [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  7.1644763e-07  2.0499472e-02 -1.8987545e-01
+  2.6147580e-01  0.0000000e+00]
+  Expected torque from 73.71 N vertical force:
+    Left leg: [ 5.2809897e-05 -1.5108732e+00 -1.3995403e+01  1.9273298e+01
+  0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  0.0000000e+00]
+    Right leg: [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  5.2809355e-05  1.5110160e+00 -1.3995720e+01
+  1.9273380e+01  0.0000000e+00]
+Note: Using unified QP force distribution with hip roll torques
+
+[POINT 5: After first mj_step] Contacts: 4, Left: 0.00 N, Right: 0.00 N, Total: 0.00 N, Asymmetry: 0.00 N
+=== END INITIALIZATION DIAGNOSTICS ===
+
+Step 1: h=0.346m, pitch=-0.0deg (sensed=0.0deg), roll=-4.8deg (sensed=-0.0deg), gravity=[0.000, 0.000, -9.810]
+
+[TERMINATED] at step 1: height_too_low
+
+================================================================================
+Simulation Summary
+================================================================================
+Total steps: 1
+Simulation time: 0.0 seconds
+Wall clock time: 1.0 seconds
+Terminated: True
+Termination reason: height_too_low
+
+CoM height range: 0.346 - 0.346 m
+Pitch range: -0.0 - -0.0 deg
+Roll range: -4.8 - -4.8 deg
+
+Max torques (wheeled biped architecture):
+  Hip roll: 11.21 Nm
+  Wheels: 0.00 Nm
+  Legs: 5.93 Nm
+  Total: 11.21 Nm
+
+Telemetry saved to: outputs\hierarchical_controller_sim\telemetry_1779214558.csv
+================================================================================

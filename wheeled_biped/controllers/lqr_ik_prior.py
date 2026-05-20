@@ -266,6 +266,8 @@ class HeightIKMapping:
     height_range: Tuple[float, float]
     hip_pitch_poly: np.ndarray  # Polynomial coefficients
     knee_poly: np.ndarray
+    hip_pitch_range: Tuple[float, float] | None = None
+    knee_range: Tuple[float, float] | None = None
 
     def __call__(self, height_cmd: float) -> Tuple[float, float]:
         """Map height command to joint angles.
@@ -279,6 +281,10 @@ class HeightIKMapping:
         h_clipped = np.clip(height_cmd, self.height_range[0], self.height_range[1])
         hip_pitch_des = np.polyval(self.hip_pitch_poly, h_clipped)
         knee_des = np.polyval(self.knee_poly, h_clipped)
+        if self.hip_pitch_range is not None:
+            hip_pitch_des = np.clip(hip_pitch_des, self.hip_pitch_range[0], self.hip_pitch_range[1])
+        if self.knee_range is not None:
+            knee_des = np.clip(knee_des, self.knee_range[0], self.knee_range[1])
         return float(hip_pitch_des), float(knee_des)
 
 
@@ -367,6 +373,8 @@ class LQRIKPrior:
                     height_range=(float(heights.min()), float(heights.max())),
                     hip_pitch_poly=hip_pitch_poly,
                     knee_poly=knee_poly,
+                    hip_pitch_range=tuple(self.config.joint_limits["hip_pitch"]),
+                    knee_range=tuple(self.config.joint_limits["knee"]),
                 )
 
         # Fallback: contact-aware FK scan
@@ -427,6 +435,8 @@ class LQRIKPrior:
             height_range=(heights.min(), heights.max()),
             hip_pitch_poly=hip_pitch_poly,
             knee_poly=knee_poly,
+            hip_pitch_range=tuple(self.config.joint_limits["hip_pitch"]),
+            knee_range=tuple(self.config.joint_limits["knee"]),
         )
 
     def _compute_lqr_gains(self) -> np.ndarray:
@@ -574,14 +584,24 @@ class LQRIKPrior:
             x_lqr = np.array([pitch_error, pitch_rate, fwd_vel, fwd_pos, com_error_y, com_vel_y])
 
             # Interpolate gains at current height
-            K = np.array([
-                self.gain_interpolators["k_pitch"](height_cmd),
-                self.gain_interpolators["k_pitch_rate"](height_cmd),
-                self.gain_interpolators["k_fwd_vel"](height_cmd),
-                self.gain_interpolators["k_fwd_pos"](height_cmd),
-                self.gain_interpolators["k_com"](height_cmd),
-                self.gain_interpolators["k_com_rate"](height_cmd),
-            ])
+            if "k_fwd_vel" in self.gain_interpolators:
+                K = np.array([
+                    self.gain_interpolators["k_pitch"](height_cmd),
+                    self.gain_interpolators["k_pitch_rate"](height_cmd),
+                    self.gain_interpolators["k_fwd_vel"](height_cmd),
+                    self.gain_interpolators["k_fwd_pos"](height_cmd),
+                    self.gain_interpolators["k_com"](height_cmd),
+                    self.gain_interpolators["k_com_rate"](height_cmd),
+                ])
+            else:
+                K = np.array([
+                    self.gain_interpolators["k_pitch"](height_cmd),
+                    self.gain_interpolators["k_pitch_rate"](height_cmd),
+                    self.gain_interpolators["k_wheel_vel"](height_cmd),
+                    self.gain_interpolators["k_wheel_pos"](height_cmd),
+                    self.gain_interpolators["k_com"](height_cmd),
+                    self.gain_interpolators["k_com_rate"](height_cmd),
+                ])
 
             # LQR control: u = -K * x
             wheel_vel_cmd = -(K @ x_lqr)

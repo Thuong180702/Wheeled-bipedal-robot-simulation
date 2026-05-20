@@ -163,3 +163,57 @@ def test_wrench_vector_format_for_unified_force_distributor():
 
     assert forces.shape == (3,), "First 3 elements must be forces"
     assert moments.shape == (3,), "Last 3 elements must be moments"
+
+
+def make_state(roll=0.0, pitch=0.0, roll_rate=0.0, pitch_rate=0.0, com_z=0.42):
+    return CentroidalState(
+        com_pos=jnp.array([0.0, 0.0, com_z]),
+        com_vel=jnp.zeros(3),
+        capture_point=jnp.zeros(2),
+        divergence=jnp.zeros(2),
+        linear_momentum=jnp.zeros(3),
+        angular_momentum=jnp.zeros(3),
+        left_wheel_contact=True,
+        right_wheel_contact=True,
+        left_wheel_force=40.0,
+        right_wheel_force=40.0,
+        base_quat=jnp.array([1.0, 0.0, 0.0, 0.0]),
+        base_ang_vel=jnp.array([roll_rate, pitch_rate, 0.0]),
+        roll=roll,
+        pitch=pitch,
+        yaw=0.0,
+        roll_rate=roll_rate,
+        pitch_rate=pitch_rate,
+        yaw_rate=0.0,
+        left_contact_force_world=jnp.array([0.0, 0.0, 40.0]),
+        right_contact_force_world=jnp.array([0.0, 0.0, 40.0]),
+        total_contact_force_z=80.0,
+    )
+
+
+def test_static_fz_equals_weight_at_target_height():
+    computer = CentroidalWrenchComputer(robot_mass=8.1, gravity=9.81, k_height=50.0)
+    force, moment = computer.compute_desired_wrench_from_state(
+        make_state(com_z=0.42), height_cmd=0.42
+    )
+    assert abs(float(force[2]) - 8.1 * 9.81) < 1e-5
+    assert abs(float(moment[0])) < 1e-8
+    assert abs(float(moment[1])) < 1e-8
+
+
+def test_positive_roll_generates_corrective_mx():
+    computer = CentroidalWrenchComputer(k_roll=10.0, k_roll_rate=0.0, robot_mass=8.1)
+    _, moment = computer.compute_desired_wrench_from_state(
+        make_state(roll=0.2), height_cmd=0.42
+    )
+    assert float(moment[0]) < 0.0
+    assert abs(float(moment[1])) < 1e-8
+
+
+def test_positive_pitch_generates_corrective_my():
+    computer = CentroidalWrenchComputer(k_pitch=10.0, k_pitch_rate=0.0, robot_mass=8.1)
+    _, moment = computer.compute_desired_wrench_from_state(
+        make_state(pitch=0.2), height_cmd=0.42
+    )
+    assert abs(float(moment[0])) < 1e-8
+    assert float(moment[1]) < 0.0

@@ -93,9 +93,15 @@ class HierarchicalVMCConfig:
         with open(config_path, "r") as f:
             data = yaml.safe_load(f)
 
+        height_cfg = data.get("height", {})
+        roll_cfg = data.get("roll", {})
+        yaw_cfg = data.get("yaw", {})
+        wheel_filter_cfg = data.get("wheel_cmd_filter", {})
+        com_cfg = data.get("com_state", {})
+
         return cls(
-            height_min=data.get("height_min", 0.40),
-            height_max=data.get("height_max", 0.70),
+            height_min=data.get("height_min", height_cfg.get("min", 0.40)),
+            height_max=data.get("height_max", height_cfg.get("max", 0.70)),
             ik_hip_pitch_range=tuple(data.get("ik_hip_pitch_range", [-0.8, 0.2])),
             ik_knee_range=tuple(data.get("ik_knee_range", [0.0, 2.0])),
             ik_num_samples=data.get("ik_num_samples", 50),
@@ -105,19 +111,19 @@ class HierarchicalVMCConfig:
             vmc_max_force=data.get("vmc_max_force", 50.0),
             vmc_force_to_hip_pitch_gain=data.get("vmc_force_to_hip_pitch_gain", 0.02),
             vmc_force_to_knee_gain=data.get("vmc_force_to_knee_gain", 0.015),
-            lqr_height_scheduled=data.get("lqr_height_scheduled", True),
-            lqr_gains=data.get("lqr_gains"),
-            wheel_cmd_filter_enabled=data.get("wheel_cmd_filter_enabled", True),
-            wheel_cmd_filter_alpha=data.get("wheel_cmd_filter_alpha", 0.7),
-            wheel_cmd_filter_max_delta=data.get("wheel_cmd_filter_max_delta", 2.0),
-            roll_kp=data.get("roll_kp", 2.0),
-            roll_kd=data.get("roll_kd", 0.4),
-            roll_max_correction=data.get("roll_max_correction", 0.4),
-            yaw_kp=data.get("yaw_kp", 3.0),
-            yaw_kd=data.get("yaw_kd", 0.3),
-            yaw_max_diff=data.get("yaw_max_diff", 2.5),
+            lqr_height_scheduled=data.get("lqr_height_scheduled", data.get("height_scheduled_gains_enabled", True)),
+            lqr_gains=data.get("lqr_gains", data.get("height_scheduled_gains")),
+            wheel_cmd_filter_enabled=data.get("wheel_cmd_filter_enabled", wheel_filter_cfg.get("enabled", True)),
+            wheel_cmd_filter_alpha=data.get("wheel_cmd_filter_alpha", wheel_filter_cfg.get("alpha", 0.7)),
+            wheel_cmd_filter_max_delta=data.get("wheel_cmd_filter_max_delta", wheel_filter_cfg.get("max_delta_per_step", 2.0)),
+            roll_kp=data.get("roll_kp", roll_cfg.get("kp", 2.0)),
+            roll_kd=data.get("roll_kd", roll_cfg.get("kd", 0.4)),
+            roll_max_correction=data.get("roll_max_correction", roll_cfg.get("max_correction", 0.4)),
+            yaw_kp=data.get("yaw_kp", yaw_cfg.get("kp", 3.0)),
+            yaw_kd=data.get("yaw_kd", yaw_cfg.get("kd", 0.3)),
+            yaw_max_diff=data.get("yaw_max_diff", yaw_cfg.get("max_diff", 2.5)),
             wheel_vel_limit=data.get("wheel_vel_limit", 20.0),
-            com_use_sim=data.get("com_use_sim", True),
+            com_use_sim=data.get("com_use_sim", com_cfg.get("use_sim", True)),
         )
 
 

@@ -228,6 +228,15 @@ class BalanceEnv(WheeledBipedEnv):
         ctrl_range = self.mjx_model.actuator_ctrlrange
         self._ctrl_min = ctrl_range[:, 0]
         self._ctrl_max = ctrl_range[:, 1]
+        torque_limit_cfg = torque_cfg.get(
+            "torque_limits_nm",
+            [15.0, 15.0, 30.0, 30.0, 15.0, 15.0, 15.0, 30.0, 30.0, 15.0],
+        )
+        if not isinstance(torque_limit_cfg, list) or len(torque_limit_cfg) != self.num_actions:
+            torque_limit_cfg = [15.0, 15.0, 30.0, 30.0, 15.0, 15.0, 15.0, 30.0, 30.0, 15.0]
+        self._torque_ctrl_limit = jnp.array(torque_limit_cfg, dtype=jnp.float32)
+        self._torque_ctrl_min = -self._torque_ctrl_limit
+        self._torque_ctrl_max = self._torque_ctrl_limit
 
         # Lấy torso body_id từ mj_model
         import mujoco
@@ -438,8 +447,8 @@ class BalanceEnv(WheeledBipedEnv):
         if self._low_level_mode == "motor_torque" and self._torque_control_enabled:
             scaled_action = normalized_motor_torque_control(
                 control_action,
-                self._ctrl_min,
-                self._ctrl_max,
+                self._torque_ctrl_min,
+                self._torque_ctrl_max,
                 self._torque_max_ctrl_fraction,
                 self._torque_allow_mask,
             )
