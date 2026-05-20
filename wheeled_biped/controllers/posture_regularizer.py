@@ -14,14 +14,19 @@ from jax import Array
 class PostureRegularizerConfig:
     """Configuration for posture regularizer."""
 
-    # Proportional gain
-    k_posture: float = 2.0  # Weak compared to WBC gains
+    # Proportional gain (used for any joint group without an override)
+    k_posture: float = 10.0
+    k_hip_roll: float | None = None
+    k_hip_yaw: float | None = None
+    k_hip_pitch: float | None = None
+    k_knee: float | None = None
+    k_wheel: float = 0.0
 
-    # Per-joint deadbands (radians)
-    hip_roll_deadband: float = 0.05  # ±2.9° - allow lateral sway
-    hip_yaw_deadband: float = 0.03  # ±1.7° - tighter, yaw drift is bad
-    hip_pitch_deadband: float = 0.08  # ±4.6° - allow squat variation
-    knee_deadband: float = 0.10  # ±5.7° - allow knee bend variation
+    # Per-joint deadbands (radians) - reduced for earlier activation
+    hip_roll_deadband: float = 0.15  # ±8.6° - LARGE deadband, hip roll must be free for balance
+    hip_yaw_deadband: float = 0.02  # ±1.1° - tighter, yaw drift is bad
+    hip_pitch_deadband: float = 0.035  # ±2.0° - reduced from ±4.6° for earlier activation
+    knee_deadband: float = 0.05  # ±2.9° - reduced from ±5.7° for earlier activation
     wheel_deadband: float = 0.0  # wheels don't have posture target
 
     # Gating thresholds
@@ -33,6 +38,7 @@ class PostureRegularizerConfig:
 
     # Authority budget
     posture_authority_budget: float = 0.2  # 20% of actuator range
+    max_actuator_torque: float = 30.0
 
 
 class PostureRegularizer:
@@ -47,37 +53,80 @@ class PostureRegularizer:
         self.config = config
 
         # Robot geometry (from URDF)
-        self.hip_to_knee_length = 0.25  # hip_pitch joint to knee joint
-        self.knee_to_wheel_length = 0.25  # knee joint to wheel center
+        self.hip_to_knee_length = 0.26  # hip_pitch joint to knee joint (thigh length)
+        self.knee_to_wheel_length = 0.28  # knee joint to wheel center (shin length)
         self.hip_height_offset = 0.05  # hip joint height above base
 
-    def compute_target_posture_from_height(self, height_cmd: float) -> Array:
-        """Return fixed target posture that matches geometrically balanced keyframe.
+        self._joint_gains = jnp.array([
+            self.config.k_hip_roll if self.config.k_hip_roll is not None else self.config.k_posture,
+            self.config.k_hip_yaw if self.config.k_hip_yaw is not None else self.config.k_posture,
+            self.config.k_hip_pitch if self.config.k_hip_pitch is not None else self.config.k_posture,
+            self.config.k_knee if self.config.k_knee is not None else self.config.k_posture,
+            self.config.k_wheel,
+            self.config.k_hip_roll if self.config.k_hip_roll is not None else self.config.k_posture,
+            self.config.k_hip_yaw if self.config.k_hip_yaw is not None else self.config.k_posture,
+            self.config.k_hip_pitch if self.config.k_hip_pitch is not None else self.config.k_posture,
+            self.config.k_knee if self.config.k_knee is not None else self.config.k_posture,
+            self.config.k_wheel,
+        ])
 
-        The robot's geometry requires forward lean for balance. Using the empirically
-        determined balanced configuration (hip_pitch=0.95, knee=1.70) that centers
-        CoM over wheels at 0.58m height.
+        # Height-dependent target lookup table
+        # Format: (height_m, l_hip_pitch, l_knee, r_hip_pitch, r_knee)
+        # Equilibrium configuration at h=0.534m (from keyframe)
+        self.height_targets = jnp.array([
+            [0.40, 0.926052, 1.748364, 0.926052, 1.748364],  # Current standing keyframe
+            [0.45, 0.78, 1.85, 0.78, 1.85],  # Mid-low
+            [0.50, 0.72, 1.75, 0.72, 1.75],  # Mid
+            [0.534, 0.668271, 1.698462, 0.668302, 1.698341],  # Equilibrium (from keyframe)
+            [0.55, 0.65, 1.65, 0.65, 1.65],  # Mid-high
+            [0.60, 0.58, 1.50, 0.58, 1.50],  # High
+            [0.65, 0.50, 1.35, 0.50, 1.35],  # Higher
+            [0.70, 0.42, 1.20, 0.42, 1.20],  # Highest - more upright
+        ])
+
+    def compute_target_posture_from_height(self, height_cmd: float) -> Array:
+        """Compute target posture from height command using interpolation.
+
+        Interpolates between height-dependent equilibrium configurations to provide
+        smooth target transitions. Uses equilibrium keyframe at h=0.534m as anchor point.
 
         Args:
-            height_cmd: Desired CoM height in meters (currently ignored, uses fixed target)
+            height_cmd: Desired CoM height in meters (0.40 to 0.70)
 
         Returns:
-            Target joint positions (10,) with balanced leg configuration
+            Target joint positions (10,) interpolated from height lookup table
         """
-        # Fixed balanced configuration from keyframe (empirically determined)
-        # This configuration achieves CoM height ~0.58m with CoM centered over wheels
-        # hip_pitch=0.95 rad (54.4°), knee=1.70 rad (97.4°)
+        # Clamp height to valid range
+        height_clamped = jnp.clip(height_cmd, 0.40, 0.70)
+
+        # Extract height column and target columns
+        heights = self.height_targets[:, 0]
+        l_hip_pitch_targets = self.height_targets[:, 1]
+        l_knee_targets = self.height_targets[:, 2]
+        r_hip_pitch_targets = self.height_targets[:, 3]
+        r_knee_targets = self.height_targets[:, 4]
+
+        # Linear interpolation for each joint
+        l_hip_pitch = jnp.interp(height_clamped, heights, l_hip_pitch_targets)
+        l_knee = jnp.interp(height_clamped, heights, l_knee_targets)
+        r_hip_pitch = jnp.interp(height_clamped, heights, r_hip_pitch_targets)
+        r_knee = jnp.interp(height_clamped, heights, r_knee_targets)
+
+        # Construct full target posture
+        # Hip roll has NO target - must be free for WBC balance control
+        # Hip yaw has small target to prevent drift
+        # Hip pitch/knee interpolated from height for posture maintenance
         target_pos = jnp.array([
-            0.0,   # l_hip_roll - neutral
-            0.0,   # l_hip_yaw - neutral
-            0.95,  # l_hip_pitch - forward lean for balance
-            1.70,  # l_knee - bent for height + balance
-            0.0,   # l_wheel - no target
-            0.0,   # r_hip_roll - neutral
-            0.0,   # r_hip_yaw - neutral
-            0.95,  # r_hip_pitch - forward lean for balance
-            1.70,  # r_knee - bent for height + balance
-            0.0,   # r_wheel - no target
+            0.0,          # l_hip_roll - NO TARGET (free for balance)
+            -0.000740,    # l_hip_yaw - equilibrium value
+            l_hip_pitch,  # l_hip_pitch - interpolated
+            l_knee,       # l_knee - interpolated
+            0.0,          # l_wheel - no target
+            0.0,          # r_hip_roll - NO TARGET (free for balance)
+            0.000859,     # r_hip_yaw - equilibrium value
+            r_hip_pitch,  # r_hip_pitch - interpolated
+            r_knee,       # r_knee - interpolated
+            0.0,          # r_wheel - no target
         ])
 
         return target_pos
@@ -121,7 +170,7 @@ class PostureRegularizer:
         active = jnp.where(jnp.abs(posture_error) > deadbands, 1.0, 0.0)
 
         # Proportional control with deadband gating
-        tau = -self.config.k_posture * posture_error * active
+        tau = -self._joint_gains * posture_error * active
 
         return tau
 
@@ -194,11 +243,8 @@ class PostureRegularizer:
         Returns:
             Clipped torque array (10,) within 20% authority budget
         """
-        # Maximum actuator torque (hardcoded as per Phase 2)
-        max_actuator_torque = 30.0
-
         # Compute budget limit
-        budget_limit = self.config.posture_authority_budget * max_actuator_torque
+        budget_limit = self.config.posture_authority_budget * self.config.max_actuator_torque
 
         # Find maximum absolute torque
         max_tau = jnp.max(jnp.abs(tau))

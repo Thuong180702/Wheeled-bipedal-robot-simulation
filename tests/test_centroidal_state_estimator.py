@@ -119,12 +119,12 @@ def test_velocity_computation_via_finite_difference():
     # Verify first call returns zero velocity
     assert jnp.allclose(state1.com_vel, jnp.zeros(3))
 
-    # Second call at t=0.02s with CoM moved by [0.02, 0.01, -0.01] m
+    # Second call at t=0.01s with CoM moved by [0.02, 0.01, -0.01] m
     data2 = MockData(jnp.array([0.02, 0.01, 0.59]))
     state2, com_pos2 = estimator.estimate(obs, data2, prev_com_pos=com_pos1)
 
-    # Expected velocity: delta_pos / dt = [0.02, 0.01, -0.01] / 0.02 = [1.0, 0.5, -0.5] m/s
-    expected_vel = jnp.array([1.0, 0.5, -0.5])
+    # Expected velocity: delta_pos / dt = [0.02, 0.01, -0.01] / 0.01 = [2.0, 1.0, -1.0] m/s
+    expected_vel = jnp.array([2.0, 1.0, -1.0])
     assert jnp.allclose(state2.com_vel, expected_vel, atol=1e-6)
 
     # Verify CoM position is correct
@@ -201,7 +201,7 @@ def test_wheel_geom_ids_are_resolved_by_name():
     )
 
 
-def test_reset_keyframe_detects_wheel_contact_and_force():
+def test_reset_keyframe_detects_contact_but_marks_forward_force_invalid():
     model, data = make_model_data()
     estimator = CentroidalStateEstimator(
         CentroidalStateEstimatorConfig(
@@ -213,6 +213,26 @@ def test_reset_keyframe_detects_wheel_contact_and_force():
     state, _ = estimator.estimate(jnp.zeros(42), data, None)
     assert state.left_wheel_contact
     assert state.right_wheel_contact
+    assert not state.contact_force_valid
+    assert state.left_wheel_force == 0.0
+    assert state.right_wheel_force == 0.0
+    assert state.total_contact_force_z == 0.0
+
+
+def test_contact_force_is_valid_after_mj_step():
+    model, data = make_model_data()
+    mujoco.mj_step(model, data)
+    estimator = CentroidalStateEstimator(
+        CentroidalStateEstimatorConfig(
+            robot_mass=sum(model.body_mass),
+            torso_inertia=jnp.array([0.1, 0.1, 0.05]),
+        ),
+        mj_model=model,
+    )
+    state, _ = estimator.estimate(jnp.zeros(42), data, None)
+    assert state.left_wheel_contact
+    assert state.right_wheel_contact
+    assert state.contact_force_valid
     assert state.left_wheel_force > 0.0
     assert state.right_wheel_force > 0.0
     assert state.total_contact_force_z > 0.5 * sum(model.body_mass) * abs(model.opt.gravity[2])

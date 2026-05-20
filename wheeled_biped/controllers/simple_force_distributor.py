@@ -28,6 +28,10 @@ class SimpleForceDistributor:
         self.max_force_asymmetry = max_force_asymmetry
         self.min_wheel_force = min_wheel_force
 
+    def _roll_moment_to_hip_roll_torque(self, mx: Array) -> Array:
+        tau_hip_roll = jnp.array([-mx / 2.0, mx / 2.0])
+        return jnp.clip(tau_hip_roll, -self.tau_hip_roll_max, self.tau_hip_roll_max)
+
     def distribute_wrench_contact_aware(
         self,
         desired_wrench: Array,
@@ -48,11 +52,7 @@ class SimpleForceDistributor:
             # This prevents collapse when robot briefly loses contact
             f_left = jnp.array([Fx / 2.0, Fy / 2.0, Fz / 2.0])
             f_right = jnp.array([Fx / 2.0, Fy / 2.0, Fz / 2.0])
-            tau_hip_roll = jnp.clip(
-                jnp.array([Mx / 2.0, Mx / 2.0]),
-                -self.tau_hip_roll_max,
-                self.tau_hip_roll_max,
-            )
+            tau_hip_roll = self._roll_moment_to_hip_roll_torque(Mx)
             return (
                 f_left,
                 f_right,
@@ -80,34 +80,12 @@ class SimpleForceDistributor:
             # Hip roll torques can provide strong roll control without risking liftoff
             # Only use vertical force asymmetry when hip torques saturate
 
-            # CRITICAL FIX: Hip roll torques must have SAME SIGN to generate roll moment
-            # For a wheeled biped, both hip roll actuators work together:
-            #   - To correct positive roll (tilting right): both hips apply positive torque
-            #   - To correct negative roll (tilting left): both hips apply negative torque
-            # This creates a net roll moment about the CoM
-
-            # CRITICAL: Calculate remaining moment BEFORE clipping
-            # If we calculate after clipping, the clipped torques always sum to match demand,
-            # so remaining_mx is always ~0 even when saturated
-            tau_hip_roll_desired = jnp.array([Mx / 2.0, Mx / 2.0])
-
-            # DEBUG: Print clipping parameters
-            print(f"[CLIP DEBUG] tau_hip_roll_max={self.tau_hip_roll_max}")
-            print(f"[CLIP DEBUG] tau_hip_roll_desired={tau_hip_roll_desired}")
-            print(f"[CLIP DEBUG] clip_bounds=[-{self.tau_hip_roll_max}, +{self.tau_hip_roll_max}]")
-
-            tau_hip_roll = jnp.clip(
-                tau_hip_roll_desired,
-                -self.tau_hip_roll_max,
-                self.tau_hip_roll_max,
-            )
-
-            print(f"[CLIP DEBUG] tau_hip_roll_after_clip={tau_hip_roll}")
+            # Positive Mx uses opposite hip-roll signs in this model.
+            tau_hip_roll = self._roll_moment_to_hip_roll_torque(Mx)
 
             # Calculate remaining roll moment that hip torques cannot provide
             # (due to saturation or insufficient authority)
-            # Note: Both hip torques have same sign, so they add up to provide total moment
-            hip_roll_moment_provided = tau_hip_roll[0] + tau_hip_roll[1]
+            hip_roll_moment_provided = tau_hip_roll[1] - tau_hip_roll[0]
             remaining_mx = Mx - hip_roll_moment_provided
 
             # RECOVERY MECHANISM 3: Predictive contact maintenance
@@ -126,9 +104,6 @@ class SimpleForceDistributor:
                     liftoff_threshold,  # Never exceed liftoff threshold
                 )
                 fz_diff = jnp.clip(fz_diff_desired, -max_safe_diff, max_safe_diff)
-
-                if abs(fz_diff_desired) > max_safe_diff:
-                    print(f"[FORCE_DIST] LIFTOFF PREVENTION: reducing asymmetry from {fz_diff_desired:.2f} to {fz_diff:.2f}")
             else:
                 # Hip torques are sufficient - use symmetric vertical forces
                 fz_diff = 0.0
@@ -136,48 +111,30 @@ class SimpleForceDistributor:
             fz_left = Fz / 2.0 + fz_diff / 2.0
             fz_right = Fz / 2.0 - fz_diff / 2.0
 
-            print(f"[FORCE_DIST] Mx={Mx:.2f}, hip_moment={hip_roll_moment_provided:.2f}, remaining={remaining_mx:.2f}")
-            print(f"[FORCE_DIST] fz_diff={fz_diff:.2f}, fz_left={fz_left:.2f}, fz_right={fz_right:.2f}")
-
             f_left = jnp.array([Fx / 2.0, Fy / 2.0, fz_left])
             f_right = jnp.array([Fx / 2.0, Fy / 2.0, fz_right])
-
-            print(f"[FORCE_DIST] f_left={f_left}, f_right={f_right}")
-            print(f"[FORCE_DIST] tau_hip_roll={tau_hip_roll}")
         else:
-            print(f"[FORCE_DIST] SINGLE CONTACT RECOVERY: active_count={active_count}")
 
             # RECOVERY MECHANISM 1: Active contact recovery via hip roll moment
             # Generate strong hip roll torque to tilt robot back toward lifted wheel
-            recovery_roll_gain = 3.5  # Amplify roll correction during single contact (increased from 2.0)
+            recovery_roll_gain = 5.0  # Amplify roll correction during single contact (increased from 3.5)
             recovery_mx = Mx * recovery_roll_gain
 
             # RECOVERY MECHANISM 2: Asymmetric leg stiffness
             # Maintain minimum vertical force on lifted leg to keep it extended
-            min_recovery_force = 35.0  # N - enough to keep leg extended and generate recovery torque (increased from 25.0)
+            min_recovery_force = 50.0  # N - enough to keep leg extended and generate recovery torque (increased from 35.0)
 
             if left_contact:
                 # Left wheel in contact, right wheel lifted
                 f_left = jnp.array([Fx, Fy, Fz])
                 f_right = jnp.array([0.0, 0.0, min_recovery_force])  # Keep right leg extended
-                tau_hip_roll = jnp.clip(
-                    jnp.array([recovery_mx / 2.0, recovery_mx / 2.0]),  # Both hips work to recover
-                    -self.tau_hip_roll_max,
-                    self.tau_hip_roll_max,
-                )
-                print(f"[FORCE_DIST] LEFT CONTACT ONLY: f_right_z={min_recovery_force:.2f}N (recovery), recovery_mx={recovery_mx:.2f}")
+                tau_hip_roll = self._roll_moment_to_hip_roll_torque(recovery_mx)
             else:  # right_contact
                 # Right wheel in contact, left wheel lifted
                 f_left = jnp.array([0.0, 0.0, min_recovery_force])  # Keep left leg extended
                 f_right = jnp.array([Fx, Fy, Fz])
-                tau_hip_roll = jnp.clip(
-                    jnp.array([recovery_mx / 2.0, recovery_mx / 2.0]),  # Both hips work to recover
-                    -self.tau_hip_roll_max,
-                    self.tau_hip_roll_max,
-                )
-                print(f"[FORCE_DIST] RIGHT CONTACT ONLY: f_left_z={min_recovery_force:.2f}N (recovery), recovery_mx={recovery_mx:.2f}")
+                tau_hip_roll = self._roll_moment_to_hip_roll_torque(recovery_mx)
 
-        print(f"[FORCE_DIST] FINAL OUTPUT: f_left_z={f_left[2]:.2f}, f_right_z={f_right[2]:.2f}, asymmetry={abs(f_left[2] - f_right[2]):.2f}")
         return f_left, f_right, tau_hip_roll, {"feasible": True, "reason": "ok"}
 
     def distribute_wrench(
@@ -223,12 +180,6 @@ class SimpleForceDistributor:
         f_right = jnp.array([fx_right, fy_per_wheel, fz_per_wheel])
 
         # Map roll moment to hip roll torques
-        # Each hip roll contributes directly to roll moment
-        tau_hip_roll_per_side = Mx / 2.0
-        tau_hip_roll = jnp.clip(
-            jnp.array([tau_hip_roll_per_side, tau_hip_roll_per_side]),
-            -self.tau_hip_roll_max,
-            self.tau_hip_roll_max,
-        )
+        tau_hip_roll = self._roll_moment_to_hip_roll_torque(Mx)
 
         return f_left, f_right, tau_hip_roll

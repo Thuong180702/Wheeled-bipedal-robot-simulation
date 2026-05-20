@@ -212,6 +212,55 @@ def test_posture_authority_budget_clipping():
     assert jnp.abs(ratio - expected_ratio) < 0.01
 
 
+def test_height_040_target_matches_current_standing_keyframe():
+    regularizer = PostureRegularizer(PostureRegularizerConfig())
+
+    target = regularizer.compute_target_posture_from_height(0.40)
+
+    assert jnp.isclose(target[2], 0.926052)
+    assert jnp.isclose(target[3], 1.748364)
+    assert jnp.isclose(target[7], 0.926052)
+    assert jnp.isclose(target[8], 1.748364)
+
+
+def test_per_joint_posture_gains_leave_wheels_uncontrolled():
+    config = PostureRegularizerConfig(
+        k_hip_roll=3.0,
+        k_hip_yaw=1.5,
+        k_hip_pitch=30.0,
+        k_knee=30.0,
+        k_wheel=0.0,
+        hip_roll_deadband=0.0,
+        hip_yaw_deadband=0.0,
+        hip_pitch_deadband=0.0,
+        knee_deadband=0.0,
+    )
+    regularizer = PostureRegularizer(config)
+    joint_pos = jnp.array([0.1, 0.1, 0.1, 0.1, 2.0, 0.1, 0.1, 0.1, 0.1, -2.0])
+
+    tau = regularizer.compute_posture_restoration_torque(joint_pos)
+
+    assert jnp.isclose(tau[0], -0.3)
+    assert jnp.isclose(tau[1], -0.15)
+    assert jnp.isclose(tau[2], -3.0)
+    assert jnp.isclose(tau[3], -3.0)
+    assert jnp.isclose(tau[4], 0.0)
+    assert jnp.isclose(tau[9], 0.0)
+
+
+def test_posture_authority_uses_configured_actuator_limit():
+    config = PostureRegularizerConfig(
+        posture_authority_budget=0.4,
+        max_actuator_torque=60.0,
+    )
+    regularizer = PostureRegularizer(config)
+    tau_desired = jnp.array([30.0, 0.0, 0.0, 0.0, 0.0, -30.0, 0.0, 0.0, 0.0, 0.0])
+
+    tau_clipped = regularizer.clip_to_authority_budget(tau_desired)
+
+    assert jnp.max(jnp.abs(tau_clipped)) <= 24.0
+
+
 def test_integrated_posture_regularizer():
     """Test integrated posture regularizer with two-level gating."""
     config = PostureRegularizerConfig(

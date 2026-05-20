@@ -53,6 +53,7 @@ class CentroidalState:
     left_contact_force_world: Array = jnp.zeros(3)
     right_contact_force_world: Array = jnp.zeros(3)
     total_contact_force_z: float = 0.0
+    contact_force_valid: bool = False
 
 
 class CentroidalStateEstimator:
@@ -60,7 +61,7 @@ class CentroidalStateEstimator:
 
     def __init__(self, config: CentroidalStateEstimatorConfig, mj_model=None):
         self.config = config
-        self.dt = 0.02  # 50Hz control rate
+        self.dt = 0.01  # 100Hz control rate
         self.mj_model = mj_model
 
         if mj_model is not None:
@@ -105,16 +106,22 @@ class CentroidalStateEstimator:
         right_wheel_force = 0.0
         left_contact_force_world = jnp.zeros(3)
         right_contact_force_world = jnp.zeros(3)
+        contact_force_valid = True
+
+        if self.mj_model is not None and hasattr(data, "time"):
+            contact_force_valid = float(data.time) > 0.0
 
         if self.mj_model is not None and hasattr(data, "ncon"):
             for i in range(data.ncon):
                 contact = data.contact[i]
                 geom1 = int(contact.geom1)
                 geom2 = int(contact.geom2)
-                force_contact = np.zeros(6)
-                mujoco.mj_contactForce(self.mj_model, data, i, force_contact)
-                frame = np.array(contact.frame).reshape(3, 3)
-                force_world = frame.T @ force_contact[:3]
+                force_world = np.zeros(3)
+                if contact_force_valid:
+                    force_contact = np.zeros(6)
+                    mujoco.mj_contactForce(self.mj_model, data, i, force_contact)
+                    frame = np.array(contact.frame).reshape(3, 3)
+                    force_world = frame.T @ force_contact[:3]
 
                 if geom1 == self.left_wheel_geom_id or geom2 == self.left_wheel_geom_id:
                     left_wheel_contact = True
@@ -157,9 +164,23 @@ class CentroidalStateEstimator:
         pitch_rate = float(base_ang_vel[1])
         yaw_rate = float(base_ang_vel[2])
 
-        # Placeholder values for capture point (will be implemented in Task 4-5)
-        capture_point = jnp.zeros(2)
-        divergence = jnp.zeros(2)
+        # Compute capture point for predictive balance control
+        # Capture point: x_cp = x_com + v_com / omega_0
+        # where omega_0 = sqrt(g / h) is the natural frequency of inverted pendulum
+        com_height = com_pos[2]
+        omega_0 = jnp.sqrt(9.81 / jnp.maximum(com_height, 0.1))  # Avoid division by zero
+
+        # Capture point in horizontal plane (x, y)
+        capture_point = jnp.array([
+            com_pos[0] + com_vel[0] / omega_0,
+            com_pos[1] + com_vel[1] / omega_0,
+        ])
+
+        # Divergent component (distance from CoM to capture point)
+        divergence = jnp.array([
+            com_vel[0] / omega_0,
+            com_vel[1] / omega_0,
+        ])
 
         # Compute linear momentum
         linear_momentum = self.config.robot_mass * com_vel
@@ -189,6 +210,7 @@ class CentroidalStateEstimator:
             left_contact_force_world=left_contact_force_world,
             right_contact_force_world=right_contact_force_world,
             total_contact_force_z=total_contact_force_z,
+            contact_force_valid=contact_force_valid,
         )
 
         return state, com_pos

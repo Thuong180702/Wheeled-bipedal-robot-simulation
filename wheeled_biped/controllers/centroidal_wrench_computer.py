@@ -18,6 +18,7 @@ class CentroidalWrenchComputer:
         self,
         k_roll: float = 20.0,
         k_roll_rate: float = 4.0,
+        k_roll_integral: float = 2.0,
         k_pitch: float = 5.0,
         k_pitch_rate: float = 1.0,
         k_com_lateral: float = 15.0,
@@ -29,12 +30,14 @@ class CentroidalWrenchComputer:
         k_height: float = 5.0,
         robot_mass: float = 15.0,
         gravity: float = 9.81,
+        max_roll_moment: float | None = None,
     ):
         """Initialize centroidal wrench computer.
 
         Args:
-            k_roll: Roll stabilization gain
-            k_roll_rate: Roll rate damping gain
+            k_roll: Roll stabilization gain (proportional)
+            k_roll_rate: Roll rate damping gain (derivative)
+            k_roll_integral: Roll integral gain (eliminates steady-state error)
             k_pitch: Pitch stabilization gain
             k_pitch_rate: Pitch rate damping gain
             k_com_lateral: CoM lateral position gain
@@ -46,9 +49,11 @@ class CentroidalWrenchComputer:
             k_height: Height tracking gain
             robot_mass: Robot mass in kg
             gravity: Gravity constant
+            max_roll_moment: Optional roll moment clamp in Nm
         """
         self.k_roll = k_roll
         self.k_roll_rate = k_roll_rate
+        self.k_roll_integral = k_roll_integral
         self.k_pitch = k_pitch
         self.k_pitch_rate = k_pitch_rate
         self.k_com_lateral = k_com_lateral
@@ -60,12 +65,19 @@ class CentroidalWrenchComputer:
         self.k_height = k_height
         self.robot_mass = robot_mass
         self.gravity = gravity
+        self.max_roll_moment = max_roll_moment
+
+    def _limit_roll_moment(self, m_roll: Array) -> Array:
+        if self.max_roll_moment is None:
+            return m_roll
+        return jnp.clip(m_roll, -self.max_roll_moment, self.max_roll_moment)
 
     def compute_desired_wrench(
         self,
         obs: Array,
         state: CentroidalState,
         height_cmd: float,
+        roll_integral: float = 0.0,
     ) -> tuple[Array, Array]:
         """Compute desired 6D wrench on CoM from control objectives.
 
@@ -73,6 +85,7 @@ class CentroidalWrenchComputer:
             obs: Observation array with gravity_body at [0:3], base_ang_vel at [6:9]
             state: CentroidalState with CoM, capture point, etc.
             height_cmd: Desired height command
+            roll_integral: Accumulated roll error for integral control
 
         Returns:
             Tuple of (desired_force, desired_moment) where:
@@ -126,8 +139,14 @@ class CentroidalWrenchComputer:
 
         # === Moment objectives ===
 
-        # Roll stabilization: moment about x-axis to correct roll
-        m_roll = -self.k_roll * roll - self.k_roll_rate * roll_rate
+        # Roll stabilization: PID control to eliminate steady-state error
+        # P term: proportional to current roll error
+        # D term: damping based on roll rate
+        # I term: accumulated error to eliminate bias/drift
+        # CRITICAL FIX: Negative roll (left tilt) requires POSITIVE Mx to correct
+        # The corrective moment must be opposite in sign to the roll error
+        m_roll = -self.k_roll * roll - self.k_roll_rate * roll_rate - self.k_roll_integral * roll_integral
+        m_roll = self._limit_roll_moment(m_roll)
 
         # Pitch stabilization: for wheeled biped, use inverted pendulum control
         # Sagittal force should be directly proportional to pitch angle (not scaled by height)
@@ -150,8 +169,18 @@ class CentroidalWrenchComputer:
         self,
         state: CentroidalState,
         height_cmd: float,
+        roll_integral: float = 0.0,
     ) -> tuple[Array, Array]:
-        """Compute desired force and moment from explicit centroidal state."""
+        """Compute desired force and moment from explicit centroidal state.
+
+        Args:
+            state: CentroidalState with CoM, capture point, etc.
+            height_cmd: Desired height command
+            roll_integral: Accumulated roll error for integral control
+
+        Returns:
+            Tuple of (desired_force, desired_moment)
+        """
         f_gravity = jnp.array([0.0, 0.0, self.robot_mass * self.gravity])
         height_error = height_cmd - state.com_pos[2]
         f_height = jnp.array([0.0, 0.0, self.k_height * height_error])
@@ -176,7 +205,11 @@ class CentroidalWrenchComputer:
 
         desired_force = f_gravity + f_height + f_com_lateral + f_com_sagittal + f_cp
 
-        m_roll = -self.k_roll * state.roll - self.k_roll_rate * state.roll_rate
+        # Roll stabilization: PID control to eliminate steady-state error
+        # CRITICAL FIX: Negative roll (left tilt) requires POSITIVE Mx to correct
+        # The corrective moment must be opposite in sign to the roll error
+        m_roll = -self.k_roll * state.roll - self.k_roll_rate * state.roll_rate - self.k_roll_integral * roll_integral
+        m_roll = self._limit_roll_moment(m_roll)
 
         # Pitch stabilization: for wheeled biped, use inverted pendulum control
         # Sagittal force should be directly proportional to pitch angle (not scaled by height)
@@ -195,6 +228,7 @@ class CentroidalWrenchComputer:
         obs: Array,
         state: CentroidalState,
         height_cmd: float,
+        roll_integral: float = 0.0,
     ) -> Array:
         """Compute desired 6D wrench vector for force distribution.
 
@@ -205,9 +239,10 @@ class CentroidalWrenchComputer:
             obs: Observation array with gravity_body at [0:3], base_ang_vel at [6:9]
             state: CentroidalState with CoM, capture point, etc.
             height_cmd: Desired height command
+            roll_integral: Accumulated roll error for integral control
 
         Returns:
             Desired wrench (6,) [Fx, Fy, Fz, Mx, My, Mz] in world frame
         """
-        desired_force, desired_moment = self.compute_desired_wrench(obs, state, height_cmd)
+        desired_force, desired_moment = self.compute_desired_wrench(obs, state, height_cmd, roll_integral)
         return jnp.concatenate([desired_force, desired_moment])

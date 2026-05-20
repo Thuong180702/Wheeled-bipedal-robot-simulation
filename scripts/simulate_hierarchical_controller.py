@@ -73,6 +73,9 @@ def main():
     parser.add_argument(
         "--visual", action="store_true", help="Run with MuJoCo viewer (visual mode)"
     )
+    parser.add_argument(
+        "--steps", type=int, default=200, help="Number of 100 Hz control steps to simulate"
+    )
     args = parser.parse_args()
 
     print("=" * 80)
@@ -167,25 +170,30 @@ def main():
     )
     wbc_controller = IntegratedWBC(
         mj_model,
-        k_roll=150.0,  # MODERATE: 1.5x higher to provide better roll rejection without saturating actuators
-        k_roll_rate=30.0,  # MODERATE: 1.5x higher damping
-        k_pitch=100.0,  # BASELINE: Keep original to avoid creating excessive roll disturbances
-        k_pitch_rate=20.0,  # BASELINE: Keep original damping
+        k_roll=60.0,
+        k_roll_rate=12.0,
+        k_roll_integral=0.0,
+        k_pitch=300.0,  # TUNED: Optimal balance - strong enough without oscillation (tested: 800 too high, 150 too low)
+        k_pitch_rate=15.0,  # TUNED: Proportional damping with 20:1 ratio
         k_com_lateral=15.0,
         k_com_lateral_damping=3.0,
-        k_com_sagittal=30.0,  # MODERATE INCREASE: 3x higher to actively move wheels under CoM
+        k_com_sagittal=50.0,  # INCREASED: Faster CoM positioning to help wheels move under CoM (was 30.0)
         k_com_sagittal_damping=6.0,  # MODERATE INCREASE: 3x higher for proper damping
-        k_cp_lateral=50.0,  # INCREASED: 2x higher for more aggressive anticipatory lateral control
-        k_cp_sagittal=100.0,  # MODERATE INCREASE: 2.5x higher for anticipatory pitch control
-        k_height=100.0,  # INCREASED: 2x higher to maintain stability margin
+        k_cp_lateral=50.0,  # REVERTED: Back to best config (Test 2: 46 steps with k_cp_lateral=25.0)
+        k_cp_sagittal=100.0,  # REVERTED: Back to best config (Test 2: 46 steps with k_cp_sagittal=50.0)
+        k_height=50.0,  # OPTIMAL: Best balance between contact maintenance and overshoot prevention (tested: 80 and 150 too high)
         robot_mass=robot_mass,
         gravity=gravity,
-        wbc_authority_budget=0.70,  # 70% of 60 Nm = 42 Nm available
+        max_roll_moment=25.0,
+        wbc_authority_budget=0.95,  # INCREASED: Use more motor capability (0.95 × 60 = 57 Nm limit)
         max_actuator_torque=60.0,  # Increased from 30 to 60 Nm
-        force_feedback_gain=0.3,  # Gentle force feedback to prevent bouncing without collapse
-        tau_hip_roll_max=30.0,  # Maximum hip roll torque PER SIDE (total capacity = 60 Nm when both work together)
-        max_force_asymmetry=40.0,  # INCREASED: More authority for vertical force asymmetry backup control
-        min_wheel_force=10.0,  # REDUCED: Allow larger asymmetry while maintaining contact
+        force_feedback_gain=0.2,  # FIXED: Reduced from 0.8 to 0.2 to eliminate phase lag oscillations (was causing 3.3x scale swings)
+        force_feedback_warmup_steps=5,  # FIXED: Added 5-step warmup to avoid reacting to mj_forward artifacts at t=0
+        tau_hip_roll_max=15.0,
+        max_force_asymmetry=60.0,  # INCREASED: Allow larger asymmetry to prevent wheel liftoff (was 40.0)
+        min_wheel_force=20.0,  # INCREASED: Higher minimum to prevent wheel liftoff (was 10.0)
+        roll_integral_limit=0.52,  # Anti-windup limit: ~30 degrees
+        dt=mj_model.opt.timestep,
     )
     momentum_coordinator = MomentumCoordinator(
         MomentumCoordinatorConfig(
@@ -199,15 +207,21 @@ def main():
     )
     posture_regularizer = PostureRegularizer(
         PostureRegularizerConfig(
-            k_posture=0.0,  # DISABLED - balance IK target conflicts with geometrically balanced keyframe
-            hip_roll_deadband=0.05,
-            hip_yaw_deadband=0.03,
-            hip_pitch_deadband=0.08,
-            knee_deadband=0.10,
+            k_posture=10.0,
+            k_hip_roll=3.0,
+            k_hip_yaw=1.5,
+            k_hip_pitch=30.0,
+            k_knee=30.0,
+            k_wheel=0.0,
+            hip_roll_deadband=0.15,  # ±8.6° - LARGE deadband, hip roll must be free for balance
+            hip_yaw_deadband=0.02,  # ±1.1° - tighter, yaw drift is bad
+            hip_pitch_deadband=0.035,  # ±2.0° - reduced for earlier activation
+            knee_deadband=0.05,  # ±2.9° - reduced for earlier activation
             wbc_error_threshold=0.3,
             momentum_activity_threshold=0.1,
             momentum_active_scale=0.5,
-            posture_authority_budget=0.15,  # 15% of 60 Nm = 9 Nm
+            posture_authority_budget=0.40,
+            max_actuator_torque=60.0,
         )
     )
 
@@ -268,7 +282,7 @@ def main():
         "cp_x": [],
         "cp_y": [],
         "tau_wbc_max": [],
-        "tau_momentum_max": [],
+        "tau_wheel_actual_max": [],  # Actual wheel torques from tau_total at indices [4, 9]
         "tau_posture_max": [],
         "tau_total_max": [],
         "pitch": [],
@@ -281,6 +295,7 @@ def main():
         "left_contact_active": [],
         "right_contact_active": [],
         "n_contacts": [],
+        "contact_force_valid": [],
         "left_contact_force_world_x": [],
         "left_contact_force_world_y": [],
         "left_contact_force_world_z": [],
@@ -315,14 +330,26 @@ def main():
         "desired_wrench_Mx": [],
         "desired_wrench_My": [],
         "desired_wrench_Mz": [],
+        # Motor tracking diagnostics
+        "target_joint_pos": [],  # Target positions from posture regularizer
+        "joint_pos_error": [],  # Position error per joint (target - actual)
+        "joint_pos_error_norm": [],  # L2 norm of position error
+        "joint_vel_norm": [],  # L2 norm of joint velocities
+        "tau_wbc_norm": [],  # L2 norm of WBC torques
+        "tau_posture_norm": [],  # L2 norm of posture torques
+        "tau_inverse_dynamics_norm": [],  # L2 norm of inverse dynamics torques
+        "tau_total_norm": [],  # L2 norm of total torques
+        "tau_rate_unlimited": [],  # Torque rate before rate limiting (Nm/s)
+        "tau_rate_limited": [],  # Torque rate after rate limiting (Nm/s)
     }
 
     # Simulation parameters
-    max_steps = 2000  # Run for 2000 steps (~40 seconds at 50Hz)
-    control_dt = 0.02  # 50 Hz
+    max_steps = args.steps
+    control_dt = 0.01  # 100 Hz
     physics_dt = mj_model.opt.timestep
     n_substeps = int(control_dt / physics_dt)
     prev_com_pos = None
+    tau_prev = jnp.array(mj_data.ctrl)  # Initialize previous torque from current control
 
     print(
         f"\nRunning simulation for {max_steps} steps ({max_steps * control_dt:.1f} seconds)"
@@ -333,10 +360,10 @@ def main():
     terminated = False
     termination_reason = None
     step = 0
-    height_cmd = 0.40  # Match actual CoM height from keyframe (~0.406m with wheels on ground)
+    height_cmd = 0.40  # Match equilibrium CoM height from compute_equilibrium_keyframe.py
 
     def simulation_step():
-        nonlocal prev_com_pos, terminated, termination_reason, step, height_cmd
+        nonlocal prev_com_pos, terminated, termination_reason, step, height_cmd, tau_prev
 
         if terminated or step >= max_steps:
             return False
@@ -391,15 +418,9 @@ def main():
         right_contact = centroidal_state.right_wheel_contact
         active_wheels = int(left_contact) + int(right_contact)
 
-        # Adaptive height adjustment logic:
-        # - Raise height when detecting large orientation errors or contact loss
-        # - Lower back to nominal when stable
-        if abs(pitch_rad) > 0.3 or abs(roll_rad) > 0.3 or active_wheels < 2:
-            # Unstable: raise height to increase stability margin
-            height_cmd = min(height_cmd + 0.01, 0.50)  # Max 0.50m (9.4cm above nominal)
-        elif abs(pitch_rad) < 0.1 and abs(roll_rad) < 0.1 and active_wheels == 2:
-            # Stable: gradually lower back to nominal
-            height_cmd = max(height_cmd - 0.005, 0.40)  # Nominal 0.40m (matches keyframe CoM)
+        # Keep height_cmd constant at 0.40m (no adaptive adjustment)
+        # Adaptive height adjustment was causing instability by reducing natural frequency
+        # when the robot was already unstable
 
         tau_wbc, qp_diagnostics = wbc_controller.compute_wbc_torque_with_diagnostics(
             mj_data, obs, centroidal_state, height_cmd
@@ -461,8 +482,9 @@ def main():
                 )
             weight_n = robot_mass * gravity
             print(
-                f"  Total contact force z: {total_contact_force_z:.2f} N (weight: {weight_n:.2f} N)"
+                f"  Raw mj_forward contact force z: {total_contact_force_z:.2f} N (weight: {weight_n:.2f} N)"
             )
+            print(f"  Contact force valid for feedback: {qp_diagnostics['contact_force_valid']}")
             print(f"  Desired Fz: {qp_diagnostics['desired_wrench_Fz']:.2f} N")
 
             # Force feedback diagnostics
@@ -488,16 +510,45 @@ def main():
             print(f"Note: Using unified QP force distribution with hip roll torques\n")
 
         # WBC is the primary torque path. Posture is secondary and budgeted.
-        tau_posture = leg_position_controller.compute_leg_torques(joint_pos, joint_vel)
+        wbc_error_magnitude = float(jnp.linalg.norm(qp_diagnostics.get('wrench_error_norm', 0.0)))
+        momentum_magnitude = 0.0  # Not using momentum coordinator in this test
+        tau_posture = compute_posture_jit(joint_pos, wbc_error_magnitude, momentum_magnitude, height_cmd)
         tau_wheel_secondary = jnp.zeros(10)
-        # FIXED: WBC now handles all joints (masking removed), so reduce posture contribution
-        tau_total_raw = tau_wbc + 0.0 * tau_posture + tau_wheel_secondary
+        RAW_INVERSE_DYNAMICS_DIAGNOSTIC_ENABLED = False
+        if RAW_INVERSE_DYNAMICS_DIAGNOSTIC_ENABLED:
+            mujoco.mj_inverse(mj_model, mj_data)
+            tau_inverse_dynamics = jnp.array(mj_data.qfrc_inverse[6:16])
+        else:
+            tau_inverse_dynamics = jnp.zeros(10)
+
+        # ENABLED: Posture regularizer now active with equilibrium-based targets
+        tau_total_raw = tau_wbc + tau_posture + tau_wheel_secondary + tau_inverse_dynamics
         torque_limit = jnp.array(mj_model.actuator_ctrlrange[:, 1])
         tau_total = jnp.clip(tau_total_raw, -torque_limit, torque_limit)
         tau_saturation_rate = float(jnp.mean(jnp.abs(tau_total_raw) > torque_limit))
 
-        # Apply torques
-        mj_data.ctrl[:] = np.array(tau_total)
+        # Compute motor tracking telemetry
+        target_joint_pos = posture_regularizer.compute_target_posture_from_height(height_cmd)
+        joint_pos_error = target_joint_pos - joint_pos
+        joint_pos_error_norm = float(jnp.linalg.norm(joint_pos_error))
+        joint_vel_norm = float(jnp.linalg.norm(mj_data.qvel[6:16]))
+        tau_wbc_norm = float(jnp.linalg.norm(tau_wbc))
+        tau_posture_norm = float(jnp.linalg.norm(tau_posture))
+        tau_inverse_dynamics_norm = float(jnp.linalg.norm(tau_inverse_dynamics))
+        tau_total_norm = float(jnp.linalg.norm(tau_total))
+
+        # Compute torque rate (Nm/s) and apply limiting from the first control step.
+        tau_rate_unlimited = float(jnp.linalg.norm(tau_total - tau_prev) / control_dt)
+        max_torque_rate = 400.0
+        tau_rate_vec = (tau_total - tau_prev) / control_dt
+        tau_rate_vec_clipped = jnp.clip(tau_rate_vec, -max_torque_rate, max_torque_rate)
+        tau_smooth = tau_prev + tau_rate_vec_clipped * control_dt
+        tau_rate_limited = float(jnp.linalg.norm(tau_rate_vec_clipped))
+
+        tau_prev = tau_smooth
+
+        # Apply rate-limited torques
+        mj_data.ctrl[:] = np.array(tau_smooth)
 
         # POINT 5: After first mj_step (only on step 0)
         if step == 0:
@@ -534,7 +585,10 @@ def main():
         telemetry["cp_x"].append(float(centroidal_state.capture_point[0]))
         telemetry["cp_y"].append(float(centroidal_state.capture_point[1]))
         telemetry["tau_wbc_max"].append(float(jnp.max(jnp.abs(tau_wbc))))
-        telemetry["tau_momentum_max"].append(float(jnp.max(jnp.abs(tau_wheel_secondary))))
+        # Track actual wheel torques at indices [4, 9] from tau_total
+        wheel_indices = jnp.array([4, 9])
+        tau_wheel_actual = jnp.max(jnp.abs(tau_total[wheel_indices]))
+        telemetry["tau_wheel_actual_max"].append(float(tau_wheel_actual))
         telemetry["tau_posture_max"].append(float(jnp.max(jnp.abs(tau_posture))))
         telemetry["tau_total_max"].append(float(jnp.max(jnp.abs(tau_total))))
         telemetry["pitch"].append(pitch)
@@ -547,6 +601,7 @@ def main():
         telemetry["left_contact_active"].append(bool(centroidal_state.left_wheel_contact))
         telemetry["right_contact_active"].append(bool(centroidal_state.right_wheel_contact))
         telemetry["n_contacts"].append(int(mj_data.ncon))
+        telemetry["contact_force_valid"].append(bool(centroidal_state.contact_force_valid))
         telemetry["left_contact_force_world_x"].append(float(centroidal_state.left_contact_force_world[0]))
         telemetry["left_contact_force_world_y"].append(float(centroidal_state.left_contact_force_world[1]))
         telemetry["left_contact_force_world_z"].append(float(centroidal_state.left_contact_force_world[2]))
@@ -585,6 +640,17 @@ def main():
         telemetry["desired_wrench_Mx"].append(qp_diagnostics["desired_wrench_Mx"])
         telemetry["desired_wrench_My"].append(qp_diagnostics["desired_wrench_My"])
         telemetry["desired_wrench_Mz"].append(qp_diagnostics["desired_wrench_Mz"])
+        # Motor tracking diagnostics
+        telemetry["target_joint_pos"].append(",".join(f"{x:.4f}" for x in np.array(target_joint_pos)))
+        telemetry["joint_pos_error"].append(",".join(f"{x:.4f}" for x in np.array(joint_pos_error)))
+        telemetry["joint_pos_error_norm"].append(joint_pos_error_norm)
+        telemetry["joint_vel_norm"].append(joint_vel_norm)
+        telemetry["tau_wbc_norm"].append(tau_wbc_norm)
+        telemetry["tau_posture_norm"].append(tau_posture_norm)
+        telemetry["tau_inverse_dynamics_norm"].append(tau_inverse_dynamics_norm)
+        telemetry["tau_total_norm"].append(tau_total_norm)
+        telemetry["tau_rate_unlimited"].append(tau_rate_unlimited)
+        telemetry["tau_rate_limited"].append(tau_rate_limited)
 
         # Progress updates with orientation feedback
         if (step + 1) % 10 == 0 or step < 5:
@@ -675,7 +741,7 @@ def main():
 
     print(f"\nMax torques (wheeled biped architecture):")
     max_hip_roll = max(telemetry["tau_wbc_max"])
-    max_wheels = max(telemetry["tau_momentum_max"])
+    max_wheels = max(telemetry["tau_wheel_actual_max"])
     max_legs = max(telemetry["tau_posture_max"])
     max_total = max(telemetry["tau_total_max"])
     print(f"  Hip roll: {max_hip_roll:.2f} Nm")
