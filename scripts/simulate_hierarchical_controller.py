@@ -66,6 +66,68 @@ def check_termination(qpos, com_height):
     return False, None
 
 
+def measure_wheel_floor_contact(model, data, floor_geom_id, l_wheel_geom_id, r_wheel_geom_id):
+    min_dist = None
+    total_fz = 0.0
+    contact_count = 0
+    wheel_geom_ids = {l_wheel_geom_id, r_wheel_geom_id}
+
+    for i in range(data.ncon):
+        c = data.contact[i]
+        g1 = int(c.geom1)
+        g2 = int(c.geom2)
+        involves_floor = g1 == floor_geom_id or g2 == floor_geom_id
+        involves_wheel = g1 in wheel_geom_ids or g2 in wheel_geom_ids
+        if not (involves_floor and involves_wheel):
+            continue
+
+        contact_count += 1
+        d = float(c.dist)
+        min_dist = d if min_dist is None else min(min_dist, d)
+
+        force_contact = np.zeros(6)
+        mujoco.mj_contactForce(model, data, i, force_contact)
+        frame = np.array(c.frame).reshape(3, 3)
+        force_world = frame.T @ force_contact[:3]
+        total_fz += float(force_world[2])
+
+    return {
+        "min_dist": min_dist,
+        "total_fz": total_fz,
+        "contact_count": contact_count,
+    }
+
+
+def calibrate_root_z_for_wheel_floor_contact(model, data, target_dist=-5e-4, max_iters=5):
+    floor_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
+    l_wheel_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "l_wheel_collision")
+    r_wheel_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "r_wheel_collision")
+
+    for _ in range(max_iters):
+        mujoco.mj_forward(model, data)
+        stats = measure_wheel_floor_contact(
+            model, data, floor_geom_id, l_wheel_geom_id, r_wheel_geom_id
+        )
+        min_dist = stats["min_dist"]
+        if min_dist is None:
+            break
+
+        delta_z = target_dist - min_dist
+        if abs(delta_z) < 1e-7:
+            break
+
+        data.qpos[2] += delta_z
+        data.qvel[:] = 0.0
+        data.qacc[:] = 0.0
+
+    mujoco.mj_forward(model, data)
+    return {
+        "floor_geom_id": floor_geom_id,
+        "l_wheel_geom_id": l_wheel_geom_id,
+        "r_wheel_geom_id": r_wheel_geom_id,
+    }
+
+
 def build_step1_telemetry_template():
     return {
         "tau_wbc_per_joint": [],
@@ -254,67 +316,45 @@ def main():
     mj_data = mujoco.MjData(mj_model)
     contact_jacobian = ContactJacobian(mj_model)
 
-    # Helper function to measure contact forces
-    def measure_contact_forces(mj_model, mj_data, label):
-        """Measure and log contact forces at a specific initialization point."""
-        left_fz = 0.0
-        right_fz = 0.0
-        n_contacts = 0
-
-        for i in range(mj_data.ncon):
-            contact = mj_data.contact[i]
-            geom1_name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom1)
-            geom2_name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom2)
-
-            # Get contact force (only valid after mj_step, may be zero after mj_forward)
-            if i < len(mj_data.efc_force):
-                force = mj_data.efc_force[i]
-            else:
-                force = 0.0
-
-            if "l_wheel" in geom1_name or "l_wheel" in geom2_name:
-                left_fz += force
-                n_contacts += 1
-            if "r_wheel" in geom1_name or "r_wheel" in geom2_name:
-                right_fz += force
-                n_contacts += 1
-
-        total_fz = left_fz + right_fz
-        asymmetry = abs(left_fz - right_fz)
-        print(f"[{label}] Contacts: {n_contacts}, Left: {left_fz:.2f} N, Right: {right_fz:.2f} N, Total: {total_fz:.2f} N, Asymmetry: {asymmetry:.2f} N")
-        return left_fz, right_fz, total_fz, asymmetry
+    floor_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
+    l_wheel_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "l_wheel_collision")
+    r_wheel_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "r_wheel_collision")
 
     # Initialize robot on ground using keyframe 0
     if mj_model.nkey > 0:
         mujoco.mj_resetDataKeyframe(mj_model, mj_data, 0)
         print("[OK] Robot initialized using keyframe 0")
 
-    # POINT 1: After keyframe load (before any mj_forward)
     print("\n=== INITIALIZATION DIAGNOSTICS ===")
-    measure_contact_forces(mj_model, mj_data, "POINT 1: After keyframe load")
-
-    # Forward kinematics to ensure consistent state
+    root_z_before_calib = float(mj_data.qpos[2])
     mujoco.mj_forward(mj_model, mj_data)
+    before_contact = measure_wheel_floor_contact(
+        mj_model, mj_data, floor_geom_id, l_wheel_geom_id, r_wheel_geom_id
+    )
+    before_min_dist = before_contact["min_dist"]
+    print(f"[INIT CALIB] root_z before calibration: {root_z_before_calib:+.6f}")
+    print(
+        "[INIT CALIB] min wheel-floor contact.dist before calibration: "
+        f"{before_min_dist:+.6f}" if before_min_dist is not None else "[INIT CALIB] min wheel-floor contact.dist before calibration: <none>"
+    )
 
-    # POINT 2: After first mj_forward
-    measure_contact_forces(mj_model, mj_data, "POINT 2: After first mj_forward")
+    calibrate_root_z_for_wheel_floor_contact(
+        mj_model,
+        mj_data,
+        target_dist=-5e-4,
+        max_iters=5,
+    )
 
-    # CRITICAL FIX: Explicitly zero all velocities to eliminate mj_forward() perturbations
-    # mj_forward() may introduce small velocities through contact resolution/constraint solving
-    # This causes exponential divergence from non-equilibrium initial state
-    mj_data.qvel[:] = 0.0
-    mj_data.qacc[:] = 0.0
-
-    # POINT 3: After velocity zeroing
-    measure_contact_forces(mj_model, mj_data, "POINT 3: After velocity zeroing")
-
-    # Recompute forward kinematics with zero velocities
-    mujoco.mj_forward(mj_model, mj_data)
-
-    # POINT 4: After second mj_forward
-    measure_contact_forces(mj_model, mj_data, "POINT 4: After second mj_forward")
-
-    print("[OK] Initial velocities explicitly zeroed to ensure equilibrium")
+    root_z_after_calib = float(mj_data.qpos[2])
+    after_contact = measure_wheel_floor_contact(
+        mj_model, mj_data, floor_geom_id, l_wheel_geom_id, r_wheel_geom_id
+    )
+    after_min_dist = after_contact["min_dist"]
+    print(f"[INIT CALIB] root_z after calibration: {root_z_after_calib:+.6f}")
+    print(
+        "[INIT CALIB] min wheel-floor contact.dist after calibration: "
+        f"{after_min_dist:+.6f}" if after_min_dist is not None else "[INIT CALIB] min wheel-floor contact.dist after calibration: <none>"
+    )
 
     # Initialize controllers
     print("\nInitializing hierarchical controller...")
@@ -576,8 +616,8 @@ def main():
         # ADAPTIVE HEIGHT ADJUSTMENT: Maintain stability margin by raising height when unstable
         # Extract orientation from gravity vector
         gravity_body = obs[0:3]
-        roll_rad, pitch_rad = compute_orientation_from_gravity(gravity_body)
-        control_mode = compute_step6_control_mode(roll_rad, pitch_rad)
+        pitch_x_rad, roll_y_rad = compute_orientation_from_gravity(gravity_body)
+        control_mode = compute_step6_control_mode(roll_y_rad, pitch_x_rad)
 
         # Check contact state
         left_contact = centroidal_state_control.left_wheel_contact
@@ -602,10 +642,10 @@ def main():
 
             # Show computed orientation from gravity vector using unified computation
             gravity_body = obs[0:3]
-            roll_computed, pitch_computed = compute_orientation_from_gravity(gravity_body)
+            pitch_x_computed, roll_y_computed = compute_orientation_from_gravity(gravity_body)
             print(f"Computed orientation from gravity:")
-            print(f"  Roll: {roll_computed*57.3:.2f} deg")
-            print(f"  Pitch: {pitch_computed*57.3:.2f} deg")
+            print(f"  Roll(Y): {roll_y_computed*57.3:.2f} deg")
+            print(f"  Pitch(X): {pitch_x_computed*57.3:.2f} deg")
             print(f"  Gravity vector: [{obs[0]:.3f}, {obs[1]:.3f}, {obs[2]:.3f}]")
 
             print(
@@ -698,7 +738,7 @@ def main():
         capture_point_error_y = float(centroidal_state_control.capture_point[1] - centroidal_state_control.com_pos[1])
         if args.enable_secondary_wheel_balance:
             tau_wheel_balance = compute_step5_wheel_balance(
-                pitch_rad,
+                pitch_x_rad,
                 centroidal_state_control.pitch_rate,
                 capture_point_error_y,
             )
@@ -791,7 +831,18 @@ def main():
         if step == 0:
             # Step simulation once to get constraint forces
             mujoco.mj_step(mj_model, mj_data)
-            measure_contact_forces(mj_model, mj_data, "POINT 5: After first mj_step")
+            post_step_contact = measure_wheel_floor_contact(
+                mj_model,
+                mj_data,
+                floor_geom_id,
+                l_wheel_geom_id,
+                r_wheel_geom_id,
+            )
+            first_total_fz = post_step_contact["total_fz"]
+            weight_n = robot_mass * gravity
+            ratio = first_total_fz / max(weight_n, 1e-6)
+            print(f"[INIT CALIB] first post-step total wheel-floor Fz: {first_total_fz:+.6f} N")
+            print(f"[INIT CALIB] first post-step total_fz/weight: {ratio:+.6f}")
             print("=== END INITIALIZATION DIAGNOSTICS ===\n")
 
             # Continue with remaining substeps
@@ -949,9 +1000,9 @@ def main():
             elapsed = time.time() - start_time
             # Show what controller is sensing using unified orientation computation
             gravity_body = obs[0:3]
-            roll_sensed, pitch_sensed = compute_orientation_from_gravity(gravity_body)
-            pitch_sensed = float(pitch_sensed) * 57.3
-            roll_sensed = float(roll_sensed) * 57.3
+            pitch_x_sensed, roll_y_sensed = compute_orientation_from_gravity(gravity_body)
+            pitch_sensed = float(pitch_x_sensed) * 57.3
+            roll_sensed = float(roll_y_sensed) * 57.3
             print(
                 f"Step {step + 1}: h={com_height:.3f}m, "
                 f"pitch={pitch*57.3:.1f}deg (sensed={pitch_sensed:.1f}deg), "
