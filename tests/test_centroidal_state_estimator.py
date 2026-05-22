@@ -35,6 +35,18 @@ def test_centroidal_state_creation():
     assert isinstance(state.right_wheel_contact, bool)
     assert isinstance(state.left_wheel_force, float)
     assert isinstance(state.right_wheel_force, float)
+    assert hasattr(state, "body_pitch_x")
+    assert hasattr(state, "body_roll_y")
+    assert hasattr(state, "body_yaw_z")
+    assert hasattr(state, "body_pitch_rate_x")
+    assert hasattr(state, "body_roll_rate_y")
+    assert hasattr(state, "body_yaw_rate_z")
+    assert hasattr(state, "pitch_x")
+    assert hasattr(state, "roll_y")
+    assert hasattr(state, "yaw_z")
+    assert hasattr(state, "pitch_rate_x")
+    assert hasattr(state, "roll_rate_y")
+    assert hasattr(state, "yaw_rate_z")
 
 
 def test_com_extraction_from_mjx_data():

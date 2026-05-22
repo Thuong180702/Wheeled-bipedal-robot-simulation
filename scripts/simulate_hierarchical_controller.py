@@ -217,6 +217,11 @@ def main():
     parser.add_argument(
         "--steps", type=int, default=200, help="Number of 100 Hz control steps to simulate"
     )
+    parser.add_argument(
+        "--enable-secondary-wheel-balance",
+        action="store_true",
+        help="Enable secondary wheel-balance torque path (default: disabled for WBC-only wheel torque)",
+    )
     args = parser.parse_args()
 
     print("=" * 80)
@@ -673,11 +678,14 @@ def main():
         tau_hip_roll_centering = compute_step4_hip_roll_centering(joint_pos, joint_vel)
         # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
         capture_point_error_y = float(centroidal_state.capture_point[1] - centroidal_state.com_pos[1])
-        tau_wheel_balance = compute_step5_wheel_balance(
-            pitch_rad,
-            centroidal_state.pitch_rate,
-            capture_point_error_y,
-        )
+        if args.enable_secondary_wheel_balance:
+            tau_wheel_balance = compute_step5_wheel_balance(
+                pitch_rad,
+                centroidal_state.pitch_rate,
+                capture_point_error_y,
+            )
+        else:
+            tau_wheel_balance = jnp.zeros(10)
         torque_components = compute_step2_torque_components(
             leg_position_controller,
             joint_pos,

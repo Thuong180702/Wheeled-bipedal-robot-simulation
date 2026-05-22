@@ -129,7 +129,7 @@ def test_wrench_matrix_hip_roll_contribution(mj_model, mj_data):
     assert wrench[5] == pytest.approx(0.0, abs=1e-6)  # Mz
 
 
-def test_wrench_matrix_vertical_force_asymmetry_creates_roll_moment(mj_model, mj_data):
+def test_wrench_matrix_vertical_force_asymmetry_creates_pitch_moment_my(mj_model, mj_data):
     jacobian = ContactJacobian(mj_model)
 
     wheel_pos_left = np.array([0.135, 0.0, 0.0])
@@ -148,8 +148,31 @@ def test_wrench_matrix_vertical_force_asymmetry_creates_roll_moment(mj_model, mj
     wrench = A_wrench @ decision_vars
 
     assert wrench[2] == pytest.approx(80.0, abs=1e-6)
-    assert wrench[3] == pytest.approx(4.05, abs=1e-6)
-    assert wrench[4] == pytest.approx(0.0, abs=1e-6)
+    assert wrench[3] == pytest.approx(0.0, abs=1e-6)
+    assert wrench[4] == pytest.approx(-4.05, abs=1e-6)
+
+
+def test_wrench_matrix_moment_rows_match_cross_product(mj_model, mj_data):
+    jacobian = ContactJacobian(mj_model)
+
+    r_left = np.array([0.12, -0.04, -0.30])
+    r_right = np.array([-0.11, 0.03, -0.28])
+    f_left = np.array([7.0, -2.0, 40.0])
+    f_right = np.array([-5.0, 3.0, 35.0])
+
+    A_wrench = jacobian.build_wrench_matrix(mj_data, r_left, r_right)
+    decision_vars = np.array([
+        f_left[0], f_left[1], f_left[2],
+        f_right[0], f_right[1], f_right[2],
+        0.0, 0.0,
+    ])
+
+    wrench = A_wrench @ decision_vars
+    expected_moment = np.cross(r_left, f_left) + np.cross(r_right, f_right)
+
+    assert wrench[3] == pytest.approx(expected_moment[0], abs=1e-6)
+    assert wrench[4] == pytest.approx(expected_moment[1], abs=1e-6)
+    assert wrench[5] == pytest.approx(expected_moment[2], abs=1e-6)
 
 
 def test_wrench_matrix_pitch_moment(mj_model, mj_data):

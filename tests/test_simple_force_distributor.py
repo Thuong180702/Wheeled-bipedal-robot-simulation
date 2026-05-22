@@ -35,14 +35,15 @@ def test_no_contact_outputs_anticipatory_support():
         left_contact=False,
         right_contact=False,
     )
-    assert jnp.allclose(f_left, jnp.array([0.5, 1.0, 40.0]))
-    assert jnp.allclose(f_right, jnp.array([0.5, 1.0, 40.0]))
+    expected_fz_diff = -4.0 / 0.135
+    assert jnp.allclose(f_left, jnp.array([0.5, 1.0, 40.0 + expected_fz_diff / 2.0]))
+    assert jnp.allclose(f_right, jnp.array([0.5, 1.0, 40.0 - expected_fz_diff / 2.0]))
     assert float(jnp.linalg.norm(tau_hip_roll)) > 0.0
     assert diagnostics["feasible"]
     assert diagnostics["reason"] == "flight_phase_anticipatory"
 
 
-def test_no_contact_anticipatory_support_preserves_roll_force_asymmetry():
+def test_no_contact_anticipatory_support_preserves_my_force_asymmetry():
     distributor = SimpleForceDistributor(
         tau_hip_roll_max=15.0,
         max_force_asymmetry=40.0,
@@ -50,7 +51,7 @@ def test_no_contact_anticipatory_support_preserves_roll_force_asymmetry():
     )
 
     f_left, f_right, tau_hip_roll, diagnostics = distributor.distribute_wrench_contact_aware(
-        jnp.array([0.0, 0.0, 80.0, -25.0, 0.0, 0.0]),
+        jnp.array([0.0, 0.0, 80.0, -25.0, 4.05, 0.0]),
         left_contact=False,
         right_contact=False,
         hip_roll_authority_scale=0.25,
@@ -63,7 +64,7 @@ def test_no_contact_anticipatory_support_preserves_roll_force_asymmetry():
     assert diagnostics["reason"] == "flight_phase_anticipatory"
 
 
-def test_reduced_hip_roll_authority_reallocates_roll_moment_to_vertical_forces():
+def test_reduced_hip_roll_authority_keeps_mx_in_hip_torque_and_uses_my_for_fz_split():
     distributor = SimpleForceDistributor(
         tau_hip_roll_max=15.0,
         max_force_asymmetry=40.0,
@@ -71,7 +72,7 @@ def test_reduced_hip_roll_authority_reallocates_roll_moment_to_vertical_forces()
     )
 
     f_left, f_right, tau_hip_roll, diagnostics = distributor.distribute_wrench_contact_aware(
-        jnp.array([0.0, 0.0, 80.0, 25.0, 0.0, 0.0]),
+        jnp.array([0.0, 0.0, 80.0, 25.0, -4.05, 0.0]),
         left_contact=True,
         right_contact=True,
         hip_roll_authority_scale=0.25,
@@ -80,4 +81,22 @@ def test_reduced_hip_roll_authority_reallocates_roll_moment_to_vertical_forces()
     assert jnp.allclose(tau_hip_roll, jnp.array([-3.125, 3.125]))
     assert jnp.allclose(jnp.array([f_left[2], f_right[2]]), jnp.array([55.0, 25.0]))
     assert jnp.isclose(f_left[2] + f_right[2], 80.0)
+    assert diagnostics["feasible"]
+
+
+def test_my_only_does_not_create_hip_roll_torque_from_vertical_asymmetry():
+    distributor = SimpleForceDistributor(
+        tau_hip_roll_max=15.0,
+        max_force_asymmetry=40.0,
+        min_wheel_force=20.0,
+    )
+
+    f_left, f_right, tau_hip_roll, diagnostics = distributor.distribute_wrench_contact_aware(
+        jnp.array([0.0, 0.0, 80.0, 0.0, -4.05, 0.0]),
+        left_contact=True,
+        right_contact=True,
+    )
+
+    assert jnp.allclose(tau_hip_roll, jnp.array([0.0, 0.0]))
+    assert jnp.allclose(jnp.array([f_left[2], f_right[2]]), jnp.array([55.0, 25.0]))
     assert diagnostics["feasible"]

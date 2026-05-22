@@ -52,10 +52,10 @@ class SimpleForceDistributor:
         if not left_contact and not right_contact:
             wheel_x_offset = 0.135
             tau_hip_roll = self._roll_moment_to_hip_roll_torque(Mx) * hip_roll_authority_scale
-            hip_roll_moment_provided = tau_hip_roll[1] - tau_hip_roll[0]
-            remaining_mx = Mx - hip_roll_moment_provided
-            if abs(remaining_mx) > 0.5:
-                fz_diff_desired = remaining_mx / wheel_x_offset
+            # Vertical force asymmetry across ±x produces My = -x*Fz, not Mx.
+            remaining_my = My
+            if abs(remaining_my) > 0.5:
+                fz_diff_desired = -remaining_my / wheel_x_offset
                 fz_avg = Fz / 2.0
                 liftoff_threshold = 2.0 * (fz_avg - self.min_wheel_force - 5.0)
                 max_safe_diff = min(self.max_force_asymmetry, liftoff_threshold)
@@ -76,13 +76,9 @@ class SimpleForceDistributor:
         print(f"[FORCE_DIST] left_contact={left_contact}, right_contact={right_contact}, active_count={active_count}")
         print(f"[FORCE_DIST] desired_wrench: Fx={Fx:.2f}, Fy={Fy:.2f}, Fz={Fz:.2f}, Mx={Mx:.2f}, My={My:.2f}, Mz={Mz:.2f}")
 
-        # CRITICAL FIX: Create asymmetric vertical forces to generate roll moment
-        # Wheels are positioned at x = ±0.135m (left/right sides), not y-axis
-        # Roll moment from cross product: Mx = r_left_x * f_left_z + r_right_x * f_right_z
-        # With r_left_x = +0.135 and r_right_x = -0.135:
-        # Mx = 0.135 * f_left_z - 0.135 * f_right_z = 0.135 * (f_left_z - f_right_z)
-        # Therefore: f_left_z - f_right_z = Mx / 0.135
-        wheel_x_offset = 0.135  # meters, actual x-position of wheels from CoM
+        # Vertical asymmetry across ±x creates pitch moment My = -x*Fz.
+        # It is not used to realize Mx in this distributor.
+        wheel_x_offset = 0.135  # meters, wheel x-offset relative to CoM
 
         if active_count == 2:
             print(f"[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact")
@@ -94,18 +90,14 @@ class SimpleForceDistributor:
             # Positive Mx uses opposite hip-roll signs in this model.
             tau_hip_roll = self._roll_moment_to_hip_roll_torque(Mx) * hip_roll_authority_scale
 
-            # Calculate remaining roll moment that hip torques cannot provide
-            # (due to saturation or insufficient authority)
-            hip_roll_moment_provided = tau_hip_roll[1] - tau_hip_roll[0]
-            remaining_mx = Mx - hip_roll_moment_provided
+            # Keep Mx control in hip-roll torque path.
+            # Vertical force asymmetry across ±x is used for My, not Mx.
 
             # RECOVERY MECHANISM 3: Predictive contact maintenance
-            # Only use vertical force asymmetry if hip torques are saturated
-            # AND the remaining moment is significant
-            # TUNING: Lowered threshold from 1.0 to 0.5 Nm to engage earlier as preventive measure
-            if abs(remaining_mx) > 0.5:  # Only if >0.5 Nm remains after hip saturation
-                # Use differential vertical forces as SECONDARY/backup for remaining moment
-                fz_diff_desired = remaining_mx / wheel_x_offset  # f_left_z - f_right_z
+            # Use vertical force asymmetry only for residual My demand.
+            if abs(My) > 0.5:
+                # My = -x*(f_left_z - f_right_z) => f_left_z - f_right_z = -My/x
+                fz_diff_desired = -My / wheel_x_offset
 
                 # SAFETY LIMIT: Constrain force asymmetry to prevent liftoff
                 fz_avg = Fz / 2.0
@@ -157,8 +149,8 @@ class SimpleForceDistributor:
         Uses simple heuristics instead of QP optimization:
         - Split vertical force equally between wheels
         - Split sagittal force equally between wheels
-        - Use lateral force for roll moment via differential wheel forces
-        - Map roll moment directly to hip roll torques
+        - Use vertical force asymmetry across ±x for My when needed
+        - Map Mx directly to hip roll torques
 
         Args:
             desired_wrench: Desired 6D wrench [Fx, Fy, Fz, Mx, My, Mz]

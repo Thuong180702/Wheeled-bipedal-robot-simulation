@@ -165,7 +165,7 @@ def test_wrench_vector_format_for_unified_force_distributor():
     assert moments.shape == (3,), "Last 3 elements must be moments"
 
 
-def make_state(roll=0.0, pitch=0.0, roll_rate=0.0, pitch_rate=0.0, com_z=0.42):
+def make_state(roll_y=0.0, pitch_x=0.0, roll_rate_y=0.0, pitch_rate_x=0.0, com_z=0.42):
     return CentroidalState(
         com_pos=jnp.array([0.0, 0.0, com_z]),
         com_vel=jnp.zeros(3),
@@ -178,13 +178,25 @@ def make_state(roll=0.0, pitch=0.0, roll_rate=0.0, pitch_rate=0.0, com_z=0.42):
         left_wheel_force=40.0,
         right_wheel_force=40.0,
         base_quat=jnp.array([1.0, 0.0, 0.0, 0.0]),
-        base_ang_vel=jnp.array([roll_rate, pitch_rate, 0.0]),
-        roll=roll,
-        pitch=pitch,
+        base_ang_vel=jnp.array([pitch_rate_x, roll_rate_y, 0.0]),
+        roll=pitch_x,
+        pitch=roll_y,
         yaw=0.0,
-        roll_rate=roll_rate,
-        pitch_rate=pitch_rate,
+        roll_rate=pitch_rate_x,
+        pitch_rate=roll_rate_y,
         yaw_rate=0.0,
+        body_pitch_x=pitch_x,
+        body_roll_y=roll_y,
+        body_yaw_z=0.0,
+        body_pitch_rate_x=pitch_rate_x,
+        body_roll_rate_y=roll_rate_y,
+        body_yaw_rate_z=0.0,
+        pitch_x=pitch_x,
+        roll_y=roll_y,
+        yaw_z=0.0,
+        pitch_rate_x=pitch_rate_x,
+        roll_rate_y=roll_rate_y,
+        yaw_rate_z=0.0,
         left_contact_force_world=jnp.array([0.0, 0.0, 40.0]),
         right_contact_force_world=jnp.array([0.0, 0.0, 40.0]),
         total_contact_force_z=80.0,
@@ -201,16 +213,16 @@ def test_static_fz_equals_weight_at_target_height():
     assert abs(float(moment[1])) < 1e-8
 
 
-def test_positive_roll_generates_corrective_mx():
+def test_positive_roll_y_generates_corrective_mx():
     computer = CentroidalWrenchComputer(k_roll=10.0, k_roll_rate=0.0, robot_mass=8.1)
     _, moment = computer.compute_desired_wrench_from_state(
-        make_state(roll=0.2), height_cmd=0.42
+        make_state(roll_y=0.2), height_cmd=0.42
     )
     assert float(moment[0]) < 0.0
     assert abs(float(moment[1])) < 1e-8
 
 
-def test_pitch_correction_force_uses_sagittal_y_axis_not_lateral_x_axis():
+def test_pitch_x_correction_force_uses_sagittal_y_axis_not_lateral_x_axis():
     computer = CentroidalWrenchComputer(
         k_pitch=10.0,
         k_pitch_rate=0.0,
@@ -223,16 +235,36 @@ def test_pitch_correction_force_uses_sagittal_y_axis_not_lateral_x_axis():
         robot_mass=8.1,
     )
     force, _ = computer.compute_desired_wrench_from_state(
-        make_state(pitch=0.2), height_cmd=0.42
+        make_state(pitch_x=0.2), height_cmd=0.42
     )
     assert abs(float(force[0])) < 1e-8
     assert float(force[1]) < 0.0
 
 
-def test_positive_pitch_generates_sagittal_force_not_pitch_moment():
+def test_roll_y_does_not_produce_fy_correction():
+    computer = CentroidalWrenchComputer(
+        k_roll=10.0,
+        k_roll_rate=0.0,
+        k_pitch=10.0,
+        k_pitch_rate=0.0,
+        k_com_sagittal=0.0,
+        k_com_sagittal_damping=0.0,
+        k_com_lateral=0.0,
+        k_com_lateral_damping=0.0,
+        k_cp_sagittal=0.0,
+        k_cp_lateral=0.0,
+        robot_mass=8.1,
+    )
+    force, _ = computer.compute_desired_wrench_from_state(
+        make_state(roll_y=0.2, pitch_x=0.0), height_cmd=0.42
+    )
+    assert abs(float(force[1])) < 1e-8
+
+
+def test_positive_pitch_x_generates_sagittal_force_not_pitch_moment():
     computer = CentroidalWrenchComputer(k_pitch=10.0, k_pitch_rate=0.0, robot_mass=8.1)
     force, moment = computer.compute_desired_wrench_from_state(
-        make_state(pitch=0.2), height_cmd=0.42
+        make_state(pitch_x=0.2), height_cmd=0.42
     )
     assert float(force[1]) < 0.0
     assert abs(float(moment[0])) < 1e-8

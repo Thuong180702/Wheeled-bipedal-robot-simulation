@@ -6,7 +6,10 @@ import mujoco
 import numpy as np
 from jax import Array
 
-from wheeled_biped.controllers.orientation_utils import compute_orientation_from_quaternion
+from wheeled_biped.controllers.orientation_utils import (
+    compute_orientation_from_quaternion,
+    compute_robot_frame_orientation_from_quaternion,
+)
 
 
 @chex.dataclass
@@ -50,6 +53,18 @@ class CentroidalState:
     roll_rate: float = 0.0
     pitch_rate: float = 0.0
     yaw_rate: float = 0.0
+    body_pitch_x: float = 0.0
+    body_roll_y: float = 0.0
+    body_yaw_z: float = 0.0
+    body_pitch_rate_x: float = 0.0
+    body_roll_rate_y: float = 0.0
+    body_yaw_rate_z: float = 0.0
+    pitch_x: float = 0.0
+    roll_y: float = 0.0
+    yaw_z: float = 0.0
+    pitch_rate_x: float = 0.0
+    roll_rate_y: float = 0.0
+    yaw_rate_z: float = 0.0
     left_contact_force_world: Array = jnp.zeros(3)
     right_contact_force_world: Array = jnp.zeros(3)
     total_contact_force_z: float = 0.0
@@ -152,17 +167,26 @@ class CentroidalStateEstimator:
         if hasattr(data, "qpos"):
             base_quat = jnp.array(data.qpos[3:7])
             roll, pitch, yaw = compute_orientation_from_quaternion(np.array(data.qpos[3:7]))
+            body_pitch_x, body_roll_y, body_yaw_z = compute_robot_frame_orientation_from_quaternion(
+                np.array(data.qpos[3:7])
+            )
         else:
             base_quat = jnp.array([1.0, 0.0, 0.0, 0.0])
             roll, pitch, yaw = 0.0, 0.0, 0.0
+            body_pitch_x, body_roll_y, body_yaw_z = 0.0, 0.0, 0.0
 
         if hasattr(data, "qvel") and len(data.qvel) >= 6:
             base_ang_vel = jnp.array(data.qvel[3:6])
         else:
             base_ang_vel = jnp.zeros(3)
+
         roll_rate = float(base_ang_vel[0])
         pitch_rate = float(base_ang_vel[1])
         yaw_rate = float(base_ang_vel[2])
+
+        body_pitch_rate_x = float(base_ang_vel[0])
+        body_roll_rate_y = float(base_ang_vel[1])
+        body_yaw_rate_z = float(base_ang_vel[2])
 
         # Compute capture point for predictive balance control
         # Capture point: x_cp = x_com + v_com / omega_0
@@ -207,6 +231,18 @@ class CentroidalStateEstimator:
             roll_rate=roll_rate,
             pitch_rate=pitch_rate,
             yaw_rate=yaw_rate,
+            body_pitch_x=body_pitch_x,
+            body_roll_y=body_roll_y,
+            body_yaw_z=body_yaw_z,
+            body_pitch_rate_x=body_pitch_rate_x,
+            body_roll_rate_y=body_roll_rate_y,
+            body_yaw_rate_z=body_yaw_rate_z,
+            pitch_x=body_pitch_x,
+            roll_y=body_roll_y,
+            yaw_z=body_yaw_z,
+            pitch_rate_x=body_pitch_rate_x,
+            roll_rate_y=body_roll_rate_y,
+            yaw_rate_z=body_yaw_rate_z,
             left_contact_force_world=left_contact_force_world,
             right_contact_force_world=right_contact_force_world,
             total_contact_force_z=total_contact_force_z,

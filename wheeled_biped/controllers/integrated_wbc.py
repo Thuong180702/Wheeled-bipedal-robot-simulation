@@ -188,7 +188,7 @@ class IntegratedWBC:
 
         # Update roll integral with anti-windup
         # Only accumulate when roll is small (< 15 degrees) to prevent windup during falls
-        roll_rad = float(state.roll)
+        roll_rad = float(state.roll_y)
         if abs(roll_rad) < self.roll_integral_limit:
             self.roll_integral += roll_rad * self.dt
             # Clamp integral to prevent excessive accumulation
