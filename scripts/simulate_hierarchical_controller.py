@@ -47,6 +47,7 @@ from wheeled_biped.controllers.posture_regularizer import (
     PostureRegularizerConfig,
 )
 from wheeled_biped.controllers.leg_position_controller import LegPositionController
+from wheeled_biped.controllers.contact_jacobian import ContactJacobian
 
 
 def check_termination(qpos, com_height):
@@ -74,6 +75,15 @@ def build_step1_telemetry_template():
         "tau_leg_position_per_joint": [],
         "tau_wheel_balance_per_joint": [],
         "tau_total_per_joint": [],
+        "tau_total_raw_per_joint": [],
+        "tau_total_clipped_per_joint": [],
+        "tau_smooth_per_joint": [],
+        "support_ratio_support_joints": [],
+        "support_ratio_mean": [],
+        "torque_rate_limit_enabled": [],
+        "per_actuator_wbc_authority_enabled": [],
+        "wbc_joint_scaling_enabled": [],
+        "initialize_tau_prev_from_wbc_enabled": [],
         "hip_roll_abs_max": [],
         "hip_yaw_abs_max": [],
         "hip_pitch_error_max": [],
@@ -222,6 +232,10 @@ def main():
         action="store_true",
         help="Enable secondary wheel-balance torque path (default: disabled for WBC-only wheel torque)",
     )
+    parser.add_argument("--disable-torque-rate-limit", action="store_true")
+    parser.add_argument("--initialize-tau-prev-from-wbc", action="store_true")
+    parser.add_argument("--disable-wbc-joint-scale", action="store_true")
+    parser.add_argument("--use-per-actuator-wbc-authority", action="store_true")
     args = parser.parse_args()
 
     print("=" * 80)
@@ -238,6 +252,7 @@ def main():
     print(f"\nLoading model: {model_path}")
     mj_model = mujoco.MjModel.from_xml_path(model_path)
     mj_data = mujoco.MjData(mj_model)
+    contact_jacobian = ContactJacobian(mj_model)
 
     # Helper function to measure contact forces
     def measure_contact_forces(mj_model, mj_data, label):
@@ -340,6 +355,7 @@ def main():
         min_wheel_force=20.0,  # INCREASED: Higher minimum to prevent wheel liftoff (was 10.0)
         roll_integral_limit=0.52,  # Anti-windup limit: ~30 degrees
         dt=mj_model.opt.timestep,
+        use_per_actuator_authority=args.use_per_actuator_wbc_authority,
     )
     momentum_coordinator = MomentumCoordinator(
         MomentumCoordinatorConfig(
@@ -428,7 +444,7 @@ def main():
         "cp_x": [],
         "cp_y": [],
         "tau_wbc_max": [],
-        "tau_wheel_actual_max": [],  # Actual wheel torques from tau_total at indices [4, 9]
+        "tau_wheel_actual_max": [],  # Actual wheel torques from applied tau_smooth at indices [4, 9]
         "tau_posture_max": [],
         "tau_total_max": [],
         "pitch": [],
@@ -686,6 +702,11 @@ def main():
             )
         else:
             tau_wheel_balance = jnp.zeros(10)
+        if args.disable_wbc_joint_scale:
+            wbc_joint_scale = jnp.ones(10)
+        else:
+            wbc_joint_scale = build_step6_wbc_joint_scale(control_mode)
+
         torque_components = compute_step2_torque_components(
             leg_position_controller,
             joint_pos,
@@ -695,7 +716,7 @@ def main():
             tau_posture,
             tau_wheel_secondary,
             tau_inverse_dynamics,
-            wbc_joint_scale=build_step6_wbc_joint_scale(control_mode),
+            wbc_joint_scale=wbc_joint_scale,
             tau_hip_roll_centering=tau_hip_roll_centering,
             tau_wheel_balance=tau_wheel_balance,
         )
@@ -705,8 +726,11 @@ def main():
         tau_wheel_balance = torque_components["tau_wheel_balance"]
         tau_total_raw = torque_components["tau_total_raw"]
         torque_limit = jnp.array(mj_model.actuator_ctrlrange[:, 1])
-        tau_total = jnp.clip(tau_total_raw, -torque_limit, torque_limit)
+        tau_total_clipped = jnp.clip(tau_total_raw, -torque_limit, torque_limit)
         tau_saturation_rate = float(jnp.mean(jnp.abs(tau_total_raw) > torque_limit))
+
+        if step == 0 and args.initialize_tau_prev_from_wbc:
+            tau_prev = tau_total_clipped
 
         # Compute motor tracking telemetry
         step1_diagnostics = compute_step1_joint_diagnostics(joint_pos, joint_pos_error)
@@ -716,19 +740,49 @@ def main():
         tau_wbc_norm = float(jnp.linalg.norm(tau_wbc))
         tau_posture_norm = float(jnp.linalg.norm(tau_posture))
         tau_inverse_dynamics_norm = float(jnp.linalg.norm(tau_inverse_dynamics))
-        tau_total_norm = float(jnp.linalg.norm(tau_total))
+        tau_total_norm = float(jnp.linalg.norm(tau_total_clipped))
 
-        # Compute torque rate (Nm/s) and apply limiting from the first control step.
-        tau_rate_unlimited = float(jnp.linalg.norm(tau_total - tau_prev) / control_dt)
+        # Compute torque rate (Nm/s) and optionally apply limiting.
+        tau_rate_unlimited = float(jnp.linalg.norm(tau_total_clipped - tau_prev) / control_dt)
         max_torque_rate = 400.0
-        tau_rate_vec = (tau_total - tau_prev) / control_dt
+        tau_rate_vec = (tau_total_clipped - tau_prev) / control_dt
         tau_rate_vec_clipped = jnp.clip(tau_rate_vec, -max_torque_rate, max_torque_rate)
-        tau_smooth = tau_prev + tau_rate_vec_clipped * control_dt
-        tau_rate_limited = float(jnp.linalg.norm(tau_rate_vec_clipped))
+
+        if args.disable_torque_rate_limit:
+            tau_smooth = tau_total_clipped
+            tau_rate_limited = tau_rate_unlimited
+        else:
+            tau_smooth = tau_prev + tau_rate_vec_clipped * control_dt
+            tau_rate_limited = float(jnp.linalg.norm(tau_rate_vec_clipped))
 
         tau_prev = tau_smooth
 
-        # Apply rate-limited torques
+        # Early-step support torque parity diagnostics
+        j_left_dbg, j_right_dbg = contact_jacobian.compute_wheel_jacobians(mj_data)
+        f_up_left = jnp.array([0.0, 0.0, robot_mass * gravity / 2.0])
+        f_up_right = jnp.array([0.0, 0.0, robot_mass * gravity / 2.0])
+        tau_ideal = j_left_dbg.T @ f_up_left + j_right_dbg.T @ f_up_right
+        support_indices = [2, 3, 7, 8]
+        support_ratios = [
+            float(jnp.abs(tau_smooth[idx]) / jnp.maximum(jnp.abs(tau_ideal[idx]), 1e-6))
+            for idx in support_indices
+        ]
+        support_ratio_mean = float(np.mean(support_ratios))
+
+        if step < 10:
+            print(f"[EARLY SUPPORT][step={step}] tau_wbc={np.array(tau_wbc)}")
+            print(f"[EARLY SUPPORT][step={step}] tau_wbc_scaled={np.array(tau_wbc_scaled)}")
+            print(f"[EARLY SUPPORT][step={step}] tau_total_raw={np.array(tau_total_raw)}")
+            print(f"[EARLY SUPPORT][step={step}] tau_total_clipped={np.array(tau_total_clipped)}")
+            print(f"[EARLY SUPPORT][step={step}] tau_smooth={np.array(tau_smooth)}")
+            print(
+                f"[EARLY SUPPORT][step={step}] support_ratio_[2,3,7,8]={support_ratios}, mean={support_ratio_mean:.4f}, "
+                f"rate_limit_enabled={not args.disable_torque_rate_limit}, "
+                f"per_actuator_wbc_authority={args.use_per_actuator_wbc_authority}, "
+                f"wbc_joint_scaling_enabled={not args.disable_wbc_joint_scale}"
+            )
+
+        # Apply final torques
         mj_data.ctrl[:] = np.array(tau_smooth)
 
         # POINT 5: After first mj_step (only on step 0)
@@ -766,12 +820,12 @@ def main():
         telemetry["cp_x"].append(float(centroidal_state.capture_point[0]))
         telemetry["cp_y"].append(float(centroidal_state.capture_point[1]))
         telemetry["tau_wbc_max"].append(float(jnp.max(jnp.abs(tau_wbc))))
-        # Track actual wheel torques at indices [4, 9] from tau_total
+        # Track actual wheel torques at indices [4, 9] from applied torque (tau_smooth)
         wheel_indices = jnp.array([4, 9])
-        tau_wheel_actual = jnp.max(jnp.abs(tau_total[wheel_indices]))
+        tau_wheel_actual = jnp.max(jnp.abs(tau_smooth[wheel_indices]))
         telemetry["tau_wheel_actual_max"].append(float(tau_wheel_actual))
         telemetry["tau_posture_max"].append(float(jnp.max(jnp.abs(tau_posture))))
-        telemetry["tau_total_max"].append(float(jnp.max(jnp.abs(tau_total))))
+        telemetry["tau_total_max"].append(float(jnp.max(jnp.abs(tau_smooth))))
         telemetry["pitch"].append(pitch)
         telemetry["roll"].append(roll)
         telemetry["yaw"].append(yaw)
@@ -838,7 +892,16 @@ def main():
         telemetry["tau_posture_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_posture)))
         telemetry["tau_leg_position_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_leg_position)))
         telemetry["tau_wheel_balance_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wheel_balance)))
-        telemetry["tau_total_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_total)))
+        telemetry["tau_total_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_smooth)))
+        telemetry["tau_total_raw_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_total_raw)))
+        telemetry["tau_total_clipped_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_total_clipped)))
+        telemetry["tau_smooth_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_smooth)))
+        telemetry["support_ratio_support_joints"].append(",".join(f"{x:.4f}" for x in support_ratios))
+        telemetry["support_ratio_mean"].append(support_ratio_mean)
+        telemetry["torque_rate_limit_enabled"].append(not args.disable_torque_rate_limit)
+        telemetry["per_actuator_wbc_authority_enabled"].append(args.use_per_actuator_wbc_authority)
+        telemetry["wbc_joint_scaling_enabled"].append(not args.disable_wbc_joint_scale)
+        telemetry["initialize_tau_prev_from_wbc_enabled"].append(args.initialize_tau_prev_from_wbc)
         telemetry["hip_roll_abs_max"].append(step1_diagnostics["hip_roll_abs_max"])
         telemetry["hip_yaw_abs_max"].append(step1_diagnostics["hip_yaw_abs_max"])
         telemetry["hip_pitch_error_max"].append(step1_diagnostics["hip_pitch_error_max"])

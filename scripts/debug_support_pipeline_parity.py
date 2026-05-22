@@ -1,10 +1,14 @@
 """Debug parity between ideal support torque and applied control pipeline torque.
 
-Computes at standing keyframe:
+Compares:
 - tau_ideal = +J_left^T f_up_left + +J_right^T f_up_right
-- tau_wbc from IntegratedWBC
-- tau_wbc_scaled, tau_leg_position, tau_posture, tau_total_raw, tau_total_clipped
-- tau_smooth at step-0 with rate limit from tau_prev=0
+- tau_wbc (scalar authority)
+- tau_wbc (per-actuator authority)
+- tau_wbc_scaled
+- tau_total_raw
+- tau_total_clipped
+- tau_smooth_step0 from tau_prev=0
+- tau_smooth_step0 with tau_prev initialized to tau_total_clipped
 """
 
 from __future__ import annotations
@@ -43,6 +47,7 @@ JOINT_NAMES = [
     "r_knee",
     "r_wheel",
 ]
+SUPPORT_INDICES = [2, 3, 7, 8]
 
 
 def compute_step4_hip_roll_centering(
@@ -63,54 +68,8 @@ def compute_step4_hip_roll_centering(
     return tau.at[hip_roll_indices].set(tau_limited)
 
 
-def main() -> None:
-    model = mujoco.MjModel.from_xml_path(MODEL_PATH)
-    data = mujoco.MjData(model)
-
-    mujoco.mj_resetDataKeyframe(model, data, 0)
-    mujoco.mj_forward(model, data)
-    data.qvel[:] = 0.0
-    data.qacc[:] = 0.0
-    mujoco.mj_forward(model, data)
-
-    robot_mass = float(np.sum(model.body_mass))
-    gravity = float(abs(model.opt.gravity[2]))
-    weight = robot_mass * gravity
-
-    # Ideal support torque from static support forces
-    jacobian = ContactJacobian(model)
-    j_left, j_right = jacobian.compute_wheel_jacobians(data)
-    f_up_left = jnp.array([0.0, 0.0, weight / 2.0])
-    f_up_right = jnp.array([0.0, 0.0, weight / 2.0])
-    tau_ideal = j_left.T @ f_up_left + j_right.T @ f_up_right
-
-    # Build state/obs exactly like simulation path
-    estimator = CentroidalStateEstimator(
-        CentroidalStateEstimatorConfig(
-            robot_mass=robot_mass,
-            torso_inertia=jnp.array([0.1, 0.1, 0.05]),
-        ),
-        mj_model=model,
-    )
-    capture_estimator = CapturePointEstimator(CapturePointEstimatorConfig(gravity=gravity, min_height=0.35))
-
-    centroidal_state, _ = estimator.estimate(jnp.zeros(42), data, None)
-    centroidal_state = capture_estimator.update(centroidal_state)
-
-    base_body_id = 1
-    R = np.array(data.xmat[base_body_id]).reshape(3, 3)
-    gravity_world = np.array([0.0, 0.0, -9.81])
-    gravity_body = R.T @ gravity_world
-
-    obs = jnp.zeros(42)
-    obs = obs.at[0:3].set(jnp.array(gravity_body))
-    obs = obs.at[6:16].set(jnp.array(data.qpos[7:17]))
-    obs = obs.at[16:26].set(jnp.array(data.qvel[6:16]))
-    height_cmd = 0.40
-    obs = obs.at[36].set(height_cmd)
-    obs = obs.at[37].set(centroidal_state.com_pos[2])
-
-    wbc_controller = IntegratedWBC(
+def build_wbc_controller(model, robot_mass, gravity, use_per_actuator_authority: bool) -> IntegratedWBC:
+    return IntegratedWBC(
         model,
         k_roll=60.0,
         k_roll_rate=12.0,
@@ -136,9 +95,66 @@ def main() -> None:
         min_wheel_force=20.0,
         roll_integral_limit=0.52,
         dt=model.opt.timestep,
+        use_per_actuator_authority=use_per_actuator_authority,
     )
 
-    tau_wbc, qp_diag = wbc_controller.compute_wbc_torque_with_diagnostics(
+
+def main() -> None:
+    model = mujoco.MjModel.from_xml_path(MODEL_PATH)
+    data = mujoco.MjData(model)
+
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_forward(model, data)
+    data.qvel[:] = 0.0
+    data.qacc[:] = 0.0
+    mujoco.mj_forward(model, data)
+
+    robot_mass = float(np.sum(model.body_mass))
+    gravity = float(abs(model.opt.gravity[2]))
+    weight = robot_mass * gravity
+
+    jacobian = ContactJacobian(model)
+    j_left, j_right = jacobian.compute_wheel_jacobians(data)
+    f_up_left = jnp.array([0.0, 0.0, weight / 2.0])
+    f_up_right = jnp.array([0.0, 0.0, weight / 2.0])
+    tau_ideal = j_left.T @ f_up_left + j_right.T @ f_up_right
+
+    estimator = CentroidalStateEstimator(
+        CentroidalStateEstimatorConfig(
+            robot_mass=robot_mass,
+            torso_inertia=jnp.array([0.1, 0.1, 0.05]),
+        ),
+        mj_model=model,
+    )
+    capture_estimator = CapturePointEstimator(CapturePointEstimatorConfig(gravity=gravity, min_height=0.35))
+
+    centroidal_state, _ = estimator.estimate(jnp.zeros(42), data, None)
+    centroidal_state = capture_estimator.update(centroidal_state)
+
+    base_body_id = 1
+    R = np.array(data.xmat[base_body_id]).reshape(3, 3)
+    gravity_world = np.array([0.0, 0.0, -9.81])
+    gravity_body = R.T @ gravity_world
+
+    obs = jnp.zeros(42)
+    obs = obs.at[0:3].set(jnp.array(gravity_body))
+    obs = obs.at[6:16].set(jnp.array(data.qpos[7:17]))
+    obs = obs.at[16:26].set(jnp.array(data.qvel[6:16]))
+    height_cmd = 0.40
+    obs = obs.at[36].set(height_cmd)
+    obs = obs.at[37].set(centroidal_state.com_pos[2])
+
+    wbc_scalar = build_wbc_controller(model, robot_mass, gravity, use_per_actuator_authority=False)
+    wbc_per = build_wbc_controller(model, robot_mass, gravity, use_per_actuator_authority=True)
+
+    tau_wbc_scalar, qp_diag_scalar = wbc_scalar.compute_wbc_torque_with_diagnostics(
+        data,
+        obs,
+        centroidal_state,
+        height_cmd,
+        hip_roll_authority_scale=1.0,
+    )
+    tau_wbc_per, _ = wbc_per.compute_wbc_torque_with_diagnostics(
         data,
         obs,
         centroidal_state,
@@ -147,7 +163,7 @@ def main() -> None:
     )
 
     wbc_joint_scale = jnp.array([1.0, 0.3, 0.75, 0.75, 1.0, 1.0, 0.3, 0.75, 0.75, 1.0])
-    tau_wbc_scaled = tau_wbc * wbc_joint_scale
+    tau_wbc_scaled = tau_wbc_scalar * wbc_joint_scale
 
     posture_regularizer = PostureRegularizer(
         PostureRegularizerConfig(
@@ -182,7 +198,7 @@ def main() -> None:
     joint_vel = jnp.array(data.qvel[6:16])
     target_joint_pos = posture_regularizer.compute_target_posture_from_height(height_cmd)
 
-    wbc_error_magnitude = float(jnp.linalg.norm(qp_diag.get("wrench_error_norm", 0.0)))
+    wbc_error_magnitude = float(jnp.linalg.norm(qp_diag_scalar.get("wrench_error_norm", 0.0)))
     tau_posture = posture_regularizer.compute_posture_regularizer_torque(
         joint_pos,
         wbc_error_magnitude,
@@ -205,51 +221,77 @@ def main() -> None:
         + tau_inverse_dynamics
     )
 
-    torque_limit = jnp.array(model.actuator_ctrlrange[:, 1])
-    tau_total_clipped = jnp.clip(tau_total_raw, -torque_limit, torque_limit)
+    actuator_limit = jnp.array(model.actuator_ctrlrange[:, 1])
+    tau_total_clipped = jnp.clip(tau_total_raw, -actuator_limit, actuator_limit)
 
-    # Step-0 rate limiter from tau_prev=0
     control_dt = 0.01
     max_torque_rate = 400.0
-    tau_prev = jnp.zeros(10)
-    tau_rate_vec = (tau_total_clipped - tau_prev) / control_dt
-    tau_rate_vec_clipped = jnp.clip(tau_rate_vec, -max_torque_rate, max_torque_rate)
-    tau_smooth_step0 = tau_prev + tau_rate_vec_clipped * control_dt
 
-    print("=" * 170)
+    tau_prev_zero = jnp.zeros(10)
+    tau_rate_vec_zero = (tau_total_clipped - tau_prev_zero) / control_dt
+    tau_rate_vec_zero_clipped = jnp.clip(tau_rate_vec_zero, -max_torque_rate, max_torque_rate)
+    tau_smooth_step0 = tau_prev_zero + tau_rate_vec_zero_clipped * control_dt
+
+    tau_prev_initialized = tau_total_clipped
+    tau_rate_vec_init = (tau_total_clipped - tau_prev_initialized) / control_dt
+    tau_rate_vec_init_clipped = jnp.clip(tau_rate_vec_init, -max_torque_rate, max_torque_rate)
+    tau_smooth_step0_initialized = tau_prev_initialized + tau_rate_vec_init_clipped * control_dt
+
+    print("=" * 250)
     print("Support pipeline parity diagnostic")
     print(f"Model: {MODEL_PATH}")
     print(f"Weight: {weight:.4f} N")
-    print("Columns: joint, ctrlrange, tau_ideal, tau_wbc, tau_wbc_scaled, tau_total_raw, tau_smooth_step0, ratio_smooth_to_ideal")
-    print("=" * 170)
+    print(
+        "Columns: joint, ctrlrange, tau_ideal, tau_wbc_scalar, tau_wbc_per_act, "
+        "tau_wbc_scaled, tau_total_raw, tau_total_clipped, tau_smooth_step0, "
+        "tau_smooth_step0_init, ratio_smooth_to_ideal"
+    )
+    print("=" * 250)
 
     for i, name in enumerate(JOINT_NAMES):
-        ctrl_hi = float(torque_limit[i])
+        ctrl_hi = float(actuator_limit[i])
         ideal = float(tau_ideal[i])
-        wbc = float(tau_wbc[i])
-        wbc_s = float(tau_wbc_scaled[i])
+        wbc_scalar_val = float(tau_wbc_scalar[i])
+        wbc_per_val = float(tau_wbc_per[i])
+        wbc_scaled_val = float(tau_wbc_scaled[i])
         raw = float(tau_total_raw[i])
+        clipped = float(tau_total_clipped[i])
         smooth = float(tau_smooth_step0[i])
+        smooth_init = float(tau_smooth_step0_initialized[i])
         ratio = smooth / ideal if abs(ideal) > 1e-6 else np.nan
         print(
-            f"{name:12s} | {ctrl_hi:8.2f} | {ideal:10.4f} | {wbc:10.4f} | {wbc_s:14.4f} | {raw:12.4f} | {smooth:16.4f} | {ratio: .4f}"
+            f"{name:12s} | {ctrl_hi:8.2f} | {ideal:10.4f} | {wbc_scalar_val:14.4f} | "
+            f"{wbc_per_val:14.4f} | {wbc_scaled_val:14.4f} | {raw:12.4f} | {clipped:16.4f} | "
+            f"{smooth:16.4f} | {smooth_init:20.4f} | {ratio: .4f}"
         )
 
-    support_indices = [2, 3, 7, 8]
     ratios = []
-    for idx in support_indices:
+    for idx in SUPPORT_INDICES:
         ideal = float(tau_ideal[idx])
         smooth = float(tau_smooth_step0[idx])
         ratios.append(abs(smooth) / max(abs(ideal), 1e-6))
 
     mean_ratio = float(np.mean(ratios))
     min_ratio = float(np.min(ratios))
-    print("-" * 170)
-    print(f"hip_pitch/knee | mean |tau_smooth/tau_ideal| = {mean_ratio:.4f}, min = {min_ratio:.4f}")
-    if mean_ratio < 0.5:
-        print("[CAUSE] First-step applied support torque is far below ideal on hip_pitch/knee; this is a primary collapse cause.")
-    else:
-        print("[INFO] First-step applied support torque is not far below ideal on hip_pitch/knee.")
+
+    ratios_init = []
+    for idx in SUPPORT_INDICES:
+        ideal = float(tau_ideal[idx])
+        smooth = float(tau_smooth_step0_initialized[idx])
+        ratios_init.append(abs(smooth) / max(abs(ideal), 1e-6))
+
+    mean_ratio_init = float(np.mean(ratios_init))
+    min_ratio_init = float(np.min(ratios_init))
+
+    print("-" * 250)
+    print(
+        f"support joints [2,3,7,8] | mean |tau_smooth/tau_ideal| = {mean_ratio:.4f}, min = {min_ratio:.4f} "
+        f"(tau_prev=0 rate-limited)"
+    )
+    print(
+        f"support joints [2,3,7,8] | mean |tau_smooth/tau_ideal| = {mean_ratio_init:.4f}, min = {min_ratio_init:.4f} "
+        f"(tau_prev initialized from wbc)"
+    )
 
 
 if __name__ == "__main__":
