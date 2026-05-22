@@ -149,13 +149,15 @@ def compute_step4_hip_roll_centering(
 def compute_step5_wheel_balance(
     pitch_rad,
     pitch_rate_rad_s,
-    capture_point_error_x,
+    capture_point_error_y,
     kp_pitch=10.0,
     kd_pitch=2.0,
     k_cp=4.0,
     max_torque=4.0,
 ):
-    tau_wheel = kp_pitch * pitch_rad + kd_pitch * pitch_rate_rad_s + k_cp * capture_point_error_x
+    # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
+    # Wheel balance uses sagittal capture-point error on Y-axis.
+    tau_wheel = kp_pitch * pitch_rad + kd_pitch * pitch_rate_rad_s + k_cp * capture_point_error_y
     tau_wheel = jnp.clip(tau_wheel, -max_torque, max_torque)
     tau = jnp.zeros(10)
     return tau.at[jnp.array([4, 9])].set(tau_wheel)
@@ -669,11 +671,12 @@ def main():
         target_joint_pos = posture_regularizer.compute_target_posture_from_height(height_cmd)
         joint_pos_error = target_joint_pos - joint_pos
         tau_hip_roll_centering = compute_step4_hip_roll_centering(joint_pos, joint_vel)
-        capture_point_error_x = float(centroidal_state.capture_point[0] - centroidal_state.com_pos[0])
+        # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
+        capture_point_error_y = float(centroidal_state.capture_point[1] - centroidal_state.com_pos[1])
         tau_wheel_balance = compute_step5_wheel_balance(
             pitch_rad,
             centroidal_state.pitch_rate,
-            capture_point_error_x,
+            capture_point_error_y,
         )
         torque_components = compute_step2_torque_components(
             leg_position_controller,

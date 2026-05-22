@@ -6,8 +6,8 @@ height_min: 0.40
 height_max: 0.70
 
 # Layer 1: Height IK (unchanged)
-ik_hip_pitch_range: [-0.8, 0.2]
-ik_knee_range: [0.0, 2.0]
+ik_hip_pitch_range: [-0.5, 1.8]
+ik_knee_range: [-0.5, 2.7]
 ik_num_samples: 50
 
 # Layer 2: CoM VMC - ENABLED for posture control

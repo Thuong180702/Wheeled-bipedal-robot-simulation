@@ -247,12 +247,12 @@ class IntegratedWBC:
         )
         solve_time_ms = (time.perf_counter() - solve_start) * 1000.0
 
-        # Keep contact-force sign separate from direct hip-roll torque sign.
-        tau_contact = -self.contact_jacobian.map_contact_forces_to_torques(
+        # ContactJacobian defines tau = J^T f for ground-reaction forces.
+        tau_contact = self.contact_jacobian.map_contact_forces_to_torques(
             mj_data, f_left, f_right, tau_hip_roll=None
         )
         tau_hip = self._build_direct_hip_roll_torque(tau_hip_roll)
-        tau_wbc_raw = tau_contact - tau_hip
+        tau_wbc_raw = tau_contact + tau_hip
 
         # REMOVED: Direct wheel torque addition (was causing cancellation bug)
         # The contact Jacobian already converts sagittal force Fy into wheel torques

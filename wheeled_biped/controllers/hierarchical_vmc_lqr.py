@@ -50,8 +50,8 @@ class HierarchicalVMCConfig:
     height_max: float = 0.70
 
     # Layer 1: Height IK
-    ik_hip_pitch_range: tuple[float, float] = (-0.8, 0.2)
-    ik_knee_range: tuple[float, float] = (0.0, 2.0)
+    ik_hip_pitch_range: tuple[float, float] = (-0.5, 1.8)
+    ik_knee_range: tuple[float, float] = (-0.5, 2.7)
     ik_num_samples: int = 50
 
     # Layer 2: CoM VMC
@@ -102,8 +102,8 @@ class HierarchicalVMCConfig:
         return cls(
             height_min=data.get("height_min", height_cfg.get("min", 0.40)),
             height_max=data.get("height_max", height_cfg.get("max", 0.70)),
-            ik_hip_pitch_range=tuple(data.get("ik_hip_pitch_range", [-0.8, 0.2])),
-            ik_knee_range=tuple(data.get("ik_knee_range", [0.0, 2.0])),
+            ik_hip_pitch_range=tuple(data.get("ik_hip_pitch_range", [-0.5, 1.8])),
+            ik_knee_range=tuple(data.get("ik_knee_range", [-0.5, 2.7])),
             ik_num_samples=data.get("ik_num_samples", 50),
             vmc_enabled=data.get("vmc_enabled", True),
             vmc_k_com=data.get("vmc_k_com", 150.0),
@@ -141,12 +141,12 @@ class HierarchicalVMCController:
         self.config = config
         self.model = model
 
-        # Joint limits (from URDF)
+        # Joint limits (from robot XML)
         self.joint_limits = {
             "hip_roll": (-0.349, 0.349),
             "hip_yaw": (-0.524, 0.524),
-            "hip_pitch": (-0.873, 0.349),
-            "knee": (0.0, 2.007),
+            "hip_pitch": (-0.5, 1.8),
+            "knee": (-0.5, 2.7),
         }
 
         # Build height IK lookup table
@@ -380,11 +380,12 @@ class HierarchicalVMCController:
 
         return float(roll_correction), float(yaw_correction)
 
-    def compute_action(self, obs: np.ndarray) -> np.ndarray:
+    def compute_action(self, obs: np.ndarray, mj_data: Optional[mujoco.MjData] = None) -> np.ndarray:
         """Compute action from observation through hierarchical control.
 
         Args:
             obs: Observation from BalanceEnv, shape (42,).
+            mj_data: MuJoCo data with real simulator root pose for CoM and wheel contact computation.
 
         Returns:
             base_action_abs: Normalized action in [-1, 1]^10.
@@ -393,8 +394,8 @@ class HierarchicalVMCController:
         g_body = obs[0:3]
         body_lin_vel = obs[3:6]
         body_ang_vel = obs[6:9]
-        qpos = obs[9:19]
-        qvel = obs[19:29]
+        _ = obs[9:19]
+        _ = obs[19:29]
         height_cmd_norm = float(obs[39])
         yaw_error = float(obs[41])
 
@@ -412,10 +413,16 @@ class HierarchicalVMCController:
         yaw_rate = body_ang_vel[2]
         fwd_vel = body_lin_vel[1]
 
-        # CoM computation
-        com_y = self._compute_com_y(qpos)
-        wheel_contact_y = self._compute_wheel_contact_y(qpos)
-        com_error_y = com_y - wheel_contact_y
+        # CoM computation must use real simulator state, not synthetic root pose.
+        if self.config.com_use_sim and mj_data is None:
+            raise ValueError("mj_data is required when com_use_sim=True")
+
+        if mj_data is not None:
+            com_y = self._compute_com_y(mj_data)
+            wheel_contact_y = self._compute_wheel_contact_y(mj_data)
+            com_error_y = com_y - wheel_contact_y
+        else:
+            com_error_y = 0.0
         com_vel_y = body_lin_vel[1]
 
         # === Layer 1: Height IK ===
@@ -501,28 +508,18 @@ class HierarchicalVMCController:
         half_range = (limits[1] - limits[0]) / 2.0
         return (value - mid) / half_range
 
-    def _compute_com_y(self, qpos: np.ndarray) -> float:
-        """Compute whole-body CoM y-position (simulator-only)."""
-        data = mujoco.MjData(self.model)
-        data.qpos[0:3] = [0.0, 0.0, 0.6]
-        data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
-        data.qpos[7:17] = qpos
-        mujoco.mj_kinematics(self.model, data)
+    def _compute_com_y(self, mj_data: mujoco.MjData) -> float:
+        """Compute whole-body CoM y-position from real MuJoCo state."""
         torso_body_id = self.model.body("torso").id
-        com = data.subtree_com[torso_body_id]
+        com = mj_data.subtree_com[torso_body_id]
         return float(com[1])
 
-    def _compute_wheel_contact_y(self, qpos: np.ndarray) -> float:
-        """Compute wheel contact point y-position."""
-        data = mujoco.MjData(self.model)
-        data.qpos[0:3] = [0.0, 0.0, 0.6]
-        data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
-        data.qpos[7:17] = qpos
-        mujoco.mj_kinematics(self.model, data)
+    def _compute_wheel_contact_y(self, mj_data: mujoco.MjData) -> float:
+        """Compute wheel contact point y-position from real MuJoCo state."""
         l_wheel_body_id = self.model.body("l_wheel_link").id
         r_wheel_body_id = self.model.body("r_wheel_link").id
-        l_wheel_y = data.xpos[l_wheel_body_id, 1]
-        r_wheel_y = data.xpos[r_wheel_body_id, 1]
+        l_wheel_y = mj_data.xpos[l_wheel_body_id, 1]
+        r_wheel_y = mj_data.xpos[r_wheel_body_id, 1]
         return float((l_wheel_y + r_wheel_y) / 2.0)
 
 

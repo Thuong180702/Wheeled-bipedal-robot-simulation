@@ -204,7 +204,7 @@ def test_step5_wheel_balance_uses_same_wheel_torque_with_verified_signs():
     tau_positive = compute_step5_wheel_balance(
         pitch_rad=0.10,
         pitch_rate_rad_s=0.20,
-        capture_point_error_x=0.05,
+        capture_point_error_y=0.05,
         kp_pitch=10.0,
         kd_pitch=2.0,
         k_cp=4.0,
@@ -213,7 +213,7 @@ def test_step5_wheel_balance_uses_same_wheel_torque_with_verified_signs():
     tau_negative = compute_step5_wheel_balance(
         pitch_rad=-0.10,
         pitch_rate_rad_s=-0.20,
-        capture_point_error_x=-0.05,
+        capture_point_error_y=-0.05,
         kp_pitch=10.0,
         kd_pitch=2.0,
         k_cp=4.0,
@@ -228,7 +228,7 @@ def test_step5_wheel_balance_is_bounded_to_recovery_authority():
     tau = compute_step5_wheel_balance(
         pitch_rad=1.0,
         pitch_rate_rad_s=1.0,
-        capture_point_error_x=1.0,
+        capture_point_error_y=1.0,
         max_torque=4.0,
     )
 

@@ -19,6 +19,15 @@ def mj_model():
 
 
 @pytest.fixture
+def mj_data(mj_model):
+    """Create MuJoCo data at standing keyframe."""
+    data = mujoco.MjData(mj_model)
+    mujoco.mj_resetDataKeyframe(mj_model, data, 0)
+    mujoco.mj_forward(mj_model, data)
+    return data
+
+
+@pytest.fixture
 def default_config():
     """Create default hierarchical VMC config."""
     return HierarchicalVMCConfig(
@@ -174,8 +183,8 @@ class TestCoMVMC:
         hip_pitch_large, knee_large = controller.com_vmc(1.0, 0.0, hip_pitch_ik, knee_ik)
         hip_pitch_huge, knee_huge = controller.com_vmc(10.0, 0.0, hip_pitch_ik, knee_ik)
 
-        # Should not grow unboundedly
-        assert abs(hip_pitch_huge - hip_pitch_ik) < 0.5, "VMC force should saturate"
+        # Saturation means larger error should not increase correction further.
+        assert abs(hip_pitch_huge - hip_pitch_large) < 1e-6, "VMC correction should saturate"
 
     def test_vmc_respects_joint_limits(self, controller):
         """Test VMC output respects joint limits."""
@@ -282,32 +291,32 @@ class TestRollYawStabilization:
 class TestComputeAction:
     """Test full action computation pipeline."""
 
-    def test_action_shape(self, controller):
+    def test_action_shape(self, controller, mj_data):
         """Test action has correct shape."""
         obs = np.zeros(42)
         obs[39] = 0.5  # height_cmd_norm
 
-        action = controller.compute_action(obs)
+        action = controller.compute_action(obs, mj_data=mj_data)
 
         assert action.shape == (10,)
         assert np.all(np.isfinite(action))
 
-    def test_action_bounds(self, controller):
+    def test_action_bounds(self, controller, mj_data):
         """Test action is within [-1, 1]."""
         obs = np.zeros(42)
         obs[39] = 0.5
 
-        action = controller.compute_action(obs)
+        action = controller.compute_action(obs, mj_data=mj_data)
 
         assert np.all(action >= -1.0)
         assert np.all(action <= 1.0)
 
-    def test_action_symmetry(self, controller):
+    def test_action_symmetry(self, controller, mj_data):
         """Test left/right leg symmetry."""
         obs = np.zeros(42)
         obs[39] = 0.5
 
-        action = controller.compute_action(obs)
+        action = controller.compute_action(obs, mj_data=mj_data)
 
         # Hip pitch should be symmetric
         assert abs(action[2] - action[7]) < 1e-6, "Hip pitch should be symmetric"
@@ -318,7 +327,7 @@ class TestComputeAction:
         # Wheels should be symmetric (no yaw error)
         assert abs(action[4] - action[9]) < 0.1, "Wheels should be nearly symmetric"
 
-    def test_wheel_command_filtering(self, mj_model):
+    def test_wheel_command_filtering(self, mj_model, mj_data):
         """Test wheel command filtering."""
         config = HierarchicalVMCConfig(
             wheel_cmd_filter_enabled=True,
@@ -332,24 +341,24 @@ class TestComputeAction:
         obs[0:3] = [0.0, 0.1, 0.0]  # Pitch forward
 
         # First action
-        action1 = controller.compute_action(obs)
+        action1 = controller.compute_action(obs, mj_data=mj_data)
         wheel_cmd1 = action1[4]
 
         # Second action (should be filtered)
-        action2 = controller.compute_action(obs)
+        action2 = controller.compute_action(obs, mj_data=mj_data)
         wheel_cmd2 = action2[4]
 
         # Should not change too much
         assert abs(wheel_cmd2 - wheel_cmd1) <= config.wheel_cmd_filter_max_delta
 
-    def test_reset_clears_state(self, controller):
+    def test_reset_clears_state(self, controller, mj_data):
         """Test reset clears controller state."""
         obs = np.zeros(42)
         obs[39] = 0.5
 
         # Run a few steps
         for _ in range(5):
-            controller.compute_action(obs)
+            controller.compute_action(obs, mj_data=mj_data)
 
         # Reset
         controller.reset(height_cmd_m=0.55)
@@ -357,7 +366,7 @@ class TestComputeAction:
         # Internal state should be cleared
         assert controller._prev_wheel_cmd == 0.0
 
-    def test_different_heights(self, controller):
+    def test_different_heights(self, controller, mj_data):
         """Test controller works across height range."""
         heights_norm = np.linspace(0.0, 1.0, 10)
 
@@ -365,7 +374,7 @@ class TestComputeAction:
             obs = np.zeros(42)
             obs[39] = h_norm
 
-            action = controller.compute_action(obs)
+            action = controller.compute_action(obs, mj_data=mj_data)
 
             assert action.shape == (10,)
             assert np.all(np.isfinite(action))
@@ -376,31 +385,19 @@ class TestComputeAction:
 class TestCoMComputation:
     """Test CoM computation methods."""
 
-    def test_com_computation_finite(self, controller):
+    def test_com_computation_finite(self, controller, mj_data):
         """Test CoM computation returns finite values."""
-        qpos = np.zeros(10)
-        qpos[2] = 0.5  # l_hip_pitch
-        qpos[3] = 1.0  # l_knee
-        qpos[7] = 0.5  # r_hip_pitch
-        qpos[8] = 1.0  # r_knee
-
-        com_y = controller._compute_com_y(qpos)
-        wheel_y = controller._compute_wheel_contact_y(qpos)
+        com_y = controller._compute_com_y(mj_data)
+        wheel_y = controller._compute_wheel_contact_y(mj_data)
 
         assert np.isfinite(com_y)
         assert np.isfinite(wheel_y)
 
-    def test_wheel_contact_symmetric(self, controller):
-        """Test wheel contact is symmetric for symmetric config."""
-        qpos = np.zeros(10)
-        qpos[2] = 0.5  # l_hip_pitch
-        qpos[3] = 1.0  # l_knee
-        qpos[7] = 0.5  # r_hip_pitch
-        qpos[8] = 1.0  # r_knee
+    def test_wheel_contact_symmetric(self, controller, mj_data):
+        """Test wheel contact is symmetric for standing keyframe."""
+        wheel_y = controller._compute_wheel_contact_y(mj_data)
 
-        wheel_y = controller._compute_wheel_contact_y(qpos)
-
-        # Should be near zero for symmetric config
+        # Should be near zero for symmetric standing keyframe.
         assert abs(wheel_y) < 0.1
 
 

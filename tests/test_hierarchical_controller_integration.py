@@ -234,8 +234,8 @@ def test_integrated_wbc_converts_direct_hip_roll_torque_to_actuator_convention(m
         height_cmd=0.5,
     )
 
-    assert jnp.isclose(tau_wbc[0], 2.0)
-    assert jnp.isclose(tau_wbc[5], -2.0)
+    assert jnp.isclose(tau_wbc[0], -2.0)
+    assert jnp.isclose(tau_wbc[5], 2.0)
 
 
 

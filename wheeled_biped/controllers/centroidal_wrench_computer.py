@@ -113,24 +113,27 @@ class CentroidalWrenchComputer:
         height_error = height_cmd - com_pos[2]
         f_height = jnp.array([0.0, 0.0, self.k_height * height_error])
 
-        # CoM lateral regulation: lateral force to center CoM
+        # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
+        # CoM lateral regulation: lateral force to center CoM on X-axis.
         f_com_lateral = jnp.array([
+            -self.k_com_lateral * com_pos[0] - self.k_com_lateral_damping * com_vel[0],
             0.0,
-            -self.k_com_lateral * com_pos[1] - self.k_com_lateral_damping * com_vel[1],
             0.0
         ])
 
-        # CoM sagittal regulation: forward force to center CoM
+        # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
+        # CoM sagittal regulation: sagittal force to center CoM on Y-axis.
         f_com_sagittal = jnp.array([
-            -self.k_com_sagittal * com_pos[0] - self.k_com_sagittal_damping * com_vel[0],
             0.0,
+            -self.k_com_sagittal * com_pos[1] - self.k_com_sagittal_damping * com_vel[1],
             0.0
         ])
 
-        # Capture point tracking: force to prevent divergence
+        # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
+        # Capture-point corrections map lateral→Fx and sagittal→Fy.
         f_cp = jnp.array([
-            -self.k_cp_sagittal * cp[0],
-            -self.k_cp_lateral * cp[1],
+            -self.k_cp_lateral * cp[0],
+            -self.k_cp_sagittal * cp[1],
             0.0
         ])
 
@@ -185,21 +188,24 @@ class CentroidalWrenchComputer:
         height_error = height_cmd - state.com_pos[2]
         f_height = jnp.array([0.0, 0.0, self.k_height * height_error])
 
+        # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
         f_com_lateral = jnp.array([
+            -self.k_com_lateral * state.com_pos[0]
+            - self.k_com_lateral_damping * state.com_vel[0],
             0.0,
-            -self.k_com_lateral * state.com_pos[1]
-            - self.k_com_lateral_damping * state.com_vel[1],
             0.0,
         ])
+        # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
         f_com_sagittal = jnp.array([
-            -self.k_com_sagittal * state.com_pos[0]
-            - self.k_com_sagittal_damping * state.com_vel[0],
             0.0,
+            -self.k_com_sagittal * state.com_pos[1]
+            - self.k_com_sagittal_damping * state.com_vel[1],
             0.0,
         ])
+        # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
         f_cp = jnp.array([
-            -self.k_cp_sagittal * state.capture_point[0],
-            -self.k_cp_lateral * state.capture_point[1],
+            -self.k_cp_lateral * state.capture_point[0],
+            -self.k_cp_sagittal * state.capture_point[1],
             0.0,
         ])
 

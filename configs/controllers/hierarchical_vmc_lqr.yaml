@@ -19,8 +19,8 @@ height:
   grid: [0.70, 0.65, 0.60, 0.55, 0.50, 0.45, 0.40]
 
 # Layer 1: Height IK
-ik_hip_pitch_range: [-0.8, 0.2]
-ik_knee_range: [0.0, 2.0]
+ik_hip_pitch_range: [-0.5, 1.8]
+ik_knee_range: [-0.5, 2.7]
 ik_num_samples: 50
 
 # Layer 2: CoM Virtual Model Control
