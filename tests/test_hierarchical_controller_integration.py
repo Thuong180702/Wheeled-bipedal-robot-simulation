@@ -204,6 +204,41 @@ def test_hip_roll_torque_limits(integrated_wbc, mj_model, mj_data, nominal_obs, 
     print(f"Hip roll torque limit: {tau_max}")
 
 
+def test_integrated_wbc_converts_direct_hip_roll_torque_to_actuator_convention(mj_model, mj_data, nominal_obs, nominal_state):
+    class FakeForceDistributor:
+        def distribute_wrench_contact_aware(self, *args, **kwargs):
+            return (
+                jnp.zeros(3),
+                jnp.zeros(3),
+                jnp.array([-2.0, 2.0]),
+                {"feasible": True, "reason": "test"},
+            )
+
+    class FakeContactJacobian:
+        def map_contact_forces_to_torques(self, *args, **kwargs):
+            return jnp.zeros(10)
+
+        def build_wrench_matrix(self, *args, **kwargs):
+            return jnp.zeros((6, 8))
+
+    wbc = IntegratedWBC(mj_model)
+    wbc.force_distributor = FakeForceDistributor()
+    wbc.contact_jacobian = FakeContactJacobian()
+    wbc._compute_wheel_positions_relative_to_com = lambda *args, **kwargs: (jnp.zeros(3), jnp.zeros(3))
+    wbc.wrench_computer.compute_desired_wrench_from_state = lambda *args, **kwargs: (jnp.zeros(3), jnp.zeros(3))
+
+    tau_wbc, _ = wbc.compute_wbc_torque_with_diagnostics(
+        mj_data,
+        nominal_obs,
+        nominal_state,
+        height_cmd=0.5,
+    )
+
+    assert jnp.isclose(tau_wbc[0], 2.0)
+    assert jnp.isclose(tau_wbc[5], -2.0)
+
+
+
 def test_smooth_transitions_between_timesteps(integrated_wbc, mj_model, mj_data, nominal_obs):
     """Test that controller produces smooth transitions between timesteps."""
     # Reset MuJoCo data

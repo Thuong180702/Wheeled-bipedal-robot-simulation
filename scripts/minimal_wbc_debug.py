@@ -48,10 +48,10 @@ wbc_controller = IntegratedWBC(
     max_actuator_torque=60.0, force_feedback_gain=0.5,
 )
 leg_controller = LegPositionController(
-    target_hip_pitch=0.95, target_knee=1.70,
     kp_hip_pitch=100.0, kd_hip_pitch=10.0,
     kp_knee=150.0, kd_knee=15.0,
 )
+target_joint_pos = jnp.array([0.0, 0.0, 0.95, 1.70, 0.0, 0.0, 0.0, 0.95, 1.70, 0.0])
 
 # Open CSV log
 csv_file = output_dir / "minimal_simulation.csv"
@@ -93,7 +93,7 @@ for step in range(10):
     print(f"  Computing WBC torques for step {step}...")
     tau_wbc, qp_diag = wbc_controller.compute_wbc_torque_with_diagnostics(data, obs, centroidal_state, height_cmd)
     tau_wbc_masked = leg_controller.mask_wbc_torques(tau_wbc)
-    tau_leg = leg_controller.compute_leg_torques(joint_pos, joint_vel)
+    tau_leg = leg_controller.compute_leg_torques(joint_pos, joint_vel, target_joint_pos)
     tau_total = tau_wbc_masked + tau_leg
 
     # Apply torques and step physics

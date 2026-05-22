@@ -210,10 +210,30 @@ def test_positive_roll_generates_corrective_mx():
     assert abs(float(moment[1])) < 1e-8
 
 
-def test_positive_pitch_generates_corrective_my():
-    computer = CentroidalWrenchComputer(k_pitch=10.0, k_pitch_rate=0.0, robot_mass=8.1)
-    _, moment = computer.compute_desired_wrench_from_state(
+def test_pitch_correction_force_uses_sagittal_y_axis_not_lateral_x_axis():
+    computer = CentroidalWrenchComputer(
+        k_pitch=10.0,
+        k_pitch_rate=0.0,
+        k_com_sagittal=0.0,
+        k_com_sagittal_damping=0.0,
+        k_com_lateral=0.0,
+        k_com_lateral_damping=0.0,
+        k_cp_sagittal=0.0,
+        k_cp_lateral=0.0,
+        robot_mass=8.1,
+    )
+    force, _ = computer.compute_desired_wrench_from_state(
         make_state(pitch=0.2), height_cmd=0.42
     )
+    assert abs(float(force[0])) < 1e-8
+    assert float(force[1]) < 0.0
+
+
+def test_positive_pitch_generates_sagittal_force_not_pitch_moment():
+    computer = CentroidalWrenchComputer(k_pitch=10.0, k_pitch_rate=0.0, robot_mass=8.1)
+    force, moment = computer.compute_desired_wrench_from_state(
+        make_state(pitch=0.2), height_cmd=0.42
+    )
+    assert float(force[1]) < 0.0
     assert abs(float(moment[0])) < 1e-8
-    assert float(moment[1]) < 0.0
+    assert abs(float(moment[1])) < 1e-8

@@ -22,18 +22,12 @@ def test_compute_hip_roll_moment_contribution(mj_model, mj_data):
     """Test that hip roll torques map to roll moment (Mx)."""
     jacobian = ContactJacobian(mj_model)
 
-    # Hip roll torques: [left, right]
-    tau_hip_roll = np.array([1.0, -1.0])
+    tau_hip_roll = np.array([-12.5, 12.5])
 
-    # Should return roll moment contribution
     mx = jacobian.compute_hip_roll_moment_contribution(tau_hip_roll)
 
-    # Hip roll torques directly contribute to roll moment
-    # Left hip roll positive = positive roll moment
-    # Right hip roll positive = positive roll moment
-    # So [1.0, -1.0] should give net moment of 0.0
     assert isinstance(mx, (float, np.floating))
-    assert mx == pytest.approx(0.0, abs=1e-6)
+    assert mx == pytest.approx(25.0, abs=1e-6)
 
 
 def test_map_forces_with_hip_roll_torques(mj_model, mj_data):
@@ -119,22 +113,43 @@ def test_wrench_matrix_hip_roll_contribution(mj_model, mj_data):
         mj_data, wheel_pos_left, wheel_pos_right
     )
 
-    # Test case: hip roll torques only
     decision_vars = np.array([
-        0.0, 0.0, 0.0,  # f_left: zero
-        0.0, 0.0, 0.0,  # f_right: zero
-        5.0, 3.0        # tau_hip_roll: [5Nm, 3Nm]
+        0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0,
+        -12.5, 12.5,
     ])
 
     wrench = A_wrench @ decision_vars
 
-    # Expected: Mx = 8Nm (5 + 3), all other components = 0
     assert wrench[0] == pytest.approx(0.0, abs=1e-6)  # Fx
     assert wrench[1] == pytest.approx(0.0, abs=1e-6)  # Fy
     assert wrench[2] == pytest.approx(0.0, abs=1e-6)  # Fz
-    assert wrench[3] == pytest.approx(8.0, abs=1e-6)  # Mx
+    assert wrench[3] == pytest.approx(25.0, abs=1e-6)  # Mx
     assert wrench[4] == pytest.approx(0.0, abs=1e-6)  # My
     assert wrench[5] == pytest.approx(0.0, abs=1e-6)  # Mz
+
+
+def test_wrench_matrix_vertical_force_asymmetry_creates_roll_moment(mj_model, mj_data):
+    jacobian = ContactJacobian(mj_model)
+
+    wheel_pos_left = np.array([0.135, 0.0, 0.0])
+    wheel_pos_right = np.array([-0.135, 0.0, 0.0])
+
+    A_wrench = jacobian.build_wrench_matrix(
+        mj_data, wheel_pos_left, wheel_pos_right
+    )
+
+    decision_vars = np.array([
+        0.0, 0.0, 55.0,
+        0.0, 0.0, 25.0,
+        0.0, 0.0,
+    ])
+
+    wrench = A_wrench @ decision_vars
+
+    assert wrench[2] == pytest.approx(80.0, abs=1e-6)
+    assert wrench[3] == pytest.approx(4.05, abs=1e-6)
+    assert wrench[4] == pytest.approx(0.0, abs=1e-6)
 
 
 def test_wrench_matrix_pitch_moment(mj_model, mj_data):

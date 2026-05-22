@@ -145,10 +145,11 @@ class IntegratedWBC:
         obs: Array,
         state: CentroidalState,
         height_cmd: float,
+        hip_roll_authority_scale: float = 1.0,
     ) -> Array:
         """Compute WBC joint torques via unified QP force distribution."""
         tau_wbc, _ = self.compute_wbc_torque_with_diagnostics(
-            mj_data, obs, state, height_cmd
+            mj_data, obs, state, height_cmd, hip_roll_authority_scale=hip_roll_authority_scale
         )
         return tau_wbc
 
@@ -158,6 +159,7 @@ class IntegratedWBC:
         obs: Array,
         state: CentroidalState,
         height_cmd: float,
+        hip_roll_authority_scale: float = 1.0,
     ) -> tuple[Array, dict]:
         """Compute WBC joint torques and diagnostics via unified force distribution.
 
@@ -240,6 +242,7 @@ class IntegratedWBC:
                 desired_wrench,  # Use full wrench including Fy
                 left_contact=bool(state.left_wheel_contact),
                 right_contact=bool(state.right_wheel_contact),
+                hip_roll_authority_scale=hip_roll_authority_scale,
             )
         )
         solve_time_ms = (time.perf_counter() - solve_start) * 1000.0

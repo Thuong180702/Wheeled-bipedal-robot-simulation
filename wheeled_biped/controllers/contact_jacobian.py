@@ -69,9 +69,8 @@ class ContactJacobian:
         tau_hip_roll_array = jnp.asarray(tau_hip_roll)
         assert tau_hip_roll_array.shape == (2,), f"Expected shape (2,), got {tau_hip_roll_array.shape}"
 
-        # Hip roll torques directly contribute to roll moment about CoM
-        # Both left and right hip roll torques add to roll moment
-        mx = tau_hip_roll_array[0] + tau_hip_roll_array[1]
+        # Hip roll torques contribute with opposite signs in the actuator convention.
+        mx = tau_hip_roll_array[1] - tau_hip_roll_array[0]
         return float(mx)
 
     def build_wrench_matrix(
@@ -110,23 +109,22 @@ class ContactJacobian:
         r_right = wheel_pos_right
 
         # Mx (roll moment) row
-        # From left wheel: r_y * Fz - r_z * Fy
+        # From wheel vertical force asymmetry: Mx = r_x * Fz
         A_wrench = A_wrench.at[3, 1].set(-r_left[2])  # -r_z * f_left_y
-        A_wrench = A_wrench.at[3, 2].set(r_left[1])   # r_y * f_left_z
-        # From right wheel: r_y * Fz - r_z * Fy
+        A_wrench = A_wrench.at[3, 2].set(r_left[0])   # r_x * f_left_z
         A_wrench = A_wrench.at[3, 4].set(-r_right[2])  # -r_z * f_right_y
-        A_wrench = A_wrench.at[3, 5].set(r_right[1])   # r_y * f_right_z
-        # Hip roll torques contribute directly to roll moment
-        A_wrench = A_wrench.at[3, 6].set(1.0)   # tau_hip_roll_L
+        A_wrench = A_wrench.at[3, 5].set(r_right[0])   # r_x * f_right_z
+        # Hip roll torques contribute with opposite signs in the actuator convention
+        A_wrench = A_wrench.at[3, 6].set(-1.0)  # tau_hip_roll_L
         A_wrench = A_wrench.at[3, 7].set(1.0)   # tau_hip_roll_R
 
         # My (pitch moment) row
-        # From left wheel: r_z * Fx - r_x * Fz
+        # From left wheel: r_z * Fx - r_y * Fz
         A_wrench = A_wrench.at[4, 0].set(r_left[2])   # r_z * f_left_x
-        A_wrench = A_wrench.at[4, 2].set(-r_left[0])  # -r_x * f_left_z
-        # From right wheel: r_z * Fx - r_x * Fz
+        A_wrench = A_wrench.at[4, 2].set(-r_left[1])  # -r_y * f_left_z
+        # From right wheel: r_z * Fx - r_y * Fz
         A_wrench = A_wrench.at[4, 3].set(r_right[2])   # r_z * f_right_x
-        A_wrench = A_wrench.at[4, 5].set(-r_right[0])  # -r_x * f_right_z
+        A_wrench = A_wrench.at[4, 5].set(-r_right[1])  # -r_y * f_right_z
 
         # Mz (yaw moment) row
         # From left wheel: r_x * Fy - r_y * Fx

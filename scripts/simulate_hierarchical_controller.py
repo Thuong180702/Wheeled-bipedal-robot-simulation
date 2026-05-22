@@ -65,6 +65,145 @@ def check_termination(qpos, com_height):
     return False, None
 
 
+def build_step1_telemetry_template():
+    return {
+        "tau_wbc_per_joint": [],
+        "tau_wbc_scaled_per_joint": [],
+        "tau_hip_roll_centering_per_joint": [],
+        "tau_posture_per_joint": [],
+        "tau_leg_position_per_joint": [],
+        "tau_wheel_balance_per_joint": [],
+        "tau_total_per_joint": [],
+        "hip_roll_abs_max": [],
+        "hip_yaw_abs_max": [],
+        "hip_pitch_error_max": [],
+        "knee_error_max": [],
+        "wheel_balance_torque": [],
+        "control_mode": [],
+    }
+
+
+def compute_step1_joint_diagnostics(joint_pos, joint_pos_error):
+    hip_roll_indices = jnp.array([0, 5])
+    hip_yaw_indices = jnp.array([1, 6])
+    hip_pitch_indices = jnp.array([2, 7])
+    knee_indices = jnp.array([3, 8])
+
+    return {
+        "control_mode": "upright",
+        "hip_roll_abs_max": float(jnp.max(jnp.abs(joint_pos[hip_roll_indices]))),
+        "hip_yaw_abs_max": float(jnp.max(jnp.abs(joint_pos[hip_yaw_indices]))),
+        "hip_pitch_error_max": float(jnp.max(jnp.abs(joint_pos_error[hip_pitch_indices]))),
+        "knee_error_max": float(jnp.max(jnp.abs(joint_pos_error[knee_indices]))),
+        "wheel_balance_torque": 0.0,
+    }
+
+
+def build_step3_wbc_joint_scale():
+    return jnp.array([1.0, 0.3, 0.75, 0.75, 1.0, 1.0, 0.3, 0.75, 0.75, 1.0])
+
+
+def compute_step6_control_mode(
+    roll_rad,
+    pitch_rad,
+    upright_roll_threshold=0.20,
+    upright_pitch_threshold=0.15,
+    recovery_roll_threshold=0.30,
+    recovery_pitch_threshold=0.25,
+):
+    if abs(roll_rad) > recovery_roll_threshold or abs(pitch_rad) > recovery_pitch_threshold:
+        return "recovery"
+    if abs(roll_rad) < upright_roll_threshold and abs(pitch_rad) < upright_pitch_threshold:
+        return "upright"
+    return "transition"
+
+
+def build_step6_wbc_joint_scale(control_mode):
+    return build_step3_wbc_joint_scale()
+
+
+def compute_step6_hip_roll_authority_scale(control_mode):
+    if control_mode == "transition":
+        return 0.5
+    return 1.0
+
+
+def compute_step4_hip_roll_centering(
+    joint_pos,
+    joint_vel,
+    deadband=0.25,
+    kp=20.0,
+    kd=1.0,
+    max_torque=12.0,
+):
+    tau = jnp.zeros(10)
+    hip_roll_indices = jnp.array([0, 5])
+    hip_roll_pos = joint_pos[hip_roll_indices]
+    hip_roll_vel = joint_vel[hip_roll_indices]
+    excess = jnp.maximum(jnp.abs(hip_roll_pos) - deadband, 0.0)
+    tau_raw = -kp * excess * jnp.sign(hip_roll_pos) - kd * hip_roll_vel
+    tau_limited = jnp.clip(tau_raw, -max_torque, max_torque)
+    return tau.at[hip_roll_indices].set(tau_limited)
+
+
+def compute_step5_wheel_balance(
+    pitch_rad,
+    pitch_rate_rad_s,
+    capture_point_error_x,
+    kp_pitch=10.0,
+    kd_pitch=2.0,
+    k_cp=4.0,
+    max_torque=4.0,
+):
+    tau_wheel = kp_pitch * pitch_rad + kd_pitch * pitch_rate_rad_s + k_cp * capture_point_error_x
+    tau_wheel = jnp.clip(tau_wheel, -max_torque, max_torque)
+    tau = jnp.zeros(10)
+    return tau.at[jnp.array([4, 9])].set(tau_wheel)
+
+
+def compute_step2_torque_components(
+    leg_position_controller,
+    joint_pos,
+    joint_vel,
+    target_joint_pos,
+    tau_wbc,
+    tau_posture,
+    tau_wheel_secondary,
+    tau_inverse_dynamics,
+    wbc_joint_scale=None,
+    tau_hip_roll_centering=None,
+    tau_wheel_balance=None,
+):
+    tau_leg_position = leg_position_controller.compute_leg_torques(
+        joint_pos,
+        joint_vel,
+        target_joint_pos,
+    )
+    if wbc_joint_scale is None:
+        wbc_joint_scale = jnp.ones(10)
+    if tau_hip_roll_centering is None:
+        tau_hip_roll_centering = jnp.zeros(10)
+    if tau_wheel_balance is None:
+        tau_wheel_balance = jnp.zeros(10)
+    tau_wbc_scaled = tau_wbc * wbc_joint_scale
+    tau_total_raw = (
+        tau_wbc_scaled
+        + tau_hip_roll_centering
+        + tau_leg_position
+        + tau_posture
+        + tau_wheel_secondary
+        + tau_wheel_balance
+        + tau_inverse_dynamics
+    )
+    return {
+        "tau_wbc_scaled": tau_wbc_scaled,
+        "tau_hip_roll_centering": tau_hip_roll_centering,
+        "tau_leg_position": tau_leg_position,
+        "tau_wheel_balance": tau_wheel_balance,
+        "tau_total_raw": tau_total_raw,
+    }
+
+
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser(
@@ -227,13 +366,13 @@ def main():
 
     # Secondary posture controller only; WBC is the primary torque path.
     leg_position_controller = LegPositionController(
-        target_hip_pitch=0.674267,  # UPDATED: Optimized equilibrium configuration
-        target_knee=1.668071,  # UPDATED: Optimized equilibrium configuration
-        kp_hip_pitch=15.0,  # Moderate compliance - prevent collapse, allow adjustment
-        kd_hip_pitch=2.0,
-        kp_knee=25.0,  # Moderate compliance - prevent buckling, allow adjustment
-        kd_knee=3.0,
-        max_torque=40.0,  # Moderate torque limit
+        kp_hip_yaw=5.0,
+        kd_hip_yaw=1.0,
+        kp_hip_pitch=20.0,
+        kd_hip_pitch=3.0,
+        kp_knee=35.0,
+        kd_knee=4.0,
+        max_torque=25.0,
     )
 
     print("[OK] Controllers initialized (wheeled biped architecture)")
@@ -342,6 +481,7 @@ def main():
         "tau_rate_unlimited": [],  # Torque rate before rate limiting (Nm/s)
         "tau_rate_limited": [],  # Torque rate after rate limiting (Nm/s)
     }
+    telemetry.update(build_step1_telemetry_template())
 
     # Simulation parameters
     max_steps = args.steps
@@ -412,6 +552,7 @@ def main():
         # Extract orientation from gravity vector
         gravity_body = obs[0:3]
         roll_rad, pitch_rad = compute_orientation_from_gravity(gravity_body)
+        control_mode = compute_step6_control_mode(roll_rad, pitch_rad)
 
         # Check contact state
         left_contact = centroidal_state.left_wheel_contact
@@ -423,7 +564,11 @@ def main():
         # when the robot was already unstable
 
         tau_wbc, qp_diagnostics = wbc_controller.compute_wbc_torque_with_diagnostics(
-            mj_data, obs, centroidal_state, height_cmd
+            mj_data,
+            obs,
+            centroidal_state,
+            height_cmd,
+            hip_roll_authority_scale=compute_step6_hip_roll_authority_scale(control_mode),
         )
 
         # Diagnostic: log WBC output on first step
@@ -521,15 +666,40 @@ def main():
         else:
             tau_inverse_dynamics = jnp.zeros(10)
 
-        # ENABLED: Posture regularizer now active with equilibrium-based targets
-        tau_total_raw = tau_wbc + tau_posture + tau_wheel_secondary + tau_inverse_dynamics
+        target_joint_pos = posture_regularizer.compute_target_posture_from_height(height_cmd)
+        joint_pos_error = target_joint_pos - joint_pos
+        tau_hip_roll_centering = compute_step4_hip_roll_centering(joint_pos, joint_vel)
+        capture_point_error_x = float(centroidal_state.capture_point[0] - centroidal_state.com_pos[0])
+        tau_wheel_balance = compute_step5_wheel_balance(
+            pitch_rad,
+            centroidal_state.pitch_rate,
+            capture_point_error_x,
+        )
+        torque_components = compute_step2_torque_components(
+            leg_position_controller,
+            joint_pos,
+            joint_vel,
+            target_joint_pos,
+            tau_wbc,
+            tau_posture,
+            tau_wheel_secondary,
+            tau_inverse_dynamics,
+            wbc_joint_scale=build_step6_wbc_joint_scale(control_mode),
+            tau_hip_roll_centering=tau_hip_roll_centering,
+            tau_wheel_balance=tau_wheel_balance,
+        )
+        tau_wbc_scaled = torque_components["tau_wbc_scaled"]
+        tau_hip_roll_centering = torque_components["tau_hip_roll_centering"]
+        tau_leg_position = torque_components["tau_leg_position"]
+        tau_wheel_balance = torque_components["tau_wheel_balance"]
+        tau_total_raw = torque_components["tau_total_raw"]
         torque_limit = jnp.array(mj_model.actuator_ctrlrange[:, 1])
         tau_total = jnp.clip(tau_total_raw, -torque_limit, torque_limit)
         tau_saturation_rate = float(jnp.mean(jnp.abs(tau_total_raw) > torque_limit))
 
         # Compute motor tracking telemetry
-        target_joint_pos = posture_regularizer.compute_target_posture_from_height(height_cmd)
-        joint_pos_error = target_joint_pos - joint_pos
+        step1_diagnostics = compute_step1_joint_diagnostics(joint_pos, joint_pos_error)
+        step1_diagnostics["control_mode"] = control_mode
         joint_pos_error_norm = float(jnp.linalg.norm(joint_pos_error))
         joint_vel_norm = float(jnp.linalg.norm(mj_data.qvel[6:16]))
         tau_wbc_norm = float(jnp.linalg.norm(tau_wbc))
@@ -651,6 +821,19 @@ def main():
         telemetry["tau_total_norm"].append(tau_total_norm)
         telemetry["tau_rate_unlimited"].append(tau_rate_unlimited)
         telemetry["tau_rate_limited"].append(tau_rate_limited)
+        telemetry["tau_wbc_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc)))
+        telemetry["tau_wbc_scaled_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc_scaled)))
+        telemetry["tau_hip_roll_centering_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_hip_roll_centering)))
+        telemetry["tau_posture_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_posture)))
+        telemetry["tau_leg_position_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_leg_position)))
+        telemetry["tau_wheel_balance_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wheel_balance)))
+        telemetry["tau_total_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_total)))
+        telemetry["hip_roll_abs_max"].append(step1_diagnostics["hip_roll_abs_max"])
+        telemetry["hip_yaw_abs_max"].append(step1_diagnostics["hip_yaw_abs_max"])
+        telemetry["hip_pitch_error_max"].append(step1_diagnostics["hip_pitch_error_max"])
+        telemetry["knee_error_max"].append(step1_diagnostics["knee_error_max"])
+        telemetry["wheel_balance_torque"].append(step1_diagnostics["wheel_balance_torque"])
+        telemetry["control_mode"].append(step1_diagnostics["control_mode"])
 
         # Progress updates with orientation feedback
         if (step + 1) % 10 == 0 or step < 5:
