@@ -549,11 +549,11 @@ def main():
         gravity_body = R.T @ gravity_world  # R.T transforms world to body frame
 
         # Phase 1: State estimation (use real MuJoCo data)
-        centroidal_state, new_com_pos = centroidal_estimator.estimate(
+        centroidal_state_control, new_com_pos = centroidal_estimator.estimate(
             jnp.zeros(42), mj_data, prev_com_pos
         )
         prev_com_pos = new_com_pos
-        centroidal_state = capture_estimator.update(centroidal_state)
+        centroidal_state_control = capture_estimator.update(centroidal_state_control)
 
         # Construct observation with ACTUAL gravity from IMU
         obs = jnp.zeros(42)
@@ -561,7 +561,7 @@ def main():
         obs = obs.at[6:16].set(qpos_jax[7:17])
         obs = obs.at[16:26].set(qvel_jax[6:16])
         obs = obs.at[36].set(height_cmd)  # Height command (adaptive, matches keyframe CoM)
-        obs = obs.at[37].set(centroidal_state.com_pos[2])
+        obs = obs.at[37].set(centroidal_state_control.com_pos[2])
 
         joint_pos = qpos_jax[7:17]
         joint_vel = qvel_jax[6:16]
@@ -578,8 +578,8 @@ def main():
         control_mode = compute_step6_control_mode(roll_rad, pitch_rad)
 
         # Check contact state
-        left_contact = centroidal_state.left_wheel_contact
-        right_contact = centroidal_state.right_wheel_contact
+        left_contact = centroidal_state_control.left_wheel_contact
+        right_contact = centroidal_state_control.right_wheel_contact
         active_wheels = int(left_contact) + int(right_contact)
 
         # Keep height_cmd constant at 0.40m (no adaptive adjustment)
@@ -589,7 +589,7 @@ def main():
         tau_wbc, qp_diagnostics = wbc_controller.compute_wbc_torque_with_diagnostics(
             mj_data,
             obs,
-            centroidal_state,
+            centroidal_state_control,
             height_cmd,
             hip_roll_authority_scale=compute_step6_hip_roll_authority_scale(control_mode),
         )
@@ -693,11 +693,11 @@ def main():
         joint_pos_error = target_joint_pos - joint_pos
         tau_hip_roll_centering = compute_step4_hip_roll_centering(joint_pos, joint_vel)
         # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
-        capture_point_error_y = float(centroidal_state.capture_point[1] - centroidal_state.com_pos[1])
+        capture_point_error_y = float(centroidal_state_control.capture_point[1] - centroidal_state_control.com_pos[1])
         if args.enable_secondary_wheel_balance:
             tau_wheel_balance = compute_step5_wheel_balance(
                 pitch_rad,
-                centroidal_state.pitch_rate,
+                centroidal_state_control.pitch_rate,
                 capture_point_error_y,
             )
         else:
@@ -800,8 +800,15 @@ def main():
             for _ in range(n_substeps):
                 mujoco.mj_step(mj_model, mj_data)
 
+        # Re-estimate centroidal/contact state after physics stepping for logging.
+        centroidal_state_log, logged_com_pos = centroidal_estimator.estimate(
+            jnp.zeros(42), mj_data, prev_com_pos
+        )
+        centroidal_state_log = capture_estimator.update(centroidal_state_log)
+        prev_com_pos = logged_com_pos
+
         # Check termination
-        com_height = float(centroidal_state.com_pos[2])
+        com_height = float(centroidal_state_log.com_pos[2])
         terminated, termination_reason = check_termination(mj_data.qpos, com_height)
 
         # Record telemetry using unified orientation computation
@@ -811,14 +818,14 @@ def main():
         telemetry["time"].append(step * control_dt)
         telemetry["mass_kg"].append(robot_mass)
         telemetry["weight_N"].append(robot_mass * gravity)
-        telemetry["com_x"].append(float(centroidal_state.com_pos[0]))
-        telemetry["com_y"].append(float(centroidal_state.com_pos[1]))
+        telemetry["com_x"].append(float(centroidal_state_log.com_pos[0]))
+        telemetry["com_y"].append(float(centroidal_state_log.com_pos[1]))
         telemetry["com_z"].append(com_height)
-        telemetry["com_vx"].append(float(centroidal_state.com_vel[0]))
-        telemetry["com_vy"].append(float(centroidal_state.com_vel[1]))
-        telemetry["com_vz"].append(float(centroidal_state.com_vel[2]))
-        telemetry["cp_x"].append(float(centroidal_state.capture_point[0]))
-        telemetry["cp_y"].append(float(centroidal_state.capture_point[1]))
+        telemetry["com_vx"].append(float(centroidal_state_log.com_vel[0]))
+        telemetry["com_vy"].append(float(centroidal_state_log.com_vel[1]))
+        telemetry["com_vz"].append(float(centroidal_state_log.com_vel[2]))
+        telemetry["cp_x"].append(float(centroidal_state_log.capture_point[0]))
+        telemetry["cp_y"].append(float(centroidal_state_log.capture_point[1]))
         telemetry["tau_wbc_max"].append(float(jnp.max(jnp.abs(tau_wbc))))
         # Track actual wheel torques at indices [4, 9] from applied torque (tau_smooth)
         wheel_indices = jnp.array([4, 9])
@@ -829,21 +836,21 @@ def main():
         telemetry["pitch"].append(pitch)
         telemetry["roll"].append(roll)
         telemetry["yaw"].append(yaw)
-        telemetry["roll_rate_rad_s"].append(float(centroidal_state.roll_rate))
-        telemetry["pitch_rate_rad_s"].append(float(centroidal_state.pitch_rate))
-        telemetry["yaw_rate_rad_s"].append(float(centroidal_state.yaw_rate))
+        telemetry["roll_rate_rad_s"].append(float(centroidal_state_log.roll_rate))
+        telemetry["pitch_rate_rad_s"].append(float(centroidal_state_log.pitch_rate))
+        telemetry["yaw_rate_rad_s"].append(float(centroidal_state_log.yaw_rate))
         telemetry["height_cmd"].append(height_cmd)  # Log adaptive height command
-        telemetry["left_contact_active"].append(bool(centroidal_state.left_wheel_contact))
-        telemetry["right_contact_active"].append(bool(centroidal_state.right_wheel_contact))
+        telemetry["left_contact_active"].append(bool(centroidal_state_log.left_wheel_contact))
+        telemetry["right_contact_active"].append(bool(centroidal_state_log.right_wheel_contact))
         telemetry["n_contacts"].append(int(mj_data.ncon))
-        telemetry["contact_force_valid"].append(bool(centroidal_state.contact_force_valid))
-        telemetry["left_contact_force_world_x"].append(float(centroidal_state.left_contact_force_world[0]))
-        telemetry["left_contact_force_world_y"].append(float(centroidal_state.left_contact_force_world[1]))
-        telemetry["left_contact_force_world_z"].append(float(centroidal_state.left_contact_force_world[2]))
-        telemetry["right_contact_force_world_x"].append(float(centroidal_state.right_contact_force_world[0]))
-        telemetry["right_contact_force_world_y"].append(float(centroidal_state.right_contact_force_world[1]))
-        telemetry["right_contact_force_world_z"].append(float(centroidal_state.right_contact_force_world[2]))
-        telemetry["total_contact_force_z"].append(float(centroidal_state.total_contact_force_z))
+        telemetry["contact_force_valid"].append(bool(centroidal_state_log.contact_force_valid))
+        telemetry["left_contact_force_world_x"].append(float(centroidal_state_log.left_contact_force_world[0]))
+        telemetry["left_contact_force_world_y"].append(float(centroidal_state_log.left_contact_force_world[1]))
+        telemetry["left_contact_force_world_z"].append(float(centroidal_state_log.left_contact_force_world[2]))
+        telemetry["right_contact_force_world_x"].append(float(centroidal_state_log.right_contact_force_world[0]))
+        telemetry["right_contact_force_world_y"].append(float(centroidal_state_log.right_contact_force_world[1]))
+        telemetry["right_contact_force_world_z"].append(float(centroidal_state_log.right_contact_force_world[2]))
+        telemetry["total_contact_force_z"].append(float(centroidal_state_log.total_contact_force_z))
         telemetry["joint_pos"].append(",".join(f"{x:.4f}" for x in np.array(joint_pos)))
         telemetry["joint_vel"].append(
             ",".join(f"{x:.4f}" for x in np.array(mj_data.qvel[6:16]))

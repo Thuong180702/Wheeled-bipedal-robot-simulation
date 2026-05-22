@@ -1,6 +1,14 @@
 import jax.numpy as jnp
 import mujoco
 
+from wheeled_biped.controllers.capture_point_estimator import (
+    CapturePointEstimator,
+    CapturePointEstimatorConfig,
+)
+from wheeled_biped.controllers.centroidal_state_estimator import (
+    CentroidalStateEstimator,
+    CentroidalStateEstimatorConfig,
+)
 from wheeled_biped.controllers.integrated_wbc import IntegratedWBC
 
 MODEL_PATH = "assets/robot/wheeled_biped_real.xml"
@@ -67,3 +75,36 @@ def test_step0_preload_eliminates_rate_limit_ramp_from_zero():
     assert tau_smooth_from_zero[8] == 4.0
 
     assert jnp.allclose(tau_smooth_from_preload, tau_total_clipped)
+
+
+def test_contact_force_is_zero_pre_step_and_nonzero_post_step_for_logging_order():
+    model = mujoco.MjModel.from_xml_path(MODEL_PATH)
+    data = mujoco.MjData(model)
+
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_forward(model, data)
+    data.qvel[:] = 0.0
+    data.qacc[:] = 0.0
+    mujoco.mj_forward(model, data)
+
+    estimator = CentroidalStateEstimator(
+        CentroidalStateEstimatorConfig(
+            robot_mass=float(sum(model.body_mass)),
+            torso_inertia=jnp.array([0.1, 0.1, 0.05]),
+        ),
+        mj_model=model,
+    )
+    capture_estimator = CapturePointEstimator(CapturePointEstimatorConfig())
+
+    state_pre, com_pre = estimator.estimate(jnp.zeros(42), data, None)
+    state_pre = capture_estimator.update(state_pre)
+
+    data.ctrl[:] = 0.0
+    mujoco.mj_step(model, data)
+
+    state_post, _ = estimator.estimate(jnp.zeros(42), data, com_pre)
+    state_post = capture_estimator.update(state_post)
+
+    assert state_pre.left_wheel_contact and state_pre.right_wheel_contact
+    assert abs(float(state_pre.total_contact_force_z)) < 1e-6
+    assert abs(float(state_post.total_contact_force_z)) > 1e-3
