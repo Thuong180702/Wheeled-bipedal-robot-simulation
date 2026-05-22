@@ -49,6 +49,7 @@ class IntegratedWBC:
         min_wheel_force: float = 10.0,
         roll_integral_limit: float = 0.52,
         dt: float = 0.01,
+        use_per_actuator_authority: bool = False,
     ):
         """Initialize integrated WBC.
 
@@ -78,6 +79,7 @@ class IntegratedWBC:
             min_wheel_force: Minimum safe wheel force to prevent liftoff (reduced to 10.0 N)
             roll_integral_limit: Anti-windup limit for roll integral (radians, ~30 degrees)
             dt: Control timestep in seconds
+            use_per_actuator_authority: If True, clip WBC torque elementwise by actuator limits
         """
         self.mj_model = mj_model
         self.wbc_authority_budget = wbc_authority_budget
@@ -87,6 +89,7 @@ class IntegratedWBC:
         self.step_count = 0
         self.dt = dt
         self.roll_integral_limit = roll_integral_limit
+        self.use_per_actuator_authority = use_per_actuator_authority
 
         # PID state: roll integral accumulator with anti-windup
         self.roll_integral = 0.0
@@ -391,21 +394,16 @@ class IntegratedWBC:
         return total_fz
 
     def clip_to_authority_budget(self, tau: Array) -> Array:
-        """Clip torque to WBC authority budget.
+        """Clip torque to WBC authority budget."""
+        if self.use_per_actuator_authority:
+            actuator_limit = jnp.array(self.mj_model.actuator_ctrlrange[:, 1])
+            per_joint_limit = self.wbc_authority_budget * actuator_limit
+            return jnp.clip(tau, -per_joint_limit, per_joint_limit)
 
-        Args:
-            tau: Desired torque array (10,)
-
-        Returns:
-            Clipped torque array (10,) within authority budget
-        """
         budget_limit = self.wbc_authority_budget * self.max_actuator_torque
-
         max_tau = jnp.max(jnp.abs(tau))
         scale_factor = jnp.where(max_tau <= budget_limit, 1.0, budget_limit / max_tau)
-        tau_clipped = tau * scale_factor
-
-        return tau_clipped
+        return tau * scale_factor
 
     def reset_integral(self):
         """Reset integral state (call when robot resets or falls)."""
