@@ -213,13 +213,13 @@ def test_static_fz_equals_weight_at_target_height():
     assert abs(float(moment[1])) < 1e-8
 
 
-def test_positive_roll_y_generates_corrective_mx():
+def test_positive_roll_y_generates_corrective_my_not_mx():
     computer = CentroidalWrenchComputer(k_roll=10.0, k_roll_rate=0.0, robot_mass=8.1)
     _, moment = computer.compute_desired_wrench_from_state(
         make_state(roll_y=0.2), height_cmd=0.42
     )
-    assert float(moment[0]) < 0.0
-    assert abs(float(moment[1])) < 1e-8
+    assert abs(float(moment[0])) < 1e-8
+    assert float(moment[1]) < 0.0
 
 
 def test_pitch_x_correction_force_uses_sagittal_y_axis_not_lateral_x_axis():

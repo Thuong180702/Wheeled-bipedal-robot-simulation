@@ -146,10 +146,9 @@ class CentroidalWrenchComputer:
         # P term: proportional to current roll error
         # D term: damping based on roll rate
         # I term: accumulated error to eliminate bias/drift
-        # CRITICAL FIX: Negative roll (left tilt) requires POSITIVE Mx to correct
-        # The corrective moment must be opposite in sign to the roll error
-        m_roll = -self.k_roll * roll_y - self.k_roll_rate * roll_rate_y - self.k_roll_integral * roll_integral
-        m_roll = self._limit_roll_moment(m_roll)
+        # roll_y is rotation about body/world Y; correction must be applied on My channel.
+        m_roll_y = -self.k_roll * roll_y - self.k_roll_rate * roll_rate_y - self.k_roll_integral * roll_integral
+        m_roll_y = self._limit_roll_moment(m_roll_y)
 
         # Pitch stabilization: for wheeled biped, use inverted pendulum control
         # Sagittal force should be directly proportional to pitch angle (not scaled by height)
@@ -161,10 +160,8 @@ class CentroidalWrenchComputer:
         # This will drive wheel motion through the contact Jacobian
         desired_force = desired_force.at[1].add(pitch_correction_force)
 
-        # Keep pitch moment at zero since pitch control is handled by wheel motion
-        m_pitch = 0.0
-
-        desired_moment = jnp.array([m_roll, m_pitch, 0.0])
+        # Keep Mx at zero in this model; pitch_x is handled through Fy.
+        desired_moment = jnp.array([0.0, m_roll_y, 0.0])
 
         return desired_force, desired_moment
 
@@ -211,11 +208,9 @@ class CentroidalWrenchComputer:
 
         desired_force = f_gravity + f_height + f_com_lateral + f_com_sagittal + f_cp
 
-        # Roll stabilization: PID control to eliminate steady-state error
-        # CRITICAL FIX: Negative roll (left tilt) requires POSITIVE Mx to correct
-        # The corrective moment must be opposite in sign to the roll error
-        m_roll = -self.k_roll * state.body_roll_y - self.k_roll_rate * state.body_roll_rate_y - self.k_roll_integral * roll_integral
-        m_roll = self._limit_roll_moment(m_roll)
+        # Roll_y is rotation about Y; correction must be applied on My channel.
+        m_roll_y = -self.k_roll * state.body_roll_y - self.k_roll_rate * state.body_roll_rate_y - self.k_roll_integral * roll_integral
+        m_roll_y = self._limit_roll_moment(m_roll_y)
 
         # Pitch stabilization: for wheeled biped, use inverted pendulum control
         # Sagittal force should be directly proportional to pitch angle (not scaled by height)
@@ -224,8 +219,7 @@ class CentroidalWrenchComputer:
         pitch_correction_force = -self.k_pitch * state.body_pitch_x - self.k_pitch_rate * state.body_pitch_rate_x
         desired_force = desired_force.at[1].add(pitch_correction_force)
 
-        m_pitch = 0.0
-        desired_moment = jnp.array([m_roll, m_pitch, 0.0])
+        desired_moment = jnp.array([0.0, m_roll_y, 0.0])
 
         return desired_force, desired_moment
 

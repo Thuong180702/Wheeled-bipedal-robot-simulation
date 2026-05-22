@@ -245,3 +245,48 @@ def test_force_mapping_diagnostics_include_jacobian_and_torque_terms():
     assert diagnostics["tau_left_from_force"].shape == (10,)
     assert diagnostics["tau_right_from_force"].shape == (10,)
     assert diagnostics["tau_total_from_force"].shape == (10,)
+
+
+def _reset_static_keyframe(model, data):
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_forward(model, data)
+    data.qvel[:] = 0.0
+    data.qacc[:] = 0.0
+    mujoco.mj_forward(model, data)
+
+
+def _collapse_metric_from_qacc(data):
+    hip_pitch_l = float(data.qacc[6 + 2])
+    knee_l = float(data.qacc[6 + 3])
+    hip_pitch_r = float(data.qacc[6 + 7])
+    knee_r = float(data.qacc[6 + 8])
+    return sum(max(0.0, -x) for x in [hip_pitch_l, knee_l, hip_pitch_r, knee_r])
+
+
+def test_static_support_prefers_positive_jtf_sign_dynamically():
+    model = mujoco.MjModel.from_xml_path("assets/robot/wheeled_biped_real.xml")
+    jacobian = ContactJacobian(model)
+
+    data0 = mujoco.MjData(model)
+    _reset_static_keyframe(model, data0)
+    j_left, j_right = jacobian.compute_wheel_jacobians(data0)
+
+    weight = float(np.sum(model.body_mass) * abs(model.opt.gravity[2]))
+    f_left = jnp.array([0.0, 0.0, weight / 2.0])
+    f_right = jnp.array([0.0, 0.0, weight / 2.0])
+
+    tau_plus = np.array(j_left.T @ f_left + j_right.T @ f_right)
+    tau_minus = -tau_plus
+
+    def run_case(tau):
+        data = mujoco.MjData(model)
+        _reset_static_keyframe(model, data)
+        for _ in range(5):
+            data.ctrl[:] = tau
+            mujoco.mj_step(model, data)
+        return _collapse_metric_from_qacc(data)
+
+    plus_metric = run_case(tau_plus)
+    minus_metric = run_case(tau_minus)
+
+    assert plus_metric < minus_metric
