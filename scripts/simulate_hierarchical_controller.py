@@ -511,7 +511,7 @@ def main():
     control_dt = 0.01  # 100 Hz
     physics_dt = mj_model.opt.timestep
     n_substeps = int(control_dt / physics_dt)
-    prev_com_pos = None
+    prev_control_com_pos = None
     tau_prev = jnp.array(mj_data.ctrl)  # Initialize previous torque from current control
 
     print(
@@ -526,7 +526,7 @@ def main():
     height_cmd = 0.40  # Match equilibrium CoM height from compute_equilibrium_keyframe.py
 
     def simulation_step():
-        nonlocal prev_com_pos, terminated, termination_reason, step, height_cmd, tau_prev
+        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev
 
         if terminated or step >= max_steps:
             return False
@@ -548,11 +548,13 @@ def main():
         gravity_world = np.array([0.0, 0.0, -9.81])
         gravity_body = R.T @ gravity_world  # R.T transforms world to body frame
 
-        # Phase 1: State estimation (use real MuJoCo data)
-        centroidal_state_control, new_com_pos = centroidal_estimator.estimate(
-            jnp.zeros(42), mj_data, prev_com_pos
+        # Phase 1: Control-time state estimation.
+        # Use previous CONTROL sample CoM for velocity finite-difference.
+        prev_control_before_estimate = prev_control_com_pos
+        centroidal_state_control, control_com_pos = centroidal_estimator.estimate(
+            jnp.zeros(42), mj_data, prev_control_com_pos
         )
-        prev_com_pos = new_com_pos
+        prev_control_com_pos = control_com_pos
         centroidal_state_control = capture_estimator.update(centroidal_state_control)
 
         # Construct observation with ACTUAL gravity from IMU
@@ -801,11 +803,37 @@ def main():
                 mujoco.mj_step(mj_model, mj_data)
 
         # Re-estimate centroidal/contact state after physics stepping for logging.
+        # Do NOT overwrite prev_control_com_pos from logging sample.
         centroidal_state_log, logged_com_pos = centroidal_estimator.estimate(
-            jnp.zeros(42), mj_data, prev_com_pos
+            jnp.zeros(42), mj_data, control_com_pos
         )
         centroidal_state_log = capture_estimator.update(centroidal_state_log)
-        prev_com_pos = logged_com_pos
+
+        if step < 20:
+            prev_ctrl_txt = (
+                "None"
+                if prev_control_before_estimate is None
+                else np.array2string(np.array(prev_control_before_estimate), precision=6)
+            )
+            print(
+                f"[LIFECYCLE][step={step}] prev_control_com_pos={prev_ctrl_txt}, "
+                f"control_com_pos={np.array(control_com_pos)}, "
+                f"control_com_vel={np.array(centroidal_state_control.com_vel)}, "
+                f"cp_x={float(centroidal_state_control.capture_point[0]):+.6f}, "
+                f"cp_y={float(centroidal_state_control.capture_point[1]):+.6f}, "
+                f"com_vx={float(centroidal_state_control.com_vel[0]):+.6f}, "
+                f"com_vy={float(centroidal_state_control.com_vel[1]):+.6f}, "
+                f"com_vz={float(centroidal_state_control.com_vel[2]):+.6f}"
+            )
+            print(
+                f"[LIFECYCLE][step={step}] log_com_pos={np.array(logged_com_pos)}, "
+                f"log_com_vel={np.array(centroidal_state_log.com_vel)}, "
+                f"log_cp_x={float(centroidal_state_log.capture_point[0]):+.6f}, "
+                f"log_cp_y={float(centroidal_state_log.capture_point[1]):+.6f}, "
+                f"log_com_vx={float(centroidal_state_log.com_vel[0]):+.6f}, "
+                f"log_com_vy={float(centroidal_state_log.com_vel[1]):+.6f}, "
+                f"log_com_vz={float(centroidal_state_log.com_vel[2]):+.6f}"
+            )
 
         # Check termination
         com_height = float(centroidal_state_log.com_pos[2])
