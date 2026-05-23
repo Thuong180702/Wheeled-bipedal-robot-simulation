@@ -208,6 +208,10 @@ def run_one_control_cycle(
     # Height command for standing
     height_cmd = 0.534
 
+    # Complete observation with height_cmd and com_z
+    obs = obs.at[36].set(height_cmd)  # height_cmd
+    obs = obs.at[37].set(centroidal_state.com_pos[2])  # com_z from centroidal state
+
     # Compute WBC torque with diagnostics
     tau_wbc, wbc_diagnostics = wbc_controller.compute_wbc_torque_with_diagnostics(
         mj_data, obs, centroidal_state, height_cmd
@@ -262,6 +266,10 @@ def run_one_control_cycle(
     f_left_z_actual, f_right_z_actual = measure_contact_forces(mj_model, mj_data)
     f_total_z_actual = f_left_z_actual + f_right_z_actual
 
+    # Get robot mass and gravity for audit trail
+    robot_mass = np.sum(mj_model.body_mass)
+    gravity = float(np.abs(mj_model.opt.gravity[2]))
+
     # Return comprehensive telemetry
     return {
         "desired_fz_total": desired_fz_total,
@@ -279,6 +287,8 @@ def run_one_control_cycle(
         "f_left_z_actual": f_left_z_actual,
         "f_right_z_actual": f_right_z_actual,
         "f_total_z_actual": f_total_z_actual,
+        "robot_mass": robot_mass,
+        "gravity": gravity,
     }
 
 
