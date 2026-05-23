@@ -4,13 +4,16 @@ Cancels WBC static equilibrium bias by computing static reference torques
 once at initialization, then removing equilibrium bias at runtime.
 """
 
+import jax.numpy as jnp
 import mujoco
 import numpy as np
+from jax import Array
 from numpy.typing import NDArray
 
 # Import existing calibration helper from simulate_hierarchical_controller
 # Do not duplicate - reuse the tested implementation
 from scripts.simulate_hierarchical_controller import calibrate_root_z_for_wheel_floor_contact
+from wheeled_biped.controllers.centroidal_state_estimator import CentroidalState
 
 
 class StaticBalanceController:
@@ -42,14 +45,260 @@ class StaticBalanceController:
         self.qfrc_inverse_ref = None
         self.qfrc_bias_ref = None
         self.qfrc_constraint_ref = None
+        self.geom_ids = None
 
         # Compute references using copied data
         self._compute_equilibrium_references(mj_data)
 
     def _compute_equilibrium_references(self, mj_data: mujoco.MjData) -> None:
-        """Compute static reference torques at calibrated equilibrium."""
-        # TODO: Implement in next step
-        pass
+        """Compute static reference torques at calibrated equilibrium.
+
+        This method:
+        1. Copies MuJoCo data to avoid mutation
+        2. Runs calibrated initialization sequence (5 steps)
+        3. Captures equilibrium state with proper orientation
+        4. Computes tau_static_ref using inverse dynamics
+        5. Computes tau_wbc_equilibrium using WBC at zero-error state
+        6. Logs initialization diagnostics
+        """
+        import jax.numpy as jnp
+        from wheeled_biped.controllers.orientation_utils import (
+            compute_robot_frame_orientation_from_quaternion,
+        )
+
+        print("\n" + "="*80)
+        print("STATIC BALANCE CONTROLLER INITIALIZATION")
+        print("="*80)
+
+        # Step 1: Copy MuJoCo data to avoid mutation
+        data_copy = mujoco.MjData(self.mj_model)
+        data_copy.qpos[:] = mj_data.qpos
+        data_copy.qvel[:] = mj_data.qvel
+        data_copy.ctrl[:] = mj_data.ctrl
+
+        print("\n[STEP 1] MuJoCo data copied")
+        print(f"  Initial qpos[2] (root_z): {data_copy.qpos[2]:.6f} m")
+
+        # Step 2: Run calibrated initialization sequence (5 steps)
+        print("\n[STEP 2] Running calibrated initialization (5 steps)...")
+        self.geom_ids = calibrate_root_z_for_wheel_floor_contact(
+            self.mj_model,
+            data_copy,
+            max_iters=5,
+        )
+        print(f"  Calibrated qpos[2] (root_z): {data_copy.qpos[2]:.6f} m")
+
+        # Step 3: Capture equilibrium state with proper orientation
+        print("\n[STEP 3] Capturing equilibrium state...")
+
+        # Extract quaternion and compute orientation
+        quat = data_copy.qpos[3:7]  # [w, x, y, z]
+        pitch_x, roll_y, yaw_z = compute_robot_frame_orientation_from_quaternion(quat)
+
+        print(f"  Quaternion: [{quat[0]:.6f}, {quat[1]:.6f}, {quat[2]:.6f}, {quat[3]:.6f}]")
+        print(f"  Orientation: pitch_x={pitch_x*180/np.pi:.4f}°, roll_y={roll_y*180/np.pi:.4f}°, yaw_z={yaw_z*180/np.pi:.4f}°")
+
+        # Store equilibrium state
+        com_z = self._compute_com_z(data_copy)
+        self.equilibrium_state = {
+            'qpos': data_copy.qpos.copy(),
+            'qvel': data_copy.qvel.copy(),
+            'pitch_x': pitch_x,
+            'roll_y': roll_y,
+            'yaw_z': yaw_z,
+            'com_z': com_z,
+            'geom_ids': self.geom_ids,
+        }
+
+        print(f"  CoM height: {self.equilibrium_state['com_z']:.6f} m")
+        print(f"  Joint positions (support): {data_copy.qpos[9:13]}")  # [l_hip_pitch, l_knee, r_hip_pitch, r_knee]
+
+        # Step 4: Compute tau_static_ref using inverse dynamics
+        print("\n[STEP 4] Computing static reference torques via inverse dynamics...")
+
+        # Set zero acceleration for static equilibrium
+        data_copy.qacc[:] = 0.0
+
+        # Compute inverse dynamics: tau = M*qacc + C(q,qvel) + g(q)
+        # With qacc=0: tau = C(q,qvel) + g(q)
+        # With qvel=0: tau = g(q) (pure gravity compensation)
+        mujoco.mj_inverse(self.mj_model, data_copy)
+
+        # Extract joint torques (indices 6:16 in qfrc_inverse correspond to 10 actuated joints)
+        self.tau_static_ref = data_copy.qfrc_inverse[6:16].copy()
+
+        # Store additional inverse dynamics components for diagnostics
+        self.qfrc_inverse_ref = data_copy.qfrc_inverse.copy()
+        self.qfrc_bias_ref = data_copy.qfrc_bias.copy()
+
+        # Store constraint forces if they exist
+        if hasattr(data_copy, 'qfrc_constraint') and data_copy.qfrc_constraint is not None:
+            self.qfrc_constraint_ref = data_copy.qfrc_constraint.copy()
+        else:
+            self.qfrc_constraint_ref = None
+
+        print(f"  tau_static_ref (support joints [2,3,7,8]): {self.tau_static_ref[[2,3,7,8]]}")
+        print(f"  tau_static_ref (all joints): {self.tau_static_ref}")
+        print(f"  Max |tau_static_ref|: {np.max(np.abs(self.tau_static_ref)):.4f} Nm")
+
+        # Step 5: Compute tau_wbc_equilibrium using WBC at zero-error state
+        print("\n[STEP 5] Computing WBC equilibrium bias at zero-error state...")
+
+        # Build zero-error observation
+        obs_equilibrium = self._build_zero_error_observation(data_copy)
+
+        print(f"  Zero-error observation built (dim={len(obs_equilibrium)})")
+        print(f"    Gravity body frame: {obs_equilibrium[0:3]}")
+        print(f"    Joint positions: {obs_equilibrium[6:16]}")
+        print(f"    Joint velocities: {obs_equilibrium[16:26]}")
+        print(f"    Height command: {obs_equilibrium[36]:.6f} m")
+        print(f"    Current height: {obs_equilibrium[37]:.6f} m")
+
+        # Compute WBC torque at equilibrium
+        self.tau_wbc_equilibrium = self._compute_wbc_at_equilibrium(data_copy, obs_equilibrium)
+
+        print(f"  tau_wbc_equilibrium (support joints [2,3,7,8]): {self.tau_wbc_equilibrium[[2,3,7,8]]}")
+        print(f"  tau_wbc_equilibrium (all joints): {self.tau_wbc_equilibrium}")
+        print(f"  Max |tau_wbc_equilibrium|: {np.max(np.abs(self.tau_wbc_equilibrium)):.4f} Nm")
+
+        # Step 6: Log initialization diagnostics
+        self._log_initialization()
+
+        print("\n" + "="*80)
+        print("INITIALIZATION COMPLETE")
+        print("="*80 + "\n")
+
+    def _compute_com_z(self, mj_data: mujoco.MjData) -> float:
+        """Compute center of mass height.
+
+        Args:
+            mj_data: MuJoCo data
+
+        Returns:
+            CoM height in meters
+        """
+        return float(mj_data.subtree_com[0, 2])
+
+    def _log_initialization(self) -> None:
+        """Log initialization diagnostics with support bias analysis."""
+        print("\n[STEP 6] Initialization diagnostics:")
+        print(f"  Static equilibrium bias (support joints): {self.tau_wbc_equilibrium[[2,3,7,8]] - self.tau_static_ref[[2,3,7,8]]}")
+        print(f"  Static equilibrium bias (all joints): {self.tau_wbc_equilibrium - self.tau_static_ref}")
+        print(f"  Max |bias|: {np.max(np.abs(self.tau_wbc_equilibrium - self.tau_static_ref)):.4f} Nm")
+
+    def _build_zero_error_observation(self, mj_data: mujoco.MjData) -> Array:
+        """Build zero-error observation for WBC equilibrium computation.
+
+        Observation structure (42-dim):
+        - [0:3]: gravity in body frame (should be [0, 0, -9.81] at equilibrium)
+        - [3:6]: body linear velocity (zeros at equilibrium)
+        - [6:16]: joint positions (10 actuated joints)
+        - [16:26]: joint velocities (zeros at equilibrium)
+        - [26:36]: previous action (zeros at equilibrium)
+        - [36]: height command (current CoM height)
+        - [37]: current torso height (current CoM height)
+        - [38:42]: reserved/unused (zeros)
+
+        Args:
+            mj_data: MuJoCo data at equilibrium state
+
+        Returns:
+            Zero-error observation array (42,)
+        """
+        obs = jnp.zeros(42)
+
+        # Gravity in body frame at equilibrium (upright orientation)
+        # At perfect equilibrium, body frame aligns with world frame
+        gravity_body = jnp.array([0.0, 0.0, -9.81])
+        obs = obs.at[0:3].set(gravity_body)
+
+        # Body linear velocity (zero at equilibrium)
+        obs = obs.at[3:6].set(jnp.zeros(3))
+
+        # Joint positions from qpos[7:17] (10 actuated joints)
+        joint_pos = jnp.array(mj_data.qpos[7:17])
+        obs = obs.at[6:16].set(joint_pos)
+
+        # Joint velocities (zero at equilibrium)
+        obs = obs.at[16:26].set(jnp.zeros(10))
+
+        # Previous action (zero at equilibrium)
+        obs = obs.at[26:36].set(jnp.zeros(10))
+
+        # Height command and current height (both equal at equilibrium)
+        com_height = float(mj_data.subtree_com[0, 2])
+        obs = obs.at[36].set(com_height)  # height_cmd
+        obs = obs.at[37].set(com_height)  # current height
+
+        # Reserved/unused (already zeros)
+
+        return obs
+
+    def _compute_wbc_at_equilibrium(self, mj_data: mujoco.MjData, obs: Array) -> NDArray:
+        """Compute WBC torque at equilibrium state.
+
+        Args:
+            mj_data: MuJoCo data at equilibrium
+            obs: Zero-error observation
+
+        Returns:
+            WBC torque at equilibrium (10,)
+        """
+        # Create a minimal CentroidalState for equilibrium
+        # At equilibrium, all velocities and rates are zero
+        com_pos = jnp.array(mj_data.subtree_com[0])
+        com_height = float(com_pos[2])
+
+        # Create equilibrium state with zero velocities
+        state = CentroidalState(
+            com_pos=com_pos,
+            com_vel=jnp.zeros(3),
+            capture_point=jnp.array([com_pos[0], com_pos[1]]),  # CP = CoM at zero velocity
+            divergence=jnp.zeros(2),
+            linear_momentum=jnp.zeros(3),
+            angular_momentum=jnp.zeros(3),
+            left_wheel_contact=True,  # Assume both wheels in contact at equilibrium
+            right_wheel_contact=True,
+            left_wheel_force=0.0,  # Will be computed by WBC
+            right_wheel_force=0.0,
+            base_quat=jnp.array(mj_data.qpos[3:7]),
+            base_ang_vel=jnp.zeros(3),
+            roll=0.0,
+            pitch=0.0,
+            yaw=0.0,
+            roll_rate=0.0,
+            pitch_rate=0.0,
+            yaw_rate=0.0,
+            body_pitch_x=0.0,
+            body_roll_y=0.0,
+            body_yaw_z=0.0,
+            body_pitch_rate_x=0.0,
+            body_roll_rate_y=0.0,
+            body_yaw_rate_z=0.0,
+            pitch_x=0.0,
+            roll_y=0.0,
+            yaw_z=0.0,
+            pitch_rate_x=0.0,
+            roll_rate_y=0.0,
+            yaw_rate_z=0.0,
+            left_contact_force_world=jnp.zeros(3),
+            right_contact_force_world=jnp.zeros(3),
+            total_contact_force_z=0.0,
+            contact_force_valid=False,
+        )
+
+        # Call WBC pipeline to compute torque at equilibrium
+        # Use height command equal to current height (zero height error)
+        tau_wbc = self.wbc_pipeline.compute_wbc_torque(
+            mj_data,
+            obs,
+            state,
+            height_cmd=com_height,
+            hip_roll_authority_scale=1.0,
+        )
+
+        # Convert JAX array to numpy for storage
+        return np.array(tau_wbc)
 
     def wrap(
         self,
