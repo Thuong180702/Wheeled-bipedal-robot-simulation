@@ -51,12 +51,20 @@ def run_case_b(enable_wrapper=False):
         CapturePointEstimatorConfig,
     )
     from wheeled_biped.controllers.orientation_utils import compute_robot_frame_orientation_from_quaternion
+    from scripts.simulate_hierarchical_controller import calibrate_root_z_for_wheel_floor_contact
     import jax.numpy as jnp
 
     # Load model and data
     model = mujoco.MjModel.from_xml_path(MODEL_PATH)
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, 0)
+
+    # Calibrate BEFORE controller initialization (fair comparison)
+    mujoco.mj_forward(model, data)
+    calibrate_root_z_for_wheel_floor_contact(model, data, target_dist=-5e-4)
+    data.qvel[:] = 0.0
+    data.qacc[:] = 0.0
+    mujoco.mj_forward(model, data)
 
     # Initialize controllers
     robot_mass = 15.0
@@ -221,11 +229,11 @@ def main():
     # Verdict
     print("\n[VERDICT]")
     if error_wrapped < error_old and fz_error_wrapped < fz_error_old:
-        print("✅ Wrapped WBC is closer to inverse dynamics than old WBC")
+        print("[PASS] Wrapped WBC is closer to inverse dynamics than old WBC")
     elif error_wrapped < error_old or fz_error_wrapped < fz_error_old:
-        print("⚠️ Wrapped WBC shows partial improvement over old WBC")
+        print("[PARTIAL] Wrapped WBC shows partial improvement over old WBC")
     else:
-        print("❌ Wrapped WBC did not improve over old WBC")
+        print("[FAIL] Wrapped WBC did not improve over old WBC")
 
 
 if __name__ == "__main__":
