@@ -237,7 +237,6 @@ def compute_step5_wheel_balance(
 
 def log_wrapper_telemetry(step, telemetry):
     """Log StaticBalanceController wrapper telemetry for diagnostics."""
-    support_joints = [2, 3, 7, 8]
     print(f"[WRAPPER][step={step}] Support joint bias removed: {telemetry['support_joint_bias_removed']}")
     print(f"[WRAPPER][step={step}] Posture error: {telemetry['posture_error_norm']:.6f} rad")
     print(f"[WRAPPER][step={step}] CoM height error: {telemetry['com_height_error']:.6f} m")
