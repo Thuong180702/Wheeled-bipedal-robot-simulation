@@ -201,9 +201,6 @@ def run_test_case(mj_model, mj_data, tau_func, steps_list=[1, 5, 10, 20]):
         mj_data.qacc[:] = 0.0
         mujoco.mj_forward(mj_model, mj_data)
 
-        # Get initial CoM position
-        com_z_initial = float(mj_data.subtree_com[1, 2])  # body 1 is torso
-
         # Apply torque and step physics n times
         for _ in range(n_steps):
             tau = tau_func(mj_model, mj_data)
