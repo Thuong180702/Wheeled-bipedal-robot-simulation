@@ -103,8 +103,28 @@ def test_static_balance_controller_init():
     print(f"  tau_wbc_equilibrium: {controller.tau_wbc_equilibrium[support_indices]}")
     print(f"  bias: {bias[support_indices]}")
 
+    # Test wrap method
+    print(f"\n[TEST] Testing wrap() method...")
+    current_state = {
+        'com_z': controller.equilibrium_state['com_z'],
+        'pitch_x': 0.0,
+        'roll_y': 0.0,
+        'joint_pos': controller.equilibrium_state['qpos'][7:17],
+        'com_vel': np.zeros(3),
+        'angular_vel': np.zeros(3),
+    }
+
+    tau_wbc_current = np.zeros(10)
+    tau_wrapped, telemetry = controller.wrap(tau_wbc_current, current_state)
+
+    print(f"\n[VERIFY] wrap() method output:")
+    print(f"  tau_wrapped shape: {tau_wrapped.shape}")
+    print(f"  Telemetry keys: {list(telemetry.keys())}")
+    print(f"  tau_wbc_correction[2,3,7,8]: {telemetry['tau_wbc_correction'][[2,3,7,8]]}")
+    print(f"  [PASS] wrap() method executed successfully")
+
     print(f"\n" + "="*80)
-    print("TEST PASSED: Initialization completed successfully")
+    print("TEST PASSED: Initialization and wrap() completed successfully")
     print("="*80 + "\n")
 
     return True

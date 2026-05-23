@@ -321,10 +321,55 @@ class StaticBalanceController:
         Args:
             tau_wbc_current: Current WBC output (10,)
             current_state: Current robot state for error metrics
+                Required keys: com_z, pitch_x, roll_y, joint_pos, com_vel, angular_vel
 
         Returns:
             tau_wbc_wrapped: Bias-corrected WBC torque (10,)
             telemetry: Dict with all diagnostic values
         """
-        # TODO: Implement in later step
-        pass
+        # Compute correction torque (remove equilibrium bias)
+        tau_wbc_correction = tau_wbc_current - self.tau_wbc_equilibrium
+
+        # Compute wrapped WBC torque
+        tau_wbc_wrapped = self.tau_static_ref + tau_wbc_correction
+
+        # Compute equilibrium error metrics
+        # Extract joint positions from equilibrium qpos[7:17]
+        equilibrium_joint_pos = self.equilibrium_state['qpos'][7:17]
+        posture_error_norm = np.linalg.norm(
+            current_state['joint_pos'] - equilibrium_joint_pos
+        )
+        com_height_error = current_state['com_z'] - self.equilibrium_state['com_z']
+        pitch_x_error = current_state['pitch_x'] - self.equilibrium_state['pitch_x']
+        roll_y_error = current_state['roll_y'] - self.equilibrium_state['roll_y']
+        com_velocity_norm = np.linalg.norm(current_state.get('com_vel', np.zeros(3)))
+        angular_velocity_norm = np.linalg.norm(current_state.get('angular_vel', np.zeros(3)))
+
+        # Safety diagnostic (not a hard control switch)
+        if posture_error_norm > 0.1 or abs(com_height_error) > 0.05:
+            print(f"WARNING: Fixed static reference may no longer be physically exact "
+                  f"(posture_error={posture_error_norm:.3f}, com_height_error={com_height_error:.3f})")
+
+        # Build telemetry dict
+        support_joints = [2, 3, 7, 8]
+        telemetry = {
+            # Torque components (full 10-dim arrays)
+            'tau_static_ref': self.tau_static_ref.copy(),
+            'tau_wbc_equilibrium': self.tau_wbc_equilibrium.copy(),
+            'tau_wbc_current': tau_wbc_current.copy(),
+            'tau_wbc_correction': tau_wbc_correction.copy(),
+            'tau_wbc_wrapped': tau_wbc_wrapped.copy(),
+
+            # Support joint bias removed (for diagnostics)
+            'support_joint_bias_removed': self.tau_wbc_equilibrium[support_joints].copy(),
+
+            # Equilibrium error metrics
+            'posture_error_norm': posture_error_norm,
+            'com_height_error': com_height_error,
+            'pitch_x_error': pitch_x_error,
+            'roll_y_error': roll_y_error,
+            'com_velocity_norm': com_velocity_norm,
+            'angular_velocity_norm': angular_velocity_norm,
+        }
+
+        return tau_wbc_wrapped, telemetry
