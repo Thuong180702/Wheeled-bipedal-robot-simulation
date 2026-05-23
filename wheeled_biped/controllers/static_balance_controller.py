@@ -18,8 +18,8 @@ class StaticBalanceController:
 
     def __init__(
         self,
-        mj_model,
-        mj_data,
+        mj_model: mujoco.MjModel,
+        mj_data: mujoco.MjData,
         wbc_pipeline,
         calibration_config: dict | None = None,
     ):
@@ -46,7 +46,7 @@ class StaticBalanceController:
         # Compute references using copied data
         self._compute_equilibrium_references(mj_data)
 
-    def _compute_equilibrium_references(self, mj_data):
+    def _compute_equilibrium_references(self, mj_data: mujoco.MjData) -> None:
         """Compute static reference torques at calibrated equilibrium."""
         # TODO: Implement in next step
         pass
