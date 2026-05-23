@@ -37,33 +37,41 @@ class SimpleForceDistributor:
         desired_wrench: Array,
         left_contact: bool,
         right_contact: bool,
+        wheel_pos_left: Array | None = None,
+        wheel_pos_right: Array | None = None,
         hip_roll_authority_scale: float = 1.0,
     ) -> tuple[Array, Array, Array, dict]:
-        """Distribute desired wrench only through active wheel contacts.
-
-        When no contact is detected, still distribute forces as if both wheels
-        are in contact. This allows the controller to prepare for landing and
-        prevents collapse during brief flight phases.
-        """
         Fx, Fy, Fz, Mx, My, Mz = desired_wrench
 
+        _ = Mz
+        x_l = float(wheel_pos_left[0]) if wheel_pos_left is not None else 0.0
+        x_r = float(wheel_pos_right[0]) if wheel_pos_right is not None else 0.0
+        x_denom = x_l - x_r
+
         hip_roll_authority_scale = float(jnp.clip(hip_roll_authority_scale, 0.0, 1.0))
+        tau_hip_roll = self._roll_moment_to_hip_roll_torque(Mx) * hip_roll_authority_scale
+
+        def split_fz_from_my(total_fz: Array, my_cmd: Array) -> tuple[Array, Array]:
+            if abs(float(x_denom)) < 1e-6:
+                fz_left_raw = total_fz / 2.0
+                fz_right_raw = total_fz / 2.0
+            else:
+                fz_left_raw = (-my_cmd - x_r * total_fz) / x_denom
+                fz_right_raw = total_fz - fz_left_raw
+
+            fz_diff_raw = fz_left_raw - fz_right_raw
+            fz_avg = total_fz / 2.0
+            liftoff_threshold = 2.0 * (fz_avg - self.min_wheel_force - 5.0)
+            max_safe_diff = jnp.maximum(0.0, jnp.minimum(self.max_force_asymmetry, liftoff_threshold))
+            fz_diff = jnp.clip(fz_diff_raw, -max_safe_diff, max_safe_diff)
+            fz_left = total_fz / 2.0 + fz_diff / 2.0
+            fz_right = total_fz / 2.0 - fz_diff / 2.0
+            return fz_left, fz_right
 
         if not left_contact and not right_contact:
-            wheel_x_offset = 0.135
-            tau_hip_roll = self._roll_moment_to_hip_roll_torque(Mx) * hip_roll_authority_scale
-            # Vertical force asymmetry across ±x produces My = -x*Fz, not Mx.
-            remaining_my = My
-            if abs(remaining_my) > 0.5:
-                fz_diff_desired = -remaining_my / wheel_x_offset
-                fz_avg = Fz / 2.0
-                liftoff_threshold = 2.0 * (fz_avg - self.min_wheel_force - 5.0)
-                max_safe_diff = min(self.max_force_asymmetry, liftoff_threshold)
-                fz_diff = jnp.clip(fz_diff_desired, -max_safe_diff, max_safe_diff)
-            else:
-                fz_diff = 0.0
-            f_left = jnp.array([Fx / 2.0, Fy / 2.0, Fz / 2.0 + fz_diff / 2.0])
-            f_right = jnp.array([Fx / 2.0, Fy / 2.0, Fz / 2.0 - fz_diff / 2.0])
+            fz_left, fz_right = split_fz_from_my(Fz, My)
+            f_left = jnp.array([Fx / 2.0, Fy / 2.0, fz_left])
+            f_right = jnp.array([Fx / 2.0, Fy / 2.0, fz_right])
             return (
                 f_left,
                 f_right,
@@ -73,70 +81,22 @@ class SimpleForceDistributor:
 
         active_count = int(left_contact) + int(right_contact)
 
-        print(f"[FORCE_DIST] left_contact={left_contact}, right_contact={right_contact}, active_count={active_count}")
-        print(f"[FORCE_DIST] desired_wrench: Fx={Fx:.2f}, Fy={Fy:.2f}, Fz={Fz:.2f}, Mx={Mx:.2f}, My={My:.2f}, Mz={Mz:.2f}")
-
-        # Vertical asymmetry across ±x creates pitch moment My = -x*Fz.
-        # It is not used to realize Mx in this distributor.
-        wheel_x_offset = 0.135  # meters, wheel x-offset relative to CoM
-
         if active_count == 2:
-            print(f"[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact")
-
-            # STRATEGY: Prioritize hip roll torques over vertical force asymmetry
-            # Hip roll torques can provide strong roll control without risking liftoff
-            # Only use vertical force asymmetry when hip torques saturate
-
-            # Positive Mx uses opposite hip-roll signs in this model.
-            tau_hip_roll = self._roll_moment_to_hip_roll_torque(Mx) * hip_roll_authority_scale
-
-            # Keep Mx control in hip-roll torque path.
-            # Vertical force asymmetry across ±x is used for My, not Mx.
-
-            # RECOVERY MECHANISM 3: Predictive contact maintenance
-            # Use vertical force asymmetry only for residual My demand.
-            if abs(My) > 0.5:
-                # My = -x*(f_left_z - f_right_z) => f_left_z - f_right_z = -My/x
-                fz_diff_desired = -My / wheel_x_offset
-
-                # SAFETY LIMIT: Constrain force asymmetry to prevent liftoff
-                fz_avg = Fz / 2.0
-                liftoff_threshold = 2.0 * (fz_avg - self.min_wheel_force - 5.0)  # 5N safety margin
-                max_safe_diff = min(
-                    self.max_force_asymmetry,
-                    liftoff_threshold,  # Never exceed liftoff threshold
-                )
-                fz_diff = jnp.clip(fz_diff_desired, -max_safe_diff, max_safe_diff)
-            else:
-                # Hip torques are sufficient - use symmetric vertical forces
-                fz_diff = 0.0
-
-            fz_left = Fz / 2.0 + fz_diff / 2.0
-            fz_right = Fz / 2.0 - fz_diff / 2.0
-
+            fz_left, fz_right = split_fz_from_my(Fz, My)
             f_left = jnp.array([Fx / 2.0, Fy / 2.0, fz_left])
             f_right = jnp.array([Fx / 2.0, Fy / 2.0, fz_right])
         else:
-
-            # RECOVERY MECHANISM 1: Active contact recovery via hip roll moment
-            # Generate strong hip roll torque to tilt robot back toward lifted wheel
-            recovery_roll_gain = 5.0  # Amplify roll correction during single contact (increased from 3.5)
+            recovery_roll_gain = 5.0
             recovery_mx = Mx * recovery_roll_gain
-
-            # RECOVERY MECHANISM 2: Asymmetric leg stiffness
-            # Maintain minimum vertical force on lifted leg to keep it extended
-            min_recovery_force = 50.0  # N - enough to keep leg extended and generate recovery torque (increased from 35.0)
+            min_recovery_force = 50.0
+            tau_hip_roll = self._roll_moment_to_hip_roll_torque(recovery_mx) * hip_roll_authority_scale
 
             if left_contact:
-                # Left wheel in contact, right wheel lifted
                 f_left = jnp.array([Fx, Fy, Fz])
-                f_right = jnp.array([0.0, 0.0, min_recovery_force])  # Keep right leg extended
-                tau_hip_roll = self._roll_moment_to_hip_roll_torque(recovery_mx) * hip_roll_authority_scale
-            else:  # right_contact
-                # Right wheel in contact, left wheel lifted
-                f_left = jnp.array([0.0, 0.0, min_recovery_force])  # Keep left leg extended
+                f_right = jnp.array([0.0, 0.0, min_recovery_force])
+            else:
+                f_left = jnp.array([0.0, 0.0, min_recovery_force])
                 f_right = jnp.array([Fx, Fy, Fz])
-                tau_hip_roll = self._roll_moment_to_hip_roll_torque(recovery_mx) * hip_roll_authority_scale
 
         return f_left, f_right, tau_hip_roll, {"feasible": True, "reason": "ok"}
 

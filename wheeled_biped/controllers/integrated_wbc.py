@@ -37,6 +37,7 @@ class IntegratedWBC:
         k_cp_lateral: float = 25.0,
         k_cp_sagittal: float = 20.0,
         k_height: float = 5.0,
+        k_height_damping: float = 0.0,
         robot_mass: float = 15.0,
         gravity: float = 9.81,
         max_roll_moment: float | None = None,
@@ -108,6 +109,7 @@ class IntegratedWBC:
             k_cp_lateral=k_cp_lateral,
             k_cp_sagittal=k_cp_sagittal,
             k_height=k_height,
+            k_height_damping=k_height_damping,
             robot_mass=robot_mass,
             gravity=gravity,
             max_roll_moment=max_roll_moment,
@@ -119,22 +121,6 @@ class IntegratedWBC:
         )
         self.contact_jacobian = ContactJacobian(mj_model)
 
-        # Find wheel body IDs for position computation
-        # Note: ContactJacobian also looks up these IDs for Jacobian computation.
-        # This duplication is intentional - each component uses the IDs for different
-        # purposes and maintains its own state independently.
-        self.l_wheel_id = mujoco.mj_name2id(
-            mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link"
-        )
-        self.r_wheel_id = mujoco.mj_name2id(
-            mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link"
-        )
-
-        # Validate body IDs were found
-        if self.l_wheel_id == -1 or self.r_wheel_id == -1:
-            raise ValueError(
-                "Wheel body IDs not found in model. Expected 'l_wheel_link' and 'r_wheel_link'."
-            )
 
     def _build_direct_hip_roll_torque(self, tau_hip_roll: Array) -> Array:
         tau = jnp.zeros(10, dtype=tau_hip_roll.dtype)
@@ -239,12 +225,18 @@ class IntegratedWBC:
         # were "100-1000x too small", but that was due to the wheel radius mismatch
         # (0.05 vs 0.06 m) and this double-counting cancellation bug.
 
+        wheel_pos_left, wheel_pos_right = self._compute_wheel_positions_relative_to_com(
+            mj_data, state.com_pos
+        )
+
         solve_start = time.perf_counter()
         f_left, f_right, tau_hip_roll, distribution_diagnostics = (
             self.force_distributor.distribute_wrench_contact_aware(
-                desired_wrench,  # Use full wrench including Fy
+                desired_wrench,
                 left_contact=bool(state.left_wheel_contact),
                 right_contact=bool(state.right_wheel_contact),
+                wheel_pos_left=wheel_pos_left,
+                wheel_pos_right=wheel_pos_right,
                 hip_roll_authority_scale=hip_roll_authority_scale,
             )
         )
@@ -304,9 +296,6 @@ class IntegratedWBC:
         print(f"[WBC PIPELINE] After clipping - wheel torques: L={tau_wbc[4]:.4f} Nm, R={tau_wbc[9]:.4f} Nm")
         print(f"[WBC PIPELINE] Max final torque: {jnp.max(jnp.abs(tau_wbc)):.4f} Nm")
 
-        wheel_pos_left, wheel_pos_right = self._compute_wheel_positions_relative_to_com(
-            mj_data, state.com_pos
-        )
         solution = jnp.concatenate([f_left, f_right, tau_hip_roll])
         A_wrench = self.contact_jacobian.build_wrench_matrix(
             mj_data, wheel_pos_left, wheel_pos_right
@@ -367,14 +356,11 @@ class IntegratedWBC:
             Tuple of (wheel_pos_left, wheel_pos_right) where each is (3,) [x, y, z]
             relative to CoM in world frame
         """
-        # Get wheel body positions from MuJoCo (world frame)
-        l_wheel_pos_world = np.array(mj_data.xpos[self.l_wheel_id])
-        r_wheel_pos_world = np.array(mj_data.xpos[self.r_wheel_id])
+        l_contact_world, r_contact_world = self.contact_jacobian.get_wheel_contact_points(mj_data)
 
-        # Convert to JAX arrays and compute relative positions
         com_pos_np = np.array(com_pos)
-        wheel_pos_left = jnp.array(l_wheel_pos_world - com_pos_np)
-        wheel_pos_right = jnp.array(r_wheel_pos_world - com_pos_np)
+        wheel_pos_left = jnp.array(np.array(l_contact_world) - com_pos_np)
+        wheel_pos_right = jnp.array(np.array(r_contact_world) - com_pos_np)
 
         return wheel_pos_left, wheel_pos_right
 

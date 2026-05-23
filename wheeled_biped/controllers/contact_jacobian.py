@@ -25,35 +25,74 @@ class ContactJacobian:
         self.l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
         self.r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
 
-        # Find wheel radius from geom
-        l_wheel_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "l_wheel_collision")
-        self.wheel_radius = mj_model.geom_size[l_wheel_geom_id][0]
+        # Contact geometry IDs
+        self.floor_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
+        self.l_wheel_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "l_wheel_collision")
+        self.r_wheel_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "r_wheel_collision")
+
+        # Wheel radii from collision geoms
+        self.l_wheel_radius = mj_model.geom_size[self.l_wheel_geom_id][0]
+        self.r_wheel_radius = mj_model.geom_size[self.r_wheel_geom_id][0]
 
         # Preallocate Jacobian arrays (3 x nv for translation, 3 x nv for rotation)
         self.jacp = np.zeros((3, mj_model.nv))
         self.jacr = np.zeros((3, mj_model.nv))
 
+    def get_wheel_contact_points(self, mj_data: mujoco.MjData) -> tuple[Array, Array]:
+        """Get left/right wheel contact points in world frame."""
+        left_points = []
+        right_points = []
+
+        for i in range(mj_data.ncon):
+            c = mj_data.contact[i]
+            g1 = int(c.geom1)
+            g2 = int(c.geom2)
+            involves_floor = g1 == self.floor_geom_id or g2 == self.floor_geom_id
+            if not involves_floor:
+                continue
+
+            if g1 == self.l_wheel_geom_id or g2 == self.l_wheel_geom_id:
+                left_points.append(np.array(c.pos))
+            if g1 == self.r_wheel_geom_id or g2 == self.r_wheel_geom_id:
+                right_points.append(np.array(c.pos))
+
+        if left_points:
+            l_contact_point = np.mean(np.stack(left_points, axis=0), axis=0)
+        else:
+            l_geom_center = np.array(mj_data.geom_xpos[self.l_wheel_geom_id])
+            l_contact_point = l_geom_center - np.array([0.0, 0.0, self.l_wheel_radius])
+
+        if right_points:
+            r_contact_point = np.mean(np.stack(right_points, axis=0), axis=0)
+        else:
+            r_geom_center = np.array(mj_data.geom_xpos[self.r_wheel_geom_id])
+            r_contact_point = r_geom_center - np.array([0.0, 0.0, self.r_wheel_radius])
+
+        return jnp.array(l_contact_point), jnp.array(r_contact_point)
+
     def compute_wheel_jacobians(self, mj_data: mujoco.MjData) -> tuple[Array, Array]:
-        """Compute contact Jacobians for both wheels at ground contact points.
+        """Compute contact Jacobians for both wheels at contact points."""
+        l_contact_point, r_contact_point = self.get_wheel_contact_points(mj_data)
 
-        Args:
-            mj_data: MuJoCo data with current robot state
+        mujoco.mj_jac(
+            self.mj_model,
+            mj_data,
+            self.jacp,
+            self.jacr,
+            np.array(l_contact_point),
+            self.l_wheel_id,
+        )
+        J_left = jnp.array(self.jacp[:, 6:16])
 
-        Returns:
-            Tuple of (J_left, J_right) where each is (3, 10) mapping contact forces to joint torques
-        """
-        # Compute Jacobians at ground contact points (wheel center - wheel radius in z)
-        # Left wheel contact point
-        l_wheel_center = mj_data.xpos[self.l_wheel_id]
-        l_contact_point = l_wheel_center - np.array([0.0, 0.0, self.wheel_radius])
-        mujoco.mj_jac(self.mj_model, mj_data, self.jacp, self.jacr, l_contact_point, self.l_wheel_id)
-        J_left = jnp.array(self.jacp[:, 6:16])  # (3, 10)
-
-        # Right wheel contact point
-        r_wheel_center = mj_data.xpos[self.r_wheel_id]
-        r_contact_point = r_wheel_center - np.array([0.0, 0.0, self.wheel_radius])
-        mujoco.mj_jac(self.mj_model, mj_data, self.jacp, self.jacr, r_contact_point, self.r_wheel_id)
-        J_right = jnp.array(self.jacp[:, 6:16])  # (3, 10)
+        mujoco.mj_jac(
+            self.mj_model,
+            mj_data,
+            self.jacp,
+            self.jacr,
+            np.array(r_contact_point),
+            self.r_wheel_id,
+        )
+        J_right = jnp.array(self.jacp[:, 6:16])
 
         return J_left, J_right
 

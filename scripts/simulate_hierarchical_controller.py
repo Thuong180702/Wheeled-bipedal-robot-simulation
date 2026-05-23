@@ -298,6 +298,7 @@ def main():
     parser.add_argument("--initialize-tau-prev-from-wbc", action="store_true")
     parser.add_argument("--disable-wbc-joint-scale", action="store_true")
     parser.add_argument("--use-per-actuator-wbc-authority", action="store_true")
+    parser.add_argument("--height-damping", type=float, default=0.0)
     args = parser.parse_args()
 
     print("=" * 80)
@@ -383,6 +384,7 @@ def main():
         k_cp_lateral=50.0,  # REVERTED: Back to best config (Test 2: 46 steps with k_cp_lateral=25.0)
         k_cp_sagittal=100.0,  # REVERTED: Back to best config (Test 2: 46 steps with k_cp_sagittal=50.0)
         k_height=50.0,  # OPTIMAL: Best balance between contact maintenance and overshoot prevention (tested: 80 and 150 too high)
+        k_height_damping=args.height_damping,
         robot_mass=robot_mass,
         gravity=gravity,
         max_roll_moment=25.0,

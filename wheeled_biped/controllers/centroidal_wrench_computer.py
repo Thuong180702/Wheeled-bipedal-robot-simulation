@@ -28,6 +28,7 @@ class CentroidalWrenchComputer:
         k_cp_lateral: float = 25.0,
         k_cp_sagittal: float = 20.0,
         k_height: float = 5.0,
+        k_height_damping: float = 0.0,
         robot_mass: float = 15.0,
         gravity: float = 9.81,
         max_roll_moment: float | None = None,
@@ -63,6 +64,7 @@ class CentroidalWrenchComputer:
         self.k_cp_lateral = k_cp_lateral
         self.k_cp_sagittal = k_cp_sagittal
         self.k_height = k_height
+        self.k_height_damping = k_height_damping
         self.robot_mass = robot_mass
         self.gravity = gravity
         self.max_roll_moment = max_roll_moment
@@ -109,9 +111,13 @@ class CentroidalWrenchComputer:
         # In static equilibrium, vertical force must equal total weight
         f_gravity = jnp.array([0.0, 0.0, self.robot_mass * self.gravity])
 
-        # Height tracking: additional vertical force to correct height error
+        # Height tracking: proportional + vertical damping
         height_error = height_cmd - com_pos[2]
-        f_height = jnp.array([0.0, 0.0, self.k_height * height_error])
+        f_height = jnp.array([
+            0.0,
+            0.0,
+            self.k_height * height_error - self.k_height_damping * com_vel[2],
+        ])
 
         # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
         # CoM lateral regulation: lateral force to center CoM on X-axis.
@@ -183,7 +189,11 @@ class CentroidalWrenchComputer:
         """
         f_gravity = jnp.array([0.0, 0.0, self.robot_mass * self.gravity])
         height_error = height_cmd - state.com_pos[2]
-        f_height = jnp.array([0.0, 0.0, self.k_height * height_error])
+        f_height = jnp.array([
+            0.0,
+            0.0,
+            self.k_height * height_error - self.k_height_damping * state.com_vel[2],
+        ])
 
         # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
         f_com_lateral = jnp.array([
