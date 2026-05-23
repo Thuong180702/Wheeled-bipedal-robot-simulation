@@ -235,6 +235,16 @@ def compute_step5_wheel_balance(
     return tau.at[jnp.array([4, 9])].set(tau_wheel)
 
 
+def log_wrapper_telemetry(step, telemetry):
+    """Log StaticBalanceController wrapper telemetry for diagnostics."""
+    support_joints = [2, 3, 7, 8]
+    print(f"[WRAPPER][step={step}] Support joint bias removed: {telemetry['support_joint_bias_removed']}")
+    print(f"[WRAPPER][step={step}] Posture error: {telemetry['posture_error_norm']:.6f} rad")
+    print(f"[WRAPPER][step={step}] CoM height error: {telemetry['com_height_error']:.6f} m")
+    print(f"[WRAPPER][step={step}] Pitch error: {telemetry['pitch_x_error']:.6f} rad")
+    print(f"[WRAPPER][step={step}] Roll error: {telemetry['roll_y_error']:.6f} rad")
+
+
 def compute_step2_torque_components(
     leg_position_controller,
     joint_pos,
@@ -299,6 +309,12 @@ def main():
     parser.add_argument("--disable-wbc-joint-scale", action="store_true")
     parser.add_argument("--use-per-actuator-wbc-authority", action="store_true")
     parser.add_argument("--height-damping", type=float, default=0.0)
+    parser.add_argument(
+        '--enable-static-dynamics-wrapper',
+        action='store_true',
+        default=False,
+        help='Enable StaticBalanceController wrapper to cancel WBC equilibrium bias'
+    )
     args = parser.parse_args()
 
     print("=" * 80)
@@ -441,6 +457,23 @@ def main():
     )
 
     print("[OK] Controllers initialized (wheeled biped architecture)")
+
+    # Initialize StaticBalanceController wrapper if enabled
+    static_balance_wrapper = None
+    if args.enable_static_dynamics_wrapper:
+        from wheeled_biped.controllers.static_balance_controller import StaticBalanceController
+
+        print("\n[WRAPPER] Initializing StaticBalanceController wrapper...")
+        calibration_config = {
+            'target_contact_dist': -5e-4,
+        }
+        static_balance_wrapper = StaticBalanceController(
+            mj_model,
+            mj_data,
+            wbc_controller,
+            calibration_config=calibration_config,
+        )
+        print("[OK] StaticBalanceController wrapper initialized")
 
     # JIT-compile controller functions for real-time performance
     print("\nJIT-compiling controller functions...")
@@ -637,6 +670,35 @@ def main():
             height_cmd,
             hip_roll_authority_scale=compute_step6_hip_roll_authority_scale(control_mode),
         )
+
+        # Apply StaticBalanceController wrapper if enabled
+        if static_balance_wrapper is not None:
+            # Build current_state dict with required keys
+            current_state = {
+                'com_z': float(centroidal_state_control.com_pos[2]),
+                'pitch_x': float(pitch_x_rad),
+                'roll_y': float(roll_y_rad),
+                'joint_pos': np.array(joint_pos),
+                'com_vel': np.array(centroidal_state_control.com_vel),
+                'angular_vel': np.array([
+                    centroidal_state_control.roll_rate,
+                    centroidal_state_control.pitch_rate,
+                    centroidal_state_control.yaw_rate,
+                ]),
+            }
+
+            # Apply wrapper to remove equilibrium bias
+            tau_wbc_wrapped, wrapper_telemetry = static_balance_wrapper.wrap(
+                np.array(tau_wbc),
+                current_state,
+            )
+
+            # Log wrapper telemetry for first 20 steps
+            if step < 20:
+                log_wrapper_telemetry(step, wrapper_telemetry)
+
+            # Use wrapped torque for rest of pipeline
+            tau_wbc = jnp.array(tau_wbc_wrapped)
 
         # Diagnostic: log WBC output on first step
         if step == 0:
