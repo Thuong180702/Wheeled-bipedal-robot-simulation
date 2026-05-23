@@ -9,6 +9,7 @@ import mujoco
 import numpy as np
 from jax import Array
 from numpy.typing import NDArray
+from typing import Any
 
 # Import existing calibration helper from simulate_hierarchical_controller
 # Do not duplicate - reuse the tested implementation
@@ -21,6 +22,10 @@ class StaticBalanceController:
 
     # Observation dimension constant
     OBS_DIM = 42
+
+    # Error thresholds for equilibrium deviation warnings
+    POSTURE_ERROR_WARN_THRESHOLD = 0.1  # rad, joint position deviation
+    COM_HEIGHT_ERROR_WARN_THRESHOLD = 0.05  # m, CoM height deviation
 
     def __init__(
         self,
@@ -314,19 +319,29 @@ class StaticBalanceController:
     def wrap(
         self,
         tau_wbc_current: NDArray,
-        current_state: dict,
+        current_state: dict[str, Any],
     ) -> tuple[NDArray, dict]:
         """Wrap WBC torque to remove equilibrium bias.
 
         Args:
             tau_wbc_current: Current WBC output (10,)
             current_state: Current robot state for error metrics
-                Required keys: com_z, pitch_x, roll_y, joint_pos, com_vel, angular_vel
+                Required keys: com_z, pitch_x, roll_y, joint_pos
+                Optional keys: com_vel, angular_vel
 
         Returns:
             tau_wbc_wrapped: Bias-corrected WBC torque (10,)
             telemetry: Dict with all diagnostic values
         """
+        # Validate required keys in current_state
+        required_keys = ['com_z', 'pitch_x', 'roll_y', 'joint_pos']
+        missing_keys = [key for key in required_keys if key not in current_state]
+        if missing_keys:
+            raise ValueError(
+                f"current_state missing required keys: {missing_keys}. "
+                f"Required keys are: {required_keys}"
+            )
+
         # Compute correction torque (remove equilibrium bias)
         tau_wbc_correction = tau_wbc_current - self.tau_wbc_equilibrium
 
@@ -346,11 +361,12 @@ class StaticBalanceController:
         angular_velocity_norm = np.linalg.norm(current_state.get('angular_vel', np.zeros(3)))
 
         # Safety diagnostic (not a hard control switch)
-        if posture_error_norm > 0.1 or abs(com_height_error) > 0.05:
+        if posture_error_norm > self.POSTURE_ERROR_WARN_THRESHOLD or abs(com_height_error) > self.COM_HEIGHT_ERROR_WARN_THRESHOLD:
             print(f"WARNING: Fixed static reference may no longer be physically exact "
                   f"(posture_error={posture_error_norm:.3f}, com_height_error={com_height_error:.3f})")
 
         # Build telemetry dict
+        # Support joints: [l_hip_pitch, l_knee, r_hip_pitch, r_knee]
         support_joints = [2, 3, 7, 8]
         telemetry = {
             # Torque components (full 10-dim arrays)
