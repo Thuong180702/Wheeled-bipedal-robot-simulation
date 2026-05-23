@@ -19,6 +19,9 @@ from wheeled_biped.controllers.centroidal_state_estimator import CentroidalState
 class StaticBalanceController:
     """Wrapper that cancels WBC static equilibrium bias."""
 
+    # Observation dimension constant
+    OBS_DIM = 42
+
     def __init__(
         self,
         mj_model: mujoco.MjModel,
@@ -61,7 +64,6 @@ class StaticBalanceController:
         5. Computes tau_wbc_equilibrium using WBC at zero-error state
         6. Logs initialization diagnostics
         """
-        import jax.numpy as jnp
         from wheeled_biped.controllers.orientation_utils import (
             compute_robot_frame_orientation_from_quaternion,
         )
@@ -80,11 +82,12 @@ class StaticBalanceController:
         print(f"  Initial qpos[2] (root_z): {data_copy.qpos[2]:.6f} m")
 
         # Step 2: Run calibrated initialization sequence (5 steps)
-        print("\n[STEP 2] Running calibrated initialization (5 steps)...")
+        max_iters = self.calibration_config.get("max_iters", 5)
+        print(f"\n[STEP 2] Running calibrated initialization ({max_iters} steps)...")
         self.geom_ids = calibrate_root_z_for_wheel_floor_contact(
             self.mj_model,
             data_copy,
-            max_iters=5,
+            max_iters=max_iters,
         )
         print(f"  Calibrated qpos[2] (root_z): {data_copy.qpos[2]:.6f} m")
 
@@ -111,7 +114,7 @@ class StaticBalanceController:
         }
 
         print(f"  CoM height: {self.equilibrium_state['com_z']:.6f} m")
-        print(f"  Joint positions (support): {data_copy.qpos[9:13]}")  # [l_hip_pitch, l_knee, r_hip_pitch, r_knee]
+        print(f"  Joint positions (support): {data_copy.qpos[[9, 10, 14, 15]]}")  # [l_hip_pitch, l_knee, r_hip_pitch, r_knee]
 
         # Step 4: Compute tau_static_ref using inverse dynamics
         print("\n[STEP 4] Computing static reference torques via inverse dynamics...")
@@ -126,6 +129,10 @@ class StaticBalanceController:
 
         # Extract joint torques (indices 6:16 in qfrc_inverse correspond to 10 actuated joints)
         self.tau_static_ref = data_copy.qfrc_inverse[6:16].copy()
+
+        # Validate that computed reference is finite
+        if not np.all(np.isfinite(self.tau_static_ref)):
+            raise ValueError(f"tau_static_ref contains NaN or Inf: {self.tau_static_ref}")
 
         # Store additional inverse dynamics components for diagnostics
         self.qfrc_inverse_ref = data_copy.qfrc_inverse.copy()
@@ -156,6 +163,10 @@ class StaticBalanceController:
 
         # Compute WBC torque at equilibrium
         self.tau_wbc_equilibrium = self._compute_wbc_at_equilibrium(data_copy, obs_equilibrium)
+
+        # Validate that computed reference is finite
+        if not np.all(np.isfinite(self.tau_wbc_equilibrium)):
+            raise ValueError(f"tau_wbc_equilibrium contains NaN or Inf: {self.tau_wbc_equilibrium}")
 
         print(f"  tau_wbc_equilibrium (support joints [2,3,7,8]): {self.tau_wbc_equilibrium[[2,3,7,8]]}")
         print(f"  tau_wbc_equilibrium (all joints): {self.tau_wbc_equilibrium}")
@@ -205,11 +216,11 @@ class StaticBalanceController:
         Returns:
             Zero-error observation array (42,)
         """
-        obs = jnp.zeros(42)
+        obs = jnp.zeros(self.OBS_DIM)
 
         # Gravity in body frame at equilibrium (upright orientation)
         # At perfect equilibrium, body frame aligns with world frame
-        gravity_body = jnp.array([0.0, 0.0, -9.81])
+        gravity_body = jnp.array([0.0, 0.0, self.mj_model.opt.gravity[2]])
         obs = obs.at[0:3].set(gravity_body)
 
         # Body linear velocity (zero at equilibrium)
