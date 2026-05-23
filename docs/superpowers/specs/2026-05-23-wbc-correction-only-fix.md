@@ -1,14 +1,14 @@
 # WBC Correction-Only Fix Specification
 
 **Date:** 2026-05-23  
-**Status:** Approved  
+**Status:** Approved (Revised)  
 **Replaces:** StaticBalanceController wrapper approach (failed validation)
 
 ## Problem Statement
 
-The wheeled biped robot falls after 14-15 steps due to a 15-20N vertical contact force deficit (desired ~79N vs actual 60-67N, 19-25% shortfall). Root cause analysis revealed:
+The wheeled biped robot falls after 14-15 steps due to a vertical contact force deficit. Root cause analysis revealed:
 
-1. **Current WBC behavior:** Maps entire baseline body weight (mg = 147N) through joint-only contact Jacobian (J^T f), producing large support-joint torques that fight against contact constraints
+1. **Current WBC behavior:** Maps entire baseline body weight (mg) through joint-only contact Jacobian (J^T f), producing large support-joint torques that fight against contact constraints
 2. **Physics reality:** MuJoCo contact constraints already provide baseline body-weight support through normal forces at wheel-floor contacts
 3. **Result:** WBC-commanded torques and contact-provided support interfere, causing force deficit and eventual collapse
 
@@ -63,7 +63,11 @@ def compute_baseline_and_correction_wrench(
 
 **Baseline wrench (diagnostic only):**
 ```python
-baseline_wrench = jnp.array([0.0, 0.0, self.robot_mass * self.gravity, 0.0, 0.0, 0.0])
+# Baseline vertical force = total model weight
+# robot_mass should be computed as: float(np.sum(mj_model.body_mass))
+# gravity should be: abs(float(mj_model.opt.gravity[2]))
+baseline_fz = self.robot_mass * self.gravity
+baseline_wrench = jnp.array([0.0, 0.0, baseline_fz, 0.0, 0.0, 0.0])
 ```
 
 **Correction wrench (control output):**
@@ -101,21 +105,31 @@ correction_wrench = jnp.array([
 ])
 ```
 
-**Correction limits:**
+**Correction limits (configurable):**
 ```python
 # Clamp correction_Fz to prevent reintroducing baseline mg
-MAX_CORRECTION_FZ = 50.0  # N (reasonable correction range)
-correction_Fz = jnp.clip(correction_Fz, -MAX_CORRECTION_FZ, MAX_CORRECTION_FZ)
+# Express limits as fraction of model weight for generality
+max_correction_fz_fraction = 0.35  # 35% of body weight (configurable parameter)
+max_correction_fxy_fraction = 0.20  # 20% of body weight (configurable parameter)
 
-# Clamp horizontal forces
-MAX_CORRECTION_FXY = 30.0  # N
+model_weight = self.robot_mass * self.gravity
+MAX_CORRECTION_FZ = max_correction_fz_fraction * model_weight
+MAX_CORRECTION_FXY = max_correction_fxy_fraction * model_weight
+
+correction_Fz = jnp.clip(correction_Fz, -MAX_CORRECTION_FZ, MAX_CORRECTION_FZ)
 correction_Fx = jnp.clip(correction_Fx, -MAX_CORRECTION_FXY, MAX_CORRECTION_FXY)
 correction_Fy = jnp.clip(correction_Fy, -MAX_CORRECTION_FXY, MAX_CORRECTION_FXY)
 ```
 
 **2. IntegratedWBC**
 
-Modify `compute_wbc_torque_with_diagnostics` to use correction-only wrench:
+Modify `compute_wbc_torque_with_diagnostics` to use correction-only wrench.
+
+**CRITICAL: Force feedback adaptation**
+
+The existing force feedback mechanism scales WBC torque based on `(actual_fz - desired_fz) / desired_fz`. In the old WBC, `desired_fz` included baseline mg, so the feedback compensated for contact force errors relative to total body weight. In correction-only mode, `desired_fz` from the force distributor will be near zero at equilibrium, making the ratio undefined or unstable.
+
+**Solution:** Redefine force feedback to use error relative to baseline model_weight:
 
 ```python
 def compute_wbc_torque_with_diagnostics(
@@ -151,6 +165,20 @@ def compute_wbc_torque_with_diagnostics(
     tau_hip = self._build_direct_hip_roll_torque(tau_hip_roll)
     tau_wbc_correction = tau_contact + tau_hip
     
+    # Force feedback adaptation for correction-only mode
+    # OLD: force_scale = 1.0 - gain * (actual - desired) / desired
+    # NEW: force_scale based on error relative to baseline model_weight
+    model_weight = self.wrench_computer.robot_mass * self.wrench_computer.gravity
+    if contact_force_valid and model_weight > 1e-3:
+        force_error = actual_fz_total - model_weight
+        force_error_fraction = force_error / model_weight
+        # Reduce torque if actual > model_weight (too much support)
+        # Increase torque if actual < model_weight (too little support)
+        force_scale = 1.0 - self.force_feedback_gain * force_error_fraction
+        force_scale = float(jnp.clip(force_scale, 0.1, 2.0))
+    else:
+        force_scale = 1.0
+    
     # Apply authority budget and force feedback
     tau_wbc = self.clip_to_authority_budget(tau_wbc_correction * force_scale)
     
@@ -159,7 +187,7 @@ def compute_wbc_torque_with_diagnostics(
         # Baseline wrench (diagnostic only)
         "baseline_wrench_Fx": float(baseline_wrench[0]),
         "baseline_wrench_Fy": float(baseline_wrench[1]),
-        "baseline_wrench_Fz": float(baseline_wrench[2]),  # Should be mg
+        "baseline_wrench_Fz": float(baseline_wrench[2]),  # Should equal model_weight
         "baseline_wrench_Mx": float(baseline_wrench[3]),
         "baseline_wrench_My": float(baseline_wrench[4]),
         "baseline_wrench_Mz": float(baseline_wrench[5]),
@@ -173,10 +201,12 @@ def compute_wbc_torque_with_diagnostics(
         "correction_wrench_Mz": float(correction_wrench[5]),
         
         # Force breakdown
-        "baseline_fz": float(baseline_wrench[2]),
+        "baseline_fz": float(baseline_wrench[2]),  # Should equal model_weight
         "correction_fz": float(correction_wrench[2]),
+        "distributor_fz_sum": float(f_left[2] + f_right[2]),  # Should match correction_fz
         "total_expected_support_fz": float(baseline_wrench[2] + correction_wrench[2]),
         "actual_contact_fz": actual_fz_total,
+        "force_error": actual_fz_total - float(baseline_wrench[2]),  # Error relative to model_weight
         
         # Torque breakdown
         "tau_wbc_correction": tau_wbc_correction,
@@ -190,7 +220,26 @@ def compute_wbc_torque_with_diagnostics(
 
 **3. SimpleForceDistributor**
 
-No changes required. Already accepts 6D wrench and distributes to wheel forces + hip roll torques.
+**CRITICAL AUDIT REQUIRED:** The force distributor must be verified to NOT reintroduce baseline body weight when correction_wrench ≈ 0.
+
+Current implementation has `min_wheel_force = 10.0 N` safety floor. At equilibrium with correction_wrench_Fz ≈ 0:
+- If distributor enforces `f_left[2] >= 10.0` and `f_right[2] >= 10.0`
+- Then `f_left[2] + f_right[2] >= 20.0 N` even when correction_wrench_Fz = 0
+- This reintroduces 20N of baseline force through J^T f
+
+**Required behavior:**
+- At equilibrium: `f_left[2] + f_right[2]` should match `correction_wrench_Fz` (near zero)
+- `min_wheel_force` should only apply during single-wheel contact recovery, NOT at two-wheel equilibrium
+- Force floor logic must not silently add baseline support
+
+**Validation:**
+```python
+# Test: correction_wrench = [0, 0, 0, 0, 0, 0], both wheels in contact
+f_left, f_right, tau_hip_roll, _ = distributor.distribute_wrench_contact_aware(
+    correction_wrench, left_contact=True, right_contact=True, ...
+)
+assert abs(f_left[2] + f_right[2]) < 1.0, "Distributor must not add baseline force at equilibrium"
+```
 
 **4. ContactJacobian**
 
@@ -200,19 +249,30 @@ No changes required. Already maps contact forces to joint torques via J^T f.
 
 ### Test 1: Equilibrium Correction Wrench Near Zero
 
-**Setup:** Calibrated initialization (root_z adjusted for -5e-4 contact penetration), zero velocities
+**Setup:**
+- Calibrated initialization: `mj_resetDataKeyframe` → `mj_forward` → `calibrate_root_z_for_wheel_floor_contact(target_dist=-5e-4)` → zero qvel/qacc → `mj_forward`
+- Compute model_weight: `model_weight = float(np.sum(mj_model.body_mass)) * abs(float(mj_model.opt.gravity[2]))`
+- Build observation with height_cmd = current CoM z (from `data.subtree_com[1, 2]`)
+
+**Height definition clarity:**
+- `root_z` = `data.qpos[2]` (floating base z position)
+- `com_z` = `data.subtree_com[1, 2]` (center of mass z, body index 1 = torso)
+- `height_cmd` = desired CoM z (NOT root_z)
+- At equilibrium: `height_cmd` should equal current `com_z` to produce zero height error
 
 **Expected:**
-- `correction_wrench_Fz` < 5.0 N (small height tracking correction)
-- `correction_wrench_Fx` < 2.0 N (small lateral correction)
-- `correction_wrench_Fy` < 2.0 N (small sagittal correction)
+- `correction_wrench_Fz` < 0.05 * model_weight (5% of body weight)
+- `correction_wrench_Fx` < 0.02 * model_weight (2% of body weight)
+- `correction_wrench_Fy` < 0.02 * model_weight (2% of body weight)
 - `correction_wrench_My` < 5.0 Nm (small roll correction)
-- `baseline_wrench_Fz` = 147.15 N (15 kg × 9.81 m/s²)
+- `baseline_wrench_Fz` = model_weight
 
 **Assertion:**
 ```python
-assert abs(correction_wrench[2]) < 5.0, "Correction Fz should be near zero at equilibrium"
-assert jnp.linalg.norm(correction_wrench) < 10.0, "Total correction wrench should be small"
+model_weight = float(np.sum(mj_model.body_mass)) * abs(float(mj_model.opt.gravity[2]))
+assert abs(correction_wrench[2]) < 0.05 * model_weight, "Correction Fz should be < 5% of model weight"
+assert jnp.linalg.norm(correction_wrench) < 0.10 * model_weight, "Total correction wrench should be small"
+assert abs(baseline_wrench[2] - model_weight) < 0.01, "Baseline Fz should equal model weight"
 ```
 
 ### Test 2: Equilibrium WBC Torque Near Zero
@@ -244,28 +304,44 @@ assert correction_wrench[2] > 10.0, "Height drop should produce positive correct
 
 ### Test 4: Pitch Perturbation Produces Stabilizing Correction
 
-**Setup:** Set pitch_x = 0.05 rad (forward tilt), pitch_rate_x = 0.0
+**Setup:** Perturb pitch_x = 0.05 rad (forward tilt), pitch_rate_x = 0.0
+
+**Physical stabilization criterion:**
+- Forward pitch (pitch_x > 0) means CoM is ahead of support base
+- Stabilizing correction requires backward force (Fy < 0) to decelerate forward motion
+- Through contact Jacobian, backward Fy produces negative wheel torques (backward wheel acceleration)
 
 **Expected:**
 - `correction_wrench_Fy` < 0 (backward force to counteract forward tilt)
-- Wheel torques produce backward acceleration
+- Sign backed by inverted pendulum dynamics: F = -k * theta for stabilization
 
 **Assertion:**
 ```python
-assert correction_wrench[1] < -5.0, "Forward pitch should produce backward correction Fy"
+# Pitch correction force should oppose pitch angle (negative gain)
+pitch_correction_fy = -k_pitch * pitch_x - k_pitch_rate * pitch_rate_x
+assert pitch_correction_fy < 0, "Forward pitch should produce backward correction Fy (inverted pendulum)"
+assert correction_wrench[1] < 0, "Total correction Fy should be negative for forward pitch"
 ```
 
 ### Test 5: Roll Perturbation Produces Stabilizing Correction
 
-**Setup:** Set roll_y = 0.03 rad (right tilt), roll_rate_y = 0.0
+**Setup:** Perturb roll_y = 0.03 rad (right tilt), roll_rate_y = 0.0
+
+**Physical stabilization criterion:**
+- Right roll (roll_y > 0) means robot tilting to the right
+- Stabilizing correction requires left roll moment (My < 0) to counteract right tilt
+- Roll moment convention: My < 0 produces left roll correction
 
 **Expected:**
 - `correction_wrench_My` < 0 (left roll moment to counteract right tilt)
-- Hip roll torques produce left roll correction
+- Sign backed by PID control: M = -k * roll for stabilization
 
 **Assertion:**
 ```python
-assert correction_wrench[4] < -2.0, "Right roll should produce left correction My"
+# Roll correction moment should oppose roll angle (negative gain)
+roll_correction_my = -k_roll * roll_y - k_roll_rate * roll_rate_y
+assert roll_correction_my < 0, "Right roll should produce left correction My (negative gain)"
+assert correction_wrench[4] < 0, "Total correction My should be negative for right roll"
 ```
 
 ### Test 6: Force Audit - Baseline mg Not Mapped Through J^T f
@@ -273,17 +349,24 @@ assert correction_wrench[4] < -2.0, "Right roll should produce left correction M
 **Setup:** Calibrated equilibrium, instrument force distribution pipeline
 
 **Audit:**
-1. Capture `correction_wrench` passed to `SimpleForceDistributor`
-2. Verify `correction_wrench[2]` does NOT contain baseline mg (should be < 10 N)
-3. Capture `f_left`, `f_right` from force distributor
-4. Verify `f_left[2] + f_right[2]` ≈ `correction_wrench[2]` (not mg)
-5. Capture `tau_wbc` from contact Jacobian
-6. Verify `tau_wbc[SUPPORT_JOINTS]` near zero (< 1.0 Nm)
+1. Compute `model_weight = float(np.sum(mj_model.body_mass)) * abs(float(mj_model.opt.gravity[2]))`
+2. Capture `correction_wrench` passed to `SimpleForceDistributor`
+3. Verify `correction_wrench[2]` does NOT contain baseline mg (should be < 0.10 * model_weight)
+4. Capture `f_left`, `f_right` from force distributor
+5. Verify `f_left[2] + f_right[2]` ≈ `correction_wrench[2]` (NOT model_weight)
+6. Verify distributor does not add force floor at two-wheel equilibrium
+7. Capture `tau_wbc` from contact Jacobian
+8. Verify `tau_wbc[SUPPORT_JOINTS]` near zero (< 1.0 Nm per joint)
 
 **Assertion:**
 ```python
-assert correction_wrench_to_distributor[2] < 10.0, "Baseline mg must not be passed to distributor"
-assert abs((f_left[2] + f_right[2]) - correction_wrench_to_distributor[2]) < 1.0, "Distributed forces should match correction wrench"
+model_weight = float(np.sum(mj_model.body_mass)) * abs(float(mj_model.opt.gravity[2]))
+assert correction_wrench_to_distributor[2] < 0.10 * model_weight, "Baseline mg must not be passed to distributor"
+distributor_fz_sum = f_left[2] + f_right[2]
+assert abs(distributor_fz_sum - correction_wrench_to_distributor[2]) < 0.02 * model_weight, \
+    "Distributed forces should match correction wrench, not add baseline"
+assert abs(distributor_fz_sum) < 0.15 * model_weight, \
+    "Distributor must not reintroduce baseline force via min_wheel_force at equilibrium"
 ```
 
 ### Test 7: Static Support Parity Comparison
@@ -296,24 +379,29 @@ assert abs((f_left[2] + f_right[2]) - correction_wrench_to_distributor[2]) < 1.0
 
 **Metrics:**
 - Survival time (steps before termination)
-- Contact force error: `|actual_fz - 79.5 N|`
-- Support joint torque RMS
+- Contact force error: `|actual_fz - model_weight|` where `model_weight = float(np.sum(mj_model.body_mass)) * abs(float(mj_model.opt.gravity[2]))`
+- Support joint torque RMS (joints [2, 3, 7, 8])
 - Pitch/roll RMS
 
 **Expected:**
 - Case B (correction-only) should survive ≥ 100 steps or show clear improvement over Case A
 - Case B contact force error < Case A contact force error
 - Case B support joint torque RMS < Case A support joint torque RMS
+- Case B should show near-zero WBC torque at equilibrium (first 5 steps)
 
 ### Test 8: 100-Step Static Standing
 
-**Setup:** Calibrated initialization, height_cmd = 0.534 m, full controller pipeline (WBC + posture + leg PD)
+**Setup:**
+- Calibrated initialization
+- Compute `model_weight = float(np.sum(mj_model.body_mass)) * abs(float(mj_model.opt.gravity[2]))`
+- Set `height_cmd = data.subtree_com[1, 2]` (current CoM z at equilibrium)
+- Full controller pipeline (WBC + posture + leg PD)
 
 **Success criteria:**
 - Survive 100 steps without termination
-- Contact force remains 70-90 N (within 15% of 79.5 N)
+- Contact force remains within 15% of model_weight: `0.85 * model_weight < actual_fz < 1.15 * model_weight`
 - Pitch/roll remain < 0.1 rad (< 5.7 degrees)
-- CoM height remains 0.50-0.57 m
+- CoM height remains within ±0.05 m of height_cmd
 
 **Failure analysis (if < 100 steps):**
 - If termination < 20 steps: likely static equilibrium issue (WBC still injecting bias)
@@ -325,12 +413,14 @@ assert abs((f_left[2] + f_right[2]) - correction_wrench_to_distributor[2]) < 1.0
 
 **In scope:**
 1. Modify `CentroidalWrenchComputer.compute_baseline_and_correction_wrench()`
-2. Modify `IntegratedWBC.compute_wbc_torque_with_diagnostics()` to use correction-only wrench
-3. Add correction limits (MAX_CORRECTION_FZ, MAX_CORRECTION_FXY)
-4. Add telemetry for baseline/correction wrench breakdown
-5. Implement 8 validation tests
-6. Run static support parity comparison
-7. Run 100-step static standing test
+2. Add configurable correction limit parameters (max_correction_fz_fraction, max_correction_fxy_fraction)
+3. Modify `IntegratedWBC.compute_wbc_torque_with_diagnostics()` to use correction-only wrench
+4. Adapt force feedback to use error relative to model_weight
+5. Audit `SimpleForceDistributor` to ensure no baseline force reintroduction at equilibrium
+6. Add telemetry for baseline/correction wrench breakdown with distributor_fz_sum
+7. Implement 8 validation tests with model_weight computation
+8. Run static support parity comparison
+9. Run 100-step static standing test
 
 **Out of scope (future work):**
 - QP-based force distribution
@@ -351,12 +441,12 @@ assert abs((f_left[2] + f_right[2]) - correction_wrench_to_distributor[2]) < 1.0
 - Missing contact recovery (single-wheel contact handling)
 
 **Validation checklist:**
-- [ ] Test 1: Equilibrium correction wrench < 10 N norm
+- [ ] Test 1: Equilibrium correction wrench < 10% of model_weight norm
 - [ ] Test 2: Equilibrium WBC torque < 1 Nm on support joints
 - [ ] Test 3: Height drop produces positive correction Fz
-- [ ] Test 4: Pitch perturbation produces stabilizing correction Fy
-- [ ] Test 5: Roll perturbation produces stabilizing correction My
-- [ ] Test 6: Force audit confirms mg not mapped through J^T f
+- [ ] Test 4: Pitch perturbation produces stabilizing correction Fy (with physical criterion)
+- [ ] Test 5: Roll perturbation produces stabilizing correction My (with physical criterion)
+- [ ] Test 6: Force audit confirms mg not mapped through J^T f, distributor doesn't add baseline
 - [ ] Test 7: Correction-only WBC outperforms old WBC in parity test
 - [ ] Test 8: 100-step static standing OR clear failure telemetry
 
@@ -375,15 +465,22 @@ Mitigation: Contact constraints should provide baseline support. If robot collap
 
 **Risk 3: Correction limits too restrictive, prevent recovery**
 
-Mitigation: Start with generous limits (MAX_CORRECTION_FZ = 50 N, MAX_CORRECTION_FXY = 30 N). If recovery fails, increase limits incrementally and re-test.
+Mitigation: Start with generous limits (max_correction_fz_fraction = 0.35, max_correction_fxy_fraction = 0.20). If recovery fails, increase fractions incrementally and re-test.
+
+**Risk 4: SimpleForceDistributor reintroduces baseline via min_wheel_force**
+
+Mitigation: Audit distributor behavior at equilibrium. If force floor applies at two-wheel contact, modify logic to only enforce minimum during single-wheel recovery, not at equilibrium.
 
 ## Telemetry Requirements
 
 **Per-step logging:**
 ```python
 {
+    # Model parameters (computed once at initialization)
+    "model_weight": 147.15,  # float(np.sum(mj_model.body_mass)) * abs(float(mj_model.opt.gravity[2]))
+    
     # Baseline wrench (diagnostic)
-    "baseline_fz": 147.15,  # Should be constant mg
+    "baseline_fz": 147.15,  # Should equal model_weight
     
     # Correction wrench (control)
     "correction_fx": 0.5,
@@ -395,9 +492,10 @@ Mitigation: Start with generous limits (MAX_CORRECTION_FZ = 50 N, MAX_CORRECTION
     "correction_wrench_norm": 4.2,
     
     # Force breakdown
+    "distributor_fz_sum": 3.0,  # f_left[2] + f_right[2], should match correction_fz
     "total_expected_support_fz": 150.25,  # baseline + correction
     "actual_contact_fz": 148.7,
-    "force_error": -1.55,
+    "force_error": 1.55,  # actual_contact_fz - model_weight (NOT - total_expected)
     
     # Torque breakdown
     "tau_wbc_correction": [0.1, 0.0, 0.3, 0.2, 0.0, 0.1, 0.0, 0.3, 0.2, 0.0],
@@ -407,7 +505,9 @@ Mitigation: Start with generous limits (MAX_CORRECTION_FZ = 50 N, MAX_CORRECTION
     # State
     "pitch_x": 0.002,
     "roll_y": -0.001,
-    "height_error": 0.005,
+    "height_error": 0.005,  # height_cmd - com_z
+    "com_z": 0.534,  # data.subtree_com[1, 2]
+    "root_z": 0.595,  # data.qpos[2]
     "com_pos_x": 0.001,
     "com_pos_y": -0.002,
 }
@@ -419,3 +519,4 @@ Mitigation: Start with generous limits (MAX_CORRECTION_FZ = 50 N, MAX_CORRECTION
 - **Root cause analysis:** Phases 0-3 diagnostics (scripts/debug_*.py)
 - **Validation failure:** debug_static_support_parity_v2.py output showing 14× worse performance
 - **Physics principle:** Contact constraints provide baseline support in static equilibrium
+- **Mass computation convention:** `float(np.sum(mj_model.body_mass))` from simulate_hierarchical_controller.py
