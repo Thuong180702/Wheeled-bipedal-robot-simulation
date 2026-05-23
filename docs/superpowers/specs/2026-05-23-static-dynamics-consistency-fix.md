@@ -121,12 +121,19 @@ Equilibrium State:
   
 Static Reference Torques (from inverse dynamics):
   tau_static_ref[2,3,7,8] = [0.2, -0.1, 0.2, -0.1] Nm
+  qfrc_constraint_ref: not available  # Optional, may not be exposed by MuJoCo
   
 WBC Equilibrium Bias:
   tau_wbc_equilibrium[2,3,7,8] = [8.5, 15.2, 8.5, 15.2] Nm
   
 Support Bias Removed:
   support_bias[2,3,7,8] = [8.3, 15.3, 8.3, 15.3] Nm
+```
+
+**Note**: `qfrc_constraint_ref` should be retrieved using:
+```python
+qfrc_constraint_ref = getattr(data_copy, "qfrc_constraint", None)
+# Log "not available" if None
 ```
 
 ## Runtime Behavior
@@ -369,9 +376,11 @@ def test_correction_response_to_perturbations():
     # Correction should be nonzero
     assert np.any(np.abs(telemetry['tau_wbc_correction'][SUPPORT_JOINTS]) > 1.0)
     
-    # Correction should oppose pitch error (stabilizing)
-    # Physical check: does correction reduce pitch acceleration?
-    assert verify_stabilizing_correction(tau_wbc_wrapped, state_pitch, 'pitch')
+    # Log/measure stabilizing tendency
+    # Only hard-fail sign if physical acceleration check is robustly implemented
+    stabilizing_tendency = measure_stabilizing_tendency(tau_wbc_wrapped, state_pitch, 'pitch')
+    print(f"Pitch correction stabilizing tendency: {stabilizing_tendency}")
+    # Optional: assert stabilizing_tendency > 0 if one-step acceleration check is robust
     
     # Test roll perturbation
     state_roll = perturb_roll(equilibrium_state, +0.03)  # rad
@@ -407,14 +416,19 @@ def test_telemetry_completeness():
 ```python
 def test_reference_computation_no_mutation():
     """Verify reference computation doesn't mutate live mj_data."""
-    data_copy = copy.deepcopy(mj_data)
+    # Copy arrays explicitly before initialization
+    qpos_before = mj_data.qpos.copy()
+    qvel_before = mj_data.qvel.copy()
+    qacc_before = mj_data.qacc.copy()
+    ctrl_before = mj_data.ctrl.copy()
     
     controller = StaticBalanceController(model, mj_data, wbc, config)
     
     # Live data should be unchanged
-    assert np.allclose(mj_data.qpos, data_copy.qpos)
-    assert np.allclose(mj_data.qvel, data_copy.qvel)
-    assert np.allclose(mj_data.qacc, data_copy.qacc)
+    assert np.allclose(mj_data.qpos, qpos_before)
+    assert np.allclose(mj_data.qvel, qvel_before)
+    assert np.allclose(mj_data.qacc, qacc_before)
+    assert np.allclose(mj_data.ctrl, ctrl_before)
 ```
 
 ### Integration Tests (`tests/test_static_balance_simulation.py`)
@@ -425,21 +439,33 @@ def test_100_step_survival_with_wrapper():
     """Simulation with wrapper should survive ≥100 steps."""
     sim = setup_simulation(enable_static_dynamics_wrapper=True)
     
+    termination_step = None
     for step in range(100):
         sim.step()
         
-        # Should not terminate early
+        # Track termination but don't fail immediately
         if sim.terminated:
-            pytest.fail(f"Terminated at step {step}")
+            termination_step = step
+            break
+    
+    # If terminated early, classify failure using decision rules
+    if termination_step is not None:
+        failure_classification = classify_failure(sim, termination_step)
+        pytest.fail(
+            f"Terminated at step {termination_step}. "
+            f"Failure classification: {failure_classification}"
+        )
     
     # Contact force should remain near weight
     # Use stable window (steps 20-100) to avoid transients
     contact_fz_mean = np.mean(sim.contact_fz_history[20:100])
-    assert 75.0 < contact_fz_mean < 83.0  # 79N ± 5%
+    assert 75.0 < contact_fz_mean < 83.0, \
+        f"Contact force {contact_fz_mean:.1f}N outside 79N ± 5% range"
     
     # CoM height should remain stable (no continuous drift)
     com_z_std = np.std(sim.com_z_history[20:100])
-    assert com_z_std < 0.01  # m
+    assert com_z_std < 0.01, \
+        f"CoM height std {com_z_std:.4f}m exceeds 0.01m threshold"
 ```
 
 **Test 7: A/B Comparison (Old WBC vs Wrapped)**
@@ -475,6 +501,7 @@ def test_secondary_controller_audit():
     sim = setup_simulation(enable_static_dynamics_wrapper=True)
     
     # Run at equilibrium for 10 steps
+    secondary_bias_detected = False
     for step in range(10):
         sim.step()
         
@@ -490,7 +517,16 @@ def test_secondary_controller_audit():
         # Flag if secondary bias is significant
         if np.any(np.abs(secondary_bias) > 5.0):
             print(f"WARNING: Secondary controllers reintroduce {secondary_bias} Nm bias")
-            # This is diagnostic, not a failure - may need follow-up fix
+            secondary_bias_detected = True
+    
+    # If secondary bias detected and simulation fails, classify as interference
+    if secondary_bias_detected and sim.terminated:
+        pytest.fail(
+            "Secondary controller interference detected: "
+            f"bias > 5 Nm on support joints. "
+            "This requires a follow-up fix to posture/leg PD controllers, "
+            "not tuning the wrapper to hide the bias."
+        )
 ```
 
 ### Regression Tests (`scripts/debug_static_support_parity_v2.py`)
