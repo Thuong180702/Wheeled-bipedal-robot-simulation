@@ -51,6 +51,7 @@ def run_case_b(enable_wrapper=False):
         CapturePointEstimatorConfig,
     )
     from wheeled_biped.controllers.orientation_utils import compute_robot_frame_orientation_from_quaternion
+    from wheeled_biped.controllers.robot_model_utils import get_total_robot_mass, get_robot_weight
     from scripts.simulate_hierarchical_controller import calibrate_root_z_for_wheel_floor_contact
     import jax.numpy as jnp
 
@@ -66,9 +67,13 @@ def run_case_b(enable_wrapper=False):
     data.qacc[:] = 0.0
     mujoco.mj_forward(model, data)
 
-    # Initialize controllers
-    robot_mass = 15.0
+    # Initialize controllers with model-derived mass
+    robot_mass = get_total_robot_mass(model)
+    robot_weight = get_robot_weight(model)
     gravity = 9.81
+
+    print(f"\n[MASS] Robot mass: {robot_mass:.4f} kg")
+    print(f"[MASS] Robot weight: {robot_weight:.4f} N")
 
     centroidal_estimator = CentroidalStateEstimator(
         CentroidalStateEstimatorConfig(

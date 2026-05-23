@@ -17,6 +17,7 @@ from wheeled_biped.controllers.centroidal_wrench_computer import (
 )
 from wheeled_biped.controllers.contact_jacobian import ContactJacobian
 from wheeled_biped.controllers.simple_force_distributor import SimpleForceDistributor
+from wheeled_biped.controllers.robot_model_utils import get_total_robot_mass
 
 
 class IntegratedWBC:
@@ -38,7 +39,7 @@ class IntegratedWBC:
         k_cp_sagittal: float = 20.0,
         k_height: float = 5.0,
         k_height_damping: float = 0.0,
-        robot_mass: float = 15.0,
+        robot_mass: float | None = None,
         gravity: float = 9.81,
         max_roll_moment: float | None = None,
         wbc_authority_budget: float = 0.6,
@@ -68,7 +69,7 @@ class IntegratedWBC:
             k_cp_lateral: Capture point lateral gain
             k_cp_sagittal: Capture point sagittal gain
             k_height: Height tracking gain
-            robot_mass: Robot mass in kg
+            robot_mass: Robot mass in kg (if None, derived from mj_model)
             gravity: Gravity constant
             max_roll_moment: Optional roll moment clamp in Nm
             wbc_authority_budget: Authority budget as fraction (0.0-1.0)
@@ -83,6 +84,12 @@ class IntegratedWBC:
             use_per_actuator_authority: If True, clip WBC torque elementwise by actuator limits
         """
         self.mj_model = mj_model
+
+        # Derive robot mass from model if not provided
+        if robot_mass is None:
+            robot_mass = get_total_robot_mass(mj_model)
+
+        self.robot_mass = robot_mass
         self.wbc_authority_budget = wbc_authority_budget
         self.max_actuator_torque = max_actuator_torque
         self.force_feedback_gain = force_feedback_gain

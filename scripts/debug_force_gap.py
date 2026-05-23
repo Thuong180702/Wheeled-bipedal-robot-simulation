@@ -307,9 +307,15 @@ def main():
     print(f"     CoM z: {float(mj_data.subtree_com[1][2]):.6f}")
     print()
 
-    # Initialize controllers
-    robot_mass = 15.0
+    # Initialize controllers with model-derived mass
+    from wheeled_biped.controllers.robot_model_utils import get_total_robot_mass, get_robot_weight
+
+    robot_mass = get_total_robot_mass(mj_model)
+    robot_weight = get_robot_weight(mj_model)
     gravity = 9.81
+
+    print(f"[MASS] Robot mass: {robot_mass:.4f} kg")
+    print(f"[MASS] Robot weight: {robot_weight:.4f} N\n")
 
     centroidal_estimator = CentroidalStateEstimator(
         CentroidalStateEstimatorConfig(

@@ -15,6 +15,7 @@ from typing import Any
 # Do not duplicate - reuse the tested implementation
 from scripts.simulate_hierarchical_controller import calibrate_root_z_for_wheel_floor_contact
 from wheeled_biped.controllers.centroidal_state_estimator import CentroidalState
+from wheeled_biped.controllers.robot_model_utils import get_total_robot_mass, get_robot_weight
 
 
 class StaticBalanceController:
@@ -46,6 +47,10 @@ class StaticBalanceController:
         self.wbc_pipeline = wbc_pipeline
         self.calibration_config = calibration_config or {}
 
+        # Store robot mass and weight from model
+        self.robot_mass = get_total_robot_mass(mj_model)
+        self.robot_weight = get_robot_weight(mj_model)
+
         # Will be computed in initialization
         self.tau_static_ref = None
         self.tau_wbc_equilibrium = None
@@ -76,6 +81,9 @@ class StaticBalanceController:
         print("\n" + "="*80)
         print("STATIC BALANCE CONTROLLER INITIALIZATION")
         print("="*80)
+
+        print(f"\n[MASS] Robot mass: {self.robot_mass:.4f} kg")
+        print(f"[MASS] Robot weight: {self.robot_weight:.4f} N")
 
         # Step 1: Copy MuJoCo data to avoid mutation
         data_copy = mujoco.MjData(self.mj_model)
@@ -198,6 +206,8 @@ class StaticBalanceController:
     def _log_initialization(self) -> None:
         """Log initialization diagnostics with support bias analysis."""
         print("\n[STEP 6] Initialization diagnostics:")
+        print(f"  Robot mass: {self.robot_mass:.4f} kg")
+        print(f"  Robot weight: {self.robot_weight:.4f} N")
         print(f"  Static equilibrium bias (support joints): {self.tau_wbc_equilibrium[[2,3,7,8]] - self.tau_static_ref[[2,3,7,8]]}")
         print(f"  Static equilibrium bias (all joints): {self.tau_wbc_equilibrium - self.tau_static_ref}")
         print(f"  Max |bias|: {np.max(np.abs(self.tau_wbc_equilibrium - self.tau_static_ref)):.4f} Nm")

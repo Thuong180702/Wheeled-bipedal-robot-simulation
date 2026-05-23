@@ -16,6 +16,7 @@ class CentroidalWrenchComputer:
 
     def __init__(
         self,
+        robot_mass: float,
         k_roll: float = 20.0,
         k_roll_rate: float = 4.0,
         k_roll_integral: float = 2.0,
@@ -29,13 +30,13 @@ class CentroidalWrenchComputer:
         k_cp_sagittal: float = 20.0,
         k_height: float = 5.0,
         k_height_damping: float = 0.0,
-        robot_mass: float = 15.0,
         gravity: float = 9.81,
         max_roll_moment: float | None = None,
     ):
         """Initialize centroidal wrench computer.
 
         Args:
+            robot_mass: Robot mass in kg (REQUIRED - must be derived from mj_model)
             k_roll: Roll stabilization gain (proportional)
             k_roll_rate: Roll rate damping gain (derivative)
             k_roll_integral: Roll integral gain (eliminates steady-state error)
@@ -48,7 +49,6 @@ class CentroidalWrenchComputer:
             k_cp_lateral: Capture point lateral gain
             k_cp_sagittal: Capture point sagittal gain
             k_height: Height tracking gain
-            robot_mass: Robot mass in kg
             gravity: Gravity constant
             max_roll_moment: Optional roll moment clamp in Nm
         """
