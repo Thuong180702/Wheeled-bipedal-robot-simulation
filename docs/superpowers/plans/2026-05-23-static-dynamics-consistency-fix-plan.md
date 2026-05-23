@@ -36,7 +36,7 @@
 - Create: `wheeled_biped/controllers/static_balance_controller.py`
 - Reference: `scripts/debug_force_gap.py` (for calibration function)
 
-- [ ] **Step 1.1: Create skeleton class with calibration function**
+- [ ] **Step 1.1: Create skeleton class (import existing calibration helper)**
 
 ```python
 """Static balance controller wrapper.
@@ -49,53 +49,9 @@ import mujoco
 import numpy as np
 from numpy.typing import NDArray
 
-
-def calibrate_root_z_for_wheel_floor_contact(
-    mj_model,
-    mj_data,
-    target_dist: float = -5e-4,
-    max_iters: int = 5,
-    tol: float = 1e-5,
-) -> float:
-    """Calibrate root_z to achieve target wheel-floor contact distance.
-    
-    Args:
-        mj_model: MuJoCo model
-        mj_data: MuJoCo data (will be modified)
-        target_dist: Target contact distance in meters (negative = penetration)
-        max_iters: Maximum calibration iterations
-        tol: Convergence tolerance in meters
-        
-    Returns:
-        Calibrated root_z value
-    """
-    for _ in range(max_iters):
-        mujoco.mj_forward(mj_model, mj_data)
-        
-        # Find wheel contacts
-        contact_dists = []
-        for i in range(mj_data.ncon):
-            contact = mj_data.contact[i]
-            geom1_name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom1)
-            geom2_name = mujoco.mj_id2name(mj_model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom2)
-            
-            if ("wheel" in geom1_name or "wheel" in geom2_name) and \
-               ("floor" in geom1_name or "floor" in geom2_name):
-                contact_dists.append(contact.dist)
-        
-        if not contact_dists:
-            raise RuntimeError("No wheel-floor contacts found")
-        
-        avg_dist = np.mean(contact_dists)
-        error = avg_dist - target_dist
-        
-        if abs(error) < tol:
-            break
-        
-        # Adjust root_z
-        mj_data.qpos[2] -= error
-    
-    return float(mj_data.qpos[2])
+# Import existing calibration helper from simulate_hierarchical_controller
+# Do not duplicate - reuse the tested implementation
+from scripts.simulate_hierarchical_controller import calibrate_root_z_for_wheel_floor_contact
 
 
 class StaticBalanceController:
@@ -164,10 +120,10 @@ Expected: "Import successful"
 
 ```bash
 git add wheeled_biped/controllers/static_balance_controller.py
-git commit -m "feat: Add StaticBalanceController skeleton with calibration function
+git commit -m "feat: Add StaticBalanceController skeleton
 
-- Add calibrate_root_z_for_wheel_floor_contact from diagnostic scripts
 - Add class skeleton with __init__ and wrap methods
+- Import existing calibration helper from simulate_hierarchical_controller
 - Placeholder for equilibrium reference computation"
 ```
 
@@ -181,6 +137,11 @@ git commit -m "feat: Add StaticBalanceController skeleton with calibration funct
 - Reference: `scripts/debug_force_gap.py` (for WBC pipeline setup)
 
 - [ ] **Step 2.1: Implement _compute_equilibrium_references method**
+
+**IMPORTANT**: Before implementing, inspect the actual APIs:
+1. Check `IntegratedWBC` signature: `Read wheeled_biped/controllers/integrated_wbc.py` to find the actual compute method
+2. Check observation structure: `Read scripts/simulate_hierarchical_controller.py` around line 400-500 to see how observations are built
+3. Use `CentroidalStateEstimator` if available for proper state extraction
 
 Replace the `_compute_equilibrium_references` placeholder with:
 
@@ -197,14 +158,14 @@ def _compute_equilibrium_references(self, mj_data):
     data_copy.qacc[:] = mj_data.qacc
     data_copy.ctrl[:] = mj_data.ctrl
     
-    # Calibrated initialization sequence
+    # Calibrated initialization sequence (reuse existing helper)
     # 1. Reset to keyframe (already done by caller)
     # 2. Forward dynamics
     mujoco.mj_forward(self.mj_model, data_copy)
     
-    # 3. Calibrate root_z for wheel-floor contact
+    # 3. Calibrate root_z for wheel-floor contact (reuse existing helper)
     target_contact_dist = self.calibration_config.get('target_contact_dist', -5e-4)
-    calibrate_root_z_for_wheel_floor_contact(
+    geom_ids = calibrate_root_z_for_wheel_floor_contact(
         self.mj_model,
         data_copy,
         target_dist=target_contact_dist,
@@ -217,13 +178,19 @@ def _compute_equilibrium_references(self, mj_data):
     # 5. Forward dynamics again
     mujoco.mj_forward(self.mj_model, data_copy)
     
-    # Capture equilibrium state
+    # Capture equilibrium state using proper orientation computation
+    from wheeled_biped.controllers.orientation_utils import compute_robot_frame_orientation_from_quaternion
+    
+    quat = data_copy.qpos[3:7]  # [w, x, y, z]
+    pitch_x, roll_y, yaw_z = compute_robot_frame_orientation_from_quaternion(quat)
+    
     self.equilibrium_state = {
         'com_z': self._compute_com_z(data_copy),
-        'pitch_x': self._compute_pitch_x(data_copy),
-        'roll_y': self._compute_roll_y(data_copy),
+        'pitch_x': float(pitch_x),
+        'roll_y': float(roll_y),
         'joint_pos': data_copy.qpos[7:17].copy(),
         'root_z': float(data_copy.qpos[2]),
+        'geom_ids': geom_ids,  # Store for later use
     }
     
     # Compute tau_static_ref using inverse dynamics
@@ -238,9 +205,14 @@ def _compute_equilibrium_references(self, mj_data):
         self.qfrc_constraint_ref = self.qfrc_constraint_ref[6:16].copy()
     
     # Compute tau_wbc_equilibrium using WBC pipeline
-    # Build zero-error observation
+    # IMPORTANT: Inspect IntegratedWBC API before implementing this
+    # The actual method signature may be compute_torque(state, obs, ...) not compute(obs)
+    # Build zero-error observation by inspecting simulate_hierarchical_controller.py
     obs_equilibrium = self._build_zero_error_observation(data_copy)
-    self.tau_wbc_equilibrium = self.wbc_pipeline.compute(obs_equilibrium)
+    
+    # TODO: Replace with actual WBC API after inspection
+    # Example: self.tau_wbc_equilibrium = self.wbc_pipeline.compute_torque(...)
+    self.tau_wbc_equilibrium = self._compute_wbc_at_equilibrium(data_copy, obs_equilibrium)
     
     # Log initialization diagnostics
     self._log_initialization()
@@ -250,54 +222,32 @@ def _compute_com_z(self, mj_data):
     # Subtree CoM for body 1 (torso)
     return float(mj_data.subtree_com[1, 2])
 
-def _compute_pitch_x(self, mj_data):
-    """Compute pitch angle from gravity vector."""
-    gravity_body = mj_data.sensor('imu_gyro').data[:3]  # Placeholder
-    # Use orientation_utils if available
-    # For now, approximate from quat
-    quat = mj_data.qpos[3:7]
-    # Convert quat to euler (simplified)
-    return 0.0  # TODO: Implement proper conversion
-
-def _compute_roll_y(self, mj_data):
-    """Compute roll angle from gravity vector."""
-    # Similar to pitch
-    return 0.0  # TODO: Implement proper conversion
+def _compute_wbc_at_equilibrium(self, mj_data, obs_equilibrium):
+    """Compute WBC torque at equilibrium.
+    
+    IMPORTANT: This is a placeholder. Subagent must inspect IntegratedWBC
+    to find the actual compute method signature and call it correctly.
+    """
+    # Placeholder - will be replaced after API inspection
+    raise NotImplementedError(
+        "Subagent must inspect IntegratedWBC API and implement correct call"
+    )
 
 def _build_zero_error_observation(self, mj_data):
     """Build observation with zero errors for equilibrium reference.
     
+    IMPORTANT: This is a placeholder. Subagent must inspect 
+    simulate_hierarchical_controller.py to see how observations are actually
+    constructed and replicate that logic with zero-error values.
+    
     All velocities, rates, and error terms must be zero.
+    Height command must equal equilibrium CoM height.
     """
-    # This depends on the observation structure used by WBC pipeline
-    # Placeholder - will need to match actual obs structure
-    obs = np.zeros(42)  # Adjust size based on actual obs
-    
-    # Gravity in body frame (from IMU)
-    obs[0:3] = [0.0, 0.0, -9.81]  # Upright
-    
-    # Body angular velocity (zero)
-    obs[6:9] = 0.0
-    
-    # Joint positions (equilibrium)
-    obs[9:19] = mj_data.qpos[7:17]
-    
-    # Joint velocities (zero)
-    obs[19:29] = 0.0
-    
-    # Previous action (zero or equilibrium pose)
-    obs[29:39] = 0.0
-    
-    # Height command (equilibrium CoM height)
-    obs[36] = self.equilibrium_state['com_z']
-    
-    # Current CoM height
-    obs[37] = self.equilibrium_state['com_z']
-    
-    # Yaw error (zero)
-    obs[38] = 0.0
-    
-    return obs
+    # Placeholder - will be replaced after inspecting actual obs construction
+    raise NotImplementedError(
+        "Subagent must inspect simulate_hierarchical_controller.py "
+        "observation construction and implement correct zero-error obs"
+    )
 
 def _log_initialization(self):
     """Log initialization diagnostics."""
@@ -512,7 +462,7 @@ SUPPORT_JOINTS = [2, 3, 7, 8]
 @pytest.fixture
 def mj_model():
     """Load MuJoCo model."""
-    return mujoco.MjModel.from_xml_path("wheeled_biped/assets/wheeled_biped.xml")
+    return mujoco.MjModel.from_xml_path("assets/robot/wheeled_biped_real.xml")
 
 
 @pytest.fixture
@@ -1050,42 +1000,35 @@ SUPPORT_JOINTS = [2, 3, 7, 8]
 
 
 def run_case_b(enable_wrapper=False):
-    """Run Case B: Current pipeline with optional wrapper."""
+    """Run Case B: Current pipeline with optional wrapper.
+    
+    IMPORTANT: Before implementing, inspect actual WBC API:
+    - Read wheeled_biped/controllers/integrated_wbc.py to find compute method signature
+    - Read scripts/simulate_hierarchical_controller.py to see how WBC is called
+    - Read scripts/simulate_hierarchical_controller.py to see how observations are built
+    """
     # Load model and data
-    model = mujoco.MjModel.from_xml_path("wheeled_biped/assets/wheeled_biped.xml")
+    model = mujoco.MjModel.from_xml_path("assets/robot/wheeled_biped_real.xml")
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, 0)
     
-    # Initialize WBC pipeline
-    # ... setup code ...
-    
-    # Initialize wrapper if enabled
-    if enable_wrapper:
-        controller = StaticBalanceController(model, data, wbc_pipeline)
-        tau_wbc_raw = wbc_pipeline.compute(obs)
-        tau_wbc, _ = controller.wrap(tau_wbc_raw, current_state)
-    else:
-        tau_wbc = wbc_pipeline.compute(obs)
-    
-    # Apply torque and step
-    data.ctrl[:] = tau_wbc
-    mujoco.mj_step(model, data)
-    
-    # Measure contact force
-    contact_fz = measure_total_contact_force(model, data)
-    
-    return tau_wbc, contact_fz
+    # TODO: Inspect and implement actual WBC initialization and call
+    # This is a placeholder - subagent must inspect IntegratedWBC API
+    raise NotImplementedError(
+        "Subagent must inspect IntegratedWBC API in wheeled_biped/controllers/integrated_wbc.py "
+        "and simulate_hierarchical_controller.py to implement correct WBC initialization and call"
+    )
 
 
 def run_case_d():
     """Run Case D: Inverse dynamics baseline."""
     # Load model and data
-    model = mujoco.MjModel.from_xml_path("wheeled_biped/assets/wheeled_biped.xml")
+    model = mujoco.MjModel.from_xml_path("assets/robot/wheeled_biped_real.xml")
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, 0)
     
-    # Calibrate
-    from wheeled_biped.controllers.static_balance_controller import calibrate_root_z_for_wheel_floor_contact
+    # Calibrate (reuse existing helper)
+    from scripts.simulate_hierarchical_controller import calibrate_root_z_for_wheel_floor_contact
     calibrate_root_z_for_wheel_floor_contact(model, data)
     
     # Zero velocities
@@ -1108,18 +1051,29 @@ def run_case_d():
 
 
 def measure_total_contact_force(model, data):
-    """Measure total vertical contact force."""
+    """Measure total vertical contact force using proper MuJoCo API."""
+    floor_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
+    l_wheel_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "l_wheel_collision")
+    r_wheel_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "r_wheel_collision")
+    
     total_fz = 0.0
+    wheel_geom_ids = {l_wheel_geom_id, r_wheel_geom_id}
+    
     for i in range(data.ncon):
-        contact = data.contact[i]
-        geom1_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom1)
-        geom2_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom2)
+        c = data.contact[i]
+        g1 = int(c.geom1)
+        g2 = int(c.geom2)
+        involves_floor = g1 == floor_geom_id or g2 == floor_geom_id
+        involves_wheel = g1 in wheel_geom_ids or g2 in wheel_geom_ids
+        if not (involves_floor and involves_wheel):
+            continue
         
-        if ("wheel" in geom1_name or "wheel" in geom2_name) and \
-           ("floor" in geom1_name or "floor" in geom2_name):
-            # Extract normal force (contact.frame[2] is normal direction)
-            force = contact.frame[2] * np.linalg.norm(data.contact[i].force[:3])
-            total_fz += force
+        # Use proper MuJoCo API: mj_contactForce + contact.frame
+        force_contact = np.zeros(6)
+        mujoco.mj_contactForce(model, data, i, force_contact)
+        frame = np.array(c.frame).reshape(3, 3)
+        force_world = frame.T @ force_contact[:3]
+        total_fz += float(force_world[2])
     
     return total_fz
 
