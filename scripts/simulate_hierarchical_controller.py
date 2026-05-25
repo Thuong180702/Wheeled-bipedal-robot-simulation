@@ -53,6 +53,7 @@ from wheeled_biped.controllers.static_feedforward_controller import (
     load_empirical_feedforward_from_telemetry,
 )
 from wheeled_biped.controllers.stage2b_roll_direct_controller import Stage2BRollDirectController
+from wheeled_biped.controllers.stage2b_sagittal_wheel_controller import Stage2BSagittalWheelController
 from wheeled_biped.controllers.contact_jacobian import ContactJacobian
 
 
@@ -72,18 +73,18 @@ def resolve_stage2b_empirical_feedforward(telemetry_path: str | None) -> np.ndar
     return load_empirical_feedforward_from_telemetry(telemetry_path)
 
 
-def check_termination(qpos, com_height):
-    """Check if robot should terminate (fall detection)."""
+def check_termination(qpos, com_height, robot_pitch_x, robot_roll_y):
+    """Check if robot should terminate (fall detection).
+
+    Uses robot-frame orientation (pitch_x, roll_y) for termination, not Euler angles.
+    """
     # Height check
     if com_height < 0.35:
         return True, "height_too_low"
 
-    # Orientation check (pitch/roll > 45 degrees) using unified computation
-    quat = qpos[3:7]  # [w, x, y, z]
-    roll, pitch, _ = compute_orientation_from_quaternion(quat)
-
-    if abs(pitch) > 0.785 or abs(roll) > 0.785:  # 45 degrees
-        return True, f"orientation_fail_pitch_{pitch:.2f}_roll_{roll:.2f}"
+    # Orientation check using robot-frame orientation (45 degrees threshold)
+    if abs(robot_pitch_x) > 0.785 or abs(robot_roll_y) > 0.785:
+        return True, f"orientation_fail_pitch_x_{robot_pitch_x:.2f}_roll_y_{robot_roll_y:.2f}"
 
     return False, None
 
@@ -440,6 +441,14 @@ def main():
     parser.add_argument('--stage2b-roll-kp', type=float, default=100.0, help='Stage 2B direct roll kp gain (Nm/rad)')
     parser.add_argument('--stage2b-roll-kd', type=float, default=20.0, help='Stage 2B direct roll kd gain (Nm/(rad/s))')
     parser.add_argument('--stage2b-roll-tau-max', type=float, default=15.0, help='Stage 2B direct roll max hip_roll torque per side (Nm)')
+    # Stage 2B: Sagittal wheel controller
+    parser.add_argument('--enable-stage2b-sagittal-wheel', action='store_true', default=False, help='Enable Stage 2B sagittal wheel controller (direct wheel PD for pitch)')
+    parser.add_argument('--stage2b-sagittal-k-pitch', type=float, default=10.0, help='Stage 2B sagittal k_pitch gain (Nm/rad)')
+    parser.add_argument('--stage2b-sagittal-k-pitch-rate', type=float, default=2.0, help='Stage 2B sagittal k_pitch_rate gain (Nm/(rad/s))')
+    parser.add_argument('--stage2b-sagittal-k-cp', type=float, default=4.0, help='Stage 2B sagittal k_cp gain (Nm/m)')
+    parser.add_argument('--stage2b-sagittal-k-com-y', type=float, default=0.0, help='Stage 2B sagittal k_com_y gain (Nm/m)')
+    parser.add_argument('--stage2b-sagittal-k-com-vy', type=float, default=2.0, help='Stage 2B sagittal k_com_vy gain (Nm/(m/s))')
+    parser.add_argument('--stage2b-sagittal-max-tau', type=float, default=3.0, help='Stage 2B sagittal max wheel torque (Nm)')
     args = parser.parse_args()
 
     print("=" * 80)
@@ -651,6 +660,29 @@ def main():
         print(f"  tau_hip_roll_max: {args.stage2b_roll_tau_max} Nm")
         print(f"  Direct roll mode: WBC contact path disabled for roll")
 
+    # Stage 2B: Sagittal wheel controller (alternative to WBC wheel path)
+    stage2b_sagittal_wheel_controller = None
+    if args.enable_stage2b_sagittal_wheel:
+        if not args.enable_stage2_static_posture_hold:
+            raise ValueError("Stage 2B sagittal wheel requires Stage 2 static posture hold (--enable-stage2-static-posture-hold)")
+
+        stage2b_sagittal_wheel_controller = Stage2BSagittalWheelController(
+            k_pitch=args.stage2b_sagittal_k_pitch,
+            k_pitch_rate=args.stage2b_sagittal_k_pitch_rate,
+            k_cp=args.stage2b_sagittal_k_cp,
+            k_com_y=args.stage2b_sagittal_k_com_y,
+            k_com_vy=args.stage2b_sagittal_k_com_vy,
+            max_tau_wheel=args.stage2b_sagittal_max_tau,
+        )
+        print(f"[STAGE 2B] Stage2BSagittalWheelController initialized:")
+        print(f"  k_pitch: {args.stage2b_sagittal_k_pitch} Nm/rad")
+        print(f"  k_pitch_rate: {args.stage2b_sagittal_k_pitch_rate} Nm/(rad/s)")
+        print(f"  k_cp: {args.stage2b_sagittal_k_cp} Nm/m")
+        print(f"  k_com_y: {args.stage2b_sagittal_k_com_y} Nm/m")
+        print(f"  k_com_vy: {args.stage2b_sagittal_k_com_vy} Nm/(m/s)")
+        print(f"  max_tau_wheel: {args.stage2b_sagittal_max_tau} Nm")
+        print(f"  Direct wheel mode: WBC wheel path disabled for pitch")
+
     print("[OK] Controllers initialized (wheeled biped architecture)")
 
     # Initialize StaticBalanceController wrapper if enabled
@@ -739,6 +771,18 @@ def main():
         stage2b_roll_direct_controller.set_equilibrium_reference(float(roll_y_eq))
         print(f"[STAGE 2B] Stage2BRollDirectController equilibrium reference set: {float(roll_y_eq)*57.3:.2f} deg")
 
+    # Set equilibrium reference for Stage2B sagittal wheel controller if enabled
+    if stage2b_sagittal_wheel_controller is not None:
+        stage2b_sagittal_wheel_controller.set_equilibrium_reference(
+            pitch_x=float(pitch_x_eq),
+            cp_y=float(centroidal_state_eq.capture_point[1]),
+            com_y=float(centroidal_state_eq.com_pos[1]),
+        )
+        print(f"[STAGE 2B] Stage2BSagittalWheelController equilibrium reference set:")
+        print(f"  Pitch: {float(pitch_x_eq)*57.3:.2f} deg")
+        print(f"  CP Y: {float(centroidal_state_eq.capture_point[1]):.6f} m")
+        print(f"  CoM Y: {float(centroidal_state_eq.com_pos[1]):.6f} m")
+
     # Telemetry storage
     telemetry = {
         "time": [],
@@ -756,9 +800,14 @@ def main():
         "tau_wheel_actual_max": [],  # Actual wheel torques from applied tau_smooth at indices [4, 9]
         "tau_posture_max": [],
         "tau_total_max": [],
-        "pitch": [],
-        "roll": [],
-        "yaw": [],
+        # Euler angles (world-frame, for reference only)
+        "euler_roll_x": [],
+        "euler_pitch_y": [],
+        "euler_yaw_z": [],
+        # Robot-frame orientation (used for control and termination)
+        "robot_pitch_x": [],
+        "robot_roll_y": [],
+        "robot_yaw_z": [],
         "roll_rate_rad_s": [],
         "pitch_rate_rad_s": [],
         "yaw_rate_rad_s": [],
@@ -1144,17 +1193,32 @@ def main():
                 roll_rate_y=float(centroidal_state_control.body_roll_rate_y),
             )
 
+        # Stage 2B: Compute sagittal wheel controller torque if enabled
+        tau_stage2b_sagittal_wheel = jnp.zeros(10)
+        sagittal_wheel_diagnostics = {}
+        if stage2b_sagittal_wheel_controller is not None:
+            tau_stage2b_sagittal_wheel, sagittal_wheel_diagnostics = stage2b_sagittal_wheel_controller.compute_wheel_torques(
+                pitch_x=float(centroidal_state_control.body_pitch_x),
+                pitch_rate_x=float(centroidal_state_control.body_pitch_rate_x),
+                cp_y=float(centroidal_state_control.capture_point[1]),
+                com_y=float(centroidal_state_control.com_pos[1]),
+                com_vy=float(centroidal_state_control.com_vel[1]),
+            )
+
         # Stage 2B joint ownership mask: WBC only controls hip_roll and wheels
         # Static feedforward/posture own hip_pitch/knee to prevent conflict
         # If direct roll controller is enabled, WBC does not control hip_roll
+        # If sagittal wheel controller is enabled, WBC does not control wheels
         if static_posture_controller is not None and static_feedforward_controller is not None and include_wbc:
             tau_wbc_stage2b = jnp.zeros(10)
             # Only include hip_roll from WBC if direct roll controller is NOT enabled
             if stage2b_roll_direct_controller is None:
                 tau_wbc_stage2b = tau_wbc_stage2b.at[0].set(tau_wbc_scaled[0])  # l_hip_roll
                 tau_wbc_stage2b = tau_wbc_stage2b.at[5].set(tau_wbc_scaled[5])  # r_hip_roll
-            tau_wbc_stage2b = tau_wbc_stage2b.at[4].set(tau_wbc_scaled[4])  # l_wheel
-            tau_wbc_stage2b = tau_wbc_stage2b.at[9].set(tau_wbc_scaled[9])  # r_wheel
+            # Only include wheels from WBC if sagittal wheel controller is NOT enabled
+            if stage2b_sagittal_wheel_controller is None:
+                tau_wbc_stage2b = tau_wbc_stage2b.at[4].set(tau_wbc_scaled[4])  # l_wheel
+                tau_wbc_stage2b = tau_wbc_stage2b.at[9].set(tau_wbc_scaled[9])  # r_wheel
             tau_wbc_correction = tau_wbc_stage2b
         else:
             tau_wbc_correction = tau_wbc_scaled if include_wbc else jnp.zeros(10)
@@ -1170,6 +1234,7 @@ def main():
                 + tau_static_posture
                 + tau_wbc_correction
                 + tau_stage2b_roll_direct
+                + tau_stage2b_sagittal_wheel
                 + tau_hip_roll_centering
                 + tau_wheel_balance
                 + tau_inverse_dynamics
@@ -1276,6 +1341,19 @@ def main():
                     print(f"[STAGE2B ROLL DIRECT][step={step}] tau_hip_roll_right={roll_direct_diagnostics.get('tau_hip_roll_right', 0.0):+.2f} Nm")
                     print(f"[STAGE2B ROLL DIRECT][step={step}] saturated={roll_direct_diagnostics.get('moment_saturated', False)}")
                     print(f"[STAGE2B ROLL DIRECT][step={step}] tau_stage2b_roll_direct[0,5]={[float(tau_stage2b_roll_direct[0]), float(tau_stage2b_roll_direct[5])]}")
+
+                # Sagittal wheel controller diagnostics
+                if stage2b_sagittal_wheel_controller is not None:
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] pitch_error={sagittal_wheel_diagnostics.get('pitch_error', 0.0):.6f} rad ({sagittal_wheel_diagnostics.get('pitch_error', 0.0)*57.3:.2f} deg)")
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] pitch_rate_x={sagittal_wheel_diagnostics.get('pitch_rate_x', 0.0):+.6f} rad/s")
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] cp_error_y={sagittal_wheel_diagnostics.get('cp_error_y', 0.0):+.6f} m")
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] tau_wheel_cmd={sagittal_wheel_diagnostics.get('tau_wheel_cmd', 0.0):+.2f} Nm")
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] saturated={sagittal_wheel_diagnostics.get('saturated', False)}")
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] tau_stage2b_sagittal_wheel[4,9]={[float(tau_stage2b_sagittal_wheel[4]), float(tau_stage2b_sagittal_wheel[9])]}")
+                    print(f"[STAGE2B ROLL DIRECT][step={step}] tau_hip_roll_left={roll_direct_diagnostics.get('tau_hip_roll_left', 0.0):+.2f} Nm")
+                    print(f"[STAGE2B ROLL DIRECT][step={step}] tau_hip_roll_right={roll_direct_diagnostics.get('tau_hip_roll_right', 0.0):+.2f} Nm")
+                    print(f"[STAGE2B ROLL DIRECT][step={step}] saturated={roll_direct_diagnostics.get('moment_saturated', False)}")
+                    print(f"[STAGE2B ROLL DIRECT][step={step}] tau_stage2b_roll_direct[0,5]={[float(tau_stage2b_roll_direct[0]), float(tau_stage2b_roll_direct[5])]}")
                 pitch_deg = float(pitch_x_rad) * 57.3
                 roll_deg = float(roll_y_rad) * 57.3
                 print(f"[STAGE2B OWNERSHIP][step={step}] com_z={com_z:.4f}m, com_vz={com_vz:.4f}m/s, pitch={pitch_deg:.2f}deg, roll={roll_deg:.2f}deg")
@@ -1351,13 +1429,18 @@ def main():
             r_wheel_geom_id,
         )
 
-        # Check termination
-        com_height = float(centroidal_state_log.com_pos[2])
-        terminated, termination_reason = check_termination(mj_data.qpos, com_height)
-
-        # Record telemetry using unified orientation computation
+        # Compute both Euler angles and robot-frame orientation
         quat = np.array(mj_data.qpos[3:7])  # [w, x, y, z]
-        roll, pitch, yaw = compute_orientation_from_quaternion(quat)
+        euler_roll_x, euler_pitch_y, euler_yaw_z = compute_orientation_from_quaternion(quat)
+
+        # Robot-frame orientation from gravity vector (used for control and termination)
+        robot_pitch_x = float(centroidal_state_log.body_pitch_x)
+        robot_roll_y = float(centroidal_state_log.body_roll_y)
+        robot_yaw_z = float(centroidal_state_log.body_yaw_z)
+
+        # Check termination using robot-frame orientation
+        com_height = float(centroidal_state_log.com_pos[2])
+        terminated, termination_reason = check_termination(mj_data.qpos, com_height, robot_pitch_x, robot_roll_y)
 
         # Wrench diagnostics with explicit separation:
         # - full_wrench: baseline + correction
@@ -1395,9 +1478,14 @@ def main():
         else:
             telemetry["tau_posture_max"].append(float(jnp.max(jnp.abs(tau_posture))))
         telemetry["tau_total_max"].append(float(jnp.max(jnp.abs(tau_smooth))))
-        telemetry["pitch"].append(pitch)
-        telemetry["roll"].append(roll)
-        telemetry["yaw"].append(yaw)
+        # Euler angles (world-frame, for reference only)
+        telemetry["euler_roll_x"].append(euler_roll_x)
+        telemetry["euler_pitch_y"].append(euler_pitch_y)
+        telemetry["euler_yaw_z"].append(euler_yaw_z)
+        # Robot-frame orientation (used for control and termination)
+        telemetry["robot_pitch_x"].append(robot_pitch_x)
+        telemetry["robot_roll_y"].append(robot_roll_y)
+        telemetry["robot_yaw_z"].append(robot_yaw_z)
         telemetry["roll_rate_rad_s"].append(float(centroidal_state_log.roll_rate))
         telemetry["pitch_rate_rad_s"].append(float(centroidal_state_log.pitch_rate))
         telemetry["yaw_rate_rad_s"].append(float(centroidal_state_log.yaw_rate))
@@ -1621,8 +1709,9 @@ def main():
             roll_sensed = float(roll_y_sensed) * 57.3
             print(
                 f"Step {step + 1}: h={com_height:.3f}m, "
-                f"pitch={pitch*57.3:.1f}deg (sensed={pitch_sensed:.1f}deg), "
-                f"roll={roll*57.3:.1f}deg (sensed={roll_sensed:.1f}deg), "
+                f"euler_pitch={euler_pitch_y*57.3:.1f}deg (sensed={pitch_sensed:.1f}deg), "
+                f"euler_roll={euler_roll_x*57.3:.1f}deg (sensed={roll_sensed:.1f}deg), "
+                f"robot_pitch_x={robot_pitch_x*57.3:.1f}deg, robot_roll_y={robot_roll_y*57.3:.1f}deg, "
                 f"gravity=[{obs[0]:.3f}, {obs[1]:.3f}, {obs[2]:.3f}]"
             )
 
@@ -1692,10 +1781,16 @@ def main():
         f"\nCoM height range: {min(telemetry['com_z']):.3f} - {max(telemetry['com_z']):.3f} m"
     )
     print(
-        f"Pitch range: {min(telemetry['pitch'])*57.3:.1f} - {max(telemetry['pitch'])*57.3:.1f} deg"
+        f"Robot pitch_x range: {min(telemetry['robot_pitch_x'])*57.3:.1f} - {max(telemetry['robot_pitch_x'])*57.3:.1f} deg"
     )
     print(
-        f"Roll range: {min(telemetry['roll'])*57.3:.1f} - {max(telemetry['roll'])*57.3:.1f} deg"
+        f"Robot roll_y range: {min(telemetry['robot_roll_y'])*57.3:.1f} - {max(telemetry['robot_roll_y'])*57.3:.1f} deg"
+    )
+    print(
+        f"Euler pitch_y range: {min(telemetry['euler_pitch_y'])*57.3:.1f} - {max(telemetry['euler_pitch_y'])*57.3:.1f} deg"
+    )
+    print(
+        f"Euler roll_x range: {min(telemetry['euler_roll_x'])*57.3:.1f} - {max(telemetry['euler_roll_x'])*57.3:.1f} deg"
     )
 
     print(f"\nMax torques (wheeled biped architecture):")
