@@ -52,6 +52,7 @@ from wheeled_biped.controllers.static_feedforward_controller import (
     StaticFeedforwardController,
     load_empirical_feedforward_from_telemetry,
 )
+from wheeled_biped.controllers.stage2b_roll_direct_controller import Stage2BRollDirectController
 from wheeled_biped.controllers.contact_jacobian import ContactJacobian
 
 
@@ -434,6 +435,11 @@ def main():
     parser.add_argument('--disable-wbc-correction', action='store_true', default=False, help='Disable WBC correction torque in Stage 2B ablation')
     parser.add_argument('--disable-hip-roll-centering', action='store_true', default=False, help='Disable hip-roll centering torque in Stage 2B ablation')
     parser.add_argument('--disable-wheel-balance', action='store_true', default=False, help='Disable wheel-balance torque in Stage 2B ablation')
+    # Stage 2B: Direct roll controller
+    parser.add_argument('--enable-stage2b-roll-direct', action='store_true', default=False, help='Enable Stage 2B direct roll controller (hip_roll PD only, no WBC contact path)')
+    parser.add_argument('--stage2b-roll-kp', type=float, default=100.0, help='Stage 2B direct roll kp gain (Nm/rad)')
+    parser.add_argument('--stage2b-roll-kd', type=float, default=20.0, help='Stage 2B direct roll kd gain (Nm/(rad/s))')
+    parser.add_argument('--stage2b-roll-tau-max', type=float, default=15.0, help='Stage 2B direct roll max hip_roll torque per side (Nm)')
     args = parser.parse_args()
 
     print("=" * 80)
@@ -626,6 +632,25 @@ def main():
         wbc_controller.set_correction_only_mode(True)
         print("  WBC distributor input mode: correction-only")
 
+    # Stage 2B: Direct roll controller (alternative to WBC contact path)
+    stage2b_roll_direct_controller = None
+    if args.enable_stage2b_roll_direct:
+        if not args.enable_stage2_static_posture_hold:
+            raise ValueError("Stage 2B direct roll requires Stage 2 static posture hold (--enable-stage2-static-posture-hold)")
+
+        stage2b_roll_direct_controller = Stage2BRollDirectController(
+            k_roll=args.stage2b_roll_kp,
+            k_roll_rate=args.stage2b_roll_kd,
+            k_roll_integral=0.0,
+            tau_hip_roll_max=args.stage2b_roll_tau_max,
+            max_roll_moment=args.stage2b_roll_tau_max * 2.0,
+        )
+        print(f"[STAGE 2B] Stage2BRollDirectController initialized:")
+        print(f"  k_roll: {args.stage2b_roll_kp} Nm/rad")
+        print(f"  k_roll_rate: {args.stage2b_roll_kd} Nm/(rad/s)")
+        print(f"  tau_hip_roll_max: {args.stage2b_roll_tau_max} Nm")
+        print(f"  Direct roll mode: WBC contact path disabled for roll")
+
     print("[OK] Controllers initialized (wheeled biped architecture)")
 
     # Initialize StaticBalanceController wrapper if enabled
@@ -708,6 +733,11 @@ def main():
     if static_posture_controller is not None:
         static_posture_controller.set_equilibrium_reference(equilibrium_joint_pos)
         print(f"[STAGE 2] StaticPostureHoldingController equilibrium reference set")
+
+    # Set equilibrium reference for Stage2B direct roll controller if enabled
+    if stage2b_roll_direct_controller is not None:
+        stage2b_roll_direct_controller.set_equilibrium_reference(float(roll_y_eq))
+        print(f"[STAGE 2B] Stage2BRollDirectController equilibrium reference set: {float(roll_y_eq)*57.3:.2f} deg")
 
     # Telemetry storage
     telemetry = {
@@ -1105,12 +1135,24 @@ def main():
             include_hip_roll = True
             include_wheel_balance = True
 
+        # Stage 2B: Compute direct roll controller torque if enabled
+        tau_stage2b_roll_direct = jnp.zeros(10)
+        roll_direct_diagnostics = {}
+        if stage2b_roll_direct_controller is not None:
+            tau_stage2b_roll_direct, roll_direct_diagnostics = stage2b_roll_direct_controller.compute_roll_torques(
+                roll_y=float(centroidal_state_control.body_roll_y),
+                roll_rate_y=float(centroidal_state_control.body_roll_rate_y),
+            )
+
         # Stage 2B joint ownership mask: WBC only controls hip_roll and wheels
         # Static feedforward/posture own hip_pitch/knee to prevent conflict
+        # If direct roll controller is enabled, WBC does not control hip_roll
         if static_posture_controller is not None and static_feedforward_controller is not None and include_wbc:
             tau_wbc_stage2b = jnp.zeros(10)
-            tau_wbc_stage2b = tau_wbc_stage2b.at[0].set(tau_wbc_scaled[0])  # l_hip_roll
-            tau_wbc_stage2b = tau_wbc_stage2b.at[5].set(tau_wbc_scaled[5])  # r_hip_roll
+            # Only include hip_roll from WBC if direct roll controller is NOT enabled
+            if stage2b_roll_direct_controller is None:
+                tau_wbc_stage2b = tau_wbc_stage2b.at[0].set(tau_wbc_scaled[0])  # l_hip_roll
+                tau_wbc_stage2b = tau_wbc_stage2b.at[5].set(tau_wbc_scaled[5])  # r_hip_roll
             tau_wbc_stage2b = tau_wbc_stage2b.at[4].set(tau_wbc_scaled[4])  # l_wheel
             tau_wbc_stage2b = tau_wbc_stage2b.at[9].set(tau_wbc_scaled[9])  # r_wheel
             tau_wbc_correction = tau_wbc_stage2b
@@ -1127,6 +1169,7 @@ def main():
                 tau_static_feedforward
                 + tau_static_posture
                 + tau_wbc_correction
+                + tau_stage2b_roll_direct
                 + tau_hip_roll_centering
                 + tau_wheel_balance
                 + tau_inverse_dynamics
@@ -1224,6 +1267,15 @@ def main():
                 # CoM and orientation state
                 com_z = float(centroidal_state_control.com_pos[2])
                 com_vz = float(centroidal_state_control.com_vel[2])
+
+                # Direct roll controller diagnostics
+                if stage2b_roll_direct_controller is not None:
+                    print(f"[STAGE2B ROLL DIRECT][step={step}] roll_error={roll_direct_diagnostics.get('roll_error', 0.0):.6f} rad ({roll_direct_diagnostics.get('roll_error', 0.0)*57.3:.2f} deg)")
+                    print(f"[STAGE2B ROLL DIRECT][step={step}] m_roll_cmd={roll_direct_diagnostics.get('m_roll_cmd', 0.0):+.2f} Nm")
+                    print(f"[STAGE2B ROLL DIRECT][step={step}] tau_hip_roll_left={roll_direct_diagnostics.get('tau_hip_roll_left', 0.0):+.2f} Nm")
+                    print(f"[STAGE2B ROLL DIRECT][step={step}] tau_hip_roll_right={roll_direct_diagnostics.get('tau_hip_roll_right', 0.0):+.2f} Nm")
+                    print(f"[STAGE2B ROLL DIRECT][step={step}] saturated={roll_direct_diagnostics.get('moment_saturated', False)}")
+                    print(f"[STAGE2B ROLL DIRECT][step={step}] tau_stage2b_roll_direct[0,5]={[float(tau_stage2b_roll_direct[0]), float(tau_stage2b_roll_direct[5])]}")
                 pitch_deg = float(pitch_x_rad) * 57.3
                 roll_deg = float(roll_y_rad) * 57.3
                 print(f"[STAGE2B OWNERSHIP][step={step}] com_z={com_z:.4f}m, com_vz={com_vz:.4f}m/s, pitch={pitch_deg:.2f}deg, roll={roll_deg:.2f}deg")
