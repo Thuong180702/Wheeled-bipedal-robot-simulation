@@ -925,6 +925,22 @@ def main():
         "sagittal_cp_error_y": [],
         "sagittal_tau_wheel_cmd": [],
         "sagittal_saturated": [],
+        # Control-time vs post-step orientation/rate telemetry
+        "control_pitch_x": [],
+        "control_pitch_rate_x": [],
+        "control_roll_y": [],
+        "control_roll_rate_y": [],
+        "log_pitch_x": [],
+        "log_pitch_rate_x": [],
+        "log_roll_y": [],
+        "log_roll_rate_y": [],
+        "fd_pitch_rate_x": [],
+        "fd_roll_rate_y": [],
+        "sagittal_controller_input_pitch_x": [],
+        "sagittal_controller_input_pitch_rate_x": [],
+        "sagittal_controller_input_cp_y": [],
+        "sagittal_controller_input_com_y": [],
+        "sagittal_controller_input_com_vy": [],
     }
     telemetry.update(build_step1_telemetry_template())
 
@@ -935,6 +951,10 @@ def main():
     n_substeps = int(control_dt / physics_dt)
     prev_control_com_pos = None
     tau_prev = jnp.array(mj_data.ctrl)  # Initialize previous torque from current control
+
+    # For finite-difference rate computation
+    prev_log_pitch_x = None
+    prev_log_roll_y = None
 
     print(
         f"\nRunning simulation for {max_steps} steps ({max_steps * control_dt:.1f} seconds)"
@@ -948,7 +968,7 @@ def main():
     height_cmd = 0.40  # Match equilibrium CoM height from compute_equilibrium_keyframe.py
 
     def simulation_step():
-        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev
+        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y
 
         if terminated or step >= max_steps:
             return False
@@ -1213,13 +1233,23 @@ def main():
         # Stage 2B: Compute sagittal wheel controller torque if enabled
         tau_stage2b_sagittal_wheel = jnp.zeros(10)
         sagittal_wheel_diagnostics = {}
+        sagittal_controller_input_pitch_x = 0.0
+        sagittal_controller_input_pitch_rate_x = 0.0
+        sagittal_controller_input_cp_y = 0.0
+        sagittal_controller_input_com_y = 0.0
+        sagittal_controller_input_com_vy = 0.0
         if stage2b_sagittal_wheel_controller is not None:
+            sagittal_controller_input_pitch_x = float(centroidal_state_control.body_pitch_x)
+            sagittal_controller_input_pitch_rate_x = float(centroidal_state_control.body_pitch_rate_x)
+            sagittal_controller_input_cp_y = float(centroidal_state_control.capture_point[1])
+            sagittal_controller_input_com_y = float(centroidal_state_control.com_pos[1])
+            sagittal_controller_input_com_vy = float(centroidal_state_control.com_vel[1])
             tau_stage2b_sagittal_wheel, sagittal_wheel_diagnostics = stage2b_sagittal_wheel_controller.compute_wheel_torques(
-                pitch_x=float(centroidal_state_control.body_pitch_x),
-                pitch_rate_x=float(centroidal_state_control.body_pitch_rate_x),
-                cp_y=float(centroidal_state_control.capture_point[1]),
-                com_y=float(centroidal_state_control.com_pos[1]),
-                com_vy=float(centroidal_state_control.com_vel[1]),
+                pitch_x=sagittal_controller_input_pitch_x,
+                pitch_rate_x=sagittal_controller_input_pitch_rate_x,
+                cp_y=sagittal_controller_input_cp_y,
+                com_y=sagittal_controller_input_com_y,
+                com_vy=sagittal_controller_input_com_vy,
             )
 
         # Stage 2B joint ownership mask: WBC only controls hip_roll and wheels
@@ -1570,6 +1600,37 @@ def main():
         telemetry["roll_y"].append(float(roll_y_rad))
         telemetry["roll_rate_y"].append(float(centroidal_state_control.roll_rate_y))
         telemetry["yaw_z"].append(float(centroidal_state_control.yaw_z))
+
+        # Control-time vs post-step orientation/rate telemetry
+        telemetry["control_pitch_x"].append(float(centroidal_state_control.body_pitch_x))
+        telemetry["control_pitch_rate_x"].append(float(centroidal_state_control.body_pitch_rate_x))
+        telemetry["control_roll_y"].append(float(centroidal_state_control.body_roll_y))
+        telemetry["control_roll_rate_y"].append(float(centroidal_state_control.body_roll_rate_y))
+        telemetry["log_pitch_x"].append(float(centroidal_state_log.body_pitch_x))
+        telemetry["log_pitch_rate_x"].append(float(centroidal_state_log.body_pitch_rate_x))
+        telemetry["log_roll_y"].append(float(centroidal_state_log.body_roll_y))
+        telemetry["log_roll_rate_y"].append(float(centroidal_state_log.body_roll_rate_y))
+
+        # Compute finite-difference rates from logged orientation
+        if prev_log_pitch_x is not None:
+            fd_pitch_rate_x = (float(centroidal_state_log.body_pitch_x) - prev_log_pitch_x) / control_dt
+            fd_roll_rate_y = (float(centroidal_state_log.body_roll_y) - prev_log_roll_y) / control_dt
+        else:
+            fd_pitch_rate_x = 0.0
+            fd_roll_rate_y = 0.0
+        telemetry["fd_pitch_rate_x"].append(fd_pitch_rate_x)
+        telemetry["fd_roll_rate_y"].append(fd_roll_rate_y)
+
+        # Update previous logged orientation for next step
+        prev_log_pitch_x = float(centroidal_state_log.body_pitch_x)
+        prev_log_roll_y = float(centroidal_state_log.body_roll_y)
+
+        # Sagittal controller input telemetry
+        telemetry["sagittal_controller_input_pitch_x"].append(sagittal_controller_input_pitch_x)
+        telemetry["sagittal_controller_input_pitch_rate_x"].append(sagittal_controller_input_pitch_rate_x)
+        telemetry["sagittal_controller_input_cp_y"].append(sagittal_controller_input_cp_y)
+        telemetry["sagittal_controller_input_com_y"].append(sagittal_controller_input_com_y)
+        telemetry["sagittal_controller_input_com_vy"].append(sagittal_controller_input_com_vy)
         telemetry["com_error_x"].append(float(qp_diagnostics.get("com_error_x", 0.0)))
         telemetry["com_error_y"].append(float(qp_diagnostics.get("com_error_y", 0.0)))
         telemetry["com_error_z"].append(float(qp_diagnostics.get("com_error_z", 0.0)))
