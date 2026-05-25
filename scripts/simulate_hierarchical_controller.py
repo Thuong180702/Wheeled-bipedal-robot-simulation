@@ -1105,7 +1105,18 @@ def main():
             include_hip_roll = True
             include_wheel_balance = True
 
-        tau_wbc_correction = tau_wbc_scaled if include_wbc else jnp.zeros(10)
+        # Stage 2B joint ownership mask: WBC only controls hip_roll and wheels
+        # Static feedforward/posture own hip_pitch/knee to prevent conflict
+        if static_posture_controller is not None and static_feedforward_controller is not None and include_wbc:
+            tau_wbc_stage2b = jnp.zeros(10)
+            tau_wbc_stage2b = tau_wbc_stage2b.at[0].set(tau_wbc_scaled[0])  # l_hip_roll
+            tau_wbc_stage2b = tau_wbc_stage2b.at[5].set(tau_wbc_scaled[5])  # r_hip_roll
+            tau_wbc_stage2b = tau_wbc_stage2b.at[4].set(tau_wbc_scaled[4])  # l_wheel
+            tau_wbc_stage2b = tau_wbc_stage2b.at[9].set(tau_wbc_scaled[9])  # r_wheel
+            tau_wbc_correction = tau_wbc_stage2b
+        else:
+            tau_wbc_correction = tau_wbc_scaled if include_wbc else jnp.zeros(10)
+
         tau_hip_roll_centering = tau_hip_roll_centering_raw if include_hip_roll else jnp.zeros(10)
         tau_wheel_balance = tau_wheel_balance_raw if include_wheel_balance else jnp.zeros(10)
 
@@ -1193,6 +1204,29 @@ def main():
                 f"per_actuator_wbc_authority={args.use_per_actuator_wbc_authority}, "
                 f"wbc_joint_scaling_enabled={not args.disable_wbc_joint_scale}"
             )
+
+            # Stage2B joint ownership diagnostics
+            if static_posture_controller is not None and static_feedforward_controller is not None:
+                support_joints = [2, 3, 7, 8]  # hip_pitch/knee
+                print(f"[STAGE2B OWNERSHIP][step={step}] tau_wbc_raw[2,3,7,8]={[float(tau_wbc_scaled[i]) for i in support_joints]}")
+                print(f"[STAGE2B OWNERSHIP][step={step}] tau_wbc_correction[2,3,7,8]={[float(tau_wbc_correction[i]) for i in support_joints]}")
+                print(f"[STAGE2B OWNERSHIP][step={step}] tau_static_feedforward[2,3,7,8]={[float(tau_static_feedforward[i]) for i in support_joints]}")
+                print(f"[STAGE2B OWNERSHIP][step={step}] tau_static_posture[2,3,7,8]={[float(tau_static_posture[i]) for i in support_joints]}")
+                print(f"[STAGE2B OWNERSHIP][step={step}] tau_total_raw[2,3,7,8]={[float(tau_total_raw[i]) for i in support_joints]}")
+
+                # Knee state diagnostics
+                knee_indices = [3, 8]  # l_knee, r_knee
+                knee_pos = [float(joint_pos[i]) for i in knee_indices]
+                knee_vel = [float(joint_vel[i]) for i in knee_indices]
+                knee_error = [float(joint_pos_error[i]) for i in knee_indices]
+                print(f"[STAGE2B OWNERSHIP][step={step}] knee_pos[3,8]={knee_pos}, knee_vel={knee_vel}, knee_error={knee_error}")
+
+                # CoM and orientation state
+                com_z = float(centroidal_state_control.com_pos[2])
+                com_vz = float(centroidal_state_control.com_vel[2])
+                pitch_deg = float(pitch_x_rad) * 57.3
+                roll_deg = float(roll_y_rad) * 57.3
+                print(f"[STAGE2B OWNERSHIP][step={step}] com_z={com_z:.4f}m, com_vz={com_vz:.4f}m/s, pitch={pitch_deg:.2f}deg, roll={roll_deg:.2f}deg")
 
         # Apply final torques
         mj_data.ctrl[:] = np.array(tau_smooth)
