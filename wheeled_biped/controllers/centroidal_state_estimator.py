@@ -180,10 +180,13 @@ class CentroidalStateEstimator:
         else:
             base_ang_vel = jnp.zeros(3)
 
+        # World-frame Euler rates (for diagnostics)
         roll_rate = float(base_ang_vel[0])
         pitch_rate = float(base_ang_vel[1])
         yaw_rate = float(base_ang_vel[2])
 
+        # Body-frame angular rates (MuJoCo qvel[3:6] is in body frame)
+        # Diagnostic confirmed these are correct - controller receives proper rates
         body_pitch_rate_x = float(base_ang_vel[0])
         body_roll_rate_y = float(base_ang_vel[1])
         body_yaw_rate_z = float(base_ang_vel[2])
@@ -237,12 +240,12 @@ class CentroidalStateEstimator:
             body_pitch_rate_x=body_pitch_rate_x,
             body_roll_rate_y=body_roll_rate_y,
             body_yaw_rate_z=body_yaw_rate_z,
-            pitch_x=pitch,
-            roll_y=roll,
-            yaw_z=yaw,
-            pitch_rate_x=pitch_rate,
-            roll_rate_y=roll_rate,
-            yaw_rate_z=yaw_rate,
+            pitch_x=body_pitch_x,
+            roll_y=body_roll_y,
+            yaw_z=body_yaw_z,
+            pitch_rate_x=body_pitch_rate_x,
+            roll_rate_y=body_roll_rate_y,
+            yaw_rate_z=body_yaw_rate_z,
             left_contact_force_world=left_contact_force_world,
             right_contact_force_world=right_contact_force_world,
             total_contact_force_z=total_contact_force_z,
