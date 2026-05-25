@@ -269,6 +269,10 @@ class IntegratedWBC:
         )
 
         solve_start = time.perf_counter()
+
+        # Choose distribution mode based on correction_only_mode
+        distribution_mode = "delta" if self.correction_only_mode else "absolute"
+
         f_left, f_right, tau_hip_roll, distribution_diagnostics = (
             self.force_distributor.distribute_wrench_contact_aware(
                 distributor_input_wrench,
@@ -277,6 +281,8 @@ class IntegratedWBC:
                 wheel_pos_left=wheel_pos_left,
                 wheel_pos_right=wheel_pos_right,
                 hip_roll_authority_scale=hip_roll_authority_scale,
+                distribution_mode=distribution_mode,
+                max_delta_fz=30.0,
             )
         )
         solve_time_ms = (time.perf_counter() - solve_start) * 1000.0

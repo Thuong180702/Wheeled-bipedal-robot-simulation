@@ -41,6 +41,8 @@ class SimpleForceDistributor:
         wheel_pos_right: Array | None = None,
         hip_roll_authority_scale: float = 1.0,
         recovery_mode: bool = False,
+        distribution_mode: str = "absolute",
+        max_delta_fz: float = 30.0,
     ) -> tuple[Array, Array, Array, dict]:
         """Distribute wrench to contact forces.
 
@@ -52,7 +54,9 @@ class SimpleForceDistributor:
             wheel_pos_right: Right wheel position relative to CoM
             hip_roll_authority_scale: Hip roll authority scaling
             recovery_mode: If True, apply min_recovery_force behavior for single-contact recovery.
-                          If False (default), zero wrench produces zero force.
+            distribution_mode: "absolute" (default) treats wrench as absolute contact force,
+                             "delta" treats wrench as correction/delta force
+            max_delta_fz: Maximum delta force per wheel in delta mode (N)
 
         Returns:
             Tuple of (f_left, f_right, tau_hip_roll, diagnostics)
@@ -60,6 +64,14 @@ class SimpleForceDistributor:
         Fx, Fy, Fz, Mx, My, Mz = desired_wrench
 
         _ = Mz
+
+        # For wheeled biped with side-by-side wheels, use y-coordinates for My (roll moment)
+        # My = y_l * fz_l + y_r * fz_r (lateral positions generate roll moment)
+        y_l = float(wheel_pos_left[1]) if wheel_pos_left is not None else 0.0
+        y_r = float(wheel_pos_right[1]) if wheel_pos_right is not None else 0.0
+        y_denom = y_l - y_r
+
+        # For pitch moment Mx, use x-coordinates (sagittal positions)
         x_l = float(wheel_pos_left[0]) if wheel_pos_left is not None else 0.0
         x_r = float(wheel_pos_right[0]) if wheel_pos_right is not None else 0.0
         x_denom = x_l - x_r
@@ -67,6 +79,65 @@ class SimpleForceDistributor:
         hip_roll_authority_scale = float(jnp.clip(hip_roll_authority_scale, 0.0, 1.0))
         tau_hip_roll = self._roll_moment_to_hip_roll_torque(My) * hip_roll_authority_scale
 
+        # DELTA DISTRIBUTION MODE: For correction-only WBC
+        if distribution_mode == "delta":
+            # Treat wrench as delta/correction force, not absolute contact force
+            # Allow negative delta forces (reducing baseline contact load)
+
+            wrench_norm = float(jnp.linalg.norm(desired_wrench))
+            is_near_zero = wrench_norm < 1.0
+
+            if is_near_zero:
+                return (
+                    jnp.zeros(3),
+                    jnp.zeros(3),
+                    jnp.zeros(2),
+                    {"feasible": True, "reason": "zero_correction_delta"},
+                )
+
+            active_count = int(left_contact) + int(right_contact)
+
+            if active_count == 2:
+                # Double contact: solve for delta forces that achieve correction wrench
+                # delta_fz_l + delta_fz_r = correction_Fz
+                # y_l * delta_fz_l + y_r * delta_fz_r = correction_My
+                if abs(float(y_denom)) < 1e-6:
+                    delta_fz_left = Fz / 2.0
+                    delta_fz_right = Fz / 2.0
+                else:
+                    delta_fz_left = (My - y_r * Fz) / y_denom
+                    delta_fz_right = Fz - delta_fz_left
+
+                # Clip delta forces by max_delta_fz (not liftoff threshold)
+                delta_fz_left = jnp.clip(delta_fz_left, -max_delta_fz, max_delta_fz)
+                delta_fz_right = jnp.clip(delta_fz_right, -max_delta_fz, max_delta_fz)
+
+                f_left = jnp.array([Fx / 2.0, Fy / 2.0, delta_fz_left])
+                f_right = jnp.array([Fx / 2.0, Fy / 2.0, delta_fz_right])
+
+                return f_left, f_right, tau_hip_roll, {"feasible": True, "reason": "delta_double_contact"}
+
+            elif active_count == 1:
+                # Single contact: apply correction to contact wheel only
+                if left_contact:
+                    f_left = jnp.array([Fx, Fy, Fz])
+                    f_right = jnp.zeros(3)
+                else:
+                    f_left = jnp.zeros(3)
+                    f_right = jnp.array([Fx, Fy, Fz])
+
+                return f_left, f_right, tau_hip_roll, {"feasible": True, "reason": "delta_single_contact"}
+
+            else:
+                # No contact: zero forces, preserve hip-roll torques
+                return (
+                    jnp.zeros(3),
+                    jnp.zeros(3),
+                    tau_hip_roll,
+                    {"feasible": True, "reason": "delta_no_contact"},
+                )
+
+        # ABSOLUTE DISTRIBUTION MODE: Original behavior for non-correction WBC
         # CRITICAL: In normal mode (recovery_mode=False), zero wrench must produce zero force
         # Check if wrench is near zero (correction-only mode at equilibrium)
         wrench_norm = float(jnp.linalg.norm(desired_wrench))
