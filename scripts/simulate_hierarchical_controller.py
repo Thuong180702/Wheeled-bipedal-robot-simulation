@@ -908,6 +908,23 @@ def main():
         "tau_static_posture": [],
         "saturation_flags": [],
         "rate_limit_flags": [],
+        # Wheel torque pipeline telemetry
+        "tau_stage2b_sagittal_wheel_l": [],
+        "tau_stage2b_sagittal_wheel_r": [],
+        "tau_total_raw_l_wheel": [],
+        "tau_total_raw_r_wheel": [],
+        "tau_total_clipped_l_wheel": [],
+        "tau_total_clipped_r_wheel": [],
+        "tau_smooth_l_wheel": [],
+        "tau_smooth_r_wheel": [],
+        "ctrl_l_wheel": [],
+        "ctrl_r_wheel": [],
+        "qvel_l_wheel": [],
+        "qvel_r_wheel": [],
+        "sagittal_pitch_error": [],
+        "sagittal_cp_error_y": [],
+        "sagittal_tau_wheel_cmd": [],
+        "sagittal_saturated": [],
     }
     telemetry.update(build_step1_telemetry_template())
 
@@ -1350,10 +1367,12 @@ def main():
                     print(f"[STAGE2B SAGITTAL WHEEL][step={step}] tau_wheel_cmd={sagittal_wheel_diagnostics.get('tau_wheel_cmd', 0.0):+.2f} Nm")
                     print(f"[STAGE2B SAGITTAL WHEEL][step={step}] saturated={sagittal_wheel_diagnostics.get('saturated', False)}")
                     print(f"[STAGE2B SAGITTAL WHEEL][step={step}] tau_stage2b_sagittal_wheel[4,9]={[float(tau_stage2b_sagittal_wheel[4]), float(tau_stage2b_sagittal_wheel[9])]}")
-                    print(f"[STAGE2B ROLL DIRECT][step={step}] tau_hip_roll_left={roll_direct_diagnostics.get('tau_hip_roll_left', 0.0):+.2f} Nm")
-                    print(f"[STAGE2B ROLL DIRECT][step={step}] tau_hip_roll_right={roll_direct_diagnostics.get('tau_hip_roll_right', 0.0):+.2f} Nm")
-                    print(f"[STAGE2B ROLL DIRECT][step={step}] saturated={roll_direct_diagnostics.get('moment_saturated', False)}")
-                    print(f"[STAGE2B ROLL DIRECT][step={step}] tau_stage2b_roll_direct[0,5]={[float(tau_stage2b_roll_direct[0]), float(tau_stage2b_roll_direct[5])]}")
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] tau_total_raw[4,9]={[float(tau_total_raw[4]), float(tau_total_raw[9])]}")
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] tau_static_feedforward[4,9]={[float(tau_static_feedforward[4]), float(tau_static_feedforward[9])]}")
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] tau_static_posture[4,9]={[float(tau_static_posture[4]), float(tau_static_posture[9])]}")
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] tau_wbc_correction[4,9]={[float(tau_wbc_correction[4]), float(tau_wbc_correction[9])]}")
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] tau_hip_roll_centering[4,9]={[float(tau_hip_roll_centering[4]), float(tau_hip_roll_centering[9])]}")
+                    print(f"[STAGE2B SAGITTAL WHEEL][step={step}] tau_wheel_balance[4,9]={[float(tau_wheel_balance[4]), float(tau_wheel_balance[9])]}")
                 pitch_deg = float(pitch_x_rad) * 57.3
                 roll_deg = float(roll_y_rad) * 57.3
                 print(f"[STAGE2B OWNERSHIP][step={step}] com_z={com_z:.4f}m, com_vz={com_vz:.4f}m/s, pitch={pitch_deg:.2f}deg, roll={roll_deg:.2f}deg")
@@ -1622,6 +1641,23 @@ def main():
         telemetry["knee_error_max"].append(step1_diagnostics["knee_error_max"])
         telemetry["wheel_balance_torque"].append(step1_diagnostics["wheel_balance_torque"])
         telemetry["control_mode"].append(step1_diagnostics["control_mode"])
+        # Wheel torque pipeline telemetry
+        telemetry["tau_stage2b_sagittal_wheel_l"].append(float(tau_stage2b_sagittal_wheel[4]))
+        telemetry["tau_stage2b_sagittal_wheel_r"].append(float(tau_stage2b_sagittal_wheel[9]))
+        telemetry["tau_total_raw_l_wheel"].append(float(tau_total_raw[4]))
+        telemetry["tau_total_raw_r_wheel"].append(float(tau_total_raw[9]))
+        telemetry["tau_total_clipped_l_wheel"].append(float(tau_total_clipped[4]))
+        telemetry["tau_total_clipped_r_wheel"].append(float(tau_total_clipped[9]))
+        telemetry["tau_smooth_l_wheel"].append(float(tau_smooth[4]))
+        telemetry["tau_smooth_r_wheel"].append(float(tau_smooth[9]))
+        telemetry["ctrl_l_wheel"].append(float(mj_data.ctrl[4]))
+        telemetry["ctrl_r_wheel"].append(float(mj_data.ctrl[9]))
+        telemetry["qvel_l_wheel"].append(float(mj_data.qvel[10]))  # l_wheel joint velocity
+        telemetry["qvel_r_wheel"].append(float(mj_data.qvel[15]))  # r_wheel joint velocity
+        telemetry["sagittal_pitch_error"].append(sagittal_wheel_diagnostics.get("pitch_error", 0.0))
+        telemetry["sagittal_cp_error_y"].append(sagittal_wheel_diagnostics.get("cp_error_y", 0.0))
+        telemetry["sagittal_tau_wheel_cmd"].append(sagittal_wheel_diagnostics.get("tau_wheel_cmd", 0.0))
+        telemetry["sagittal_saturated"].append(sagittal_wheel_diagnostics.get("saturated", False))
 
         if step < 20 and static_feedforward_controller is not None:
             idx = [2, 3, 7, 8]
