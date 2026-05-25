@@ -65,16 +65,17 @@ class SimpleForceDistributor:
 
         _ = Mz
 
-        # For wheeled biped with side-by-side wheels, use y-coordinates for My (roll moment)
-        # My = y_l * fz_l + y_r * fz_r (lateral positions generate roll moment)
-        y_l = float(wheel_pos_left[1]) if wheel_pos_left is not None else 0.0
-        y_r = float(wheel_pos_right[1]) if wheel_pos_right is not None else 0.0
-        y_denom = y_l - y_r
-
-        # For pitch moment Mx, use x-coordinates (sagittal positions)
+        # For wheeled biped with left/right wheels separated along X-axis (lateral)
+        # Cross product: M = r × F, so My = -x * Fz for vertical forces
+        # My = -x_l * fz_l - x_r * fz_r (roll moment from lateral force asymmetry)
+        # Mx = y_l * fz_l + y_r * fz_r (pitch moment from sagittal force asymmetry)
         x_l = float(wheel_pos_left[0]) if wheel_pos_left is not None else 0.0
         x_r = float(wheel_pos_right[0]) if wheel_pos_right is not None else 0.0
         x_denom = x_l - x_r
+
+        y_l = float(wheel_pos_left[1]) if wheel_pos_left is not None else 0.0
+        y_r = float(wheel_pos_right[1]) if wheel_pos_right is not None else 0.0
+        y_denom = y_l - y_r
 
         hip_roll_authority_scale = float(jnp.clip(hip_roll_authority_scale, 0.0, 1.0))
         tau_hip_roll = self._roll_moment_to_hip_roll_torque(My) * hip_roll_authority_scale
@@ -100,12 +101,12 @@ class SimpleForceDistributor:
             if active_count == 2:
                 # Double contact: solve for delta forces that achieve correction wrench
                 # delta_fz_l + delta_fz_r = correction_Fz
-                # y_l * delta_fz_l + y_r * delta_fz_r = correction_My
-                if abs(float(y_denom)) < 1e-6:
+                # -x_l * delta_fz_l - x_r * delta_fz_r = correction_My
+                if abs(float(x_denom)) < 1e-6:
                     delta_fz_left = Fz / 2.0
                     delta_fz_right = Fz / 2.0
                 else:
-                    delta_fz_left = (My - y_r * Fz) / y_denom
+                    delta_fz_left = (-My - x_r * Fz) / x_denom
                     delta_fz_right = Fz - delta_fz_left
 
                 # Clip delta forces by max_delta_fz (not liftoff threshold)

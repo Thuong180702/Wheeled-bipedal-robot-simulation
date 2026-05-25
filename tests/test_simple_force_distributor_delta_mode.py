@@ -23,8 +23,8 @@ def distributor():
 @pytest.fixture
 def wheel_positions():
     """Standard wheel positions relative to CoM."""
-    wheel_pos_left = jnp.array([0.0, 0.15, 0.0])  # 0.3m track width
-    wheel_pos_right = jnp.array([0.0, -0.15, 0.0])
+    wheel_pos_left = jnp.array([+0.15, 0.0, 0.0])  # 0.3m track width (X-axis lateral)
+    wheel_pos_right = jnp.array([-0.15, 0.0, 0.0])
     return wheel_pos_left, wheel_pos_right
 
 
@@ -116,12 +116,12 @@ def test_delta_mode_my_sign_consistency(distributor, wheel_positions):
         )
 
         # Compute achieved My from force asymmetry
-        # My = y_l * fz_l + y_r * fz_r (lateral positions generate roll moment)
-        y_l = float(wheel_pos_left[1])
-        y_r = float(wheel_pos_right[1])
+        # My = -x * Fz from cross product r × F
+        x_l = float(wheel_pos_left[0])
+        x_r = float(wheel_pos_right[0])
         fz_l = float(f_left[2])
         fz_r = float(f_right[2])
-        achieved_my = y_l * fz_l + y_r * fz_r
+        achieved_my = -x_l * fz_l - x_r * fz_r
 
         if expected_sign == "positive":
             assert achieved_my > 0, f"My={my_cmd} should produce positive achieved_my, got {achieved_my:.3f}"

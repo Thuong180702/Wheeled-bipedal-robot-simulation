@@ -675,36 +675,39 @@ def main():
 
     print("[OK] JIT compilation complete - controllers ready for real-time operation")
 
-    # Stage 2: Set equilibrium reference for StaticPostureHoldingController
+    # Stage 2: Set equilibrium reference for WBC and StaticPostureHoldingController
+    print("\n[STAGE 2] Setting equilibrium reference...")
+    # Capture equilibrium state after calibration
+    mujoco.mj_forward(mj_model, mj_data)
+    equilibrium_joint_pos = jnp.array(mj_data.qpos[7:17])
+
+    # Set equilibrium reference for correction-only WBC (always needed)
+    centroidal_state_eq, com_pos_eq = centroidal_estimator.estimate(jnp.zeros(42), mj_data, None)
+    centroidal_state_eq = capture_estimator.update(centroidal_state_eq)
+
+    base_body_id = 1
+    R_eq = np.array(mj_data.xmat[base_body_id]).reshape(3, 3)
+    gravity_world = np.array([0.0, 0.0, -gravity])
+    gravity_body_eq = R_eq.T @ gravity_world
+    pitch_x_eq, roll_y_eq = compute_orientation_from_gravity(jnp.array(gravity_body_eq))
+
+    wbc_controller.wrench_computer.set_equilibrium_reference(
+        com_pos=centroidal_state_eq.com_pos,
+        com_z=float(centroidal_state_eq.com_pos[2]),
+        pitch_x=float(pitch_x_eq),
+        roll_y=float(roll_y_eq),
+        capture_point=centroidal_state_eq.capture_point,
+        joint_pos=equilibrium_joint_pos,
+    )
+    print(f"[STAGE 2] WBC equilibrium reference set:")
+    print(f"  CoM: [{float(centroidal_state_eq.com_pos[0]):.6f}, {float(centroidal_state_eq.com_pos[1]):.6f}, {float(centroidal_state_eq.com_pos[2]):.6f}] m")
+    print(f"  Pitch: {float(pitch_x_eq)*57.3:.2f} deg, Roll: {float(roll_y_eq)*57.3:.2f} deg")
+    print(f"  Joint pos: {[f'{float(x):.3f}' for x in equilibrium_joint_pos]}")
+
+    # Set equilibrium reference for StaticPostureHoldingController if enabled
     if static_posture_controller is not None:
-        print("\n[STAGE 2] Setting equilibrium reference for StaticPostureHoldingController...")
-        # Capture equilibrium state after calibration
-        mujoco.mj_forward(mj_model, mj_data)
-        equilibrium_joint_pos = jnp.array(mj_data.qpos[7:17])
         static_posture_controller.set_equilibrium_reference(equilibrium_joint_pos)
-
-        # Also set equilibrium reference for correction-only WBC
-        centroidal_state_eq, com_pos_eq = centroidal_estimator.estimate(jnp.zeros(42), mj_data, None)
-        centroidal_state_eq = capture_estimator.update(centroidal_state_eq)
-
-        base_body_id = 1
-        R_eq = np.array(mj_data.xmat[base_body_id]).reshape(3, 3)
-        gravity_world = np.array([0.0, 0.0, -gravity])
-        gravity_body_eq = R_eq.T @ gravity_world
-        pitch_x_eq, roll_y_eq = compute_orientation_from_gravity(jnp.array(gravity_body_eq))
-
-        wbc_controller.wrench_computer.set_equilibrium_reference(
-            com_pos=centroidal_state_eq.com_pos,
-            com_z=float(centroidal_state_eq.com_pos[2]),
-            pitch_x=float(pitch_x_eq),
-            roll_y=float(roll_y_eq),
-            capture_point=centroidal_state_eq.capture_point,
-            joint_pos=equilibrium_joint_pos,
-        )
-        print(f"[STAGE 2] Equilibrium reference set:")
-        print(f"  CoM: [{float(centroidal_state_eq.com_pos[0]):.6f}, {float(centroidal_state_eq.com_pos[1]):.6f}, {float(centroidal_state_eq.com_pos[2]):.6f}] m")
-        print(f"  Pitch: {float(pitch_x_eq)*57.3:.2f} deg, Roll: {float(roll_y_eq)*57.3:.2f} deg")
-        print(f"  Joint pos: {[f'{float(x):.3f}' for x in equilibrium_joint_pos]}")
+        print(f"[STAGE 2] StaticPostureHoldingController equilibrium reference set")
 
     # Telemetry storage
     telemetry = {

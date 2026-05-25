@@ -200,10 +200,10 @@ class CentroidalWrenchComputer:
         # === Moment objectives (equilibrium-relative) ===
 
         # Roll stabilization: PID control (equilibrium-relative)
-        # P term: proportional to roll error from equilibrium
-        # D term: damping based on roll rate
-        # I term: accumulated error to eliminate bias/drift
-        # roll_y is rotation about body/world Y; correction must be applied on My channel.
+        # With My = -x*Fz cross product and X-axis lateral separation:
+        # Negative roll (left tilt) requires positive My (push right harder)
+        # Positive roll (right tilt) requires negative My (push left harder)
+        # Therefore: m_roll_y = -k_roll * roll_error (negative sign inverts)
         m_roll_y = -self.k_roll * roll_error - self.k_roll_rate * roll_rate_y - self.k_roll_integral * roll_integral
         m_roll_y = self._limit_roll_moment(m_roll_y)
 
