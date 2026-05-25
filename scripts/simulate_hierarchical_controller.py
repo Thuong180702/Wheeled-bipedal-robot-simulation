@@ -47,7 +47,28 @@ from wheeled_biped.controllers.posture_regularizer import (
     PostureRegularizerConfig,
 )
 from wheeled_biped.controllers.leg_position_controller import LegPositionController
+from wheeled_biped.controllers.static_posture_holding_controller import StaticPostureHoldingController
+from wheeled_biped.controllers.static_feedforward_controller import (
+    StaticFeedforwardController,
+    load_empirical_feedforward_from_telemetry,
+)
 from wheeled_biped.controllers.contact_jacobian import ContactJacobian
+
+
+STAGE2B_DEFAULT_EMPIRICAL_FEEDFORWARD = np.array([
+    0.0, 0.0, 0.0, -15.5, 0.0,
+    0.0, 0.0, 0.0, -15.8, 0.0,
+], dtype=np.float64)
+
+
+def get_stage2b_default_empirical_feedforward() -> np.ndarray:
+    return STAGE2B_DEFAULT_EMPIRICAL_FEEDFORWARD.copy()
+
+
+def resolve_stage2b_empirical_feedforward(telemetry_path: str | None) -> np.ndarray:
+    if telemetry_path is None:
+        return get_stage2b_default_empirical_feedforward()
+    return load_empirical_feedforward_from_telemetry(telemetry_path)
 
 
 def check_termination(qpos, com_height):
@@ -98,6 +119,54 @@ def measure_wheel_floor_contact(model, data, floor_geom_id, l_wheel_geom_id, r_w
     }
 
 
+def classify_floor_contacts(model, data, floor_geom_id, l_wheel_geom_id, r_wheel_geom_id):
+    left_wheel_floor_contact = False
+    right_wheel_floor_contact = False
+    non_wheel_floor_contacts = 0
+    total_wheel_floor_fz = 0.0
+    contact_dist_min = None
+    contact_dist_max = None
+
+    for i in range(data.ncon):
+        c = data.contact[i]
+        g1 = int(c.geom1)
+        g2 = int(c.geom2)
+        involves_floor = g1 == floor_geom_id or g2 == floor_geom_id
+        if not involves_floor:
+            continue
+
+        dist = float(c.dist)
+        if contact_dist_min is None:
+            contact_dist_min = dist
+            contact_dist_max = dist
+        else:
+            contact_dist_min = min(contact_dist_min, dist)
+            contact_dist_max = max(contact_dist_max, dist)
+
+        involves_l_wheel = g1 == l_wheel_geom_id or g2 == l_wheel_geom_id
+        involves_r_wheel = g1 == r_wheel_geom_id or g2 == r_wheel_geom_id
+
+        if involves_l_wheel or involves_r_wheel:
+            left_wheel_floor_contact = left_wheel_floor_contact or involves_l_wheel
+            right_wheel_floor_contact = right_wheel_floor_contact or involves_r_wheel
+            force_contact = np.zeros(6)
+            mujoco.mj_contactForce(model, data, i, force_contact)
+            frame = np.array(c.frame).reshape(3, 3)
+            force_world = frame.T @ force_contact[:3]
+            total_wheel_floor_fz += float(force_world[2])
+        else:
+            non_wheel_floor_contacts += 1
+
+    return {
+        "left_wheel_floor_contact": left_wheel_floor_contact,
+        "right_wheel_floor_contact": right_wheel_floor_contact,
+        "non_wheel_floor_contacts": non_wheel_floor_contacts,
+        "total_wheel_floor_fz": total_wheel_floor_fz,
+        "contact_dist_min": contact_dist_min if contact_dist_min is not None else 0.0,
+        "contact_dist_max": contact_dist_max if contact_dist_max is not None else 0.0,
+    }
+
+
 def calibrate_root_z_for_wheel_floor_contact(model, data, target_dist=-5e-4, max_iters=5):
     floor_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
     l_wheel_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "l_wheel_collision")
@@ -128,6 +197,26 @@ def calibrate_root_z_for_wheel_floor_contact(model, data, target_dist=-5e-4, max
     }
 
 
+def build_stage2b_drift_audit_field_names():
+    return [
+        "com_z", "com_vz", "pitch_x", "pitch_rate_x", "roll_y", "roll_rate_y", "yaw_z",
+        "com_x", "com_y", "cp_x", "cp_y",
+        "com_error_x", "com_error_y", "com_error_z",
+        "cp_error_x", "cp_error_y",
+        "pitch_error", "roll_error", "height_error",
+        "left_wheel_floor_contact", "right_wheel_floor_contact", "total_wheel_floor_fz",
+        "left_fz_actual", "right_fz_actual", "fz_asymmetry_actual",
+        "non_wheel_floor_contacts", "contact_dist_min", "contact_dist_max",
+        "correction_wrench_Fx", "correction_wrench_Fy", "correction_wrench_Fz",
+        "correction_wrench_Mx", "correction_wrench_My", "correction_wrench_Mz",
+        "correction_Fy_com", "correction_Fy_cp", "correction_Fy_pitch", "correction_My_roll",
+        "distributor_f_left", "distributor_f_right", "distributor_fz_sum",
+        "tau_hip_roll", "tau_contact", "tau_wbc_correction", "tau_wbc_after_authority_clip",
+        "tau_static_feedforward", "tau_static_posture", "tau_total_raw", "tau_final",
+        "saturation_flags", "rate_limit_flags",
+    ]
+
+
 def build_step1_telemetry_template():
     return {
         "tau_wbc_per_joint": [],
@@ -136,6 +225,7 @@ def build_step1_telemetry_template():
         "tau_posture_per_joint": [],
         "tau_leg_position_per_joint": [],
         "tau_wheel_balance_per_joint": [],
+        "tau_static_feedforward_per_joint": [],  # Stage 2B
         "tau_total_per_joint": [],
         "tau_total_raw_per_joint": [],
         "tau_total_clipped_per_joint": [],
@@ -152,6 +242,8 @@ def build_step1_telemetry_template():
         "knee_error_max": [],
         "wheel_balance_torque": [],
         "control_mode": [],
+        "feedforward_enabled": [],  # Stage 2B
+        "feedforward_norm": [],  # Stage 2B
     }
 
 
@@ -314,6 +406,34 @@ def main():
         default=False,
         help='Enable StaticBalanceController wrapper to cancel WBC equilibrium bias'
     )
+    parser.add_argument(
+        '--enable-stage2-static-posture-hold',
+        action='store_true',
+        default=False,
+        help='Enable Stage 2: StaticPostureHoldingController + correction-only WBC'
+    )
+    parser.add_argument('--static-kp-hip-pitch', type=float, default=30.0, help='StaticPostureHoldingController kp_hip_pitch')
+    parser.add_argument('--static-kd-hip-pitch', type=float, default=4.0, help='StaticPostureHoldingController kd_hip_pitch')
+    parser.add_argument('--static-kp-knee', type=float, default=40.0, help='StaticPostureHoldingController kp_knee')
+    parser.add_argument('--static-kd-knee', type=float, default=5.0, help='StaticPostureHoldingController kd_knee')
+    parser.add_argument('--static-max-torque-hip-pitch', type=float, default=30.0, help='StaticPostureHoldingController max_torque_hip_pitch')
+    parser.add_argument('--static-max-torque-knee', type=float, default=30.0, help='StaticPostureHoldingController max_torque_knee')
+    # Stage 2B: Gravity feedforward compensation
+    parser.add_argument(
+        '--enable-stage2b-gravity-feedforward',
+        action='store_true',
+        default=False,
+        help='Enable Stage 2B: StaticFeedforwardController for gravity compensation (validated: +empirical, scale=0.5, knee, instant)'
+    )
+    parser.add_argument('--stage2b-feedforward-scale', type=float, default=0.5, help='Stage 2B feedforward scale factor (default: 0.5, validated)')
+    parser.add_argument('--stage2b-feedforward-joint-group', type=str, default='knee', choices=['knee', 'hip_pitch', 'hip_pitch_knee'], help='Stage 2B feedforward joint group (default: knee, validated)')
+    parser.add_argument('--stage2b-feedforward-ramp', type=str, default='instant', choices=['instant', 'short', 'medium'], help='Stage 2B feedforward ramp mode (default: instant, validated)')
+    parser.add_argument('--stage2b-feedforward-sign', type=str, default='positive', choices=['positive', 'negative'], help='Stage 2B feedforward sign (default: positive, validated)')
+    parser.add_argument('--stage2b-feedforward-telemetry-path', type=str, default=None, help='Optional telemetry CSV path to override fixed Stage 2B empirical feedforward default')
+    parser.add_argument('--stage2b-ablation-mode', type=str, default='E', choices=['A', 'B', 'C', 'D', 'E'], help='Stage 2B ablation mode: A=ff+posture, B=+wbc, C=+hip_roll_centering, D=+wheel_balance, E=full stack')
+    parser.add_argument('--disable-wbc-correction', action='store_true', default=False, help='Disable WBC correction torque in Stage 2B ablation')
+    parser.add_argument('--disable-hip-roll-centering', action='store_true', default=False, help='Disable hip-roll centering torque in Stage 2B ablation')
+    parser.add_argument('--disable-wheel-balance', action='store_true', default=False, help='Disable wheel-balance torque in Stage 2B ablation')
     args = parser.parse_args()
 
     print("=" * 80)
@@ -455,6 +575,57 @@ def main():
         max_torque=25.0,
     )
 
+    # Stage 2: Static posture holding controller for correction-only WBC
+    static_posture_controller = None
+    if args.enable_stage2_static_posture_hold:
+        static_posture_controller = StaticPostureHoldingController(
+            kp_hip_roll=5.0,
+            kd_hip_roll=1.0,
+            kp_hip_yaw=5.0,
+            kd_hip_yaw=1.0,
+            kp_hip_pitch=args.static_kp_hip_pitch,
+            kd_hip_pitch=args.static_kd_hip_pitch,
+            kp_knee=args.static_kp_knee,
+            kd_knee=args.static_kd_knee,
+            max_torque_hip_roll=15.0,
+            max_torque_hip_yaw=15.0,
+            max_torque_hip_pitch=args.static_max_torque_hip_pitch,
+            max_torque_knee=args.static_max_torque_knee,
+        )
+        print(f"[STAGE 2] StaticPostureHoldingController initialized with gains:")
+        print(f"  kp_hip_pitch={args.static_kp_hip_pitch}, kd_hip_pitch={args.static_kd_hip_pitch}")
+        print(f"  kp_knee={args.static_kp_knee}, kd_knee={args.static_kd_knee}")
+
+    # Stage 2B: Static feedforward controller for gravity compensation
+    static_feedforward_controller = None
+    wbc_controller.set_correction_only_mode(False)
+    if args.enable_stage2b_gravity_feedforward:
+        if not args.enable_stage2_static_posture_hold:
+            raise ValueError("Stage 2B feedforward requires Stage 2 static posture hold (--enable-stage2-static-posture-hold)")
+
+        empirical_ff = resolve_stage2b_empirical_feedforward(args.stage2b_feedforward_telemetry_path)
+
+        static_feedforward_controller = StaticFeedforwardController(
+            empirical_feedforward=empirical_ff,
+            scale=args.stage2b_feedforward_scale,
+            joint_group=args.stage2b_feedforward_joint_group,
+            ramp_mode=args.stage2b_feedforward_ramp,
+            sign=args.stage2b_feedforward_sign,
+        )
+        print(f"[STAGE 2B] StaticFeedforwardController initialized:")
+        if args.stage2b_feedforward_telemetry_path is None:
+            print("  Empirical feedforward source: fixed validated default")
+        else:
+            print(f"  Empirical feedforward source: telemetry override ({Path(args.stage2b_feedforward_telemetry_path).name})")
+        print(f"  Sign: {args.stage2b_feedforward_sign}")
+        print(f"  Scale: {args.stage2b_feedforward_scale}")
+        print(f"  Joint group: {args.stage2b_feedforward_joint_group}")
+        print(f"  Ramp mode: {args.stage2b_feedforward_ramp}")
+        print(f"  Ablation mode: {args.stage2b_ablation_mode}")
+        print(f"  Effective feedforward (knee): {empirical_ff[3] * args.stage2b_feedforward_scale:.2f}, {empirical_ff[8] * args.stage2b_feedforward_scale:.2f} Nm")
+        wbc_controller.set_correction_only_mode(True)
+        print("  WBC distributor input mode: correction-only")
+
     print("[OK] Controllers initialized (wheeled biped architecture)")
 
     # Initialize StaticBalanceController wrapper if enabled
@@ -503,6 +674,37 @@ def main():
     _ = compute_posture_jit(dummy_joint_pos, 0.5, 0.1, 0.55)
 
     print("[OK] JIT compilation complete - controllers ready for real-time operation")
+
+    # Stage 2: Set equilibrium reference for StaticPostureHoldingController
+    if static_posture_controller is not None:
+        print("\n[STAGE 2] Setting equilibrium reference for StaticPostureHoldingController...")
+        # Capture equilibrium state after calibration
+        mujoco.mj_forward(mj_model, mj_data)
+        equilibrium_joint_pos = jnp.array(mj_data.qpos[7:17])
+        static_posture_controller.set_equilibrium_reference(equilibrium_joint_pos)
+
+        # Also set equilibrium reference for correction-only WBC
+        centroidal_state_eq, com_pos_eq = centroidal_estimator.estimate(jnp.zeros(42), mj_data, None)
+        centroidal_state_eq = capture_estimator.update(centroidal_state_eq)
+
+        base_body_id = 1
+        R_eq = np.array(mj_data.xmat[base_body_id]).reshape(3, 3)
+        gravity_world = np.array([0.0, 0.0, -gravity])
+        gravity_body_eq = R_eq.T @ gravity_world
+        pitch_x_eq, roll_y_eq = compute_orientation_from_gravity(jnp.array(gravity_body_eq))
+
+        wbc_controller.wrench_computer.set_equilibrium_reference(
+            com_pos=centroidal_state_eq.com_pos,
+            com_z=float(centroidal_state_eq.com_pos[2]),
+            pitch_x=float(pitch_x_eq),
+            roll_y=float(roll_y_eq),
+            capture_point=centroidal_state_eq.capture_point,
+            joint_pos=equilibrium_joint_pos,
+        )
+        print(f"[STAGE 2] Equilibrium reference set:")
+        print(f"  CoM: [{float(centroidal_state_eq.com_pos[0]):.6f}, {float(centroidal_state_eq.com_pos[1]):.6f}, {float(centroidal_state_eq.com_pos[2]):.6f}] m")
+        print(f"  Pitch: {float(pitch_x_eq)*57.3:.2f} deg, Roll: {float(roll_y_eq)*57.3:.2f} deg")
+        print(f"  Joint pos: {[f'{float(x):.3f}' for x in equilibrium_joint_pos]}")
 
     # Telemetry storage
     telemetry = {
@@ -577,6 +779,53 @@ def main():
         "tau_total_norm": [],  # L2 norm of total torques
         "tau_rate_unlimited": [],  # Torque rate before rate limiting (Nm/s)
         "tau_rate_limited": [],  # Torque rate after rate limiting (Nm/s)
+        # Stage 2B ablation diagnostics
+        "active_wheels": [],
+        "left_wheel_floor_contact": [],
+        "right_wheel_floor_contact": [],
+        "non_wheel_floor_contacts": [],
+        "total_wheel_floor_fz": [],
+        "correction_wrench_norm": [],
+        "correction_wrench_Fx": [],
+        "correction_wrench_Fy": [],
+        "correction_wrench_Fz": [],
+        "correction_wrench_Mx": [],
+        "correction_wrench_My": [],
+        "correction_wrench_Mz": [],
+        "ablation_mode": [],
+        # B500 drift audit fields
+        "pitch_x": [],
+        "pitch_rate_x": [],
+        "roll_y": [],
+        "roll_rate_y": [],
+        "yaw_z": [],
+        "com_error_x": [],
+        "com_error_y": [],
+        "com_error_z": [],
+        "cp_error_x": [],
+        "cp_error_y": [],
+        "pitch_error": [],
+        "roll_error": [],
+        "height_error": [],
+        "left_fz_actual": [],
+        "right_fz_actual": [],
+        "fz_asymmetry_actual": [],
+        "contact_dist_min": [],
+        "contact_dist_max": [],
+        "correction_Fy_com": [],
+        "correction_Fy_cp": [],
+        "correction_Fy_pitch": [],
+        "correction_My_roll": [],
+        "distributor_f_left": [],
+        "distributor_f_right": [],
+        "tau_hip_roll": [],
+        "tau_contact": [],
+        "tau_wbc_correction": [],
+        "tau_wbc_after_authority_clip": [],
+        "tau_static_feedforward": [],
+        "tau_static_posture": [],
+        "saturation_flags": [],
+        "rate_limit_flags": [],
     }
     telemetry.update(build_step1_telemetry_template())
 
@@ -785,7 +1034,33 @@ def main():
         # WBC is the primary torque path. Posture is secondary and budgeted.
         wbc_error_magnitude = float(jnp.linalg.norm(qp_diagnostics.get('wrench_error_norm', 0.0)))
         momentum_magnitude = 0.0  # Not using momentum coordinator in this test
-        tau_posture = compute_posture_jit(joint_pos, wbc_error_magnitude, momentum_magnitude, height_cmd)
+
+        # Stage 2: Use StaticPostureHoldingController if enabled, otherwise use PostureRegularizer
+        if static_posture_controller is not None:
+            # Stage 2: Static posture holding for correction-only WBC
+            tau_static_posture, posture_diag = static_posture_controller.compute_posture_holding_torque(
+                joint_pos, joint_vel
+            )
+            tau_posture = jnp.zeros(10)  # Disable PostureRegularizer
+            tau_leg_position = jnp.zeros(10)  # Disable LegPositionController
+
+            # Stage 2B: Compute feedforward torque if enabled
+            if static_feedforward_controller is not None:
+                tau_static_feedforward = jnp.array(static_feedforward_controller.compute_feedforward())
+            else:
+                tau_static_feedforward = jnp.zeros(10)
+
+            if step < 10:
+                print(f"[STAGE 2][step={step}] tau_static_posture={np.array(tau_static_posture)}")
+                print(f"[STAGE 2][step={step}] posture_error_norm={posture_diag['posture_error_norm']:.6f}")
+                if static_feedforward_controller is not None:
+                    print(f"[STAGE 2B][step={step}] tau_static_feedforward={np.array(tau_static_feedforward)}")
+        else:
+            # Legacy path: PostureRegularizer
+            tau_posture = compute_posture_jit(joint_pos, wbc_error_magnitude, momentum_magnitude, height_cmd)
+            tau_static_posture = jnp.zeros(10)
+            tau_static_feedforward = jnp.zeros(10)
+
         tau_wheel_secondary = jnp.zeros(10)
         RAW_INVERSE_DYNAMICS_DIAGNOSTIC_ENABLED = False
         if RAW_INVERSE_DYNAMICS_DIAGNOSTIC_ENABLED:
@@ -796,40 +1071,69 @@ def main():
 
         target_joint_pos = posture_regularizer.compute_target_posture_from_height(height_cmd)
         joint_pos_error = target_joint_pos - joint_pos
-        tau_hip_roll_centering = compute_step4_hip_roll_centering(joint_pos, joint_vel)
+        tau_hip_roll_centering_raw = compute_step4_hip_roll_centering(joint_pos, joint_vel)
         # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
         capture_point_error_y = float(centroidal_state_control.capture_point[1] - centroidal_state_control.com_pos[1])
         if args.enable_secondary_wheel_balance:
-            tau_wheel_balance = compute_step5_wheel_balance(
+            tau_wheel_balance_raw = compute_step5_wheel_balance(
                 pitch_x_rad,
                 centroidal_state_control.pitch_rate,
                 capture_point_error_y,
             )
         else:
-            tau_wheel_balance = jnp.zeros(10)
+            tau_wheel_balance_raw = jnp.zeros(10)
         if args.disable_wbc_joint_scale:
             wbc_joint_scale = jnp.ones(10)
         else:
             wbc_joint_scale = build_step6_wbc_joint_scale(control_mode)
 
-        torque_components = compute_step2_torque_components(
-            leg_position_controller,
-            joint_pos,
-            joint_vel,
-            target_joint_pos,
-            tau_wbc,
-            tau_posture,
-            tau_wheel_secondary,
-            tau_inverse_dynamics,
-            wbc_joint_scale=wbc_joint_scale,
-            tau_hip_roll_centering=tau_hip_roll_centering,
-            tau_wheel_balance=tau_wheel_balance,
-        )
-        tau_wbc_scaled = torque_components["tau_wbc_scaled"]
-        tau_hip_roll_centering = torque_components["tau_hip_roll_centering"]
-        tau_leg_position = torque_components["tau_leg_position"]
-        tau_wheel_balance = torque_components["tau_wheel_balance"]
-        tau_total_raw = torque_components["tau_total_raw"]
+        # Compute scaled WBC torque (used in both paths)
+        tau_wbc_scaled = tau_wbc * wbc_joint_scale
+
+        # Stage 2B ablation gating for component isolation
+        if static_posture_controller is not None and static_feedforward_controller is not None:
+            mode = args.stage2b_ablation_mode
+            include_wbc = mode in ["B", "C", "D", "E"] and (not args.disable_wbc_correction)
+            include_hip_roll = mode in ["C", "E"] and (not args.disable_hip_roll_centering)
+            include_wheel_balance = mode in ["D", "E"] and (not args.disable_wheel_balance)
+        else:
+            mode = "LEGACY"
+            include_wbc = True
+            include_hip_roll = True
+            include_wheel_balance = True
+
+        tau_wbc_correction = tau_wbc_scaled if include_wbc else jnp.zeros(10)
+        tau_hip_roll_centering = tau_hip_roll_centering_raw if include_hip_roll else jnp.zeros(10)
+        tau_wheel_balance = tau_wheel_balance_raw if include_wheel_balance else jnp.zeros(10)
+
+        # Stage 2: Modify torque combination for static posture holding
+        if static_posture_controller is not None:
+            # A/B/C/D/E ablations over Stage 2B stack
+            tau_total_raw = (
+                tau_static_feedforward
+                + tau_static_posture
+                + tau_wbc_correction
+                + tau_hip_roll_centering
+                + tau_wheel_balance
+                + tau_inverse_dynamics
+            )
+            tau_leg_position = jnp.zeros(10)  # Not used in Stage 2
+        else:
+            # Legacy path: original torque combination
+            tau_leg_position = leg_position_controller.compute_leg_torques(
+                joint_pos,
+                joint_vel,
+                target_joint_pos,
+            )
+            tau_total_raw = (
+                tau_wbc_scaled
+                + tau_hip_roll_centering
+                + tau_leg_position
+                + tau_posture
+                + tau_wheel_secondary
+                + tau_wheel_balance
+                + tau_inverse_dynamics
+            )
         torque_limit = jnp.array(mj_model.actuator_ctrlrange[:, 1])
         tau_total_clipped = jnp.clip(tau_total_raw, -torque_limit, torque_limit)
         tau_saturation_rate = float(jnp.mean(jnp.abs(tau_total_raw) > torque_limit))
@@ -949,6 +1253,15 @@ def main():
                 f"log_com_vz={float(centroidal_state_log.com_vel[2]):+.6f}"
             )
 
+        # Contact classification from MuJoCo geoms
+        contact_class = classify_floor_contacts(
+            mj_model,
+            mj_data,
+            floor_geom_id,
+            l_wheel_geom_id,
+            r_wheel_geom_id,
+        )
+
         # Check termination
         com_height = float(centroidal_state_log.com_pos[2])
         terminated, termination_reason = check_termination(mj_data.qpos, com_height)
@@ -956,6 +1269,20 @@ def main():
         # Record telemetry using unified orientation computation
         quat = np.array(mj_data.qpos[3:7])  # [w, x, y, z]
         roll, pitch, yaw = compute_orientation_from_quaternion(quat)
+
+        # Wrench diagnostics with explicit separation:
+        # - full_wrench: baseline + correction
+        # - correction_wrench: equilibrium-relative correction only
+        full_wrench = np.array([
+            qp_diagnostics["desired_wrench_Fx"],
+            qp_diagnostics["desired_wrench_Fy"],
+            qp_diagnostics["desired_wrench_Fz"],
+            qp_diagnostics["desired_wrench_Mx"],
+            qp_diagnostics["desired_wrench_My"],
+            qp_diagnostics["desired_wrench_Mz"],
+        ])
+        full_wrench_norm = float(np.linalg.norm(full_wrench))
+        correction_wrench_norm = float(qp_diagnostics.get("correction_wrench_norm", full_wrench_norm))
 
         telemetry["time"].append(step * control_dt)
         telemetry["mass_kg"].append(robot_mass)
@@ -973,7 +1300,11 @@ def main():
         wheel_indices = jnp.array([4, 9])
         tau_wheel_actual = jnp.max(jnp.abs(tau_smooth[wheel_indices]))
         telemetry["tau_wheel_actual_max"].append(float(tau_wheel_actual))
-        telemetry["tau_posture_max"].append(float(jnp.max(jnp.abs(tau_posture))))
+        # Stage 2: Log max of tau_static_posture if enabled, otherwise tau_posture
+        if static_posture_controller is not None:
+            telemetry["tau_posture_max"].append(float(jnp.max(jnp.abs(tau_static_posture))))
+        else:
+            telemetry["tau_posture_max"].append(float(jnp.max(jnp.abs(tau_posture))))
         telemetry["tau_total_max"].append(float(jnp.max(jnp.abs(tau_smooth))))
         telemetry["pitch"].append(pitch)
         telemetry["roll"].append(roll)
@@ -984,6 +1315,11 @@ def main():
         telemetry["height_cmd"].append(height_cmd)  # Log adaptive height command
         telemetry["left_contact_active"].append(bool(centroidal_state_log.left_wheel_contact))
         telemetry["right_contact_active"].append(bool(centroidal_state_log.right_wheel_contact))
+        telemetry["active_wheels"].append(int(active_wheels))
+        telemetry["left_wheel_floor_contact"].append(bool(contact_class["left_wheel_floor_contact"]))
+        telemetry["right_wheel_floor_contact"].append(bool(contact_class["right_wheel_floor_contact"]))
+        telemetry["non_wheel_floor_contacts"].append(int(contact_class["non_wheel_floor_contacts"]))
+        telemetry["total_wheel_floor_fz"].append(float(contact_class["total_wheel_floor_fz"]))
         telemetry["n_contacts"].append(int(mj_data.ncon))
         telemetry["contact_force_valid"].append(bool(centroidal_state_log.contact_force_valid))
         telemetry["left_contact_force_world_x"].append(float(centroidal_state_log.left_contact_force_world[0]))
@@ -1024,6 +1360,50 @@ def main():
         telemetry["desired_wrench_Mx"].append(qp_diagnostics["desired_wrench_Mx"])
         telemetry["desired_wrench_My"].append(qp_diagnostics["desired_wrench_My"])
         telemetry["desired_wrench_Mz"].append(qp_diagnostics["desired_wrench_Mz"])
+        telemetry["correction_wrench_norm"].append(correction_wrench_norm)
+        telemetry["correction_wrench_Fx"].append(float(qp_diagnostics.get("correction_wrench_Fx", qp_diagnostics["desired_wrench_Fx"])))
+        telemetry["correction_wrench_Fy"].append(float(qp_diagnostics.get("correction_wrench_Fy", qp_diagnostics["desired_wrench_Fy"])))
+        telemetry["correction_wrench_Fz"].append(float(qp_diagnostics.get("correction_wrench_Fz", qp_diagnostics["desired_wrench_Fz"])))
+        telemetry["correction_wrench_Mx"].append(float(qp_diagnostics.get("correction_wrench_Mx", 0.0)))
+        telemetry["correction_wrench_My"].append(float(qp_diagnostics.get("correction_wrench_My", qp_diagnostics["desired_wrench_My"])))
+        telemetry["correction_wrench_Mz"].append(float(qp_diagnostics.get("correction_wrench_Mz", 0.0)))
+        telemetry["ablation_mode"].append(mode)
+        # B500 drift audit fields
+        telemetry["pitch_x"].append(float(pitch_x_rad))
+        telemetry["pitch_rate_x"].append(float(centroidal_state_log.pitch_rate_x))
+        telemetry["roll_y"].append(float(roll_y_rad))
+        telemetry["roll_rate_y"].append(float(centroidal_state_log.roll_rate_y))
+        telemetry["yaw_z"].append(float(centroidal_state_log.yaw_z))
+        telemetry["com_error_x"].append(float(qp_diagnostics.get("com_error_x", 0.0)))
+        telemetry["com_error_y"].append(float(qp_diagnostics.get("com_error_y", 0.0)))
+        telemetry["com_error_z"].append(float(qp_diagnostics.get("com_error_z", 0.0)))
+        telemetry["cp_error_x"].append(float(qp_diagnostics.get("cp_error_x", 0.0)))
+        telemetry["cp_error_y"].append(float(qp_diagnostics.get("cp_error_y", 0.0)))
+        telemetry["pitch_error"].append(float(qp_diagnostics.get("pitch_error", 0.0)))
+        telemetry["roll_error"].append(float(qp_diagnostics.get("roll_error", 0.0)))
+        telemetry["height_error"].append(float(qp_diagnostics.get("height_error", 0.0)))
+        telemetry["left_fz_actual"].append(float(centroidal_state_log.left_contact_force_world[2]))
+        telemetry["right_fz_actual"].append(float(centroidal_state_log.right_contact_force_world[2]))
+        telemetry["fz_asymmetry_actual"].append(float(centroidal_state_log.left_contact_force_world[2] - centroidal_state_log.right_contact_force_world[2]))
+        telemetry["contact_dist_min"].append(float(contact_class["contact_dist_min"]))
+        telemetry["contact_dist_max"].append(float(contact_class["contact_dist_max"]))
+        telemetry["correction_Fy_com"].append(float(qp_diagnostics.get("correction_Fy_com", 0.0)))
+        telemetry["correction_Fy_cp"].append(float(qp_diagnostics.get("correction_Fy_cp", 0.0)))
+        telemetry["correction_Fy_pitch"].append(float(qp_diagnostics.get("correction_Fy_pitch", 0.0)))
+        telemetry["correction_My_roll"].append(float(qp_diagnostics.get("correction_My_roll", 0.0)))
+        telemetry["distributor_f_left"].append(",".join(f"{x:.4f}" for x in np.array(qp_diagnostics.get("f_left", jnp.zeros(3)))))
+        telemetry["distributor_f_right"].append(",".join(f"{x:.4f}" for x in np.array(qp_diagnostics.get("f_right", jnp.zeros(3)))))
+        telemetry["tau_hip_roll"].append(",".join(f"{x:.4f}" for x in np.array(qp_diagnostics.get("tau_hip_roll", jnp.zeros(2)))))
+        tau_contact_val = jnp.zeros(10)  # Placeholder if not available
+        telemetry["tau_contact"].append(",".join(f"{x:.4f}" for x in np.array(tau_contact_val)))
+        telemetry["tau_wbc_correction"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc_correction)))
+        telemetry["tau_wbc_after_authority_clip"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc)))
+        telemetry["tau_static_feedforward"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_feedforward)))
+        telemetry["tau_static_posture"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_posture)))
+        sat_flags_vec = (np.abs(np.array(tau_total_raw)) > np.array(torque_limit)).astype(int)
+        rate_flags_vec = (np.abs(np.array(tau_rate_vec)) > max_torque_rate).astype(int)
+        telemetry["saturation_flags"].append(",".join(f"{x}" for x in sat_flags_vec))
+        telemetry["rate_limit_flags"].append(",".join(f"{x}" for x in rate_flags_vec))
         # Motor tracking diagnostics
         telemetry["target_joint_pos"].append(",".join(f"{x:.4f}" for x in np.array(target_joint_pos)))
         telemetry["joint_pos_error"].append(",".join(f"{x:.4f}" for x in np.array(joint_pos_error)))
@@ -1038,7 +1418,15 @@ def main():
         telemetry["tau_wbc_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc)))
         telemetry["tau_wbc_scaled_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc_scaled)))
         telemetry["tau_hip_roll_centering_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_hip_roll_centering)))
-        telemetry["tau_posture_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_posture)))
+        # Stage 2: Log tau_static_posture if enabled, otherwise tau_posture
+        if static_posture_controller is not None:
+            telemetry["tau_posture_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_posture)))
+        else:
+            telemetry["tau_posture_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_posture)))
+        # Stage 2B: Log tau_static_feedforward
+        telemetry["tau_static_feedforward_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_feedforward)))
+        telemetry["feedforward_enabled"].append(static_feedforward_controller is not None)
+        telemetry["feedforward_norm"].append(float(jnp.linalg.norm(tau_static_feedforward)))
         telemetry["tau_leg_position_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_leg_position)))
         telemetry["tau_wheel_balance_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wheel_balance)))
         telemetry["tau_total_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_smooth)))
@@ -1057,6 +1445,82 @@ def main():
         telemetry["knee_error_max"].append(step1_diagnostics["knee_error_max"])
         telemetry["wheel_balance_torque"].append(step1_diagnostics["wheel_balance_torque"])
         telemetry["control_mode"].append(step1_diagnostics["control_mode"])
+
+        if step < 20 and static_feedforward_controller is not None:
+            idx = [2, 3, 7, 8]
+            sat_flags = np.abs(np.array(tau_total_raw)) > np.array(torque_limit)
+            rate_flags = np.abs(np.array(tau_rate_vec)) > max_torque_rate
+            wc = wbc_controller.wrench_computer
+            eq_com = np.array(wc.equilibrium_com_pos) if wc.equilibrium_com_pos is not None else np.zeros(3)
+            eq_cp = np.array(wc.equilibrium_capture_point) if wc.equilibrium_capture_point is not None else np.zeros(2)
+            cur_com = np.array(centroidal_state_log.com_pos)
+            cur_cp = np.array(centroidal_state_log.capture_point)
+            com_err = cur_com - eq_com
+            cp_err = cur_cp - eq_cp
+
+            print(
+                f"[B0-AUDIT][step={step}][mode={mode}] "
+                f"tau_static_feedforward[2,3,7,8]={np.array(tau_static_feedforward)[idx]} "
+                f"tau_static_posture[2,3,7,8]={np.array(tau_static_posture)[idx]} "
+                f"tau_wbc_correction[2,3,7,8]={np.array(tau_wbc_correction)[idx]}"
+            )
+            print(
+                f"[B0-AUDIT][step={step}] "
+                f"tau_total_raw[2,3,7,8]={np.array(tau_total_raw)[idx]} "
+                f"tau_final[2,3,7,8]={np.array(tau_smooth)[idx]} "
+                f"sat_flags[2,3,7,8]={sat_flags[idx].astype(int)} "
+                f"rate_limit_flags[2,3,7,8]={rate_flags[idx].astype(int)}"
+            )
+            print(
+                f"[B0-AUDIT][step={step}] "
+                f"correction_wrench_norm={float(qp_diagnostics.get('correction_wrench_norm', correction_wrench_norm)):+.6f} "
+                f"correction_wrench_Fx={float(qp_diagnostics.get('correction_wrench_Fx', 0.0)):+.6f} "
+                f"correction_wrench_Fy={float(qp_diagnostics.get('correction_wrench_Fy', 0.0)):+.6f} "
+                f"correction_wrench_Fz={float(qp_diagnostics.get('correction_wrench_Fz', 0.0)):+.6f} "
+                f"correction_wrench_My={float(qp_diagnostics.get('correction_wrench_My', 0.0)):+.6f}"
+            )
+            print(
+                f"[B0-AUDIT][step={step}] "
+                f"correction_Fy_com={float(qp_diagnostics.get('correction_Fy_com', 0.0)):+.6f} "
+                f"correction_Fy_cp={float(qp_diagnostics.get('correction_Fy_cp', 0.0)):+.6f} "
+                f"correction_Fy_pitch={float(qp_diagnostics.get('correction_Fy_pitch', 0.0)):+.6f}"
+            )
+            print(
+                f"[B0-AUDIT][step={step}] "
+                f"baseline_fz={float(qp_diagnostics.get('baseline_fz', 0.0)):+.6f} "
+                f"distributor_input_wrench=[{float(qp_diagnostics.get('distributor_input_wrench_Fx', 0.0)):+.6f},"
+                f" {float(qp_diagnostics.get('distributor_input_wrench_Fy', 0.0)):+.6f},"
+                f" {float(qp_diagnostics.get('distributor_input_wrench_Fz', 0.0)):+.6f},"
+                f" {float(qp_diagnostics.get('distributor_input_wrench_Mx', 0.0)):+.6f},"
+                f" {float(qp_diagnostics.get('distributor_input_wrench_My', 0.0)):+.6f},"
+                f" {float(qp_diagnostics.get('distributor_input_wrench_Mz', 0.0)):+.6f}] "
+                f"distributor_fz_sum={float(qp_diagnostics.get('distributor_fz_sum', 0.0)):+.6f}"
+            )
+            print(
+                f"[B0-AUDIT][step={step}] "
+                f"force_feedback_scale={float(qp_diagnostics.get('force_scale', 1.0)):+.6f} "
+                f"force_feedback_enabled={bool(qp_diagnostics.get('force_feedback_enabled', False))} "
+                f"force_feedback_mode={qp_diagnostics.get('force_feedback_mode', 'unknown')}"
+            )
+            print(
+                f"[B0-AUDIT][step={step}] "
+                f"equilibrium_com_pos={eq_com.tolist()} current_com_pos={cur_com.tolist()} com_error={com_err.tolist()} "
+                f"equilibrium_capture_point={eq_cp.tolist()} current_capture_point={cur_cp.tolist()} cp_error={cp_err.tolist()}"
+            )
+            print(
+                f"[B0-AUDIT][step={step}] "
+                f"pitch_x={float(pitch_x_rad):+.6f} pitch_error={float(qp_diagnostics.get('pitch_error', 0.0)):+.6f} "
+                f"roll_y={float(roll_y_rad):+.6f} roll_error={float(qp_diagnostics.get('roll_error', 0.0)):+.6f} "
+                f"height_error={float(qp_diagnostics.get('height_error', 0.0)):+.6f} "
+                f"gravity_body=[{float(obs[0]):+.6f}, {float(obs[1]):+.6f}, {float(obs[2]):+.6f}]"
+            )
+            print(
+                f"[B0-AUDIT][step={step}] "
+                f"active_wheels={active_wheels} "
+                f"left_wheel_floor_contact={contact_class['left_wheel_floor_contact']} "
+                f"right_wheel_floor_contact={contact_class['right_wheel_floor_contact']} "
+                f"total_wheel_floor_fz={contact_class['total_wheel_floor_fz']:+.6f}"
+            )
 
         # Progress updates with orientation feedback
         if (step + 1) % 10 == 0 or step < 5:

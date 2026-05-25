@@ -10,6 +10,8 @@ from scripts.simulate_hierarchical_controller import (
     compute_step4_hip_roll_centering,
     compute_step5_wheel_balance,
     compute_step6_control_mode,
+    get_stage2b_default_empirical_feedforward,
+    resolve_stage2b_empirical_feedforward,
 )
 from wheeled_biped.controllers.leg_position_controller import LegPositionController
 
@@ -285,3 +287,21 @@ def test_step5_torque_components_include_wheel_balance():
 
     assert jnp.allclose(components["tau_wheel_balance"], tau_wheel_balance)
     assert jnp.allclose(components["tau_total_raw"], tau_wheel_balance)
+
+
+def test_stage2b_default_empirical_feedforward_is_fixed_validated_vector():
+    empirical_ff = get_stage2b_default_empirical_feedforward()
+
+    assert empirical_ff.shape == (10,)
+    assert jnp.isclose(empirical_ff[3], -15.5)
+    assert jnp.isclose(empirical_ff[8], -15.8)
+    assert jnp.isclose(empirical_ff[0], 0.0)
+    assert jnp.isclose(empirical_ff[9], 0.0)
+
+
+def test_stage2b_default_source_does_not_require_telemetry_file():
+    empirical_ff = resolve_stage2b_empirical_feedforward(telemetry_path=None)
+
+    assert empirical_ff.shape == (10,)
+    assert jnp.isclose(empirical_ff[3], -15.5)
+    assert jnp.isclose(empirical_ff[8], -15.8)

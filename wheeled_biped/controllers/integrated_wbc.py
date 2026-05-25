@@ -98,6 +98,7 @@ class IntegratedWBC:
         self.dt = dt
         self.roll_integral_limit = roll_integral_limit
         self.use_per_actuator_authority = use_per_actuator_authority
+        self.correction_only_mode = False
 
         # PID state: roll integral accumulator with anti-windup
         self.roll_integral = 0.0
@@ -134,6 +135,9 @@ class IntegratedWBC:
         tau = tau.at[0].set(tau_hip_roll[0])
         tau = tau.at[5].set(tau_hip_roll[1])
         return tau
+
+    def set_correction_only_mode(self, enabled: bool) -> None:
+        self.correction_only_mode = enabled
 
     def compute_wbc_torque(
         self,
@@ -195,14 +199,42 @@ class IntegratedWBC:
 
         print(f"[PID STATE] roll={roll_rad*180/3.14159:.2f}°, roll_integral={self.roll_integral:.4f}, integral_contribution={self.wrench_computer.k_roll_integral * self.roll_integral:.2f} Nm")
 
-        desired_force, desired_moment = self.wrench_computer.compute_desired_wrench_from_state(
-            state, height_cmd, self.roll_integral
+        desired_force, desired_moment, correction_breakdown = (
+            self.wrench_computer.compute_desired_wrench_from_state_with_breakdown(
+                state, height_cmd, self.roll_integral
+            )
         )
         desired_wrench = jnp.concatenate([desired_force, desired_moment])
 
+        correction_wrench = jnp.array([
+            correction_breakdown["correction_wrench_Fx"],
+            correction_breakdown["correction_wrench_Fy"],
+            correction_breakdown["correction_wrench_Fz"],
+            0.0,
+            correction_breakdown["correction_wrench_My"],
+            0.0,
+        ])
+
+        left_contact = bool(state.left_wheel_contact)
+        right_contact = bool(state.right_wheel_contact)
+        active_contacts = int(left_contact) + int(right_contact)
+
+        if self.correction_only_mode:
+            correction_wrench_limited = correction_wrench.at[1].set(jnp.clip(correction_wrench[1], -150.0, 150.0))
+            if active_contacts == 2:
+                distributor_input_wrench = correction_wrench_limited
+            elif active_contacts == 1:
+                distributor_input_wrench = correction_wrench_limited.at[4].set(0.0)
+            else:
+                # No wheel contact: zero forces but preserve My for hip-roll torques
+                # Hip-roll joints can stabilize even without wheel contact
+                distributor_input_wrench = jnp.array([0.0, 0.0, 0.0, 0.0, correction_wrench_limited[4], 0.0])
+        else:
+            distributor_input_wrench = desired_wrench
+
         # CRITICAL FIX: Extract sagittal force (Fy) for diagnostics
         # The contact Jacobian will convert this into wheel torques automatically
-        Fy_total = desired_wrench[1]  # Sagittal force (forward/backward)
+        Fy_total = distributor_input_wrench[1]  # Sagittal force (forward/backward)
 
         # Compute expected wheel torques for diagnostics (not used in control)
         wheel_radius = 0.06  # meters (from robot XML: wheel geom size="0.06 0.025")
@@ -239,7 +271,7 @@ class IntegratedWBC:
         solve_start = time.perf_counter()
         f_left, f_right, tau_hip_roll, distribution_diagnostics = (
             self.force_distributor.distribute_wrench_contact_aware(
-                desired_wrench,
+                distributor_input_wrench,
                 left_contact=bool(state.left_wheel_contact),
                 right_contact=bool(state.right_wheel_contact),
                 wheel_pos_left=wheel_pos_left,
@@ -278,11 +310,21 @@ class IntegratedWBC:
         # At t=0, mj_forward produces large penetration forces (143N) that are not real
         # After mj_step, actual forces drop to ~18N, but controller already reduced torque
         # This delays response during critical first timesteps when robot is unstable
-        if self.step_count < self.force_feedback_warmup_steps:
+        if self.correction_only_mode:
             force_scale = 1.0
+            force_feedback_mode = "disabled_correction_only"
+            print("[FORCE FEEDBACK] Disabled in correction-only mode, scale=1.0")
+        elif self.force_feedback_gain <= 0.0:
+            force_scale = 1.0
+            force_feedback_mode = "disabled"
+            print("[FORCE FEEDBACK] Disabled (gain <= 0), scale=1.0")
+        elif self.step_count < self.force_feedback_warmup_steps:
+            force_scale = 1.0
+            force_feedback_mode = "warmup"
             print(f"[FORCE FEEDBACK] Warmup step {self.step_count}/{self.force_feedback_warmup_steps}, scale=1.0 (no correction)")
         elif not contact_force_valid:
             force_scale = 1.0
+            force_feedback_mode = "invalid_contact"
             print("[FORCE FEEDBACK] Contact force invalid before first mj_step, scale=1.0 (no correction)")
         elif desired_fz_total > 1e-3:  # Avoid division by zero
             force_error_ratio = (actual_fz_total - desired_fz_total) / desired_fz_total
@@ -291,9 +333,11 @@ class IntegratedWBC:
             # force_scale > 1.0 means increase torque (actual < desired)
             force_scale = 1.0 - self.force_feedback_gain * force_error_ratio
             force_scale = float(jnp.clip(force_scale, 0.1, 2.0))  # Limit scale range
+            force_feedback_mode = "active"
             print(f"[FORCE FEEDBACK] Active: actual={actual_fz_total:.1f}N, desired={desired_fz_total:.1f}N, scale={force_scale:.3f}")
         else:
             force_scale = 1.0
+            force_feedback_mode = "neutral"
 
         self.step_count += 1
         tau_before_clip = tau_wbc_masked * force_scale
@@ -311,6 +355,8 @@ class IntegratedWBC:
         wrench_error = desired_wrench - achieved_wrench
         wrench_error_norm = float(jnp.linalg.norm(wrench_error))
 
+        baseline_fz = float(self.wrench_computer.robot_mass * self.wrench_computer.gravity)
+
         diagnostics = {
             "solve_time_ms": solve_time_ms,
             "wrench_error_norm": wrench_error_norm,
@@ -322,12 +368,31 @@ class IntegratedWBC:
             "desired_wrench_Mx": float(desired_wrench[3]),
             "desired_wrench_My": float(desired_wrench[4]),
             "desired_wrench_Mz": float(desired_wrench[5]),
+            "full_wrench_Fx": float(desired_wrench[0]),
+            "full_wrench_Fy": float(desired_wrench[1]),
+            "full_wrench_Fz": float(desired_wrench[2]),
+            "full_wrench_Mx": float(desired_wrench[3]),
+            "full_wrench_My": float(desired_wrench[4]),
+            "full_wrench_Mz": float(desired_wrench[5]),
+            "baseline_fz": baseline_fz,
+            "baseline_wrench_Fz": baseline_fz,
+            "distributor_input_wrench_Fx": float(distributor_input_wrench[0]),
+            "distributor_input_wrench_Fy": float(distributor_input_wrench[1]),
+            "distributor_input_wrench_Fz": float(distributor_input_wrench[2]),
+            "distributor_input_wrench_Mx": float(distributor_input_wrench[3]),
+            "distributor_input_wrench_My": float(distributor_input_wrench[4]),
+            "distributor_input_wrench_Mz": float(distributor_input_wrench[5]),
+            "distributor_fz_sum": float(f_left[2] + f_right[2]),
             "f_left": f_left,
             "f_right": f_right,
             "tau_hip_roll": tau_hip_roll,
             "actual_fz_total": actual_fz_total,
             "desired_fz_total": desired_fz_total,
             "force_scale": float(force_scale),
+            "force_feedback_mode": force_feedback_mode,
+            "force_feedback_enabled": bool(self.force_feedback_gain > 0.0 and not self.correction_only_mode),
+            "force_feedback_active": bool(force_feedback_mode == "active"),
+            "correction_only_mode": bool(self.correction_only_mode),
             "contact_force_valid": contact_force_valid,
             "left_contact_active": bool(state.left_wheel_contact),
             "right_contact_active": bool(state.right_wheel_contact),
@@ -344,6 +409,9 @@ class IntegratedWBC:
             "distributed_right_fz": float(f_right[2]),
             "roll_integral": self.roll_integral,
             "roll_integral_contribution_Nm": self.wrench_computer.k_roll_integral * self.roll_integral,
+
+            # Correction breakdown telemetry (Stage 1)
+            **correction_breakdown,
         }
 
         return tau_wbc, diagnostics

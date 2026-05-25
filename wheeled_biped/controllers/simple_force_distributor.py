@@ -40,7 +40,23 @@ class SimpleForceDistributor:
         wheel_pos_left: Array | None = None,
         wheel_pos_right: Array | None = None,
         hip_roll_authority_scale: float = 1.0,
+        recovery_mode: bool = False,
     ) -> tuple[Array, Array, Array, dict]:
+        """Distribute wrench to contact forces.
+
+        Args:
+            desired_wrench: (6,) [Fx, Fy, Fz, Mx, My, Mz]
+            left_contact: Left wheel in contact
+            right_contact: Right wheel in contact
+            wheel_pos_left: Left wheel position relative to CoM
+            wheel_pos_right: Right wheel position relative to CoM
+            hip_roll_authority_scale: Hip roll authority scaling
+            recovery_mode: If True, apply min_recovery_force behavior for single-contact recovery.
+                          If False (default), zero wrench produces zero force.
+
+        Returns:
+            Tuple of (f_left, f_right, tau_hip_roll, diagnostics)
+        """
         Fx, Fy, Fz, Mx, My, Mz = desired_wrench
 
         _ = Mz
@@ -49,7 +65,21 @@ class SimpleForceDistributor:
         x_denom = x_l - x_r
 
         hip_roll_authority_scale = float(jnp.clip(hip_roll_authority_scale, 0.0, 1.0))
-        tau_hip_roll = self._roll_moment_to_hip_roll_torque(Mx) * hip_roll_authority_scale
+        tau_hip_roll = self._roll_moment_to_hip_roll_torque(My) * hip_roll_authority_scale
+
+        # CRITICAL: In normal mode (recovery_mode=False), zero wrench must produce zero force
+        # Check if wrench is near zero (correction-only mode at equilibrium)
+        wrench_norm = float(jnp.linalg.norm(desired_wrench))
+        is_near_zero = wrench_norm < 1.0  # 1 N threshold
+
+        if is_near_zero and not recovery_mode:
+            # Zero correction wrench in normal mode → zero force
+            return (
+                jnp.zeros(3),
+                jnp.zeros(3),
+                jnp.zeros(2),
+                {"feasible": True, "reason": "zero_correction"},
+            )
 
         def split_fz_from_my(total_fz: Array, my_cmd: Array) -> tuple[Array, Array]:
             if abs(float(x_denom)) < 1e-6:
@@ -86,17 +116,28 @@ class SimpleForceDistributor:
             f_left = jnp.array([Fx / 2.0, Fy / 2.0, fz_left])
             f_right = jnp.array([Fx / 2.0, Fy / 2.0, fz_right])
         else:
-            recovery_roll_gain = 5.0
-            recovery_mx = Mx * recovery_roll_gain
-            min_recovery_force = 50.0
-            tau_hip_roll = self._roll_moment_to_hip_roll_torque(recovery_mx) * hip_roll_authority_scale
+            # Single contact case
+            if recovery_mode:
+                # Recovery mode: apply aggressive roll correction and min_recovery_force
+                recovery_roll_gain = 5.0
+                recovery_mx = Mx * recovery_roll_gain
+                min_recovery_force = 50.0
+                tau_hip_roll = self._roll_moment_to_hip_roll_torque(recovery_mx) * hip_roll_authority_scale
 
-            if left_contact:
-                f_left = jnp.array([Fx, Fy, Fz])
-                f_right = jnp.array([0.0, 0.0, min_recovery_force])
+                if left_contact:
+                    f_left = jnp.array([Fx, Fy, Fz])
+                    f_right = jnp.array([0.0, 0.0, min_recovery_force])
+                else:
+                    f_left = jnp.array([0.0, 0.0, min_recovery_force])
+                    f_right = jnp.array([Fx, Fy, Fz])
             else:
-                f_left = jnp.array([0.0, 0.0, min_recovery_force])
-                f_right = jnp.array([Fx, Fy, Fz])
+                # Normal mode: solve for wrench, non-contact wheel gets ZERO force
+                if left_contact:
+                    f_left = jnp.array([Fx, Fy, Fz])
+                    f_right = jnp.zeros(3)  # CRITICAL: No fake force on non-contact wheel
+                else:
+                    f_left = jnp.zeros(3)  # CRITICAL: No fake force on non-contact wheel
+                    f_right = jnp.array([Fx, Fy, Fz])
 
         return f_left, f_right, tau_hip_roll, {"feasible": True, "reason": "ok"}
 
