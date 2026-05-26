@@ -54,6 +54,7 @@ from wheeled_biped.controllers.static_feedforward_controller import (
 )
 from wheeled_biped.controllers.stage2b_roll_direct_controller import Stage2BRollDirectController
 from wheeled_biped.controllers.stage2b_sagittal_wheel_controller import Stage2BSagittalWheelController
+from wheeled_biped.controllers.stage2c_sagittal_state_feedback_controller import Stage2CSagittalStateFeedbackController
 from wheeled_biped.controllers.contact_jacobian import ContactJacobian
 
 
@@ -449,6 +450,15 @@ def main():
     parser.add_argument('--stage2b-sagittal-k-com-y', type=float, default=0.0, help='Stage 2B sagittal k_com_y gain (Nm/m)')
     parser.add_argument('--stage2b-sagittal-k-com-vy', type=float, default=2.0, help='Stage 2B sagittal k_com_vy gain (Nm/(m/s))')
     parser.add_argument('--stage2b-sagittal-max-tau', type=float, default=3.0, help='Stage 2B sagittal max wheel torque (Nm)')
+    # Stage 2C: Sagittal state-feedback controller with wheel velocity damping
+    parser.add_argument('--enable-stage2c-sagittal-state-feedback', action='store_true', default=False, help='Enable Stage 2C sagittal state-feedback controller (full state feedback with wheel velocity damping)')
+    parser.add_argument('--stage2c-k-pitch', type=float, default=20.0, help='Stage 2C k_pitch gain (Nm/rad)')
+    parser.add_argument('--stage2c-k-pitch-rate', type=float, default=6.0, help='Stage 2C k_pitch_rate gain (Nm/(rad/s))')
+    parser.add_argument('--stage2c-k-com-y', type=float, default=0.0, help='Stage 2C k_com_y gain (Nm/m)')
+    parser.add_argument('--stage2c-k-com-vy', type=float, default=0.0, help='Stage 2C k_com_vy gain (Nm/(m/s))')
+    parser.add_argument('--stage2c-k-cp-y', type=float, default=8.0, help='Stage 2C k_cp_y gain (Nm/m)')
+    parser.add_argument('--stage2c-k-wheel-vel', type=float, default=0.3, help='Stage 2C k_wheel_vel damping gain (Nm/(rad/s))')
+    parser.add_argument('--stage2c-max-tau', type=float, default=8.0, help='Stage 2C max wheel torque (Nm)')
     args = parser.parse_args()
 
     print("=" * 80)
@@ -683,6 +693,33 @@ def main():
         print(f"  max_tau_wheel: {args.stage2b_sagittal_max_tau} Nm")
         print(f"  Direct wheel mode: WBC wheel path disabled for pitch")
 
+    # Stage 2C: Sagittal state-feedback controller (alternative to Stage 2B)
+    stage2c_sagittal_state_feedback_controller = None
+    if args.enable_stage2c_sagittal_state_feedback:
+        if not args.enable_stage2_static_posture_hold:
+            raise ValueError("Stage 2C sagittal state-feedback requires Stage 2 static posture hold (--enable-stage2-static-posture-hold)")
+        if args.enable_stage2b_sagittal_wheel:
+            raise ValueError("Stage 2C and Stage 2B sagittal controllers are mutually exclusive")
+
+        stage2c_sagittal_state_feedback_controller = Stage2CSagittalStateFeedbackController(
+            k_pitch=args.stage2c_k_pitch,
+            k_pitch_rate=args.stage2c_k_pitch_rate,
+            k_com_y=args.stage2c_k_com_y,
+            k_com_vy=args.stage2c_k_com_vy,
+            k_cp_y=args.stage2c_k_cp_y,
+            k_wheel_vel=args.stage2c_k_wheel_vel,
+            max_tau_wheel=args.stage2c_max_tau,
+        )
+        print(f"[STAGE 2C] Stage2CSagittalStateFeedbackController initialized:")
+        print(f"  k_pitch: {args.stage2c_k_pitch} Nm/rad")
+        print(f"  k_pitch_rate: {args.stage2c_k_pitch_rate} Nm/(rad/s)")
+        print(f"  k_com_y: {args.stage2c_k_com_y} Nm/m")
+        print(f"  k_com_vy: {args.stage2c_k_com_vy} Nm/(m/s)")
+        print(f"  k_cp_y: {args.stage2c_k_cp_y} Nm/m")
+        print(f"  k_wheel_vel: {args.stage2c_k_wheel_vel} Nm/(rad/s)")
+        print(f"  max_tau_wheel: {args.stage2c_max_tau} Nm")
+        print(f"  State-feedback mode: Full state feedback with wheel velocity damping")
+
     print("[OK] Controllers initialized (wheeled biped architecture)")
 
     # Initialize StaticBalanceController wrapper if enabled
@@ -782,6 +819,17 @@ def main():
         print(f"  Pitch: {float(pitch_x_eq)*57.3:.2f} deg")
         print(f"  CP Y: {float(centroidal_state_eq.capture_point[1]):.6f} m")
         print(f"  CoM Y: {float(centroidal_state_eq.com_pos[1]):.6f} m")
+
+    if stage2c_sagittal_state_feedback_controller is not None:
+        stage2c_sagittal_state_feedback_controller.set_equilibrium_reference(
+            pitch_x=float(pitch_x_eq),
+            com_y=float(centroidal_state_eq.com_pos[1]),
+            cp_y=float(centroidal_state_eq.capture_point[1]),
+        )
+        print(f"[STAGE 2C] Stage2CSagittalStateFeedbackController equilibrium reference set:")
+        print(f"  Pitch: {float(pitch_x_eq)*57.3:.2f} deg")
+        print(f"  CoM Y: {float(centroidal_state_eq.com_pos[1]):.6f} m")
+        print(f"  CP Y: {float(centroidal_state_eq.capture_point[1]):.6f} m")
 
     # Telemetry storage
     telemetry = {
@@ -925,6 +973,24 @@ def main():
         "sagittal_cp_error_y": [],
         "sagittal_tau_wheel_cmd": [],
         "sagittal_saturated": [],
+        # Stage 2C: Sagittal state-feedback telemetry
+        "stage2c_pitch_error": [],
+        "stage2c_pitch_rate_x": [],
+        "stage2c_com_y_error": [],
+        "stage2c_com_vy": [],
+        "stage2c_cp_y_error": [],
+        "stage2c_wheel_vel_left": [],
+        "stage2c_wheel_vel_right": [],
+        "stage2c_wheel_vel_mean": [],
+        "stage2c_term_pitch": [],
+        "stage2c_term_pitch_rate": [],
+        "stage2c_term_com_y": [],
+        "stage2c_term_com_vy": [],
+        "stage2c_term_cp_y": [],
+        "stage2c_term_wheel_vel": [],
+        "stage2c_tau_wheel_raw": [],
+        "stage2c_tau_wheel_clipped": [],
+        "stage2c_saturated": [],
         # Control-time vs post-step orientation/rate telemetry
         "control_pitch_x": [],
         "control_pitch_rate_x": [],
@@ -1252,18 +1318,41 @@ def main():
                 com_vy=sagittal_controller_input_com_vy,
             )
 
+        # Stage 2C: Compute sagittal state-feedback controller torque if enabled
+        tau_stage2c_sagittal_state_feedback = jnp.zeros(10)
+        stage2c_diagnostics = {}
+        if stage2c_sagittal_state_feedback_controller is not None:
+            sagittal_controller_input_pitch_x = float(centroidal_state_control.body_pitch_x)
+            sagittal_controller_input_pitch_rate_x = float(centroidal_state_control.body_pitch_rate_x)
+            sagittal_controller_input_cp_y = float(centroidal_state_control.capture_point[1])
+            sagittal_controller_input_com_y = float(centroidal_state_control.com_pos[1])
+            sagittal_controller_input_com_vy = float(centroidal_state_control.com_vel[1])
+            # Extract wheel velocities from qvel: joint indices 4 (l_wheel) and 9 (r_wheel)
+            # qvel indices are offset by -1 from joint indices: qvel[10] = l_wheel, qvel[15] = r_wheel
+            wheel_vel_left = float(joint_vel[4])  # l_wheel velocity
+            wheel_vel_right = float(joint_vel[9])  # r_wheel velocity
+            tau_stage2c_sagittal_state_feedback, stage2c_diagnostics = stage2c_sagittal_state_feedback_controller.compute_wheel_torques(
+                pitch_x=sagittal_controller_input_pitch_x,
+                pitch_rate_x=sagittal_controller_input_pitch_rate_x,
+                com_y=sagittal_controller_input_com_y,
+                com_vy=sagittal_controller_input_com_vy,
+                cp_y=sagittal_controller_input_cp_y,
+                wheel_vel_left=wheel_vel_left,
+                wheel_vel_right=wheel_vel_right,
+            )
+
         # Stage 2B joint ownership mask: WBC only controls hip_roll and wheels
         # Static feedforward/posture own hip_pitch/knee to prevent conflict
         # If direct roll controller is enabled, WBC does not control hip_roll
-        # If sagittal wheel controller is enabled, WBC does not control wheels
+        # If sagittal wheel controller (Stage 2B or Stage 2C) is enabled, WBC does not control wheels
         if static_posture_controller is not None and static_feedforward_controller is not None and include_wbc:
             tau_wbc_stage2b = jnp.zeros(10)
             # Only include hip_roll from WBC if direct roll controller is NOT enabled
             if stage2b_roll_direct_controller is None:
                 tau_wbc_stage2b = tau_wbc_stage2b.at[0].set(tau_wbc_scaled[0])  # l_hip_roll
                 tau_wbc_stage2b = tau_wbc_stage2b.at[5].set(tau_wbc_scaled[5])  # r_hip_roll
-            # Only include wheels from WBC if sagittal wheel controller is NOT enabled
-            if stage2b_sagittal_wheel_controller is None:
+            # Only include wheels from WBC if sagittal controllers (Stage 2B or Stage 2C) are NOT enabled
+            if stage2b_sagittal_wheel_controller is None and stage2c_sagittal_state_feedback_controller is None:
                 tau_wbc_stage2b = tau_wbc_stage2b.at[4].set(tau_wbc_scaled[4])  # l_wheel
                 tau_wbc_stage2b = tau_wbc_stage2b.at[9].set(tau_wbc_scaled[9])  # r_wheel
             tau_wbc_correction = tau_wbc_stage2b
@@ -1275,13 +1364,14 @@ def main():
 
         # Stage 2: Modify torque combination for static posture holding
         if static_posture_controller is not None:
-            # A/B/C/D/E ablations over Stage 2B stack
+            # A/B/C/D/E ablations over Stage 2B/2C stack
             tau_total_raw = (
                 tau_static_feedforward
                 + tau_static_posture
                 + tau_wbc_correction
                 + tau_stage2b_roll_direct
                 + tau_stage2b_sagittal_wheel
+                + tau_stage2c_sagittal_state_feedback
                 + tau_hip_roll_centering
                 + tau_wheel_balance
                 + tau_inverse_dynamics
@@ -1719,6 +1809,24 @@ def main():
         telemetry["sagittal_cp_error_y"].append(sagittal_wheel_diagnostics.get("cp_error_y", 0.0))
         telemetry["sagittal_tau_wheel_cmd"].append(sagittal_wheel_diagnostics.get("tau_wheel_cmd", 0.0))
         telemetry["sagittal_saturated"].append(sagittal_wheel_diagnostics.get("saturated", False))
+        # Stage 2C telemetry
+        telemetry["stage2c_pitch_error"].append(stage2c_diagnostics.get("pitch_error", 0.0))
+        telemetry["stage2c_pitch_rate_x"].append(stage2c_diagnostics.get("pitch_rate_x", 0.0))
+        telemetry["stage2c_com_y_error"].append(stage2c_diagnostics.get("com_y_error", 0.0))
+        telemetry["stage2c_com_vy"].append(stage2c_diagnostics.get("com_vy", 0.0))
+        telemetry["stage2c_cp_y_error"].append(stage2c_diagnostics.get("cp_y_error", 0.0))
+        telemetry["stage2c_wheel_vel_left"].append(stage2c_diagnostics.get("wheel_vel_left", 0.0))
+        telemetry["stage2c_wheel_vel_right"].append(stage2c_diagnostics.get("wheel_vel_right", 0.0))
+        telemetry["stage2c_wheel_vel_mean"].append(stage2c_diagnostics.get("wheel_vel_mean", 0.0))
+        telemetry["stage2c_term_pitch"].append(stage2c_diagnostics.get("term_pitch", 0.0))
+        telemetry["stage2c_term_pitch_rate"].append(stage2c_diagnostics.get("term_pitch_rate", 0.0))
+        telemetry["stage2c_term_com_y"].append(stage2c_diagnostics.get("term_com_y", 0.0))
+        telemetry["stage2c_term_com_vy"].append(stage2c_diagnostics.get("term_com_vy", 0.0))
+        telemetry["stage2c_term_cp_y"].append(stage2c_diagnostics.get("term_cp_y", 0.0))
+        telemetry["stage2c_term_wheel_vel"].append(stage2c_diagnostics.get("term_wheel_vel", 0.0))
+        telemetry["stage2c_tau_wheel_raw"].append(stage2c_diagnostics.get("tau_wheel_raw", 0.0))
+        telemetry["stage2c_tau_wheel_clipped"].append(stage2c_diagnostics.get("tau_wheel_clipped", 0.0))
+        telemetry["stage2c_saturated"].append(stage2c_diagnostics.get("saturated", False))
 
         if step < 20 and static_feedforward_controller is not None:
             idx = [2, 3, 7, 8]
