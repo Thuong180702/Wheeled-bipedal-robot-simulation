@@ -124,11 +124,11 @@ def run_perturbation_experiment(
         joint_vel = mj_data.qvel[6:16]
 
         # Compute base control (static posture + feedforward)
-        tau_static_posture = static_posture_controller.compute_torques(joint_pos, joint_vel)
+        tau_static_posture, _ = static_posture_controller.compute_posture_holding_torque(joint_pos, joint_vel)
         tau_static_feedforward = static_feedforward_controller.compute_feedforward(step)
 
-        # Add wheel perturbation
-        tau_total = tau_static_posture + tau_static_feedforward
+        # Add wheel perturbation (convert JAX arrays to NumPy for in-place modification)
+        tau_total = np.array(tau_static_posture + tau_static_feedforward)
         tau_total[4] += wheel_torque_perturbation  # l_wheel
         tau_total[9] += wheel_torque_perturbation  # r_wheel
 
@@ -280,8 +280,12 @@ def main():
     static_posture_controller.set_equilibrium_reference(equilibrium_joint_pos)
 
     # Create state estimators
-    centroidal_config = CentroidalStateEstimatorConfig()
-    centroidal_estimator = CentroidalStateEstimator(mj_model, centroidal_config)
+    robot_mass = float(np.sum(mj_model.body_mass))
+    centroidal_config = CentroidalStateEstimatorConfig(
+        robot_mass=robot_mass,
+        torso_inertia=np.array([0.1, 0.1, 0.05])
+    )
+    centroidal_estimator = CentroidalStateEstimator(centroidal_config, mj_model)
 
     capture_config = CapturePointEstimatorConfig()
     capture_estimator = CapturePointEstimator(capture_config)
