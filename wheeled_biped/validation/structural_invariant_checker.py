@@ -35,10 +35,11 @@ class StructuralInvariantChecker:
     # Valid contact supervisor states
     VALID_CONTACT_STATES = {
         "DOUBLE_CONTACT",
-        "LEFT_CONTACT",
-        "RIGHT_CONTACT",
+        "SINGLE_LEFT",
+        "SINGLE_RIGHT",
         "NO_CONTACT",
         "UNKNOWN",
+        "INIT",
     }
 
     # Valid balance-core torque owners
@@ -47,7 +48,6 @@ class StructuralInvariantChecker:
         "support_feedforward",
         "sagittal_wheel_balance",
         "lateral_roll_balance",
-        "none",  # For joints not controlled by any component
     }
 
     def check_all(self, df: pd.DataFrame) -> Dict[str, str]:
