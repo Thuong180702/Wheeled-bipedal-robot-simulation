@@ -80,6 +80,14 @@ def test_robot_frame_y_rotation_is_body_roll_y_only():
     assert abs(float(body_roll_y) + 0.15) < 1e-3
 
 
+def test_robot_frame_z_rotation_is_body_yaw_z_only():
+    quat = quat_from_axis_angle([0.0, 0.0, 1.0], 0.12)
+    body_pitch_x, body_roll_y, body_yaw_z = compute_robot_frame_orientation_from_quaternion(quat)
+    assert abs(body_pitch_x) < 1e-6
+    assert abs(body_roll_y) < 1e-6
+    assert abs(body_yaw_z - 0.12) < 1e-6
+
+
 def test_robot_frame_gravity_and_quaternion_paths_agree():
     quat = quat_from_axis_angle([1.0, 0.0, 0.0], 0.08)
     gravity_body = gravity_body_from_quat(quat)
@@ -87,3 +95,21 @@ def test_robot_frame_gravity_and_quaternion_paths_agree():
     pitch_x_g, roll_y_g = compute_robot_frame_orientation_from_gravity(jnp.array(gravity_body))
     assert abs(float(pitch_x_g) - pitch_x_q) < 1e-3
     assert abs(float(roll_y_g) - roll_y_q) < 1e-3
+
+
+def test_robot_frame_axes_have_low_cross_axis_leakage():
+    roll_quat = quat_from_axis_angle([1.0, 0.0, 0.0], 0.2)
+    pitch_quat = quat_from_axis_angle([0.0, 1.0, 0.0], 0.2)
+    yaw_quat = quat_from_axis_angle([0.0, 0.0, 1.0], 0.2)
+
+    pitch_x, roll_y, yaw_z = compute_robot_frame_orientation_from_quaternion(roll_quat)
+    assert abs(roll_y) / abs(pitch_x) < 1e-6
+    assert abs(yaw_z) / abs(pitch_x) < 1e-6
+
+    pitch_x, roll_y, yaw_z = compute_robot_frame_orientation_from_quaternion(pitch_quat)
+    assert abs(pitch_x) / abs(roll_y) < 1e-6
+    assert abs(yaw_z) / abs(roll_y) < 1e-6
+
+    pitch_x, roll_y, yaw_z = compute_robot_frame_orientation_from_quaternion(yaw_quat)
+    assert abs(pitch_x) / abs(yaw_z) < 1e-6
+    assert abs(roll_y) / abs(yaw_z) < 1e-6

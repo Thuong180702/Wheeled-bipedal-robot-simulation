@@ -325,9 +325,9 @@ class BalanceCoreValidator:
             results.append(result)
 
             if result.passed:
-                print(f"✓ [PASS] Duration {duration} PASSED")
+                print(f"[PASS] Duration {duration} PASSED")
             else:
-                print(f"✗ [FAIL] Duration {duration} FAILED")
+                print(f"[FAIL] Duration {duration} FAILED")
                 if result.failure_mode:
                     print(f"  Failure mode: {result.failure_mode.value}")
                     print(f"  Actual steps: {result.actual_steps}/{result.duration_steps}")

@@ -64,11 +64,15 @@ from wheeled_biped.controllers.sagittal_wheel_balance_controller import Sagittal
 from wheeled_biped.controllers.shape_posture_controller import ShapePostureController
 from wheeled_biped.controllers.support_feedforward_controller import SupportFeedforwardController
 from wheeled_biped.controllers.balance_core_types import make_balance_core_telemetry_columns
+from wheeled_biped.validation.telemetry_adapter import (
+    add_validation_telemetry_fields,
+    normalize_balance_core_owner_names,
+)
 
 
 STAGE2B_DEFAULT_EMPIRICAL_FEEDFORWARD = np.array([
-    0.0, 0.0, 0.0, -15.5, 0.0,
-    0.0, 0.0, 0.0, -15.8, 0.0,
+    0.0, 0.0, 4.1, -15.5, 0.0,
+    0.0, 0.0, 3.2, -15.8, 0.0,
 ], dtype=np.float64)
 
 
@@ -440,12 +444,9 @@ def resolve_support_feedforward_vector():
     """Return empirical support feedforward vector for balance-core mode.
 
     Returns:
-        np.ndarray: 10-element support feedforward vector with empirical knee torques
+        np.ndarray: 10-element support feedforward vector with empirical hip-pitch and knee torques
     """
-    return np.array([
-        0.0, 0.0, 0.0, -15.5, 0.0,
-        0.0, 0.0, 0.0, -15.8, 0.0,
-    ], dtype=np.float64)
+    return get_stage2b_default_empirical_feedforward()
 
 
 def append_balance_core_telemetry(
@@ -570,7 +571,7 @@ def build_balance_core_controllers(
     # Instantiate support feedforward controller
     support_feedforward = SupportFeedforwardController(
         support_vector=jnp.array(support_feedforward_vector),
-        joint_group="knee",
+        joint_group="hip_pitch_knee",
         scale=0.5,
     )
 
@@ -1238,6 +1239,15 @@ def main():
         "ctrl_r_wheel": [],
         "qvel_l_wheel": [],
         "qvel_r_wheel": [],
+        "sagittal_term_pitch": [],
+        "sagittal_term_pitch_rate": [],
+        "sagittal_term_cp": [],
+        "sagittal_term_com_vy": [],
+        "sagittal_term_wheel_vel_left": [],
+        "sagittal_term_wheel_vel_right": [],
+        "sagittal_balance_torque_raw": [],
+        "sagittal_balance_torque_clipped": [],
+        "sagittal_balance_torque_final": [],
         "sagittal_pitch_error": [],
         "sagittal_cp_error_y": [],
         "sagittal_tau_wheel_cmd": [],
@@ -2236,6 +2246,15 @@ def main():
         telemetry["ctrl_r_wheel"].append(float(mj_data.ctrl[9]))
         telemetry["qvel_l_wheel"].append(float(mj_data.qvel[10]))  # l_wheel joint velocity
         telemetry["qvel_r_wheel"].append(float(mj_data.qvel[15]))  # r_wheel joint velocity
+        telemetry["sagittal_term_pitch"].append(sagittal_diag.get("term_pitch", 0.0))
+        telemetry["sagittal_term_pitch_rate"].append(sagittal_diag.get("term_pitch_rate", 0.0))
+        telemetry["sagittal_term_cp"].append(sagittal_diag.get("term_cp", 0.0))
+        telemetry["sagittal_term_com_vy"].append(sagittal_diag.get("term_com_vy", 0.0))
+        telemetry["sagittal_term_wheel_vel_left"].append(sagittal_diag.get("term_wheel_vel_left", 0.0))
+        telemetry["sagittal_term_wheel_vel_right"].append(sagittal_diag.get("term_wheel_vel_right", 0.0))
+        telemetry["sagittal_balance_torque_raw"].append(sagittal_diag.get("balance_torque_raw", 0.0))
+        telemetry["sagittal_balance_torque_clipped"].append(sagittal_diag.get("balance_torque_raw", 0.0))
+        telemetry["sagittal_balance_torque_final"].append(0.5 * (sagittal_diag.get("tau_left", 0.0) + sagittal_diag.get("tau_right", 0.0)))
         telemetry["sagittal_pitch_error"].append(sagittal_wheel_diagnostics.get("pitch_error", 0.0))
         telemetry["sagittal_cp_error_y"].append(sagittal_wheel_diagnostics.get("cp_error_y", 0.0))
         telemetry["sagittal_tau_wheel_cmd"].append(sagittal_wheel_diagnostics.get("tau_wheel_cmd", 0.0))
@@ -2409,6 +2428,14 @@ def main():
 
     # Save telemetry to CSV
     csv_path = output_dir / f"telemetry_{int(time.time())}.csv"
+
+    # Add validation-compatible telemetry fields
+    add_validation_telemetry_fields(telemetry, control_dt, csv_path)
+
+    # Normalize balance-core owner names if in balance-core mode
+    if is_balance_core_mode(args):
+        normalize_balance_core_owner_names(telemetry)
+
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(telemetry.keys())

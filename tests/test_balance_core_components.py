@@ -354,6 +354,67 @@ def test_sagittal_wheel_balance_velocity_damping_opposes_motion():
     assert tau2[9] > 0.0  # r_wheel torque should be positive
 
 
+def test_sagittal_wheel_balance_positive_pitch_commands_backward_wheel_torque():
+    """Positive forward pitch should command positive wheel torque to drive the base backward."""
+    from wheeled_biped.controllers.sagittal_wheel_balance_controller import SagittalWheelBalanceController
+
+    controller = SagittalWheelBalanceController(wheel_torque_sign=1.0)
+
+    tau, diagnostics = controller.compute(
+        pitch_x_rad=0.1,
+        pitch_rate_x_rad_s=0.05,
+        cp_error_y_m=0.02,
+        com_vy_m_s=0.01,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        outer_position_bias=0.0,
+    )
+
+    assert tau[4] > 0.0
+    assert tau[9] > 0.0
+
+
+def test_sagittal_wheel_balance_negative_cp_error_commands_backward_wheel_torque():
+    """Negative capture-point error during a forward fall should drive the base backward."""
+    from wheeled_biped.controllers.sagittal_wheel_balance_controller import SagittalWheelBalanceController
+
+    controller = SagittalWheelBalanceController(wheel_torque_sign=1.0)
+
+    tau, diagnostics = controller.compute(
+        pitch_x_rad=0.0,
+        pitch_rate_x_rad_s=0.0,
+        cp_error_y_m=-0.1,
+        com_vy_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        outer_position_bias=0.0,
+    )
+
+    assert tau[4] > 0.0
+    assert tau[9] > 0.0
+
+
+def test_sagittal_wheel_balance_negative_forward_velocity_commands_backward_wheel_torque():
+    """Negative forward CoM velocity during a forward fall should drive the base backward."""
+    from wheeled_biped.controllers.sagittal_wheel_balance_controller import SagittalWheelBalanceController
+
+    controller = SagittalWheelBalanceController(wheel_torque_sign=1.0)
+
+    tau, diagnostics = controller.compute(
+        pitch_x_rad=0.0,
+        pitch_rate_x_rad_s=0.0,
+        cp_error_y_m=0.0,
+        com_vy_m_s=-0.1,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        outer_position_bias=0.0,
+    )
+
+    assert tau[4] > 0.0
+    assert tau[9] > 0.0
+
+
+
 def test_lateral_roll_balance_outputs_only_on_hip_roll():
     """Verify lateral roll balance controller outputs only on hip roll indices [0, 5]."""
     from wheeled_biped.controllers.lateral_roll_balance_controller import LateralRollBalanceController

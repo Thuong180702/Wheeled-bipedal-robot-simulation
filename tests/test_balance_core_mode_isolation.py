@@ -174,9 +174,35 @@ def test_resolve_support_feedforward_vector_returns_empirical_default():
     # Check it's a list or array with 10 elements
     assert len(support_vector) == 10
 
-    # Check knee indices [3, 8] have nonzero values (empirical feedforward)
-    assert support_vector[3] != 0.0
-    assert support_vector[8] != 0.0
+    # Check validated hip-pitch+knee support entries are present
+    assert support_vector[2] == pytest.approx(4.1)
+    assert support_vector[3] == pytest.approx(-15.5)
+    assert support_vector[7] == pytest.approx(3.2)
+    assert support_vector[8] == pytest.approx(-15.8)
+
+
+def test_balance_core_support_feedforward_defaults_to_hip_pitch_knee_group():
+    """Balance-core default support feedforward should cover both hip-pitch and knee joints."""
+    import sys
+    import numpy as np
+    sys.path.insert(0, str(Path("scripts")))
+    from simulate_hierarchical_controller import build_balance_core_controllers, resolve_support_feedforward_vector
+
+    controllers = build_balance_core_controllers(
+        control_dt=0.01,
+        support_feedforward_vector=resolve_support_feedforward_vector(),
+        torque_limit=np.ones(10) * 60.0,
+        max_torque_rate=np.ones(10) * 400.0,
+    )
+
+    support_feedforward = controllers["support_feedforward"]
+    assert support_feedforward.joint_group == "hip_pitch_knee"
+
+    tau, diagnostics = support_feedforward.compute()
+    assert tau[2] != 0.0
+    assert tau[3] != 0.0
+    assert tau[7] != 0.0
+    assert tau[8] != 0.0
 
 
 def test_balance_core_legacy_torque_sources_are_zeroed():

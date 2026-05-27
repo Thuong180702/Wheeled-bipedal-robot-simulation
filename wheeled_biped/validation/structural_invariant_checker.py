@@ -32,8 +32,15 @@ class StructuralInvariantChecker:
     # Tolerance for hidden torque norm (N·m)
     TOLERANCE = 1e-6
 
-    # Valid contact supervisor states
+    # Valid contact supervisor states (enum values, not names)
     VALID_CONTACT_STATES = {
+        "double_contact",
+        "left_only",
+        "right_only",
+        "flight_or_no_contact",
+        "unknown",
+        "init",
+        # Also accept uppercase variants for compatibility
         "DOUBLE_CONTACT",
         "SINGLE_LEFT",
         "SINGLE_RIGHT",
@@ -191,13 +198,21 @@ class StructuralInvariantChecker:
                 )
 
             for owner in owners:
-                if owner not in self.VALID_BALANCE_CORE_OWNERS and owner != "none":
+                # Handle composite owners like "shape_posture+support_feedforward"
+                if "+" in owner:
+                    # Validate each component of composite owner
+                    components = [c.strip() for c in owner.split("+")]
+                    for component in components:
+                        if component not in self.VALID_BALANCE_CORE_OWNERS:
+                            invalid_owners.add(owner)
+                            break
+                elif owner not in self.VALID_BALANCE_CORE_OWNERS and owner != "none":
                     invalid_owners.add(owner)
 
         if invalid_owners:
             raise ArchitectureRegressionError(
                 f"Invalid torque owners found: {invalid_owners}. "
-                f"Valid owners: {self.VALID_BALANCE_CORE_OWNERS} or 'none'"
+                f"Valid owners: {self.VALID_BALANCE_CORE_OWNERS} or 'none' or composite like 'shape_posture+support_feedforward'"
             )
 
     def _check_hidden_torque(self, df: pd.DataFrame) -> None:

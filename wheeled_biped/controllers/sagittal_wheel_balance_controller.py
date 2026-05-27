@@ -76,14 +76,18 @@ class SagittalWheelBalanceController:
         # Compute balance terms
         term_pitch = self.kp_pitch * pitch_x_rad
         term_pitch_rate = self.kd_pitch * pitch_rate_x_rad_s
-        term_cp = self.kp_cp * cp_error_y_m
-        term_com_vy = self.kd_com_vy * com_vy_m_s
+        term_cp = -self.kp_cp * cp_error_y_m
+        term_com_vy = -self.kd_com_vy * com_vy_m_s
 
         # Compute velocity damping (opposes wheel motion)
         term_wheel_vel_left = -self.kd_wheel_vel * wheel_vel_left_rad_s
         term_wheel_vel_right = -self.kd_wheel_vel * wheel_vel_right_rad_s
 
-        # Combine balance terms (same for both wheels)
+        # Sign convention verified by debug_wheel_sagittal_sign_simple.py:
+        # - Positive wheel torque (ctrl>0) moves robot backward (+Y) and accelerates wheel positively
+        # - Positive pitch_x (forward tilt) requires backward motion to recover → positive wheel torque
+        # - Negative cp_error_y / negative forward velocity likewise require backward recovery torque
+        # - Therefore corrective terms are summed with their measured physics signs and passed through wheel_torque_sign
         balance_torque = term_pitch + term_pitch_rate + term_cp + term_com_vy
 
         # Apply sign convention and add per-wheel damping
@@ -100,6 +104,15 @@ class SagittalWheelBalanceController:
         term_wheel_velocity_damping = (term_wheel_vel_left + term_wheel_vel_right) / 2.0
 
         diagnostics = {
+            "term_pitch": float(term_pitch),
+            "term_pitch_rate": float(term_pitch_rate),
+            "term_cp": float(term_cp),
+            "term_com_vy": float(term_com_vy),
+            "term_wheel_vel_left": float(term_wheel_vel_left),
+            "term_wheel_vel_right": float(term_wheel_vel_right),
+            "balance_torque_raw": float(balance_torque),
+            "tau_left": float(tau_left),
+            "tau_right": float(tau_right),
             "wheel_vel_mean_rad_s": wheel_vel_mean,
             "term_wheel_velocity_damping": term_wheel_velocity_damping,
             "wheel_torque_sign": self.wheel_torque_sign,
