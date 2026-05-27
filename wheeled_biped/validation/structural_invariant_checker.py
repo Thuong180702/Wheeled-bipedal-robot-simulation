@@ -182,26 +182,22 @@ class StructuralInvariantChecker:
         invalid_owners = set()
         for idx, row in df.iterrows():
             owners_str = row["active_torque_owner_per_joint"]
-            try:
-                owners = ast.literal_eval(owners_str)
-                if not isinstance(owners, list):
-                    raise ArchitectureRegressionError(
-                        f"Row {idx}: active_torque_owner_per_joint must be a list, "
-                        f"got {type(owners)}"
-                    )
+            # Parse CSV format: "owner1,owner2,owner3,..."
+            owners = [s.strip() for s in owners_str.split(',')]
 
-                for owner in owners:
-                    if owner not in self.VALID_BALANCE_CORE_OWNERS:
-                        invalid_owners.add(owner)
-            except (ValueError, SyntaxError) as e:
+            if len(owners) != 10:
                 raise ArchitectureRegressionError(
-                    f"Row {idx}: Failed to parse active_torque_owner_per_joint: {e}"
+                    f"Row {idx}: active_torque_owner_per_joint must have 10 elements, got {len(owners)}"
                 )
+
+            for owner in owners:
+                if owner not in self.VALID_BALANCE_CORE_OWNERS and owner != "none":
+                    invalid_owners.add(owner)
 
         if invalid_owners:
             raise ArchitectureRegressionError(
                 f"Invalid torque owners found: {invalid_owners}. "
-                f"Valid owners: {self.VALID_BALANCE_CORE_OWNERS}"
+                f"Valid owners: {self.VALID_BALANCE_CORE_OWNERS} or 'none'"
             )
 
     def _check_hidden_torque(self, df: pd.DataFrame) -> None:
@@ -254,11 +250,13 @@ class StructuralInvariantChecker:
 
             for idx, row in df.iterrows():
                 torque_str = row[field]
+                # Parse CSV format: "val1,val2,val3,..."
                 try:
-                    torques = ast.literal_eval(torque_str)
-                    if not isinstance(torques, list):
+                    torques = [float(s.strip()) for s in torque_str.split(',')]
+
+                    if len(torques) != 10:
                         raise ArchitectureRegressionError(
-                            f"Row {idx}: {field} must be a list, got {type(torques)}"
+                            f"Row {idx}: {field} must have 10 elements, got {len(torques)}"
                         )
 
                     torques_array = np.array(torques, dtype=float)
@@ -266,7 +264,7 @@ class StructuralInvariantChecker:
                         raise ArchitectureRegressionError(
                             f"Row {idx}: {field} contains non-finite values: {torques}"
                         )
-                except (ValueError, SyntaxError) as e:
+                except ValueError as e:
                     raise ArchitectureRegressionError(
                         f"Row {idx}: Failed to parse {field}: {e}"
                     )
@@ -293,23 +291,30 @@ class StructuralInvariantChecker:
 
             for idx, row in df.iterrows():
                 mask_str = row[field]
+                # Parse CSV format: "val1,val2,val3,..."
                 try:
-                    mask = ast.literal_eval(mask_str)
-                    if not isinstance(mask, list):
+                    mask_parts = [s.strip() for s in mask_str.split(',')]
+
+                    if len(mask_parts) != 10:
                         raise ArchitectureRegressionError(
-                            f"Row {idx}: {field} must be a list, got {type(mask)}"
+                            f"Row {idx}: {field} must have length 10, got {len(mask_parts)}"
                         )
 
-                    if len(mask) != 10:
-                        raise ArchitectureRegressionError(
-                            f"Row {idx}: {field} must have length 10, got {len(mask)}"
-                        )
+                    # Convert to boolean (handle "True"/"False" strings or 0/1)
+                    mask = []
+                    for part in mask_parts:
+                        if part.lower() in ('true', '1'):
+                            mask.append(True)
+                        elif part.lower() in ('false', '0'):
+                            mask.append(False)
+                        else:
+                            raise ValueError(f"Invalid boolean value: {part}")
 
                     if not all(isinstance(x, bool) for x in mask):
                         raise ArchitectureRegressionError(
                             f"Row {idx}: {field} must contain only booleans, got {mask}"
                         )
-                except (ValueError, SyntaxError) as e:
+                except ValueError as e:
                     raise ArchitectureRegressionError(
                         f"Row {idx}: Failed to parse {field}: {e}"
                     )
