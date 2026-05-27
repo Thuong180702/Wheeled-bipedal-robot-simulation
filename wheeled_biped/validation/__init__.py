@@ -15,6 +15,9 @@ from wheeled_biped.validation.failure_classifier import (
     ClassificationResult,
     ThresholdCrossing,
 )
+from wheeled_biped.validation.classification_report import (
+    ClassificationReportGenerator,
+)
 
 __all__ = [
     "TelemetrySchemaChecker",
@@ -25,4 +28,5 @@ __all__ = [
     "FailureMode",
     "ClassificationResult",
     "ThresholdCrossing",
+    "ClassificationReportGenerator",
 ]
