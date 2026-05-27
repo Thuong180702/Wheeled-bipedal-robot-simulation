@@ -45,3 +45,22 @@ def test_height_collapse_secondary_to_pitch():
     assert len(result.secondary_threshold_crossings) == 1
     assert result.secondary_threshold_crossings[0].failure_mode == FailureMode.HEIGHT_COLLAPSE
     assert result.secondary_threshold_crossings[0].step == 40
+
+
+def test_roll_divergence_classified():
+    """Roll exceeding threshold should be classified as F2.2."""
+    df = pd.DataFrame({
+        "step": [0, 10, 20, 30],
+        "time": [0.0, 0.02, 0.04, 0.06],
+        "pitch_x_rad": [0.0, 0.0, 0.0, 0.0],
+        "roll_y_rad": [0.0, 0.1, 0.25, 0.3],  # Exceeds 0.20 at step 20
+        "com_z_m": [0.45, 0.45, 0.45, 0.45],
+        "contact_supervisor_state": ["DOUBLE_CONTACT"] * 4,
+    })
+
+    classifier = FailureClassifier()
+    result = classifier.classify(df)
+
+    assert result.primary_failure_mode == FailureMode.ROLL_DIVERGENCE
+    assert result.first_threshold_crossing_step == 20
+    assert result.responsible_component == "LateralRollBalanceController"
