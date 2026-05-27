@@ -42,8 +42,11 @@ class FixCycleRecord:
     validation_result_after: str
     failure_resolved: bool
     new_failure_appeared: bool
-    structural_invariants_after_fix: Dict[str, str]
-    notes: Optional[str] = None
+    new_failure_mode: Optional[str] = None
+    structural_invariants_after_fix: Dict[str, str] = None
+    ownership_violation_count_after_fix: int = 0
+    hidden_torque_norm_after_fix: float = 0.0
+    notes: str = ""
 
 
 class FixCycleReporter:
