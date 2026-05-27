@@ -57,6 +57,13 @@ from wheeled_biped.controllers.stage2b_sagittal_wheel_controller import Stage2BS
 from wheeled_biped.controllers.stage2c_sagittal_state_feedback_controller import Stage2CSagittalStateFeedbackController
 from wheeled_biped.controllers.stage2d_sagittal_lqr_controller import Stage2DSagittalLQRController
 from wheeled_biped.controllers.contact_jacobian import ContactJacobian
+from wheeled_biped.controllers.balance_core_torque_composer import BalanceCoreTorqueComposer
+from wheeled_biped.controllers.contact_supervisor import ContactSupervisor
+from wheeled_biped.controllers.lateral_roll_balance_controller import LateralRollBalanceController
+from wheeled_biped.controllers.sagittal_wheel_balance_controller import SagittalWheelBalanceController
+from wheeled_biped.controllers.shape_posture_controller import ShapePostureController
+from wheeled_biped.controllers.support_feedforward_controller import SupportFeedforwardController
+from wheeled_biped.controllers.balance_core_types import make_balance_core_telemetry_columns
 
 
 STAGE2B_DEFAULT_EMPIRICAL_FEEDFORWARD = np.array([
@@ -383,6 +390,225 @@ def compute_step2_torque_components(
     }
 
 
+def is_balance_core_mode(args) -> bool:
+    return args.controller_mode in {"balance-core", "standing-balance"}
+
+
+def validate_balance_core_mode_args(args):
+    """Validate that balance-core mode does not use incompatible legacy flags.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Raises:
+        ValueError: If balance-core mode is used with incompatible legacy flags
+    """
+    if args.controller_mode != "balance-core":
+        return
+
+    incompatible_flags = []
+
+    if args.enable_static_dynamics_wrapper:
+        incompatible_flags.append("--enable-static-dynamics-wrapper")
+    if args.enable_secondary_wheel_balance:
+        incompatible_flags.append("--enable-secondary-wheel-balance")
+    if args.enable_stage2_static_posture_hold:
+        incompatible_flags.append("--enable-stage2-static-posture-hold")
+    if args.enable_stage2b_gravity_feedforward:
+        incompatible_flags.append("--enable-stage2b-gravity-feedforward")
+    if args.enable_stage2b_roll_direct:
+        incompatible_flags.append("--enable-stage2b-roll-direct")
+    if args.enable_stage2b_sagittal_wheel:
+        incompatible_flags.append("--enable-stage2b-sagittal-wheel")
+    if args.enable_stage2c_sagittal_state_feedback:
+        incompatible_flags.append("--enable-stage2c-sagittal-state-feedback")
+    if args.enable_stage2d_sagittal_lqr:
+        incompatible_flags.append("--enable-stage2d-sagittal-lqr")
+    if args.initialize_tau_prev_from_wbc:
+        incompatible_flags.append("--initialize-tau-prev-from-wbc")
+    if args.use_per_actuator_wbc_authority:
+        incompatible_flags.append("--use-per-actuator-wbc-authority")
+
+    if incompatible_flags:
+        raise ValueError(
+            f"balance-core mode is incompatible with the following legacy flags: "
+            f"{', '.join(incompatible_flags)}"
+        )
+
+
+def resolve_support_feedforward_vector():
+    """Return empirical support feedforward vector for balance-core mode.
+
+    Returns:
+        np.ndarray: 10-element support feedforward vector with empirical knee torques
+    """
+    return np.array([
+        0.0, 0.0, 0.0, -15.5, 0.0,
+        0.0, 0.0, 0.0, -15.8, 0.0,
+    ], dtype=np.float64)
+
+
+def append_balance_core_telemetry(
+    telemetry: dict,
+    result,
+    centroidal_state,
+    contact_output,
+    cp_error_y_m: float,
+    wheel_vel_left_rad_s: float,
+    wheel_vel_right_rad_s: float,
+    wheel_acc_left_rad_s2: float,
+    wheel_acc_right_rad_s2: float,
+):
+    """Append balance-core state and torque telemetry for one control tick.
+
+    Args:
+        telemetry: Telemetry dict with balance-core columns initialized
+        result: BalanceCoreTorqueResult with torque composition output
+        centroidal_state: Centroidal state with body orientation and CoM
+        contact_output: ContactSupervisorOutput with contact classification
+        cp_error_y_m: Capture point error in y direction [m]
+        wheel_vel_left_rad_s: Left wheel velocity [rad/s]
+        wheel_vel_right_rad_s: Right wheel velocity [rad/s]
+        wheel_acc_left_rad_s2: Left wheel acceleration [rad/s^2]
+        wheel_acc_right_rad_s2: Right wheel acceleration [rad/s^2]
+    """
+    wheel_vel_mean = 0.5 * (wheel_vel_left_rad_s + wheel_vel_right_rad_s)
+    wheel_acc_mean = 0.5 * (wheel_acc_left_rad_s2 + wheel_acc_right_rad_s2)
+
+    # Append state fields
+    state_values = {
+        "pitch_x_rad": float(centroidal_state.body_pitch_x),
+        "roll_y_rad": float(centroidal_state.body_roll_y),
+        "yaw_z_rad": float(centroidal_state.body_yaw_z),
+        "pitch_rate_x_rad_s": float(centroidal_state.body_pitch_rate_x),
+        "roll_rate_y_rad_s": float(centroidal_state.body_roll_rate_y),
+        "yaw_rate_z_rad_s": float(centroidal_state.body_yaw_rate_z),
+        "com_x_m": float(centroidal_state.com_pos[0]),
+        "com_y_m": float(centroidal_state.com_pos[1]),
+        "com_z_m": float(centroidal_state.com_pos[2]),
+        "com_vx_m_s": float(centroidal_state.com_vel[0]),
+        "com_vy_m_s": float(centroidal_state.com_vel[1]),
+        "com_vz_m_s": float(centroidal_state.com_vel[2]),
+        "cp_x_m": float(centroidal_state.capture_point[0]),
+        "cp_y_m": float(centroidal_state.capture_point[1]),
+        "cp_error_y_m": float(cp_error_y_m),
+        "wheel_vel_left_rad_s": float(wheel_vel_left_rad_s),
+        "wheel_vel_right_rad_s": float(wheel_vel_right_rad_s),
+        "wheel_vel_mean_rad_s": float(wheel_vel_mean),
+        "wheel_acc_left_rad_s2": float(wheel_acc_left_rad_s2),
+        "wheel_acc_right_rad_s2": float(wheel_acc_right_rad_s2),
+        "wheel_acc_mean_rad_s2": float(wheel_acc_mean),
+        "left_wheel_contact": bool(contact_output.left_wheel_contact),
+        "right_wheel_contact": bool(contact_output.right_wheel_contact),
+        "contact_supervisor_state": contact_output.state.value,
+        "contact_previous_state": contact_output.previous_state.value if contact_output.previous_state is not None else "none",
+        "contact_duration_s": float(contact_output.contact_duration_s),
+        "contact_transition_event": contact_output.transition_event,
+        "contact_force_valid": bool(contact_output.contact_force_valid),
+        "contact_recovery_hook_fields": str(contact_output.recovery_hook_fields),
+    }
+    for name, value in state_values.items():
+        telemetry[name].append(value)
+
+    # Append torque fields from result.telemetry
+    # Per-joint arrays are tuples and need comma-separated string conversion for CSV
+    for name, value in result.telemetry.items():
+        if isinstance(value, tuple):
+            telemetry[name].append(",".join(str(v) for v in value))
+        else:
+            telemetry[name].append(value)
+
+
+def zero_legacy_torque_sources_for_balance_core():
+    return {
+        "tau_wbc_correction": jnp.zeros(10),
+        "tau_wbc_scaled": jnp.zeros(10),
+        "tau_posture": jnp.zeros(10),
+        "tau_leg_position": jnp.zeros(10),
+        "tau_hip_roll_centering": jnp.zeros(10),
+        "tau_wheel_balance": jnp.zeros(10),
+        "tau_inverse_dynamics": jnp.zeros(10),
+    }
+
+
+def build_balance_core_controllers(
+    control_dt: float,
+    support_feedforward_vector: np.ndarray,
+    torque_limit: np.ndarray,
+    max_torque_rate: np.ndarray,
+):
+    """Build all balance-core controller components.
+
+    Args:
+        control_dt: Control timestep in seconds
+        support_feedforward_vector: 10-element empirical support torque vector
+        torque_limit: Per-joint torque limits [Nm], shape (10,)
+        max_torque_rate: Per-joint max torque rate [Nm/s], shape (10,)
+
+    Returns:
+        dict: Dictionary with keys:
+            - contact_supervisor: ContactSupervisor instance
+            - shape_posture: ShapePostureController instance
+            - support_feedforward: SupportFeedforwardController instance
+            - sagittal_wheel_balance: SagittalWheelBalanceController instance
+            - lateral_roll_balance: LateralRollBalanceController instance
+            - composer: BalanceCoreTorqueComposer instance
+    """
+    # Instantiate contact supervisor
+    contact_supervisor = ContactSupervisor(control_dt=control_dt)
+
+    # Instantiate shape-posture controller
+    shape_posture = ShapePostureController(
+        kp_hip_yaw=5.0,
+        kd_hip_yaw=1.0,
+        kp_hip_pitch=30.0,
+        kd_hip_pitch=4.0,
+        kp_knee=40.0,
+        kd_knee=5.0,
+    )
+
+    # Instantiate support feedforward controller
+    support_feedforward = SupportFeedforwardController(
+        support_vector=jnp.array(support_feedforward_vector),
+        joint_group="knee",
+        scale=0.5,
+    )
+
+    # Instantiate sagittal wheel balance controller
+    sagittal_wheel_balance = SagittalWheelBalanceController(
+        kp_pitch=50.0,
+        kd_pitch=10.0,
+        kp_cp=30.0,
+        kd_com_vy=5.0,
+        kd_wheel_vel=0.5,
+        wheel_torque_sign=1.0,
+    )
+
+    # Instantiate lateral roll balance controller
+    lateral_roll_balance = LateralRollBalanceController(
+        kp_roll=40.0,
+        kd_roll=8.0,
+        max_roll_moment=50.0,
+        hip_roll_torque_sign=1.0,
+    )
+
+    # Instantiate torque composer
+    composer = BalanceCoreTorqueComposer(
+        torque_limit=jnp.array(torque_limit),
+        max_torque_rate=jnp.array(max_torque_rate),
+        control_dt=control_dt,
+    )
+
+    return {
+        "contact_supervisor": contact_supervisor,
+        "shape_posture": shape_posture,
+        "support_feedforward": support_feedforward,
+        "sagittal_wheel_balance": sagittal_wheel_balance,
+        "lateral_roll_balance": lateral_roll_balance,
+        "composer": composer,
+    }
+
+
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser(
@@ -393,6 +619,13 @@ def main():
     )
     parser.add_argument(
         "--steps", type=int, default=200, help="Number of 100 Hz control steps to simulate"
+    )
+    parser.add_argument(
+        "--controller-mode",
+        type=str,
+        default="legacy",
+        choices=["legacy", "balance-core", "standing-balance"],
+        help="Controller mode: legacy (all features), balance-core (clean WBC), standing-balance (future)",
     )
     parser.add_argument(
         "--enable-secondary-wheel-balance",
@@ -465,6 +698,9 @@ def main():
     parser.add_argument('--stage2d-lqr-config', type=str, default='A', choices=['A', 'B', 'C', 'D'], help='Stage 2D LQR configuration (A=baseline, B=increased, C=high, D=aggressive)')
     parser.add_argument('--stage2d-model-path', type=str, default='outputs/stage2d_sysid/identified_model.npz', help='Path to identified model from Phase 1')
     args = parser.parse_args()
+
+    # Validate balance-core mode arguments
+    validate_balance_core_mode_args(args)
 
     print("=" * 80)
     print("Hierarchical Controller Simulation with Telemetry")
@@ -1058,6 +1294,11 @@ def main():
     }
     telemetry.update(build_step1_telemetry_template())
 
+    # Initialize balance-core telemetry columns if in balance-core mode
+    if is_balance_core_mode(args):
+        for key, values in make_balance_core_telemetry_columns().items():
+            telemetry.setdefault(key, values)
+
     # Simulation parameters
     max_steps = args.steps
     control_dt = 0.01  # 100 Hz
@@ -1066,9 +1307,29 @@ def main():
     prev_control_com_pos = None
     tau_prev = jnp.array(mj_data.ctrl)  # Initialize previous torque from current control
 
+    # Actuator limits (used by both balance-core and legacy modes for telemetry)
+    torque_limit = np.array(mj_model.actuator_ctrlrange[:, 1])
+    max_torque_rate = np.full(10, 400.0)  # 400 Nm/s per joint
+
+    # Balance-core controller instantiation
+    balance_core_controllers = None
+    if is_balance_core_mode(args):
+        support_feedforward_vector = resolve_support_feedforward_vector()
+        balance_core_controllers = build_balance_core_controllers(
+            control_dt=control_dt,
+            support_feedforward_vector=support_feedforward_vector,
+            torque_limit=torque_limit,
+            max_torque_rate=max_torque_rate,
+        )
+        print("[BALANCE-CORE] Functional four-source controller stack enabled")
+
     # For finite-difference rate computation
     prev_log_pitch_x = None
     prev_log_roll_y = None
+
+    # Wheel velocity memory for balance-core mode
+    prev_wheel_vel_left = 0.0
+    prev_wheel_vel_right = 0.0
 
     print(
         f"\nRunning simulation for {max_steps} steps ({max_steps * control_dt:.1f} seconds)"
@@ -1082,7 +1343,7 @@ def main():
     height_cmd = 0.40  # Match equilibrium CoM height from compute_equilibrium_keyframe.py
 
     def simulation_step():
-        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y
+        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate
 
         if terminated or step >= max_steps:
             return False
@@ -1431,8 +1692,87 @@ def main():
         tau_hip_roll_centering = tau_hip_roll_centering_raw if include_hip_roll else jnp.zeros(10)
         tau_wheel_balance = tau_wheel_balance_raw if include_wheel_balance else jnp.zeros(10)
 
+        # Balance-core runtime branch: route torque through composer
+        if is_balance_core_mode(args):
+            contact_output = balance_core_controllers["contact_supervisor"].update(
+                left_wheel_contact=bool(centroidal_state_control.left_wheel_contact),
+                right_wheel_contact=bool(centroidal_state_control.right_wheel_contact),
+                contact_force_valid=bool(centroidal_state_control.contact_force_valid),
+                left_normal_force_n=float(centroidal_state_control.left_wheel_force),
+                right_normal_force_n=float(centroidal_state_control.right_wheel_force),
+            )
+
+            tau_shape_posture, shape_diag = balance_core_controllers["shape_posture"].compute(
+                q_ref=equilibrium_joint_pos,
+                joint_pos=joint_pos,
+                joint_vel=joint_vel,
+                posture_weight=1.0,
+                contact_degraded_scale=1.0,
+            )
+            tau_support_feedforward, support_diag = balance_core_controllers["support_feedforward"].compute()
+
+            wheel_vel_left = float(joint_vel[4])
+            wheel_vel_right = float(joint_vel[9])
+            wheel_acc_left = (wheel_vel_left - prev_wheel_vel_left) / control_dt
+            wheel_acc_right = (wheel_vel_right - prev_wheel_vel_right) / control_dt
+            prev_wheel_vel_left = wheel_vel_left
+            prev_wheel_vel_right = wheel_vel_right
+
+            cp_error_y_m = float(centroidal_state_control.capture_point[1] - centroidal_state_control.com_pos[1])
+            tau_sagittal_wheel_balance, sagittal_diag = balance_core_controllers["sagittal_wheel_balance"].compute(
+                pitch_x_rad=float(centroidal_state_control.body_pitch_x),
+                pitch_rate_x_rad_s=float(centroidal_state_control.body_pitch_rate_x),
+                cp_error_y_m=cp_error_y_m,
+                com_vy_m_s=float(centroidal_state_control.com_vel[1]),
+                wheel_vel_left_rad_s=wheel_vel_left,
+                wheel_vel_right_rad_s=wheel_vel_right,
+                outer_position_bias=0.0,
+            )
+            tau_lateral_roll_balance, lateral_diag = balance_core_controllers["lateral_roll_balance"].compute(
+                roll_y_rad=float(centroidal_state_control.body_roll_y),
+                roll_rate_y_rad_s=float(centroidal_state_control.body_roll_rate_y),
+            )
+
+            balance_core_result = balance_core_controllers["composer"].compose(
+                tau_shape_posture=tau_shape_posture,
+                tau_support_feedforward=tau_support_feedforward,
+                tau_sagittal_wheel_balance=tau_sagittal_wheel_balance,
+                tau_lateral_roll_balance=tau_lateral_roll_balance,
+                tau_prev=tau_prev,
+            )
+
+            # Append balance-core telemetry
+            append_balance_core_telemetry(
+                telemetry,
+                balance_core_result,
+                centroidal_state_control,
+                contact_output,
+                cp_error_y_m=cp_error_y_m,
+                wheel_vel_left_rad_s=wheel_vel_left,
+                wheel_vel_right_rad_s=wheel_vel_right,
+                wheel_acc_left_rad_s2=wheel_acc_left,
+                wheel_acc_right_rad_s2=wheel_acc_right,
+            )
+
+            tau_total_raw = balance_core_result.tau_total_raw
+            tau_total_clipped = balance_core_result.tau_total_clipped
+            tau_smooth = balance_core_result.tau_final
+            tau_prev = tau_smooth
+
+            # Zero legacy torques for telemetry clarity
+            legacy_zeros = zero_legacy_torque_sources_for_balance_core()
+            tau_wbc_correction = legacy_zeros["tau_wbc_correction"]
+            tau_wbc_scaled = legacy_zeros["tau_wbc_scaled"]
+            tau_posture = legacy_zeros["tau_posture"]
+            # Reassign balance-core torques to legacy variable names for telemetry compatibility
+            tau_static_posture = tau_shape_posture
+            tau_static_feedforward = tau_support_feedforward
+            tau_leg_position = legacy_zeros["tau_leg_position"]
+            tau_hip_roll_centering = legacy_zeros["tau_hip_roll_centering"]
+            tau_wheel_balance = legacy_zeros["tau_wheel_balance"]
+            tau_inverse_dynamics = legacy_zeros["tau_inverse_dynamics"]
         # Stage 2: Modify torque combination for static posture holding
-        if static_posture_controller is not None:
+        elif static_posture_controller is not None:
             # A/B/C/D/E ablations over Stage 2B/2C/2D stack
             tau_total_raw = (
                 tau_static_feedforward
@@ -1463,12 +1803,18 @@ def main():
                 + tau_wheel_balance
                 + tau_inverse_dynamics
             )
-        torque_limit = jnp.array(mj_model.actuator_ctrlrange[:, 1])
-        tau_total_clipped = jnp.clip(tau_total_raw, -torque_limit, torque_limit)
-        tau_saturation_rate = float(jnp.mean(jnp.abs(tau_total_raw) > torque_limit))
 
-        if step == 0 and args.initialize_tau_prev_from_wbc:
-            tau_prev = tau_total_clipped
+        # Balance-core already handled clipping in composer; only apply legacy processing for other modes
+        if not is_balance_core_mode(args):
+            torque_limit = jnp.array(mj_model.actuator_ctrlrange[:, 1])
+            tau_total_clipped = jnp.clip(tau_total_raw, -torque_limit, torque_limit)
+            tau_saturation_rate = float(jnp.mean(jnp.abs(tau_total_raw) > torque_limit))
+
+            if step == 0 and args.initialize_tau_prev_from_wbc:
+                tau_prev = tau_total_clipped
+        else:
+            # Balance-core mode: saturation rate already computed in composer
+            tau_saturation_rate = float(jnp.mean(jnp.abs(tau_total_raw) > jnp.array(mj_model.actuator_ctrlrange[:, 1])))
 
         # Compute motor tracking telemetry
         step1_diagnostics = compute_step1_joint_diagnostics(joint_pos, joint_pos_error)
@@ -1480,20 +1826,27 @@ def main():
         tau_inverse_dynamics_norm = float(jnp.linalg.norm(tau_inverse_dynamics))
         tau_total_norm = float(jnp.linalg.norm(tau_total_clipped))
 
-        # Compute torque rate (Nm/s) and optionally apply limiting.
-        tau_rate_unlimited = float(jnp.linalg.norm(tau_total_clipped - tau_prev) / control_dt)
-        max_torque_rate = 400.0
-        tau_rate_vec = (tau_total_clipped - tau_prev) / control_dt
-        tau_rate_vec_clipped = jnp.clip(tau_rate_vec, -max_torque_rate, max_torque_rate)
+        # Balance-core already handled rate limiting in composer; only apply legacy processing for other modes
+        if not is_balance_core_mode(args):
+            # Compute torque rate (Nm/s) and optionally apply limiting.
+            tau_rate_unlimited = float(jnp.linalg.norm(tau_total_clipped - tau_prev) / control_dt)
+            max_torque_rate = 400.0
+            tau_rate_vec = (tau_total_clipped - tau_prev) / control_dt
+            tau_rate_vec_clipped = jnp.clip(tau_rate_vec, -max_torque_rate, max_torque_rate)
 
-        if args.disable_torque_rate_limit:
-            tau_smooth = tau_total_clipped
-            tau_rate_limited = tau_rate_unlimited
+            if args.disable_torque_rate_limit:
+                tau_smooth = tau_total_clipped
+                tau_rate_limited = tau_rate_unlimited
+            else:
+                tau_smooth = tau_prev + tau_rate_vec_clipped * control_dt
+                tau_rate_limited = float(jnp.linalg.norm(tau_rate_vec_clipped))
+
+            tau_prev = tau_smooth
         else:
-            tau_smooth = tau_prev + tau_rate_vec_clipped * control_dt
-            tau_rate_limited = float(jnp.linalg.norm(tau_rate_vec_clipped))
-
-        tau_prev = tau_smooth
+            # Balance-core mode: rate limiting already applied in composer
+            tau_rate_vec = (tau_total_clipped - tau_prev) / control_dt
+            tau_rate_unlimited = float(jnp.linalg.norm(tau_rate_vec))
+            tau_rate_limited = tau_rate_unlimited  # Composer already applied rate limiting
 
         # Early-step support torque parity diagnostics
         j_left_dbg, j_right_dbg = contact_jacobian.compute_wheel_jacobians(mj_data)
@@ -1813,10 +2166,18 @@ def main():
         telemetry["tau_hip_roll"].append(",".join(f"{x:.4f}" for x in np.array(qp_diagnostics.get("tau_hip_roll", jnp.zeros(2)))))
         tau_contact_val = jnp.zeros(10)  # Placeholder if not available
         telemetry["tau_contact"].append(",".join(f"{x:.4f}" for x in np.array(tau_contact_val)))
-        telemetry["tau_wbc_correction"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc_correction)))
-        telemetry["tau_wbc_after_authority_clip"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc)))
-        telemetry["tau_static_feedforward"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_feedforward)))
-        telemetry["tau_static_posture"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_posture)))
+
+        # Legacy compatibility fields: in balance-core mode, reflect balance-core torques or zeros
+        if is_balance_core_mode(args):
+            telemetry["tau_wbc_correction"].append(",".join(f"{x:.4f}" for x in np.zeros(10)))
+            telemetry["tau_wbc_after_authority_clip"].append(",".join(f"{x:.4f}" for x in np.zeros(10)))
+            telemetry["tau_static_feedforward"].append(",".join(f"{x:.4f}" for x in np.array(tau_support_feedforward)))
+            telemetry["tau_static_posture"].append(",".join(f"{x:.4f}" for x in np.array(tau_shape_posture)))
+        else:
+            telemetry["tau_wbc_correction"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc_correction)))
+            telemetry["tau_wbc_after_authority_clip"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc)))
+            telemetry["tau_static_feedforward"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_feedforward)))
+            telemetry["tau_static_posture"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_posture)))
         sat_flags_vec = (np.abs(np.array(tau_total_raw)) > np.array(torque_limit)).astype(int)
         rate_flags_vec = (np.abs(np.array(tau_rate_vec)) > max_torque_rate).astype(int)
         telemetry["saturation_flags"].append(",".join(f"{x}" for x in sat_flags_vec))
