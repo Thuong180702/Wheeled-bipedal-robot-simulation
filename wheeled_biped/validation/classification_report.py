@@ -77,6 +77,7 @@ class ClassificationReportGenerator:
         """
         report = {
             "primary_failure_mode": result.primary_failure_mode.value,
+            "primary_failure_name": result.primary_failure_mode.name,
             "first_threshold_crossing_step": result.first_threshold_crossing_step,
             "first_threshold_crossing_time_s": result.first_threshold_crossing_time_s,
             "responsible_component": result.responsible_component,
