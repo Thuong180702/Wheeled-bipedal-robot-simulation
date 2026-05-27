@@ -26,15 +26,15 @@ from wheeled_biped.validation.classification_report import (
 
 @dataclass
 class ValidationResult:
-    """Result of validating a single duration."""
+    """Result of a single duration validation."""
     passed: bool
     duration_steps: int
-    schema_valid: bool
-    structural_invariants_valid: bool
-    duration_completed: bool
-    failure_classification: Optional[ClassificationResult]
-    failure_report: Optional[str]
-    error_message: str
+    actual_steps: int
+    structural_invariants_passed: bool
+    failure_mode: Optional['FailureMode']
+    classification_result: Optional[ClassificationResult]
+    telemetry_path: Path
+    report_path: Optional[Path]
 
 
 class BalanceCoreValidator:
@@ -78,13 +78,13 @@ class BalanceCoreValidator:
         except Exception as e:
             return ValidationResult(
                 passed=False,
-                duration_steps=0,
-                schema_valid=False,
-                structural_invariants_valid=False,
-                duration_completed=False,
-                failure_classification=None,
-                failure_report=None,
-                error_message=f"Failed to load telemetry: {e}",
+                duration_steps=expected_steps,
+                actual_steps=0,
+                structural_invariants_passed=False,
+                failure_mode=None,
+                classification_result=None,
+                telemetry_path=Path(telemetry_path),
+                report_path=None,
             )
 
         actual_steps = len(df)
@@ -92,35 +92,31 @@ class BalanceCoreValidator:
         # Check schema
         try:
             self.schema_checker.validate(df)
-            schema_valid = True
-            schema_error = ""
         except MissingFieldError as e:
             return ValidationResult(
                 passed=False,
-                duration_steps=actual_steps,
-                schema_valid=False,
-                structural_invariants_valid=False,
-                duration_completed=False,
-                failure_classification=None,
-                failure_report=None,
-                error_message=str(e),
+                duration_steps=expected_steps,
+                actual_steps=actual_steps,
+                structural_invariants_passed=False,
+                failure_mode=None,
+                classification_result=None,
+                telemetry_path=Path(telemetry_path),
+                report_path=None,
             )
 
         # Check structural invariants
         try:
             self.invariant_checker.check_all(df)
-            structural_invariants_valid = True
-            structural_error = ""
         except ArchitectureRegressionError as e:
             return ValidationResult(
                 passed=False,
-                duration_steps=actual_steps,
-                schema_valid=True,
-                structural_invariants_valid=False,
-                duration_completed=False,
-                failure_classification=None,
-                failure_report=None,
-                error_message=str(e),
+                duration_steps=expected_steps,
+                actual_steps=actual_steps,
+                structural_invariants_passed=False,
+                failure_mode=None,
+                classification_result=None,
+                telemetry_path=Path(telemetry_path),
+                report_path=None,
             )
 
         # Check duration completion
@@ -128,13 +124,18 @@ class BalanceCoreValidator:
 
         # Check for failures (threshold crossings) even if duration completed
         classification = None
-        report = None
+        report_path = None
         has_failure = False
 
         try:
             classification = self.failure_classifier.classify(df)
-            report = self.report_generator.to_markdown(classification)
             has_failure = True
+
+            # Generate report and save it
+            report = self.report_generator.to_markdown(classification)
+            report_file = Path(telemetry_path).parent / f"failure_report_{expected_steps}.md"
+            report_file.write_text(report)
+            report_path = report_file
         except ValueError as e:
             # No threshold crossings found - this is expected for successful runs
             if "No threshold crossings found" in str(e):
@@ -143,67 +144,63 @@ class BalanceCoreValidator:
                 # Unexpected error
                 return ValidationResult(
                     passed=False,
-                    duration_steps=actual_steps,
-                    schema_valid=True,
-                    structural_invariants_valid=True,
-                    duration_completed=duration_completed,
-                    failure_classification=None,
-                    failure_report=None,
-                    error_message=f"Failure classification error: {e}",
+                    duration_steps=expected_steps,
+                    actual_steps=actual_steps,
+                    structural_invariants_passed=True,
+                    failure_mode=None,
+                    classification_result=None,
+                    telemetry_path=Path(telemetry_path),
+                    report_path=None,
                 )
         except Exception as e:
             # Unexpected error during classification
             return ValidationResult(
                 passed=False,
-                duration_steps=actual_steps,
-                schema_valid=True,
-                structural_invariants_valid=True,
-                duration_completed=duration_completed,
-                failure_classification=None,
-                failure_report=None,
-                error_message=f"Unexpected error during classification: {e}",
+                duration_steps=expected_steps,
+                actual_steps=actual_steps,
+                structural_invariants_passed=True,
+                failure_mode=None,
+                classification_result=None,
+                telemetry_path=Path(telemetry_path),
+                report_path=None,
             )
 
         # Determine overall pass/fail
         if has_failure:
             # Failure detected (threshold crossing)
-            error_msg = f"Failure detected: {classification.primary_failure_mode.value}"
-            if not duration_completed:
-                error_msg += f" (duration incomplete: {actual_steps}/{expected_steps} steps)"
-
             return ValidationResult(
                 passed=False,
-                duration_steps=actual_steps,
-                schema_valid=True,
-                structural_invariants_valid=True,
-                duration_completed=duration_completed,
-                failure_classification=classification,
-                failure_report=report,
-                error_message=error_msg,
+                duration_steps=expected_steps,
+                actual_steps=actual_steps,
+                structural_invariants_passed=True,
+                failure_mode=classification.primary_failure_mode,
+                classification_result=classification,
+                telemetry_path=Path(telemetry_path),
+                report_path=report_path,
             )
         elif not duration_completed:
             # Duration incomplete but no threshold crossings detected
             return ValidationResult(
                 passed=False,
-                duration_steps=actual_steps,
-                schema_valid=True,
-                structural_invariants_valid=True,
-                duration_completed=False,
-                failure_classification=None,
-                failure_report=None,
-                error_message=f"Duration incomplete: {actual_steps}/{expected_steps} steps (no threshold crossings detected)",
+                duration_steps=expected_steps,
+                actual_steps=actual_steps,
+                structural_invariants_passed=True,
+                failure_mode=None,
+                classification_result=None,
+                telemetry_path=Path(telemetry_path),
+                report_path=None,
             )
         else:
             # All checks passed
             return ValidationResult(
                 passed=True,
-                duration_steps=actual_steps,
-                schema_valid=True,
-                structural_invariants_valid=True,
-                duration_completed=True,
-                failure_classification=None,
-                failure_report=None,
-                error_message="",
+                duration_steps=expected_steps,
+                actual_steps=actual_steps,
+                structural_invariants_passed=True,
+                failure_mode=None,
+                classification_result=None,
+                telemetry_path=Path(telemetry_path),
+                report_path=None,
             )
 
     def run_simulation(self, steps: int, output_dir: str) -> Path:
@@ -297,13 +294,13 @@ class BalanceCoreValidator:
                 # Simulation failed - create failure result
                 result = ValidationResult(
                     passed=False,
-                    duration_steps=0,
-                    schema_valid=False,
-                    structural_invariants_valid=False,
-                    duration_completed=False,
-                    failure_classification=None,
-                    failure_report=None,
-                    error_message=str(e),
+                    duration_steps=duration,
+                    actual_steps=0,
+                    structural_invariants_passed=False,
+                    failure_mode=None,
+                    classification_result=None,
+                    telemetry_path=Path(output_dir) / f"telemetry_{duration}.csv",
+                    report_path=None,
                 )
                 results.append(result)
                 print(f"❌ Simulation failed: {e}")
@@ -314,16 +311,16 @@ class BalanceCoreValidator:
             results.append(result)
 
             if result.passed:
-                print(f"[PASS] Duration {duration} PASSED")
+                print(f"✓ [PASS] Duration {duration} PASSED")
             else:
-                print(f"[FAIL] Duration {duration} FAILED")
-                print(f"Error: {result.error_message}")
+                print(f"✗ [FAIL] Duration {duration} FAILED")
+                if result.failure_mode:
+                    print(f"  Failure mode: {result.failure_mode.value}")
+                    print(f"  Actual steps: {result.actual_steps}/{result.duration_steps}")
 
-                # Write failure report if available
-                if result.failure_report:
-                    report_path = Path(output_dir) / f"failure_report_{duration}.md"
-                    report_path.write_text(result.failure_report)
-                    print(f"Failure report written to: {report_path}")
+                # Report already written by validate_duration()
+                if result.report_path:
+                    print(f"  Failure report: {result.report_path}")
 
                 # Stop at first failure
                 print("\nStopping ladder at first failure")
