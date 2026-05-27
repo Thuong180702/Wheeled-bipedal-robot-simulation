@@ -22,6 +22,10 @@ from wheeled_biped.validation.fix_cycle_reporter import (
     FixCycleReporter,
     FixCycleRecord,
 )
+from wheeled_biped.validation.balance_core_validator import (
+    BalanceCoreValidator,
+    ValidationResult,
+)
 
 __all__ = [
     "TelemetrySchemaChecker",
@@ -35,4 +39,6 @@ __all__ = [
     "ClassificationReportGenerator",
     "FixCycleReporter",
     "FixCycleRecord",
+    "BalanceCoreValidator",
+    "ValidationResult",
 ]
