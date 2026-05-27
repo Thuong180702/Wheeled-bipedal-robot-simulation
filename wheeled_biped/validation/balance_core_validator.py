@@ -216,18 +216,24 @@ class BalanceCoreValidator:
         Raises:
             RuntimeError: If simulation fails
         """
+        import shutil
+        import glob
+
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
-        telemetry_path = output_path / f"telemetry_{steps}.csv"
-
         # Run simulate_hierarchical_controller.py
+        # Note: script outputs to outputs/hierarchical_controller_sim/telemetry_{timestamp}.csv
         cmd = [
             "python",
             "scripts/simulate_hierarchical_controller.py",
+            "--controller-mode", "balance-core",
             "--steps", str(steps),
-            "--output", str(telemetry_path),
         ]
+
+        # Get list of existing telemetry files before simulation
+        sim_output_dir = Path("outputs/hierarchical_controller_sim")
+        existing_files = set(sim_output_dir.glob("telemetry_*.csv")) if sim_output_dir.exists() else set()
 
         try:
             result = subprocess.run(
@@ -243,12 +249,20 @@ class BalanceCoreValidator:
                 f"stderr: {e.stderr}"
             )
 
-        if not telemetry_path.exists():
+        # Find the newly created telemetry file
+        new_files = set(sim_output_dir.glob("telemetry_*.csv")) - existing_files
+        if not new_files:
             raise RuntimeError(
-                f"Simulation completed but telemetry file not found: {telemetry_path}"
+                f"Simulation completed but no new telemetry file found in {sim_output_dir}"
             )
 
-        return telemetry_path
+        source_telemetry = max(new_files, key=lambda p: p.stat().st_mtime)
+
+        # Copy to desired output directory with predictable name
+        dest_telemetry = output_path / f"telemetry_{steps}.csv"
+        shutil.copy2(source_telemetry, dest_telemetry)
+
+        return dest_telemetry
 
     def validate_ladder(
         self,
