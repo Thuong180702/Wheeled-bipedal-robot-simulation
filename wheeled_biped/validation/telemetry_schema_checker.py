@@ -14,7 +14,7 @@ class TelemetrySchemaChecker:
     """Validates that all required telemetry fields exist."""
 
     REQUIRED_METADATA_FIELDS = [
-        "controller_mode",
+        "control_mode",
         "step",
         "time",
     ]
