@@ -18,6 +18,10 @@ from wheeled_biped.validation.failure_classifier import (
 from wheeled_biped.validation.classification_report import (
     ClassificationReportGenerator,
 )
+from wheeled_biped.validation.fix_cycle_reporter import (
+    FixCycleReporter,
+    FixCycleRecord,
+)
 
 __all__ = [
     "TelemetrySchemaChecker",
@@ -29,4 +33,6 @@ __all__ = [
     "ClassificationResult",
     "ThresholdCrossing",
     "ClassificationReportGenerator",
+    "FixCycleReporter",
+    "FixCycleRecord",
 ]
