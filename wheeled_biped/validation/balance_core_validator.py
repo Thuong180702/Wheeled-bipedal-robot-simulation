@@ -2,7 +2,7 @@
 """Main validation orchestrator for balance-core controller with duration ladder."""
 
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Sequence
 from pathlib import Path
 import subprocess
 import pandas as pd
@@ -203,12 +203,18 @@ class BalanceCoreValidator:
                 report_path=None,
             )
 
-    def run_simulation(self, steps: int, output_dir: str) -> Path:
+    def run_simulation(
+        self,
+        steps: int,
+        output_dir: str,
+        sim_args: Optional[Sequence[str]] = None,
+    ) -> Path:
         """Run simulation for specified number of steps.
 
         Args:
             steps: Number of simulation steps
             output_dir: Output directory for telemetry
+            sim_args: Optional extra simulator CLI arguments
 
         Returns:
             Path to generated telemetry CSV file
@@ -230,6 +236,8 @@ class BalanceCoreValidator:
             "--controller-mode", "balance-core",
             "--steps", str(steps),
         ]
+        if sim_args:
+            cmd.extend(sim_args)
 
         # Get list of existing telemetry files before simulation
         sim_output_dir = Path("outputs/hierarchical_controller_sim")
@@ -268,42 +276,50 @@ class BalanceCoreValidator:
         self,
         output_dir: str,
         start_duration: Optional[int] = None,
+        durations: Optional[Sequence[int]] = None,
+        stop_on_first_failure: bool = True,
+        sim_args: Optional[Sequence[str]] = None,
     ) -> List[ValidationResult]:
         """Run progressive duration ladder validation.
 
-        Runs simulations at increasing durations (100→200→500→1000) and validates
-        each. Stops at first failure.
+        Runs simulations at increasing durations and validates each.
 
         Args:
             output_dir: Output directory for telemetry and reports
-            start_duration: Optional starting duration (default: first in ladder)
+            start_duration: Optional starting duration (skip lower values)
+            durations: Custom list of step counts. Defaults to DURATION_LADDER.
+            stop_on_first_failure: If True (default), stop at first failure.
+                If False, run all durations for full diagnostics.
+            sim_args: Optional extra simulator CLI arguments.
 
         Returns:
             List of ValidationResult for each duration tested
         """
         results = []
 
+        ladder = list(durations) if durations is not None else list(self.DURATION_LADDER)
+
         # Determine starting index
-        if start_duration is None:
-            start_idx = 0
-        else:
+        if start_duration is not None:
             try:
-                start_idx = self.DURATION_LADDER.index(start_duration)
+                start_idx = ladder.index(start_duration)
             except ValueError:
                 raise ValueError(
                     f"Invalid start_duration {start_duration}. "
-                    f"Must be one of {self.DURATION_LADDER}"
+                    f"Must be one of {ladder}"
                 )
+        else:
+            start_idx = 0
 
         # Run ladder
-        for duration in self.DURATION_LADDER[start_idx:]:
+        for duration in ladder[start_idx:]:
             print(f"\n{'='*60}")
             print(f"Validating duration: {duration} steps")
             print(f"{'='*60}")
 
             # Run simulation
             try:
-                telemetry_path = self.run_simulation(duration, output_dir)
+                telemetry_path = self.run_simulation(duration, output_dir, sim_args=sim_args)
             except RuntimeError as e:
                 # Simulation failed - create failure result
                 result = ValidationResult(
@@ -336,8 +352,8 @@ class BalanceCoreValidator:
                 if result.report_path:
                     print(f"  Failure report: {result.report_path}")
 
-                # Stop at first failure
-                print("\nStopping ladder at first failure")
-                break
+                if stop_on_first_failure:
+                    print("\nStopping ladder at first failure")
+                    break
 
         return results

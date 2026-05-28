@@ -1,11 +1,13 @@
 # tests/test_balance_core_validation_workflow.py
 """Tests for balance-core validation workflow with duration ladder."""
 
+import argparse
 import pytest
 import pandas as pd
 import tempfile
 import os
 from pathlib import Path
+from unittest.mock import patch
 from wheeled_biped.validation.balance_core_validator import (
     BalanceCoreValidator,
     ValidationResult,
@@ -14,6 +16,9 @@ from wheeled_biped.validation.balance_core_validator import (
 
 class TestBalanceCoreValidationWorkflow:
     """Test balance-core validation workflow."""
+
+    def _csv_vector(self, values) -> str:
+        return ",".join(str(v) for v in values)
 
     def _create_valid_telemetry(self, steps: int) -> pd.DataFrame:
         """Create valid telemetry dataframe with all required fields.
@@ -27,6 +32,7 @@ class TestBalanceCoreValidationWorkflow:
         # Create base data
         data = {
             # Metadata
+            "control_mode": ["balance-core"] * steps,
             "controller_mode": ["balance-core"] * steps,
             "step": list(range(steps)),
             "time": [i * 0.002 for i in range(steps)],  # 500 Hz
@@ -42,31 +48,31 @@ class TestBalanceCoreValidationWorkflow:
             "com_y_m": [0.0] * steps,
             "com_z_m": [0.45] * steps,
 
-            # Posture fields (10-element lists as strings)
-            "joint_positions": [str([0.0] * 10)] * steps,
-            "joint_velocities": [str([0.0] * 10)] * steps,
+            # Posture fields (10-element CSV strings)
+            "joint_positions": [self._csv_vector([0.0] * 10)] * steps,
+            "joint_velocities": [self._csv_vector([0.0] * 10)] * steps,
 
             # Contact fields
             "contact_supervisor_state": ["DOUBLE_CONTACT"] * steps,
             "contact_duration_s": [i * 0.002 for i in range(steps)],
 
-            # Torque fields (10-element lists as strings)
-            "tau_shape_posture_per_joint": [str([0.0] * 10)] * steps,
-            "tau_support_feedforward_per_joint": [str([0.0] * 10)] * steps,
-            "tau_sagittal_wheel_balance_per_joint": [str([0.0] * 10)] * steps,
-            "tau_lateral_roll_balance_per_joint": [str([0.0] * 10)] * steps,
-            "tau_total_raw_per_joint": [str([0.0] * 10)] * steps,
-            "tau_total_clipped_per_joint": [str([0.0] * 10)] * steps,
-            "tau_final_per_joint": [str([0.0] * 10)] * steps,
-            "active_torque_owner_per_joint": [str(["shape_posture"] * 10)] * steps,
+            # Torque fields (10-element CSV strings)
+            "tau_shape_posture_per_joint": [self._csv_vector([0.0] * 10)] * steps,
+            "tau_support_feedforward_per_joint": [self._csv_vector([0.0] * 10)] * steps,
+            "tau_sagittal_wheel_balance_per_joint": [self._csv_vector([0.0] * 10)] * steps,
+            "tau_lateral_roll_balance_per_joint": [self._csv_vector([0.0] * 10)] * steps,
+            "tau_total_raw_per_joint": [self._csv_vector([0.0] * 10)] * steps,
+            "tau_total_clipped_per_joint": [self._csv_vector([0.0] * 10)] * steps,
+            "tau_final_per_joint": [self._csv_vector([0.0] * 10)] * steps,
+            "active_torque_owner_per_joint": [self._csv_vector(["shape_posture"] * 10)] * steps,
             "ownership_violation_count": [0] * steps,
 
             # Actuator fields
-            "actuator_ctrl_per_joint": [str([0.0] * 10)] * steps,
+            "actuator_ctrl_per_joint": [self._csv_vector([0.0] * 10)] * steps,
 
-            # Safety fields (10-element boolean lists as strings)
-            "torque_saturation_mask_per_joint": [str([False] * 10)] * steps,
-            "torque_rate_saturation_mask_per_joint": [str([False] * 10)] * steps,
+            # Safety fields (10-element boolean CSV strings)
+            "torque_saturation_mask_per_joint": [self._csv_vector([False] * 10)] * steps,
+            "torque_rate_saturation_mask_per_joint": [self._csv_vector([False] * 10)] * steps,
 
             # Hidden torque fields
             "hidden_torque_norm": [0.0] * steps,
@@ -110,7 +116,7 @@ class TestBalanceCoreValidationWorkflow:
             # Mock run_simulation to create telemetry files
             # For this test, we'll create files that fail at 200 steps
 
-            def mock_run_simulation(steps: int, output_dir_path: str):
+            def mock_run_simulation(steps: int, output_dir_path: str, sim_args=None):
                 """Mock simulation that creates telemetry."""
                 telemetry_path = Path(output_dir_path) / f"telemetry_{steps}.csv"
 
@@ -224,3 +230,224 @@ class TestBalanceCoreValidationWorkflow:
             assert result.structural_invariants_passed is False
         finally:
             os.unlink(telemetry_path)
+
+    def test_arbitrary_duration_ladder_with_custom_durations(self):
+        """Test that validate_ladder accepts custom durations."""
+        validator = BalanceCoreValidator()
+
+        with tempfile.TemporaryDirectory() as output_dir:
+            call_log = []
+
+            def mock_run_simulation(steps, output_dir_path, sim_args=None):
+                call_log.append(steps)
+                telemetry_path = Path(output_dir_path) / f"telemetry_{steps}.csv"
+                df = self._create_valid_telemetry(steps)
+                df.to_csv(telemetry_path, index=False)
+                return telemetry_path
+
+            original = validator.run_simulation
+            validator.run_simulation = mock_run_simulation
+            try:
+                results = validator.validate_ladder(
+                    output_dir,
+                    durations=[500, 1000, 2000],
+                )
+                assert len(results) == 3
+                assert results[0].duration_steps == 500
+                assert results[1].duration_steps == 1000
+                assert results[2].duration_steps == 2000
+                assert all(r.passed for r in results)
+                assert call_log == [500, 1000, 2000]
+            finally:
+                validator.run_simulation = original
+
+    def test_default_stops_at_first_failure(self):
+        """Test that default validate_ladder stops at first failure."""
+        validator = BalanceCoreValidator()
+
+        with tempfile.TemporaryDirectory() as output_dir:
+
+            def mock_run_simulation(steps, output_dir_path, sim_args=None):
+                telemetry_path = Path(output_dir_path) / f"telemetry_{steps}.csv"
+                df = self._create_valid_telemetry(steps)
+                if steps == 1000:
+                    df.loc[500:, "pitch_x_rad"] = 0.35
+                df.to_csv(telemetry_path, index=False)
+                return telemetry_path
+
+            original = validator.run_simulation
+            validator.run_simulation = mock_run_simulation
+            try:
+                results = validator.validate_ladder(
+                    output_dir,
+                    durations=[500, 1000, 2000],
+                    stop_on_first_failure=True,
+                )
+                assert len(results) == 2  # stops after 1000 fails
+                assert results[0].passed is True
+                assert results[1].passed is False
+            finally:
+                validator.run_simulation = original
+
+    def test_continue_all_runs_every_duration(self):
+        """Test that stop_on_first_failure=False runs all durations."""
+        validator = BalanceCoreValidator()
+
+        with tempfile.TemporaryDirectory() as output_dir:
+
+            def mock_run_simulation(steps, output_dir_path, sim_args=None):
+                telemetry_path = Path(output_dir_path) / f"telemetry_{steps}.csv"
+                df = self._create_valid_telemetry(steps)
+                if steps == 1000:
+                    df.loc[500:, "pitch_x_rad"] = 0.35
+                df.to_csv(telemetry_path, index=False)
+                return telemetry_path
+
+            original = validator.run_simulation
+            validator.run_simulation = mock_run_simulation
+            try:
+                results = validator.validate_ladder(
+                    output_dir,
+                    durations=[500, 1000, 2000],
+                    stop_on_first_failure=False,
+                )
+                assert len(results) == 3  # all run
+                assert results[0].passed is True
+                assert results[1].passed is False
+                assert results[2].passed is True
+            finally:
+                validator.run_simulation = original
+
+    def test_sim_args_forwarded_to_run_simulation(self):
+        """Test that sim_args are forwarded through run_simulation."""
+        validator = BalanceCoreValidator()
+        captured_args = []
+
+        original_run = validator.run_simulation
+
+        def mock_run(steps, output_dir_path, sim_args=None):
+            captured_args.append(list(sim_args or []))
+            telemetry_path = Path(output_dir_path) / f"telemetry_{steps}.csv"
+            df = self._create_valid_telemetry(steps)
+            df.to_csv(telemetry_path, index=False)
+            return telemetry_path
+
+        validator.run_simulation = mock_run
+        with tempfile.TemporaryDirectory() as output_dir:
+            try:
+                validator.validate_ladder(
+                    output_dir,
+                    durations=[100],
+                    sim_args=["--initial-root-z-perturbation", "0.02"],
+                )
+                assert captured_args[0] == ["--initial-root-z-perturbation", "0.02"]
+            finally:
+                validator.run_simulation = original_run
+
+
+def test_parse_durations_rejects_empty_input():
+    from scripts.validate_balance_core import _parse_durations
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        _parse_durations(",,,")
+
+
+def test_parse_durations_parses_comma_separated_ints():
+    from scripts.validate_balance_core import _parse_durations
+
+    assert _parse_durations("1000, 2000,5000") == [1000, 2000, 5000]
+
+
+def test_main_forwards_initial_root_z_perturbation_flag():
+    from scripts import validate_balance_core
+
+    class FakeValidator:
+        def __init__(self):
+            self.run_calls = []
+
+        def run_simulation(self, steps, output_dir, sim_args=None):
+            self.run_calls.append((steps, output_dir, list(sim_args or [])))
+            return Path(output_dir) / f"telemetry_{steps}.csv"
+
+        def validate_duration(self, telemetry_path, expected_steps):
+            return ValidationResult(
+                passed=True,
+                duration_steps=expected_steps,
+                actual_steps=expected_steps,
+                structural_invariants_passed=True,
+                failure_mode=None,
+                classification_result=None,
+                telemetry_path=Path(telemetry_path),
+                report_path=None,
+            )
+
+    fake_validator = FakeValidator()
+
+    with patch.object(validate_balance_core, "BalanceCoreValidator", return_value=fake_validator):
+        with patch.object(validate_balance_core.sys, "argv", [
+            "validate_balance_core.py",
+            "--single-duration", "1000",
+            "--initial-root-z-perturbation", "0.02",
+        ]):
+            exit_code = validate_balance_core.main()
+
+    assert exit_code == 0
+    assert fake_validator.run_calls == [
+        (1000, str(Path("outputs/balance_core_validation")), ["--initial-root-z-perturbation", "0.02"])
+    ]
+
+
+def test_main_forwards_initial_root_z_perturbation_in_ladder_mode():
+    from scripts import validate_balance_core
+
+    class FakeValidator:
+        def __init__(self):
+            self.ladder_calls = []
+
+        def validate_ladder(
+            self,
+            output_dir,
+            start_duration=None,
+            durations=None,
+            stop_on_first_failure=True,
+            sim_args=None,
+        ):
+            self.ladder_calls.append({
+                "output_dir": output_dir,
+                "start_duration": start_duration,
+                "durations": durations,
+                "stop_on_first_failure": stop_on_first_failure,
+                "sim_args": list(sim_args or []),
+            })
+            return [
+                ValidationResult(
+                    passed=True,
+                    duration_steps=1000,
+                    actual_steps=1000,
+                    structural_invariants_passed=True,
+                    failure_mode=None,
+                    classification_result=None,
+                    telemetry_path=Path(output_dir) / "telemetry_1000.csv",
+                    report_path=None,
+                )
+            ]
+
+    fake_validator = FakeValidator()
+
+    with patch.object(validate_balance_core, "BalanceCoreValidator", return_value=fake_validator):
+        with patch.object(validate_balance_core.sys, "argv", [
+            "validate_balance_core.py",
+            "--durations", "1000,2000",
+            "--continue-all",
+            "--initial-root-z-perturbation", "0.01",
+        ]):
+            exit_code = validate_balance_core.main()
+
+    assert exit_code == 0
+    assert fake_validator.ladder_calls == [{
+        "output_dir": str(Path("outputs/balance_core_validation")),
+        "start_duration": None,
+        "durations": [1000, 2000],
+        "stop_on_first_failure": False,
+        "sim_args": ["--initial-root-z-perturbation", "0.01"],
+    }]

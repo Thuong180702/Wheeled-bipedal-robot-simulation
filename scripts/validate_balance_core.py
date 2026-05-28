@@ -6,6 +6,11 @@ from pathlib import Path
 import sys
 
 from wheeled_biped.validation import BalanceCoreValidator
+def _parse_durations(raw: str) -> list[int]:
+    durations = [int(part.strip()) for part in raw.split(",") if part.strip()]
+    if not durations:
+        raise argparse.ArgumentTypeError("--durations must include at least one integer")
+    return durations
 
 
 def main():
@@ -21,19 +26,37 @@ def main():
     parser.add_argument(
         "--start-duration",
         type=int,
-        choices=[100, 200, 500, 1000],
-        help="Starting duration (default: 100). Use to resume from a specific duration.",
+        help="Starting duration. Use to resume from a specific duration.",
     )
     parser.add_argument(
         "--single-duration",
         type=int,
-        choices=[100, 200, 500, 1000],
         help="Run only a single duration instead of the full ladder",
+    )
+    parser.add_argument(
+        "--durations",
+        type=_parse_durations,
+        help="Comma-separated list of durations, e.g. 1000,2000,5000,10000",
+    )
+    parser.add_argument(
+        "--initial-root-z-perturbation",
+        type=float,
+        help="Apply an initial root-z perturbation after nominal equilibrium capture",
+    )
+    parser.add_argument(
+        "--continue-all",
+        action="store_true",
+        help="Run all requested durations even after a failure",
     )
 
     args = parser.parse_args()
 
     validator = BalanceCoreValidator()
+
+    # Build sim_args from explicit flags when provided
+    sim_args = []
+    if args.initial_root_z_perturbation is not None:
+        sim_args.extend(["--initial-root-z-perturbation", str(args.initial_root_z_perturbation)])
 
     print("=" * 60)
     print("Balance-Core Performance Validation")
@@ -45,8 +68,9 @@ def main():
         # Run single duration
         print(f"Running single {args.single_duration}-step validation...")
         try:
-            telemetry_path = validator.run_simulation(args.single_duration, str(args.output_dir))
+            telemetry_path = validator.run_simulation(args.single_duration, str(args.output_dir), sim_args=sim_args)
             result = validator.validate_duration(str(telemetry_path), args.single_duration)
+
 
             if result.passed:
                 print(f"[PASS] {args.single_duration}-step validation passed")
@@ -65,9 +89,13 @@ def main():
     else:
         # Run duration ladder
         try:
+            durations = args.durations
             results = validator.validate_ladder(
                 output_dir=str(args.output_dir),
                 start_duration=args.start_duration,
+                durations=durations,
+                stop_on_first_failure=not args.continue_all,
+                sim_args=sim_args,
             )
 
             print()
