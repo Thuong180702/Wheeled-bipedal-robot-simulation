@@ -1,6 +1,11 @@
+import argparse
+from unittest.mock import patch
+
 import jax.numpy as jnp
+import pytest
 
 from scripts.simulate_hierarchical_controller import (
+    apply_initial_root_z_perturbation,
     build_step1_telemetry_template,
     build_step3_wbc_joint_scale,
     build_step6_wbc_joint_scale,
@@ -16,24 +21,92 @@ from scripts.simulate_hierarchical_controller import (
 from wheeled_biped.controllers.leg_position_controller import LegPositionController
 
 
-def test_step1_telemetry_template_includes_new_fields():
+def test_step1_telemetry_template_includes_root_z_perturbation_fields():
     telemetry = build_step1_telemetry_template()
 
     required = {
-        "tau_wbc_per_joint",
-        "tau_posture_per_joint",
-        "tau_leg_position_per_joint",
-        "tau_wheel_balance_per_joint",
-        "tau_total_per_joint",
-        "hip_roll_abs_max",
-        "hip_yaw_abs_max",
-        "hip_pitch_error_max",
-        "knee_error_max",
-        "wheel_balance_torque",
-        "control_mode",
+        "initial_root_z_perturbation_m",
+        "nominal_equilibrium_com_z_m",
+        "initial_com_z_m_after_perturbation",
+        "perturbation_applied_after_equilibrium_capture",
     }
 
     assert required.issubset(telemetry.keys())
+
+
+def test_apply_initial_root_z_perturbation_offsets_root_z_after_equilibrium_capture():
+    class DummyData:
+        def __init__(self):
+            self.qpos = [0.0, 0.0, 0.45, 1.0]
+            self.qvel = [1.0, 2.0, 3.0, 4.0]
+            self.qacc = [5.0, 6.0, 7.0, 8.0]
+
+    data = DummyData()
+
+    with patch("scripts.simulate_hierarchical_controller.mujoco.mj_forward") as mj_forward:
+        metadata = apply_initial_root_z_perturbation(
+            model=object(),
+            data=data,
+            perturbation_m=0.02,
+            nominal_equilibrium_com_z_m=0.41,
+        )
+
+    assert data.qpos[2] == pytest.approx(0.47)
+    assert data.qvel == [0.0, 0.0, 0.0, 0.0]
+    assert data.qacc == [0.0, 0.0, 0.0, 0.0]
+    assert metadata == {
+        "initial_root_z_perturbation_m": 0.02,
+        "nominal_equilibrium_com_z_m": 0.41,
+        "initial_com_z_m_after_perturbation": pytest.approx(0.43),
+        "perturbation_applied_after_equilibrium_capture": True,
+    }
+    mj_forward.assert_called_once()
+
+
+def test_apply_initial_root_z_perturbation_uses_measured_post_perturbation_com_height():
+    class DummyData:
+        def __init__(self):
+            self.qpos = [0.0, 0.0, 0.45, 1.0]
+            self.qvel = [1.0, 2.0, 3.0, 4.0]
+            self.qacc = [5.0, 6.0, 7.0, 8.0]
+
+    data = DummyData()
+
+    with patch("scripts.simulate_hierarchical_controller.mujoco.mj_forward"):
+        metadata = apply_initial_root_z_perturbation(
+            model=object(),
+            data=data,
+            perturbation_m=0.02,
+            nominal_equilibrium_com_z_m=0.41,
+            initial_com_z_m_after_perturbation=0.418,
+        )
+
+    assert metadata["initial_com_z_m_after_perturbation"] == pytest.approx(0.418)
+
+
+def test_main_accepts_initial_root_z_perturbation_flag():
+    from scripts import simulate_hierarchical_controller
+
+    with patch.object(simulate_hierarchical_controller, "validate_balance_core_mode_args") as validate_args:
+        with patch.object(simulate_hierarchical_controller.mujoco.MjModel, "from_xml_path", side_effect=RuntimeError("stop after parse")):
+            with patch.object(simulate_hierarchical_controller, "time"):
+                with patch.object(simulate_hierarchical_controller, "Path") as fake_path:
+                    fake_path.return_value.mkdir.return_value = None
+                    with patch.object(simulate_hierarchical_controller.sys, "argv", [
+                        "simulate_hierarchical_controller.py",
+                        "--controller-mode", "balance-core",
+                        "--steps", "10",
+                        "--initial-root-z-perturbation", "0.02",
+                    ]):
+                        try:
+                            simulate_hierarchical_controller.main()
+                        except RuntimeError as exc:
+                            assert str(exc) == "stop after parse"
+                        else:
+                            raise AssertionError("Expected early stop after argument parsing")
+
+    parsed_args = validate_args.call_args.args[0]
+    assert parsed_args.initial_root_z_perturbation == 0.02
 
 
 def test_step1_joint_diagnostics_are_zeroed_and_mode_is_upright():

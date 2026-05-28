@@ -26,6 +26,10 @@ from wheeled_biped.validation.balance_core_validator import (
     BalanceCoreValidator,
     ValidationResult,
 )
+from wheeled_biped.validation.study_aggregator import (
+    StudyAggregator,
+    StudyCaseResult,
+)
 
 __all__ = [
     "TelemetrySchemaChecker",
@@ -41,4 +45,6 @@ __all__ = [
     "FixCycleRecord",
     "BalanceCoreValidator",
     "ValidationResult",
+    "StudyAggregator",
+    "StudyCaseResult",
 ]

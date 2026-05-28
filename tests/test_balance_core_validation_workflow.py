@@ -2,6 +2,7 @@
 """Tests for balance-core validation workflow with duration ladder."""
 
 import argparse
+import json
 import pytest
 import pandas as pd
 import tempfile
@@ -12,6 +13,7 @@ from wheeled_biped.validation.balance_core_validator import (
     BalanceCoreValidator,
     ValidationResult,
 )
+from wheeled_biped.validation.study_aggregator import StudyAggregator
 
 
 class TestBalanceCoreValidationWorkflow:
@@ -344,18 +346,140 @@ class TestBalanceCoreValidationWorkflow:
             finally:
                 validator.run_simulation = original_run
 
+    def test_study_aggregator_classifies_invalid_initial_setup_before_controller_failure(self):
+        aggregator = StudyAggregator()
+        df = self._create_valid_telemetry(100)
+        df["left_wheel_contact"] = [False] * 100
+        df["right_wheel_contact"] = [False] * 100
+        df["min_wheel_contact_dist_m"] = [0.01] * 100
+        df.loc[20:, "pitch_x_rad"] = 0.35
 
-def test_parse_durations_rejects_empty_input():
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            telemetry_path = f.name
+            df.to_csv(f, index=False)
+
+        try:
+            result = aggregator.evaluate_case_from_telemetry(
+                case_id="invalid_setup_case",
+                height_test_type="root_z_perturbation",
+                duration_steps=100,
+                telemetry_path=telemetry_path,
+                sim_args=["--initial-root-z-perturbation", "0.02"],
+            )
+        finally:
+            os.unlink(telemetry_path)
+
+        assert result.setup_valid is False
+        assert result.setup_failure_reason == "floating_start"
+        assert result.failure_mode == "invalid_initial_setup"
+        assert result.responsible_component is None
+        assert result.passed is False
+
+    def test_study_aggregator_preserves_height_test_type_and_classification(self):
+        aggregator = StudyAggregator()
+        df = self._create_valid_telemetry(100)
+        df["left_wheel_contact"] = [True] * 100
+        df["right_wheel_contact"] = [True] * 100
+        df["min_wheel_contact_dist_m"] = [-5e-4] * 100
+        df["nominal_equilibrium_com_z_m"] = [0.45] * 100
+        df["initial_com_z_m_after_perturbation"] = [0.47] * 100
+        df.loc[50:, "pitch_x_rad"] = 0.35
+
+        with tempfile.TemporaryDirectory() as output_dir:
+            telemetry_path = Path(output_dir) / "telemetry.csv"
+            df.to_csv(telemetry_path, index=False)
+            result = aggregator.evaluate_case_from_telemetry(
+                case_id="root_z_plus_020mm_100",
+                height_test_type="root_z_perturbation",
+                duration_steps=100,
+                telemetry_path=telemetry_path,
+                sim_args=["--initial-root-z-perturbation", "0.02"],
+            )
+
+        assert result.setup_valid is True
+        assert result.height_test_type == "root_z_perturbation"
+        assert result.failure_mode == "F2.1"
+        assert result.responsible_component == "SagittalWheelBalanceController"
+        assert result.initial_com_z_m == pytest.approx(0.47)
+        assert result.equilibrium_com_z_m == pytest.approx(0.45)
+
+    def test_study_aggregator_writes_json_and_markdown_summaries(self):
+        aggregator = StudyAggregator()
+        results = [
+            aggregator._to_study_case_result(
+                case_id="longevity_1000",
+                height_test_type="longevity",
+                validation_result=ValidationResult(
+                    passed=True,
+                    duration_steps=1000,
+                    actual_steps=1000,
+                    structural_invariants_passed=True,
+                    failure_mode=None,
+                    classification_result=None,
+                    telemetry_path=Path("telemetry_1000.csv"),
+                    report_path=None,
+                ),
+                sim_args=[],
+                summary_metrics={"requested_steps": 1000, "survival_steps": 1000},
+                setup_verdict={
+                    "initial_contact_state": "DOUBLE_CONTACT",
+                    "min_wheel_contact_dist_m": -5e-4,
+                    "equilibrium_com_z_m": 0.45,
+                    "initial_com_z_m": 0.45,
+                },
+            )
+        ]
+
+        with tempfile.TemporaryDirectory() as output_dir:
+            json_path = Path(output_dir) / "summary.json"
+            markdown_path = Path(output_dir) / "summary.md"
+            aggregator.write_summary_files(
+                results,
+                json_path=json_path,
+                markdown_path=markdown_path,
+                conclusion="long_duration_survival_passed_up_to_1000_steps",
+            )
+
+            payload = json.loads(json_path.read_text())
+            markdown = markdown_path.read_text()
+
+
+
+def test_main_writes_known_study_summaries():
+    from scripts import validate_balance_core
+
+    with tempfile.TemporaryDirectory() as output_dir:
+        with patch.object(validate_balance_core.sys, "argv", [
+            "validate_balance_core.py",
+            "--write-known-study-summaries",
+            "--output-dir", output_dir,
+        ]):
+            exit_code = validate_balance_core.main()
+
+        assert exit_code == 0
+
+        summary_dir = Path(output_dir)
+        long_json = json.loads((summary_dir / "long_duration_summary.json").read_text())
+        root_json = json.loads((summary_dir / "root_z_perturbation_summary.json").read_text())
+        true_height_md = (summary_dir / "true_height_feasibility_summary.md").read_text()
+
+    assert long_json["conclusion"] == "long_duration_survival_passed_up_to_10000_steps"
+    assert long_json["max_confirmed_passing_duration_steps"] == 10000
+    assert root_json["conclusion"].startswith("root_z_perturbation_robustness_narrow")
+    assert root_json["case_count"] == 9
+    assert "true_height_variant_test_blocked" in true_height_md
     from scripts.validate_balance_core import _parse_durations
 
     with pytest.raises(argparse.ArgumentTypeError):
         _parse_durations(",,,")
 
 
+
 def test_parse_durations_parses_comma_separated_ints():
     from scripts.validate_balance_core import _parse_durations
 
     assert _parse_durations("1000, 2000,5000") == [1000, 2000, 5000]
+
 
 
 def test_main_forwards_initial_root_z_perturbation_flag():
@@ -395,6 +519,7 @@ def test_main_forwards_initial_root_z_perturbation_flag():
     assert fake_validator.run_calls == [
         (1000, str(Path("outputs/balance_core_validation")), ["--initial-root-z-perturbation", "0.02"])
     ]
+
 
 
 def test_main_forwards_initial_root_z_perturbation_in_ladder_mode():

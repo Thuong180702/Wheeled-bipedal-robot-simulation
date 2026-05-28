@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import csv
+import sys
 import time
 from pathlib import Path
 
@@ -182,6 +183,27 @@ def classify_floor_contacts(model, data, floor_geom_id, l_wheel_geom_id, r_wheel
     }
 
 
+def apply_initial_root_z_perturbation(
+    model,
+    data,
+    perturbation_m: float,
+    nominal_equilibrium_com_z_m: float,
+    initial_com_z_m_after_perturbation: float | None = None,
+):
+    data.qpos[2] += perturbation_m
+    data.qvel[:] = [0.0] * len(data.qvel)
+    data.qacc[:] = [0.0] * len(data.qacc)
+    mujoco.mj_forward(model, data)
+    if initial_com_z_m_after_perturbation is None:
+        initial_com_z_m_after_perturbation = nominal_equilibrium_com_z_m + perturbation_m
+    return {
+        "initial_root_z_perturbation_m": float(perturbation_m),
+        "nominal_equilibrium_com_z_m": float(nominal_equilibrium_com_z_m),
+        "initial_com_z_m_after_perturbation": float(initial_com_z_m_after_perturbation),
+        "perturbation_applied_after_equilibrium_capture": True,
+    }
+
+
 def calibrate_root_z_for_wheel_floor_contact(model, data, target_dist=-5e-4, max_iters=5):
     floor_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
     l_wheel_geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "l_wheel_collision")
@@ -259,6 +281,10 @@ def build_step1_telemetry_template():
         "control_mode": [],
         "feedforward_enabled": [],  # Stage 2B
         "feedforward_norm": [],  # Stage 2B
+        "initial_root_z_perturbation_m": [],
+        "nominal_equilibrium_com_z_m": [],
+        "initial_com_z_m_after_perturbation": [],
+        "perturbation_applied_after_equilibrium_capture": [],
     }
 
 
@@ -698,6 +724,12 @@ def main():
     parser.add_argument('--enable-stage2d-sagittal-lqr', action='store_true', default=False, help='Enable Stage 2D sagittal LQR controller (model-based with identified dynamics)')
     parser.add_argument('--stage2d-lqr-config', type=str, default='A', choices=['A', 'B', 'C', 'D'], help='Stage 2D LQR configuration (A=baseline, B=increased, C=high, D=aggressive)')
     parser.add_argument('--stage2d-model-path', type=str, default='outputs/stage2d_sysid/identified_model.npz', help='Path to identified model from Phase 1')
+    parser.add_argument(
+        '--initial-root-z-perturbation',
+        type=float,
+        default=0.0,
+        help='Apply an initial root-z perturbation after equilibrium capture and before rollout',
+    )
     args = parser.parse_args()
 
     # Validate balance-core mode arguments
@@ -1100,6 +1132,35 @@ def main():
         print(f"  Pitch: {float(pitch_x_eq)*57.3:.2f} deg")
         print(f"  CoM Y: {float(centroidal_state_eq.com_pos[1]):.6f} m")
         print(f"  CP Y: {float(centroidal_state_eq.capture_point[1]):.6f} m")
+
+    perturbation_metadata = {
+        "initial_root_z_perturbation_m": 0.0,
+        "nominal_equilibrium_com_z_m": float(centroidal_state_eq.com_pos[2]),
+        "initial_com_z_m_after_perturbation": float(centroidal_state_eq.com_pos[2]),
+        "perturbation_applied_after_equilibrium_capture": False,
+    }
+    if args.initial_root_z_perturbation != 0.0:
+        apply_initial_root_z_perturbation(
+            model=mj_model,
+            data=mj_data,
+            perturbation_m=args.initial_root_z_perturbation,
+            nominal_equilibrium_com_z_m=float(centroidal_state_eq.com_pos[2]),
+        )
+        centroidal_state_after_perturbation, _ = centroidal_estimator.estimate(
+            jnp.zeros(42), mj_data, None
+        )
+        perturbation_metadata = {
+            "initial_root_z_perturbation_m": float(args.initial_root_z_perturbation),
+            "nominal_equilibrium_com_z_m": float(centroidal_state_eq.com_pos[2]),
+            "initial_com_z_m_after_perturbation": float(
+                centroidal_state_after_perturbation.com_pos[2]
+            ),
+            "perturbation_applied_after_equilibrium_capture": True,
+        }
+        print("[STUDY] Applied initial root-z perturbation after equilibrium capture")
+        print(f"  perturbation: {perturbation_metadata['initial_root_z_perturbation_m']:+.6f} m")
+        print(f"  nominal equilibrium com_z: {perturbation_metadata['nominal_equilibrium_com_z_m']:.6f} m")
+        print(f"  initial com_z after perturbation: {perturbation_metadata['initial_com_z_m_after_perturbation']:.6f} m")
 
     # Telemetry storage
     telemetry = {
@@ -2292,6 +2353,12 @@ def main():
         telemetry["stage2d_contrib_com_vy"].append(stage2d_diagnostics.get("contrib_com_vy", 0.0))
         telemetry["stage2d_contrib_wheel_vel_mean"].append(stage2d_diagnostics.get("contrib_wheel_vel_mean", 0.0))
         telemetry["stage2d_config"].append(stage2d_diagnostics.get("config", ""))
+        telemetry["initial_root_z_perturbation_m"].append(perturbation_metadata["initial_root_z_perturbation_m"])
+        telemetry["nominal_equilibrium_com_z_m"].append(perturbation_metadata["nominal_equilibrium_com_z_m"])
+        telemetry["initial_com_z_m_after_perturbation"].append(perturbation_metadata["initial_com_z_m_after_perturbation"])
+        telemetry["perturbation_applied_after_equilibrium_capture"].append(
+            perturbation_metadata["perturbation_applied_after_equilibrium_capture"]
+        )
 
         if step < 20 and static_feedforward_controller is not None:
             idx = [2, 3, 7, 8]
