@@ -477,6 +477,114 @@ def test_lateral_roll_balance_sign_convention():
     assert tau_pos[5] < 0.0  # r_hip_roll
 
 
+def test_lateral_roll_balance_stance_regularization_restores_nominal_hip_roll():
+    from wheeled_biped.controllers.lateral_roll_balance_controller import LateralRollBalanceController
+
+    controller = LateralRollBalanceController(
+        kp_stance=5.0,
+        kd_stance=1.0,
+        max_stance_torque=5.0,
+        stance_weight=0.4,
+    )
+
+    tau, diagnostics = controller.compute(
+        roll_y_rad=0.0,
+        roll_rate_y_rad_s=0.0,
+        hip_roll_pos=(-0.4, -0.45),
+        hip_roll_vel=(0.0, 0.0),
+        hip_roll_ref=(0.0, 0.0),
+    )
+
+    assert tau[0] > 0.0
+    assert tau[5] > 0.0
+    assert diagnostics["stance_error_left"] > 0.0
+    assert diagnostics["stance_error_right"] > 0.0
+    assert diagnostics["stance_torque_left"] > 0.0
+    assert diagnostics["stance_torque_right"] > 0.0
+
+
+def test_lateral_roll_balance_stance_regularization_zero_at_reference():
+    from wheeled_biped.controllers.lateral_roll_balance_controller import LateralRollBalanceController
+
+    controller = LateralRollBalanceController()
+
+    tau, diagnostics = controller.compute(
+        roll_y_rad=0.0,
+        roll_rate_y_rad_s=0.0,
+        hip_roll_pos=(0.0, 0.0),
+        hip_roll_vel=(0.0, 0.0),
+        hip_roll_ref=(0.0, 0.0),
+    )
+
+    assert tau[0] == 0.0
+    assert tau[5] == 0.0
+    assert diagnostics["stance_torque_left"] == 0.0
+    assert diagnostics["stance_torque_right"] == 0.0
+
+
+def test_lateral_roll_balance_stance_regularization_is_clipped():
+    from wheeled_biped.controllers.lateral_roll_balance_controller import LateralRollBalanceController
+
+    controller = LateralRollBalanceController(
+        kp_stance=20.0,
+        kd_stance=0.0,
+        max_stance_torque=3.0,
+        stance_weight=0.4,
+    )
+
+    tau, diagnostics = controller.compute(
+        roll_y_rad=0.0,
+        roll_rate_y_rad_s=0.0,
+        hip_roll_pos=(-1.0, -1.0),
+        hip_roll_vel=(0.0, 0.0),
+        hip_roll_ref=(0.0, 0.0),
+    )
+
+    assert diagnostics["stance_torque_left"] == 3.0
+    assert diagnostics["stance_torque_right"] == 3.0
+    assert tau[0] == 0.4 * 3.0
+    assert tau[5] == 0.4 * 3.0
+
+
+def test_lateral_roll_balance_backward_compatibility_without_stance_inputs():
+    from wheeled_biped.controllers.lateral_roll_balance_controller import LateralRollBalanceController
+
+    controller = LateralRollBalanceController()
+
+    tau, diagnostics = controller.compute(0.1, 0.05)
+
+    assert diagnostics["stance_error_left"] is None
+    assert diagnostics["stance_error_right"] is None
+    assert diagnostics["stance_torque_left"] == 0.0
+    assert diagnostics["stance_torque_right"] == 0.0
+    assert tau[0] != 0.0
+    assert tau[5] != 0.0
+
+
+def test_lateral_roll_balance_large_roll_keeps_roll_balance_dominant():
+    from wheeled_biped.controllers.lateral_roll_balance_controller import LateralRollBalanceController
+
+    controller = LateralRollBalanceController(
+        kp_roll=40.0,
+        kd_roll=8.0,
+        kp_stance=5.0,
+        kd_stance=1.0,
+        max_stance_torque=5.0,
+        stance_weight=0.4,
+    )
+
+    tau, diagnostics = controller.compute(
+        roll_y_rad=0.2,
+        roll_rate_y_rad_s=0.0,
+        hip_roll_pos=(-0.4, -0.45),
+        hip_roll_vel=(0.0, 0.0),
+        hip_roll_ref=(0.0, 0.0),
+    )
+
+    assert diagnostics["tau_roll_left"] > diagnostics["stance_torque_left"]
+    assert abs(float(tau[0])) > diagnostics["stance_weight"] * diagnostics["stance_torque_left"]
+
+
 def test_lateral_roll_balance_jit_compatibility():
     """Verify lateral roll balance controller works under JIT compilation."""
     import jax

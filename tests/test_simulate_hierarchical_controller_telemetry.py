@@ -1,4 +1,7 @@
 import argparse
+import json
+from collections import deque
+from pathlib import Path
 from unittest.mock import patch
 
 import jax.numpy as jnp
@@ -107,6 +110,139 @@ def test_main_accepts_initial_root_z_perturbation_flag():
 
     parsed_args = validate_args.call_args.args[0]
     assert parsed_args.initial_root_z_perturbation == 0.02
+
+
+def test_main_accepts_decimation_failure_window_and_sidecar_flags():
+    from scripts import simulate_hierarchical_controller
+
+    with patch.object(simulate_hierarchical_controller, "validate_balance_core_mode_args") as validate_args:
+        with patch.object(simulate_hierarchical_controller.mujoco.MjModel, "from_xml_path", side_effect=RuntimeError("stop after parse")):
+            with patch.object(simulate_hierarchical_controller, "time"):
+                with patch.object(simulate_hierarchical_controller, "Path") as fake_path:
+                    fake_path.return_value.mkdir.return_value = None
+                    with patch.object(simulate_hierarchical_controller.sys, "argv", [
+                        "simulate_hierarchical_controller.py",
+                        "--controller-mode", "balance-core",
+                        "--steps", "1000",
+                        "--telemetry-decimation", "20",
+                        "--failure-window-steps", "500",
+                        "--write-run-summary-sidecar",
+                    ]):
+                        try:
+                            simulate_hierarchical_controller.main()
+                        except RuntimeError as exc:
+                            assert str(exc) == "stop after parse"
+                        else:
+                            raise AssertionError("Expected early stop after argument parsing")
+
+    parsed_args = validate_args.call_args.args[0]
+    assert parsed_args.telemetry_decimation == 20
+    assert parsed_args.failure_window_steps == 500
+    assert parsed_args.write_run_summary_sidecar is True
+
+
+def test_decimation_boundary_rule_preserves_first_every_n_final_and_termination_rows():
+    telemetry_decimation = 4
+
+    def should_keep_main_telemetry_row(source_step_index: int, is_terminating: bool) -> bool:
+        if telemetry_decimation <= 1:
+            return True
+        if source_step_index == 0:
+            return True
+        if is_terminating:
+            return True
+        return (source_step_index % telemetry_decimation) == 0
+
+    kept = [
+        step for step in range(10)
+        if should_keep_main_telemetry_row(step, is_terminating=(step == 9))
+    ]
+
+    assert kept == [0, 4, 8, 9]
+
+
+def test_failure_window_buffer_preserves_latest_full_rate_rows_only():
+    failure_window_buffer = deque(maxlen=3)
+
+    for step in range(6):
+        failure_window_buffer.append({"source_step_index": step, "time": step * 0.01})
+
+    assert [row["source_step_index"] for row in failure_window_buffer] == [3, 4, 5]
+
+
+def test_run_summary_sidecar_payload_uses_simulated_steps_not_written_rows(tmp_path):
+    finalized_summary_metrics = {
+        "pitch_x": {"min": -0.1, "max": 0.2, "rms": 0.12},
+        "roll_y": {"min": -0.05, "max": 0.06, "rms": 0.04},
+        "com_z": {"min": 0.41, "max": 0.45, "drift": -0.01},
+        "wheel_vel_mean": {"min": -1.0, "max": 2.0, "rms": 0.8},
+        "wheel_velocity_trend": 0.35,
+        "ownership_violation_count_max": 0,
+        "hidden_torque_norm_max": 0.0,
+        "tau_wbc_norm_max": 0.0,
+        "torque_saturation": {"fraction_max": 0.2, "fraction_mean": 0.05},
+        "torque_rate_saturation": {"fraction_max": 0.1, "fraction_mean": 0.02},
+        "contact_state_summary": {"counts": {"DOUBLE_CONTACT": 10}, "most_common_state": "DOUBLE_CONTACT"},
+        "metric_integrity": {"source": "full_rate_online", "limitations": []},
+    }
+    telemetry = {"time": [0.0, 0.2, 0.4]}
+    simulated_steps = 50
+    payload = {
+        "requested_steps": 50,
+        "actual_steps": simulated_steps,
+        "survived_steps": simulated_steps,
+        "terminated": False,
+        "termination_reason": "completed",
+        "final_sim_time_s": 0.1,
+        "telemetry_decimation": 20,
+        "failure_window_steps": 500,
+        "written_telemetry_rows": len(telemetry["time"]),
+        **finalized_summary_metrics,
+    }
+
+    sidecar_path = tmp_path / "telemetry_50.summary.json"
+    sidecar_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    assert sidecar["actual_steps"] == 50
+    assert sidecar["survived_steps"] == 50
+    assert sidecar["terminated"] is False
+    assert sidecar["final_sim_time_s"] == pytest.approx(0.1)
+    assert sidecar["wheel_velocity_trend"] == pytest.approx(0.35)
+    assert sidecar["written_telemetry_rows"] == 3
+    assert sidecar["metric_integrity"]["source"] == "full_rate_online"
+
+
+def test_failure_window_schema_can_be_adapted_for_validator(tmp_path):
+    from wheeled_biped.validation.telemetry_adapter import add_validation_telemetry_fields
+
+    failure_window_telemetry = {
+        "source_step_index": [8, 9],
+        "time": [0.08, 0.09],
+        "control_mode": ["balance-core", "balance-core"],
+        "joint_pos": ["0,0,0,0,0,0,0,0,0,0", "0,0,0,0,0,0,0,0,0,0"],
+        "joint_vel": ["0,0,0,0,0,0,0,0,0,0", "0,0,0,0,0,0,0,0,0,0"],
+        "joint_pos_error": ["0,0,0,0,0,0,0,0,0,0", "0,0,0,0,0,0,0,0,0,0"],
+        "tau_wheel_balance_per_joint": ["0,0,0,0,0,0,0,0,0,0", "0,0,0,0,0,0,0,0,0,0"],
+        "tau_hip_roll_centering_per_joint": ["0,0,0,0,0,0,0,0,0,0", "0,0,0,0,0,0,0,0,0,0"],
+        "tau_posture_per_joint": ["0,0,0,0,0,0,0,0,0,0", "0,0,0,0,0,0,0,0,0,0"],
+        "tau_leg_position_per_joint": ["0,0,0,0,0,0,0,0,0,0", "0,0,0,0,0,0,0,0,0,0"],
+        "tau_final_per_joint": ["0,0,0,0,0,0,0,0,0,0", "0,0,0,0,0,0,0,0,0,0"],
+        "active_torque_owner_per_joint": ["shape_posture,shape_posture,shape_posture,shape_posture,shape_posture,shape_posture,shape_posture,shape_posture,shape_posture,shape_posture"] * 2,
+    }
+
+    csv_path = tmp_path / "failure_window_10.csv"
+    add_validation_telemetry_fields(
+        failure_window_telemetry,
+        control_dt=0.01,
+        csv_path=str(csv_path),
+        survival_steps_override=10,
+    )
+
+    assert failure_window_telemetry["survival_steps"] == [10, 10]
+    assert failure_window_telemetry["step"] == [8, 9]
+    assert "actuator_ctrl_per_joint" in failure_window_telemetry
+    assert "hidden_torque_norm" in failure_window_telemetry
 
 
 def test_step1_joint_diagnostics_are_zeroed_and_mode_is_upright():

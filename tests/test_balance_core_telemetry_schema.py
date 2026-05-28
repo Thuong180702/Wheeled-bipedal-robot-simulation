@@ -43,6 +43,15 @@ def test_balance_core_required_state_telemetry_names_match_spec():
         "contact_transition_event",
         "contact_force_valid",
         "contact_recovery_hook_fields",
+        "hip_roll_left_rad",
+        "hip_roll_right_rad",
+        "hip_roll_common_component_rad",
+        "hip_roll_symmetric_component_rad",
+        "hip_roll_abs_max_rad",
+        "hip_roll_ref_left_rad",
+        "hip_roll_ref_right_rad",
+        "hip_roll_error_left_rad",
+        "hip_roll_error_right_rad",
     }
     assert set(BALANCE_CORE_REQUIRED_STATE_TELEMETRY) == expected
 
@@ -125,6 +134,8 @@ def test_append_balance_core_telemetry_populates_required_fields():
         wheel_vel_right_rad_s=1.3,
         wheel_acc_left_rad_s2=2.1,
         wheel_acc_right_rad_s2=2.3,
+        hip_roll_pos=(-0.2, -0.3),
+        hip_roll_ref=(0.0, 0.0),
     )
 
     # Verify state fields
@@ -134,6 +145,10 @@ def test_append_balance_core_telemetry_populates_required_fields():
     assert telemetry["contact_supervisor_state"] == ["double_contact"]
     assert telemetry["contact_previous_state"] == ["none"]
     assert telemetry["contact_transition_event"] == ["initial_double_contact"]
+    assert telemetry["hip_roll_left_rad"] == [-0.2]
+    assert telemetry["hip_roll_right_rad"] == [-0.3]
+    assert abs(telemetry["hip_roll_common_component_rad"][0] - (-0.25)) < 1e-9
+    assert abs(telemetry["hip_roll_symmetric_component_rad"][0] - 0.05) < 1e-9
     assert abs(telemetry["wheel_vel_mean_rad_s"][0] - 1.2) < 1e-9
     assert abs(telemetry["wheel_acc_mean_rad_s2"][0] - 2.2) < 1e-9
 

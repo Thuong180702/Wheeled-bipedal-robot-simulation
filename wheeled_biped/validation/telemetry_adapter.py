@@ -8,22 +8,33 @@ without modifying controller behavior.
 import numpy as np
 
 
-def add_validation_telemetry_fields(telemetry: dict, control_dt: float, csv_path: str) -> None:
+def add_validation_telemetry_fields(
+    telemetry: dict,
+    control_dt: float,
+    csv_path: str,
+    survival_steps_override: int | None = None,
+) -> None:
     """Add canonical validation fields to telemetry dict in-place.
 
     Args:
         telemetry: Telemetry dict with simulation data
         control_dt: Control timestep in seconds
         csv_path: Path where telemetry CSV will be saved
+        survival_steps_override: Authoritative simulated-step count when telemetry rows
+            are decimated and no longer match the number of written rows
     """
     n_steps = len(telemetry["time"])
+    survival_steps = survival_steps_override if survival_steps_override is not None else n_steps
 
     # 1. Metadata fields
-    telemetry["step"] = list(range(n_steps))
+    if "source_step_index" in telemetry:
+        telemetry["step"] = telemetry["source_step_index"].copy()
+    else:
+        telemetry["step"] = list(range(n_steps))
     telemetry["sim_time_s"] = telemetry["time"].copy()
     telemetry["control_dt_s"] = [control_dt] * n_steps
     telemetry["controller_mode"] = telemetry["control_mode"].copy()
-    telemetry["survival_steps"] = [n_steps] * n_steps
+    telemetry["survival_steps"] = [survival_steps] * n_steps
     telemetry["telemetry_file_path"] = [str(csv_path)] * n_steps
 
     # 2. Posture aliases

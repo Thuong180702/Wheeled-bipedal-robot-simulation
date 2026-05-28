@@ -16,8 +16,10 @@ Usage:
 
 import argparse
 import csv
+import json
 import sys
 import time
+from collections import deque
 from pathlib import Path
 
 import jax
@@ -485,6 +487,8 @@ def append_balance_core_telemetry(
     wheel_vel_right_rad_s: float,
     wheel_acc_left_rad_s2: float,
     wheel_acc_right_rad_s2: float,
+    hip_roll_pos: tuple[float, float] | None = None,
+    hip_roll_ref: tuple[float, float] | None = None,
 ):
     """Append balance-core state and torque telemetry for one control tick.
 
@@ -501,6 +505,23 @@ def append_balance_core_telemetry(
     """
     wheel_vel_mean = 0.5 * (wheel_vel_left_rad_s + wheel_vel_right_rad_s)
     wheel_acc_mean = 0.5 * (wheel_acc_left_rad_s2 + wheel_acc_right_rad_s2)
+
+    hip_roll_left = None if hip_roll_pos is None else float(hip_roll_pos[0])
+    hip_roll_right = None if hip_roll_pos is None else float(hip_roll_pos[1])
+    hip_roll_ref_left = None if hip_roll_ref is None else float(hip_roll_ref[0])
+    hip_roll_ref_right = None if hip_roll_ref is None else float(hip_roll_ref[1])
+    hip_roll_common_component = None
+    hip_roll_symmetric_component = None
+    hip_roll_abs_max = None
+    hip_roll_error_left = None
+    hip_roll_error_right = None
+    if hip_roll_pos is not None:
+        hip_roll_common_component = 0.5 * (hip_roll_left + hip_roll_right)
+        hip_roll_symmetric_component = 0.5 * (hip_roll_left - hip_roll_right)
+        hip_roll_abs_max = max(abs(hip_roll_left), abs(hip_roll_right))
+    if hip_roll_pos is not None and hip_roll_ref is not None:
+        hip_roll_error_left = hip_roll_ref_left - hip_roll_left
+        hip_roll_error_right = hip_roll_ref_right - hip_roll_right
 
     # Append state fields
     state_values = {
@@ -533,6 +554,15 @@ def append_balance_core_telemetry(
         "contact_transition_event": contact_output.transition_event,
         "contact_force_valid": bool(contact_output.contact_force_valid),
         "contact_recovery_hook_fields": str(contact_output.recovery_hook_fields),
+        "hip_roll_left_rad": hip_roll_left,
+        "hip_roll_right_rad": hip_roll_right,
+        "hip_roll_common_component_rad": hip_roll_common_component,
+        "hip_roll_symmetric_component_rad": hip_roll_symmetric_component,
+        "hip_roll_abs_max_rad": hip_roll_abs_max,
+        "hip_roll_ref_left_rad": hip_roll_ref_left,
+        "hip_roll_ref_right_rad": hip_roll_ref_right,
+        "hip_roll_error_left_rad": hip_roll_error_left,
+        "hip_roll_error_right_rad": hip_roll_error_right,
     }
     for name, value in state_values.items():
         telemetry[name].append(value)
@@ -729,6 +759,23 @@ def main():
         type=float,
         default=0.0,
         help='Apply an initial root-z perturbation after equilibrium capture and before rollout',
+    )
+    parser.add_argument(
+        '--telemetry-decimation',
+        type=int,
+        default=1,
+        help='Write first row, every Nth row, and final/termination row to main telemetry CSV',
+    )
+    parser.add_argument(
+        '--failure-window-steps',
+        type=int,
+        default=0,
+        help='Preserve the last N full-rate rows in a failure-window CSV if the run terminates early',
+    )
+    parser.add_argument(
+        '--write-run-summary-sidecar',
+        action='store_true',
+        help='Write whole-run summary sidecar JSON with authoritative simulated-step counts and full-rate maxima',
     )
     args = parser.parse_args()
 
@@ -1162,8 +1209,9 @@ def main():
         print(f"  nominal equilibrium com_z: {perturbation_metadata['nominal_equilibrium_com_z_m']:.6f} m")
         print(f"  initial com_z after perturbation: {perturbation_metadata['initial_com_z_m_after_perturbation']:.6f} m")
 
-    # Telemetry storage
+    # Telemetry storage (all keys must be initialized here for decimation to work)
     telemetry = {
+        "source_step_index": [],
         "time": [],
         "mass_kg": [],
         "weight_N": [],
@@ -1260,6 +1308,16 @@ def main():
         "roll_y": [],
         "roll_rate_y": [],
         "yaw_z": [],
+        "hip_roll_left_rad": [],
+        "hip_roll_right_rad": [],
+        "hip_roll_common_component_rad": [],
+        "hip_roll_symmetric_component_rad": [],
+        "hip_roll_abs_max_rad": [],
+        "hip_roll_ref_left_rad": [],
+        "hip_roll_ref_right_rad": [],
+        "hip_roll_error_left_rad": [],
+        "hip_roll_error_right_rad": [],
+        "yaw_drift_from_initial_rad": [],
         "com_error_x": [],
         "com_error_y": [],
         "com_error_z": [],
@@ -1402,6 +1460,197 @@ def main():
     prev_wheel_vel_left = 0.0
     prev_wheel_vel_right = 0.0
 
+    # --- Long-run logging state ---
+    telemetry_decimation = max(1, int(getattr(args, "telemetry_decimation", 1)))
+    failure_window_steps = max(0, int(getattr(args, "failure_window_steps", 0)))
+    write_run_summary_sidecar = getattr(args, "write_run_summary_sidecar", False)
+
+    failure_window_buffer: deque = deque(maxlen=failure_window_steps) if failure_window_steps > 0 else deque()
+    last_full_rate_row = None
+    last_full_rate_step = -1
+
+    def make_rms_accumulator() -> dict:
+        return {"count": 0, "sum_sq": 0.0}
+
+    def update_rms_accumulator(accumulator: dict, value: float) -> None:
+        accumulator["count"] += 1
+        accumulator["sum_sq"] += float(value) * float(value)
+
+    def finalize_rms_accumulator(accumulator: dict) -> float:
+        if accumulator["count"] <= 0:
+            return 0.0
+        return float(np.sqrt(accumulator["sum_sq"] / accumulator["count"]))
+
+    full_rate_summary = {
+        "actual_steps": 0,
+        "survived_steps": 0,
+        "pitch_x_min": None,
+        "pitch_x_max": None,
+        "pitch_x_rms": make_rms_accumulator(),
+        "roll_y_min": None,
+        "roll_y_max": None,
+        "roll_y_rms": make_rms_accumulator(),
+        "com_z_min": None,
+        "com_z_max": None,
+        "com_z_initial": None,
+        "com_z_final": None,
+        "wheel_vel_mean_min": None,
+        "wheel_vel_mean_max": None,
+        "wheel_vel_mean_rms": make_rms_accumulator(),
+        "wheel_vel_mean_initial": None,
+        "wheel_vel_mean_final": None,
+        "ownership_violation_count_max": 0,
+        "hidden_torque_norm_max": 0.0,
+        "tau_wbc_norm_max": 0.0,
+        "torque_saturation_rate_max": 0.0,
+        "torque_saturation_fraction_mean": 0.0,
+        "torque_rate_saturation_rate_max": 0.0,
+        "torque_rate_saturation_fraction_mean": 0.0,
+        "contact_state_counts": {},
+        "metric_integrity": {
+            "source": "full_rate_online",
+            "limitations": [],
+        },
+    }
+
+    def update_min_max(summary: dict, min_key: str, max_key: str, value: float) -> None:
+        current_min = summary[min_key]
+        current_max = summary[max_key]
+        summary[min_key] = value if current_min is None else min(current_min, value)
+        summary[max_key] = value if current_max is None else max(current_max, value)
+
+    def update_full_rate_summary(
+        *,
+        pitch_x_value: float,
+        roll_y_value: float,
+        com_z_value: float,
+        wheel_vel_mean_value: float,
+        ownership_violation_count_value: int,
+        hidden_torque_norm_value: float,
+        tau_wbc_norm_value: float,
+        torque_saturation_rate_value: float,
+        torque_rate_saturation_rate_value: float,
+        contact_state_value: str,
+    ) -> None:
+        full_rate_summary["actual_steps"] += 1
+        full_rate_summary["survived_steps"] = full_rate_summary["actual_steps"]
+
+        update_min_max(full_rate_summary, "pitch_x_min", "pitch_x_max", pitch_x_value)
+        update_rms_accumulator(full_rate_summary["pitch_x_rms"], pitch_x_value)
+
+        update_min_max(full_rate_summary, "roll_y_min", "roll_y_max", roll_y_value)
+        update_rms_accumulator(full_rate_summary["roll_y_rms"], roll_y_value)
+
+        update_min_max(full_rate_summary, "com_z_min", "com_z_max", com_z_value)
+        if full_rate_summary["com_z_initial"] is None:
+            full_rate_summary["com_z_initial"] = com_z_value
+        full_rate_summary["com_z_final"] = com_z_value
+
+        update_min_max(full_rate_summary, "wheel_vel_mean_min", "wheel_vel_mean_max", wheel_vel_mean_value)
+        update_rms_accumulator(full_rate_summary["wheel_vel_mean_rms"], wheel_vel_mean_value)
+        if full_rate_summary["wheel_vel_mean_initial"] is None:
+            full_rate_summary["wheel_vel_mean_initial"] = wheel_vel_mean_value
+        full_rate_summary["wheel_vel_mean_final"] = wheel_vel_mean_value
+
+        full_rate_summary["ownership_violation_count_max"] = max(
+            int(full_rate_summary["ownership_violation_count_max"]),
+            int(ownership_violation_count_value),
+        )
+        full_rate_summary["hidden_torque_norm_max"] = max(
+            float(full_rate_summary["hidden_torque_norm_max"]),
+            float(hidden_torque_norm_value),
+        )
+        full_rate_summary["tau_wbc_norm_max"] = max(
+            float(full_rate_summary["tau_wbc_norm_max"]),
+            float(tau_wbc_norm_value),
+        )
+        full_rate_summary["torque_saturation_rate_max"] = max(
+            float(full_rate_summary["torque_saturation_rate_max"]),
+            float(torque_saturation_rate_value),
+        )
+        full_rate_summary["torque_rate_saturation_rate_max"] = max(
+            float(full_rate_summary["torque_rate_saturation_rate_max"]),
+            float(torque_rate_saturation_rate_value),
+        )
+        full_rate_summary["torque_saturation_fraction_mean"] += float(torque_saturation_rate_value)
+        full_rate_summary["torque_rate_saturation_fraction_mean"] += float(torque_rate_saturation_rate_value)
+        full_rate_summary["contact_state_counts"][contact_state_value] = (
+            int(full_rate_summary["contact_state_counts"].get(contact_state_value, 0)) + 1
+        )
+
+    def finalize_full_rate_summary() -> dict:
+        total_steps = max(int(full_rate_summary["actual_steps"]), 1)
+        com_z_initial = full_rate_summary["com_z_initial"]
+        com_z_final = full_rate_summary["com_z_final"]
+        wheel_vel_mean_initial = full_rate_summary["wheel_vel_mean_initial"]
+        wheel_vel_mean_final = full_rate_summary["wheel_vel_mean_final"]
+        contact_state_counts = dict(sorted(full_rate_summary["contact_state_counts"].items()))
+        most_common_contact_state = None
+        if contact_state_counts:
+            most_common_contact_state = max(contact_state_counts.items(), key=lambda item: item[1])[0]
+
+        return {
+            "actual_steps": int(full_rate_summary["actual_steps"]),
+            "survived_steps": int(full_rate_summary["survived_steps"]),
+            "pitch_x": {
+                "min": 0.0 if full_rate_summary["pitch_x_min"] is None else float(full_rate_summary["pitch_x_min"]),
+                "max": 0.0 if full_rate_summary["pitch_x_max"] is None else float(full_rate_summary["pitch_x_max"]),
+                "rms": finalize_rms_accumulator(full_rate_summary["pitch_x_rms"]),
+            },
+            "roll_y": {
+                "min": 0.0 if full_rate_summary["roll_y_min"] is None else float(full_rate_summary["roll_y_min"]),
+                "max": 0.0 if full_rate_summary["roll_y_max"] is None else float(full_rate_summary["roll_y_max"]),
+                "rms": finalize_rms_accumulator(full_rate_summary["roll_y_rms"]),
+            },
+            "com_z": {
+                "min": 0.0 if full_rate_summary["com_z_min"] is None else float(full_rate_summary["com_z_min"]),
+                "max": 0.0 if full_rate_summary["com_z_max"] is None else float(full_rate_summary["com_z_max"]),
+                "drift": 0.0 if com_z_initial is None or com_z_final is None else float(com_z_final - com_z_initial),
+            },
+            "wheel_vel_mean": {
+                "min": 0.0 if full_rate_summary["wheel_vel_mean_min"] is None else float(full_rate_summary["wheel_vel_mean_min"]),
+                "max": 0.0 if full_rate_summary["wheel_vel_mean_max"] is None else float(full_rate_summary["wheel_vel_mean_max"]),
+                "rms": finalize_rms_accumulator(full_rate_summary["wheel_vel_mean_rms"]),
+            },
+            "wheel_velocity_trend": 0.0 if wheel_vel_mean_initial is None or wheel_vel_mean_final is None else float(wheel_vel_mean_final - wheel_vel_mean_initial),
+            "ownership_violation_count_max": int(full_rate_summary["ownership_violation_count_max"]),
+            "hidden_torque_norm_max": float(full_rate_summary["hidden_torque_norm_max"]),
+            "tau_wbc_norm_max": float(full_rate_summary["tau_wbc_norm_max"]),
+            "torque_saturation": {
+                "fraction_max": float(full_rate_summary["torque_saturation_rate_max"]),
+                "fraction_mean": float(full_rate_summary["torque_saturation_fraction_mean"] / total_steps),
+            },
+            "torque_rate_saturation": {
+                "fraction_max": float(full_rate_summary["torque_rate_saturation_rate_max"]),
+                "fraction_mean": float(full_rate_summary["torque_rate_saturation_fraction_mean"] / total_steps),
+            },
+            "contact_state_summary": {
+                "counts": contact_state_counts,
+                "most_common_state": most_common_contact_state,
+            },
+            "metric_integrity": dict(full_rate_summary["metric_integrity"]),
+        }
+
+    def should_keep_main_telemetry_row(source_step_index: int, is_terminating: bool) -> bool:
+        if telemetry_decimation <= 1:
+            return True
+        if source_step_index == 0:
+            return True
+        if is_terminating:
+            return True
+        return (source_step_index % telemetry_decimation) == 0
+
+    def snapshot_last_telemetry_row() -> dict:
+        return {key: values[-1] for key, values in telemetry.items()}
+
+    def drop_last_telemetry_row() -> None:
+        for values in telemetry.values():
+            values.pop()
+
+    def append_telemetry_row(row: dict) -> None:
+        for key in telemetry.keys():
+            telemetry[key].append(row[key])
+
     print(
         f"\nRunning simulation for {max_steps} steps ({max_steps * control_dt:.1f} seconds)"
     )
@@ -1412,9 +1661,10 @@ def main():
     termination_reason = None
     step = 0
     height_cmd = 0.40  # Match equilibrium CoM height from compute_equilibrium_keyframe.py
+    initial_yaw_z = float(centroidal_state_eq.body_yaw_z)
 
     def simulation_step():
-        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate
+        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary
 
         if terminated or step >= max_steps:
             return False
@@ -1802,6 +2052,9 @@ def main():
             tau_lateral_roll_balance, lateral_diag = balance_core_controllers["lateral_roll_balance"].compute(
                 roll_y_rad=float(centroidal_state_control.body_roll_y),
                 roll_rate_y_rad_s=float(centroidal_state_control.body_roll_rate_y),
+                hip_roll_pos=(float(joint_pos[0]), float(joint_pos[5])),
+                hip_roll_vel=(float(joint_vel[0]), float(joint_vel[5])),
+                hip_roll_ref=(float(equilibrium_joint_pos[0]), float(equilibrium_joint_pos[5])),
             )
 
             balance_core_result = balance_core_controllers["composer"].compose(
@@ -1823,6 +2076,8 @@ def main():
                 wheel_vel_right_rad_s=wheel_vel_right,
                 wheel_acc_left_rad_s2=wheel_acc_left,
                 wheel_acc_right_rad_s2=wheel_acc_right,
+                hip_roll_pos=(float(joint_pos[0]), float(joint_pos[5])),
+                hip_roll_ref=(float(equilibrium_joint_pos[0]), float(equilibrium_joint_pos[5])),
             )
 
             tau_total_raw = balance_core_result.tau_total_raw
@@ -2089,6 +2344,7 @@ def main():
         full_wrench_norm = float(np.linalg.norm(full_wrench))
         correction_wrench_norm = float(qp_diagnostics.get("correction_wrench_norm", full_wrench_norm))
 
+        telemetry["source_step_index"].append(step)
         telemetry["time"].append(step * control_dt)
         telemetry["mass_kg"].append(robot_mass)
         telemetry["weight_N"].append(robot_mass * gravity)
@@ -2184,6 +2440,18 @@ def main():
         telemetry["roll_y"].append(float(roll_y_rad))
         telemetry["roll_rate_y"].append(float(centroidal_state_control.roll_rate_y))
         telemetry["yaw_z"].append(float(centroidal_state_control.yaw_z))
+        telemetry["hip_roll_left_rad"].append(float(joint_pos[0]))
+        telemetry["hip_roll_right_rad"].append(float(joint_pos[5]))
+        hip_roll_common_component = 0.5 * float(joint_pos[0] + joint_pos[5])
+        hip_roll_symmetric_component = 0.5 * float(joint_pos[0] - joint_pos[5])
+        telemetry["hip_roll_common_component_rad"].append(hip_roll_common_component)
+        telemetry["hip_roll_symmetric_component_rad"].append(hip_roll_symmetric_component)
+        telemetry["hip_roll_abs_max_rad"].append(max(abs(float(joint_pos[0])), abs(float(joint_pos[5]))))
+        telemetry["hip_roll_ref_left_rad"].append(float(equilibrium_joint_pos[0]))
+        telemetry["hip_roll_ref_right_rad"].append(float(equilibrium_joint_pos[5]))
+        telemetry["hip_roll_error_left_rad"].append(float(equilibrium_joint_pos[0] - joint_pos[0]))
+        telemetry["hip_roll_error_right_rad"].append(float(equilibrium_joint_pos[5] - joint_pos[5]))
+        telemetry["yaw_drift_from_initial_rad"].append(float(centroidal_state_control.yaw_z) - initial_yaw_z)
 
         # Control-time vs post-step orientation/rate telemetry
         telemetry["control_pitch_x"].append(float(centroidal_state_control.body_pitch_x))
@@ -2251,6 +2519,32 @@ def main():
             telemetry["tau_static_posture"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_posture)))
         sat_flags_vec = (np.abs(np.array(tau_total_raw)) > np.array(torque_limit)).astype(int)
         rate_flags_vec = (np.abs(np.array(tau_rate_vec)) > max_torque_rate).astype(int)
+        hidden_torque_norm_value = float(
+            np.linalg.norm(np.array(tau_wheel_balance))
+            + np.linalg.norm(np.array(tau_hip_roll_centering))
+            + np.linalg.norm(np.array(tau_static_posture if static_posture_controller is not None else tau_posture))
+            + np.linalg.norm(np.array(tau_leg_position))
+        )
+        torque_rate_saturation_rate = float(np.mean(rate_flags_vec))
+        contact_state_value = "legacy"
+        if is_balance_core_mode(args):
+            contact_state_value = str(contact_output.state.value)
+        elif static_posture_controller is not None:
+            contact_state_value = "stage2_static_posture"
+
+        update_full_rate_summary(
+            pitch_x_value=float(pitch_x_rad),
+            roll_y_value=float(roll_y_rad),
+            com_z_value=com_height,
+            wheel_vel_mean_value=float(0.5 * (float(joint_vel[4]) + float(joint_vel[9]))),
+            ownership_violation_count_value=int(balance_core_result.ownership_violation_count) if is_balance_core_mode(args) else 0,
+            hidden_torque_norm_value=hidden_torque_norm_value,
+            tau_wbc_norm_value=tau_wbc_norm,
+            torque_saturation_rate_value=tau_saturation_rate,
+            torque_rate_saturation_rate_value=torque_rate_saturation_rate,
+            contact_state_value=contact_state_value,
+        )
+
         telemetry["saturation_flags"].append(",".join(f"{x}" for x in sat_flags_vec))
         telemetry["rate_limit_flags"].append(",".join(f"{x}" for x in rate_flags_vec))
         # Motor tracking diagnostics
@@ -2359,6 +2653,15 @@ def main():
         telemetry["perturbation_applied_after_equilibrium_capture"].append(
             perturbation_metadata["perturbation_applied_after_equilibrium_capture"]
         )
+
+        current_row = snapshot_last_telemetry_row()
+        last_full_rate_row = dict(current_row)
+        last_full_rate_step = step
+        if failure_window_steps > 0:
+            failure_window_buffer.append(dict(current_row))
+
+        if not should_keep_main_telemetry_row(step, terminated):
+            drop_last_telemetry_row()
 
         if step < 20 and static_feedforward_controller is not None:
             idx = [2, 3, 7, 8]
@@ -2492,12 +2795,25 @@ def main():
             pass
 
     elapsed_time = time.time() - start_time
+    simulated_steps = int(full_rate_summary["actual_steps"])
+    finalized_summary_metrics = finalize_full_rate_summary()
+
+    if last_full_rate_row is not None and (
+        len(telemetry["source_step_index"]) == 0
+        or telemetry["source_step_index"][-1] != last_full_rate_step
+    ):
+        append_telemetry_row(last_full_rate_row)
 
     # Save telemetry to CSV
     csv_path = output_dir / f"telemetry_{int(time.time())}.csv"
 
     # Add validation-compatible telemetry fields
-    add_validation_telemetry_fields(telemetry, control_dt, csv_path)
+    add_validation_telemetry_fields(
+        telemetry,
+        control_dt,
+        csv_path,
+        survival_steps_override=simulated_steps,
+    )
 
     # Normalize balance-core owner names if in balance-core mode
     if is_balance_core_mode(args):
@@ -2509,12 +2825,50 @@ def main():
         for i in range(len(telemetry["time"])):
             writer.writerow([telemetry[k][i] for k in telemetry.keys()])
 
+    if terminated and failure_window_steps > 0 and len(failure_window_buffer) > 0:
+        failure_window_path = output_dir / f"failure_window_{simulated_steps}.csv"
+        failure_window_telemetry = {key: [] for key in failure_window_buffer[0].keys()}
+        for row in failure_window_buffer:
+            for key in failure_window_telemetry.keys():
+                failure_window_telemetry[key].append(row[key])
+        add_validation_telemetry_fields(
+            failure_window_telemetry,
+            control_dt,
+            failure_window_path,
+            survival_steps_override=simulated_steps,
+        )
+        if is_balance_core_mode(args):
+            normalize_balance_core_owner_names(failure_window_telemetry)
+        with open(failure_window_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(failure_window_telemetry.keys())
+            for i in range(len(failure_window_telemetry["time"])):
+                writer.writerow([failure_window_telemetry[k][i] for k in failure_window_telemetry.keys()])
+
+    if write_run_summary_sidecar:
+        sidecar_path = output_dir / f"telemetry_{simulated_steps}.summary.json"
+        sidecar_payload = {
+            "requested_steps": max_steps,
+            "actual_steps": simulated_steps,
+            "survived_steps": simulated_steps,
+            "terminated": bool(terminated),
+            "termination_reason": termination_reason or "completed",
+            "final_sim_time_s": float(simulated_steps * control_dt),
+            "telemetry_decimation": telemetry_decimation,
+            "failure_window_steps": failure_window_steps,
+            "written_telemetry_rows": len(telemetry["time"]),
+            **finalized_summary_metrics,
+        }
+        with open(sidecar_path, "w", encoding="utf-8") as f:
+            json.dump(sidecar_payload, f, indent=2)
+
     # Print summary
     print("\n" + "=" * 80)
     print("Simulation Summary")
     print("=" * 80)
-    print(f"Total steps: {len(telemetry['time'])}")
-    print(f"Simulation time: {telemetry['time'][-1]:.1f} seconds")
+    print(f"Total simulated steps: {simulated_steps}")
+    print(f"Written telemetry rows: {len(telemetry['time'])}")
+    print(f"Simulation time: {simulated_steps * control_dt:.1f} seconds")
     print(f"Wall clock time: {elapsed_time:.1f} seconds")
     print(f"Terminated: {terminated}")
     if terminated:
@@ -2523,19 +2877,13 @@ def main():
         print("Status: [OK] Completed full simulation without falling")
 
     print(
-        f"\nCoM height range: {min(telemetry['com_z']):.3f} - {max(telemetry['com_z']):.3f} m"
+        f"\nCoM height range: {finalized_summary_metrics['com_z']['min']:.3f} - {finalized_summary_metrics['com_z']['max']:.3f} m"
     )
     print(
-        f"Robot pitch_x range: {min(telemetry['robot_pitch_x'])*57.3:.1f} - {max(telemetry['robot_pitch_x'])*57.3:.1f} deg"
+        f"Robot pitch_x range: {finalized_summary_metrics['pitch_x']['min']*57.3:.1f} - {finalized_summary_metrics['pitch_x']['max']*57.3:.1f} deg"
     )
     print(
-        f"Robot roll_y range: {min(telemetry['robot_roll_y'])*57.3:.1f} - {max(telemetry['robot_roll_y'])*57.3:.1f} deg"
-    )
-    print(
-        f"Euler pitch_y range: {min(telemetry['euler_pitch_y'])*57.3:.1f} - {max(telemetry['euler_pitch_y'])*57.3:.1f} deg"
-    )
-    print(
-        f"Euler roll_x range: {min(telemetry['euler_roll_x'])*57.3:.1f} - {max(telemetry['euler_roll_x'])*57.3:.1f} deg"
+        f"Robot roll_y range: {finalized_summary_metrics['roll_y']['min']*57.3:.1f} - {finalized_summary_metrics['roll_y']['max']*57.3:.1f} deg"
     )
 
     print(f"\nMax torques (wheeled biped architecture):")

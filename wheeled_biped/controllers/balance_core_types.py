@@ -94,6 +94,15 @@ BALANCE_CORE_REQUIRED_STATE_TELEMETRY = (
     "contact_transition_event",
     "contact_force_valid",
     "contact_recovery_hook_fields",
+    "hip_roll_left_rad",
+    "hip_roll_right_rad",
+    "hip_roll_common_component_rad",
+    "hip_roll_symmetric_component_rad",
+    "hip_roll_abs_max_rad",
+    "hip_roll_ref_left_rad",
+    "hip_roll_ref_right_rad",
+    "hip_roll_error_left_rad",
+    "hip_roll_error_right_rad",
 )
 
 BALANCE_CORE_REQUIRED_TORQUE_TELEMETRY = (

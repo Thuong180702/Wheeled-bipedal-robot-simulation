@@ -53,6 +53,8 @@ def test_required_state_telemetry_uses_robot_frame_explicit_names():
     assert "pitch_x_rad" in BALANCE_CORE_REQUIRED_STATE_TELEMETRY
     assert "roll_y_rad" in BALANCE_CORE_REQUIRED_STATE_TELEMETRY
     assert "yaw_z_rad" in BALANCE_CORE_REQUIRED_STATE_TELEMETRY
+    assert "hip_roll_common_component_rad" in BALANCE_CORE_REQUIRED_STATE_TELEMETRY
+    assert "hip_roll_error_left_rad" in BALANCE_CORE_REQUIRED_STATE_TELEMETRY
     assert "body_pitch" not in BALANCE_CORE_REQUIRED_STATE_TELEMETRY
     assert "body_roll" not in BALANCE_CORE_REQUIRED_STATE_TELEMETRY
 

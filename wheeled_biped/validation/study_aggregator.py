@@ -226,14 +226,31 @@ class StudyAggregator:
         failed = [r for r in results if not r.passed]
         invalid = [r for r in results if r.failure_mode == "invalid_initial_setup"]
 
+        # Compute extended longevity fields
+        longevity_results = [r for r in passed if r.height_test_type == "longevity"]
+        max_confirmed_steps = (
+            max((r.duration_steps for r in longevity_results), default=0)
+        )
+        passed_100k = any(r.passed and r.duration_steps == 100000 for r in longevity_results)
+        first_failure = (
+            failed[0] if failed else None
+        )
+
         payload = {
             "case_count": len(results),
             "passed_count": len(passed),
             "failed_count": len(failed),
             "invalid_initial_setup_count": len(invalid),
-            "max_confirmed_passing_duration_steps": max(
-                (r.duration_steps for r in passed if r.height_test_type == "longevity"),
-                default=0,
+            "max_confirmed_passing_duration_steps": max_confirmed_steps,
+            "long_duration_survival_passed_up_to_100000_steps": passed_100k,
+            "first_failing_duration_steps": (
+                first_failure.duration_steps if first_failure else None
+            ),
+            "first_failing_primary_failure_mode": (
+                first_failure.failure_mode if first_failure else None
+            ),
+            "first_failing_responsible_component": (
+                first_failure.responsible_component if first_failure else None
             ),
             "results": results_list,
         }
@@ -402,7 +419,25 @@ class StudyAggregator:
             f"- Passed: {payload['passed_count']}",
             f"- Failed: {payload['failed_count']}",
             f"- Invalid initial setup: {payload['invalid_initial_setup_count']}",
+            f"- Max confirmed passing duration: {payload['max_confirmed_passing_duration_steps']} steps",
+            (
+                "- Passed 100000 steps: yes"
+                if payload["long_duration_survival_passed_up_to_100000_steps"]
+                else "- Passed 100000 steps: no"
+            ),
         ]
+        if payload.get("first_failing_duration_steps") is not None:
+            lines.append(
+                f"- First failing duration: {payload['first_failing_duration_steps']} steps"
+            )
+        if payload.get("first_failing_primary_failure_mode") is not None:
+            lines.append(
+                f"- First failing primary failure mode: {payload['first_failing_primary_failure_mode']}"
+            )
+        if payload.get("first_failing_responsible_component") is not None:
+            lines.append(
+                f"- First failing responsible component: {payload['first_failing_responsible_component']}"
+            )
         if "conclusion" in payload:
             lines.extend(["", f"**Conclusion:** {payload['conclusion']}"])
 

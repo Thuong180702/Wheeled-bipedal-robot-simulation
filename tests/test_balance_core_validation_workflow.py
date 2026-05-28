@@ -118,7 +118,7 @@ class TestBalanceCoreValidationWorkflow:
             # Mock run_simulation to create telemetry files
             # For this test, we'll create files that fail at 200 steps
 
-            def mock_run_simulation(steps: int, output_dir_path: str, sim_args=None):
+            def mock_run_simulation(steps: int, output_dir_path: str, sim_args=None, long_run_options=None):
                 """Mock simulation that creates telemetry."""
                 telemetry_path = Path(output_dir_path) / f"telemetry_{steps}.csv"
 
@@ -240,7 +240,7 @@ class TestBalanceCoreValidationWorkflow:
         with tempfile.TemporaryDirectory() as output_dir:
             call_log = []
 
-            def mock_run_simulation(steps, output_dir_path, sim_args=None):
+            def mock_run_simulation(steps, output_dir_path, sim_args=None, long_run_options=None):
                 call_log.append(steps)
                 telemetry_path = Path(output_dir_path) / f"telemetry_{steps}.csv"
                 df = self._create_valid_telemetry(steps)
@@ -269,7 +269,7 @@ class TestBalanceCoreValidationWorkflow:
 
         with tempfile.TemporaryDirectory() as output_dir:
 
-            def mock_run_simulation(steps, output_dir_path, sim_args=None):
+            def mock_run_simulation(steps, output_dir_path, sim_args=None, long_run_options=None):
                 telemetry_path = Path(output_dir_path) / f"telemetry_{steps}.csv"
                 df = self._create_valid_telemetry(steps)
                 if steps == 1000:
@@ -297,7 +297,7 @@ class TestBalanceCoreValidationWorkflow:
 
         with tempfile.TemporaryDirectory() as output_dir:
 
-            def mock_run_simulation(steps, output_dir_path, sim_args=None):
+            def mock_run_simulation(steps, output_dir_path, sim_args=None, long_run_options=None):
                 telemetry_path = Path(output_dir_path) / f"telemetry_{steps}.csv"
                 df = self._create_valid_telemetry(steps)
                 if steps == 1000:
@@ -327,7 +327,7 @@ class TestBalanceCoreValidationWorkflow:
 
         original_run = validator.run_simulation
 
-        def mock_run(steps, output_dir_path, sim_args=None):
+        def mock_run(steps, output_dir_path, sim_args=None, long_run_options=None):
             captured_args.append(list(sim_args or []))
             telemetry_path = Path(output_dir_path) / f"telemetry_{steps}.csv"
             df = self._create_valid_telemetry(steps)
@@ -345,6 +345,132 @@ class TestBalanceCoreValidationWorkflow:
                 assert captured_args[0] == ["--initial-root-z-perturbation", "0.02"]
             finally:
                 validator.run_simulation = original_run
+
+    def test_long_run_options_forwarded_to_run_simulation(self):
+        """Test that long-run logging options are forwarded through validate_ladder."""
+        validator = BalanceCoreValidator()
+        captured = {}
+
+        original_run = validator.run_simulation
+
+        def mock_run(steps, output_dir_path, sim_args=None, long_run_options=None):
+            captured["steps"] = steps
+            captured["long_run_options"] = dict(long_run_options or {})
+            telemetry_path = Path(output_dir_path) / f"telemetry_{steps}.csv"
+            df = self._create_valid_telemetry(steps)
+            df.to_csv(telemetry_path, index=False)
+            return telemetry_path
+
+        validator.run_simulation = mock_run
+        with tempfile.TemporaryDirectory() as output_dir:
+            try:
+                validator.validate_ladder(
+                    output_dir,
+                    durations=[10000],
+                    long_run_options={"telemetry_decimation": 20, "failure_window_steps": 400},
+                )
+                assert captured["steps"] == 10000
+                assert captured["long_run_options"]["telemetry_decimation"] == 20
+                assert captured["long_run_options"]["failure_window_steps"] == 400
+            finally:
+                validator.run_simulation = original_run
+
+    def test_validate_duration_prefers_failure_window_and_sidecar_actual_steps(self):
+        """Test that failure-window telemetry drives classification and sidecar drives actual steps."""
+        validator = BalanceCoreValidator()
+
+        with tempfile.TemporaryDirectory() as output_dir:
+            output_path = Path(output_dir)
+            decimated = self._create_valid_telemetry(50)
+            decimated_path = output_path / "telemetry_1000.csv"
+            decimated.to_csv(decimated_path, index=False)
+
+            failure_window = self._create_valid_telemetry(200)
+            failure_window.loc[150:, "pitch_x_rad"] = 0.35
+            failure_window_path = output_path / "failure_window_1000.csv"
+            failure_window.to_csv(failure_window_path, index=False)
+
+            summary_sidecar_path = output_path / "telemetry_1000.summary.json"
+            summary_sidecar_path.write_text(json.dumps({
+                "requested_steps": 1000,
+                "survived_steps": 1000,
+                "actual_steps": 1000,
+                "terminated": False,
+                "written_telemetry_rows": 50,
+                "termination_reason": "completed",
+                "final_sim_time_s": 2.0,
+                "wheel_velocity_trend": 0.15,
+                "metric_integrity": {"source": "full_rate_online", "limitations": []},
+            }), encoding="utf-8")
+
+            result = validator.validate_duration(
+                str(decimated_path),
+                expected_steps=1000,
+                failure_window_path=failure_window_path,
+                summary_sidecar_path=summary_sidecar_path,
+            )
+
+            assert result.passed is False
+            assert result.classification_result is not None
+            assert result.classification_source == "failure_window"
+            assert result.actual_steps == 1000
+            assert result.requested_steps == 1000
+            assert result.survived_steps == 1000
+            assert result.terminated is False
+            assert result.final_sim_time_s == pytest.approx(2.0)
+            assert result.failure_window_path == failure_window_path
+            assert result.summary_sidecar_path == summary_sidecar_path
+            assert result.termination_reason == "completed"
+            assert result.summary_metrics["metric_integrity"]["source"] == "full_rate_online"
+            assert result.summary_metrics["written_telemetry_rows"] == 50
+            assert result.summary_metrics["wheel_velocity_trend"] == pytest.approx(0.15)
+
+    def test_run_simulation_copies_failure_window_and_sidecar_to_expected_artifact_paths(self):
+        validator = BalanceCoreValidator()
+
+        with tempfile.TemporaryDirectory() as output_dir:
+            sim_output_dir = Path("outputs/hierarchical_controller_sim")
+            sim_output_dir.mkdir(parents=True, exist_ok=True)
+
+            telemetry_source = sim_output_dir / "telemetry_123456.csv"
+            failure_window_source = sim_output_dir / "failure_window_123456.csv"
+            sidecar_source = sim_output_dir / "telemetry_123456.summary.json"
+
+            telemetry_source.write_text("time\n0.0\n", encoding="utf-8")
+            failure_window_source.write_text("time\n0.0\n", encoding="utf-8")
+            sidecar_source.write_text(json.dumps({"actual_steps": 1000}), encoding="utf-8")
+
+            try:
+                telemetry_source.unlink(missing_ok=True)
+                failure_window_source.unlink(missing_ok=True)
+                sidecar_source.unlink(missing_ok=True)
+
+                def fake_run(*args, **kwargs):
+                    telemetry_source.write_text("time\n0.0\n", encoding="utf-8")
+                    failure_window_source.write_text("time\n0.0\n", encoding="utf-8")
+                    sidecar_source.write_text(json.dumps({"actual_steps": 1000}), encoding="utf-8")
+                    return None
+
+                with patch("wheeled_biped.validation.balance_core_validator.subprocess.run", side_effect=fake_run):
+                    dest_telemetry = validator.run_simulation(
+                        1000,
+                        output_dir,
+                        long_run_options={
+                            "telemetry_decimation": 20,
+                            "failure_window_steps": 500,
+                            "write_run_summary_sidecar": True,
+                        },
+                    )
+
+                assert dest_telemetry == Path(output_dir) / "telemetry_1000.csv"
+                assert dest_telemetry.exists()
+                assert (Path(output_dir) / "failure_window_1000.csv").exists()
+                assert (Path(output_dir) / "telemetry_1000.summary.json").exists()
+            finally:
+                telemetry_source.unlink(missing_ok=True)
+                failure_window_source.unlink(missing_ok=True)
+                sidecar_source.unlink(missing_ok=True)
+
 
     def test_study_aggregator_classifies_invalid_initial_setup_before_controller_failure(self):
         aggregator = StudyAggregator()
@@ -418,6 +544,7 @@ class TestBalanceCoreValidationWorkflow:
                     classification_result=None,
                     telemetry_path=Path("telemetry_1000.csv"),
                     report_path=None,
+                    summary_metrics={"requested_steps": 1000, "survival_steps": 1000},
                 ),
                 sim_args=[],
                 summary_metrics={"requested_steps": 1000, "survival_steps": 1000},
@@ -443,35 +570,52 @@ class TestBalanceCoreValidationWorkflow:
             payload = json.loads(json_path.read_text())
             markdown = markdown_path.read_text()
 
+            assert payload["max_confirmed_passing_duration_steps"] == 1000
+            assert payload["long_duration_survival_passed_up_to_100000_steps"] is False
+            assert payload["first_failing_duration_steps"] is None
+            assert "Max confirmed passing duration: 1000 steps" in markdown
+            assert "Passed 100000 steps: no" in markdown
 
 
-def test_main_writes_known_study_summaries():
+
+def test_main_routes_step_a_orchestration_to_summary_dir_from_default_output_dir():
     from scripts import validate_balance_core
 
-    with tempfile.TemporaryDirectory() as output_dir:
+    captured_output_dirs = []
+
+    def fake_write_known_study_summaries(output_dir):
+        captured_output_dirs.append(Path(output_dir))
+
+    with patch.object(validate_balance_core, "_write_known_study_summaries", side_effect=fake_write_known_study_summaries):
         with patch.object(validate_balance_core.sys, "argv", [
             "validate_balance_core.py",
-            "--write-known-study-summaries",
-            "--output-dir", output_dir,
+            "--step-a-orchestration",
         ]):
             exit_code = validate_balance_core.main()
 
-        assert exit_code == 0
+    assert exit_code == 0
+    assert captured_output_dirs == [Path("outputs/balance_core_longevity_height_sweep")]
 
-        summary_dir = Path(output_dir)
-        long_json = json.loads((summary_dir / "long_duration_summary.json").read_text())
-        root_json = json.loads((summary_dir / "root_z_perturbation_summary.json").read_text())
-        true_height_md = (summary_dir / "true_height_feasibility_summary.md").read_text()
 
-    assert long_json["conclusion"] == "long_duration_survival_passed_up_to_10000_steps"
-    assert long_json["max_confirmed_passing_duration_steps"] == 10000
-    assert root_json["conclusion"].startswith("root_z_perturbation_robustness_narrow")
-    assert root_json["case_count"] == 9
-    assert "true_height_variant_test_blocked" in true_height_md
-    from scripts.validate_balance_core import _parse_durations
+def test_main_routes_step_a_orchestration_to_custom_output_dir():
+    from scripts import validate_balance_core
 
-    with pytest.raises(argparse.ArgumentTypeError):
-        _parse_durations(",,,")
+    captured_output_dirs = []
+
+    def fake_write_known_study_summaries(output_dir):
+        captured_output_dirs.append(Path(output_dir))
+
+    with tempfile.TemporaryDirectory() as output_dir:
+        with patch.object(validate_balance_core, "_write_known_study_summaries", side_effect=fake_write_known_study_summaries):
+            with patch.object(validate_balance_core.sys, "argv", [
+                "validate_balance_core.py",
+                "--step-a-orchestration",
+                "--output-dir", output_dir,
+            ]):
+                exit_code = validate_balance_core.main()
+
+    assert exit_code == 0
+    assert captured_output_dirs == [Path(output_dir)]
 
 
 
@@ -489,11 +633,11 @@ def test_main_forwards_initial_root_z_perturbation_flag():
         def __init__(self):
             self.run_calls = []
 
-        def run_simulation(self, steps, output_dir, sim_args=None):
-            self.run_calls.append((steps, output_dir, list(sim_args or [])))
+        def run_simulation(self, steps, output_dir, sim_args=None, long_run_options=None):
+            self.run_calls.append((steps, output_dir, list(sim_args or []), dict(long_run_options or {})))
             return Path(output_dir) / f"telemetry_{steps}.csv"
 
-        def validate_duration(self, telemetry_path, expected_steps):
+        def validate_duration(self, telemetry_path, expected_steps, failure_window_path=None, summary_sidecar_path=None):
             return ValidationResult(
                 passed=True,
                 duration_steps=expected_steps,
@@ -517,7 +661,7 @@ def test_main_forwards_initial_root_z_perturbation_flag():
 
     assert exit_code == 0
     assert fake_validator.run_calls == [
-        (1000, str(Path("outputs/balance_core_validation")), ["--initial-root-z-perturbation", "0.02"])
+        (1000, str(Path("outputs/balance_core_validation")), ["--initial-root-z-perturbation", "0.02"], {})
     ]
 
 
@@ -536,6 +680,7 @@ def test_main_forwards_initial_root_z_perturbation_in_ladder_mode():
             durations=None,
             stop_on_first_failure=True,
             sim_args=None,
+            long_run_options=None,
         ):
             self.ladder_calls.append({
                 "output_dir": output_dir,
@@ -543,6 +688,7 @@ def test_main_forwards_initial_root_z_perturbation_in_ladder_mode():
                 "durations": durations,
                 "stop_on_first_failure": stop_on_first_failure,
                 "sim_args": list(sim_args or []),
+                "long_run_options": dict(long_run_options or {}),
             })
             return [
                 ValidationResult(
@@ -554,6 +700,24 @@ def test_main_forwards_initial_root_z_perturbation_in_ladder_mode():
                     classification_result=None,
                     telemetry_path=Path(output_dir) / "telemetry_1000.csv",
                     report_path=None,
+                    requested_steps=1000,
+                    survived_steps=1000,
+                    terminated=False,
+                    final_sim_time_s=2.0,
+                    summary_metrics={
+                        "pitch_x": {"min": 0.0, "max": 0.1, "rms": 0.02},
+                        "roll_y": {"min": 0.0, "max": 0.1, "rms": 0.02},
+                        "com_z": {"min": 0.4, "max": 0.45, "drift": 0.0},
+                        "wheel_vel_mean": {"min": -0.2, "max": 0.3, "rms": 0.1},
+                        "wheel_velocity_trend": 0.02,
+                        "ownership_violation_count_max": 0,
+                        "hidden_torque_norm_max": 0.0,
+                        "tau_wbc_norm_max": 0.0,
+                        "contact_state_summary": {"counts": {"DOUBLE_CONTACT": 1000}, "most_common_state": "DOUBLE_CONTACT"},
+                        "torque_saturation": {"fraction_max": 0.0, "fraction_mean": 0.0},
+                        "torque_rate_saturation": {"fraction_max": 0.0, "fraction_mean": 0.0},
+                        "metric_integrity": {"source": "full_rate_online", "limitations": []},
+                    },
                 )
             ]
 
@@ -575,4 +739,165 @@ def test_main_forwards_initial_root_z_perturbation_in_ladder_mode():
         "durations": [1000, 2000],
         "stop_on_first_failure": False,
         "sim_args": ["--initial-root-z-perturbation", "0.01"],
+        "long_run_options": {},
     }]
+
+
+def test_main_forwards_long_run_options_to_ladder_mode(tmp_path):
+    from scripts import validate_balance_core
+
+    class FakeValidator:
+        def __init__(self):
+            self.ladder_calls = []
+
+        def validate_ladder(
+            self,
+            output_dir,
+            start_duration=None,
+            durations=None,
+            stop_on_first_failure=True,
+            sim_args=None,
+            long_run_options=None,
+        ):
+            self.ladder_calls.append({
+                "output_dir": output_dir,
+                "start_duration": start_duration,
+                "durations": durations,
+                "stop_on_first_failure": stop_on_first_failure,
+                "sim_args": list(sim_args or []),
+                "long_run_options": dict(long_run_options or {}),
+            })
+            return [
+                ValidationResult(
+                    passed=True,
+                    duration_steps=10000,
+                    actual_steps=10000,
+                    structural_invariants_passed=True,
+                    failure_mode=None,
+                    classification_result=None,
+                    telemetry_path=Path(output_dir) / "telemetry_10000.csv",
+                    report_path=None,
+                    requested_steps=10000,
+                    survived_steps=10000,
+                    terminated=False,
+                    final_sim_time_s=20.0,
+                    summary_metrics={
+                        "pitch_x": {"min": 0.0, "max": 0.1, "rms": 0.02},
+                        "roll_y": {"min": 0.0, "max": 0.1, "rms": 0.02},
+                        "com_z": {"min": 0.4, "max": 0.45, "drift": 0.0},
+                        "wheel_vel_mean": {"min": -0.2, "max": 0.3, "rms": 0.1},
+                        "wheel_velocity_trend": 0.05,
+                        "ownership_violation_count_max": 0,
+                        "hidden_torque_norm_max": 0.0,
+                        "tau_wbc_norm_max": 0.0,
+                        "contact_state_summary": {"counts": {"DOUBLE_CONTACT": 10000}, "most_common_state": "DOUBLE_CONTACT"},
+                        "torque_saturation": {"fraction_max": 0.0, "fraction_mean": 0.0},
+                        "torque_rate_saturation": {"fraction_max": 0.0, "fraction_mean": 0.0},
+                        "metric_integrity": {"source": "full_rate_online", "limitations": []},
+                    },
+                )
+            ]
+
+    fake_validator = FakeValidator()
+
+    with patch.object(validate_balance_core, "BalanceCoreValidator", return_value=fake_validator):
+        with patch.object(validate_balance_core.sys, "argv", [
+            "validate_balance_core.py",
+            "--durations", "10000",
+            "--telemetry-decimation", "20",
+            "--failure-window-steps", "500",
+            "--write-run-summary-sidecar",
+            "--output-dir", str(tmp_path),
+        ]):
+            exit_code = validate_balance_core.main()
+
+    assert exit_code == 0
+    assert fake_validator.ladder_calls == [{
+        "output_dir": str(tmp_path),
+        "start_duration": None,
+        "durations": [10000],
+        "stop_on_first_failure": True,
+        "sim_args": [],
+        "long_run_options": {
+            "telemetry_decimation": 20,
+            "failure_window_steps": 500,
+            "write_run_summary_sidecar": True,
+        },
+    }]
+
+
+def test_build_extended_longevity_summary_reports_first_failure_and_100k_status(tmp_path):
+    from scripts import validate_balance_core
+
+    passing = ValidationResult(
+        passed=True,
+        duration_steps=10000,
+        actual_steps=10000,
+        structural_invariants_passed=True,
+        failure_mode=None,
+        classification_result=None,
+        telemetry_path=tmp_path / "telemetry_10000.csv",
+        report_path=None,
+        requested_steps=10000,
+        survived_steps=10000,
+        terminated=False,
+        final_sim_time_s=20.0,
+        summary_metrics={
+            "pitch_x": {"min": 0.0, "max": 0.1, "rms": 0.02},
+            "roll_y": {"min": 0.0, "max": 0.1, "rms": 0.02},
+            "com_z": {"min": 0.4, "max": 0.45, "drift": 0.0},
+            "wheel_vel_mean": {"min": -0.2, "max": 0.3, "rms": 0.1},
+            "wheel_velocity_trend": 0.05,
+            "ownership_violation_count_max": 0,
+            "hidden_torque_norm_max": 0.0,
+            "tau_wbc_norm_max": 0.0,
+            "contact_state_summary": {"counts": {"DOUBLE_CONTACT": 10000}, "most_common_state": "DOUBLE_CONTACT"},
+            "torque_saturation": {"fraction_max": 0.0, "fraction_mean": 0.0},
+            "torque_rate_saturation": {"fraction_max": 0.0, "fraction_mean": 0.0},
+            "metric_integrity": {"source": "full_rate_online", "limitations": []},
+        },
+    )
+    failing = ValidationResult(
+        passed=False,
+        duration_steps=20000,
+        actual_steps=15321,
+        structural_invariants_passed=True,
+        failure_mode=None,
+        classification_result=None,
+        telemetry_path=tmp_path / "telemetry_20000.csv",
+        report_path=tmp_path / "failure_report_20000.md",
+        requested_steps=20000,
+        survived_steps=15321,
+        terminated=True,
+        termination_reason="fell",
+        final_sim_time_s=30.642,
+        primary_failure_mode="F2.1",
+        secondary_failure_modes=["F1.2"],
+        summary_sidecar_path=tmp_path / "telemetry_20000.summary.json",
+        failure_window_path=tmp_path / "failure_window_20000.csv",
+        summary_metrics={
+            "pitch_x": {"min": 0.0, "max": 0.35, "rms": 0.08},
+            "roll_y": {"min": 0.0, "max": 0.1, "rms": 0.02},
+            "com_z": {"min": 0.35, "max": 0.45, "drift": -0.08},
+            "wheel_vel_mean": {"min": -0.2, "max": 0.7, "rms": 0.2},
+            "wheel_velocity_trend": 0.2,
+            "ownership_violation_count_max": 0,
+            "hidden_torque_norm_max": 0.0,
+            "tau_wbc_norm_max": 0.0,
+            "contact_state_summary": {"counts": {"DOUBLE_CONTACT": 12000, "NO_CONTACT": 3321}, "most_common_state": "DOUBLE_CONTACT"},
+            "torque_saturation": {"fraction_max": 0.1, "fraction_mean": 0.01},
+            "torque_rate_saturation": {"fraction_max": 0.2, "fraction_mean": 0.03},
+            "metric_integrity": {"source": "full_rate_online", "limitations": []},
+            "written_telemetry_rows": 767,
+        },
+    )
+
+    summary = validate_balance_core._write_extended_longevity_summary([passing, failing], tmp_path)
+
+    assert summary["maximum_confirmed_survival_steps"] == 10000
+    assert summary["passed_100000_steps"] is False
+    assert summary["first_failing_duration"] == 20000
+    assert summary["primary_failure_mode"] == "F2.1"
+    assert summary["conclusion"] == "long_duration_survival_confirmed_up_to_10000_steps"
+    assert (tmp_path / "extended_longevity_summary.json").exists()
+    assert (tmp_path / "extended_longevity_summary.md").exists()
