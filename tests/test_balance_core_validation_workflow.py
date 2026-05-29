@@ -901,3 +901,24 @@ def test_build_extended_longevity_summary_reports_first_failure_and_100k_status(
     assert summary["conclusion"] == "long_duration_survival_confirmed_up_to_10000_steps"
     assert (tmp_path / "extended_longevity_summary.json").exists()
     assert (tmp_path / "extended_longevity_summary.md").exists()
+
+
+def test_resolve_sysid_output_dir_uses_position_aware_namespace():
+    from scripts.collect_sagittal_balance_sysid_data import resolve_sysid_output_dir
+
+    path = resolve_sysid_output_dir(Path("outputs"))
+    assert path == Path("outputs/sagittal_position_aware_balance/sysid")
+
+
+def test_build_sysid_run_metadata_marks_closed_loop_collection():
+    from scripts.collect_sagittal_balance_sysid_data import build_sysid_run_metadata
+
+    metadata = build_sysid_run_metadata(
+        scenario="nominal",
+        duration_steps=5000,
+        controller_mode="balance-core",
+    )
+
+    assert metadata["collection_mode"] == "closed_loop"
+    assert metadata["controller_mode"] == "balance-core"
+    assert metadata["duration_steps"] == 5000
