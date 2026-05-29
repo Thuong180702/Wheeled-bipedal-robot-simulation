@@ -1199,9 +1199,8 @@ def main():
         static_posture_controller.set_equilibrium_reference(equilibrium_joint_pos)
         print(f"[STAGE 2] StaticPostureHoldingController equilibrium reference set")
 
-    # E0c: Capture initial position reference for position containment via reference shaping
-    position_reference_y_m = float(centroidal_state_eq.com_pos[1])
-    print(f"[E0c] Position reference captured: Y = {position_reference_y_m:.6f} m")
+    # E0 position-containment experiments were removed from runtime.
+    # Failure analyses remain under outputs/balance_core_position_containment/.
 
     # Set equilibrium reference for Stage2B direct roll controller if enabled
     if stage2b_roll_direct_controller is not None:
@@ -1396,37 +1395,6 @@ def main():
         "tau_static_posture": [],
         "saturation_flags": [],
         "rate_limit_flags": [],
-        # E0c position containment via reference shaping telemetry
-        "e0c_enabled": [],
-        "e0c_position_reference_y_m": [],
-        "e0c_position_error_y_m": [],
-        "e0c_position_error_abs": [],
-        "e0c_position_deadband_m": [],
-        "e0c_in_deadband": [],
-        "e0c_desired_velocity_y_m_s": [],
-        "e0c_current_velocity_y_m_s": [],
-        "e0c_velocity_error_y_m_s": [],
-        "e0c_cp_bias_from_position_m": [],
-        "e0c_balance_priority_gate": [],
-        "e0c_balance_priority_gate_active": [],
-        "e0c_cp_bias_gated_m": [],
-        "e0c_cp_bias_final_m": [],
-        # E0d: Phase-aware position containment telemetry
-        "e0d_enabled": [],
-        "e0d_position_reference_y_m": [],
-        "e0d_position_error_y_m": [],
-        "e0d_position_error_abs": [],
-        "e0d_current_velocity_y_m_s": [],
-        "e0d_velocity_away": [],
-        "e0d_velocity_toward": [],
-        "e0d_phase": [],
-        "e0d_desired_velocity_raw": [],
-        "e0d_desired_velocity_limited": [],
-        "e0d_velocity_error": [],
-        "e0d_cp_bias_raw": [],
-        "e0d_balance_priority_gate": [],
-        "e0d_cp_bias_gated": [],
-        "e0d_cp_bias_final": [],
         # Wheel torque pipeline telemetry
         "tau_stage2b_sagittal_wheel_l": [],
         "tau_stage2b_sagittal_wheel_r": [],
@@ -1453,25 +1421,6 @@ def main():
         "sagittal_cp_error_y": [],
         "sagittal_tau_wheel_cmd": [],
         "sagittal_saturated": [],
-        # E0b multi-zone position containment diagnostics
-        "sagittal_position_containment_enabled": [],
-        "sagittal_position_y_m": [],
-        "sagittal_position_error_abs": [],
-        "sagittal_planar_drift_m": [],
-        "sagittal_position_velocity_m_s": [],
-        "sagittal_position_deadband_m": [],
-        "sagittal_position_soft_limit_m": [],
-        "sagittal_position_hard_limit_m": [],
-        "sagittal_in_deadband": [],
-        "sagittal_in_soft_zone": [],
-        "sagittal_in_hard_zone": [],
-        "sagittal_containment_violation": [],
-        "sagittal_position_correction_proportional": [],
-        "sagittal_position_correction_velocity": [],
-        "sagittal_position_correction_raw": [],
-        "sagittal_position_bias": [],
-        "sagittal_balance_priority_gate": [],
-        "sagittal_balance_priority_gate_active": [],
         # Stage 2C: Sagittal state-feedback telemetry
         "stage2c_pitch_error": [],
         "stage2c_pitch_rate_x": [],
@@ -1560,9 +1509,6 @@ def main():
     # Wheel velocity memory for balance-core mode
     prev_wheel_vel_left = 0.0
     prev_wheel_vel_right = 0.0
-
-    # E0d: Phase-aware position containment state
-    e0d_prev_desired_velocity = 0.0
 
     # --- Long-run logging state ---
     telemetry_decimation = max(1, int(getattr(args, "telemetry_decimation", 1)))
@@ -1768,7 +1714,7 @@ def main():
     initial_yaw_z = float(centroidal_state_eq.body_yaw_z)
 
     def simulation_step():
-        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary, position_reference_y_m, e0d_prev_desired_velocity
+        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary
 
         if terminated or step >= max_steps:
             return False
@@ -2149,249 +2095,7 @@ def main():
             # Root cause: CP bias was ineffective, did not prevent forward drift
             # Kept for research documentation only. Must remain disabled.
 
-            # E0c parameters
-            e0c_enabled = False  # FAILED - DO NOT ENABLE
-            position_deadband_m = 0.10  # Larger than E0b to be more conservative
-            k_position_to_velocity = 0.10  # m/s per m of position error
-            max_desired_velocity_m_s = 0.10  # Conservative velocity limit
-            k_velocity_to_cp_bias = 0.50  # CP bias per m/s of velocity error
-            max_cp_bias_m = 0.05  # Small CP bias limit
-            pitch_gate_threshold_rad = 0.15
-            roll_gate_threshold_rad = 0.15
-
-            if e0c_enabled:
-                # 1. Compute position error
-                current_position_y_m = float(centroidal_state_control.com_pos[1])
-                position_error_y_m = current_position_y_m - position_reference_y_m
-                position_error_abs = abs(position_error_y_m)
-
-                # 2. Apply deadband
-                in_deadband = position_error_abs <= position_deadband_m
-
-                # 3. Compute desired velocity (proportional to position error beyond deadband)
-                if in_deadband:
-                    desired_velocity_y_m_s = 0.0
-                else:
-                    # Proportional control: move back toward reference
-                    desired_velocity_y_m_s = -k_position_to_velocity * position_error_y_m
-
-                # 4. Clip desired velocity
-                desired_velocity_y_m_s = np.clip(
-                    desired_velocity_y_m_s,
-                    -max_desired_velocity_m_s,
-                    max_desired_velocity_m_s
-                )
-
-                # 5. Compute velocity error (current - desired)
-                current_velocity_y_m_s = float(centroidal_state_control.com_vel[1])
-                velocity_error_y_m_s = current_velocity_y_m_s - desired_velocity_y_m_s
-
-                # 6. Compute CP bias from velocity error
-                # Positive velocity error (moving forward too fast) → negative CP bias (pull back)
-                cp_bias_from_position_m = -k_velocity_to_cp_bias * velocity_error_y_m_s
-
-                # 7. Apply balance priority gate (exponential decay based on pitch/roll)
-                pitch_x_rad = float(centroidal_state_control.body_pitch_x)
-                roll_y_rad = float(centroidal_state_control.body_roll_y)
-                pitch_normalized = pitch_x_rad / pitch_gate_threshold_rad
-                roll_normalized = roll_y_rad / roll_gate_threshold_rad
-                balance_priority_gate = np.exp(-(pitch_normalized**2 + roll_normalized**2))
-                balance_priority_gate_active = balance_priority_gate < 0.95
-
-                cp_bias_gated_m = cp_bias_from_position_m * balance_priority_gate
-
-                # 8. Clip CP bias
-                cp_bias_final_m = np.clip(
-                    cp_bias_gated_m,
-                    -max_cp_bias_m,
-                    max_cp_bias_m
-                )
-
-                # E0c telemetry
-                e0c_telemetry = {
-                    "e0c_enabled": True,
-                    "position_reference_y_m": position_reference_y_m,
-                    "position_error_y_m": position_error_y_m,
-                    "position_error_abs": position_error_abs,
-                    "position_deadband_m": position_deadband_m,
-                    "in_deadband": in_deadband,
-                    "desired_velocity_y_m_s": desired_velocity_y_m_s,
-                    "current_velocity_y_m_s": current_velocity_y_m_s,
-                    "velocity_error_y_m_s": velocity_error_y_m_s,
-                    "cp_bias_from_position_m": cp_bias_from_position_m,
-                    "balance_priority_gate": balance_priority_gate,
-                    "balance_priority_gate_active": balance_priority_gate_active,
-                    "cp_bias_gated_m": cp_bias_gated_m,
-                    "cp_bias_final_m": cp_bias_final_m,
-                }
-            else:
-                cp_bias_final_m = 0.0
-                e0c_telemetry = {
-                    "e0c_enabled": False,
-                    "position_reference_y_m": position_reference_y_m,
-                    "position_error_y_m": 0.0,
-                    "position_error_abs": 0.0,
-                    "position_deadband_m": position_deadband_m,
-                    "in_deadband": True,
-                    "desired_velocity_y_m_s": 0.0,
-                    "current_velocity_y_m_s": 0.0,
-                    "velocity_error_y_m_s": 0.0,
-                    "cp_bias_from_position_m": 0.0,
-                    "balance_priority_gate": 1.0,
-                    "balance_priority_gate_active": False,
-                    "cp_bias_gated_m": 0.0,
-                    "cp_bias_final_m": 0.0,
-                }
-
-            # E0d: Phase-aware position containment via capture-point reference shaping
-            # FAILED EXPERIMENT - DO NOT USE
-            # Failed catastrophically: 121.39 m drift (3.4x worse than 35.22 m baseline)
-            # Root cause: robot stayed in braking phase almost all the time, never returned effectively,
-            # CP bias saturated and did not stop forward drift
-            # Kept for research documentation only. Must remain disabled.
-
-            # E0d parameters
-            e0d_enabled = False  # FAILED - DO NOT ENABLE
-            e0d_deadband_m = 0.10  # Inside this, no position correction
-            e0d_settle_threshold_m = 0.20  # Transition from return to settle
-            e0d_k_position_to_velocity = 0.15  # m/s per m of position error (higher than E0c's 0.10)
-            e0d_max_return_velocity_m_s = 0.15  # Max return velocity (higher than E0c's 0.10)
-            e0d_braking_factor = 0.80  # Reduce outward velocity by 20% per step during braking
-            e0d_k_velocity_to_cp_bias = 0.80  # CP bias per m/s of velocity error (higher than E0c's 0.50)
-            e0d_max_cp_bias_m = 0.15  # Max CP bias (3x larger than E0c's 0.05 m)
-            e0d_accel_limit_m_s2 = 0.50  # Acceleration limit for desired velocity
-            e0d_pitch_gate_threshold_rad = 0.15  # 8.6 degrees
-            e0d_roll_gate_threshold_rad = 0.15  # 8.6 degrees
-            e0d_velocity_away_threshold_m_s = 0.02  # Velocity threshold to detect moving away
-
-            if e0d_enabled:
-                # 1. Compute position error
-                current_position_y_m = float(centroidal_state_control.com_pos[1])
-                e0d_position_error_y_m = current_position_y_m - position_reference_y_m
-                e0d_position_error_abs = abs(e0d_position_error_y_m)
-
-                # 2. Get current velocity
-                e0d_current_velocity_y_m_s = float(centroidal_state_control.com_vel[1])
-
-                # 3. Determine if velocity is moving away from or toward reference
-                # Positive position error (forward) + positive velocity (forward) = moving away
-                # Negative position error (backward) + negative velocity (backward) = moving away
-                e0d_velocity_away = (e0d_position_error_y_m * e0d_current_velocity_y_m_s) > e0d_velocity_away_threshold_m_s
-                e0d_velocity_toward = (e0d_position_error_y_m * e0d_current_velocity_y_m_s) < -e0d_velocity_away_threshold_m_s
-
-                # 4. Determine phase
-                pitch_x_rad = float(centroidal_state_control.body_pitch_x)
-                roll_y_rad = float(centroidal_state_control.body_roll_y)
-                pitch_unsafe = abs(pitch_x_rad) > e0d_pitch_gate_threshold_rad
-                roll_unsafe = abs(roll_y_rad) > e0d_roll_gate_threshold_rad
-
-                if pitch_unsafe or roll_unsafe:
-                    e0d_phase = "gated_balance_recovery"
-                elif e0d_position_error_abs <= e0d_deadband_m:
-                    e0d_phase = "inside_deadband"
-                elif e0d_velocity_away and e0d_position_error_abs > e0d_deadband_m:
-                    e0d_phase = "moving_away_braking"
-                elif e0d_position_error_abs <= e0d_settle_threshold_m:
-                    e0d_phase = "settle"
-                else:
-                    e0d_phase = "return"
-
-                # 5. Compute desired velocity based on phase
-                if e0d_phase == "inside_deadband":
-                    e0d_desired_velocity_raw = 0.0
-                elif e0d_phase == "moving_away_braking":
-                    # Reduce outward velocity toward zero, don't immediately reverse
-                    e0d_desired_velocity_raw = e0d_current_velocity_y_m_s * e0d_braking_factor
-                elif e0d_phase == "return":
-                    # Command small return velocity toward reference
-                    e0d_desired_velocity_raw = -e0d_k_position_to_velocity * e0d_position_error_y_m
-                    e0d_desired_velocity_raw = np.clip(
-                        e0d_desired_velocity_raw,
-                        -e0d_max_return_velocity_m_s,
-                        e0d_max_return_velocity_m_s
-                    )
-                elif e0d_phase == "settle":
-                    # Smoothly reduce velocity to zero near target
-                    e0d_desired_velocity_raw = -e0d_k_position_to_velocity * e0d_position_error_y_m * 0.5
-                elif e0d_phase == "gated_balance_recovery":
-                    # Freeze position return during unsafe pitch/roll
-                    e0d_desired_velocity_raw = 0.0
-                else:
-                    e0d_desired_velocity_raw = 0.0
-
-                # 6. Apply acceleration limiting
-                max_delta_v = e0d_accel_limit_m_s2 * control_dt
-                e0d_desired_velocity_limited = np.clip(
-                    e0d_desired_velocity_raw,
-                    e0d_prev_desired_velocity - max_delta_v,
-                    e0d_prev_desired_velocity + max_delta_v
-                )
-
-                # 7. Compute velocity error
-                e0d_velocity_error = e0d_current_velocity_y_m_s - e0d_desired_velocity_limited
-
-                # 8. Compute CP bias from velocity error
-                # Positive velocity error (moving forward too fast) → negative CP bias (pull back)
-                e0d_cp_bias_raw = -e0d_k_velocity_to_cp_bias * e0d_velocity_error
-
-                # 9. Apply balance priority gate
-                pitch_normalized = pitch_x_rad / e0d_pitch_gate_threshold_rad
-                roll_normalized = roll_y_rad / e0d_roll_gate_threshold_rad
-                e0d_balance_priority_gate = np.exp(-(pitch_normalized**2 + roll_normalized**2))
-                e0d_cp_bias_gated = e0d_cp_bias_raw * e0d_balance_priority_gate
-
-                # 10. Clip CP bias
-                e0d_cp_bias_final = np.clip(
-                    e0d_cp_bias_gated,
-                    -e0d_max_cp_bias_m,
-                    e0d_max_cp_bias_m
-                )
-
-                # Update state for next step
-                e0d_prev_desired_velocity = e0d_desired_velocity_limited
-
-                # E0d telemetry
-                e0d_telemetry = {
-                    "e0d_enabled": True,
-                    "e0d_position_reference_y_m": position_reference_y_m,
-                    "e0d_position_error_y_m": e0d_position_error_y_m,
-                    "e0d_position_error_abs": e0d_position_error_abs,
-                    "e0d_current_velocity_y_m_s": e0d_current_velocity_y_m_s,
-                    "e0d_velocity_away": e0d_velocity_away,
-                    "e0d_velocity_toward": e0d_velocity_toward,
-                    "e0d_phase": e0d_phase,
-                    "e0d_desired_velocity_raw": e0d_desired_velocity_raw,
-                    "e0d_desired_velocity_limited": e0d_desired_velocity_limited,
-                    "e0d_velocity_error": e0d_velocity_error,
-                    "e0d_cp_bias_raw": e0d_cp_bias_raw,
-                    "e0d_balance_priority_gate": e0d_balance_priority_gate,
-                    "e0d_cp_bias_gated": e0d_cp_bias_gated,
-                    "e0d_cp_bias_final": e0d_cp_bias_final,
-                }
-            else:
-                e0d_cp_bias_final = 0.0
-                e0d_telemetry = {
-                    "e0d_enabled": False,
-                    "e0d_position_reference_y_m": position_reference_y_m,
-                    "e0d_position_error_y_m": 0.0,
-                    "e0d_position_error_abs": 0.0,
-                    "e0d_current_velocity_y_m_s": 0.0,
-                    "e0d_velocity_away": False,
-                    "e0d_velocity_toward": False,
-                    "e0d_phase": "disabled",
-                    "e0d_desired_velocity_raw": 0.0,
-                    "e0d_desired_velocity_limited": 0.0,
-                    "e0d_velocity_error": 0.0,
-                    "e0d_cp_bias_raw": 0.0,
-                    "e0d_balance_priority_gate": 1.0,
-                    "e0d_cp_bias_gated": 0.0,
-                    "e0d_cp_bias_final": 0.0,
-                }
-
-            # Compute CP error with E0c/E0d reference shaping bias
-            # E0c and E0d are mutually exclusive (both disabled by default)
-            cp_bias_total_m = cp_bias_final_m + e0d_cp_bias_final
-            cp_error_y_m = float(centroidal_state_control.capture_point[1] - centroidal_state_control.com_pos[1]) + cp_bias_total_m
+            cp_error_y_m = float(centroidal_state_control.capture_point[1] - centroidal_state_control.com_pos[1])
             tau_sagittal_wheel_balance, sagittal_diag = balance_core_controllers["sagittal_wheel_balance"].compute(
                 pitch_x_rad=float(centroidal_state_control.body_pitch_x),
                 pitch_rate_x_rad_s=float(centroidal_state_control.body_pitch_rate_x),
@@ -2902,74 +2606,6 @@ def main():
         telemetry["saturation_flags"].append(",".join(f"{x}" for x in sat_flags_vec))
         telemetry["rate_limit_flags"].append(",".join(f"{x}" for x in rate_flags_vec))
 
-        # E0c position containment telemetry
-        if is_balance_core_mode(args):
-            telemetry["e0c_enabled"].append(e0c_telemetry["e0c_enabled"])
-            telemetry["e0c_position_reference_y_m"].append(e0c_telemetry["position_reference_y_m"])
-            telemetry["e0c_position_error_y_m"].append(e0c_telemetry["position_error_y_m"])
-            telemetry["e0c_position_error_abs"].append(e0c_telemetry["position_error_abs"])
-            telemetry["e0c_position_deadband_m"].append(e0c_telemetry["position_deadband_m"])
-            telemetry["e0c_in_deadband"].append(e0c_telemetry["in_deadband"])
-            telemetry["e0c_desired_velocity_y_m_s"].append(e0c_telemetry["desired_velocity_y_m_s"])
-            telemetry["e0c_current_velocity_y_m_s"].append(e0c_telemetry["current_velocity_y_m_s"])
-            telemetry["e0c_velocity_error_y_m_s"].append(e0c_telemetry["velocity_error_y_m_s"])
-            telemetry["e0c_cp_bias_from_position_m"].append(e0c_telemetry["cp_bias_from_position_m"])
-            telemetry["e0c_balance_priority_gate"].append(e0c_telemetry["balance_priority_gate"])
-            telemetry["e0c_balance_priority_gate_active"].append(e0c_telemetry["balance_priority_gate_active"])
-            telemetry["e0c_cp_bias_gated_m"].append(e0c_telemetry["cp_bias_gated_m"])
-            telemetry["e0c_cp_bias_final_m"].append(e0c_telemetry["cp_bias_final_m"])
-        else:
-            # Legacy mode: fill with zeros
-            telemetry["e0c_enabled"].append(False)
-            telemetry["e0c_position_reference_y_m"].append(0.0)
-            telemetry["e0c_position_error_y_m"].append(0.0)
-            telemetry["e0c_position_error_abs"].append(0.0)
-            telemetry["e0c_position_deadband_m"].append(0.0)
-            telemetry["e0c_in_deadband"].append(True)
-            telemetry["e0c_desired_velocity_y_m_s"].append(0.0)
-            telemetry["e0c_current_velocity_y_m_s"].append(0.0)
-            telemetry["e0c_velocity_error_y_m_s"].append(0.0)
-            telemetry["e0c_cp_bias_from_position_m"].append(0.0)
-            telemetry["e0c_balance_priority_gate"].append(1.0)
-            telemetry["e0c_balance_priority_gate_active"].append(False)
-            telemetry["e0c_cp_bias_gated_m"].append(0.0)
-            telemetry["e0c_cp_bias_final_m"].append(0.0)
-
-        # E0d position containment telemetry
-        if is_balance_core_mode(args):
-            telemetry["e0d_enabled"].append(e0d_telemetry["e0d_enabled"])
-            telemetry["e0d_position_reference_y_m"].append(e0d_telemetry["e0d_position_reference_y_m"])
-            telemetry["e0d_position_error_y_m"].append(e0d_telemetry["e0d_position_error_y_m"])
-            telemetry["e0d_position_error_abs"].append(e0d_telemetry["e0d_position_error_abs"])
-            telemetry["e0d_current_velocity_y_m_s"].append(e0d_telemetry["e0d_current_velocity_y_m_s"])
-            telemetry["e0d_velocity_away"].append(e0d_telemetry["e0d_velocity_away"])
-            telemetry["e0d_velocity_toward"].append(e0d_telemetry["e0d_velocity_toward"])
-            telemetry["e0d_phase"].append(e0d_telemetry["e0d_phase"])
-            telemetry["e0d_desired_velocity_raw"].append(e0d_telemetry["e0d_desired_velocity_raw"])
-            telemetry["e0d_desired_velocity_limited"].append(e0d_telemetry["e0d_desired_velocity_limited"])
-            telemetry["e0d_velocity_error"].append(e0d_telemetry["e0d_velocity_error"])
-            telemetry["e0d_cp_bias_raw"].append(e0d_telemetry["e0d_cp_bias_raw"])
-            telemetry["e0d_balance_priority_gate"].append(e0d_telemetry["e0d_balance_priority_gate"])
-            telemetry["e0d_cp_bias_gated"].append(e0d_telemetry["e0d_cp_bias_gated"])
-            telemetry["e0d_cp_bias_final"].append(e0d_telemetry["e0d_cp_bias_final"])
-        else:
-            # Legacy mode: fill with zeros
-            telemetry["e0d_enabled"].append(False)
-            telemetry["e0d_position_reference_y_m"].append(0.0)
-            telemetry["e0d_position_error_y_m"].append(0.0)
-            telemetry["e0d_position_error_abs"].append(0.0)
-            telemetry["e0d_current_velocity_y_m_s"].append(0.0)
-            telemetry["e0d_velocity_away"].append(False)
-            telemetry["e0d_velocity_toward"].append(False)
-            telemetry["e0d_phase"].append("disabled")
-            telemetry["e0d_desired_velocity_raw"].append(0.0)
-            telemetry["e0d_desired_velocity_limited"].append(0.0)
-            telemetry["e0d_velocity_error"].append(0.0)
-            telemetry["e0d_cp_bias_raw"].append(0.0)
-            telemetry["e0d_balance_priority_gate"].append(1.0)
-            telemetry["e0d_cp_bias_gated"].append(0.0)
-            telemetry["e0d_cp_bias_final"].append(0.0)
-
         # Motor tracking diagnostics
         telemetry["target_joint_pos"].append(",".join(f"{x:.4f}" for x in np.array(target_joint_pos)))
         telemetry["joint_pos_error"].append(",".join(f"{x:.4f}" for x in np.array(joint_pos_error)))
@@ -3037,25 +2673,6 @@ def main():
         telemetry["sagittal_cp_error_y"].append(sagittal_wheel_diagnostics.get("cp_error_y", 0.0))
         telemetry["sagittal_tau_wheel_cmd"].append(sagittal_wheel_diagnostics.get("tau_wheel_cmd", 0.0))
         telemetry["sagittal_saturated"].append(sagittal_wheel_diagnostics.get("saturated", False))
-        # E0b multi-zone position containment diagnostics
-        telemetry["sagittal_position_containment_enabled"].append(sagittal_diag.get("position_containment_enabled", False))
-        telemetry["sagittal_position_y_m"].append(sagittal_diag.get("position_y_m", 0.0))
-        telemetry["sagittal_position_error_abs"].append(sagittal_diag.get("position_error_abs", 0.0))
-        telemetry["sagittal_planar_drift_m"].append(sagittal_diag.get("planar_drift_m", 0.0))
-        telemetry["sagittal_position_velocity_m_s"].append(sagittal_diag.get("sagittal_position_velocity_m_s", 0.0))
-        telemetry["sagittal_position_deadband_m"].append(sagittal_diag.get("position_deadband_m", 0.0))
-        telemetry["sagittal_position_soft_limit_m"].append(sagittal_diag.get("position_soft_limit_m", 0.0))
-        telemetry["sagittal_position_hard_limit_m"].append(sagittal_diag.get("position_hard_limit_m", 0.0))
-        telemetry["sagittal_in_deadband"].append(sagittal_diag.get("in_deadband", False))
-        telemetry["sagittal_in_soft_zone"].append(sagittal_diag.get("in_soft_zone", False))
-        telemetry["sagittal_in_hard_zone"].append(sagittal_diag.get("in_hard_zone", False))
-        telemetry["sagittal_containment_violation"].append(sagittal_diag.get("containment_violation", False))
-        telemetry["sagittal_position_correction_proportional"].append(sagittal_diag.get("position_correction_proportional", 0.0))
-        telemetry["sagittal_position_correction_velocity"].append(sagittal_diag.get("position_correction_velocity", 0.0))
-        telemetry["sagittal_position_correction_raw"].append(sagittal_diag.get("position_correction_raw", 0.0))
-        telemetry["sagittal_position_bias"].append(sagittal_diag.get("position_bias", 0.0))
-        telemetry["sagittal_balance_priority_gate"].append(sagittal_diag.get("balance_priority_gate", 1.0))
-        telemetry["sagittal_balance_priority_gate_active"].append(sagittal_diag.get("balance_priority_gate_active", False))
         # Stage 2C telemetry
         telemetry["stage2c_pitch_error"].append(stage2c_diagnostics.get("pitch_error", 0.0))
         telemetry["stage2c_pitch_rate_x"].append(stage2c_diagnostics.get("pitch_rate_x", 0.0))

@@ -82,15 +82,6 @@ roll_max_correction: 0.4
 yaw_kp: 3.0
 yaw_kd: 0.3
 yaw_max_diff: 2.5
-
-# E0 Drift Containment (Sagittal Wheel Balance)
-# Outer-loop position bias with deadband and balance priority gating
-sagittal_wheel_balance:
-  kp_position: 2.0              # Position correction gain (Nm/m), weak to avoid fighting inner loop
-  position_deadband_m: 0.20     # Deadband radius (m), no correction inside this zone
-  max_position_bias: 8.0        # Maximum position bias torque (Nm)
-  pitch_gate_threshold_rad: 0.10  # Pitch threshold for balance priority gating (rad)
-  roll_gate_threshold_rad: 0.10   # Roll threshold for balance priority gating (rad)
-
+# E0 position-containment: REMOVED — see docs/superpowers/specs/YYYY-MM-DD-sagittal-position-aware-balance-controller.md
 wheel_vel_limit: 20.0
 com_use_sim: true

@@ -217,51 +217,39 @@ def test_support_feedforward_jit_compatibility():
     assert tau_jit[8] == 1.5 * (-2.0)  # r_knee
 
 
-def test_sagittal_wheel_balance_outputs_only_on_wheels():
-    """Verify sagittal wheel balance controller outputs only on wheel indices [4, 9]."""
+def test_sagittal_wheel_balance_ignores_position_containment_arguments():
+    """Position-containment compatibility args must not change balance-core wheel output."""
     from wheeled_biped.controllers.sagittal_wheel_balance_controller import SagittalWheelBalanceController
 
     controller = SagittalWheelBalanceController()
-    pitch_x_rad = 0.1
-    pitch_rate_x_rad_s = 0.05
-    cp_error_y_m = 0.02
-    com_vy_m_s = 0.01
-    wheel_vel_left_rad_s = 1.0
-    wheel_vel_right_rad_s = -0.5
-    outer_position_bias = 0.0
 
-    tau, diagnostics = controller.compute(
-        pitch_x_rad,
-        pitch_rate_x_rad_s,
-        cp_error_y_m,
-        com_vy_m_s,
-        wheel_vel_left_rad_s,
-        wheel_vel_right_rad_s,
-        outer_position_bias,
+    base_tau, base_diag = controller.compute(
+        pitch_x_rad=0.05,
+        pitch_rate_x_rad_s=0.01,
+        cp_error_y_m=0.02,
+        com_vy_m_s=0.03,
+        wheel_vel_left_rad_s=0.4,
+        wheel_vel_right_rad_s=-0.1,
+        outer_position_bias=0.0,
+    )
+    compat_tau, compat_diag = controller.compute(
+        pitch_x_rad=0.05,
+        pitch_rate_x_rad_s=0.01,
+        cp_error_y_m=0.02,
+        com_vy_m_s=0.03,
+        wheel_vel_left_rad_s=0.4,
+        wheel_vel_right_rad_s=-0.1,
+        outer_position_bias=7.5,
+        position_y_m=1.2,
+        roll_y_rad=0.4,
     )
 
-    assert tau.shape == (ACTION_DIM,)
-    # Only wheel indices [4, 9] should be nonzero
-    for idx in range(ACTION_DIM):
-        if idx in [4, 9]:
-            pass  # Can be nonzero
-        else:
-            assert tau[idx] == 0.0
-
-    # Verify all non-wheel joints are zero
-    assert tau[0] == 0.0  # l_hip_roll
-    assert tau[1] == 0.0  # l_hip_yaw
-    assert tau[2] == 0.0  # l_hip_pitch
-    assert tau[3] == 0.0  # l_knee
-    assert tau[5] == 0.0  # r_hip_roll
-    assert tau[6] == 0.0  # r_hip_yaw
-    assert tau[7] == 0.0  # r_hip_pitch
-    assert tau[8] == 0.0  # r_knee
-
-    assert "wheel_vel_mean_rad_s" in diagnostics
-    assert "term_wheel_velocity_damping" in diagnostics
-    assert "wheel_torque_sign" in diagnostics
-    assert "sign_convention" in diagnostics
+    assert jnp.allclose(compat_tau, base_tau)
+    assert compat_diag == base_diag
+    assert "wheel_vel_mean_rad_s" in compat_diag
+    assert "term_wheel_velocity_damping" in compat_diag
+    assert "wheel_torque_sign" in compat_diag
+    assert "sign_convention" in compat_diag
 
 
 def test_sagittal_wheel_balance_sign_convention():

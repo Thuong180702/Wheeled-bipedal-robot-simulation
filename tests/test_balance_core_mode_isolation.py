@@ -205,25 +205,21 @@ def test_balance_core_support_feedforward_defaults_to_hip_pitch_knee_group():
     assert tau[8] != 0.0
 
 
-def test_balance_core_legacy_torque_sources_are_zeroed():
-    """Test that zero_legacy_torque_sources_for_balance_core returns correct zero dict."""
-    import sys
-    sys.path.insert(0, str(Path("scripts")))
-    from simulate_hierarchical_controller import zero_legacy_torque_sources_for_balance_core
+def test_balance_core_rejects_position_containment_flags_in_legacy_config_path():
+    """The legacy config file must not carry stale position-containment settings."""
+    config_path = Path("configs/controllers/hierarchical_vmc_lqr_v3.yaml")
+    content = config_path.read_text(encoding="utf-8")
 
-    sources = zero_legacy_torque_sources_for_balance_core()
-
-    assert sorted(sources) == [
-        "tau_hip_roll_centering",
-        "tau_inverse_dynamics",
-        "tau_leg_position",
-        "tau_posture",
-        "tau_wbc_correction",
-        "tau_wbc_scaled",
-        "tau_wheel_balance",
+    forbidden_tokens = [
+        "kp_position:",
+        "position_deadband_m:",
+        "max_position_bias:",
+        "pitch_gate_threshold_rad:",
+        "roll_gate_threshold_rad:",
     ]
-    for value in sources.values():
-        assert jnp.allclose(value, jnp.zeros(10))
+
+    for token in forbidden_tokens:
+        assert token not in content
 
 
 def test_integrated_wbc_remains_available_but_composer_has_no_wbc_input():
