@@ -6,6 +6,8 @@
 
 **Architecture:** Keep the validated four-source balance-core stack structure, but allow the sagittal wheel source to be supplied by a new `SagittalPositionAwareBalanceController` instead of the current pitch/CP wheel regulator. Design the new controller from a closed-loop identified discrete-time sagittal model, run it as an explicit experimental mode first, and only promote it to default after validation shows substantially reduced drift without breaking balance invariants.
 
+**Execution policy:** Do not execute the full plan as one batch. Each task below has an explicit stop gate. Proceed to the next task only if the current task passes its gate.
+
 **Tech Stack:** Python, JAX/jax.numpy, MuJoCo telemetry scripts, existing balance-core validation workflow, pytest
 
 ---
@@ -40,9 +42,9 @@
 - `scripts/validate_position_aware_balance.py`
   - Orchestrate nominal and height-variant validation runs plus summary output.
 - `tests/test_sagittal_position_aware_balance_controller.py`
-  - Dedicated controller tests.
+  - Dedicated controller tests including sign, damping, and mutual-exclusion checks.
 - `tests/test_sagittal_balance_state.py`
-  - Frame/sign/state-construction tests.
+  - Frame/sign/state-construction tests, including nonzero-yaw initial-heading checks.
 
 ### Documentation / Output Paths
 
@@ -61,16 +63,16 @@
 - Check: `wheeled_biped/controllers/sagittal_wheel_balance_controller.py`
 - Check: `scripts/simulate_hierarchical_controller.py`
 - Check: `configs/controllers/hierarchical_vmc_lqr_v3.yaml`
-- Test: `tests/test_sagittal_wheel_position_containment.py`
-- Test: `tests/test_e0d_phase_aware_position_containment.py`
+- Test: `tests/test_sagittal_wheel_position_containment.py` *(rewritten cleanup/absence test only)*
+- Test: `tests/test_e0d_phase_aware_position_containment.py` *(rewritten cleanup/absence test only)*
 
-- [ ] **Step 1: Run cleanup regression tests**
+- [ ] **Step 1: Run rewritten cleanup/absence regression tests**
 
 ```bash
 pytest tests/test_sagittal_wheel_position_containment.py tests/test_e0d_phase_aware_position_containment.py -q
 ```
 
-Expected: PASS, confirming no active E0b/E0c/E0d runtime control remains.
+Expected: PASS, confirming the old position-containment experiments are absent from runtime, old telemetry no longer drives control, and only cleanup/report-preservation behavior remains under test.
 
 - [ ] **Step 2: Re-run baseline component and workflow tests**
 
@@ -89,6 +91,8 @@ python scripts/validate_balance_core.py --single-duration 5000 --output-dir outp
 ```
 
 Expected: both pass before any new controller work starts.
+
+**Stop gate:** If any cleanup regression or baseline validation fails, stop here and do not begin sagittal state helpers.
 
 - [ ] **Step 4: Commit cleanup checkpoint**
 
@@ -233,6 +237,35 @@ git add wheeled_biped/controllers/sagittal_balance_state.py tests/test_sagittal_
 git commit -m "feat: add sagittal balance state helpers"
 ```
 
+- [ ] **Step 10: Add nonzero-yaw initial-heading frame test**
+
+```python
+def test_project_sagittal_displacement_remains_correct_with_nonzero_yaw():
+    import math
+    yaw_rad = math.radians(30)
+    sagittal_axis_xy = (math.sin(yaw_rad), math.cos(yaw_rad))
+    current_xy = (0.1, 0.1732)
+    origin_xy = (0.0, 0.0)
+
+    displacement = project_sagittal_displacement(
+        origin_xy=origin_xy,
+        sagittal_axis_xy=sagittal_axis_xy,
+        current_xy=current_xy,
+    )
+
+    assert abs(displacement - 0.2) < 1e-6
+```
+
+- [ ] **Step 11: Verify GREEN**
+
+```bash
+pytest tests/test_sagittal_balance_state.py -q
+```
+
+Expected: PASS.
+
+**Stop gate:** If state-construction or frame tests fail, stop here and do not begin sysid data collection.
+
 ---
 
 ### Task 3: Closed-Loop System Identification Data Collection
@@ -330,6 +363,8 @@ git add scripts/collect_sagittal_balance_sysid_data.py tests/test_balance_core_v
 git commit -m "feat: add closed-loop sagittal sysid collection scaffold"
 ```
 
+**Stop gate:** If sysid collection fails or produces no valid trajectory data, stop here and do not begin dynamics identification. Collect better data before retrying.
+
 ---
 
 ### Task 4: Local Dynamics Identification
@@ -363,22 +398,36 @@ pytest tests/test_sagittal_position_aware_balance_controller.py::test_build_iden
 
 Expected: FAIL.
 
-- [ ] **Step 3: Write failing test for model-quality gate**
+- [ ] **Step 3: Write failing test for explicit model-quality gate**
 
 ```python
 from scripts.identify_sagittal_balance_dynamics import model_is_usable
 
 
-def test_model_is_usable_requires_positive_fit_threshold():
-    assert model_is_usable(one_step_r2=0.91, rollout_r2=0.82) is True
-    assert model_is_usable(one_step_r2=0.40, rollout_r2=0.82) is False
-    assert model_is_usable(one_step_r2=0.91, rollout_r2=0.20) is False
+def test_model_is_usable_requires_all_quality_gates():
+    assert model_is_usable(
+        one_step_r2=0.85,
+        rollout_r2=0.65,
+        residual_mean_abs=0.05,
+        sign_response_ok=True,
+        nominal_fit_ok=True,
+        height_variant_fit_ok=True,
+    ) is True
+
+    assert model_is_usable(
+        one_step_r2=0.79,
+        rollout_r2=0.65,
+        residual_mean_abs=0.05,
+        sign_response_ok=True,
+        nominal_fit_ok=True,
+        height_variant_fit_ok=True,
+    ) is False
 ```
 
 - [ ] **Step 4: Verify RED**
 
 ```bash
-pytest tests/test_sagittal_position_aware_balance_controller.py::test_model_is_usable_requires_positive_fit_threshold -q
+pytest tests/test_sagittal_position_aware_balance_controller.py::test_model_is_usable_requires_all_quality_gates -q
 ```
 
 Expected: FAIL.
@@ -395,14 +444,28 @@ def build_identified_model_payload(A, B, state_names, input_name):
     }
 
 
-def model_is_usable(one_step_r2, rollout_r2):
-    return one_step_r2 >= 0.8 and rollout_r2 >= 0.6
+def model_is_usable(
+    one_step_r2,
+    rollout_r2,
+    residual_mean_abs,
+    sign_response_ok,
+    nominal_fit_ok,
+    height_variant_fit_ok,
+):
+    return (
+        one_step_r2 >= 0.80
+        and rollout_r2 >= 0.60
+        and residual_mean_abs <= 0.10
+        and sign_response_ok is True
+        and nominal_fit_ok is True
+        and height_variant_fit_ok is True
+    )
 ```
 
 - [ ] **Step 6: Verify GREEN**
 
 ```bash
-pytest tests/test_sagittal_position_aware_balance_controller.py::test_build_identified_model_payload_includes_state_space_keys tests/test_sagittal_position_aware_balance_controller.py::test_model_is_usable_requires_positive_fit_threshold -q
+pytest tests/test_sagittal_position_aware_balance_controller.py::test_build_identified_model_payload_includes_state_space_keys tests/test_sagittal_position_aware_balance_controller.py::test_model_is_usable_requires_all_quality_gates -q
 ```
 
 Expected: PASS.
@@ -413,7 +476,19 @@ Expected: PASS.
 python scripts/identify_sagittal_balance_dynamics.py --input outputs/sagittal_position_aware_balance/sysid --output outputs/sagittal_position_aware_balance/sysid/identified_model.json
 ```
 
-Expected: writes identified model plus fit metrics; stop if model unusable.
+Expected: writes identified model plus fit metrics only if all gates pass.
+
+Required gates before controller design:
+- one-step prediction quality threshold passed
+- short-horizon rollout quality threshold passed
+- residual sanity check passed
+- correct qualitative response sign passed
+- usable fit on nominal and, if available, ±5 cm data passed
+
+If any gate fails, report:
+- `model_identification_failed`
+
+Do not design LQR/state-feedback from an unusable model.
 
 - [ ] **Step 8: Commit**
 
@@ -421,6 +496,8 @@ Expected: writes identified model plus fit metrics; stop if model unusable.
 git add scripts/identify_sagittal_balance_dynamics.py tests/test_sagittal_position_aware_balance_controller.py
 git commit -m "feat: add sagittal dynamics identification scaffold"
 ```
+
+**Stop gate:** If identification fails any quality gate, stop here, report `model_identification_failed`, and do not begin controller design.
 
 ---
 
@@ -489,7 +566,54 @@ pytest tests/test_sagittal_position_aware_balance_controller.py::test_position_a
 
 Expected: FAIL.
 
-- [ ] **Step 5: Write minimal implementation**
+- [ ] **Step 5: Write failing sign tests**
+
+```python
+import jax.numpy as jnp
+from wheeled_biped.controllers.sagittal_position_aware_balance_controller import SagittalPositionAwareBalanceController
+
+
+def test_positive_position_error_produces_corrective_tendency_toward_reference():
+    controller = SagittalPositionAwareBalanceController(jnp.array([1.0, 0.0, 0.0, 0.0, 0.0]), 5.0)
+    tau, _ = controller.compute_from_state(jnp.array([0.2, 0.0, 0.0, 0.0, 0.0]))
+    assert tau[4] < 0.0 and tau[9] < 0.0
+
+
+def test_negative_position_error_produces_corrective_tendency_toward_reference():
+    controller = SagittalPositionAwareBalanceController(jnp.array([1.0, 0.0, 0.0, 0.0, 0.0]), 5.0)
+    tau, _ = controller.compute_from_state(jnp.array([-0.2, 0.0, 0.0, 0.0, 0.0]))
+    assert tau[4] > 0.0 and tau[9] > 0.0
+
+
+def test_positive_velocity_away_from_reference_is_damped():
+    controller = SagittalPositionAwareBalanceController(jnp.array([0.0, 1.0, 0.0, 0.0, 0.0]), 5.0)
+    tau, _ = controller.compute_from_state(jnp.array([0.0, 0.3, 0.0, 0.0, 0.0]))
+    assert tau[4] < 0.0 and tau[9] < 0.0
+
+
+def test_pitch_and_pitch_rate_signs_are_restoring_and_damping():
+    controller = SagittalPositionAwareBalanceController(jnp.array([0.0, 0.0, 1.0, 1.0, 0.0]), 5.0)
+    tau_pitch, _ = controller.compute_from_state(jnp.array([0.0, 0.0, 0.1, 0.0, 0.0]))
+    tau_rate, _ = controller.compute_from_state(jnp.array([0.0, 0.0, 0.0, 0.1, 0.0]))
+    assert tau_pitch[4] < 0.0 and tau_pitch[9] < 0.0
+    assert tau_rate[4] < 0.0 and tau_rate[9] < 0.0
+
+
+def test_wheel_velocity_mean_correction_damps_wheel_runaway():
+    controller = SagittalPositionAwareBalanceController(jnp.array([0.0, 0.0, 0.0, 0.0, 1.0]), 5.0)
+    tau, _ = controller.compute_from_state(jnp.array([0.0, 0.0, 0.0, 0.0, 2.0]))
+    assert tau[4] < 0.0 and tau[9] < 0.0
+```
+
+- [ ] **Step 6: Verify RED**
+
+```bash
+pytest tests/test_sagittal_position_aware_balance_controller.py -q
+```
+
+Expected: FAIL before implementation.
+
+- [ ] **Step 7: Write minimal implementation**
 
 ```python
 import jax.numpy as jnp
@@ -514,7 +638,7 @@ class SagittalPositionAwareBalanceController:
         return tau, diagnostics
 ```
 
-- [ ] **Step 6: Verify GREEN**
+- [ ] **Step 8: Verify GREEN**
 
 ```bash
 pytest tests/test_sagittal_position_aware_balance_controller.py::test_position_aware_controller_outputs_only_on_wheels tests/test_sagittal_position_aware_balance_controller.py::test_position_aware_controller_clips_to_wheel_limit -q
@@ -522,7 +646,7 @@ pytest tests/test_sagittal_position_aware_balance_controller.py::test_position_a
 
 Expected: PASS.
 
-- [ ] **Step 7: Add smoothness/rate-limit test**
+- [ ] **Step 9: Add smoothness/rate-limit test**
 
 ```python
 import jax.numpy as jnp
@@ -534,7 +658,7 @@ def test_clip_wheel_torque_rate_limits_delta_per_step():
     assert clipped == 1.5
 ```
 
-- [ ] **Step 8: Verify RED, implement, verify GREEN**
+- [ ] **Step 10: Verify RED, implement, verify GREEN**
 
 ```bash
 pytest tests/test_sagittal_position_aware_balance_controller.py::test_clip_wheel_torque_rate_limits_delta_per_step -q
@@ -542,12 +666,14 @@ pytest tests/test_sagittal_position_aware_balance_controller.py::test_clip_wheel
 
 Expected sequence: FAIL, implement helper, PASS.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add wheeled_biped/controllers/sagittal_position_aware_balance_controller.py tests/test_sagittal_position_aware_balance_controller.py
 git commit -m "feat: add sagittal position-aware wheel controller scaffold"
 ```
+
+**Stop gate:** If any sign, ownership, or saturation test fails after implementation, stop here and do not begin integration.
 
 ---
 
@@ -600,15 +726,26 @@ def test_resolve_sagittal_controller_name_returns_position_aware_when_requested(
     assert resolve_sagittal_controller_name("position-aware") == "position-aware"
 ```
 
-- [ ] **Step 5: Verify RED, implement, verify GREEN**
+- [ ] **Step 5: Add failing mutual-exclusion test**
+
+```python
+from scripts.simulate_hierarchical_controller import resolve_active_sagittal_controller_set
+
+
+def test_baseline_and_position_aware_controllers_are_mutually_exclusive():
+    assert resolve_active_sagittal_controller_set("baseline") == {"baseline"}
+    assert resolve_active_sagittal_controller_set("position-aware") == {"position-aware"}
+```
+
+- [ ] **Step 6: Verify RED, implement, verify GREEN**
 
 ```bash
-pytest tests/test_balance_core_mode_isolation.py::test_resolve_sagittal_controller_name_returns_position_aware_when_requested -q
+pytest tests/test_balance_core_mode_isolation.py::test_resolve_sagittal_controller_name_returns_position_aware_when_requested tests/test_balance_core_mode_isolation.py::test_baseline_and_position_aware_controllers_are_mutually_exclusive -q
 ```
 
 Expected: FAIL, then PASS.
 
-- [ ] **Step 6: Keep baseline as default**
+- [ ] **Step 7: Keep baseline as default**
 
 ```python
 if args.sagittal_controller == "baseline":
@@ -617,7 +754,12 @@ else:
     sagittal_controller = SagittalPositionAwareBalanceController(...)
 ```
 
-- [ ] **Step 7: Verify integration tests**
+Requirement:
+- in baseline mode, `SagittalWheelBalanceController` active and `SagittalPositionAwareBalanceController` inactive
+- in position-aware mode, `SagittalPositionAwareBalanceController` active and `SagittalWheelBalanceController` inactive
+- they must never both contribute torque simultaneously
+
+- [ ] **Step 8: Verify integration tests**
 
 ```bash
 pytest tests/test_balance_core_mode_isolation.py -q
@@ -626,12 +768,14 @@ pytest tests/test_balance_core_validation_workflow.py -q
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add scripts/simulate_hierarchical_controller.py scripts/validate_balance_core.py tests/test_balance_core_mode_isolation.py tests/test_balance_core_validation_workflow.py
 git commit -m "feat: add selectable sagittal controller integration"
 ```
+
+**Stop gate:** If mutual exclusion or routing tests fail, stop here and do not begin validation runs.
 
 ---
 
@@ -732,6 +876,16 @@ git add scripts/validate_position_aware_balance.py tests/test_balance_core_valid
 git commit -m "feat: add position-aware balance validation workflow"
 ```
 
+**Stop gate:** If the first integration smoke test or validation report generation fails, stop here and do not proceed to any promotion/default-switch work.
+
+Required validation report outcome:
+- baseline reference recorded at 35.22 m / 5000 steps
+- minimum acceptable improvement gate checked at <= 17.6 m
+- E0b comparison at 15.98 m (historical context only, not an active mode)
+- target gate checked at <= 5.0 m
+- preferred gate checked at <= 0.50 m max drift and <= 0.20 m final drift
+- if preferred target is not reached, report the best stable tradeoff and do not claim full position hold
+
 ---
 
 ### Task 8: Acceptance and Rollback Checks
@@ -803,6 +957,8 @@ git add tests/test_balance_core_mode_isolation.py tests/test_sagittal_position_a
 git commit -m "test: lock in position-aware safety and rollback invariants"
 ```
 
+**Overall acceptance gate:** If the position-aware controller does not beat the minimum 17.6 m drift gate on nominal 5000 steps, stop here, report the best result, and do not switch from baseline as default.
+
 ---
 
 ## Commands Summary
@@ -817,6 +973,8 @@ pytest tests/test_balance_core_validation_workflow.py -q
 pytest tests/test_sagittal_balance_state.py -q
 pytest tests/test_sagittal_position_aware_balance_controller.py -q
 ```
+
+Note: `test_sagittal_wheel_position_containment.py` and `test_e0d_phase_aware_position_containment.py` are rewritten cleanup/absence tests that verify removed runtime behavior and preserved reports only. They do not assert active position-containment behavior.
 
 ### Validation commands
 

@@ -246,12 +246,27 @@ Where:
 
 ### Model Acceptance
 
-Before controller design, report:
+Before controller design, the identified model must pass all of the following quantitative gates:
 
-- one-step prediction quality
-- multi-step rollout quality over short horizons
-- residual structure
-- stability/usefulness assessment across nominal and ±5 cm height cases
+| Gate | Threshold | Description |
+|------|-----------|-------------|
+| one-step prediction | R² ≥ 0.80 | Coefficient of determination, one-step-ahead prediction |
+| short-horizon rollout | R² ≥ 0.60 | Multi-step rollout quality over 10–20 step horizon |
+| residual sanity | visually structureless residuals, no systematic bias | Residuals centered near zero, no trending or periodic structure |
+| sign response check | passed | Verified qualitatively: positive wheel torque produces expected sagittal acceleration / pitch response away from disturbance |
+| nominal data fit | usable | Model fits nominal closed-loop data at standing height |
+| height-variant data fit | available | ±5 cm height-variant data fitted if available; nominal-only fit acceptable if height data not yet collected |
+
+If the model fails any gate it must not be used for controller design.
+
+**On failure:** Report `model_identification_failed`, do not design LQR/state-feedback gains, stop Task 4, and diagnose before revising data collection or model form.
+
+### Model Acceptance Outcome
+
+| Result | Action |
+|--------|--------|
+| All gates pass | Proceed to controller design |
+| Any gate fails | Report `model_identification_failed`, stop, diagnose |
 
 If the identified model is unusable, stop and revise identification before designing the controller.
 
@@ -287,6 +302,24 @@ Before production replacement, introduce:
 
 as an experimental alternative mode, disabled by default, while the existing sagittal controller remains the default validated baseline.
 
+### Controller Mutual Exclusion
+
+The baseline sagittal controller and the new position-aware controller must be strictly mutually exclusive.
+
+In baseline mode:
+
+- `SagittalWheelBalanceController` is active
+- `SagittalPositionAwareBalanceController` is inactive
+
+In position-aware mode:
+
+- `SagittalPositionAwareBalanceController` is active
+- `SagittalWheelBalanceController` is inactive
+
+They must never both contribute torque simultaneously.
+
+This must be enforced by controller-selection routing and verified with a dedicated regression test.
+
 ### Naming Rules
 
 Use professional names only, such as:
@@ -321,6 +354,22 @@ The new design must satisfy all of the following:
 - no discontinuous phase-switch torque hacks
 - position return must be smooth, bounded, and stable
 
+### Mandatory Sign and Frame Tests
+
+The controller implementation must include explicit tests verifying the following sign and frame responses:
+
+| Test | Expected behavior |
+|------|-------------------|
+| positive sagittal position error | controller produces corrective tendency toward reference |
+| negative sagittal position error | controller produces corrective tendency toward reference |
+| positive sagittal velocity away from reference | controller damps the velocity |
+| pitch_x correction sign | restoring (opposes tilt) |
+| pitch_rate_x correction sign | damping (opposes angular velocity) |
+| wheel_velocity_mean correction | damps wheel runaway |
+| nonzero yaw initial-heading frame | sagittal displacement remains correct when yaw is nonzero |
+
+These tests must exist as automated pytest cases before the controller is connected to the simulation runtime. They are required, not optional.
+
 ## Validation Protocol
 
 Validation shall proceed progressively.
@@ -341,17 +390,48 @@ The current clean baseline without position containment drifted approximately:
 
 The new controller must be compared directly against this baseline.
 
+### Drift Gates
+
+Baseline reference:
+
+- current baseline max drift ≈ `35.22 m` over `5000` steps
+
+Minimum acceptable improvement:
+
+- max drift must be below `50%` of baseline, i.e. `<= 17.6 m`
+- and must not be worse than E0b's `15.98 m` unless clearly justified in the report
+
+Target:
+
+- max drift `<= 5.0 m` over `5000` steps
+
+Preferred:
+
+- max drift `<= 0.50 m` over `5000` steps
+- final drift `<= 0.20 m`
+
+If the preferred target is not reached, report the best stable tradeoff and do not claim full position hold.
+
 ### Drift Objective
 
 Primary objective:
 
 - reduce drift substantially versus 35.22 m baseline
 
-Ideal target:
+Minimum acceptable outcome:
+
+- beat 17.6 m max drift over 5000 steps
+- do not regress behind E0b's 15.98 m result unless the report explicitly justifies the tradeoff
+
+Target outcome:
+
+- max drift `<= 5.0 m` over 5000 steps
+
+Preferred outcome:
 
 - max drift `<= 0.30–0.50 m` over 5000 steps
 
-If the ideal target is not achieved, the result must still report the best stable tradeoff reached between:
+If the preferred target is not reached, the result must still report the best stable tradeoff reached between:
 
 - reduced drift
 - upright stability
@@ -408,6 +488,7 @@ Preferred outcome:
 - max drift `<= 0.50 m` over 5000 steps
 - final drift `<= 0.20 m`
 - stable on nominal and both ±5 cm height variants
+- if preferred target is not reached, report the best stable tradeoff and do not claim full position hold
 
 ## Telemetry and Reporting Requirements
 
