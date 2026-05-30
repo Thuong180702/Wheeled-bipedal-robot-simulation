@@ -1510,6 +1510,9 @@ def main():
         "sagittal_controller_input_cp_y": [],
         "sagittal_controller_input_com_y": [],
         "sagittal_controller_input_com_vy": [],
+        "sagittal_position_error_m": [],
+        "sagittal_velocity_m_s": [],
+        "tau_position": [],
     }
     telemetry.update(build_step1_telemetry_template())
 
@@ -2155,16 +2158,15 @@ def main():
                     sagittal_axis_xy=sagittal_axis_xy_initial,
                     velocity_xy=(float(centroidal_state_control.com_vel[0]), float(centroidal_state_control.com_vel[1])),
                 )
-                # Compute CP error in initial-heading frame (matches baseline's cp_error_y_m)
-                # CP = CoM + vel/omega_0, so CP_error = vel/omega_0 in sagittal direction
-                sag_cp_error = cp_error_y_m  # Use world-frame CP error for baseline parity
+                # Pass initial-heading-frame position error to enable position term
+                # Use world-frame velocity for baseline parity with SagittalWheelBalanceController
                 tau_sagittal_wheel_balance, sagittal_diag = balance_core_controllers["sagittal_wheel_balance"].compute(
                     pitch_x_rad=float(centroidal_state_control.body_pitch_x),
                     pitch_rate_x_rad_s=float(centroidal_state_control.body_pitch_rate_x),
                     sagittal_velocity_m_s=float(centroidal_state_control.com_vel[1]),  # Use world-frame com_vy for baseline parity
                     wheel_vel_left_rad_s=wheel_vel_left,
                     wheel_vel_right_rad_s=wheel_vel_right,
-                    sagittal_position_error_m=sag_cp_error,  # Use CP error, not position error
+                    sagittal_position_error_m=sag_pos_error,  # BUG FIX: use actual position error, not CP error
                 )
             else:
                 # Baseline SagittalWheelBalanceController
@@ -2613,6 +2615,9 @@ def main():
         telemetry["sagittal_controller_input_cp_y"].append(sagittal_controller_input_cp_y)
         telemetry["sagittal_controller_input_com_y"].append(sagittal_controller_input_com_y)
         telemetry["sagittal_controller_input_com_vy"].append(sagittal_controller_input_com_vy)
+        telemetry["sagittal_position_error_m"].append(sagittal_diag.get("sagittal_position_error_m", 0.0))
+        telemetry["sagittal_velocity_m_s"].append(sagittal_diag.get("sagittal_velocity_m_s", 0.0))
+        telemetry["tau_position"].append(sagittal_diag.get("tau_position", 0.0))
         telemetry["com_error_x"].append(float(qp_diagnostics.get("com_error_x", 0.0)))
         telemetry["com_error_y"].append(float(qp_diagnostics.get("com_error_y", 0.0)))
         telemetry["com_error_z"].append(float(qp_diagnostics.get("com_error_z", 0.0)))
