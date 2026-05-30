@@ -514,6 +514,13 @@ def main():
         action="store_true",
         help="Write per-run summary sidecar JSON",
     )
+    parser.add_argument(
+        "--sagittal-controller",
+        type=str,
+        default="baseline",
+        choices=["baseline", "velocity-damped"],
+        help="Select sagittal wheel controller for the run",
+    )
 
     args = parser.parse_args()
 
@@ -537,6 +544,8 @@ def main():
     sim_args = []
     if args.initial_root_z_perturbation is not None:
         sim_args.extend(["--initial-root-z-perturbation", str(args.initial_root_z_perturbation)])
+    if getattr(args, "sagittal_controller", "baseline") != "baseline":
+        sim_args.extend(["--sagittal-controller", args.sagittal_controller])
 
     print("=" * 60)
     print("Balance-Core Performance Validation")

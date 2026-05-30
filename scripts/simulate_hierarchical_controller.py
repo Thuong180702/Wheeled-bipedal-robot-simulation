@@ -64,6 +64,8 @@ from wheeled_biped.controllers.balance_core_torque_composer import BalanceCoreTo
 from wheeled_biped.controllers.contact_supervisor import ContactSupervisor
 from wheeled_biped.controllers.lateral_roll_balance_controller import LateralRollBalanceController
 from wheeled_biped.controllers.sagittal_wheel_balance_controller import SagittalWheelBalanceController
+from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import SagittalVelocityDampedBalanceController
+from wheeled_biped.controllers.sagittal_balance_state import project_sagittal_displacement, project_sagittal_velocity
 from wheeled_biped.controllers.shape_posture_controller import ShapePostureController
 from wheeled_biped.controllers.support_feedforward_controller import SupportFeedforwardController
 from wheeled_biped.controllers.balance_core_types import make_balance_core_telemetry_columns
@@ -426,6 +428,14 @@ def is_balance_core_mode(args) -> bool:
     return args.controller_mode in {"balance-core", "standing-balance"}
 
 
+def resolve_active_sagittal_controller_set(sagittal_controller_choice: str) -> set[str]:
+    """Return the set of active sagittal controller names for mutual exclusion verification.
+
+    Only one sagittal controller may be active at a time.
+    """
+    return {sagittal_controller_choice}
+
+
 def validate_balance_core_mode_args(args):
     """Validate that balance-core mode does not use incompatible legacy flags.
 
@@ -593,6 +603,7 @@ def build_balance_core_controllers(
     support_feedforward_vector: np.ndarray,
     torque_limit: np.ndarray,
     max_torque_rate: np.ndarray,
+    sagittal_controller_choice: str = "baseline",
 ):
     """Build all balance-core controller components.
 
@@ -601,15 +612,17 @@ def build_balance_core_controllers(
         support_feedforward_vector: 10-element empirical support torque vector
         torque_limit: Per-joint torque limits [Nm], shape (10,)
         max_torque_rate: Per-joint max torque rate [Nm/s], shape (10,)
+        sagittal_controller_choice: "baseline" or "velocity-damped"
 
     Returns:
         dict: Dictionary with keys:
             - contact_supervisor: ContactSupervisor instance
             - shape_posture: ShapePostureController instance
             - support_feedforward: SupportFeedforwardController instance
-            - sagittal_wheel_balance: SagittalWheelBalanceController instance
+            - sagittal_wheel_balance: SagittalWheelBalanceController or SagittalVelocityDampedBalanceController
             - lateral_roll_balance: LateralRollBalanceController instance
             - composer: BalanceCoreTorqueComposer instance
+            - sagittal_controller_name: str identifier for telemetry
     """
     # Instantiate contact supervisor
     contact_supervisor = ContactSupervisor(control_dt=control_dt)
@@ -631,15 +644,30 @@ def build_balance_core_controllers(
         scale=0.5,
     )
 
-    # Instantiate sagittal wheel balance controller
-    sagittal_wheel_balance = SagittalWheelBalanceController(
-        kp_pitch=50.0,
-        kd_pitch=10.0,
-        kp_cp=30.0,
-        kd_com_vy=5.0,
-        kd_wheel_vel=0.5,
-        wheel_torque_sign=1.0,
-    )
+    # Instantiate sagittal controller (mutually exclusive selection)
+    if sagittal_controller_choice == "velocity-damped":
+        sagittal_wheel_balance = SagittalVelocityDampedBalanceController(
+            kp_pitch=50.0,
+            kd_pitch=10.0,
+            kp_cp=30.0,
+            kd_com_vy=5.0,
+            k_velocity=15.0,     # F2b: Velocity damping
+            k_wheel_velocity=0.5,
+            k_position=10.0,     # F4c: Higher position return
+            wheel_torque_sign=1.0,
+            max_tau_wheel=5.0,
+        )
+        sagittal_controller_name = "velocity-damped"
+    else:
+        sagittal_wheel_balance = SagittalWheelBalanceController(
+            kp_pitch=50.0,
+            kd_pitch=10.0,
+            kp_cp=30.0,
+            kd_com_vy=5.0,
+            kd_wheel_vel=0.5,
+            wheel_torque_sign=1.0,
+        )
+        sagittal_controller_name = "baseline"
 
     # Instantiate lateral roll balance controller
     lateral_roll_balance = LateralRollBalanceController(
@@ -663,6 +691,7 @@ def build_balance_core_controllers(
         "sagittal_wheel_balance": sagittal_wheel_balance,
         "lateral_roll_balance": lateral_roll_balance,
         "composer": composer,
+        "sagittal_controller_name": sagittal_controller_name,
     }
 
 
@@ -778,10 +807,17 @@ def main():
         help='Write whole-run summary sidecar JSON with authoritative simulated-step counts and full-rate maxima',
     )
     parser.add_argument(
-        '--height-variant-setup',
+        "--height-variant-setup",
         type=str,
         default=None,
         help='Path to height variant setup JSON (from B2-B4 validation) for true standing-height variant initialization',
+    )
+    parser.add_argument(
+        "--sagittal-controller",
+        type=str,
+        default="baseline",
+        choices=["baseline", "velocity-damped"],
+        help="Select sagittal wheel controller: baseline (SagittalWheelBalanceController) or velocity-damped (SagittalVelocityDampedBalanceController)",
     )
     args = parser.parse_args()
 
@@ -1181,6 +1217,10 @@ def main():
     gravity_body_eq = R_eq.T @ gravity_world
     pitch_x_eq, roll_y_eq = compute_orientation_from_gravity(jnp.array(gravity_body_eq))
 
+    # Initial-heading sagittal axis for velocity-damped controller
+    yaw_eq = float(centroidal_state_eq.body_yaw_z)
+    sagittal_axis_xy_initial = (float(np.sin(yaw_eq)), float(np.cos(yaw_eq)))
+
     wbc_controller.wrench_computer.set_equilibrium_reference(
         com_pos=centroidal_state_eq.com_pos,
         com_z=float(centroidal_state_eq.com_pos[2]),
@@ -1494,13 +1534,17 @@ def main():
     balance_core_controllers = None
     if is_balance_core_mode(args):
         support_feedforward_vector = resolve_support_feedforward_vector()
+        sagittal_choice = getattr(args, "sagittal_controller", "baseline")
         balance_core_controllers = build_balance_core_controllers(
             control_dt=control_dt,
             support_feedforward_vector=support_feedforward_vector,
             torque_limit=torque_limit,
             max_torque_rate=max_torque_rate,
+            sagittal_controller_choice=sagittal_choice,
         )
-        print("[BALANCE-CORE] Functional four-source controller stack enabled")
+        sagittal_name = balance_core_controllers["sagittal_controller_name"]
+        print(f"[BALANCE-CORE] Functional four-source controller stack enabled")
+        print(f"[BALANCE-CORE] Sagittal controller: {sagittal_name}")
 
     # For finite-difference rate computation
     prev_log_pitch_x = None
@@ -2096,17 +2140,45 @@ def main():
             # Kept for research documentation only. Must remain disabled.
 
             cp_error_y_m = float(centroidal_state_control.capture_point[1] - centroidal_state_control.com_pos[1])
-            tau_sagittal_wheel_balance, sagittal_diag = balance_core_controllers["sagittal_wheel_balance"].compute(
-                pitch_x_rad=float(centroidal_state_control.body_pitch_x),
-                pitch_rate_x_rad_s=float(centroidal_state_control.body_pitch_rate_x),
-                cp_error_y_m=cp_error_y_m,
-                com_vy_m_s=float(centroidal_state_control.com_vel[1]),
-                wheel_vel_left_rad_s=wheel_vel_left,
-                wheel_vel_right_rad_s=wheel_vel_right,
-                outer_position_bias=0.0,
-                position_y_m=float(centroidal_state_control.com_pos[1]),
-                roll_y_rad=float(centroidal_state_control.body_roll_y),
-            )
+
+            # Sagittal controller dispatch (mutually exclusive)
+            sagittal_ctrl_name = balance_core_controllers.get("sagittal_controller_name", "baseline")
+            if sagittal_ctrl_name == "velocity-damped":
+                # SagittalVelocityDampedBalanceController
+                # Compute sagittal position error and velocity in initial-heading frame
+                sag_pos_error = project_sagittal_displacement(
+                    origin_xy=(float(com_pos_eq[0]), float(com_pos_eq[1])),
+                    sagittal_axis_xy=sagittal_axis_xy_initial,
+                    current_xy=(float(centroidal_state_control.com_pos[0]), float(centroidal_state_control.com_pos[1])),
+                )
+                sag_vel = project_sagittal_velocity(
+                    sagittal_axis_xy=sagittal_axis_xy_initial,
+                    velocity_xy=(float(centroidal_state_control.com_vel[0]), float(centroidal_state_control.com_vel[1])),
+                )
+                # Compute CP error in initial-heading frame (matches baseline's cp_error_y_m)
+                # CP = CoM + vel/omega_0, so CP_error = vel/omega_0 in sagittal direction
+                sag_cp_error = cp_error_y_m  # Use world-frame CP error for baseline parity
+                tau_sagittal_wheel_balance, sagittal_diag = balance_core_controllers["sagittal_wheel_balance"].compute(
+                    pitch_x_rad=float(centroidal_state_control.body_pitch_x),
+                    pitch_rate_x_rad_s=float(centroidal_state_control.body_pitch_rate_x),
+                    sagittal_velocity_m_s=float(centroidal_state_control.com_vel[1]),  # Use world-frame com_vy for baseline parity
+                    wheel_vel_left_rad_s=wheel_vel_left,
+                    wheel_vel_right_rad_s=wheel_vel_right,
+                    sagittal_position_error_m=sag_cp_error,  # Use CP error, not position error
+                )
+            else:
+                # Baseline SagittalWheelBalanceController
+                tau_sagittal_wheel_balance, sagittal_diag = balance_core_controllers["sagittal_wheel_balance"].compute(
+                    pitch_x_rad=float(centroidal_state_control.body_pitch_x),
+                    pitch_rate_x_rad_s=float(centroidal_state_control.body_pitch_rate_x),
+                    cp_error_y_m=cp_error_y_m,
+                    com_vy_m_s=float(centroidal_state_control.com_vel[1]),
+                    wheel_vel_left_rad_s=wheel_vel_left,
+                    wheel_vel_right_rad_s=wheel_vel_right,
+                    outer_position_bias=0.0,
+                    position_y_m=float(centroidal_state_control.com_pos[1]),
+                    roll_y_rad=float(centroidal_state_control.body_roll_y),
+                )
             tau_lateral_roll_balance, lateral_diag = balance_core_controllers["lateral_roll_balance"].compute(
                 roll_y_rad=float(centroidal_state_control.body_roll_y),
                 roll_rate_y_rad_s=float(centroidal_state_control.body_roll_rate_y),
@@ -2660,14 +2732,14 @@ def main():
         telemetry["ctrl_r_wheel"].append(float(mj_data.ctrl[9]))
         telemetry["qvel_l_wheel"].append(float(mj_data.qvel[10]))  # l_wheel joint velocity
         telemetry["qvel_r_wheel"].append(float(mj_data.qvel[15]))  # r_wheel joint velocity
-        telemetry["sagittal_term_pitch"].append(sagittal_diag.get("term_pitch", 0.0))
-        telemetry["sagittal_term_pitch_rate"].append(sagittal_diag.get("term_pitch_rate", 0.0))
+        telemetry["sagittal_term_pitch"].append(sagittal_diag.get("term_pitch", sagittal_diag.get("tau_pitch", 0.0)))
+        telemetry["sagittal_term_pitch_rate"].append(sagittal_diag.get("term_pitch_rate", sagittal_diag.get("tau_pitch_rate", 0.0)))
         telemetry["sagittal_term_cp"].append(sagittal_diag.get("term_cp", 0.0))
-        telemetry["sagittal_term_com_vy"].append(sagittal_diag.get("term_com_vy", 0.0))
-        telemetry["sagittal_term_wheel_vel_left"].append(sagittal_diag.get("term_wheel_vel_left", 0.0))
-        telemetry["sagittal_term_wheel_vel_right"].append(sagittal_diag.get("term_wheel_vel_right", 0.0))
-        telemetry["sagittal_balance_torque_raw"].append(sagittal_diag.get("balance_torque_raw", 0.0))
-        telemetry["sagittal_balance_torque_clipped"].append(sagittal_diag.get("balance_torque_raw", 0.0))
+        telemetry["sagittal_term_com_vy"].append(sagittal_diag.get("term_com_vy", sagittal_diag.get("tau_sagittal_velocity", 0.0)))
+        telemetry["sagittal_term_wheel_vel_left"].append(sagittal_diag.get("term_wheel_vel_left", sagittal_diag.get("tau_wheel_velocity_left", 0.0)))
+        telemetry["sagittal_term_wheel_vel_right"].append(sagittal_diag.get("term_wheel_vel_right", sagittal_diag.get("tau_wheel_velocity_right", 0.0)))
+        telemetry["sagittal_balance_torque_raw"].append(sagittal_diag.get("balance_torque_raw", sagittal_diag.get("tau_common_unclipped", 0.0)))
+        telemetry["sagittal_balance_torque_clipped"].append(sagittal_diag.get("balance_torque_raw", sagittal_diag.get("tau_common_clipped", 0.0)))
         telemetry["sagittal_balance_torque_final"].append(0.5 * (sagittal_diag.get("tau_left", 0.0) + sagittal_diag.get("tau_right", 0.0)))
         telemetry["sagittal_pitch_error"].append(sagittal_wheel_diagnostics.get("pitch_error", 0.0))
         telemetry["sagittal_cp_error_y"].append(sagittal_wheel_diagnostics.get("cp_error_y", 0.0))
