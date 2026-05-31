@@ -53,6 +53,31 @@ def project_sagittal_velocity(
     return velocity_xy[0] * sagittal_axis_xy[0] + velocity_xy[1] * sagittal_axis_xy[1]
 
 
+def compute_support_center_xy(
+    l_wheel_body_xpos: tuple[float, float, float],
+    r_wheel_body_xpos: tuple[float, float, float],
+) -> tuple[float, float]:
+    """Compute the XY position of the wheel support center (midpoint).
+
+    For a wheeled biped, the support center is the midpoint between the two
+    wheel contact points. This is the controlled position for standing-in-place,
+    NOT the COM position (which is allowed to move relative to the support center
+    during pitch balance).
+
+    Parameters
+    ----------
+    l_wheel_body_xpos : (x, y, z) world position of left wheel body.
+    r_wheel_body_xpos : (x, y, z) world position of right wheel body.
+
+    Returns
+    -------
+    (x, y) : world XY position of the support center.
+    """
+    support_x = 0.5 * (l_wheel_body_xpos[0] + r_wheel_body_xpos[0])
+    support_y = 0.5 * (l_wheel_body_xpos[1] + r_wheel_body_xpos[1])
+    return (support_x, support_y)
+
+
 def build_sagittal_balance_state(
     sagittal_position_error: float,
     sagittal_velocity: float,

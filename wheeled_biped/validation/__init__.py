@@ -30,6 +30,10 @@ from wheeled_biped.validation.study_aggregator import (
     StudyAggregator,
     StudyCaseResult,
 )
+from wheeled_biped.validation.step_e_audit_helpers import (
+    StepEAuditClassification,
+    classify_steady_state_balance_torque_bias,
+)
 
 __all__ = [
     "TelemetrySchemaChecker",
@@ -47,4 +51,6 @@ __all__ = [
     "ValidationResult",
     "StudyAggregator",
     "StudyCaseResult",
+    "StepEAuditClassification",
+    "classify_steady_state_balance_torque_bias",
 ]

@@ -65,7 +65,12 @@ from wheeled_biped.controllers.contact_supervisor import ContactSupervisor
 from wheeled_biped.controllers.lateral_roll_balance_controller import LateralRollBalanceController
 from wheeled_biped.controllers.sagittal_wheel_balance_controller import SagittalWheelBalanceController
 from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import SagittalVelocityDampedBalanceController
-from wheeled_biped.controllers.sagittal_balance_state import project_sagittal_displacement, project_sagittal_velocity
+from wheeled_biped.controllers.pitch_rate_consistency_estimator import PitchRateConsistencyEstimator
+from wheeled_biped.controllers.sagittal_balance_state import (
+    project_sagittal_displacement,
+    project_sagittal_velocity,
+    compute_support_center_xy,
+)
 from wheeled_biped.controllers.shape_posture_controller import ShapePostureController
 from wheeled_biped.controllers.support_feedforward_controller import SupportFeedforwardController
 from wheeled_biped.controllers.balance_core_types import make_balance_core_telemetry_columns
@@ -285,6 +290,19 @@ def build_step1_telemetry_template():
         "control_mode": [],
         "feedforward_enabled": [],  # Stage 2B
         "feedforward_norm": [],  # Stage 2B
+        "tau_total_unclipped": [],
+        "tau_total_clipped": [],
+        "tau_total_before_final_clip": [],
+        "tau_total_after_final_clip": [],
+        "tau_position_lower_bound": [],
+        "tau_position_upper_bound": [],
+        "tau_position_total_bound_clipped": [],
+        "position_authority_mode": [],
+        "position_authority_reason": [],
+        "wheel_torque_saturation_left": [],
+        "wheel_torque_saturation_right": [],
+        "wheel_torque_rate_saturation_left": [],
+        "wheel_torque_rate_saturation_right": [],
         "initial_root_z_perturbation_m": [],
         "nominal_equilibrium_com_z_m": [],
         "initial_com_z_m_after_perturbation": [],
@@ -604,6 +622,18 @@ def build_balance_core_controllers(
     torque_limit: np.ndarray,
     max_torque_rate: np.ndarray,
     sagittal_controller_choice: str = "baseline",
+    vd_k_position: float = 40.0,
+    vd_k_velocity: float = 15.0,
+    vd_k_support_velocity: float = 0.0,
+    vd_max_position_tau: float = 3.0,
+    vd_enable_capture_gate: bool = False,
+    vd_capture_gate_pitch_threshold: float = 0.05,
+    vd_capture_gate_conflict_factor: float = 0.0,
+    vd_capture_gate_smooth_steps: int = 10,
+    vd_capture_gate_use_cp: bool = True,
+    vd_enable_torque_budget_aware_position: bool = False,
+    vd_position_tau_budget_cap: float = 7.0,
+    vd_pitch_reserve_tau: float = 2.0,
 ):
     """Build all balance-core controller components.
 
@@ -646,16 +676,36 @@ def build_balance_core_controllers(
 
     # Instantiate sagittal controller (mutually exclusive selection)
     if sagittal_controller_choice == "velocity-damped":
+        # Build capture gate config if enabled
+        capture_gate_config = None
+        if vd_enable_capture_gate:
+            capture_gate_config = {
+                "pitch_threshold_rad": vd_capture_gate_pitch_threshold,
+                "gate_factor_conflict": vd_capture_gate_conflict_factor,
+                "gate_factor_normal": 1.0,
+                "smooth_ramp_steps": vd_capture_gate_smooth_steps,
+                "enable_capture_point": vd_capture_gate_use_cp,
+                "gravity_m_s2": 9.81,
+            }
+
         sagittal_wheel_balance = SagittalVelocityDampedBalanceController(
             kp_pitch=50.0,
             kd_pitch=10.0,
-            kp_cp=30.0,
+            kp_cp=0.0,  # Step E coupling fix: disable tau_cp to prevent destructive cancellation with tau_pitch
             kd_com_vy=5.0,
-            k_velocity=15.0,     # F2b: Velocity damping
+            k_velocity=vd_k_velocity,
             k_wheel_velocity=0.5,
-            k_position=10.0,     # F4c: Higher position return
+            k_position=vd_k_position,
+            k_support_velocity=vd_k_support_velocity,
+            max_position_tau=vd_max_position_tau,
             wheel_torque_sign=1.0,
             max_tau_wheel=5.0,
+            enable_capture_gate=(capture_gate_config is not None),
+            capture_gate_config=capture_gate_config,
+            dt=control_dt,
+            enable_torque_budget_aware_position=vd_enable_torque_budget_aware_position,
+            position_tau_budget_cap=vd_position_tau_budget_cap,
+            pitch_reserve_tau=vd_pitch_reserve_tau,
         )
         sagittal_controller_name = "velocity-damped"
     else:
@@ -819,6 +869,154 @@ def main():
         choices=["baseline", "velocity-damped"],
         help="Select sagittal wheel controller: baseline (SagittalWheelBalanceController) or velocity-damped (SagittalVelocityDampedBalanceController)",
     )
+    parser.add_argument(
+        "--vd-k-position",
+        type=float,
+        default=40.0,
+        help="velocity-damped controller k_position gain (Nm/m). Default: 40.0 (Step E position-return migration: restores effective return coefficient after kp_cp=0.0)",
+    )
+    parser.add_argument(
+        "--vd-k-velocity",
+        type=float,
+        default=15.0,
+        help="velocity-damped controller k_velocity gain (Nm/(m/s)). Default: 15.0 (F4c)",
+    )
+    parser.add_argument(
+        "--vd-k-support-velocity",
+        type=float,
+        default=0.0,
+        help="velocity-damped controller k_support_velocity gain (Nm/(m/s)). Damps support-center velocity to prevent position drift. Default: 0.0 (disabled)",
+    )
+    parser.add_argument(
+        "--vd-max-position-tau",
+        type=float,
+        default=3.0,
+        help="velocity-damped controller max position-return torque (Nm). Clips tau_position before summing. Default: 3.0",
+    )
+    parser.add_argument(
+        "--vd-pitch-rate-filter-alpha",
+        type=float,
+        default=0.3,
+        help="Pitch rate consistency estimator low-pass filter alpha [0,1]. Higher = more filtering. Default: 0.3",
+    )
+    parser.add_argument(
+        "--vd-pitch-rate-min-sign-check",
+        type=float,
+        default=0.01,
+        help="Minimum absolute pitch rate (rad/s) to check sign consistency. Default: 0.01",
+    )
+    parser.add_argument(
+        "--vd-enable-pitch-rate-correction",
+        action="store_true",
+        default=False,
+        help="Enable pitch rate consistency correction in velocity-damped controller. DISABLED by default (fix was ineffective and caused height variant regressions).",
+    )
+    parser.add_argument(
+        "--vd-position-ramp-steps",
+        type=int,
+        default=0,
+        help="Ramp position-hold authority from 0 to full over this many steps. 0 = instant (default). Diagnostic for transient disambiguation.",
+    )
+    parser.add_argument(
+        "--vd-balance-safety-scheduling",
+        action="store_true",
+        default=False,
+        help="Enable balance-safety scheduling: reduce tau_position when pitch/height is unsafe. Diagnostic for transient disambiguation.",
+    )
+    parser.add_argument(
+        "--vd-safety-pitch-threshold-deg",
+        type=float,
+        default=3.0,
+        help="Pitch threshold (deg) for balance-safety scheduling. Default: 3.0",
+    )
+    parser.add_argument(
+        "--vd-safety-com-z-threshold-m",
+        type=float,
+        default=0.38,
+        help="COM Z threshold (m) for balance-safety scheduling. Default: 0.38",
+    )
+    # Transient capture diagnostic variants (Task 2)
+    parser.add_argument(
+        "--vd-transient-capture-mode",
+        type=str,
+        default="none",
+        choices=["none", "T1", "T2", "T3", "T4"],
+        help="Transient capture diagnostic mode: none (baseline), T1 (position freeze), T2 (position scaling), T3 (pitch-rate boost), T4 (combined). Default: none",
+    )
+    parser.add_argument(
+        "--vd-transient-pitch-threshold-deg",
+        type=float,
+        default=3.0,
+        help="Pitch threshold (deg) for transient detection. Default: 3.0",
+    )
+    parser.add_argument(
+        "--vd-transient-pitch-rate-threshold",
+        type=float,
+        default=0.3,
+        help="Pitch rate threshold (rad/s) for transient detection. Default: 0.3",
+    )
+    parser.add_argument(
+        "--vd-transient-pitch-rate-boost-factor",
+        type=float,
+        default=2.0,
+        help="Pitch rate damping boost factor during transient (T3/T4). Default: 2.0",
+    )
+    parser.add_argument(
+        "--vd-transient-position-scale-min",
+        type=float,
+        default=0.0,
+        help="Minimum position authority scale during transient (T2/T4). Default: 0.0",
+    )
+    # Smart position hold capture gate (Fix D)
+    parser.add_argument(
+        "--vd-enable-capture-gate",
+        action="store_true",
+        default=False,
+        help="Enable smart position hold capture gate (Fix D). Gates tau_position only when it opposes required pitch capture direction.",
+    )
+    parser.add_argument(
+        "--vd-capture-gate-pitch-threshold",
+        type=float,
+        default=0.05,
+        help="Pitch threshold (rad) for capture gate activation. Default: 0.05 (~2.9 deg)",
+    )
+    parser.add_argument(
+        "--vd-capture-gate-conflict-factor",
+        type=float,
+        default=0.0,
+        help="Gate factor during conflict (0.0 = fully gate, 1.0 = no gating). Default: 0.0",
+    )
+    parser.add_argument(
+        "--vd-capture-gate-smooth-steps",
+        type=int,
+        default=10,
+        help="Number of steps for smooth gate factor transitions. Default: 10",
+    )
+    parser.add_argument(
+        "--vd-capture-gate-use-cp",
+        action="store_true",
+        default=True,
+        help="Use capture point for direction detection (default: True). If False, uses pitch sign only.",
+    )
+    # Torque-budget-aware position authority (Step E fix)
+    parser.add_argument(
+        "--vd-enable-torque-budget-aware-position",
+        action="store_true",
+        default=False,
+        help="Enable torque-budget-aware position authority allocation. Replaces fixed max_position_tau with dynamic budget based on available wheel torque.",
+    )
+    parser.add_argument(
+        "--vd-position-tau-budget-cap",
+        type=float,
+        default=7.0,
+        help="Maximum position authority cap (Nm) for torque-budget-aware mode. Default: 7.0",
+    )
+    parser.add_argument(
+        "--vd-pitch-reserve-tau",
+        type=float,
+        default=2.0,
+        help="Pitch reserve torque (Nm) - safety margin reserved for pitch balance. Default: 2.0",
+    )
     args = parser.parse_args()
 
     # Validate balance-core mode arguments
@@ -843,11 +1041,12 @@ def main():
     floor_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "floor")
     l_wheel_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "l_wheel_collision")
     r_wheel_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "r_wheel_collision")
+    l_wheel_body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
+    r_wheel_body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
 
     # Load height-variant setup if provided (B5-B10 validation)
     height_variant_setup = None
     if args.height_variant_setup:
-        import json
         with open(args.height_variant_setup, "r") as f:
             height_variant_setup = json.load(f)
         print(f"[HEIGHT VARIANT] Loaded setup: {height_variant_setup['variant_name']}")
@@ -1221,6 +1420,16 @@ def main():
     yaw_eq = float(centroidal_state_eq.body_yaw_z)
     sagittal_axis_xy_initial = (float(np.sin(yaw_eq)), float(np.cos(yaw_eq)))
 
+    # Equilibrium support center (wheel midpoint) for support-position error
+    # A wheeled biped is allowed to move its COM relative to the support center during pitch balance.
+    # Position hold must track the wheel support center, NOT the COM.
+    mujoco.mj_forward(mj_model, mj_data)
+    l_wheel_xpos_eq = tuple(float(mj_data.xpos[l_wheel_body_id][i]) for i in range(3))
+    r_wheel_xpos_eq = tuple(float(mj_data.xpos[r_wheel_body_id][i]) for i in range(3))
+    support_center_eq_xy = compute_support_center_xy(l_wheel_xpos_eq, r_wheel_xpos_eq)
+    print(f"[STAGE 2] Support center equilibrium: ({support_center_eq_xy[0]:.6f}, {support_center_eq_xy[1]:.6f}) m")
+    print(f"  COM equilibrium: ({float(centroidal_state_eq.com_pos[0]):.6f}, {float(centroidal_state_eq.com_pos[1]):.6f}) m")
+
     wbc_controller.wrench_computer.set_equilibrium_reference(
         com_pos=centroidal_state_eq.com_pos,
         com_z=float(centroidal_state_eq.com_pos[2]),
@@ -1512,7 +1721,67 @@ def main():
         "sagittal_controller_input_com_vy": [],
         "sagittal_position_error_m": [],
         "sagittal_velocity_m_s": [],
+        "support_position_velocity_m_s": [],
         "tau_position": [],
+        "tau_position_raw": [],
+        "tau_position_clipped": [],
+        "tau_support_velocity": [],
+        "max_position_tau": [],
+        "tau_position_saturation_flag": [],
+        "tau_position_saturation_reason": [],
+        "tau_balance_before_position": [],
+        "tau_position_budget_available": [],
+        "tau_position_budget_allowed": [],
+        "tau_position_budget_cap": [],
+        "pitch_reserve_tau": [],
+        "enable_torque_budget_aware_position": [],
+        "tau_position_lower_bound": [],
+        "tau_position_upper_bound": [],
+        "tau_position_total_bound_clipped": [],
+        "position_authority_mode": [],
+        "position_authority_reason": [],
+        "tau_total_unclipped": [],
+        "tau_total_clipped": [],
+        "tau_total_before_final_clip": [],
+        "tau_total_after_final_clip": [],
+        "final_wheel_torque_margin": [],
+        "k_support_velocity": [],
+        "support_position_error_m": [],
+        "com_position_error_sagittal_m": [],
+        "pitch_x_ref_rad": [],
+        "pitch_x_error_rad": [],
+        "wheel_torque_saturation_left": [],
+        "wheel_torque_saturation_right": [],
+        "wheel_torque_rate_saturation_left": [],
+        "wheel_torque_rate_saturation_right": [],
+        # Capture gate telemetry (velocity-damped controller only)
+        "capture_gate_enabled": [],
+        "capture_gate_required_direction": [],
+        "capture_gate_tau_position_direction": [],
+        "capture_gate_position_opposes_capture": [],
+        "capture_gate_factor": [],
+        "capture_gate_active": [],
+        "capture_gate_reason": [],
+        "capture_gate_pitch_reversal": [],
+        "capture_gate_capture_recovery": [],
+        "capture_gate_tau_position_gated": [],
+        "capture_gate_cp_relative_to_support_m": [],
+        "capture_gate_com_support_error_m": [],
+        # Pitch rate consistency estimator telemetry
+        "pitch_rate_measured_x_rad_s": [],
+        "pitch_rate_fd_x_rad_s": [],
+        "pitch_rate_corrected_x_rad_s": [],
+        "pitch_rate_consistency_error_rad_s": [],
+        "pitch_rate_sign_mismatch": [],
+        "pitch_rate_source_used": [],
+        # Transient capture diagnostic telemetry
+        "transient_detected": [],
+        "transient_by_pitch": [],
+        "transient_by_pitch_rate": [],
+        "transient_by_height": [],
+        "pitch_rate_boost_factor": [],
+        "pitch_rate_for_control_boosted": [],
+        "transient_capture_mode": [],
     }
     telemetry.update(build_step1_telemetry_template())
 
@@ -1544,6 +1813,18 @@ def main():
             torque_limit=torque_limit,
             max_torque_rate=max_torque_rate,
             sagittal_controller_choice=sagittal_choice,
+            vd_k_position=args.vd_k_position,
+            vd_k_velocity=args.vd_k_velocity,
+            vd_k_support_velocity=args.vd_k_support_velocity,
+            vd_max_position_tau=args.vd_max_position_tau,
+            vd_enable_capture_gate=args.vd_enable_capture_gate,
+            vd_capture_gate_pitch_threshold=args.vd_capture_gate_pitch_threshold,
+            vd_capture_gate_conflict_factor=args.vd_capture_gate_conflict_factor,
+            vd_capture_gate_smooth_steps=args.vd_capture_gate_smooth_steps,
+            vd_capture_gate_use_cp=args.vd_capture_gate_use_cp,
+            vd_enable_torque_budget_aware_position=args.vd_enable_torque_budget_aware_position,
+            vd_position_tau_budget_cap=args.vd_position_tau_budget_cap,
+            vd_pitch_reserve_tau=args.vd_pitch_reserve_tau,
         )
         sagittal_name = balance_core_controllers["sagittal_controller_name"]
         print(f"[BALANCE-CORE] Functional four-source controller stack enabled")
@@ -1552,6 +1833,17 @@ def main():
     # For finite-difference rate computation
     prev_log_pitch_x = None
     prev_log_roll_y = None
+
+    # Pitch rate consistency estimator for velocity-damped controller
+    pitch_rate_estimator = PitchRateConsistencyEstimator(
+        dt=control_dt,
+        min_rate_for_sign_check=args.vd_pitch_rate_min_sign_check,
+        filter_alpha=args.vd_pitch_rate_filter_alpha,
+    )
+    if args.sagittal_controller == "velocity-damped":
+        correction_status = "ENABLED" if args.vd_enable_pitch_rate_correction else "DISABLED (default)"
+        print(f"[PITCH RATE ESTIMATOR] Initialized: filter_alpha={args.vd_pitch_rate_filter_alpha}, min_sign_check={args.vd_pitch_rate_min_sign_check} rad/s")
+        print(f"[PITCH RATE ESTIMATOR] Correction in active control: {correction_status}")
 
     # Wheel velocity memory for balance-core mode
     prev_wheel_vel_left = 0.0
@@ -2014,6 +2306,17 @@ def main():
             include_hip_roll = True
             include_wheel_balance = True
 
+        # CRITICAL FIX: Disable legacy torque sources in balance-core mode
+        # Balance-core uses clean four-source architecture:
+        #   - ShapePostureController (not legacy static posture)
+        #   - SupportFeedforwardController (not legacy feedforward)
+        #   - LateralRollBalanceController (not legacy hip roll centering)
+        #   - SagittalVelocityDampedBalanceController (not legacy wheel balance)
+        if args.controller_mode == "balance-core":
+            include_wbc = False
+            include_hip_roll = False
+            include_wheel_balance = False
+
         # Stage 2B: Compute direct roll controller torque if enabled
         tau_stage2b_roll_direct = jnp.zeros(10)
         roll_direct_diagnostics = {}
@@ -2110,6 +2413,21 @@ def main():
         tau_hip_roll_centering = tau_hip_roll_centering_raw if include_hip_roll else jnp.zeros(10)
         tau_wheel_balance = tau_wheel_balance_raw if include_wheel_balance else jnp.zeros(10)
 
+        # Default sagittal diagnostics — overwritten inside balance-core branch
+        sagittal_diag = {}
+
+        # Default pitch rate estimate — overwritten inside velocity-damped controller branch
+        from wheeled_biped.controllers.pitch_rate_consistency_estimator import PitchRateEstimate
+        pitch_rate_estimate = PitchRateEstimate(
+            pitch_rate_corrected=0.0,
+            pitch_rate_measured=0.0,
+            pitch_rate_fd=0.0,
+            consistency_error=0.0,
+            sign_mismatch=False,
+            source_used="N/A",
+            filter_alpha=0.0,
+        )
+
         # Balance-core runtime branch: route torque through composer
         if is_balance_core_mode(args):
             contact_output = balance_core_controllers["contact_supervisor"].update(
@@ -2148,8 +2466,21 @@ def main():
             sagittal_ctrl_name = balance_core_controllers.get("sagittal_controller_name", "baseline")
             if sagittal_ctrl_name == "velocity-damped":
                 # SagittalVelocityDampedBalanceController
-                # Compute sagittal position error and velocity in initial-heading frame
+                # Support-position error: track wheel midpoint, NOT COM.
+                # A wheeled biped is allowed to move its COM relative to the support center
+                # during pitch balance. Using COM position as the standing-position error
+                # causes tau_position to fight tau_pitch during the transient (COM moves
+                # forward when pitching forward, even if wheels haven't moved).
+                l_wheel_xpos_ctrl = tuple(float(mj_data.xpos[l_wheel_body_id][i]) for i in range(3))
+                r_wheel_xpos_ctrl = tuple(float(mj_data.xpos[r_wheel_body_id][i]) for i in range(3))
+                support_center_ctrl_xy = compute_support_center_xy(l_wheel_xpos_ctrl, r_wheel_xpos_ctrl)
                 sag_pos_error = project_sagittal_displacement(
+                    origin_xy=support_center_eq_xy,
+                    sagittal_axis_xy=sagittal_axis_xy_initial,
+                    current_xy=support_center_ctrl_xy,
+                )
+                # COM position error (diagnostic only — not used for position hold)
+                com_pos_error_sagittal = project_sagittal_displacement(
                     origin_xy=(float(com_pos_eq[0]), float(com_pos_eq[1])),
                     sagittal_axis_xy=sagittal_axis_xy_initial,
                     current_xy=(float(centroidal_state_control.com_pos[0]), float(centroidal_state_control.com_pos[1])),
@@ -2158,16 +2489,125 @@ def main():
                     sagittal_axis_xy=sagittal_axis_xy_initial,
                     velocity_xy=(float(centroidal_state_control.com_vel[0]), float(centroidal_state_control.com_vel[1])),
                 )
-                # Pass initial-heading-frame position error to enable position term
-                # Use world-frame velocity for baseline parity with SagittalWheelBalanceController
+                # Pitch error relative to equilibrium reference.
+                # Using raw pitch_x means the controller fights any residual equilibrium pitch offset.
+                pitch_x_ref = float(pitch_x_eq)
+                pitch_x_error = float(centroidal_state_control.body_pitch_x) - pitch_x_ref
+
+                # Pitch rate consistency estimator: DISABLED by default in active control.
+                # The fix did not reduce the transient peak (0.595 m unchanged) and caused
+                # height variant regressions (both high_5cm and low_5cm fell due to filter lag).
+                # Estimator is still called for diagnostic telemetry only.
+                pitch_rate_estimate = pitch_rate_estimator.estimate(
+                    pitch_x=float(centroidal_state_control.body_pitch_x),
+                    pitch_rate_measured=float(centroidal_state_control.body_pitch_rate_x),
+                )
+
+                # Use raw measured pitch rate by default, corrected rate only if explicitly enabled.
+                if args.vd_enable_pitch_rate_correction:
+                    pitch_rate_for_control = pitch_rate_estimate.pitch_rate_corrected
+                else:
+                    pitch_rate_for_control = float(centroidal_state_control.body_pitch_rate_x)
+
+                # Diagnostic: position authority scaling for transient disambiguation
+                position_authority_scale = 1.0
+                pitch_rate_boost_factor = 1.0
+                transient_detected = False
+
+                # Transient detection for T1-T4 modes
+                pitch_deg = abs(float(centroidal_state_control.body_pitch_x)) * 57.3
+                pitch_rate_abs = abs(float(centroidal_state_control.body_pitch_rate_x))
+                com_z_m = float(centroidal_state_control.com_pos[2])
+                com_vz = float(centroidal_state_control.com_vel[2])
+
+                # Detect transient condition
+                transient_by_pitch = pitch_deg > args.vd_transient_pitch_threshold_deg
+                transient_by_pitch_rate = pitch_rate_abs > args.vd_transient_pitch_rate_threshold
+                transient_by_height = com_z_m < 0.38 and com_vz < -0.01
+                transient_detected = transient_by_pitch or transient_by_pitch_rate or transient_by_height
+
+                # Apply transient capture mode
+                transient_mode = args.vd_transient_capture_mode
+                if transient_mode == "T1":
+                    # T1: Position hold freeze during transient
+                    if transient_detected:
+                        position_authority_scale = 0.0
+                elif transient_mode == "T2":
+                    # T2: Position authority scaling (continuous)
+                    if transient_detected:
+                        # Scale down based on pitch magnitude
+                        pitch_excess = max(0.0, pitch_deg - args.vd_transient_pitch_threshold_deg)
+                        position_authority_scale = max(
+                            args.vd_transient_position_scale_min,
+                            1.0 - pitch_excess / 5.0
+                        )
+                elif transient_mode == "T3":
+                    # T3: Pitch-rate transient boost (no position change)
+                    if transient_detected:
+                        pitch_rate_boost_factor = args.vd_transient_pitch_rate_boost_factor
+                elif transient_mode == "T4":
+                    # T4: Combined scaling + pitch-rate boost
+                    if transient_detected:
+                        pitch_excess = max(0.0, pitch_deg - args.vd_transient_pitch_threshold_deg)
+                        position_authority_scale = max(
+                            args.vd_transient_position_scale_min,
+                            1.0 - pitch_excess / 5.0
+                        )
+                        pitch_rate_boost_factor = args.vd_transient_pitch_rate_boost_factor
+
+                # Legacy Config C: Ramp-in position authority over first N steps
+                if args.vd_position_ramp_steps > 0:
+                    ramp_progress = min(1.0, step / args.vd_position_ramp_steps)
+                    position_authority_scale *= ramp_progress
+
+                # Legacy Config D: Balance-safety scheduling - reduce position authority when unsafe
+                if args.vd_balance_safety_scheduling:
+                    if pitch_deg > args.vd_safety_pitch_threshold_deg:
+                        pitch_excess = pitch_deg - args.vd_safety_pitch_threshold_deg
+                        pitch_scale = max(0.0, 1.0 - pitch_excess / 5.0)
+                        position_authority_scale *= pitch_scale
+                    if com_z_m < args.vd_safety_com_z_threshold_m:
+                        height_deficit = args.vd_safety_com_z_threshold_m - com_z_m
+                        height_scale = max(0.0, 1.0 - height_deficit / 0.03)
+                        position_authority_scale *= height_scale
+
+                # Apply position authority scaling to position error
+                sag_pos_error_scaled = sag_pos_error * position_authority_scale
+
+                # Apply pitch rate boost for T3/T4
+                pitch_rate_for_control_boosted = pitch_rate_for_control * pitch_rate_boost_factor
+
+                # Compute support center position for capture gate
+                support_center_y_m = float(support_center_ctrl_xy[1])
+                com_y_m = float(centroidal_state_control.com_pos[1])
+                com_vy_m_s = float(centroidal_state_control.com_vel[1])
+
                 tau_sagittal_wheel_balance, sagittal_diag = balance_core_controllers["sagittal_wheel_balance"].compute(
-                    pitch_x_rad=float(centroidal_state_control.body_pitch_x),
-                    pitch_rate_x_rad_s=float(centroidal_state_control.body_pitch_rate_x),
-                    sagittal_velocity_m_s=float(centroidal_state_control.com_vel[1]),  # Use world-frame com_vy for baseline parity
+                    pitch_x_rad=pitch_x_error,
+                    pitch_rate_x_rad_s=pitch_rate_for_control_boosted,
+                    sagittal_velocity_m_s=float(centroidal_state_control.com_vel[1]),
                     wheel_vel_left_rad_s=wheel_vel_left,
                     wheel_vel_right_rad_s=wheel_vel_right,
-                    sagittal_position_error_m=sag_pos_error,  # BUG FIX: use actual position error, not CP error
+                    sagittal_position_error_m=sag_pos_error_scaled,
+                    com_y_m=com_y_m,
+                    com_vy_m_s=com_vy_m_s,
+                    support_center_y_m=support_center_y_m,
+                    com_z_m=com_z_m,
                 )
+                sagittal_diag["support_position_error_m"] = float(sag_pos_error)
+                sagittal_diag["support_position_error_scaled_m"] = float(sag_pos_error_scaled)
+                sagittal_diag["position_authority_scale"] = float(position_authority_scale)
+                sagittal_diag["com_position_error_sagittal_m"] = float(com_pos_error_sagittal)
+                sagittal_diag["pitch_x_ref_rad"] = pitch_x_ref
+                sagittal_diag["pitch_x_error_rad"] = pitch_x_error
+                # Transient capture diagnostics
+                sagittal_diag["transient_detected"] = transient_detected
+                sagittal_diag["transient_by_pitch"] = transient_by_pitch
+                sagittal_diag["transient_by_pitch_rate"] = transient_by_pitch_rate
+                sagittal_diag["transient_by_height"] = transient_by_height
+                sagittal_diag["pitch_rate_boost_factor"] = float(pitch_rate_boost_factor)
+                sagittal_diag["pitch_rate_for_control_boosted"] = float(pitch_rate_for_control_boosted)
+                sagittal_diag["transient_capture_mode"] = transient_mode
             else:
                 # Baseline SagittalWheelBalanceController
                 tau_sagittal_wheel_balance, sagittal_diag = balance_core_controllers["sagittal_wheel_balance"].compute(
@@ -2617,7 +3057,83 @@ def main():
         telemetry["sagittal_controller_input_com_vy"].append(sagittal_controller_input_com_vy)
         telemetry["sagittal_position_error_m"].append(sagittal_diag.get("sagittal_position_error_m", 0.0))
         telemetry["sagittal_velocity_m_s"].append(sagittal_diag.get("sagittal_velocity_m_s", 0.0))
+        telemetry["support_position_velocity_m_s"].append(sagittal_diag.get("support_position_velocity_m_s", 0.0))
         telemetry["tau_position"].append(sagittal_diag.get("tau_position", 0.0))
+        telemetry["tau_position_raw"].append(sagittal_diag.get("tau_position_raw", 0.0))
+        telemetry["tau_position_clipped"].append(sagittal_diag.get("tau_position_clipped", 0.0))
+        telemetry["tau_support_velocity"].append(sagittal_diag.get("tau_support_velocity", 0.0))
+        telemetry["max_position_tau"].append(sagittal_diag.get("max_position_tau", 0.0))
+        telemetry["tau_position_saturation_flag"].append(sagittal_diag.get("tau_position_saturation_flag", False))
+        telemetry["tau_position_saturation_reason"].append(sagittal_diag.get("tau_position_saturation_reason", "none"))
+        telemetry["tau_balance_before_position"].append(sagittal_diag.get("tau_balance_before_position", 0.0))
+        telemetry["tau_position_budget_available"].append(sagittal_diag.get("tau_position_budget_available", 0.0))
+        telemetry["tau_position_budget_allowed"].append(sagittal_diag.get("tau_position_budget_allowed", 0.0))
+        telemetry["tau_position_budget_cap"].append(sagittal_diag.get("tau_position_budget_cap", 0.0))
+        telemetry["pitch_reserve_tau"].append(sagittal_diag.get("pitch_reserve_tau", 0.0))
+        telemetry["enable_torque_budget_aware_position"].append(sagittal_diag.get("enable_torque_budget_aware_position", False))
+        telemetry["tau_position_lower_bound"].append(sagittal_diag.get("tau_position_lower_bound", 0.0))
+        telemetry["tau_position_upper_bound"].append(sagittal_diag.get("tau_position_upper_bound", 0.0))
+        telemetry["tau_position_total_bound_clipped"].append(sagittal_diag.get("tau_position_total_bound_clipped", False))
+        telemetry["position_authority_mode"].append(sagittal_diag.get("position_authority_mode", "none"))
+        telemetry["position_authority_reason"].append(sagittal_diag.get("position_authority_reason", "none"))
+        telemetry["tau_total_unclipped"].append(sagittal_diag.get("tau_total_unclipped", 0.0))
+        telemetry["tau_total_clipped"].append(sagittal_diag.get("tau_total_clipped", 0.0))
+        telemetry["tau_total_before_final_clip"].append(sagittal_diag.get("tau_total_before_final_clip", 0.0))
+        telemetry["tau_total_after_final_clip"].append(sagittal_diag.get("tau_total_after_final_clip", 0.0))
+        telemetry["final_wheel_torque_margin"].append(sagittal_diag.get("final_wheel_torque_margin", 0.0))
+        telemetry["k_support_velocity"].append(sagittal_diag.get("k_support_velocity", 0.0))
+        telemetry["support_position_error_m"].append(sagittal_diag.get("support_position_error_m", 0.0))
+        telemetry["com_position_error_sagittal_m"].append(sagittal_diag.get("com_position_error_sagittal_m", 0.0))
+        telemetry["pitch_x_ref_rad"].append(sagittal_diag.get("pitch_x_ref_rad", 0.0))
+        telemetry["pitch_x_error_rad"].append(sagittal_diag.get("pitch_x_error_rad", 0.0))
+
+        # Capture gate telemetry (velocity-damped controller only)
+        telemetry["capture_gate_enabled"].append(sagittal_diag.get("capture_gate_enabled", False))
+        telemetry["capture_gate_required_direction"].append(sagittal_diag.get("capture_gate_required_direction", 0.0))
+        telemetry["capture_gate_tau_position_direction"].append(sagittal_diag.get("capture_gate_tau_position_direction", 0.0))
+        telemetry["capture_gate_position_opposes_capture"].append(sagittal_diag.get("capture_gate_position_opposes_capture", False))
+        telemetry["capture_gate_factor"].append(sagittal_diag.get("capture_gate_factor", 1.0))
+        telemetry["capture_gate_active"].append(sagittal_diag.get("capture_gate_active", False))
+        telemetry["capture_gate_reason"].append(sagittal_diag.get("capture_gate_reason", "N/A"))
+        telemetry["capture_gate_pitch_reversal"].append(sagittal_diag.get("capture_gate_pitch_reversal", False))
+        telemetry["capture_gate_capture_recovery"].append(sagittal_diag.get("capture_gate_capture_recovery", False))
+        telemetry["capture_gate_tau_position_gated"].append(sagittal_diag.get("capture_gate_tau_position_gated", 0.0))
+        telemetry["capture_gate_cp_relative_to_support_m"].append(sagittal_diag.get("capture_gate_cp_relative_to_support_m", 0.0))
+        telemetry["capture_gate_com_support_error_m"].append(sagittal_diag.get("capture_gate_com_support_error_m", 0.0))
+
+        # Pitch rate consistency estimator telemetry (velocity-damped controller only)
+        if is_balance_core_mode(args) and balance_core_controllers.get("sagittal_controller_name") == "velocity-damped":
+            telemetry["pitch_rate_measured_x_rad_s"].append(pitch_rate_estimate.pitch_rate_measured)
+            telemetry["pitch_rate_fd_x_rad_s"].append(pitch_rate_estimate.pitch_rate_fd)
+            telemetry["pitch_rate_corrected_x_rad_s"].append(pitch_rate_estimate.pitch_rate_corrected)
+            telemetry["pitch_rate_consistency_error_rad_s"].append(pitch_rate_estimate.consistency_error)
+            telemetry["pitch_rate_sign_mismatch"].append(pitch_rate_estimate.sign_mismatch)
+            telemetry["pitch_rate_source_used"].append(pitch_rate_estimate.source_used)
+            # Transient capture diagnostic telemetry
+            telemetry["transient_detected"].append(sagittal_diag.get("transient_detected", False))
+            telemetry["transient_by_pitch"].append(sagittal_diag.get("transient_by_pitch", False))
+            telemetry["transient_by_pitch_rate"].append(sagittal_diag.get("transient_by_pitch_rate", False))
+            telemetry["transient_by_height"].append(sagittal_diag.get("transient_by_height", False))
+            telemetry["pitch_rate_boost_factor"].append(sagittal_diag.get("pitch_rate_boost_factor", 1.0))
+            telemetry["pitch_rate_for_control_boosted"].append(sagittal_diag.get("pitch_rate_for_control_boosted", 0.0))
+            telemetry["transient_capture_mode"].append(sagittal_diag.get("transient_capture_mode", "none"))
+        else:
+            # Baseline controller or non-balance-core mode: log zeros
+            telemetry["pitch_rate_measured_x_rad_s"].append(0.0)
+            telemetry["pitch_rate_fd_x_rad_s"].append(0.0)
+            telemetry["pitch_rate_corrected_x_rad_s"].append(0.0)
+            telemetry["pitch_rate_consistency_error_rad_s"].append(0.0)
+            telemetry["pitch_rate_sign_mismatch"].append(False)
+            telemetry["pitch_rate_source_used"].append("N/A")
+            # Transient capture diagnostic telemetry (defaults)
+            telemetry["transient_detected"].append(False)
+            telemetry["transient_by_pitch"].append(False)
+            telemetry["transient_by_pitch_rate"].append(False)
+            telemetry["transient_by_height"].append(False)
+            telemetry["pitch_rate_boost_factor"].append(1.0)
+            telemetry["pitch_rate_for_control_boosted"].append(0.0)
+            telemetry["transient_capture_mode"].append("none")
+
         telemetry["com_error_x"].append(float(qp_diagnostics.get("com_error_x", 0.0)))
         telemetry["com_error_y"].append(float(qp_diagnostics.get("com_error_y", 0.0)))
         telemetry["com_error_z"].append(float(qp_diagnostics.get("com_error_z", 0.0)))
@@ -2682,6 +3198,10 @@ def main():
 
         telemetry["saturation_flags"].append(",".join(f"{x}" for x in sat_flags_vec))
         telemetry["rate_limit_flags"].append(",".join(f"{x}" for x in rate_flags_vec))
+        telemetry["wheel_torque_saturation_left"].append(bool(sat_flags_vec[4]))
+        telemetry["wheel_torque_saturation_right"].append(bool(sat_flags_vec[9]))
+        telemetry["wheel_torque_rate_saturation_left"].append(bool(rate_flags_vec[4]))
+        telemetry["wheel_torque_rate_saturation_right"].append(bool(rate_flags_vec[9]))
 
         # Motor tracking diagnostics
         telemetry["target_joint_pos"].append(",".join(f"{x:.4f}" for x in np.array(target_joint_pos)))

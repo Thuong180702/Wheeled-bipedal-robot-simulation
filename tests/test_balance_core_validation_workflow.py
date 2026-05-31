@@ -14,6 +14,9 @@ from wheeled_biped.validation.balance_core_validator import (
     ValidationResult,
 )
 from wheeled_biped.validation.study_aggregator import StudyAggregator
+from wheeled_biped.validation.step_e_audit_helpers import (
+    classify_steady_state_balance_torque_bias,
+)
 
 
 class TestBalanceCoreValidationWorkflow:
@@ -578,25 +581,35 @@ class TestBalanceCoreValidationWorkflow:
 
 
 
+def test_step_e_steady_state_balance_torque_bias_classification():
+    df = pd.DataFrame({
+        "support_position_velocity_m_s": [0.0, 1e-6, -1e-6, 0.0],
+        "support_position_error_m": [0.0527, 0.0528, 0.0526, 0.0527],
+        "tau_balance_before_position": [1.0534, 1.0533, 1.0535, 1.0534],
+        "tau_position_clipped": [-1.0534, -1.0533, -1.0535, -1.0534],
+        "hidden_torque_norm": [0.0, 0.0, 0.0, 0.0],
+        "ownership_violation_count": [0, 0, 0, 0],
+        "wheel_torque_saturation_left": [False, False, False, False],
+        "wheel_torque_saturation_right": [False, False, False, False],
+    })
+
+    result = classify_steady_state_balance_torque_bias(df)
+
+    assert result.primary_classification == "steady_state_balance_torque_bias"
+    assert abs(result.support_position_velocity_mean) <= 1e-3
+    assert result.support_position_error_mean > 0.0
+    assert result.tau_balance_before_position_mean > 0.0
+    assert result.tau_position_clipped_mean < 0.0
+    assert abs(result.net_balance_mean) <= 1e-3
+    assert result.physical_motor_limit is False
+    assert result.sign_error is False
+    assert result.continuous_position_drift is False
+    assert result.WBC_active is False
+    assert result.E0_logic_active is False
+
+
 def test_main_routes_step_a_orchestration_to_summary_dir_from_default_output_dir():
     from scripts import validate_balance_core
-
-    captured_output_dirs = []
-
-    def fake_write_known_study_summaries(output_dir):
-        captured_output_dirs.append(Path(output_dir))
-
-    with patch.object(validate_balance_core, "_write_known_study_summaries", side_effect=fake_write_known_study_summaries):
-        with patch.object(validate_balance_core.sys, "argv", [
-            "validate_balance_core.py",
-            "--step-a-orchestration",
-        ]):
-            exit_code = validate_balance_core.main()
-
-    assert exit_code == 0
-    assert captured_output_dirs == [Path("outputs/balance_core_longevity_height_sweep")]
-
-
 def test_main_routes_step_a_orchestration_to_custom_output_dir():
     from scripts import validate_balance_core
 

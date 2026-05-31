@@ -37,6 +37,28 @@ def test_step1_telemetry_template_includes_root_z_perturbation_fields():
     assert required.issubset(telemetry.keys())
 
 
+def test_step1_telemetry_template_includes_step_e_audit_fields():
+    telemetry = build_step1_telemetry_template()
+
+    required = {
+        "tau_total_unclipped",
+        "tau_total_clipped",
+        "tau_total_before_final_clip",
+        "tau_total_after_final_clip",
+        "tau_position_lower_bound",
+        "tau_position_upper_bound",
+        "tau_position_total_bound_clipped",
+        "position_authority_mode",
+        "position_authority_reason",
+        "wheel_torque_saturation_left",
+        "wheel_torque_saturation_right",
+        "wheel_torque_rate_saturation_left",
+        "wheel_torque_rate_saturation_right",
+    }
+
+    assert required.issubset(telemetry.keys())
+
+
 def test_apply_initial_root_z_perturbation_offsets_root_z_after_equilibrium_capture():
     class DummyData:
         def __init__(self):
