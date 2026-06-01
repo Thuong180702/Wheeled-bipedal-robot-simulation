@@ -64,7 +64,16 @@ class SagittalVelocityDampedBalanceController:
         dt: float = 0.01,
         enable_torque_budget_aware_position: bool = False,
         position_tau_budget_cap: float = 7.0,
-        pitch_reserve_tau: float = 2.0,
+        enable_position_integral: bool = False,
+        ki_position_integral: float = 0.0,
+        integral_max_abs: float = 1.0,
+        integral_pitch_error_threshold_rad: float = 0.03,
+        integral_roll_error_threshold_rad: float = 0.05,
+        integral_pitch_rate_threshold_rad_s: float = 0.05,
+        integral_support_velocity_threshold_m_s: float = 0.03,
+        integral_wheel_velocity_threshold_rad_s: float = 1.0,
+        integral_min_com_z_m: float = 0.38,
+        integral_max_com_z_m: float = 0.43,
     ):
         if wheel_torque_sign not in [1.0, -1.0]:
             raise ValueError(f"wheel_torque_sign must be +1.0 or -1.0, got {wheel_torque_sign}")
@@ -84,7 +93,17 @@ class SagittalVelocityDampedBalanceController:
         self.dt = dt
         self.enable_torque_budget_aware_position = enable_torque_budget_aware_position
         self.position_tau_budget_cap = position_tau_budget_cap
-        self.pitch_reserve_tau = pitch_reserve_tau
+        self.enable_position_integral = enable_position_integral
+        self.ki_position_integral = ki_position_integral
+        self.integral_max_abs = integral_max_abs
+        self.integral_pitch_error_threshold_rad = integral_pitch_error_threshold_rad
+        self.integral_roll_error_threshold_rad = integral_roll_error_threshold_rad
+        self.integral_pitch_rate_threshold_rad_s = integral_pitch_rate_threshold_rad_s
+        self.integral_support_velocity_threshold_m_s = integral_support_velocity_threshold_m_s
+        self.integral_wheel_velocity_threshold_rad_s = integral_wheel_velocity_threshold_rad_s
+        self.integral_min_com_z_m = integral_min_com_z_m
+        self.integral_max_com_z_m = integral_max_com_z_m
+        self.position_integral_error = 0.0
 
         # State for support position velocity computation
         self.prev_support_position_error_m = 0.0
@@ -108,6 +127,8 @@ class SagittalVelocityDampedBalanceController:
         com_vy_m_s: float = 0.0,
         support_center_y_m: float = 0.0,
         com_z_m: float = 0.4,
+        roll_y_rad: float = 0.0,
+        contact_valid: bool = True,
     ) -> tuple[Array, dict]:
         """Compute sagittal velocity-damped balance torque and diagnostics.
 
@@ -157,7 +178,53 @@ class SagittalVelocityDampedBalanceController:
         tau_com_vy = -self.kd_com_vy * sagittal_velocity_m_s
 
         # Position hold term with optional smart capture gating
-        tau_position_raw = -self.k_position * sagittal_position_error_m
+        tau_position_p = -self.k_position * sagittal_position_error_m
+        tau_position_raw = tau_position_p
+
+        integral_active = False
+        integral_gate_reason = "disabled"
+        integral_saturation_flag = False
+        if self.enable_position_integral:
+            abs_pitch_error = abs(float(pitch_x_rad))
+            abs_pitch_rate = abs(float(pitch_rate_x_rad_s))
+            abs_support_velocity = abs(float(support_position_velocity_m_s))
+            abs_wheel_velocity_mean = abs(float(wheel_vel_mean))
+            com_z_safe = self.integral_min_com_z_m <= float(com_z_m) <= self.integral_max_com_z_m
+
+            if abs_pitch_error > self.integral_pitch_error_threshold_rad:
+                integral_gate_reason = "pitch_error_large"
+            elif abs_pitch_rate > self.integral_pitch_rate_threshold_rad_s:
+                integral_gate_reason = "pitch_rate_large"
+            elif abs_support_velocity > self.integral_support_velocity_threshold_m_s:
+                integral_gate_reason = "support_velocity_large"
+            elif abs_wheel_velocity_mean > self.integral_wheel_velocity_threshold_rad_s:
+                integral_gate_reason = "wheel_velocity_large"
+            elif not com_z_safe:
+                integral_gate_reason = "height_unsafe"
+            elif abs(float(roll_y_rad)) > self.integral_roll_error_threshold_rad:
+                integral_gate_reason = "roll_error_large"
+            elif not contact_valid:
+                integral_gate_reason = "contact_invalid"
+            else:
+                integral_active = True
+                integral_gate_reason = "safe_steady_state"
+
+            if integral_active:
+                self.position_integral_error += float(sagittal_position_error_m) * self.dt
+            else:
+                self.position_integral_error = 0.0
+
+        tau_position_integral_unclipped = -self.ki_position_integral * self.position_integral_error
+        tau_position_integral = float(max(
+            -self.integral_max_abs,
+            min(self.integral_max_abs, float(tau_position_integral_unclipped)),
+        ))
+        integral_saturation_flag = abs(tau_position_integral - float(tau_position_integral_unclipped)) > 1e-9
+        if not integral_active:
+            tau_position_integral = 0.0
+            integral_saturation_flag = False
+
+        tau_position_raw = tau_position_p + tau_position_integral
 
         # Apply capture gate if enabled
         capture_gate_diagnostics = None
@@ -186,6 +253,8 @@ class SagittalVelocityDampedBalanceController:
             tau_position_lower_bound = -self.max_tau_wheel - float(tau_balance_before_position)
             tau_position_upper_bound = self.max_tau_wheel - float(tau_balance_before_position)
 
+            tau_balance_before_position_log = float(tau_balance_before_position)
+
             tau_position = float(
                 jnp.clip(
                     tau_position_before_clip,
@@ -194,6 +263,7 @@ class SagittalVelocityDampedBalanceController:
                 )
             )
             tau_position_total_bound_clipped = abs(tau_position - float(tau_position_before_clip)) > 1e-9
+            tau_pitch_reserve_applied = 0.0
 
             if abs(tau_position_before_clip) < 1e-9:
                 tau_position_saturation_reason = "none"
@@ -210,7 +280,6 @@ class SagittalVelocityDampedBalanceController:
 
             tau_position_saturated = tau_position_total_bound_clipped
 
-            tau_balance_before_position_log = float(tau_balance_before_position)
             tau_position_budget_available = float(
                 tau_position_upper_bound if tau_position_before_clip >= 0.0 else -tau_position_lower_bound
             )
@@ -220,7 +289,7 @@ class SagittalVelocityDampedBalanceController:
                 else max(0.0, -tau_position_lower_bound)
             )
             tau_position_budget_cap = float(self.position_tau_budget_cap)
-            pitch_reserve_tau_log = float(self.pitch_reserve_tau)
+            pitch_reserve_tau_log = 0.0
             position_authority_mode = "total_torque_bound"
 
         else:
@@ -237,6 +306,7 @@ class SagittalVelocityDampedBalanceController:
             tau_position_budget_allowed = 0.0
             tau_position_budget_cap = float(self.max_position_tau)
             pitch_reserve_tau_log = 0.0
+            tau_pitch_reserve_applied = 0.0
             tau_position_lower_bound = -float(self.max_position_tau)
             tau_position_upper_bound = float(self.max_position_tau)
             position_authority_mode = "fixed_cap"
@@ -280,6 +350,17 @@ class SagittalVelocityDampedBalanceController:
             "tau_wheel_velocity_left": float(tau_wheel_vel_left),
             "tau_wheel_velocity_right": float(tau_wheel_vel_right),
             "tau_position_raw": float(tau_position_raw),
+            "tau_position_p": float(tau_position_p),
+            "tau_position_i": float(tau_position_integral),
+            "tau_position_integral": float(tau_position_integral),
+            "tau_position_total": float(tau_position_raw),
+            "position_integral_error": float(self.position_integral_error),
+            "integral_active": bool(integral_active),
+            "integral_gate_reason": integral_gate_reason,
+            "integral_saturation_flag": bool(integral_saturation_flag),
+            "pitch_error_x_rad": float(pitch_x_rad),
+            "wheel_velocity_mean_rad_s": float(wheel_vel_mean),
+            "com_z_m": float(com_z_m),
             "tau_position_before_clip": float(tau_position_before_clip),
             "tau_position": float(tau_position),
             "tau_position_clipped": float(tau_position),
@@ -296,6 +377,7 @@ class SagittalVelocityDampedBalanceController:
             "tau_position_budget_allowed": tau_position_budget_allowed,
             "tau_position_budget_cap": tau_position_budget_cap,
             "pitch_reserve_tau": pitch_reserve_tau_log,
+            "tau_pitch_reserve_applied": float(tau_pitch_reserve_applied),
             "enable_torque_budget_aware_position": self.enable_torque_budget_aware_position,
             "tau_common_unclipped": float(tau_common_unclipped),
             "tau_common_clipped": float(tau_common),

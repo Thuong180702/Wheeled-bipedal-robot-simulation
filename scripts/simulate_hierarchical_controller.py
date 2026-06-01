@@ -633,7 +633,16 @@ def build_balance_core_controllers(
     vd_capture_gate_use_cp: bool = True,
     vd_enable_torque_budget_aware_position: bool = False,
     vd_position_tau_budget_cap: float = 7.0,
-    vd_pitch_reserve_tau: float = 2.0,
+    vd_enable_position_integral: bool = False,
+    vd_ki_position_integral: float = 0.0,
+    vd_integral_max_abs: float = 1.0,
+    vd_integral_pitch_error_threshold_rad: float = 0.03,
+    vd_integral_roll_error_threshold_rad: float = 0.05,
+    vd_integral_pitch_rate_threshold_rad_s: float = 0.05,
+    vd_integral_support_velocity_threshold_m_s: float = 0.03,
+    vd_integral_wheel_velocity_threshold_rad_s: float = 1.0,
+    vd_integral_min_com_z_m: float = 0.38,
+    vd_integral_max_com_z_m: float = 0.43,
 ):
     """Build all balance-core controller components.
 
@@ -705,7 +714,16 @@ def build_balance_core_controllers(
             dt=control_dt,
             enable_torque_budget_aware_position=vd_enable_torque_budget_aware_position,
             position_tau_budget_cap=vd_position_tau_budget_cap,
-            pitch_reserve_tau=vd_pitch_reserve_tau,
+            enable_position_integral=vd_enable_position_integral,
+            ki_position_integral=vd_ki_position_integral,
+            integral_max_abs=vd_integral_max_abs,
+            integral_pitch_error_threshold_rad=vd_integral_pitch_error_threshold_rad,
+            integral_roll_error_threshold_rad=vd_integral_roll_error_threshold_rad,
+            integral_pitch_rate_threshold_rad_s=vd_integral_pitch_rate_threshold_rad_s,
+            integral_support_velocity_threshold_m_s=vd_integral_support_velocity_threshold_m_s,
+            integral_wheel_velocity_threshold_rad_s=vd_integral_wheel_velocity_threshold_rad_s,
+            integral_min_com_z_m=vd_integral_min_com_z_m,
+            integral_max_com_z_m=vd_integral_max_com_z_m,
         )
         sagittal_controller_name = "velocity-damped"
     else:
@@ -1012,10 +1030,64 @@ def main():
         help="Maximum position authority cap (Nm) for torque-budget-aware mode. Default: 7.0",
     )
     parser.add_argument(
-        "--vd-pitch-reserve-tau",
+        "--vd-enable-position-integral",
+        action="store_true",
+        default=False,
+        help="Enable steady-state-only centering integral for final support-position bias correction.",
+    )
+    parser.add_argument(
+        "--vd-ki-position-integral",
         type=float,
-        default=2.0,
-        help="Pitch reserve torque (Nm) - safety margin reserved for pitch balance. Default: 2.0",
+        default=0.0,
+        help="Steady-state centering integral gain (Nm/(m*s)). Default: 0.0",
+    )
+    parser.add_argument(
+        "--vd-integral-max-abs",
+        type=float,
+        default=1.0,
+        help="Maximum absolute integral torque contribution (Nm). Default: 1.0",
+    )
+    parser.add_argument(
+        "--vd-integral-pitch-error-threshold-rad",
+        type=float,
+        default=0.03,
+        help="Maximum pitch error for integral activation (rad). Default: 0.03",
+    )
+    parser.add_argument(
+        "--vd-integral-roll-error-threshold-rad",
+        type=float,
+        default=0.05,
+        help="Maximum roll error for integral activation (rad). Default: 0.05",
+    )
+    parser.add_argument(
+        "--vd-integral-pitch-rate-threshold-rad-s",
+        type=float,
+        default=0.05,
+        help="Maximum pitch rate for integral activation (rad/s). Default: 0.05",
+    )
+    parser.add_argument(
+        "--vd-integral-support-velocity-threshold-m-s",
+        type=float,
+        default=0.03,
+        help="Maximum support-position velocity for integral activation (m/s). Default: 0.03",
+    )
+    parser.add_argument(
+        "--vd-integral-wheel-velocity-threshold-rad-s",
+        type=float,
+        default=1.0,
+        help="Maximum mean wheel velocity for integral activation (rad/s). Default: 1.0",
+    )
+    parser.add_argument(
+        "--vd-integral-min-com-z-m",
+        type=float,
+        default=0.38,
+        help="Minimum safe COM height for integral activation (m). Default: 0.38",
+    )
+    parser.add_argument(
+        "--vd-integral-max-com-z-m",
+        type=float,
+        default=0.43,
+        help="Maximum safe COM height for integral activation (m). Default: 0.43",
     )
     args = parser.parse_args()
 
@@ -1724,6 +1796,14 @@ def main():
         "support_position_velocity_m_s": [],
         "tau_position": [],
         "tau_position_raw": [],
+        "position_integral_error": [],
+        "tau_position_integral": [],
+        "integral_active": [],
+        "integral_gate_reason": [],
+        "integral_saturation_flag": [],
+        "tau_position_p": [],
+        "tau_position_i": [],
+        "tau_position_total": [],
         "tau_position_clipped": [],
         "tau_support_velocity": [],
         "max_position_tau": [],
@@ -1734,6 +1814,7 @@ def main():
         "tau_position_budget_allowed": [],
         "tau_position_budget_cap": [],
         "pitch_reserve_tau": [],
+        "tau_pitch_reserve_applied": [],
         "enable_torque_budget_aware_position": [],
         "tau_position_lower_bound": [],
         "tau_position_upper_bound": [],
@@ -1824,7 +1905,16 @@ def main():
             vd_capture_gate_use_cp=args.vd_capture_gate_use_cp,
             vd_enable_torque_budget_aware_position=args.vd_enable_torque_budget_aware_position,
             vd_position_tau_budget_cap=args.vd_position_tau_budget_cap,
-            vd_pitch_reserve_tau=args.vd_pitch_reserve_tau,
+            vd_enable_position_integral=args.vd_enable_position_integral,
+            vd_ki_position_integral=args.vd_ki_position_integral,
+            vd_integral_max_abs=args.vd_integral_max_abs,
+            vd_integral_pitch_error_threshold_rad=args.vd_integral_pitch_error_threshold_rad,
+            vd_integral_roll_error_threshold_rad=args.vd_integral_roll_error_threshold_rad,
+            vd_integral_pitch_rate_threshold_rad_s=args.vd_integral_pitch_rate_threshold_rad_s,
+            vd_integral_support_velocity_threshold_m_s=args.vd_integral_support_velocity_threshold_m_s,
+            vd_integral_wheel_velocity_threshold_rad_s=args.vd_integral_wheel_velocity_threshold_rad_s,
+            vd_integral_min_com_z_m=args.vd_integral_min_com_z_m,
+            vd_integral_max_com_z_m=args.vd_integral_max_com_z_m,
         )
         sagittal_name = balance_core_controllers["sagittal_controller_name"]
         print(f"[BALANCE-CORE] Functional four-source controller stack enabled")
@@ -2593,6 +2683,8 @@ def main():
                     com_vy_m_s=com_vy_m_s,
                     support_center_y_m=support_center_y_m,
                     com_z_m=com_z_m,
+                    roll_y_rad=float(centroidal_state_control.body_roll_y),
+                    contact_valid=bool(contact_output.left_wheel_contact and contact_output.right_wheel_contact and contact_output.contact_force_valid),
                 )
                 sagittal_diag["support_position_error_m"] = float(sag_pos_error)
                 sagittal_diag["support_position_error_scaled_m"] = float(sag_pos_error_scaled)
@@ -3060,6 +3152,14 @@ def main():
         telemetry["support_position_velocity_m_s"].append(sagittal_diag.get("support_position_velocity_m_s", 0.0))
         telemetry["tau_position"].append(sagittal_diag.get("tau_position", 0.0))
         telemetry["tau_position_raw"].append(sagittal_diag.get("tau_position_raw", 0.0))
+        telemetry["position_integral_error"].append(sagittal_diag.get("position_integral_error", 0.0))
+        telemetry["tau_position_integral"].append(sagittal_diag.get("tau_position_integral", 0.0))
+        telemetry["integral_active"].append(sagittal_diag.get("integral_active", False))
+        telemetry["integral_gate_reason"].append(sagittal_diag.get("integral_gate_reason", "disabled"))
+        telemetry["integral_saturation_flag"].append(sagittal_diag.get("integral_saturation_flag", False))
+        telemetry["tau_position_p"].append(sagittal_diag.get("tau_position_p", 0.0))
+        telemetry["tau_position_i"].append(sagittal_diag.get("tau_position_i", 0.0))
+        telemetry["tau_position_total"].append(sagittal_diag.get("tau_position_total", 0.0))
         telemetry["tau_position_clipped"].append(sagittal_diag.get("tau_position_clipped", 0.0))
         telemetry["tau_support_velocity"].append(sagittal_diag.get("tau_support_velocity", 0.0))
         telemetry["max_position_tau"].append(sagittal_diag.get("max_position_tau", 0.0))
@@ -3070,6 +3170,7 @@ def main():
         telemetry["tau_position_budget_allowed"].append(sagittal_diag.get("tau_position_budget_allowed", 0.0))
         telemetry["tau_position_budget_cap"].append(sagittal_diag.get("tau_position_budget_cap", 0.0))
         telemetry["pitch_reserve_tau"].append(sagittal_diag.get("pitch_reserve_tau", 0.0))
+        telemetry["tau_pitch_reserve_applied"].append(sagittal_diag.get("tau_pitch_reserve_applied", 0.0))
         telemetry["enable_torque_budget_aware_position"].append(sagittal_diag.get("enable_torque_budget_aware_position", False))
         telemetry["tau_position_lower_bound"].append(sagittal_diag.get("tau_position_lower_bound", 0.0))
         telemetry["tau_position_upper_bound"].append(sagittal_diag.get("tau_position_upper_bound", 0.0))
