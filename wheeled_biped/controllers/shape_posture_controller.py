@@ -1,5 +1,7 @@
 """Shape-posture controller for balance-core architecture."""
 
+from dataclasses import dataclass
+
 import jax.numpy as jnp
 from jax import Array
 
@@ -7,6 +9,26 @@ from wheeled_biped.controllers.balance_core_types import (
     ACTION_DIM,
     SUPPORT_SHAPE_INDICES,
     zeros_action,
+)
+
+
+@dataclass(frozen=True)
+class HipYawAuthorityProfile:
+    name: str
+    kp_hip_yaw: float
+    kd_hip_yaw: float
+
+
+BASELINE_HIP_YAW_AUTHORITY = HipYawAuthorityProfile(
+    name="baseline_current",
+    kp_hip_yaw=5.0,
+    kd_hip_yaw=1.0,
+)
+
+BALANCE_CORE_HIP_YAW_AUTHORITY = HipYawAuthorityProfile(
+    name="balance_core_candidate_b",
+    kp_hip_yaw=15.0,
+    kd_hip_yaw=3.0,
 )
 
 

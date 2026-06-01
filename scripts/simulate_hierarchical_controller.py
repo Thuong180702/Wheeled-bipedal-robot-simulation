@@ -71,7 +71,10 @@ from wheeled_biped.controllers.sagittal_balance_state import (
     project_sagittal_velocity,
     compute_support_center_xy,
 )
-from wheeled_biped.controllers.shape_posture_controller import ShapePostureController
+from wheeled_biped.controllers.shape_posture_controller import (
+    BALANCE_CORE_HIP_YAW_AUTHORITY,
+    ShapePostureController,
+)
 from wheeled_biped.controllers.support_feedforward_controller import SupportFeedforwardController
 from wheeled_biped.controllers.balance_core_types import make_balance_core_telemetry_columns
 from wheeled_biped.validation.telemetry_adapter import (
@@ -668,8 +671,8 @@ def build_balance_core_controllers(
 
     # Instantiate shape-posture controller
     shape_posture = ShapePostureController(
-        kp_hip_yaw=5.0,
-        kd_hip_yaw=1.0,
+        kp_hip_yaw=BALANCE_CORE_HIP_YAW_AUTHORITY.kp_hip_yaw,
+        kd_hip_yaw=BALANCE_CORE_HIP_YAW_AUTHORITY.kd_hip_yaw,
         kp_hip_pitch=30.0,
         kd_hip_pitch=4.0,
         kp_knee=40.0,
