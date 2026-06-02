@@ -64,7 +64,10 @@ from wheeled_biped.controllers.balance_core_torque_composer import BalanceCoreTo
 from wheeled_biped.controllers.contact_supervisor import ContactSupervisor
 from wheeled_biped.controllers.lateral_roll_balance_controller import LateralRollBalanceController
 from wheeled_biped.controllers.sagittal_wheel_balance_controller import SagittalWheelBalanceController
-from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import SagittalVelocityDampedBalanceController
+from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import (
+    SagittalAuthoritySchedule,
+    SagittalVelocityDampedBalanceController,
+)
 from wheeled_biped.controllers.pitch_rate_consistency_estimator import PitchRateConsistencyEstimator
 from wheeled_biped.controllers.sagittal_balance_state import (
     project_sagittal_displacement,
@@ -87,6 +90,61 @@ STAGE2B_DEFAULT_EMPIRICAL_FEEDFORWARD = np.array([
     0.0, 0.0, 4.1, -15.5, 0.0,
     0.0, 0.0, 3.2, -15.8, 0.0,
 ], dtype=np.float64)
+
+HIGH_HEIGHT_VARIANTS = ("high_tiny", "high_small")
+SAGITTAL_AUTHORITY_PROFILES = {
+    "baseline": SagittalAuthoritySchedule(),
+    "candidate_A_position_cap": SagittalAuthoritySchedule(
+        profile_name="candidate_A_position_cap",
+        applies_to_variants=HIGH_HEIGHT_VARIANTS,
+        position_tau_cap_scale=4.0 / 3.0,
+    ),
+    "candidate_B_balanced": SagittalAuthoritySchedule(
+        profile_name="candidate_B_balanced",
+        applies_to_variants=HIGH_HEIGHT_VARIANTS,
+        position_tau_cap_scale=4.0 / 3.0,
+        pitch_tau_scale=0.9,
+    ),
+    "candidate_C_stronger_position": SagittalAuthoritySchedule(
+        profile_name="candidate_C_stronger_position",
+        applies_to_variants=HIGH_HEIGHT_VARIANTS,
+        position_tau_cap_scale=4.5 / 3.0,
+        pitch_tau_scale=0.85,
+    ),
+    "candidate_A2_height_staged": SagittalAuthoritySchedule(
+        profile_name="candidate_A2_height_staged",
+        applies_to_variants=HIGH_HEIGHT_VARIANTS,
+        position_tau_cap_by_variant=(
+            ("high_tiny", 4.0),
+            ("high_small", 4.5),
+        ),
+        pitch_tau_scale=1.0,
+    ),
+    "candidate_D1_support_velocity_light": SagittalAuthoritySchedule(
+        profile_name="candidate_D1_support_velocity_light",
+        applies_to_variants=HIGH_HEIGHT_VARIANTS,
+        position_tau_cap_by_variant=(
+            ("high_tiny", 4.0),
+            ("high_small", 4.0),
+        ),
+        pitch_tau_scale=1.0,
+        support_velocity_gain=0.2,
+    ),
+    "candidate_D2_wheel_velocity_damping_light": SagittalAuthoritySchedule(
+        profile_name="candidate_D2_wheel_velocity_damping_light",
+        applies_to_variants=HIGH_HEIGHT_VARIANTS,
+        position_tau_cap_by_variant=(
+            ("high_tiny", 4.0),
+            ("high_small", 4.0),
+        ),
+        pitch_tau_scale=1.0,
+        velocity_damping_scale=1.10,
+    ),
+}
+
+
+def resolve_sagittal_authority_schedule(profile_name: str) -> SagittalAuthoritySchedule:
+    return SAGITTAL_AUTHORITY_PROFILES[profile_name]
 
 
 def get_stage2b_default_empirical_feedforward() -> np.ndarray:
@@ -646,6 +704,7 @@ def build_balance_core_controllers(
     vd_integral_wheel_velocity_threshold_rad_s: float = 1.0,
     vd_integral_min_com_z_m: float = 0.38,
     vd_integral_max_com_z_m: float = 0.43,
+    sagittal_authority_schedule: SagittalAuthoritySchedule | None = None,
 ):
     """Build all balance-core controller components.
 
@@ -727,6 +786,7 @@ def build_balance_core_controllers(
             integral_wheel_velocity_threshold_rad_s=vd_integral_wheel_velocity_threshold_rad_s,
             integral_min_com_z_m=vd_integral_min_com_z_m,
             integral_max_com_z_m=vd_integral_max_com_z_m,
+            authority_schedule=sagittal_authority_schedule,
         )
         sagittal_controller_name = "velocity-damped"
     else:
@@ -1091,6 +1151,21 @@ def main():
         type=float,
         default=0.43,
         help="Maximum safe COM height for integral activation (m). Default: 0.43",
+    )
+    parser.add_argument(
+        "--vd-sagittal-authority-profile",
+        type=str,
+        default="baseline",
+        choices=[
+            "baseline",
+            "candidate_A_position_cap",
+            "candidate_A2_height_staged",
+            "candidate_B_balanced",
+            "candidate_C_stronger_position",
+            "candidate_D1_support_velocity_light",
+            "candidate_D2_wheel_velocity_damping_light",
+        ],
+        help="Height-variant-aware sagittal authority schedule. Default: baseline",
     )
     args = parser.parse_args()
 
@@ -1809,6 +1884,22 @@ def main():
         "tau_position_total": [],
         "tau_position_clipped": [],
         "tau_support_velocity": [],
+        "tau_pitch": [],
+        "tau_pitch_raw": [],
+        "tau_pitch_scheduled": [],
+        "tau_pitch_clipped": [],
+        "tau_pitch_to_position_ratio": [],
+        "sagittal_schedule_profile": [],
+        "high_height_schedule_active": [],
+        "effective_max_position_tau": [],
+        "effective_pitch_scale": [],
+        "effective_pitch_tau_cap": [],
+        "effective_velocity_damping_scale": [],
+        "effective_support_velocity_scale": [],
+        "tau_pitch_rate": [],
+        "tau_sagittal_velocity": [],
+        "tau_wheel_velocity_left": [],
+        "tau_wheel_velocity_right": [],
         "max_position_tau": [],
         "tau_position_saturation_flag": [],
         "tau_position_saturation_reason": [],
@@ -1866,6 +1957,57 @@ def main():
         "pitch_rate_boost_factor": [],
         "pitch_rate_for_control_boosted": [],
         "transient_capture_mode": [],
+        "sagittal_axis_x_initial": [],
+        "sagittal_axis_y_initial": [],
+        "raw_com_vx": [],
+        "raw_com_vy": [],
+        "projected_sagittal_velocity_m_s": [],
+        "actual_sagittal_velocity_passed_to_controller_m_s": [],
+        "tau_wheel_total_raw_left": [],
+        "tau_wheel_total_raw_right": [],
+        "tau_wheel_total_clipped_left": [],
+        "tau_wheel_total_clipped_right": [],
+        "wheel_torque_margin_left": [],
+        "wheel_torque_margin_right": [],
+        "wheel_torque_rate_limit_active_left": [],
+        "wheel_torque_rate_limit_active_right": [],
+        "l_hip_yaw_pos": [],
+        "r_hip_yaw_pos": [],
+        "l_hip_yaw_ref": [],
+        "r_hip_yaw_ref": [],
+        "l_hip_yaw_error": [],
+        "r_hip_yaw_error": [],
+        "l_hip_yaw_vel": [],
+        "r_hip_yaw_vel": [],
+        "hip_yaw_error_rms": [],
+        "l_hip_yaw_tau_shape_raw": [],
+        "r_hip_yaw_tau_shape_raw": [],
+        "l_hip_yaw_tau_shape_final": [],
+        "r_hip_yaw_tau_shape_final": [],
+        "hip_yaw_torque_sign_correct_left": [],
+        "hip_yaw_torque_sign_correct_right": [],
+        "hip_yaw_torque_saturation_flag_left": [],
+        "hip_yaw_torque_saturation_flag_right": [],
+        "hip_yaw_torque_margin_left": [],
+        "hip_yaw_torque_margin_right": [],
+        "variant_name": [],
+        "height_variant_target_com_z_m": [],
+        "height_variant_achieved_com_z_m": [],
+        "height_variant_root_z_m": [],
+        "height_variant_hip_pitch_ref": [],
+        "height_variant_knee_ref": [],
+        "shape_posture_reference_source": [],
+        "equilibrium_capture_after_variant_applied": [],
+        "target_com_z_m": [],
+        "current_com_z_m": [],
+        "height_error_m": [],
+        "root_z_m": [],
+        "support_center_ref_x": [],
+        "support_center_ref_y": [],
+        "support_center_x": [],
+        "support_center_y": [],
+        "support_position_reference_source": [],
+        "support_reference_captured_after_variant": [],
     }
     telemetry.update(build_step1_telemetry_template())
 
@@ -1918,6 +2060,7 @@ def main():
             vd_integral_wheel_velocity_threshold_rad_s=args.vd_integral_wheel_velocity_threshold_rad_s,
             vd_integral_min_com_z_m=args.vd_integral_min_com_z_m,
             vd_integral_max_com_z_m=args.vd_integral_max_com_z_m,
+            sagittal_authority_schedule=resolve_sagittal_authority_schedule(args.vd_sagittal_authority_profile),
         )
         sagittal_name = balance_core_controllers["sagittal_controller_name"]
         print(f"[BALANCE-CORE] Functional four-source controller stack enabled")
@@ -2688,6 +2831,7 @@ def main():
                     com_z_m=com_z_m,
                     roll_y_rad=float(centroidal_state_control.body_roll_y),
                     contact_valid=bool(contact_output.left_wheel_contact and contact_output.right_wheel_contact and contact_output.contact_force_valid),
+                    height_variant_name=height_variant_setup.get("variant_name") if height_variant_setup else None,
                 )
                 sagittal_diag["support_position_error_m"] = float(sag_pos_error)
                 sagittal_diag["support_position_error_scaled_m"] = float(sag_pos_error_scaled)
@@ -2703,6 +2847,14 @@ def main():
                 sagittal_diag["pitch_rate_boost_factor"] = float(pitch_rate_boost_factor)
                 sagittal_diag["pitch_rate_for_control_boosted"] = float(pitch_rate_for_control_boosted)
                 sagittal_diag["transient_capture_mode"] = transient_mode
+                sagittal_diag["sagittal_axis_x_initial"] = float(sagittal_axis_xy_initial[0])
+                sagittal_diag["sagittal_axis_y_initial"] = float(sagittal_axis_xy_initial[1])
+                sagittal_diag["raw_com_vx"] = float(centroidal_state_control.com_vel[0])
+                sagittal_diag["raw_com_vy"] = float(centroidal_state_control.com_vel[1])
+                sagittal_diag["projected_sagittal_velocity_m_s"] = float(sag_vel)
+                sagittal_diag["actual_sagittal_velocity_passed_to_controller_m_s"] = float(centroidal_state_control.com_vel[1])
+                sagittal_diag["support_center_x"] = float(support_center_ctrl_xy[0])
+                sagittal_diag["support_center_y"] = float(support_center_ctrl_xy[1])
             else:
                 # Baseline SagittalWheelBalanceController
                 tau_sagittal_wheel_balance, sagittal_diag = balance_core_controllers["sagittal_wheel_balance"].compute(
@@ -2840,6 +2992,9 @@ def main():
             tau_rate_vec = (tau_total_clipped - tau_prev) / control_dt
             tau_rate_unlimited = float(jnp.linalg.norm(tau_rate_vec))
             tau_rate_limited = tau_rate_unlimited  # Composer already applied rate limiting
+
+        sat_flags_vec = (np.abs(np.array(tau_total_raw)) > np.array(torque_limit)).astype(int)
+        rate_flags_vec = (np.abs(np.array(tau_rate_vec)) > np.array(max_torque_rate)).astype(int)
 
         # Early-step support torque parity diagnostics
         j_left_dbg, j_right_dbg = contact_jacobian.compute_wheel_jacobians(mj_data)
@@ -3165,6 +3320,22 @@ def main():
         telemetry["tau_position_total"].append(sagittal_diag.get("tau_position_total", 0.0))
         telemetry["tau_position_clipped"].append(sagittal_diag.get("tau_position_clipped", 0.0))
         telemetry["tau_support_velocity"].append(sagittal_diag.get("tau_support_velocity", 0.0))
+        telemetry["tau_pitch"].append(sagittal_diag.get("tau_pitch", 0.0))
+        telemetry["tau_pitch_raw"].append(sagittal_diag.get("tau_pitch_raw", sagittal_diag.get("tau_pitch", 0.0)))
+        telemetry["tau_pitch_scheduled"].append(sagittal_diag.get("tau_pitch_scheduled", sagittal_diag.get("tau_pitch", 0.0)))
+        telemetry["tau_pitch_clipped"].append(sagittal_diag.get("tau_pitch_clipped", sagittal_diag.get("tau_pitch", 0.0)))
+        telemetry["tau_pitch_to_position_ratio"].append(sagittal_diag.get("tau_pitch_to_position_ratio", 0.0))
+        telemetry["sagittal_schedule_profile"].append(sagittal_diag.get("sagittal_schedule_profile", "baseline"))
+        telemetry["high_height_schedule_active"].append(sagittal_diag.get("high_height_schedule_active", False))
+        telemetry["effective_max_position_tau"].append(sagittal_diag.get("effective_max_position_tau", sagittal_diag.get("max_position_tau", 0.0)))
+        telemetry["effective_pitch_scale"].append(sagittal_diag.get("effective_pitch_scale", 1.0))
+        telemetry["effective_pitch_tau_cap"].append(sagittal_diag.get("effective_pitch_tau_cap", "none"))
+        telemetry["effective_velocity_damping_scale"].append(sagittal_diag.get("effective_velocity_damping_scale", 1.0))
+        telemetry["effective_support_velocity_scale"].append(sagittal_diag.get("effective_support_velocity_scale", 1.0))
+        telemetry["tau_pitch_rate"].append(sagittal_diag.get("tau_pitch_rate", 0.0))
+        telemetry["tau_sagittal_velocity"].append(sagittal_diag.get("tau_sagittal_velocity", 0.0))
+        telemetry["tau_wheel_velocity_left"].append(sagittal_diag.get("tau_wheel_velocity_left", 0.0))
+        telemetry["tau_wheel_velocity_right"].append(sagittal_diag.get("tau_wheel_velocity_right", 0.0))
         telemetry["max_position_tau"].append(sagittal_diag.get("max_position_tau", 0.0))
         telemetry["tau_position_saturation_flag"].append(sagittal_diag.get("tau_position_saturation_flag", False))
         telemetry["tau_position_saturation_reason"].append(sagittal_diag.get("tau_position_saturation_reason", "none"))
@@ -3238,6 +3409,59 @@ def main():
             telemetry["pitch_rate_for_control_boosted"].append(0.0)
             telemetry["transient_capture_mode"].append("none")
 
+        telemetry["sagittal_axis_x_initial"].append(float(sagittal_diag.get("sagittal_axis_x_initial", sagittal_axis_xy_initial[0])))
+        telemetry["sagittal_axis_y_initial"].append(float(sagittal_diag.get("sagittal_axis_y_initial", sagittal_axis_xy_initial[1])))
+        telemetry["raw_com_vx"].append(float(sagittal_diag.get("raw_com_vx", centroidal_state_control.com_vel[0])))
+        telemetry["raw_com_vy"].append(float(sagittal_diag.get("raw_com_vy", centroidal_state_control.com_vel[1])))
+        telemetry["projected_sagittal_velocity_m_s"].append(float(sagittal_diag.get("projected_sagittal_velocity_m_s", 0.0)))
+        telemetry["actual_sagittal_velocity_passed_to_controller_m_s"].append(float(sagittal_diag.get("actual_sagittal_velocity_passed_to_controller_m_s", sagittal_diag.get("sagittal_velocity_m_s", 0.0))))
+        telemetry["tau_wheel_total_raw_left"].append(float(sagittal_diag.get("tau_left", 0.0)))
+        telemetry["tau_wheel_total_raw_right"].append(float(sagittal_diag.get("tau_right", 0.0)))
+        telemetry["tau_wheel_total_clipped_left"].append(float(tau_total_clipped[4]))
+        telemetry["tau_wheel_total_clipped_right"].append(float(tau_total_clipped[9]))
+        telemetry["wheel_torque_margin_left"].append(float(torque_limit[4] - abs(float(tau_total_raw[4]))))
+        telemetry["wheel_torque_margin_right"].append(float(torque_limit[9] - abs(float(tau_total_raw[9]))))
+        telemetry["wheel_torque_rate_limit_active_left"].append(bool(rate_flags_vec[4]))
+        telemetry["wheel_torque_rate_limit_active_right"].append(bool(rate_flags_vec[9]))
+
+        l_hip_yaw_pos = float(joint_pos[1])
+        r_hip_yaw_pos = float(joint_pos[6])
+        l_hip_yaw_ref = float(equilibrium_joint_pos[1])
+        r_hip_yaw_ref = float(equilibrium_joint_pos[6])
+        l_hip_yaw_error = l_hip_yaw_ref - l_hip_yaw_pos
+        r_hip_yaw_error = r_hip_yaw_ref - r_hip_yaw_pos
+        l_hip_yaw_vel = float(joint_vel[1])
+        r_hip_yaw_vel = float(joint_vel[6])
+        l_hip_yaw_tau_raw = l_hip_yaw_error * balance_core_controllers["shape_posture"].kp_hip_yaw - l_hip_yaw_vel * balance_core_controllers["shape_posture"].kd_hip_yaw if is_balance_core_mode(args) else 0.0
+        r_hip_yaw_tau_raw = r_hip_yaw_error * balance_core_controllers["shape_posture"].kp_hip_yaw - r_hip_yaw_vel * balance_core_controllers["shape_posture"].kd_hip_yaw if is_balance_core_mode(args) else 0.0
+        telemetry["l_hip_yaw_pos"].append(l_hip_yaw_pos)
+        telemetry["r_hip_yaw_pos"].append(r_hip_yaw_pos)
+        telemetry["l_hip_yaw_ref"].append(l_hip_yaw_ref)
+        telemetry["r_hip_yaw_ref"].append(r_hip_yaw_ref)
+        telemetry["l_hip_yaw_error"].append(l_hip_yaw_error)
+        telemetry["r_hip_yaw_error"].append(r_hip_yaw_error)
+        telemetry["l_hip_yaw_vel"].append(l_hip_yaw_vel)
+        telemetry["r_hip_yaw_vel"].append(r_hip_yaw_vel)
+        telemetry["hip_yaw_error_rms"].append(float(np.sqrt(0.5 * (l_hip_yaw_error**2 + r_hip_yaw_error**2))))
+        telemetry["l_hip_yaw_tau_shape_raw"].append(l_hip_yaw_tau_raw)
+        telemetry["r_hip_yaw_tau_shape_raw"].append(r_hip_yaw_tau_raw)
+        telemetry["l_hip_yaw_tau_shape_final"].append(float(tau_shape_posture[1]) if is_balance_core_mode(args) else 0.0)
+        telemetry["r_hip_yaw_tau_shape_final"].append(float(tau_shape_posture[6]) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_torque_sign_correct_left"].append(abs(l_hip_yaw_error) < 1e-9 or l_hip_yaw_error * (float(tau_shape_posture[1]) if is_balance_core_mode(args) else 0.0) >= 0.0)
+        telemetry["hip_yaw_torque_sign_correct_right"].append(abs(r_hip_yaw_error) < 1e-9 or r_hip_yaw_error * (float(tau_shape_posture[6]) if is_balance_core_mode(args) else 0.0) >= 0.0)
+        telemetry["hip_yaw_torque_saturation_flag_left"].append(bool(sat_flags_vec[1]))
+        telemetry["hip_yaw_torque_saturation_flag_right"].append(bool(sat_flags_vec[6]))
+        telemetry["hip_yaw_torque_margin_left"].append(float(torque_limit[1] - abs(float(tau_total_raw[1]))))
+        telemetry["hip_yaw_torque_margin_right"].append(float(torque_limit[6] - abs(float(tau_total_raw[6]))))
+        telemetry["variant_name"].append(height_variant_setup.get("variant_name", "nominal_keyframe") if height_variant_setup else "nominal_keyframe")
+        telemetry["height_variant_target_com_z_m"].append(float(height_variant_setup.get("target_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
+        telemetry["height_variant_achieved_com_z_m"].append(float(height_variant_setup.get("achieved_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
+        telemetry["height_variant_root_z_m"].append(float(height_variant_setup.get("calibrated_root_z_m", mj_data.qpos[2])) if height_variant_setup else float(mj_data.qpos[2]))
+        telemetry["height_variant_hip_pitch_ref"].append(float(height_variant_setup.get("hip_pitch_ref", equilibrium_joint_pos[2])) if height_variant_setup else float(equilibrium_joint_pos[2]))
+        telemetry["height_variant_knee_ref"].append(float(height_variant_setup.get("knee_ref", equilibrium_joint_pos[3])) if height_variant_setup else float(equilibrium_joint_pos[3]))
+        telemetry["shape_posture_reference_source"].append("height_variant_equilibrium_joint_pos" if height_variant_setup else "nominal_equilibrium_joint_pos")
+        telemetry["equilibrium_capture_after_variant_applied"].append(bool(height_variant_setup is not None))
+
         telemetry["com_error_x"].append(float(qp_diagnostics.get("com_error_x", 0.0)))
         telemetry["com_error_y"].append(float(qp_diagnostics.get("com_error_y", 0.0)))
         telemetry["com_error_z"].append(float(qp_diagnostics.get("com_error_z", 0.0)))
@@ -3246,6 +3470,16 @@ def main():
         telemetry["pitch_error"].append(float(qp_diagnostics.get("pitch_error", 0.0)))
         telemetry["roll_error"].append(float(qp_diagnostics.get("roll_error", 0.0)))
         telemetry["height_error"].append(float(qp_diagnostics.get("height_error", 0.0)))
+        telemetry["target_com_z_m"].append(float(height_variant_setup.get("achieved_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
+        telemetry["current_com_z_m"].append(float(centroidal_state_control.com_pos[2]))
+        telemetry["height_error_m"].append(float(centroidal_state_control.com_pos[2]) - (float(height_variant_setup.get("achieved_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd)))
+        telemetry["root_z_m"].append(float(mj_data.qpos[2]))
+        telemetry["support_center_ref_x"].append(float(support_center_eq_xy[0]))
+        telemetry["support_center_ref_y"].append(float(support_center_eq_xy[1]))
+        telemetry["support_center_x"].append(float(sagittal_diag.get("support_center_x", support_center_eq_xy[0])))
+        telemetry["support_center_y"].append(float(sagittal_diag.get("support_center_y", support_center_eq_xy[1])))
+        telemetry["support_position_reference_source"].append("height_variant_equilibrium_support_center" if height_variant_setup else "nominal_equilibrium_support_center")
+        telemetry["support_reference_captured_after_variant"].append(bool(height_variant_setup is not None))
         telemetry["left_fz_actual"].append(float(centroidal_state_log.left_contact_force_world[2]))
         telemetry["right_fz_actual"].append(float(centroidal_state_log.right_contact_force_world[2]))
         telemetry["fz_asymmetry_actual"].append(float(centroidal_state_log.left_contact_force_world[2] - centroidal_state_log.right_contact_force_world[2]))
@@ -3272,15 +3506,13 @@ def main():
             telemetry["tau_wbc_after_authority_clip"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc)))
             telemetry["tau_static_feedforward"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_feedforward)))
             telemetry["tau_static_posture"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_posture)))
-        sat_flags_vec = (np.abs(np.array(tau_total_raw)) > np.array(torque_limit)).astype(int)
-        rate_flags_vec = (np.abs(np.array(tau_rate_vec)) > max_torque_rate).astype(int)
+        torque_rate_saturation_rate = float(np.mean(rate_flags_vec))
         hidden_torque_norm_value = float(
             np.linalg.norm(np.array(tau_wheel_balance))
             + np.linalg.norm(np.array(tau_hip_roll_centering))
             + np.linalg.norm(np.array(tau_static_posture if static_posture_controller is not None else tau_posture))
             + np.linalg.norm(np.array(tau_leg_position))
         )
-        torque_rate_saturation_rate = float(np.mean(rate_flags_vec))
         contact_state_value = "legacy"
         if is_balance_core_mode(args):
             contact_state_value = str(contact_output.state.value)

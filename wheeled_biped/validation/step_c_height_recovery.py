@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
+import json
 import numpy as np
 import pandas as pd
 
@@ -620,13 +622,13 @@ def evaluate_step_c_case(
 
 def build_step_c_case_matrix() -> list[dict[str, Any]]:
     return [
-        {"case_name": "nominal", "initial_root_z_perturbation_m": 0.0, "gate_level": 0, "purpose": "Step E parity sanity check"},
-        {"case_name": "low_1cm", "initial_root_z_perturbation_m": -0.01, "gate_level": 1, "purpose": "first low-height recovery gate"},
-        {"case_name": "high_1cm", "initial_root_z_perturbation_m": 0.01, "gate_level": 1, "purpose": "first high-height recovery gate"},
-        {"case_name": "low_2cm", "initial_root_z_perturbation_m": -0.02, "gate_level": 2, "purpose": "medium low-height recovery gate"},
-        {"case_name": "high_2cm", "initial_root_z_perturbation_m": 0.02, "gate_level": 2, "purpose": "medium high-height recovery gate"},
-        {"case_name": "low_3cm", "initial_root_z_perturbation_m": -0.03, "gate_level": 3, "purpose": "final low-height diagnostic gate"},
-        {"case_name": "high_3cm", "initial_root_z_perturbation_m": 0.03, "gate_level": 3, "purpose": "final high-height diagnostic gate"},
+        {"case_name": "nominal", "initial_root_z_perturbation_m": 0.0, "gate_level": 0, "purpose": "Step E parity sanity check", "mode": "diagnostic_root_z_legacy"},
+        {"case_name": "low_1cm", "initial_root_z_perturbation_m": -0.01, "gate_level": 1, "purpose": "first low-height recovery gate", "mode": "diagnostic_root_z_legacy"},
+        {"case_name": "high_1cm", "initial_root_z_perturbation_m": 0.01, "gate_level": 1, "purpose": "first high-height recovery gate", "mode": "diagnostic_root_z_legacy"},
+        {"case_name": "low_2cm", "initial_root_z_perturbation_m": -0.02, "gate_level": 2, "purpose": "medium low-height recovery gate", "mode": "diagnostic_root_z_legacy"},
+        {"case_name": "high_2cm", "initial_root_z_perturbation_m": 0.02, "gate_level": 2, "purpose": "medium high-height recovery gate", "mode": "diagnostic_root_z_legacy"},
+        {"case_name": "low_3cm", "initial_root_z_perturbation_m": -0.03, "gate_level": 3, "purpose": "final low-height diagnostic gate", "mode": "diagnostic_root_z_legacy"},
+        {"case_name": "high_3cm", "initial_root_z_perturbation_m": 0.03, "gate_level": 3, "purpose": "final high-height diagnostic gate", "mode": "diagnostic_root_z_legacy"},
     ]
 
 
@@ -695,3 +697,66 @@ def render_step_c_report(
         lines.append(f"- {name}: `{path}`")
     lines.append("")
     return "\n".join(lines)
+
+
+def load_height_variant_setup(
+    setup_report_path: Path,
+    variant_name: str,
+) -> dict[str, Any]:
+    with open(setup_report_path, "r", encoding="utf-8") as f:
+        report = json.load(f)
+
+    for variant in report["setup_results"]:
+        if variant["variant_name"] == variant_name:
+            if not variant.get("setup_valid"):
+                raise ValueError(
+                    f"Height variant '{variant_name}' is not setup-valid: {variant.get('setup_failure_reason')}"
+                )
+            return variant
+
+    valid_names = [v["variant_name"] for v in report["setup_results"] if v.get("setup_valid")]
+    raise ValueError(
+        f"Unknown height variant '{variant_name}'. Available valid variants: {valid_names}"
+    )
+
+
+def build_step_c_variant_case_matrix(
+    setup_report_path: Path,
+    variant_names: tuple[str, ...] = ("nominal", "low_tiny", "high_tiny", "low_small", "high_small"),
+) -> list[dict[str, Any]]:
+    with open(setup_report_path, "r", encoding="utf-8") as f:
+        report = json.load(f)
+
+    variants_by_name = {v["variant_name"]: v for v in report["setup_results"]}
+
+    matrix: list[dict[str, Any]] = []
+    for case_name in variant_names:
+        if case_name not in variants_by_name:
+            raise ValueError(f"Height variant '{case_name}' not found in setup report")
+        variant = variants_by_name[case_name]
+        if not variant.get("setup_valid"):
+            raise ValueError(
+                f"Height variant '{case_name}' is not setup-valid: {variant.get('setup_failure_reason')}"
+            )
+        matrix.append({
+            "case_name": case_name,
+            "height_variant_name": case_name,
+            "initialization_method": "step_b_true_height_variant",
+            "variant_setup_path": str(
+                setup_report_path.parent
+                / f"variant_{case_name}"
+                / "variant_setup.json"
+            ),
+            "target_com_z_m": variant["target_com_z_m"],
+            "achieved_initial_com_z_m": variant["achieved_com_z_m"],
+            "calibrated_root_z_m": variant["calibrated_root_z_m"],
+            "hip_pitch_ref": variant["hip_pitch_ref"],
+            "knee_ref": variant["knee_ref"],
+            "setup_valid": variant["setup_valid"],
+            "left_wheel_contact": variant["left_wheel_contact"],
+            "right_wheel_contact": variant["right_wheel_contact"],
+            "non_wheel_floor_contact_count": variant["non_wheel_floor_contact_count"],
+        })
+
+    return matrix
+

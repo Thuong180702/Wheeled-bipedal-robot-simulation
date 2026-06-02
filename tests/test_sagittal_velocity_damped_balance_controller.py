@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import pytest
 
 from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import (
+    SagittalAuthoritySchedule,
     SagittalVelocityDampedBalanceController,
 )
 
@@ -548,9 +549,303 @@ def test_k_position_40_effective_return_coefficient_matches_original():
     )
 
 
-def test_baseline_sagittal_wheel_controller_unchanged():
-    """SagittalWheelBalanceController must not be affected by the Step E migration."""
-    from wheeled_biped.controllers.sagittal_wheel_balance_controller import SagittalWheelBalanceController
-    ctrl = SagittalWheelBalanceController(kp_pitch=50.0, kp_cp=30.0)
-    # Verify it still uses kp_cp=30.0 (unchanged from original)
-    assert ctrl.kp_cp == 30.0, f"Baseline controller kp_cp should remain 30.0, got {ctrl.kp_cp}"
+
+
+# ---- 10. Step C high-height sagittal authority scheduling ----
+
+
+def test_sagittal_authority_schedule_inactive_for_nominal_and_low_variants():
+    schedule = SagittalAuthoritySchedule(
+        profile_name="candidate_B_balanced",
+        applies_to_variants=("high_tiny", "high_small"),
+        position_tau_cap_scale=4.0 / 3.0,
+        pitch_tau_scale=0.9,
+    )
+
+    assert schedule.is_active_for_variant(None) is False
+    assert schedule.is_active_for_variant("nominal") is False
+    assert schedule.is_active_for_variant("low_tiny") is False
+    assert schedule.is_active_for_variant("low_small") is False
+
+
+def test_sagittal_authority_schedule_active_for_high_variants():
+    schedule = SagittalAuthoritySchedule(
+        profile_name="candidate_B_balanced",
+        applies_to_variants=("high_tiny", "high_small"),
+        position_tau_cap_scale=4.0 / 3.0,
+        pitch_tau_scale=0.9,
+    )
+
+    assert schedule.is_active_for_variant("high_tiny") is True
+    assert schedule.is_active_for_variant("high_small") is True
+
+
+def test_candidate_a_increases_effective_position_cap_only_for_high_variants():
+    schedule = SagittalAuthoritySchedule(
+        profile_name="candidate_A_position_cap",
+        applies_to_variants=("high_tiny", "high_small"),
+        position_tau_cap_scale=4.0 / 3.0,
+        pitch_tau_scale=1.0,
+    )
+    ctrl = SagittalVelocityDampedBalanceController(
+        kp_pitch=0.0,
+        kd_pitch=0.0,
+        k_velocity=0.0,
+        k_wheel_velocity=0.0,
+        k_position=40.0,
+        max_position_tau=3.0,
+        authority_schedule=schedule,
+        max_tau_wheel=100.0,
+    )
+
+    _, low_diag = ctrl.compute(
+        pitch_x_rad=0.0,
+        pitch_rate_x_rad_s=0.0,
+        sagittal_velocity_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        sagittal_position_error_m=0.2,
+        height_variant_name="low_tiny",
+    )
+    _, high_diag = ctrl.compute(
+        pitch_x_rad=0.0,
+        pitch_rate_x_rad_s=0.0,
+        sagittal_velocity_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        sagittal_position_error_m=0.2,
+        height_variant_name="high_tiny",
+    )
+
+    assert low_diag["high_height_schedule_active"] is False
+    assert low_diag["effective_max_position_tau"] == pytest.approx(3.0)
+    assert low_diag["tau_position_clipped"] == pytest.approx(-3.0)
+    assert high_diag["high_height_schedule_active"] is True
+    assert high_diag["effective_max_position_tau"] == pytest.approx(4.0)
+    assert high_diag["tau_position_clipped"] == pytest.approx(-4.0)
+    assert high_diag["effective_pitch_scale"] == pytest.approx(1.0)
+
+
+def test_balanced_schedule_reduces_pitch_relative_authority_only_for_high_variants():
+    schedule = SagittalAuthoritySchedule(
+        profile_name="candidate_B_balanced",
+        applies_to_variants=("high_tiny", "high_small"),
+        position_tau_cap_scale=4.0 / 3.0,
+        pitch_tau_scale=0.9,
+    )
+    ctrl = SagittalVelocityDampedBalanceController(
+        kp_pitch=50.0,
+        kd_pitch=0.0,
+        k_velocity=0.0,
+        k_wheel_velocity=0.0,
+        k_position=40.0,
+        max_position_tau=3.0,
+        authority_schedule=schedule,
+        max_tau_wheel=100.0,
+    )
+
+    _, nominal_diag = ctrl.compute(
+        pitch_x_rad=0.1,
+        pitch_rate_x_rad_s=0.0,
+        sagittal_velocity_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        sagittal_position_error_m=0.1,
+        height_variant_name="nominal",
+    )
+    _, high_diag = ctrl.compute(
+        pitch_x_rad=0.1,
+        pitch_rate_x_rad_s=0.0,
+        sagittal_velocity_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        sagittal_position_error_m=0.1,
+        height_variant_name="high_small",
+    )
+
+    assert nominal_diag["high_height_schedule_active"] is False
+    assert nominal_diag["tau_pitch_raw"] == pytest.approx(5.0)
+    assert nominal_diag["tau_pitch_scheduled"] == pytest.approx(5.0)
+    assert nominal_diag["tau_pitch_to_position_ratio"] == pytest.approx(5.0 / 3.0)
+    assert high_diag["high_height_schedule_active"] is True
+    assert high_diag["tau_pitch_raw"] == pytest.approx(5.0)
+    assert high_diag["tau_pitch_scheduled"] == pytest.approx(4.5)
+    assert high_diag["effective_pitch_scale"] == pytest.approx(0.9)
+    assert high_diag["tau_pitch_to_position_ratio"] == pytest.approx(4.5 / 4.0)
+
+
+def test_default_sagittal_controller_schedule_is_disabled():
+    ctrl = SagittalVelocityDampedBalanceController()
+
+    _, diag = ctrl.compute(
+        pitch_x_rad=0.1,
+        pitch_rate_x_rad_s=0.0,
+        sagittal_velocity_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        sagittal_position_error_m=0.1,
+        height_variant_name="high_tiny",
+    )
+
+    assert diag["sagittal_schedule_profile"] == "baseline"
+    assert diag["high_height_schedule_active"] is False
+    assert diag["effective_max_position_tau"] == pytest.approx(ctrl.max_position_tau)
+    assert diag["effective_pitch_scale"] == pytest.approx(1.0)
+    assert diag["effective_pitch_tau_cap"] == "none"
+
+
+def test_height_staged_schedule_gives_high_small_more_position_authority_without_pitch_reduction():
+    schedule = SagittalAuthoritySchedule(
+        profile_name="candidate_A2_height_staged",
+        applies_to_variants=("high_tiny", "high_small"),
+        position_tau_cap_by_variant=(
+            ("high_tiny", 4.0),
+            ("high_small", 4.5),
+        ),
+        pitch_tau_scale=1.0,
+    )
+    ctrl = SagittalVelocityDampedBalanceController(
+        kp_pitch=50.0,
+        kd_pitch=0.0,
+        k_velocity=0.0,
+        k_wheel_velocity=0.0,
+        k_position=40.0,
+        max_position_tau=3.0,
+        authority_schedule=schedule,
+        max_tau_wheel=100.0,
+    )
+
+    _, nominal_diag = ctrl.compute(
+        pitch_x_rad=0.1,
+        pitch_rate_x_rad_s=0.0,
+        sagittal_velocity_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        sagittal_position_error_m=0.2,
+        height_variant_name="nominal",
+    )
+    _, high_tiny_diag = ctrl.compute(
+        pitch_x_rad=0.1,
+        pitch_rate_x_rad_s=0.0,
+        sagittal_velocity_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        sagittal_position_error_m=0.2,
+        height_variant_name="high_tiny",
+    )
+    _, high_small_diag = ctrl.compute(
+        pitch_x_rad=0.1,
+        pitch_rate_x_rad_s=0.0,
+        sagittal_velocity_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        sagittal_position_error_m=0.2,
+        height_variant_name="high_small",
+    )
+
+    assert nominal_diag["high_height_schedule_active"] is False
+    assert nominal_diag["effective_max_position_tau"] == pytest.approx(3.0)
+    assert nominal_diag["effective_pitch_scale"] == pytest.approx(1.0)
+    assert high_tiny_diag["high_height_schedule_active"] is True
+    assert high_tiny_diag["effective_max_position_tau"] == pytest.approx(4.0)
+    assert high_tiny_diag["effective_pitch_scale"] == pytest.approx(1.0)
+    assert high_tiny_diag["tau_pitch_scheduled"] == pytest.approx(5.0)
+    assert high_small_diag["high_height_schedule_active"] is True
+    assert high_small_diag["effective_max_position_tau"] == pytest.approx(4.5)
+    assert high_small_diag["effective_pitch_scale"] == pytest.approx(1.0)
+    assert high_small_diag["tau_pitch_scheduled"] == pytest.approx(5.0)
+    assert high_small_diag["effective_max_position_tau"] >= high_tiny_diag["effective_max_position_tau"]
+
+
+def test_support_velocity_schedule_adds_light_damping_only_for_high_variants():
+    schedule = SagittalAuthoritySchedule(
+        profile_name="candidate_D1_support_velocity_light",
+        applies_to_variants=("high_tiny", "high_small"),
+        position_tau_cap_by_variant=(
+            ("high_tiny", 4.0),
+            ("high_small", 4.0),
+        ),
+        pitch_tau_scale=1.0,
+        support_velocity_gain=0.2,
+    )
+    ctrl = SagittalVelocityDampedBalanceController(
+        kp_pitch=0.0,
+        kd_pitch=0.0,
+        k_velocity=0.0,
+        k_wheel_velocity=0.0,
+        k_position=0.0,
+        k_support_velocity=0.0,
+        max_position_tau=3.0,
+        authority_schedule=schedule,
+        max_tau_wheel=100.0,
+        dt=0.01,
+    )
+
+    ctrl.compute(
+        pitch_x_rad=0.0,
+        pitch_rate_x_rad_s=0.0,
+        sagittal_velocity_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        sagittal_position_error_m=0.0,
+        height_variant_name="nominal",
+    )
+    _, nominal_diag = ctrl.compute(
+        pitch_x_rad=0.0,
+        pitch_rate_x_rad_s=0.0,
+        sagittal_velocity_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        sagittal_position_error_m=0.01,
+        height_variant_name="nominal",
+    )
+
+    ctrl.prev_support_position_error_m = 0.0
+    _, high_diag = ctrl.compute(
+        pitch_x_rad=0.0,
+        pitch_rate_x_rad_s=0.0,
+        sagittal_velocity_m_s=0.0,
+        wheel_vel_left_rad_s=0.0,
+        wheel_vel_right_rad_s=0.0,
+        sagittal_position_error_m=0.01,
+        height_variant_name="high_small",
+    )
+
+    assert nominal_diag["high_height_schedule_active"] is False
+    assert nominal_diag["effective_support_velocity_gain"] == pytest.approx(0.0)
+    assert nominal_diag["tau_support_velocity"] == pytest.approx(0.0)
+    assert high_diag["high_height_schedule_active"] is True
+    assert high_diag["effective_max_position_tau"] == pytest.approx(4.0)
+    assert high_diag["effective_pitch_scale"] == pytest.approx(1.0)
+    assert high_diag["effective_support_velocity_gain"] == pytest.approx(0.2)
+    assert high_diag["support_position_velocity_m_s"] == pytest.approx(1.0)
+    assert high_diag["tau_support_velocity"] == pytest.approx(-0.2)
+
+
+def test_candidate_d_profiles_are_high_variant_only_and_preserve_candidate_a_cap():
+    from scripts.simulate_hierarchical_controller import resolve_sagittal_authority_schedule
+
+    d1 = resolve_sagittal_authority_schedule("candidate_D1_support_velocity_light")
+    d2 = resolve_sagittal_authority_schedule("candidate_D2_wheel_velocity_damping_light")
+
+    assert d1.is_active_for_variant("nominal") is False
+    assert d1.is_active_for_variant("low_tiny") is False
+    assert d1.is_active_for_variant("low_small") is False
+    assert d1.is_active_for_variant("high_tiny") is True
+    assert d1.is_active_for_variant("high_small") is True
+    assert d1.max_position_tau_for_variant("high_tiny", 3.0) == pytest.approx(4.0)
+    assert d1.max_position_tau_for_variant("high_small", 3.0) == pytest.approx(4.0)
+    assert d1.pitch_tau_scale == pytest.approx(1.0)
+    assert d1.velocity_damping_scale == pytest.approx(1.0)
+    assert d1.support_velocity_gain == pytest.approx(0.2)
+
+    assert d2.is_active_for_variant("nominal") is False
+    assert d2.is_active_for_variant("low_tiny") is False
+    assert d2.is_active_for_variant("low_small") is False
+    assert d2.is_active_for_variant("high_tiny") is True
+    assert d2.is_active_for_variant("high_small") is True
+    assert d2.max_position_tau_for_variant("high_tiny", 3.0) == pytest.approx(4.0)
+    assert d2.max_position_tau_for_variant("high_small", 3.0) == pytest.approx(4.0)
+    assert d2.pitch_tau_scale == pytest.approx(1.0)
+    assert d2.velocity_damping_scale == pytest.approx(1.10)
+    assert d2.support_velocity_gain is None

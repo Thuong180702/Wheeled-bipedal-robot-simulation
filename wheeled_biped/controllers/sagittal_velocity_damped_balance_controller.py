@@ -13,6 +13,7 @@ Output: nonzero torque only on wheel joints [4, 9].
 
 import jax.numpy as jnp
 from jax import Array
+from dataclasses import dataclass
 from typing import Optional
 
 from wheeled_biped.controllers.balance_core_types import (
@@ -24,6 +25,33 @@ from wheeled_biped.controllers.position_hold_capture_gate import (
     PositionHoldCaptureGate,
     CaptureGateDiagnostics,
 )
+
+
+@dataclass(frozen=True)
+class SagittalAuthoritySchedule:
+    profile_name: str = "baseline"
+    applies_to_variants: tuple[str, ...] = ()
+    position_tau_cap_scale: float = 1.0
+    position_tau_cap_by_variant: tuple[tuple[str, float], ...] = ()
+    pitch_tau_scale: float = 1.0
+    pitch_tau_cap_nm: float | None = None
+    velocity_damping_scale: float = 1.0
+    support_velocity_scale: float = 1.0
+    support_velocity_gain: float | None = None
+
+    def is_active_for_variant(self, variant_name: str | None) -> bool:
+        return variant_name is not None and variant_name in self.applies_to_variants
+
+    def max_position_tau_for_variant(self, variant_name: str | None, baseline_max_position_tau: float) -> float:
+        if not self.is_active_for_variant(variant_name):
+            return baseline_max_position_tau
+        for candidate_name, max_position_tau in self.position_tau_cap_by_variant:
+            if candidate_name == variant_name:
+                return float(max_position_tau)
+        return baseline_max_position_tau * self.position_tau_cap_scale
+
+
+BASELINE_AUTHORITY_SCHEDULE = SagittalAuthoritySchedule()
 
 
 class SagittalVelocityDampedBalanceController:
@@ -74,6 +102,7 @@ class SagittalVelocityDampedBalanceController:
         integral_wheel_velocity_threshold_rad_s: float = 1.0,
         integral_min_com_z_m: float = 0.38,
         integral_max_com_z_m: float = 0.43,
+        authority_schedule: SagittalAuthoritySchedule | None = None,
     ):
         if wheel_torque_sign not in [1.0, -1.0]:
             raise ValueError(f"wheel_torque_sign must be +1.0 or -1.0, got {wheel_torque_sign}")
@@ -103,6 +132,7 @@ class SagittalVelocityDampedBalanceController:
         self.integral_wheel_velocity_threshold_rad_s = integral_wheel_velocity_threshold_rad_s
         self.integral_min_com_z_m = integral_min_com_z_m
         self.integral_max_com_z_m = integral_max_com_z_m
+        self.authority_schedule = authority_schedule or BASELINE_AUTHORITY_SCHEDULE
         self.position_integral_error = 0.0
 
         # State for support position velocity computation
@@ -129,6 +159,7 @@ class SagittalVelocityDampedBalanceController:
         com_z_m: float = 0.4,
         roll_y_rad: float = 0.0,
         contact_valid: bool = True,
+        height_variant_name: str | None = None,
     ) -> tuple[Array, dict]:
         """Compute sagittal velocity-damped balance torque and diagnostics.
 
@@ -151,6 +182,20 @@ class SagittalVelocityDampedBalanceController:
             diagnostics: Dictionary with per-term decomposition and saturation info.
         """
         wheel_vel_mean = 0.5 * (wheel_vel_left_rad_s + wheel_vel_right_rad_s)
+        schedule_active = self.authority_schedule.is_active_for_variant(height_variant_name)
+        effective_max_position_tau = self.authority_schedule.max_position_tau_for_variant(
+            height_variant_name,
+            self.max_position_tau,
+        )
+        effective_pitch_scale = self.authority_schedule.pitch_tau_scale if schedule_active else 1.0
+        effective_pitch_tau_cap = self.authority_schedule.pitch_tau_cap_nm if schedule_active else None
+        effective_velocity_damping_scale = self.authority_schedule.velocity_damping_scale if schedule_active else 1.0
+        effective_support_velocity_scale = self.authority_schedule.support_velocity_scale if schedule_active else 1.0
+        effective_support_velocity_gain = (
+            self.authority_schedule.support_velocity_gain
+            if schedule_active and self.authority_schedule.support_velocity_gain is not None
+            else self.k_support_velocity
+        )
 
         # Compute support position velocity (numerical derivative)
         # This is the rate of change of support-center position error in initial-heading frame
@@ -162,13 +207,20 @@ class SagittalVelocityDampedBalanceController:
         tau_wheel_vel_right = -self.k_wheel_velocity * wheel_vel_right_rad_s
 
         # Common balance terms
-        tau_pitch = self.kp_pitch * pitch_x_rad
+        tau_pitch_raw = self.kp_pitch * pitch_x_rad
+        tau_pitch_scheduled = tau_pitch_raw * effective_pitch_scale
+        if effective_pitch_tau_cap is None:
+            tau_pitch = tau_pitch_scheduled
+            tau_pitch_clipped = tau_pitch_scheduled
+        else:
+            tau_pitch = float(jnp.clip(tau_pitch_scheduled, -effective_pitch_tau_cap, effective_pitch_tau_cap))
+            tau_pitch_clipped = tau_pitch
         tau_pitch_rate = self.kd_pitch * pitch_rate_x_rad_s
-        tau_sagittal_velocity = -self.k_velocity * sagittal_velocity_m_s
+        tau_sagittal_velocity = -self.k_velocity * effective_velocity_damping_scale * sagittal_velocity_m_s
 
         # Support position velocity damping term
         # Directly opposes support-center drift velocity to prevent transient position excursions
-        tau_support_velocity = -self.k_support_velocity * support_position_velocity_m_s
+        tau_support_velocity = -effective_support_velocity_gain * effective_support_velocity_scale * support_position_velocity_m_s
 
         # Capture-point-like term matching baseline controller's cp/com_vy contributions
         # Uses sagittal_position_error as proxy for cp_error and sagittal_velocity as proxy for com_vy
@@ -294,9 +346,9 @@ class SagittalVelocityDampedBalanceController:
 
         else:
             # Legacy fixed-cap clipping
-            tau_position = float(jnp.clip(tau_position_before_clip, -self.max_position_tau, self.max_position_tau))
+            tau_position = float(jnp.clip(tau_position_before_clip, -effective_max_position_tau, effective_max_position_tau))
             tau_position_total_bound_clipped = False
-            tau_position_saturated = abs(tau_position_before_clip) >= self.max_position_tau * 0.99
+            tau_position_saturated = abs(tau_position_before_clip) >= effective_max_position_tau * 0.99
             tau_position_saturation_reason = "fixed_cap" if tau_position_saturated else "none"
             position_authority_reason = tau_position_saturation_reason
 
@@ -304,12 +356,12 @@ class SagittalVelocityDampedBalanceController:
             tau_balance_before_position_log = 0.0
             tau_position_budget_available = 0.0
             tau_position_budget_allowed = 0.0
-            tau_position_budget_cap = float(self.max_position_tau)
+            tau_position_budget_cap = float(effective_max_position_tau)
             pitch_reserve_tau_log = 0.0
             tau_pitch_reserve_applied = 0.0
-            tau_position_lower_bound = -float(self.max_position_tau)
-            tau_position_upper_bound = float(self.max_position_tau)
-            position_authority_mode = "fixed_cap"
+            tau_position_lower_bound = -float(effective_max_position_tau)
+            tau_position_upper_bound = float(effective_max_position_tau)
+            position_authority_mode = "scheduled_fixed_cap" if schedule_active else "fixed_cap"
 
         # Common scalar command (before per-wheel damping)
         # No internal clipping - let the composer handle torque limits like baseline does
@@ -342,6 +394,9 @@ class SagittalVelocityDampedBalanceController:
 
         diagnostics = {
             "tau_pitch": float(tau_pitch),
+            "tau_pitch_raw": float(tau_pitch_raw),
+            "tau_pitch_scheduled": float(tau_pitch_scheduled),
+            "tau_pitch_clipped": float(tau_pitch_clipped),
             "tau_pitch_rate": float(tau_pitch_rate),
             "tau_cp": float(tau_cp),
             "tau_com_vy": float(tau_com_vy),
@@ -370,6 +425,16 @@ class SagittalVelocityDampedBalanceController:
             "position_authority_mode": position_authority_mode,
             "position_authority_reason": position_authority_reason,
             "max_position_tau": float(self.max_position_tau),
+            "sagittal_schedule_profile": self.authority_schedule.profile_name,
+            "high_height_schedule_active": bool(schedule_active),
+            "effective_max_position_tau": float(effective_max_position_tau),
+            "effective_pitch_scale": float(effective_pitch_scale),
+            "effective_pitch_tau_cap": "none" if effective_pitch_tau_cap is None else float(effective_pitch_tau_cap),
+            "effective_velocity_damping_scale": float(effective_velocity_damping_scale),
+            "effective_support_velocity_scale": float(effective_support_velocity_scale),
+            "effective_support_velocity_gain": float(effective_support_velocity_gain),
+            "tau_pitch_to_position_ratio": float(abs(tau_pitch) / max(abs(tau_position), 1e-9)),
+            "height_variant_name": height_variant_name or "none",
             "tau_position_saturation_flag": bool(tau_position_saturated),
             "tau_position_saturation_reason": tau_position_saturation_reason,
             "tau_balance_before_position": tau_balance_before_position_log,

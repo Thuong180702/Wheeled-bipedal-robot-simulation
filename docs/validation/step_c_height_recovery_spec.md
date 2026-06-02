@@ -6,12 +6,12 @@ Roadmap step: **Step C — Height recovery to target height**
 
 ## 1. Scope
 
-Step C validates whether the existing WBC-off balance-core controller can recover body height after small root-height offsets while preserving the completed Step E standing-position behavior.
+Step C validates whether the existing WBC-off balance-core controller can recover body height from kinematically consistent small standing-height variants while preserving the completed Step E standing-position behavior.
 
 Step C covers:
 
 - target height definition from official Step E telemetry and equilibrium metadata
-- staged low/high initial root-z perturbation cases
+- staged low/high kinematically consistent standing-height variants
 - height recovery metrics and pass/fail thresholds
 - position-hold, posture, balance, contact, and structural invariant preservation
 - telemetry requirements for diagnosing failure before changing controller behavior
@@ -48,7 +48,7 @@ Step C starts from the official Step E production controller:
   4. `LateralRollBalanceController`
 - WBC raw computation may remain diagnostic-only, but WBC must not contribute to applied torque
 
-The existing simulation already supports initial root-z perturbations with `--initial-root-z-perturbation`, applied after equilibrium capture.
+The existing simulation supports `--initial-root-z-perturbation`, but the Step C initialization audit found that this path changes only `qpos[2]` after equilibrium capture and does not update hip/knee posture or capture a height-specific equilibrium. Root-z-only perturbation is therefore not the official Step C height-change method unless a later static validation proves it physically valid.
 
 ## 4. Target height definition
 
@@ -77,19 +77,40 @@ The official Step C reference extractor must write the exact target and source s
 
 ## 5. Initial disturbances and test cases
 
-Step C uses staged root-z perturbations applied after equilibrium capture. Disturbances are relative offsets from the validated Step E equilibrium initialization, not new commanded height trajectories.
+Step C official cases must use kinematically consistent standing-height variant initialization, not root-z-only displacement. Each height case must start from a physically valid pose that preserves wheel-floor contact, symmetric left/right leg posture, support-center alignment, and near-equilibrium pitch/roll/yaw before the dynamic rollout begins.
 
-Required case matrix:
+Root-z-only offsets are diagnostic-only after the initialization audit in `outputs/step_c_initialization_method_audit/`. The audit confirmed that `--initial-root-z-perturbation` changes only `qpos[2]` after equilibrium capture, which can create physically inconsistent startup contact transients and wheel velocity spikes.
 
-| Case | Initial root-z perturbation | Purpose |
+Preferred initialization sources:
+
+1. Reuse existing Step B true standing-height variant setup JSONs when the target height matches an available variant.
+2. If a required height is missing, add a diagnostic-only symmetric hip-pitch/knee pose search or IK generator that calibrates root height for wheel-floor contact before simulation.
+3. Capture per-variant equilibrium references from the validated initial pose before running the dynamic Step C case.
+
+Required official case matrix:
+
+| Case | Target standing-height variant | Purpose |
 |---|---:|---|
-| nominal | `+0.00 m` | sanity check and Step E parity |
-| low_1cm | `-0.01 m` | first low-height recovery gate |
-| high_1cm | `+0.01 m` | first high-height recovery gate |
-| low_2cm | `-0.02 m` | medium low-height recovery gate |
-| high_2cm | `+0.02 m` | medium high-height recovery gate |
-| low_3cm | `-0.03 m` | final low-height diagnostic gate |
-| high_3cm | `+0.03 m` | final high-height diagnostic gate |
+| nominal | validated Step E/Step B nominal pose | sanity check and Step E parity |
+| low_1cm | nominal CoM height `-0.01 m` valid pose | first low-height recovery gate |
+| high_1cm | nominal CoM height `+0.01 m` valid pose | first high-height recovery gate |
+| low_2cm | nominal CoM height `-0.02 m` valid pose if feasible | medium low-height recovery gate |
+| high_2cm | nominal CoM height `+0.02 m` valid pose if feasible | medium high-height recovery gate |
+| low_3cm | nominal CoM height `-0.03 m` valid pose if feasible | final low-height diagnostic gate |
+| high_3cm | nominal CoM height `+0.03 m` valid pose if feasible | final high-height diagnostic gate |
+
+Static initialization validation is mandatory before each dynamic case:
+
+- both wheel contacts valid after reset
+- left/right wheel floor contacts true
+- no non-wheel ground penetration/contact
+- contact force positive and physically reasonable
+- support center near body/CoM projection
+- CoM height close to requested target
+- pitch/roll/yaw near equilibrium
+- hip/knee within joint limits
+- left/right leg symmetry preserved unless intentionally testing asymmetry
+- Step E position reference preserved or explicitly re-captured for the height variant
 
 Stop-gated progression:
 
@@ -300,10 +321,18 @@ This specification must be reviewed and approved before implementation planning.
 - write `step_c_height_reference.json`
 - no controller changes
 
+### Gate C1b — Kinematically consistent height initialization
+
+- root-z-only perturbation must not be used as the official Step C height-change method unless static validation proves it physically valid
+- select or generate a valid standing-height pose for each requested target height
+- validate wheel contacts, no ground penetration, support-center alignment, CoM target accuracy, posture symmetry, joint limits, and near-equilibrium orientation before dynamic rollout
+- capture equilibrium references from the validated pose
+- no controller torque/gain/ownership changes
+
 ### Gate C2 — Diagnostic runner readiness
 
 - define case matrix
-- run cases through existing Step E production path with root-z perturbation
+- run cases through existing Step E production path with validated height-variant initialization
 - no controller changes
 
 ### Gate C3 — Validator readiness
@@ -357,6 +386,8 @@ Validators must classify failures using these labels:
 - `legacy_torque_path_enabled`: legacy torque path contributes in balance-core mode
 - `torque_saturation_persistent`: torque saturation persists in a way that plausibly prevents recovery
 - `torque_rate_saturation_persistent`: torque-rate saturation persists in a way that plausibly prevents recovery
+- `root_z_only_initialization_artifact`: startup failure caused by displacing root height without updating leg posture or revalidating contacts/equilibrium
+- `physically_inconsistent_height_perturbation`: height variant starts from invalid or unvalidated kinematics, contact, support-center, or posture state
 - `unclear_requires_more_telemetry`: required telemetry is missing or contradictory
 
 Each failed case must include primary and secondary classifications.
@@ -369,7 +400,7 @@ Each failed case must include primary and secondary classifications.
 - add validator/reporting scripts
 - add tests for metrics and classification
 - add non-invasive telemetry fields needed for Step C validation
-- use existing `--initial-root-z-perturbation`
+- use existing `--initial-root-z-perturbation` only for diagnostic audits, not official Step C pass/fail cases unless static validation proves it physically valid
 - write artifacts under `outputs/step_c_height_recovery/`
 
 ### Forbidden before baseline diagnostics prove root cause

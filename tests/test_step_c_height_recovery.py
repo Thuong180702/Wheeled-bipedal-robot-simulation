@@ -10,10 +10,12 @@ from wheeled_biped.validation.step_c_height_recovery import (
     StepCThresholds,
     build_step_c_case_matrix,
     build_step_c_pass_fail_summary,
+    build_step_c_variant_case_matrix,
     compute_height_reference,
     detect_recovery_time,
     evaluate_step_c_case,
     infer_time_seconds,
+    load_height_variant_setup,
     parse_vector_column,
     render_step_c_report,
     resolve_contact_validity,
@@ -430,8 +432,75 @@ def test_build_step_c_case_matrix_contains_stop_gated_cases():
         "high_3cm",
     ]
     assert matrix[1]["initial_root_z_perturbation_m"] == -0.01
+    assert matrix[1]["mode"] == "diagnostic_root_z_legacy"
     assert matrix[2]["initial_root_z_perturbation_m"] == 0.01
     assert matrix[-1]["gate_level"] == 3
+
+
+def test_load_height_variant_setup_from_step_b_report():
+    setup = load_height_variant_setup(
+        Path("outputs/balance_core_true_height_variants/true_height_variant_setup_report.json"),
+        "low_tiny",
+    )
+
+    assert setup["variant_name"] == "low_tiny"
+    assert setup["setup_valid"] is True
+    assert setup["left_wheel_contact"] is True
+    assert setup["right_wheel_contact"] is True
+    assert setup["non_wheel_floor_contact_count"] == 0
+    assert math.isclose(setup["calibrated_root_z_m"], 0.529296875)
+    assert math.isclose(setup["hip_pitch_ref"], 0.9365783157894737)
+    assert math.isclose(setup["knee_ref"], 1.7799429473684212)
+
+
+def test_load_height_variant_setup_rejects_unknown_variant():
+    with pytest.raises(ValueError, match="Unknown height variant"):
+        load_height_variant_setup(
+            Path("outputs/balance_core_true_height_variants/true_height_variant_setup_report.json"),
+            "missing_variant",
+        )
+
+
+def test_build_step_c_variant_case_matrix_uses_step_b_variants():
+    matrix = build_step_c_variant_case_matrix(
+        Path("outputs/balance_core_true_height_variants/true_height_variant_setup_report.json")
+    )
+
+    assert [case["case_name"] for case in matrix] == [
+        "nominal",
+        "low_tiny",
+        "high_tiny",
+        "low_small",
+        "high_small",
+    ]
+    assert [case["height_variant_name"] for case in matrix] == [
+        "nominal",
+        "low_tiny",
+        "high_tiny",
+        "low_small",
+        "high_small",
+    ]
+    assert all(case["initialization_method"] == "step_b_true_height_variant" for case in matrix)
+    assert all("initial_root_z_perturbation_m" not in case for case in matrix)
+    assert matrix[1]["setup_valid"] is True
+    assert matrix[1]["left_wheel_contact"] is True
+    assert matrix[1]["right_wheel_contact"] is True
+    assert matrix[1]["non_wheel_floor_contact_count"] == 0
+    assert math.isclose(matrix[1]["achieved_initial_com_z_m"], 0.3986319235445995)
+    assert math.isclose(matrix[1]["calibrated_root_z_m"], 0.529296875)
+    assert math.isclose(matrix[1]["hip_pitch_ref"], 0.9365783157894737)
+    assert math.isclose(matrix[1]["knee_ref"], 1.7799429473684212)
+
+
+def test_build_step_c_variant_case_matrix_rejects_invalid_variant(tmp_path):
+    setup_json = tmp_path / "setup.json"
+    setup_json.write_text(
+        '{"setup_results": [{"variant_name": "nominal", "setup_valid": false, "setup_failure_reason": "bad contact"}]}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="is not setup-valid"):
+        build_step_c_variant_case_matrix(setup_json, variant_names=("nominal",))
 
 
 def test_build_summary_marks_baseline_pass_without_controller_change():
@@ -487,8 +556,12 @@ def test_render_step_c_report_contains_artifact_and_case_status():
 from scripts.run_step_c_height_recovery import (
     build_simulation_command,
     evaluate_case_telemetry_or_failure,
+    filter_case_matrix,
+    resolve_case_target_com_z,
     should_stop_after_case,
 )
+from scripts.simulate_hierarchical_controller import build_balance_core_controllers
+from scripts.evaluate_step_c_sagittal_schedule_candidates import build_candidate_simulation_command
 
 
 def test_build_simulation_command_uses_step_e_balance_core_path():
@@ -506,7 +579,99 @@ def test_build_simulation_command_uses_step_e_balance_core_path():
     assert "velocity-damped" in cmd
     assert "--initial-root-z-perturbation" in cmd
     assert "-0.01" in cmd
+    assert "--height-variant-setup" not in cmd
     assert "--write-run-summary-sidecar" in cmd
+    assert "--vd-sagittal-authority-profile" not in cmd
+
+
+def test_build_simulation_command_variant_mode_uses_step_b_setup():
+    cmd = build_simulation_command(
+        steps=5000,
+        telemetry_decimation=1,
+        failure_window_steps=500,
+        height_variant_setup=Path("outputs/balance_core_true_height_variants/variant_low_tiny/variant_setup.json"),
+    )
+
+    assert cmd[:2] == ["python", "scripts/simulate_hierarchical_controller.py"]
+    assert "--controller-mode" in cmd
+    assert "balance-core" in cmd
+    assert "--sagittal-controller" in cmd
+    assert "velocity-damped" in cmd
+    assert "--height-variant-setup" in cmd
+    assert "outputs/balance_core_true_height_variants/variant_low_tiny/variant_setup.json" in cmd
+    assert "--initial-root-z-perturbation" not in cmd
+    assert "--write-run-summary-sidecar" in cmd
+
+
+def test_build_simulation_command_can_use_selected_step_e_hv_schedule():
+    cmd = build_simulation_command(
+        steps=5000,
+        telemetry_decimation=1,
+        failure_window_steps=500,
+        height_variant_setup=Path("outputs/balance_core_true_height_variants/variant_high_tiny/variant_setup.json"),
+        vd_sagittal_authority_profile="candidate_D2_wheel_velocity_damping_light",
+    )
+
+    assert "--vd-sagittal-authority-profile" in cmd
+    idx = cmd.index("--vd-sagittal-authority-profile")
+    assert cmd[idx + 1] == "candidate_D2_wheel_velocity_damping_light"
+    assert "--height-variant-setup" in cmd
+    assert "--initial-root-z-perturbation" not in cmd
+
+
+def test_candidate_simulation_command_adds_explicit_sagittal_schedule_profile():
+    cmd = build_candidate_simulation_command(
+        candidate="candidate_B_balanced",
+        steps=5000,
+        height_variant_setup=Path("outputs/balance_core_true_height_variants/variant_high_tiny/variant_setup.json"),
+    )
+
+    assert "--vd-sagittal-authority-profile" in cmd
+    idx = cmd.index("--vd-sagittal-authority-profile")
+    assert cmd[idx + 1] == "candidate_B_balanced"
+    assert "--height-variant-setup" in cmd
+
+
+def test_resolve_case_target_com_z_uses_variant_achieved_height():
+    case = {"case_name": "low_tiny", "achieved_initial_com_z_m": 0.3986319235445995}
+
+    assert math.isclose(resolve_case_target_com_z(case, reference_target_com_z_m=0.40774276852607727), 0.3986319235445995)
+
+
+def test_variant_metadata_is_preserved_in_case_result(tmp_path):
+    telemetry_path = tmp_path / "variant_telemetry.csv"
+    _passing_case_df().to_csv(telemetry_path, index=False)
+    variant_metadata = {
+        "initialization_method": "step_b_true_height_variant",
+        "height_variant_name": "low_tiny",
+        "variant_setup_path": "outputs/balance_core_true_height_variants/variant_low_tiny/variant_setup.json",
+        "target_com_z_m": 0.3989993119017284,
+        "achieved_initial_com_z_m": 0.3986319235445995,
+        "calibrated_root_z_m": 0.529296875,
+        "hip_pitch_ref": 0.9365783157894737,
+        "knee_ref": 1.7799429473684212,
+        "setup_valid": True,
+        "left_wheel_contact": True,
+        "right_wheel_contact": True,
+        "non_wheel_floor_contact_count": 0,
+    }
+
+    result = evaluate_case_telemetry_or_failure(
+        telemetry_path=telemetry_path,
+        case_name="low_tiny",
+        target_com_z_m=0.407,
+        expected_steps=5,
+        thresholds=StepCThresholds(recovery_hold_window_s=0.4),
+        process_error=None,
+        variant_metadata=variant_metadata,
+    )
+
+    assert result["initialization_method"] == "step_b_true_height_variant"
+    assert result["height_variant_name"] == "low_tiny"
+    assert result["variant_setup_path"] == "outputs/balance_core_true_height_variants/variant_low_tiny/variant_setup.json"
+    assert result["setup_valid"] is True
+    assert math.isclose(result["achieved_initial_com_z_m"], 0.3986319235445995)
+    assert math.isclose(result["calibrated_root_z_m"], 0.529296875)
 
 
 def test_should_stop_after_case_stops_on_failure():
@@ -643,11 +808,29 @@ def test_startup_invalid_with_abnormal_pitch_roll_or_com_z_still_fails():
     assert result["startup_contact_artifact_ignored"] is False
 
 
+def test_filter_case_matrix_keeps_only_requested_case():
+    matrix = [
+        {"case_name": "nominal"},
+        {"case_name": "low_tiny"},
+        {"case_name": "high_tiny"},
+    ]
+
+    filtered = filter_case_matrix(matrix, case_name="high_tiny")
+
+    assert filtered == [{"case_name": "high_tiny"}]
+
+
+def test_filter_case_matrix_rejects_unknown_case():
+    matrix = [{"case_name": "nominal"}]
+
+    with pytest.raises(ValueError, match="Requested Step C case 'high_tiny' not found"):
+        filter_case_matrix(matrix, case_name="high_tiny")
+
+
 def test_controller_files_are_not_part_of_step_c_validator_diff():
     controller_paths = [
         "wheeled_biped/controllers/shape_posture_controller.py",
         "wheeled_biped/controllers/support_feedforward_controller.py",
-        "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
         "wheeled_biped/controllers/lateral_roll_balance_controller.py",
         "wheeled_biped/controllers/balance_core_torque_composer.py",
     ]
@@ -655,3 +838,32 @@ def test_controller_files_are_not_part_of_step_c_validator_diff():
     completed = subprocess.run(["git", "diff", "--quiet", "--", *controller_paths], check=False)
 
     assert completed.returncode == 0
+
+
+def test_sagittal_schedule_build_balance_core_produces_schedule_aware_controller():
+    schedule = SagittalAuthoritySchedule(
+        profile_name="candidate_A_position_cap",
+        applies_to_variants=("high_tiny", "high_small"),
+        position_tau_cap_scale=4.0 / 3.0,
+        pitch_tau_scale=1.0,
+    )
+    result = build_balance_core_controllers(
+        control_dt=0.01,
+        support_feedforward_vector=np.zeros(10),
+        torque_limit=np.full(10, 20.0),
+        max_torque_rate=np.full(10, 400.0),
+        sagittal_controller_choice="velocity-damped",
+        vd_k_position=40.0,
+        vd_k_velocity=15.0,
+        vd_k_support_velocity=0.0,
+        vd_max_position_tau=3.0,
+        sagittal_authority_schedule=schedule,
+    )
+    sagittal = result["sagittal_wheel_balance"]
+    assert sagittal.authority_schedule is schedule
+    assert sagittal.max_position_tau == 3.0
+
+
+from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import (
+    SagittalAuthoritySchedule,
+)

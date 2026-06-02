@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a diagnostic-first Step C validation pipeline that measures height recovery from small root-z offsets while preserving Step E position hold, posture, contact, and WBC-off torque ownership invariants.
+**Goal:** Build a diagnostic-first Step C validation pipeline that measures height recovery from kinematically consistent small standing-height variants while preserving Step E position hold, posture, contact, and WBC-off torque ownership invariants.
 
-**Architecture:** Add focused validation utilities under `wheeled_biped/validation/` for height-reference extraction, case matrix generation, telemetry metrics, recovery-time detection, robust WBC-application auditing, robust posture/contact resolvers, failure classification, and artifact generation. Add a thin runner under `scripts/` to run the approved stop-gated diagnostic sweep using the existing `scripts/simulate_hierarchical_controller.py` root-z perturbation support, while still writing artifacts if a simulation exits nonzero. Do not change controller behavior unless a later approved plan revision authorizes a targeted fix.
+**Architecture:** Add focused validation utilities under `wheeled_biped/validation/` for height-reference extraction, case matrix generation, telemetry metrics, recovery-time detection, robust WBC-application auditing, robust posture/contact resolvers, failure classification, and artifact generation. Add a thin runner under `scripts/` to run the approved stop-gated diagnostic sweep using kinematically consistent height-variant initialization. Existing root-z-only perturbation support may be used only for diagnostic audits, not as the official Step C height-change method unless static validation later proves it physically valid. Do not change controller behavior unless a later approved plan revision authorizes a targeted fix.
 
 **Tech Stack:** Python, pandas, pytest, MuJoCo simulation entrypoint `scripts/simulate_hierarchical_controller.py`, existing balance-core validation helpers, JSON/Markdown/CSV artifacts.
 
@@ -34,7 +34,8 @@ This plan must not change controller torque logic, gains, ownership, WBC routing
 
 - Create `scripts/run_step_c_height_recovery.py`
   - Orchestrates the stop-gated diagnostic sweep.
-  - Calls `scripts/simulate_hierarchical_controller.py` with balance-core Step E production arguments and `--initial-root-z-perturbation`.
+  - Calls `scripts/simulate_hierarchical_controller.py` with balance-core Step E production arguments and validated height-variant initialization.
+  - Must not use `--initial-root-z-perturbation` for official Step C pass/fail cases unless a static initialization gate later proves it physically valid.
   - Copies per-case telemetry into `outputs/step_c_height_recovery/` even when the simulation exits nonzero and telemetry exists.
   - Writes case matrix, metrics, failure classifications, report, and pass/fail summary.
 
@@ -1118,6 +1119,30 @@ Expected: all selected tests PASS.
 
 ---
 
+### Gate C1b — Kinematically consistent height initialization
+
+Before Task 6 can be used for official Step C pass/fail, add or wire a diagnostic initialization source that provides physically valid height-variant poses.
+
+Requirements:
+
+- Do not use root-z-only perturbation as the official Step C height-change method unless static validation proves it physically valid.
+- Prefer existing Step B setup artifacts under `outputs/balance_core_true_height_variants/variant_*/variant_setup.json` or `outputs/balance_core_true_height_variants/true_height_variant_setup_report.json` when they cover the requested height.
+- If a target height is missing, add a diagnostic-only symmetric hip_pitch/knee pose generator or search routine before dynamic simulation.
+- For each generated/selected pose, validate before rollout:
+  - both wheel contacts valid after reset
+  - left/right wheel floor contacts true
+  - no non-wheel ground contacts
+  - contact force positive and physically reasonable
+  - support center near body/CoM projection
+  - CoM height close to requested target
+  - pitch/roll/yaw near equilibrium
+  - hip/knee within joint limits
+  - left/right leg symmetry preserved
+- Capture equilibrium references from the validated height-variant pose before dynamic rollout.
+- Do not modify controller torque logic, gains, WBC routing, ownership, hip-roll logic, sagittal logic, or Step E behavior.
+
+---
+
 ## Task 5: Case matrix and report artifact builders
 
 **Files:**
@@ -1148,8 +1173,10 @@ def test_build_step_c_case_matrix_contains_stop_gated_cases():
         "low_3cm",
         "high_3cm",
     ]
-    assert matrix[1]["initial_root_z_perturbation_m"] == -0.01
-    assert matrix[2]["initial_root_z_perturbation_m"] == 0.01
+    assert matrix[1]["target_height_offset_m"] == -0.01
+    assert matrix[2]["target_height_offset_m"] == 0.01
+    assert matrix[1]["initialization_method"] == "kinematic_height_variant"
+    assert "initial_root_z_perturbation_m" not in matrix[1]
     assert matrix[-1]["gate_level"] == 3
 
 
@@ -1221,13 +1248,13 @@ Add to `wheeled_biped/validation/step_c_height_recovery.py`:
 
 def build_step_c_case_matrix() -> list[dict[str, Any]]:
     return [
-        {"case_name": "nominal", "initial_root_z_perturbation_m": 0.0, "gate_level": 0, "purpose": "Step E parity sanity check"},
-        {"case_name": "low_1cm", "initial_root_z_perturbation_m": -0.01, "gate_level": 1, "purpose": "first low-height recovery gate"},
-        {"case_name": "high_1cm", "initial_root_z_perturbation_m": 0.01, "gate_level": 1, "purpose": "first high-height recovery gate"},
-        {"case_name": "low_2cm", "initial_root_z_perturbation_m": -0.02, "gate_level": 2, "purpose": "medium low-height recovery gate"},
-        {"case_name": "high_2cm", "initial_root_z_perturbation_m": 0.02, "gate_level": 2, "purpose": "medium high-height recovery gate"},
-        {"case_name": "low_3cm", "initial_root_z_perturbation_m": -0.03, "gate_level": 3, "purpose": "final low-height diagnostic gate"},
-        {"case_name": "high_3cm", "initial_root_z_perturbation_m": 0.03, "gate_level": 3, "purpose": "final high-height diagnostic gate"},
+        {"case_name": "nominal", "target_height_offset_m": 0.0, "initialization_method": "validated_nominal_pose", "gate_level": 0, "purpose": "Step E parity sanity check"},
+        {"case_name": "low_1cm", "target_height_offset_m": -0.01, "initialization_method": "kinematic_height_variant", "gate_level": 1, "purpose": "first low-height recovery gate"},
+        {"case_name": "high_1cm", "target_height_offset_m": 0.01, "initialization_method": "kinematic_height_variant", "gate_level": 1, "purpose": "first high-height recovery gate"},
+        {"case_name": "low_2cm", "target_height_offset_m": -0.02, "initialization_method": "kinematic_height_variant", "gate_level": 2, "purpose": "medium low-height recovery gate"},
+        {"case_name": "high_2cm", "target_height_offset_m": 0.02, "initialization_method": "kinematic_height_variant", "gate_level": 2, "purpose": "medium high-height recovery gate"},
+        {"case_name": "low_3cm", "target_height_offset_m": -0.03, "initialization_method": "kinematic_height_variant", "gate_level": 3, "purpose": "final low-height diagnostic gate"},
+        {"case_name": "high_3cm", "target_height_offset_m": 0.03, "initialization_method": "kinematic_height_variant", "gate_level": 3, "purpose": "final high-height diagnostic gate"},
     ]
 
 
@@ -1333,7 +1360,7 @@ from scripts.run_step_c_height_recovery import (
 def test_build_simulation_command_uses_step_e_balance_core_path():
     cmd = build_simulation_command(
         steps=5000,
-        perturbation_m=-0.01,
+        height_variant_setup="outputs/balance_core_true_height_variants/variant_low_small/variant_setup.json",
         telemetry_decimation=1,
         failure_window_steps=500,
     )
@@ -1343,8 +1370,9 @@ def test_build_simulation_command_uses_step_e_balance_core_path():
     assert "balance-core" in cmd
     assert "--sagittal-controller" in cmd
     assert "velocity-damped" in cmd
-    assert "--initial-root-z-perturbation" in cmd
-    assert "-0.01" in cmd
+    assert "--height-variant-setup" in cmd
+    assert "outputs/balance_core_true_height_variants/variant_low_small/variant_setup.json" in cmd
+    assert "--initial-root-z-perturbation" not in cmd
     assert "--write-run-summary-sidecar" in cmd
 
 
@@ -1417,7 +1445,7 @@ SIM_OUTPUT_DIR = Path("outputs/hierarchical_controller_sim")
 def build_simulation_command(
     *,
     steps: int,
-    perturbation_m: float,
+    height_variant_setup: str,
     telemetry_decimation: int,
     failure_window_steps: int,
 ) -> list[str]:
@@ -1430,8 +1458,8 @@ def build_simulation_command(
         "velocity-damped",
         "--steps",
         str(steps),
-        "--initial-root-z-perturbation",
-        str(perturbation_m),
+        "--height-variant-setup",
+        height_variant_setup,
         "--telemetry-decimation",
         str(telemetry_decimation),
         "--failure-window-steps",
@@ -1503,11 +1531,25 @@ def evaluate_case_telemetry_or_failure(
     return result
 
 
+def resolve_height_variant_setup(case: dict, *, setup_root: Path = Path("outputs/balance_core_true_height_variants")) -> Path:
+    if case["case_name"] == "nominal":
+        return setup_root / "variant_nominal" / "variant_setup.json"
+    if case["case_name"] == "low_1cm":
+        return setup_root / "variant_low_small" / "variant_setup.json"
+    if case["case_name"] == "high_1cm":
+        return setup_root / "variant_high_small" / "variant_setup.json"
+    raise FileNotFoundError(
+        f"No approved Step B height-variant setup exists for {case['case_name']}; "
+        "generate and statically validate a kinematic setup before running this official Step C case"
+    )
+
+
 def run_case(case: dict, *, output_dir: Path, target_com_z_m: float, steps: int, thresholds: StepCThresholds) -> dict:
     before_csv, before_sidecar = _snapshot_outputs()
+    height_variant_setup = resolve_height_variant_setup(case)
     cmd = build_simulation_command(
         steps=steps,
-        perturbation_m=float(case["initial_root_z_perturbation_m"]),
+        height_variant_setup=str(height_variant_setup),
         telemetry_decimation=1,
         failure_window_steps=500,
     )
