@@ -30,20 +30,49 @@ DELETE_LOG = EXEC_DIR / "deep_outputs_cleanup_delete_log.csv"
 
 DELETABLE = {"SUMMARIZE_THEN_DELETE", "DELETE_DIRECT"}
 
-# Hard refusal: any path containing one of these segments is never deleted.
-PROTECTED_SUBSTRINGS = (
-    "outputs/balance",
-    "physical_target_height_setups",
-    "backup_checkpoints",
+# Hard refusal: a candidate is protected only when it is EXACTLY one of these
+# paths or lives INSIDE one of them. Substring matching is intentionally NOT
+# used so that sibling dirs like outputs/balance_core_validation (which merely
+# share the "balance" prefix) are not falsely protected.
+PROTECTED_PATHS = frozenset(
+    {
+        (REPO / "outputs" / "balance").resolve(),
+        (REPO / "outputs" / "physical_target_height_setups").resolve(),
+        (REPO / "backup_checkpoints").resolve(),
+    }
 )
 
 
-def is_protected(rel_path: str) -> bool:
-    norm = rel_path.replace("\\", "/")
-    return any(p in norm for p in PROTECTED_SUBSTRINGS)
+def is_protected(candidate: Path) -> bool:
+    """True only if candidate is exactly a protected path or nested within one.
+
+    Uses resolved paths and parent containment — NOT substring matching — so
+    that ``outputs/balance_core_validation`` is NOT treated as protected while
+    ``outputs/balance`` and ``outputs/balance/rl/seed42`` are.
+    """
+    resolved = (candidate if candidate.is_absolute() else (REPO / candidate)).resolve()
+    if resolved in PROTECTED_PATHS:
+        return True
+    return any(p in resolved.parents for p in PROTECTED_PATHS)
+
+
+def _self_check() -> None:
+    assert is_protected(Path("outputs/balance")) is True, "outputs/balance must be protected"
+    assert (
+        is_protected(Path("outputs/balance/rl/seed42")) is True
+    ), "outputs/balance/rl/seed42 must be protected"
+    assert (
+        is_protected(Path("outputs/balance_core_validation")) is False
+    ), "outputs/balance_core_validation must NOT be protected"
+    assert (
+        is_protected(Path("outputs/physical_target_height_setups")) is True
+    ), "setups dir must be protected"
+    assert is_protected(Path("backup_checkpoints")) is True, "backup_checkpoints must be protected"
 
 
 def main() -> int:
+    _self_check()
+
     if not AUDIT_JSON.exists():
         print(f"FATAL: audit json missing: {AUDIT_JSON}")
         return 2

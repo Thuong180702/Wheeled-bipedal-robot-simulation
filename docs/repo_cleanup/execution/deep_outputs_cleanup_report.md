@@ -6,13 +6,14 @@
 
 ---
 
-## 1–3. Disk impact
+## 1–3. Disk impact (updated after balance_core cleanup)
 
 | Metric | Value |
 |---|---|
-| `outputs/` before | **8.2 G** |
-| `outputs/` after | **~651 M** |
-| **Disk freed** | **~7.51 G** (8,066,814,481 bytes) |
+| `outputs/` before any cleanup | **8.2 G** |
+| `outputs/` after first deep pass | **~651 M** |
+| `outputs/` after balance_core cleanup | **~276 M** |
+| **Total disk freed** | **~7.9 G** (8,459,212,490 bytes) |
 | Summary archive size | 81 M (1,009 small artifacts) |
 
 `outputs/` is gitignored — none of these deletions affect version control.
@@ -55,13 +56,14 @@ Total deleted: **158 directories**, 0 failures.
 
 ## 9. Directories preserved
 
-- `outputs/balance` (PROTECT)
+- `outputs/balance` (PROTECT) — trained seed trees intact
 - `outputs/physical_target_height_setups` (PROTECT)
-- **12 `balance_core_*` dirs over-refused by the safety guard** (~377 M) — see Remaining Risks.
+- `backup_checkpoints/` (PROTECT, tracked, not `git rm`'d)
+- 7 small top-level `.txt`/`.log` files directly under `outputs/` (a few KB each — left in place)
 
 ## 10. Summary archive location
 
-`archive/cleanup_2026-06-13/output_summaries/` — 154 per-dir folders, global manifest at `docs/repo_cleanup/execution/deep_outputs_summary_extraction_manifest.json`.
+`archive/cleanup_2026-06-13/output_summaries/` — **166** per-dir folders (154 first-pass + 12 balance_core), global manifest at `docs/repo_cleanup/execution/deep_outputs_summary_extraction_manifest.json`.
 
 ---
 
@@ -81,14 +83,15 @@ Only new/untracked docs under `docs/repo_cleanup/execution/`, the two cleanup sc
 
 ## 14. Remaining risks / review items
 
-1. **12 `balance_core_*` dirs (~377 M) were conservatively NOT deleted.** The `clean_outputs_bulk.py` guard refuses any path containing `outputs/balance`, which over-matches `outputs/balance_core_*`. This is a safe false-positive (kept more than required). Their summaries were already extracted, so a follow-up could delete them explicitly if the disk is needed. The largest are `balance_core_validation` (173 M) and `balance_core_position_containment` (86 M).
-2. A few raw top-level `.txt`/`.log` files remain directly under `outputs/` (e.g. `stage2b_*_with_ownership_mask.log`) — small, left in place.
-3. The deleted diagnostic dirs are regenerable but expensive; their authoritative numbers now live only in the extracted summaries + kept validation reports. Acceptable per the approved policy.
+**None.** The `balance_core_*` over-refusal was resolved in a second pass: the guard was fixed to exact-path parent containment, all 12 dirs passed self-check + manifest check + tracked-file check + protected-path check, and all 12 were deleted with 0 failures.
+
+1. The deleted diagnostic dirs are regenerable but expensive; their authoritative numbers live in the extracted summaries + kept validation reports. Acceptable per the approved policy.
+2. The summary archive at `archive/cleanup_2026-06-13/output_summaries/` (81 M) is gitignored — confirm your backup strategy covers it if needed.
 
 ---
 
 ## Final classification
 
-**DEEP_OUTPUTS_CLEANUP_PASS_WITH_REMAINING_REVIEW_ITEMS**
+**DEEP_OUTPUTS_CLEANUP_PASS**
 
-Rationale: ~7.51 G reclaimed, all protected checkpoints/setups/backups verified intact, runtime verification PASS, summaries archived. One benign over-refusal (12 `balance_core_*` dirs kept) remains as an optional follow-up — hence PASS_WITH_REMAINING_REVIEW_ITEMS rather than plain PASS.
+Total freed: ~7.9 G across two passes (8,459,212,490 bytes). All protected checkpoints/setups/backups verified intact. 170 raw diagnostic dirs deleted after summary extraction. 1,009 summary artifacts archived. Runtime verification PASS. No tracked file modified.

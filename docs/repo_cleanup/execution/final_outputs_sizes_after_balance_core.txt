@@ -1,0 +1,12 @@
+4.0K	outputs/contact_geometry_analysis.txt
+4.0K	outputs/diagnostic_corrected.txt
+4.0K	outputs/diagnostic_full.txt
+4.0K	outputs/stage2b_b500_roll_analysis.log
+8.0K	outputs/stage2_gain_sweep_log.txt
+36K	outputs/stage2b_b500_after_all_sign_fixes.log
+56K	outputs/physical_target_height_setups
+100K	outputs/stage2b_b100_with_ownership_mask.log
+100K	outputs/stage2b_b500_with_ownership_mask.log
+152K	outputs/stage2b_a500_with_ownership_mask.log
+1.1M	outputs/hierarchical_controller_sim
+275M	outputs/balance
