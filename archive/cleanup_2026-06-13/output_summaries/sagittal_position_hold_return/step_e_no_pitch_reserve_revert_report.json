@@ -1,0 +1,104 @@
+{
+  "report_type": "step_e_no_pitch_reserve_revert_report",
+  "date": "2026-06-01",
+  "status": "PITCH_RESERVE_REVERTED_BASELINE_RESTORED",
+  "primary_change": "Removed pitch-reserve tau allocation from torque-budget-aware position authority, restoring pure total-torque-bound allocator.",
+  "reason": "Pitch-reserve allocator starved transient position authority: max_abs support error worsened from 0.386 m to 0.666 m while final improved trivially from 0.053 to 0.045 m.",
+  "allocator_before": {
+    "formula": "tau_position = clip(tau_position_raw, tau_position_lower_bound, tau_position_upper_bound) with pitch_reserve_tau clipping",
+    "known_issue": "pitch_reserve_tau=2.0 reduced tau_position authority from 9 Nm to 2.5 Nm during transient, worsening peak to 0.666 m"
+  },
+  "allocator_after": {
+    "formula": "tau_position = clip(tau_position_raw, -max_tau_wheel - tau_balance, max_tau_wheel - tau_balance)",
+    "description": "Pure total-torque-bound allocator with no pitch reserve"
+  },
+  "tests_run": [
+    "pytest tests/test_torque_budget_aware_position.py -q",
+    "pytest tests/test_sagittal_velocity_damped_balance_controller.py -q",
+    "pytest tests/test_balance_core_components.py -q",
+    "pytest tests/test_balance_core_validation_workflow.py -q",
+    "pytest tests -q -k \"support_position or support_velocity or position_hold or authority or sagittal_velocity_damped or equilibrium\""
+  ],
+  "test_selection_result": "98 passed, 1 failed (pre-existing test_simple_force_distributor unrelated failure), 1193 deselected",
+  "validation_results": {
+    "V1_1000": {
+      "telemetry": "outputs/hierarchical_controller_sim/telemetry_1780277761.csv",
+      "rows": 1000,
+      "termination": "completed",
+      "max_abs_support_position_error_m": 0.1214840647543909,
+      "final_abs_support_position_error_m": 0.1214840647543909,
+      "pitch_range_deg": [-0.099, 3.133],
+      "roll_range_deg": [-0.334, 0.168],
+      "com_z_range_m": [0.403841, 0.408641],
+      "wheel_velocity_mean_range_rad_s": [-2.055, 1.321],
+      "tau_position_lower_bound_range_nm": [-7.453, -4.163],
+      "tau_position_upper_bound_range_nm": [2.547, 5.837],
+      "tau_total_before_final_clip_range_nm": [-0.831, 1.294],
+      "position_authority_reason_counts": {"within_bounds": 1000},
+      "integral_active": "disabled",
+      "pitch_reserve_applied_max": 0.0
+    },
+    "V2_2000": {
+      "telemetry": "outputs/hierarchical_controller_sim/telemetry_1780277894.csv",
+      "rows": 2000,
+      "termination": "completed",
+      "max_abs_support_position_error_m": 0.3857986906388263,
+      "final_abs_support_position_error_m": 0.163959568230592,
+      "pitch_range_deg": [-0.099, 10.401],
+      "roll_range_deg": [-2.397, 0.168],
+      "com_z_range_m": [0.363021, 0.408641],
+      "wheel_velocity_mean_range_rad_s": [-4.754, 1.321],
+      "tau_position_lower_bound_range_nm": [-13.055, -4.163],
+      "tau_position_upper_bound_range_nm": [-3.055, 5.837],
+      "tau_total_before_final_clip_range_nm": [-1.075, 1.294],
+      "position_authority_reason_counts": {"within_bounds": 2000},
+      "integral_active": "disabled",
+      "pitch_reserve_applied_max": 0.0
+    },
+    "V3_5000": {
+      "telemetry": "outputs/hierarchical_controller_sim/telemetry_1780278172.csv",
+      "rows": 5000,
+      "termination": "completed",
+      "max_abs_support_position_error_m": 0.3857986906388263,
+      "final_abs_support_position_error_m": 0.0526681058478187,
+      "pitch_range_deg": [-0.099, 10.401],
+      "roll_range_deg": [-2.397, 0.168],
+      "com_z_range_m": [0.363021, 0.408641],
+      "wheel_velocity_mean_range_rad_s": [-4.754, 1.321],
+      "tau_position_lower_bound_range_nm": [-13.055, -4.163],
+      "tau_position_upper_bound_range_nm": [-3.055, 5.837],
+      "tau_total_before_final_clip_range_nm": [-1.075, 1.294],
+      "position_authority_reason_counts": {"within_bounds": 5000},
+      "integral_active": "disabled",
+      "pitch_reserve_applied_max": 0.0,
+      "ownership_violation_count_max": 0,
+      "hidden_torque_norm_max": 0.0,
+      "tau_wbc_norm_max": 36.547
+    }
+  },
+  "acceptance_gates_V3": {
+    "preferred": false,
+    "fallback": false,
+    "hard_minimum_peak": false,
+    "hard_minimum_final": true,
+    "max_abs_support_position_error_m": 0.3858,
+    "final_abs_support_position_error_m": 0.0527,
+    "note": "Final error passes hard minimum but peak 0.386 m exceeds 0.30 m hard peak gate"
+  },
+  "comparison_to_pitch_reserve_V3": {
+    "pitch_reserve_max_abs": 0.6657,
+    "no_pitch_reserve_max_abs": 0.3858,
+    "improvement": "peak reduced by 42%",
+    "pitch_reserve_final_abs": 0.0448,
+    "no_pitch_reserve_final_abs": 0.0527,
+    "note": "Pitch reserve traded peak authority for trivially better final"
+  },
+  "integrity_checks": {
+    "no_WBC": true,
+    "no_E0b_E0c_E0d": true,
+    "kp_cp_disabled": true,
+    "torque_ownership_unchanged": true,
+    "baseline_velocity_damped_mutually_exclusive": true
+  },
+  "recommendation": "Do not proceed to Step C. Revert pitch-reserve restored baseline, but transient peak 0.386 m still exceeds hard minimum 0.30 m."
+}

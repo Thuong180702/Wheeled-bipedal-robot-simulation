@@ -1,0 +1,96 @@
+{
+  "classification": "T6F_SIGN_FIX_BUGFIX_500_FAIL_STABILITY",
+  "date": "2026-06-12",
+  "phase": "Phase 6",
+  "task": "T6F sign fix bug fix and validation",
+  "phases_completed": [
+    "Phase 0: Health check",
+    "Phase 1: Profile identity telemetry fix",
+    "Phase 2: Pitch suppression placement fix",
+    "Phase 3: Band state audit script fix",
+    "Phase 4: Integration tests (390/390 passed)",
+    "Phase 5: 500-step diagnostic (T5, T6F, T6F_sign_corrected)",
+    "Phase 6: Final report and classification"
+  ],
+  "bugs_fixed": {
+    "bug_1_profile_identity_telemetry": {
+      "status": "FIXED",
+      "fix": "Added vd_sagittal_authority_profile, controller_mode, sagittal_controller, height_variant_setup_name to telemetry",
+      "verification": "All 3 profiles have correct identity fields"
+    },
+    "bug_2_pitch_suppression_placement": {
+      "status": "FIXED",
+      "fix": "Moved pitch suppression code from line 2027 to after line 2253 (after arch_fix_active set)",
+      "verification": "Pitch suppression activates 126/126 eligible steps (100%)"
+    },
+    "bug_3_band_state_audit_script": {
+      "status": "FIXED",
+      "fix": "Corrected audit script telemetry field name (tuned_band_state_id) and mapping (0-4)",
+      "verification": "Band state transitions correctly: T6F_sign_corrected 289 hard/emergency steps (57.9%)"
+    }
+  },
+  "validation_results": {
+    "profile_identity": "PASS",
+    "pitch_suppression_activation": "PASS",
+    "band_state_transitions": "PASS",
+    "integration_tests": "PASS (390/390)",
+    "sign_correctness": "FAIL (43.5%, target >80%, worse than T6F 48.9%)",
+    "drift": "FAIL (0.383m max, 88% worse than T6F 0.203m)",
+    "stability": "FAIL (152 transition/recovery steps, pitch -12.5 to +19.7 deg)",
+    "no_fall": "PASS (all 3 profiles survived 500 steps)"
+  },
+  "comparison_table": {
+    "T5_baseline": {
+      "sign_correctness_pct": 35.5,
+      "max_abs_error_m": 0.187,
+      "final_error_m": 0.06,
+      "max_pitch_deg": 6.1,
+      "transition_recovery_steps": 0
+    },
+    "T6F_baseline": {
+      "sign_correctness_pct": 48.9,
+      "max_abs_error_m": 0.203,
+      "final_error_m": 0.141,
+      "max_pitch_deg": 8.4,
+      "transition_recovery_steps": 0
+    },
+    "T6F_sign_corrected": {
+      "sign_correctness_pct": 43.5,
+      "max_abs_error_m": 0.383,
+      "final_error_m": 0.32,
+      "max_pitch_deg": 19.7,
+      "transition_recovery_steps": 152
+    }
+  },
+  "failure_mode": "STABILITY_DEGRADATION",
+  "design_hypothesis": "INVALIDATED",
+  "reason": "Sign fix improves local behavior during arch_fix (46.6% vs 18.4%) but causes severe global instability: worse overall sign correctness (43.5% vs 48.9%), 88% worse drift (0.383m vs 0.203m), controller mode transitions (152 steps), and 2.3x pitch excursion (19.7 deg vs 8.4 deg)",
+  "root_cause_of_failure": [
+    "Pitch suppression removes pitch stabilization during high error conditions",
+    "Damping override removes energy dissipation when needed",
+    "Combined effect creates narrow operating envelope",
+    "Robot lacks stabilization authority during arch_fix",
+    "Sign incorrectness may be symptom of instability, not cause"
+  ],
+  "next_action": "DO_NOT_PROCEED_TO_1200_STEP",
+  "recommendation": "ABANDON_T6F_SIGN_CORRECTED_AS_IS - return to T6F baseline for long evaluation",
+  "do_not_proceed_with": [
+    "1200-step evaluation of T6F_sign_corrected",
+    "2000-step evaluation",
+    "5000-step evaluation",
+    "Step C validation",
+    "Step D validation",
+    "Commit T6F_sign_corrected",
+    "Paper claims about sign fix"
+  ],
+  "files_generated": [
+    "docs/validation/t6f_sign_fix_profile_identity_telemetry_fix.md",
+    "docs/validation/t6f_sign_fix_pitch_suppression_placement_fix.md",
+    "docs/validation/t6f_sign_fix_band_gate_logic_fix.md",
+    "docs/validation/t6f_sign_fix_bugfix_tests_report.md",
+    "docs/validation/t6f_sign_corrected_500_diagnostic_after_bugfix_report.md",
+    "docs/validation/t6f_sign_fix_bugfix_final_report.md",
+    "outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/t6f_sign_corrected_500_diagnostic_after_bugfix.json",
+    "outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/t6f_sign_fix_bugfix_summary.json"
+  ]
+}

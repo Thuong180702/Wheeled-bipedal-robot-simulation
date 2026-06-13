@@ -1,0 +1,76 @@
+{
+  "t6i": {
+    "label": "T6I_phase_aware_release",
+    "survived": true,
+    "final_step": 1198,
+    "drift_column": "active_pitch_crossing_signed_error_m",
+    "max_abs_error_m": 0.2034146827413985,
+    "final_error_m": 0.03110249167873591,
+    "mean_error_m": 0.09335496920951654,
+    "abs_mean_error_m": 0.09444476414097715,
+    "positive_pct": 92.82735613010841,
+    "negative_pct": 6.005004170141785,
+    "zero_crossings": 3,
+    "outside_008_pct": 52.293577981651374,
+    "outside_010_pct": 46.038365304420346,
+    "outside_015_pct": 30.275229357798167,
+    "p2p_m": 0.21938321189176196,
+    "pitch_max_deg": 8.401070353639508,
+    "pitch_rms_deg": 4.790766614232371,
+    "roll_max_deg": 0.23984428049996628,
+    "roll_rms_deg": 0.10672355869879406,
+    "com_z_drift": 0.009359598159790039,
+    "wheel_vel_rms": 3.8425434234880425,
+    "ownership_violation_max": 0,
+    "hidden_torque_max": 0.0,
+    "t6j_active_pct": 0.0,
+    "t6j_safety_gate_pass_pct": 0.0,
+    "t6j_direction_correct_pct": 0.0,
+    "t6j_block_reasons": [
+      "disabled"
+    ],
+    "t6j_tau_range": [
+      0.0,
+      0.0
+    ]
+  },
+  "t6j": {
+    "label": "T6J_centering_bias_trim",
+    "survived": true,
+    "final_step": 1198,
+    "drift_column": "active_pitch_crossing_signed_error_m",
+    "max_abs_error_m": 0.18277824006889393,
+    "final_error_m": 0.013177221423138617,
+    "mean_error_m": 0.07827348818673081,
+    "abs_mean_error_m": 0.07916777357138093,
+    "positive_pct": 92.91075896580485,
+    "negative_pct": 5.254378648874062,
+    "zero_crossings": 5,
+    "outside_008_pct": 46.28857381150959,
+    "outside_010_pct": 39.69974979149291,
+    "outside_015_pct": 21.100917431192663,
+    "p2p_m": 0.19863894154126355,
+    "pitch_max_deg": 8.193520541556683,
+    "pitch_rms_deg": 4.542434222938722,
+    "roll_max_deg": 0.2216437206721599,
+    "roll_rms_deg": 0.09929581216512597,
+    "com_z_drift": 0.008658498525619507,
+    "wheel_vel_rms": 3.484411689165729,
+    "ownership_violation_max": 0,
+    "hidden_torque_max": 0.0,
+    "t6j_active_pct": 87.65638031693076,
+    "t6j_safety_gate_pass_pct": 96.66388657214345,
+    "t6j_direction_correct_pct": 100.0,
+    "t6j_block_reasons": [
+      "contact_unstable",
+      "hold_between_thresholds",
+      "inside_exit_threshold",
+      "positive_bias_correcting",
+      "upright_gate_fail"
+    ],
+    "t6j_tau_range": [
+      -0.35,
+      0.0
+    ]
+  }
+}

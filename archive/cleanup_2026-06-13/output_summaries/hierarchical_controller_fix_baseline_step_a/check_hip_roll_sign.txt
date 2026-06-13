@@ -1,0 +1,59 @@
+Hip-roll sign diagnostic
+model=assets/robot/wheeled_biped_real.xml
+rollout_steps=10
+
+case=same_positive
+  tau_l_hip_roll=+5.00 Nm
+  tau_r_hip_roll=+5.00 Nm
+  response_delta_roll=-0.0011 deg
+  response_delta_pitch=+0.0514 deg
+  response_roll_rate_est=-0.0113 deg/s
+  response_delta_left_fz=+0.0000 N
+  response_delta_right_fz=+0.0000 N
+  response_delta_total_fz=+0.0000 N
+  response_delta_l_hip_roll=+0.023689 rad
+  response_delta_r_hip_roll=+0.023674 rad
+  response_joint_vel_delta=[ 1.92477  0.13304 -0.07755  0.04389 -0.03989  1.92415  0.13451  0.07611
+ -0.03831  0.04227]
+
+case=same_negative
+  tau_l_hip_roll=-5.00 Nm
+  tau_r_hip_roll=-5.00 Nm
+  response_delta_roll=-0.0013 deg
+  response_delta_pitch=-0.0514 deg
+  response_roll_rate_est=-0.0127 deg/s
+  response_delta_left_fz=+0.0000 N
+  response_delta_right_fz=+0.0000 N
+  response_delta_total_fz=+0.0000 N
+  response_delta_l_hip_roll=-0.023672 rad
+  response_delta_r_hip_roll=-0.023689 rad
+  response_joint_vel_delta=[-1.92406 -0.13436  0.07624 -0.03823  0.04216 -1.92481 -0.13303 -0.07763
+  0.04405 -0.0396 ]
+
+case=opposite_left_positive
+  tau_l_hip_roll=+5.00 Nm
+  tau_r_hip_roll=-5.00 Nm
+  response_delta_roll=-0.0104 deg
+  response_delta_pitch=+0.0000 deg
+  response_roll_rate_est=-0.1035 deg/s
+  response_delta_left_fz=+0.0000 N
+  response_delta_right_fz=+0.0000 N
+  response_delta_total_fz=+0.0000 N
+  response_delta_l_hip_roll=+0.021264 rad
+  response_delta_r_hip_roll=-0.021265 rad
+  response_joint_vel_delta=[ 1.76258  0.28788  0.10092 -0.02296 -0.03491 -1.76263 -0.28782  0.10101
+ -0.02279 -0.03461]
+
+case=opposite_right_positive
+  tau_l_hip_roll=-5.00 Nm
+  tau_r_hip_roll=+5.00 Nm
+  response_delta_roll=+0.0097 deg
+  response_delta_pitch=+0.0000 deg
+  response_roll_rate_est=+0.0973 deg/s
+  response_delta_left_fz=+0.0000 N
+  response_delta_right_fz=+0.0000 N
+  response_delta_total_fz=+0.0000 N
+  response_delta_l_hip_roll=-0.021235 rad
+  response_delta_r_hip_roll=+0.021237 rad
+  response_joint_vel_delta=[-1.76197 -0.27514 -0.10665  0.03556  0.0438   1.76206  0.27524 -0.10695
+  0.03547  0.04391]

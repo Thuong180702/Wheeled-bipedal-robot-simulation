@@ -1,0 +1,24 @@
+{
+  "original_path": "outputs/step_e_height_variant_position_hold_final",
+  "original_size": "416.8M",
+  "original_size_bytes": 437096609,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "step_e_hv_sagittal_schedule_candidate_summary.json",
+      "size_bytes": 29051
+    },
+    {
+      "file": "step_e_hv_sagittal_schedule_fix_report.md",
+      "size_bytes": 1650
+    },
+    {
+      "file": "step_e_hv_sagittal_schedule_fix_summary.json",
+      "size_bytes": 30935
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,13 @@
+{
+  "overall_step_e_extreme_verdict": "PASS",
+  "final_decision": "STEP_E_EXTREME_HEIGHT_PASS",
+  "candidate_D2_profile_used": true,
+  "controller_behavior_changed": false,
+  "case_count": 2,
+  "passed_cases": [
+    "min_operational_height",
+    "max_operational_height"
+  ],
+  "failed_cases": [],
+  "inconclusive_cases": []
+}

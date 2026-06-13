@@ -1,0 +1,282 @@
+{
+  "variant_name": "low_0p300",
+  "setup_path": "outputs/physical_target_height_setups/low_0p300_setup.json",
+  "reference_consistency": {
+    "target_com_z_m": 0.3,
+    "achieved_com_z_m": 0.2954845595126816,
+    "root_z_m": 0.39708760597982296,
+    "hip_pitch_ref": 1.376052,
+    "knee_ref": 2.348364,
+    "hip_yaw_ref": [
+      0.0,
+      0.0
+    ],
+    "hip_roll_ref": [
+      0.0,
+      0.0
+    ],
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      1.376052,
+      2.348364,
+      0.0,
+      0.0,
+      0.0,
+      1.376052,
+      2.348364,
+      0.0
+    ],
+    "current_joint_pos": [
+      0.0,
+      0.0,
+      1.376052,
+      2.348364,
+      0.0,
+      0.0,
+      0.0,
+      1.376052,
+      2.348364,
+      0.0
+    ],
+    "reference_consistent": true,
+    "max_joint_pos_error_rad": 0.0
+  },
+  "inverse_dynamics": {
+    "tau_required": [
+      -2.8626168784311092e-15,
+      1.7763568394002505e-15,
+      9.992007221626409e-15,
+      -3.4638958368304884e-14,
+      -2.9646424204443633e-15,
+      3.903899467962765e-15,
+      -5.995204332975845e-15,
+      1.0880185641326534e-14,
+      -3.5083047578154947e-14,
+      -2.9021923753091983e-15
+    ],
+    "qfrc_bias": [
+      -3.4901590841611885e-06,
+      0.23537139838916898,
+      1.3655054405898028,
+      1.1314404086423346,
+      4.210295306839029e-13,
+      -3.4903965930684677e-06,
+      -0.23536889348743673,
+      1.3654777377606673,
+      1.1314595495778001,
+      -1.4515211949062135e-12
+    ]
+  },
+  "torque_budget": {
+    "l_hip_roll": {
+      "tau_required_nm": -2.8626168784311092e-15,
+      "tau_pd_at_zero_error_nm": 0.0,
+      "tau_pd_at_threshold_nm": 0.0,
+      "tau_pd_at_observed_nm": 0.0,
+      "deficit_at_zero_nm": -2.8626168784311092e-15,
+      "deficit_at_threshold_nm": -2.8626168784311092e-15,
+      "deficit_at_observed_nm": -2.8626168784311092e-15
+    },
+    "l_hip_yaw": {
+      "tau_required_nm": 1.7763568394002505e-15,
+      "tau_pd_at_zero_error_nm": 0.0,
+      "tau_pd_at_threshold_nm": 1.05,
+      "tau_pd_at_observed_nm": 2.25,
+      "deficit_at_zero_nm": 1.7763568394002505e-15,
+      "deficit_at_threshold_nm": -1.0499999999999983,
+      "deficit_at_observed_nm": -2.2499999999999982
+    },
+    "l_hip_pitch": {
+      "tau_required_nm": 9.992007221626409e-15,
+      "tau_pd_at_zero_error_nm": 0.0,
+      "tau_pd_at_threshold_nm": 0.0,
+      "tau_pd_at_observed_nm": 0.0,
+      "deficit_at_zero_nm": 9.992007221626409e-15,
+      "deficit_at_threshold_nm": 9.992007221626409e-15,
+      "deficit_at_observed_nm": 9.992007221626409e-15
+    },
+    "l_knee": {
+      "tau_required_nm": -3.4638958368304884e-14,
+      "tau_pd_at_zero_error_nm": 0.0,
+      "tau_pd_at_threshold_nm": 0.0,
+      "tau_pd_at_observed_nm": 0.0,
+      "deficit_at_zero_nm": -3.4638958368304884e-14,
+      "deficit_at_threshold_nm": -3.4638958368304884e-14,
+      "deficit_at_observed_nm": -3.4638958368304884e-14
+    },
+    "l_wheel": {
+      "tau_required_nm": -2.9646424204443633e-15,
+      "tau_pd_at_zero_error_nm": 0.0,
+      "tau_pd_at_threshold_nm": 0.0,
+      "tau_pd_at_observed_nm": 0.0,
+      "deficit_at_zero_nm": -2.9646424204443633e-15,
+      "deficit_at_threshold_nm": -2.9646424204443633e-15,
+      "deficit_at_observed_nm": -2.9646424204443633e-15
+    },
+    "r_hip_roll": {
+      "tau_required_nm": 3.903899467962765e-15,
+      "tau_pd_at_zero_error_nm": 0.0,
+      "tau_pd_at_threshold_nm": 0.0,
+      "tau_pd_at_observed_nm": 0.0,
+      "deficit_at_zero_nm": 3.903899467962765e-15,
+      "deficit_at_threshold_nm": 3.903899467962765e-15,
+      "deficit_at_observed_nm": 3.903899467962765e-15
+    },
+    "r_hip_yaw": {
+      "tau_required_nm": -5.995204332975845e-15,
+      "tau_pd_at_zero_error_nm": 0.0,
+      "tau_pd_at_threshold_nm": 1.05,
+      "tau_pd_at_observed_nm": 2.25,
+      "deficit_at_zero_nm": -5.995204332975845e-15,
+      "deficit_at_threshold_nm": -1.050000000000006,
+      "deficit_at_observed_nm": -2.250000000000006
+    },
+    "r_hip_pitch": {
+      "tau_required_nm": 1.0880185641326534e-14,
+      "tau_pd_at_zero_error_nm": 0.0,
+      "tau_pd_at_threshold_nm": 0.0,
+      "tau_pd_at_observed_nm": 0.0,
+      "deficit_at_zero_nm": 1.0880185641326534e-14,
+      "deficit_at_threshold_nm": 1.0880185641326534e-14,
+      "deficit_at_observed_nm": 1.0880185641326534e-14
+    },
+    "r_knee": {
+      "tau_required_nm": -3.5083047578154947e-14,
+      "tau_pd_at_zero_error_nm": 0.0,
+      "tau_pd_at_threshold_nm": 0.0,
+      "tau_pd_at_observed_nm": 0.0,
+      "deficit_at_zero_nm": -3.5083047578154947e-14,
+      "deficit_at_threshold_nm": -3.5083047578154947e-14,
+      "deficit_at_observed_nm": -3.5083047578154947e-14
+    },
+    "r_wheel": {
+      "tau_required_nm": -2.9021923753091983e-15,
+      "tau_pd_at_zero_error_nm": 0.0,
+      "tau_pd_at_threshold_nm": 0.0,
+      "tau_pd_at_observed_nm": 0.0,
+      "deficit_at_zero_nm": -2.9021923753091983e-15,
+      "deficit_at_threshold_nm": -2.9021923753091983e-15,
+      "deficit_at_observed_nm": -2.9021923753091983e-15
+    }
+  },
+  "pd_torque_at_zero_error": {
+    "tau": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "posture_error": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "hip_yaw_error": [
+      0.0,
+      0.0
+    ],
+    "hip_pitch_error": [
+      0.0,
+      0.0
+    ],
+    "knee_error": [
+      0.0,
+      0.0
+    ]
+  },
+  "pd_torque_at_threshold_error": {
+    "tau": [
+      0.0,
+      1.05,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.05,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "posture_error": [
+      0.0,
+      0.07,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.07,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "hip_yaw_error": [
+      0.07,
+      0.07
+    ],
+    "hip_pitch_error": [
+      0.0,
+      0.0
+    ],
+    "knee_error": [
+      0.0,
+      0.0
+    ]
+  },
+  "pd_torque_at_observed_error": {
+    "tau": [
+      0.0,
+      2.25,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      2.25,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "posture_error": [
+      0.0,
+      0.15,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.15,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "hip_yaw_error": [
+      0.15,
+      0.15
+    ],
+    "hip_pitch_error": [
+      0.0,
+      0.0
+    ],
+    "knee_error": [
+      0.0,
+      0.0
+    ]
+  },
+  "root_cause_indicators": {
+    "hip_yaw_has_nonzero_holding_torque": false,
+    "max_hip_yaw_deficit_at_zero_nm": 5.995204332975845e-15,
+    "observed_yaw_error_rad": 0.15
+  }
+}

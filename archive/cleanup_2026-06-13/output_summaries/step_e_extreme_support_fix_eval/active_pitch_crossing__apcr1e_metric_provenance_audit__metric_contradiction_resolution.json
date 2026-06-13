@@ -1,0 +1,116 @@
+{
+  "audit_type": "metric_provenance_audit",
+  "profile": "APCR1e_adaptive_symmetric_soft_band",
+  "classification": "APCR1E_ANALYSIS_INVALID_RECOMPUTED_NOT_BETTER",
+  "contradiction_resolved": true,
+  "root_cause": "analyzer_used_wrong_column_mixing_ref_with_position",
+
+  "findings": {
+    "analyzer_column_source": {
+      "column_used_for_p2p_claim": "support_center_x - support_center_ref_x",
+      "column_used_for_signed_range_claim": "active_pitch_crossing_signed_error_m",
+      "analyzer_column_is_mirage": true,
+      "reason": "support_center_ref_x is updated to track support_center_x, making their difference near-zero"
+    },
+    "correct_physical_drift_column": "active_pitch_crossing_signed_error_m",
+    "equivalent_columns": [
+      "sagittal_position_error_m",
+      "support_position_error_m",
+      "hip_yaw_comp_support_error_m"
+    ],
+    "all_these_columns_are_identical": true,
+    "correlation": 1.0,
+    "max_diff": 0.0
+  },
+
+  "contradiction_resolution": {
+    "p2p_claim": {
+      "value": "< 0.002 m",
+      "source_column": "support_center_x - support_center_ref_x",
+      "is_valid": false,
+      "reason": "reference column is tracking position, making difference near-zero - a mirage"
+    },
+    "signed_range_claim": {
+      "value": "[-0.064, +0.17] m",
+      "source_column": "active_pitch_crossing_signed_error_m",
+      "is_valid": true,
+      "reason": "this is the true physical drift column"
+    }
+  },
+
+  "corrected_metrics": {
+    "500_step": {
+      "min_drift": -0.0273,
+      "max_drift": 0.1619,
+      "p2p": 0.1892,
+      "outside_0p15": 9.8,
+      "outside_0p08": 42.4,
+      "mean": 0.0603,
+      "abs_mean": 0.0685
+    },
+    "2000_step": {
+      "min_drift": -0.0644,
+      "max_drift": 0.1708,
+      "p2p": 0.2352,
+      "outside_0p15": 10.1,
+      "outside_0p08": 45.4,
+      "mean": 0.0618,
+      "abs_mean": 0.0761
+    }
+  },
+
+  "comparison_vs_baselines": {
+    "D2": {
+      "p2p": 0.1615,
+      "outside_0p15": 19.2,
+      "max_drift": 0.1757,
+      "min_drift": 0.0142
+    },
+    "APCR1c": {
+      "p2p": 0.2398,
+      "outside_0p15": 12.6,
+      "max_drift": 0.1682,
+      "min_drift": -0.0716
+    },
+    "APCR1d": {
+      "survived": false,
+      "fail_step": 18
+    },
+    "APCR1e": {
+      "p2p": 0.2352,
+      "outside_0p15": 10.1,
+      "max_drift": 0.1708,
+      "min_drift": -0.0644
+    }
+  },
+
+  "performance_assessment": {
+    "vs_D2": {
+      "p2p_worse": true,
+      "p2p_ratio": 1.46,
+      "outside_0p15_better": true,
+      "outside_0p15_ratio": 0.53
+    },
+    "vs_APCR1c": {
+      "p2p_better": true,
+      "p2p_ratio": 0.98,
+      "outside_0p15_better": true,
+      "outside_0p15_ratio": 0.80
+    },
+    "conclusion": "APCR1e slightly better than APCR1c but WORSE than D2 on P2P"
+  },
+
+  "adaptive_authority_behavior": {
+    "is_valid": true,
+    "tau_max": 1.1556,
+    "tau_mean": 0.5302,
+    "tau_reached_adaptive_max": true,
+    "apcr_active_pct": 60.55,
+    "conclusion": "adaptive authority behavior appears real and functional"
+  },
+
+  "recommendation": "APCR1E_ANALYSIS_INVALID_RECOMPUTED_NOT_BETTER",
+  "reason": "Original P2P < 0.002 claim was based on wrong column. Corrected P2P = 0.2352 m, which is worse than D2 (0.1615 m). While APCR1e slightly improves over APCR1c, it is not better than D2.",
+  "proceed_to_5000": false,
+  "note": "APCR1e adaptive authority behavior is real, but physical drift performance is not improved vs D2 baseline."
+}

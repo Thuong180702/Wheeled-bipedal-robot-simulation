@@ -1,0 +1,70 @@
+{
+  "inventory_date": "2026-06-07",
+  "scope": "Step E official WBC gate logic",
+  "summary": "Single file contains the official WBC gate. tau_wbc_norm > 0.001 is used as proxy for WBC 'applied', but this is a false positive since tau_wbc_norm is structural QP support feedforward output, not active WBC control authority.",
+
+  "files_with_wbc_gate_logic": [
+    {
+      "file": "scripts/analyze_step_e_extreme_height_d2_official_check.py",
+      "lines": [160, 162, 275-280],
+      "uses": "official_pass_fail_gate",
+      "current_logic": "wbc_applied = any(tau_wbc_norm > 0.001 for row in rows)",
+      "issue": "False positive - tau_wbc_norm includes QP structural support feedforward, not active WBC control",
+      "fix_needed": "Replace with active WBC authority check using per_actuator_wbc_authority_enabled or ownership-based detection"
+    }
+  ],
+
+  "files_with_tau_wbc_norm_diagnostic_only": [
+    {
+      "file": "scripts/simulate_hierarchical_controller.py",
+      "lines": [573, 2127, 2615, 2674-2676, 2729, 3543, 4223, 4241, 4268],
+      "uses": "diagnostic_telemetry",
+      "note": "These are telemetry logging only - should remain as-is but clearly labeled as structural QP output"
+    }
+  ],
+
+  "telemetry_field_mapping": {
+    "tau_wbc_norm": {
+      "source": "scripts/simulate_hierarchical_controller.py",
+      "description": "L2 norm of WBC torques from BalanceCoreTorqueComposer",
+      "is_structural_qp_output": true,
+      "includes_support_feedforward": true,
+      "renamed_to": "structural_qp_tau_norm (recommended)"
+    },
+    "per_actuator_wbc_authority_enabled": {
+      "source": "scripts/simulate_hierarchical_controller.py",
+      "description": "Flag indicating per-actuator WBC authority is enabled (separate from QP structural output)",
+      "is_actual_wbc_authority": true,
+      "current_value_at_extreme_heights": false
+    },
+    "active_torque_owner_per_joint": {
+      "source": "scripts/simulate_hierarchical_controller.py",
+      "description": "Per-joint torque owner classification",
+      "values_at_extreme_heights": "none,support_feedforward - NO actual WBC owners",
+      "can_detect_actual_wbc": true
+    }
+  },
+
+  "recommended_fix": {
+    "description": "Replace tau_wbc_norm > 0.001 check with per_actuator_wbc_authority_enabled check",
+    "new_logic": "wbc_applied = per_actuator_wbc_authority_enabled == True",
+    "fallback_logic": "Check active_torque_owner_per_joint for any WBC-related owners excluding support_feedforward",
+    "excluded_owners": [
+      "support_feedforward",
+      "shape_posture",
+      "sagittal_wheel_balance",
+      "lateral_roll_balance",
+      "none"
+    ]
+  },
+
+  "impact": {
+    "files_to_modify": [
+      "scripts/analyze_step_e_extreme_height_d2_official_check.py"
+    ],
+    "files_to_keep_unchanged": [
+      "scripts/simulate_hierarchical_controller.py (telemetry only)"
+    ],
+    "tests_to_add": "tests/test_step_e_validator.py or update existing validator tests"
+  }
+}

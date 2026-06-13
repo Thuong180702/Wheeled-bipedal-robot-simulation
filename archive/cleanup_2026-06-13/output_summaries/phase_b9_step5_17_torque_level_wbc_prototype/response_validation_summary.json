@@ -1,0 +1,20 @@
+{
+  "baseline_h060": {
+    "survival_s": 0.52,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 0.8745,
+    "roll_rms_deg": 16.493,
+    "action_saturation": 0.0
+  },
+  "tested_perturbations_deg": [
+    2.0,
+    -2.0
+  ],
+  "stabilizing_static_torque_response_candidates": [
+    "torque_roll_only",
+    "torque_roll_plus_lateral",
+    "hybrid_pid_plus_torque_roll",
+    "conservative_torque_wbc"
+  ],
+  "result": "diagnostic_torque_authority_exists_but_not_deployable_control_interface"
+}

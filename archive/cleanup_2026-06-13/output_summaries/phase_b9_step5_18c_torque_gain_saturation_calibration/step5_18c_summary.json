@@ -1,0 +1,77 @@
+{
+  "final_decision": "TORQUE_GAIN_CALIBRATION_IMPROVES_BUT_DOES_NOT_PASS_GATE",
+  "output_dir": "outputs/phase_b9_step5_18c_torque_gain_saturation_calibration",
+  "baseline_h060": {
+    "survival_s": 0.52,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 0.8745,
+    "roll_rms_deg": 16.493,
+    "action_saturation": 0.0
+  },
+  "baseline_all_height_reset_fixed": {
+    "mean_survival_s": 3.8167,
+    "fall_rate": 0.8333,
+    "pitch_rms_deg": 1.1938,
+    "roll_rms_deg": 21.1630
+  },
+  "step5_18b_saturation_root_cause": "PID_CONTROLLER_SATURATION_NOT_TORQUE_RESIDUAL",
+  "step5_18b_issue": "PID outputs 30 Nm and saturates at ctrlrange limits while torque residuals remain under 1 Nm due to weak gains (k_roll=1.5, max_ctrl_fraction=0.15)",
+  "step5_18c_fix": "Increased torque gains by 10-13x (k_roll: 1.5 → 20.0, k_pitch: 0.4 → 5.0) and max_ctrl_fraction (0.15 → 0.5) to produce physical torques (5.24 Nm) that compete with PID output",
+  "phase3_response_validation": {
+    "candidates_tested": 5,
+    "torque_range_Nm": [1.57, 10.5],
+    "all_non_saturating": true
+  },
+  "phase4_h060_evaluation": {
+    "candidates_tested": 5,
+    "all_beat_baseline": true,
+    "best_candidate": "strong_k20",
+    "best_h060_survival_s": 0.86,
+    "best_h060_fall_rate": 0.8,
+    "improvement_vs_baseline_pct": 65.4
+  },
+  "phase5_full_validation": {
+    "candidates_tested": 2,
+    "heights": [0.65, 0.60, 0.55, 0.50, 0.45, 0.40],
+    "episodes_per_height": 5,
+    "best_candidate": {
+      "name": "strong_k20",
+      "k_roll": 20.0,
+      "k_roll_rate": 2.0,
+      "k_pitch": 5.0,
+      "k_pitch_rate": 0.5,
+      "max_ctrl_fraction": 0.5,
+      "mean_survival_s": 0.86,
+      "fall_rate": 0.8,
+      "pitch_rms_deg": 0.058,
+      "roll_rms_deg": 15.9,
+      "action_saturation_rate": 0.8
+    }
+  },
+  "comparison_vs_baselines": {
+    "vs_h060_baseline": {
+      "survival_improvement_s": 0.34,
+      "survival_improvement_pct": 65.4,
+      "fall_rate_improvement": 0.2,
+      "beats_baseline": true
+    },
+    "vs_all_height_reset_fixed_baseline": {
+      "survival_change_s": -2.9567,
+      "survival_change_pct": -77.5,
+      "fall_rate_change": -0.0333,
+      "beats_baseline": false
+    }
+  },
+  "interpretation": "Torque gain calibration (k_roll=20, max_ctrl_fraction=0.5) produces meaningful physical torques (5.24 Nm) that improve h=0.60 survival by 65% vs Step 5.18b. However, all-height performance remains 77% worse than Step 5 reset-fixed baseline (0.86s vs 3.82s). The hybrid PID+torque path shows local improvement but does not pass the full validation gate.",
+  "gate_status": "DOES_NOT_PASS",
+  "gate_criteria": "Beat all-height reset-fixed baseline (3.8167s)",
+  "actual_all_height_survival": 0.86,
+  "step5_passed": false,
+  "step6_status": "BLOCKED",
+  "current_best_controller": "outputs/phase_b9_lqr_gain_strengthening/best_lqr_config.yaml",
+  "recommended_next_steps": [
+    "Option A: Pure motor torque control (disable PID path entirely)",
+    "Option B: QP-based WBC with contact force optimization",
+    "Option C: Accept classical controller limit and advance to Step 6 with Step 5 best as prior"
+  ]
+}

@@ -1,0 +1,244 @@
+{
+  "case_count": 9,
+  "passed_count": 3,
+  "failed_count": 6,
+  "invalid_initial_setup_count": 0,
+  "max_confirmed_passing_duration_steps": 0,
+  "results": [
+    {
+      "case_id": "root_z_minus_030mm_1000",
+      "height_test_type": "root_z_perturbation",
+      "duration_steps": 1000,
+      "passed": false,
+      "actual_steps": 1000,
+      "setup_valid": true,
+      "setup_failure_reason": null,
+      "initial_contact_state": null,
+      "min_wheel_contact_dist_m": null,
+      "equilibrium_com_z_m": null,
+      "initial_com_z_m": null,
+      "failure_mode": "F2.1",
+      "responsible_component": "SagittalWheelBalanceController",
+      "telemetry_path": "outputs/root_z_recheck/m003",
+      "report_path": "outputs/root_z_recheck/m003/failure_report_1000.md",
+      "sim_args": [
+        "--initial-root-z-perturbation",
+        "-0.03"
+      ],
+      "summary_metrics": {
+        "requested_steps": 1000,
+        "survival_steps": 1000,
+        "height_offset_m": -0.03
+      }
+    },
+    {
+      "case_id": "root_z_minus_020mm_1000",
+      "height_test_type": "root_z_perturbation",
+      "duration_steps": 1000,
+      "passed": false,
+      "actual_steps": 1000,
+      "setup_valid": true,
+      "setup_failure_reason": null,
+      "initial_contact_state": null,
+      "min_wheel_contact_dist_m": null,
+      "equilibrium_com_z_m": null,
+      "initial_com_z_m": null,
+      "failure_mode": "F2.1",
+      "responsible_component": "SagittalWheelBalanceController",
+      "telemetry_path": "outputs/root_z_recheck/m002",
+      "report_path": "outputs/root_z_recheck/m002/failure_report_1000.md",
+      "sim_args": [
+        "--initial-root-z-perturbation",
+        "-0.02"
+      ],
+      "summary_metrics": {
+        "requested_steps": 1000,
+        "survival_steps": 1000,
+        "height_offset_m": -0.02
+      }
+    },
+    {
+      "case_id": "root_z_minus_010mm_1000",
+      "height_test_type": "root_z_perturbation",
+      "duration_steps": 1000,
+      "passed": true,
+      "actual_steps": 1000,
+      "setup_valid": true,
+      "setup_failure_reason": null,
+      "initial_contact_state": null,
+      "min_wheel_contact_dist_m": null,
+      "equilibrium_com_z_m": null,
+      "initial_com_z_m": null,
+      "failure_mode": null,
+      "responsible_component": null,
+      "telemetry_path": "outputs/root_z_recheck/m001",
+      "report_path": null,
+      "sim_args": [
+        "--initial-root-z-perturbation",
+        "-0.01"
+      ],
+      "summary_metrics": {
+        "requested_steps": 1000,
+        "survival_steps": 1000,
+        "height_offset_m": -0.01
+      }
+    },
+    {
+      "case_id": "root_z_plus_000mm_1000",
+      "height_test_type": "root_z_perturbation",
+      "duration_steps": 1000,
+      "passed": true,
+      "actual_steps": 1000,
+      "setup_valid": true,
+      "setup_failure_reason": null,
+      "initial_contact_state": null,
+      "min_wheel_contact_dist_m": null,
+      "equilibrium_com_z_m": null,
+      "initial_com_z_m": null,
+      "failure_mode": null,
+      "responsible_component": null,
+      "telemetry_path": "outputs/root_z_recheck/p000",
+      "report_path": null,
+      "sim_args": [
+        "--initial-root-z-perturbation",
+        "0.0"
+      ],
+      "summary_metrics": {
+        "requested_steps": 1000,
+        "survival_steps": 1000,
+        "height_offset_m": 0.0
+      }
+    },
+    {
+      "case_id": "root_z_plus_010mm_1000",
+      "height_test_type": "root_z_perturbation",
+      "duration_steps": 1000,
+      "passed": false,
+      "actual_steps": 1000,
+      "setup_valid": true,
+      "setup_failure_reason": null,
+      "initial_contact_state": null,
+      "min_wheel_contact_dist_m": null,
+      "equilibrium_com_z_m": null,
+      "initial_com_z_m": null,
+      "failure_mode": "F1.2",
+      "responsible_component": "ShapePostureController or SupportFeedforwardController",
+      "telemetry_path": "outputs/root_z_recheck/p001",
+      "report_path": "outputs/root_z_recheck/p001/failure_report_1000.md",
+      "sim_args": [
+        "--initial-root-z-perturbation",
+        "0.01"
+      ],
+      "summary_metrics": {
+        "requested_steps": 1000,
+        "survival_steps": 1000,
+        "height_offset_m": 0.01
+      }
+    },
+    {
+      "case_id": "root_z_plus_020mm_1000",
+      "height_test_type": "root_z_perturbation",
+      "duration_steps": 1000,
+      "passed": false,
+      "actual_steps": 1000,
+      "setup_valid": true,
+      "setup_failure_reason": null,
+      "initial_contact_state": null,
+      "min_wheel_contact_dist_m": null,
+      "equilibrium_com_z_m": null,
+      "initial_com_z_m": null,
+      "failure_mode": "F1.2",
+      "responsible_component": "ShapePostureController or SupportFeedforwardController",
+      "telemetry_path": "outputs/root_z_recheck/p002",
+      "report_path": "outputs/root_z_recheck/p002/failure_report_1000.md",
+      "sim_args": [
+        "--initial-root-z-perturbation",
+        "0.02"
+      ],
+      "summary_metrics": {
+        "requested_steps": 1000,
+        "survival_steps": 1000,
+        "height_offset_m": 0.02
+      }
+    },
+    {
+      "case_id": "root_z_plus_030mm_1000",
+      "height_test_type": "root_z_perturbation",
+      "duration_steps": 1000,
+      "passed": false,
+      "actual_steps": 1000,
+      "setup_valid": true,
+      "setup_failure_reason": null,
+      "initial_contact_state": null,
+      "min_wheel_contact_dist_m": null,
+      "equilibrium_com_z_m": null,
+      "initial_com_z_m": null,
+      "failure_mode": "F1.2",
+      "responsible_component": "ShapePostureController or SupportFeedforwardController",
+      "telemetry_path": "outputs/root_z_recheck/p003",
+      "report_path": "outputs/root_z_recheck/p003/failure_report_1000.md",
+      "sim_args": [
+        "--initial-root-z-perturbation",
+        "0.03"
+      ],
+      "summary_metrics": {
+        "requested_steps": 1000,
+        "survival_steps": 1000,
+        "height_offset_m": 0.03
+      }
+    },
+    {
+      "case_id": "root_z_minus_010mm_5000",
+      "height_test_type": "root_z_perturbation",
+      "duration_steps": 5000,
+      "passed": true,
+      "actual_steps": 5000,
+      "setup_valid": true,
+      "setup_failure_reason": null,
+      "initial_contact_state": null,
+      "min_wheel_contact_dist_m": null,
+      "equilibrium_com_z_m": null,
+      "initial_com_z_m": null,
+      "failure_mode": null,
+      "responsible_component": null,
+      "telemetry_path": "outputs/root_z_recheck/m001_5k",
+      "report_path": null,
+      "sim_args": [
+        "--initial-root-z-perturbation",
+        "-0.01"
+      ],
+      "summary_metrics": {
+        "requested_steps": 5000,
+        "survival_steps": 5000,
+        "height_offset_m": -0.01
+      }
+    },
+    {
+      "case_id": "root_z_plus_000mm_5000",
+      "height_test_type": "root_z_perturbation",
+      "duration_steps": 5000,
+      "passed": false,
+      "actual_steps": 5000,
+      "setup_valid": true,
+      "setup_failure_reason": null,
+      "initial_contact_state": null,
+      "min_wheel_contact_dist_m": null,
+      "equilibrium_com_z_m": null,
+      "initial_com_z_m": null,
+      "failure_mode": "failed_validation",
+      "responsible_component": null,
+      "telemetry_path": "outputs/root_z_recheck/p000_5k",
+      "report_path": null,
+      "sim_args": [
+        "--initial-root-z-perturbation",
+        "0.0"
+      ],
+      "summary_metrics": {
+        "requested_steps": 5000,
+        "survival_steps": 5000,
+        "height_offset_m": 0.0
+      }
+    }
+  ],
+  "conclusion": "root_z_perturbation_robustness_narrow: pass_1000=[-0.01,0.00], fail_1000=[-0.03,-0.02,+0.01,+0.02,+0.03], pass_5000=[-0.01], fail_5000=[0.00]"
+}

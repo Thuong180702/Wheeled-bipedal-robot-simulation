@@ -1,0 +1,35 @@
+{
+  "decision": "F1B_INCONCLUSIVE_TELEMETRY_BUG",
+  "f1b_survived_steps": 500,
+  "d2_survived_steps": 500,
+  "d2_signed_support_mean": 0.082333,
+  "d2_signed_support_positive_pct": 93.0,
+  "d2_signed_support_max": 0.1757,
+  "d2_wheel_velocity_abs_max": 4.3887,
+  "d2_hip_yaw_max": 0.1018,
+  "f1b_pitch_x_max_deg": 6.32,
+  "f1b_wheel_velocity_max": 5.0049,
+  "f1b_ownership_violations": 0,
+  "f1b_hidden_torque": 0.0,
+  "f1b_contact_state": "double_contact",
+  "telemetry_issue": "CSV file has header only, no data rows",
+  "root_cause": "Pre-existing CSV writing bug in simulate_hierarchical_controller.py",
+  "missing_metrics": [
+    "signed_support_mean",
+    "signed_support_positive_pct",
+    "signed_support_crossings_015",
+    "hip_yaw_abs_max",
+    "recenter_active_percent"
+  ],
+  "next_steps": [
+    "Fix CSV writing bug in simulate_hierarchical_controller.py",
+    "Re-run F1b 500-step validation",
+    "Verify recenter_active_percent > 0",
+    "Verify signed_support_positive_pct < 80%"
+  ],
+  "structural_gates_pass": true,
+  "files_changed": [
+    "scripts/simulate_hierarchical_controller.py",
+    "tests/test_sagittal_velocity_damped_balance_controller.py"
+  ]
+}

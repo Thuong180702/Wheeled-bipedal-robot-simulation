@@ -1,0 +1,20 @@
+{
+  "original_path": "outputs/phase_b_verification",
+  "original_size": "2.1K",
+  "original_size_bytes": 2159,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "eval_results.json",
+      "size_bytes": 1674
+    },
+    {
+      "file": "summary_table.txt",
+      "size_bytes": 0
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,83 @@
+{
+  "profile_name": "APCR1n_recenter_priority_torque_boost",
+  "base_profile": "APCR1h_support_drift_priority_fast_recenter",
+  "not_based_on": "APCR1m_conditional_pitch_blend_recenter",
+
+  "design_date": "2026-06-11",
+
+  "root_cause_from_apcr1m_audit": {
+    "wheel_damping_too_high": "APCR1m wheel damping = 5.0 Nm vs APCR1h = 1.42 Nm (3.5x larger)",
+    "position_cap_saturated": "APCR1m position cap ±3 Nm, saturation rate = 77.3%",
+    "final_torque_fights_drift": "APCR1m final torque fights drift 62.8% during RECENTER"
+  },
+
+  "features": {
+    "wheel_damping_override": {
+      "enabled": true,
+      "vd_wheel_damping_recenter_override_enabled": true,
+      "vd_wheel_damping_recenter_scale": 0.30,
+      "vd_wheel_damping_recenter_min_abs_nm": 0.50,
+      "vd_wheel_damping_preserve_if_opposes_drift": true,
+      "description": "Reduce wheel damping by 0.30x when it fights drift recovery during RECENTER"
+    },
+    "position_cap_boost": {
+      "enabled": true,
+      "position_cap_recenter_boost_enabled": true,
+      "position_cap_normal_nm": 3.0,
+      "position_cap_recenter_nm": 5.0,
+      "position_cap_emergency_nm": 6.0,
+      "position_cap_ramp_steps": 50,
+      "description": "Boost position cap from 3.0 to 5.0 Nm during safe RECENTER"
+    },
+    "startup_guard": {
+      "enabled": true,
+      "recenter_priority_startup_guard_steps": 100,
+      "description": "Preserve APCR1h behavior for first 100 steps"
+    },
+    "safety_gates": {
+      "recenter_priority_safe_min_com_z": 0.27,
+      "recenter_priority_safe_roll_rad": 0.15,
+      "recenter_priority_safe_pitch_rad": 0.15,
+      "description": "Safety gates for position cap boost activation"
+    }
+  },
+
+  "telemetry_fields": [
+    "apcr1n_recenter_priority_active",
+    "apcr1n_startup_guard_active",
+    "apcr1n_wheel_damping_override_active",
+    "apcr1n_wheel_damping_scale",
+    "apcr1n_wheel_damping_before",
+    "apcr1n_wheel_damping_after",
+    "apcr1n_wheel_damping_fights_drift",
+    "apcr1n_position_cap_boost_active",
+    "apcr1n_position_cap_current",
+    "apcr1n_tau_position_raw",
+    "apcr1n_tau_position_after_cap",
+    "apcr1n_position_saturated",
+    "apcr1n_safety_gate_pass",
+    "apcr1n_final_torque_direction_correct",
+    "apcr1n_final_torque_fights_drift",
+    "apcr1n_physical_drift_column_used"
+  ],
+
+  "expected_metrics": {
+    "max_abs_e": {"apcr1h": 0.178, "apcr1n_target": "< 0.178", "apcr1m": 0.434},
+    "p2p": {"apcr1h": 0.249, "apcr1n_target": "<= 0.249", "apcr1m": 0.833},
+    "outside_0p15": {"apcr1h": 9.7, "apcr1n_target": "< 9.7", "apcr1m": 54.0},
+    "wheel_damping_nm": {"apcr1h": 1.42, "apcr1n_target": "1.5-2.0", "apcr1m": 5.00}
+  },
+
+  "implementation_plan": [
+    "Add APCR1n dataclass fields to SagittalAuthoritySchedule",
+    "Add APCR1N_RECENTER_PRIORITY_TORQUE_BOOST profile",
+    "Add to profile registry",
+    "Implement wheel damping override logic in compute_apcr_torque",
+    "Implement position cap boost logic",
+    "Add APCR1n telemetry fields",
+    "Add APCR1n profile to simulate_hierarchical_controller.py",
+    "Add tests for APCR1n",
+    "Run 1000-step validation",
+    "Analyze and create report"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "original_path": "outputs/stage2_diagnostics",
+  "original_size": "1015.6K",
+  "original_size_bytes": 1039975,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "stage2_diagnostics_1779583170.json",
+      "size_bytes": 337439
+    },
+    {
+      "file": "stage2_diagnostics_1779583245.json",
+      "size_bytes": 351268
+    },
+    {
+      "file": "stage2_diagnostics_1779583280.json",
+      "size_bytes": 351268
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

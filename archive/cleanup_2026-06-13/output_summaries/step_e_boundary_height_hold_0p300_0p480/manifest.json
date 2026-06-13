@@ -1,0 +1,20 @@
+{
+  "original_path": "outputs/step_e_boundary_height_hold_0p300_0p480",
+  "original_size": "1.8K",
+  "original_size_bytes": 1894,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "step_e_boundary_metrics.json",
+      "size_bytes": 1602
+    },
+    {
+      "file": "step_e_boundary_position_hold_summary.json",
+      "size_bytes": 292
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

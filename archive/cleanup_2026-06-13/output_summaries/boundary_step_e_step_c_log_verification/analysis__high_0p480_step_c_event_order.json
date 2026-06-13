@@ -1,0 +1,16 @@
+{
+  "case_name": "high_0p480",
+  "stage": "step_c",
+  "hip_yaw_0p03_cross": 400,
+  "hip_yaw_0p07_cross": null,
+  "hip_yaw_0p10_cross": null,
+  "support_0p05_cross": null,
+  "support_0p10_cross": null,
+  "support_0p15_cross": null,
+  "pitch_0p05_cross": 390,
+  "pitch_0p10_cross": null,
+  "first_event": "pitch_0p05_cross",
+  "second_event": "hip_yaw_0p03_cross",
+  "third_event": null,
+  "classification": "pitch_led"
+}

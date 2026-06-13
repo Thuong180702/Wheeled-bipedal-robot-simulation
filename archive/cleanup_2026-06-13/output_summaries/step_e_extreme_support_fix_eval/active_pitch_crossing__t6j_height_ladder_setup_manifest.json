@@ -1,0 +1,102 @@
+[
+  {
+    "label": "low_0p300",
+    "setup_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\physical_target_height_setups\\low_0p300_setup.json",
+    "exists": true,
+    "launch_status": "completed",
+    "return_code": 0,
+    "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_extreme_support_fix_eval\\active_pitch_crossing\\t6j_height_ladder_2000_low_0p300\\telemetry_2000.csv",
+    "summary_path": "",
+    "notes": " No summary file found."
+  },
+  {
+    "label": "low_0p320",
+    "setup_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\physical_target_height_setups\\low_0p320_setup.json",
+    "exists": true,
+    "launch_status": "completed",
+    "return_code": 0,
+    "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_extreme_support_fix_eval\\active_pitch_crossing\\t6j_height_ladder_2000_low_0p320\\telemetry_2000.csv",
+    "summary_path": "",
+    "notes": " No summary file found."
+  },
+  {
+    "label": "low_0p330",
+    "setup_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\physical_target_height_setups\\low_0p330_setup.json",
+    "exists": true,
+    "launch_status": "completed",
+    "return_code": 0,
+    "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_extreme_support_fix_eval\\active_pitch_crossing\\t6j_height_ladder_2000_low_0p330\\telemetry_2000.csv",
+    "summary_path": "",
+    "notes": " No summary file found."
+  },
+  {
+    "label": "low_0p340",
+    "setup_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\physical_target_height_setups\\low_0p340_setup.json",
+    "exists": true,
+    "launch_status": "completed",
+    "return_code": 0,
+    "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_extreme_support_fix_eval\\active_pitch_crossing\\t6j_height_ladder_2000_low_0p340\\telemetry_2000.csv",
+    "summary_path": "",
+    "notes": " No summary file found."
+  },
+  {
+    "label": "low_0p360",
+    "setup_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\physical_target_height_setups\\low_0p360_setup.json",
+    "exists": true,
+    "launch_status": "completed",
+    "return_code": 0,
+    "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_extreme_support_fix_eval\\active_pitch_crossing\\t6j_height_ladder_2000_low_0p360\\telemetry_2000.csv",
+    "summary_path": "",
+    "notes": " No summary file found."
+  },
+  {
+    "label": "low_0p380",
+    "setup_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\physical_target_height_setups\\low_0p380_setup.json",
+    "exists": true,
+    "launch_status": "completed",
+    "return_code": 0,
+    "telemetry_path": "f:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_extreme_support_fix_eval\\active_pitch_crossing\\t6j_height_ladder_2000_low_0p380\\telemetry_2000.csv",
+    "summary_path": "",
+    "notes": ""
+  },
+  {
+    "label": "high_0p430",
+    "setup_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\physical_target_height_setups\\high_0p430_setup.json",
+    "exists": true,
+    "launch_status": "completed",
+    "return_code": 0,
+    "telemetry_path": "f:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_extreme_support_fix_eval\\active_pitch_crossing\\t6j_height_ladder_2000_high_0p430\\telemetry_2000.csv",
+    "summary_path": "",
+    "notes": ""
+  },
+  {
+    "label": "high_0p450",
+    "setup_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\physical_target_height_setups\\high_0p450_setup.json",
+    "exists": true,
+    "launch_status": "completed",
+    "return_code": 0,
+    "telemetry_path": "f:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_extreme_support_fix_eval\\active_pitch_crossing\\t6j_height_ladder_2000_high_0p450\\telemetry_2000.csv",
+    "summary_path": "",
+    "notes": ""
+  },
+  {
+    "label": "high_0p465",
+    "setup_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\physical_target_height_setups\\high_0p465_setup.json",
+    "exists": true,
+    "launch_status": "completed",
+    "return_code": 0,
+    "telemetry_path": "f:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_extreme_support_fix_eval\\active_pitch_crossing\\t6j_height_ladder_2000_high_0p465\\telemetry_2000.csv",
+    "summary_path": "",
+    "notes": ""
+  },
+  {
+    "label": "high_0p480",
+    "setup_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\physical_target_height_setups\\high_0p480_setup.json",
+    "exists": true,
+    "launch_status": "completed",
+    "return_code": 0,
+    "telemetry_path": "f:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_extreme_support_fix_eval\\active_pitch_crossing\\t6j_height_ladder_2000_high_0p480\\telemetry_2000.csv",
+    "summary_path": "",
+    "notes": ""
+  }
+]

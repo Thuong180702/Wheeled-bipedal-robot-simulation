@@ -1,0 +1,482 @@
+{
+  "low_0p300_hip_yaw": {
+    "variant": "low_0p300",
+    "position": {
+      "l_max": 0.27804744243621826,
+      "r_max": 0.2806517779827118,
+      "common_mode_max": 0.01086403802037239,
+      "divergence_max": 0.55869922041893,
+      "common_mode_rms": 0.003354714608181934,
+      "divergence_rms": 0.35750059978437265
+    },
+    "error": {
+      "l_mean": 0.15913287770065362,
+      "r_mean": -0.16437951310546633,
+      "l_std": 0.07745917107306373,
+      "r_std": 0.07471296651780258,
+      "common_mode_rms": 0.003354714608181934,
+      "divergence_rms": 0.35750059978437265,
+      "hip_yaw_abs_max": 0.2806517779827118,
+      "hip_yaw_error_rms_max": 0.2793526451728885
+    },
+    "torque": {
+      "l_raw_max": 4.338353902101517,
+      "r_raw_max": 4.3788794204592705,
+      "l_final_max": 4.338354110717773,
+      "r_final_max": 4.378879070281982,
+      "sign_correct_l_pct": 0.0,
+      "sign_correct_r_pct": 0.0,
+      "sign_opposes_error_pct": 2.8000000000000003
+    },
+    "behavior_classification": "one_sided_drift"
+  },
+  "low_0p300_body_yaw": {
+    "variant": "low_0p300",
+    "body_yaw": {
+      "max_abs": 0.010887809235987783,
+      "rms": 0.0038511168943610105
+    },
+    "root_yaw": {
+      "max_abs": 0.007498093712718495,
+      "rms": 0.004063542119598253
+    },
+    "yaw_rate": {
+      "max_abs": 0.04169449955224991,
+      "rms": 0.005351399724557736
+    },
+    "yaw_error": {
+      "max_abs": 0.014940345409582393,
+      "rms": 0.008120790814885558
+    },
+    "yaw_drift": {
+      "max_abs": 0.014940345409582393,
+      "final": -0.014778032036810908
+    },
+    "hip_yaw_abs_max": 0.2806517779827118,
+    "classification": "stable"
+  },
+  "low_0p300_support": {
+    "variant": "low_0p300",
+    "support_position": {
+      "error_max": 0.0,
+      "error_mean": 0.0,
+      "error_final": 0.0,
+      "center_x_max": 0.005630662984382875,
+      "center_y_max": 0.0937867048030966
+    },
+    "com_position": {
+      "x_max": 0.007392854895442724,
+      "y_max": 0.06376885622739792,
+      "z_final": 0.2795393764972687
+    },
+    "com_velocity": {
+      "vx_max": 0.015333713963627815,
+      "vx_rms": 0.0018860132509069725
+    },
+    "wheel_velocity": {
+      "max_abs": 7.251313209533691,
+      "rms": 3.9661940778907563
+    },
+    "height": {
+      "error_max": 0.021352546191758748,
+      "error_final": -0.015945183015412923
+    },
+    "pitch": {
+      "max_abs": 0.15714838248390156,
+      "rms": 0.08774529641836727
+    },
+    "classification": "large_pitch"
+  },
+  "low_0p300_roll": {
+    "variant": "low_0p300",
+    "roll": {
+      "max_abs": 0.013980393148883566,
+      "rms": 0.00502864988379738,
+      "final": 0.0018695225852823913
+    },
+    "roll_rate": {
+      "max_abs": 0.03359297662973404,
+      "rms": 0.0036887498320747167
+    },
+    "hip_roll": {
+      "left_max": 0.20880240201950073,
+      "right_max": 0.21667753159999847,
+      "left_error_max": 0.20880240201950073,
+      "right_error_max": 0.21667753159999847,
+      "abs_max": 0.21667753159999847
+    },
+    "contact": {
+      "left_pct": 100.0,
+      "right_pct": 100.0,
+      "asymmetry": 0.0
+    },
+    "classification": "hip_roll_saturation"
+  },
+  "low_0p300_height": {
+    "variant": "low_0p300",
+    "height": {
+      "com_z_final": 0.2795393764972687,
+      "root_z_final": 0.3817631447585298,
+      "error_max": 0.021352546191758748,
+      "error_final": -0.015945183015412923,
+      "target_final": 0.2954845595126816,
+      "achieved_final": 0.2795393764972687
+    },
+    "contact": {
+      "valid_pct": 100.0,
+      "left_pct": 100.0,
+      "right_pct": 100.0,
+      "non_wheel_max": 0.0
+    },
+    "classification": "moderate_height_error"
+  },
+  "low_0p300_torque_composer": {
+    "variant": "low_0p300",
+    "torque_sources_available": {
+      "shape_posture": true,
+      "support_feedforward": true,
+      "sagittal": true,
+      "lateral": true,
+      "final": true
+    },
+    "saturation": {
+      "torque_saturation_events": 0,
+      "rate_limit_events": 0
+    },
+    "ownership": {
+      "violation_max": 0.0
+    },
+    "per_joint_max_torque": [
+      0.3008,
+      4.3384,
+      2.05,
+      8.9457,
+      1.6528,
+      0.2799,
+      4.3789,
+      1.6,
+      8.8801,
+      1.6183
+    ]
+  },
+  "nominal_hip_yaw": {
+    "variant": "nominal",
+    "position": {
+      "l_max": 0.03366447240114212,
+      "r_max": 0.057555120438337326,
+      "common_mode_max": 0.014545345213264227,
+      "divergence_max": 0.09100078791379929,
+      "common_mode_rms": 0.007220497501471163,
+      "divergence_rms": 0.0446887017744127
+    },
+    "error": {
+      "l_mean": 0.012181626328631743,
+      "r_mean": -0.025325369761279217,
+      "l_std": 0.010115967748299455,
+      "r_std": 0.014515923134204604,
+      "common_mode_rms": 0.007220497501471163,
+      "divergence_rms": 0.0446887017744127,
+      "hip_yaw_abs_max": 0.057555120438337326,
+      "hip_yaw_error_rms_max": 0.04705117685968018
+    },
+    "torque": {
+      "l_raw_max": 0.5496698934584856,
+      "r_raw_max": 0.9184435978531837,
+      "l_final_max": 0.5496698617935181,
+      "r_final_max": 0.9184436202049255,
+      "sign_correct_l_pct": 0.0,
+      "sign_correct_r_pct": 0.0,
+      "sign_opposes_error_pct": 14.879999999999999
+    },
+    "behavior_classification": "divergence_present"
+  },
+  "nominal_body_yaw": {
+    "variant": "nominal",
+    "body_yaw": {
+      "max_abs": 0.05054563298333426,
+      "rms": 0.021229208207374447
+    },
+    "root_yaw": {
+      "max_abs": 0.04730861284939972,
+      "rms": 0.022960334415079883
+    },
+    "yaw_rate": {
+      "max_abs": 0.07157151401042938,
+      "rms": 0.0243628683688604
+    },
+    "yaw_error": {
+      "max_abs": 0.09455184433860343,
+      "rms": 0.045903389433169406
+    },
+    "yaw_drift": {
+      "max_abs": 0.09455184433860343,
+      "final": -0.07956887019069454
+    },
+    "hip_yaw_abs_max": 0.057555120438337326,
+    "classification": "stable"
+  },
+  "nominal_support": {
+    "variant": "nominal",
+    "support_position": {
+      "error_max": 0.0,
+      "error_mean": 0.0,
+      "error_final": 0.0,
+      "center_x_max": 0.030877641975741693,
+      "center_y_max": 0.09105318605150409
+    },
+    "com_position": {
+      "x_max": 0.03343382477760315,
+      "y_max": 0.07768937200307846,
+      "z_final": 0.408227801322937
+    },
+    "com_velocity": {
+      "vx_max": 0.022066757082939148,
+      "vx_rms": 0.006653834580900689
+    },
+    "wheel_velocity": {
+      "max_abs": 3.8395681381225586,
+      "rms": 2.3091020277538856
+    },
+    "height": {
+      "error_max": 0.008547222614288308,
+      "error_final": 0.00822780132293699
+    },
+    "pitch": {
+      "max_abs": 0.07077135067308149,
+      "rms": 0.041090416346735936
+    },
+    "classification": "controlled"
+  },
+  "nominal_roll": {
+    "variant": "nominal",
+    "roll": {
+      "max_abs": 0.012998944689273586,
+      "rms": 0.00689390598526861,
+      "final": 0.004272549127689044
+    },
+    "roll_rate": {
+      "max_abs": 0.03754504770040512,
+      "rms": 0.009562592125784142
+    },
+    "hip_roll": {
+      "left_max": 0.16676445305347443,
+      "right_max": 0.17408870160579681,
+      "left_error_max": 0.16676445305347443,
+      "right_error_max": 0.17408870160579681,
+      "abs_max": 0.17488786578178406
+    },
+    "contact": {
+      "left_pct": 100.0,
+      "right_pct": 100.0,
+      "asymmetry": 0.0
+    },
+    "classification": "hip_roll_saturation"
+  },
+  "nominal_height": {
+    "variant": "nominal",
+    "height": {
+      "com_z_final": 0.408227801322937,
+      "root_z_final": 0.5404034229712487,
+      "error_max": 0.008547222614288308,
+      "error_final": 0.00822780132293699,
+      "target_final": 0.4,
+      "achieved_final": 0.408227801322937
+    },
+    "contact": {
+      "valid_pct": 100.0,
+      "left_pct": 100.0,
+      "right_pct": 100.0,
+      "non_wheel_max": 0.0
+    },
+    "classification": "controlled"
+  },
+  "nominal_torque_composer": {
+    "variant": "nominal",
+    "torque_sources_available": {
+      "shape_posture": true,
+      "support_feedforward": true,
+      "sagittal": true,
+      "lateral": true,
+      "final": true
+    },
+    "saturation": {
+      "torque_saturation_events": 0,
+      "rate_limit_events": 0
+    },
+    "ownership": {
+      "violation_max": 0.0
+    },
+    "per_joint_max_torque": [
+      0.2561,
+      0.5497,
+      2.05,
+      8.3349,
+      1.269,
+      0.2349,
+      0.9184,
+      1.6,
+      8.4239,
+      1.2938
+    ]
+  },
+  "high_0p480_hip_yaw": {
+    "variant": "high_0p480",
+    "position": {
+      "l_max": 0.2604807913303375,
+      "r_max": 0.2618856728076935,
+      "common_mode_max": 0.010362188331782818,
+      "divergence_max": 0.5223635733127594,
+      "common_mode_rms": 0.00325380447970604,
+      "divergence_rms": 0.2824615521984521
+    },
+    "error": {
+      "l_mean": 0.11661746896155248,
+      "r_mean": -0.1196187852478719,
+      "l_std": 0.07874897418335129,
+      "r_std": 0.07618234661821906,
+      "common_mode_rms": 0.00325380447970604,
+      "divergence_rms": 0.2824615521984521,
+      "hip_yaw_abs_max": 0.2618856728076935,
+      "hip_yaw_error_rms_max": 0.2611827343399112
+    },
+    "torque": {
+      "l_raw_max": 3.916118808556348,
+      "r_raw_max": 3.937689720187336,
+      "l_final_max": 3.916118621826172,
+      "r_final_max": 3.937689781188965,
+      "sign_correct_l_pct": 0.0,
+      "sign_correct_r_pct": 0.0,
+      "sign_opposes_error_pct": 0.72
+    },
+    "behavior_classification": "one_sided_drift"
+  },
+  "high_0p480_body_yaw": {
+    "variant": "high_0p480",
+    "body_yaw": {
+      "max_abs": 0.043448786726763715,
+      "rms": 0.021740825461989327
+    },
+    "root_yaw": {
+      "max_abs": 0.05175455443768041,
+      "rms": 0.028377047605225737
+    },
+    "yaw_rate": {
+      "max_abs": 0.0330340601503849,
+      "rms": 0.004287485415258588
+    },
+    "yaw_error": {
+      "max_abs": 0.1035709452061849,
+      "rms": 0.05677751497200413
+    },
+    "yaw_drift": {
+      "max_abs": 0.1035709452061849,
+      "final": -0.1035709452061849
+    },
+    "hip_yaw_abs_max": 0.2618856728076935,
+    "classification": "stable"
+  },
+  "high_0p480_support": {
+    "variant": "high_0p480",
+    "support_position": {
+      "error_max": 0.0,
+      "error_mean": 0.0,
+      "error_final": 0.0,
+      "center_x_max": 0.013383042688088431,
+      "center_y_max": 0.22792486483777574
+    },
+    "com_position": {
+      "x_max": 0.012371070683002472,
+      "y_max": 0.22787140309810638,
+      "z_final": 0.46588775515556335
+    },
+    "com_velocity": {
+      "vx_max": 0.00662337988615036,
+      "vx_rms": 0.0016623370218123157
+    },
+    "wheel_velocity": {
+      "max_abs": 5.36802077293396,
+      "rms": 0.6753552217966818
+    },
+    "height": {
+      "error_max": 0.015352217756341657,
+      "error_final": -0.01514747580153819
+    },
+    "pitch": {
+      "max_abs": 0.09260970191419433,
+      "rms": 0.05697190635294511
+    },
+    "classification": "controlled"
+  },
+  "high_0p480_roll": {
+    "variant": "high_0p480",
+    "roll": {
+      "max_abs": 0.0023418433950051706,
+      "rms": 0.0007800124533233226,
+      "final": -0.0003248350135914781
+    },
+    "roll_rate": {
+      "max_abs": 0.01196906715631485,
+      "rms": 0.0008132967254598104
+    },
+    "hip_roll": {
+      "left_max": 0.035489823669195175,
+      "right_max": 0.051791127771139145,
+      "left_error_max": 0.035489823669195175,
+      "right_error_max": 0.051791127771139145,
+      "abs_max": 0.0772780030965805
+    },
+    "contact": {
+      "left_pct": 100.0,
+      "right_pct": 100.0,
+      "asymmetry": 0.0
+    },
+    "classification": "stable"
+  },
+  "high_0p480_height": {
+    "variant": "high_0p480",
+    "height": {
+      "com_z_final": 0.46588775515556335,
+      "root_z_final": 0.6149879641187479,
+      "error_max": 0.015352217756341657,
+      "error_final": -0.01514747580153819,
+      "target_final": 0.48103523095710155,
+      "achieved_final": 0.46588775515556335
+    },
+    "contact": {
+      "valid_pct": 100.0,
+      "left_pct": 100.0,
+      "right_pct": 100.0,
+      "non_wheel_max": 0.0
+    },
+    "classification": "controlled"
+  },
+  "high_0p480_torque_composer": {
+    "variant": "high_0p480",
+    "torque_sources_available": {
+      "shape_posture": true,
+      "support_feedforward": true,
+      "sagittal": true,
+      "lateral": true,
+      "final": true
+    },
+    "saturation": {
+      "torque_saturation_events": 0,
+      "rate_limit_events": 0
+    },
+    "ownership": {
+      "violation_max": 0.0
+    },
+    "per_joint_max_torque": [
+      0.1555,
+      3.9161,
+      2.05,
+      8.0,
+      1.1431,
+      0.1779,
+      3.9377,
+      1.6,
+      8.0,
+      1.1633
+    ]
+  }
+}

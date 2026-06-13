@@ -1,0 +1,75 @@
+{
+  "classification": "NEEDS_ANALYSIS",
+  "apcr1b_metrics": {
+    "steps": 500,
+    "signed_error_mean": 0.066,
+    "signed_error_min": -0.0694,
+    "signed_error_max": 0.1714,
+    "signed_error_rms": 0.0937,
+    "positive_percent": 79.2,
+    "zero_crossings": 5,
+    "outside_0.15_percent": 13.8,
+    "pitch_x_mean_deg": 2.79,
+    "pitch_x_min_deg": -3.4,
+    "pitch_x_max_deg": 6.88,
+    "pitch_x_rms_deg": 3.95,
+    "height_mean_m": 0.2922,
+    "height_min_m": 0.2854,
+    "hip_yaw_abs_max_deg": 0.0,
+    "wheel_vel_mean_rad_s": 2.46,
+    "wheel_vel_rms_rad_s": 2.79
+  },
+  "d2_reference": {
+    "profile": "D2_baseline",
+    "signed_error_mean": 0.0824,
+    "signed_error_min": 0.0,
+    "signed_error_max": 0.1757,
+    "positive_percent": 93.2,
+    "outside_0.15_percent": 19.2,
+    "pitch_x_rms_deg": 3.6,
+    "pitch_x_min_deg": -0.48,
+    "pitch_x_max_deg": 6.36,
+    "height_mean_m": 0.2921
+  },
+  "apcr1_reference": {
+    "profile": "APCR1_active_pitch_crossing_recovery_moderate",
+    "signed_error_mean": 0.0674,
+    "signed_error_min": -0.0721,
+    "signed_error_max": 0.1714,
+    "positive_percent": 79.4,
+    "outside_0.15_percent": 13.8,
+    "pitch_x_rms_deg": 4.0,
+    "pitch_x_min_deg": -3.34,
+    "pitch_x_max_deg": 6.88,
+    "height_mean_m": 0.2922
+  },
+  "criteria": [
+    [
+      "Survived 500 steps",
+      true
+    ],
+    [
+      "Outside \u00b10.15 <= APCR1 (13.8% <= 13.8%)",
+      true
+    ],
+    [
+      "Positive % >= 75% (79.2%)",
+      false
+    ],
+    [
+      "Final signed error far from zero (-0.0694)",
+      false
+    ],
+    [
+      "No overcorrection below -0.15 (min=-0.0694)",
+      true
+    ]
+  ],
+  "analysis": {
+    "outside_positive_0.15": 13.8,
+    "outside_negative_0.15": 0.0,
+    "longest_positive_interval": 58,
+    "longest_negative_interval": 243,
+    "final_signed_error": -0.0694
+  }
+}

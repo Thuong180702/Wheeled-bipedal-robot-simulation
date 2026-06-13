@@ -1,0 +1,56 @@
+{
+  "requested_steps": 2000,
+  "actual_steps": 605,
+  "survived_steps": 605,
+  "terminated": false,
+  "termination_reason": "completed",
+  "final_sim_time_s": 6.05,
+  "telemetry_decimation": 1,
+  "failure_window_steps": 2000,
+  "written_telemetry_rows": 605,
+  "telemetry_columns_total": 553,
+  "telemetry_columns_populated": 539,
+  "telemetry_columns_empty": 14,
+  "pitch_x": {
+    "min": -0.025299450382590294,
+    "max": 0.12274667620658875,
+    "rms": 0.07200351195886051
+  },
+  "roll_y": {
+    "min": 0.0,
+    "max": 0.012642314657568932,
+    "rms": 0.00864899754715522
+  },
+  "com_z": {
+    "min": 0.2891932725906372,
+    "max": 0.29544979333877563,
+    "drift": -0.0027923882007598877
+  },
+  "wheel_vel_mean": {
+    "min": -4.627023458480835,
+    "max": 3.845439910888672,
+    "rms": 2.7171654010032036
+  },
+  "wheel_velocity_trend": 2.1975642442703247,
+  "ownership_violation_count_max": 0,
+  "hidden_torque_norm_max": 0.0,
+  "tau_wbc_norm_max": 14.900389671325684,
+  "torque_saturation": {
+    "fraction_max": 0.0,
+    "fraction_mean": 0.0
+  },
+  "torque_rate_saturation": {
+    "fraction_max": 0.0,
+    "fraction_mean": 0.0
+  },
+  "contact_state_summary": {
+    "counts": {
+      "double_contact": 605
+    },
+    "most_common_state": "double_contact"
+  },
+  "metric_integrity": {
+    "source": "full_rate_online",
+    "limitations": []
+  }
+}

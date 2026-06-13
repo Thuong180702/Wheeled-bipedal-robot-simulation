@@ -1,0 +1,51 @@
+Controller isolation diagnostic
+model=assets/robot/wheeled_biped_real.xml
+height_cmd=0.4
+
+mode=posture_only
+  steps_completed=16
+  termination_reason=height_too_low
+  pitch_range_deg=[-0.03, -0.00]
+  roll_range_deg=[-13.43, -0.52]
+  joint_error_norm_min=0.0660
+  joint_error_norm_max=0.2650
+  joint_error_norm_final=0.2650
+  max_tau_norm=2.3991 Nm
+  max_tau_rate=96.7879 Nm/s
+  contact_loss_count=8
+
+mode=wbc_only
+  steps_completed=53
+  termination_reason=orientation_fail_pitch_10.84_roll_-46.62
+  pitch_range_deg=[-0.06, +10.84]
+  roll_range_deg=[-46.62, -0.44]
+  joint_error_norm_min=0.2187
+  joint_error_norm_max=2.1432
+  joint_error_norm_final=2.1432
+  max_tau_norm=53.1694 Nm
+  max_tau_rate=1146.4855 Nm/s
+  contact_loss_count=7
+
+mode=combined
+  steps_completed=100
+  termination_reason=none
+  pitch_range_deg=[-21.89, +1.73]
+  roll_range_deg=[-24.53, +14.64]
+  joint_error_norm_min=0.2168
+  joint_error_norm_max=1.4313
+  joint_error_norm_final=1.3136
+  max_tau_norm=50.3587 Nm
+  max_tau_rate=1379.2283 Nm/s
+  contact_loss_count=16
+
+mode=combined_inverse_dynamics
+  steps_completed=18
+  termination_reason=orientation_fail_pitch_18.59_roll_-50.30
+  pitch_range_deg=[-0.02, +18.59]
+  roll_range_deg=[-50.30, -0.49]
+  joint_error_norm_min=0.2170
+  joint_error_norm_max=3.2806
+  joint_error_norm_final=3.2806
+  max_tau_norm=88.4666 Nm
+  max_tau_rate=1361.2705 Nm/s
+  contact_loss_count=8

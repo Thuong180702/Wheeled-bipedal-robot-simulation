@@ -1,0 +1,25 @@
+{
+  "overall_step_c_verdict": "FAIL",
+  "final_decision": "STEP_C_FIX_REQUIRED",
+  "controller_behavior_changed": false,
+  "wbc_applied": false,
+  "step_e_invariants_preserved": true,
+  "case_count": 2,
+  "passed_cases": [
+    "nominal"
+  ],
+  "failed_cases": [
+    "low_1cm"
+  ],
+  "inconclusive_cases": [],
+  "failure_classifications": [
+    "contact_invalid",
+    "wheel_velocity_runaway"
+  ],
+  "artifact_paths": {
+    "height_reference": "outputs\\step_c_height_recovery_short_v2\\step_c_height_reference.json",
+    "case_matrix": "outputs\\step_c_height_recovery_short_v2\\step_c_height_case_matrix.json",
+    "metrics": "outputs\\step_c_height_recovery_short_v2\\step_c_height_recovery_metrics.json",
+    "failure_classification": "outputs\\step_c_height_recovery_short_v2\\step_c_failure_classification.json"
+  }
+}

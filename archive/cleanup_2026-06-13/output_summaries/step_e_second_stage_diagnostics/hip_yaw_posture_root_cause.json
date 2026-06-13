@@ -1,0 +1,18 @@
+{
+  "classification": "shape-posture torque too weak",
+  "metrics": {
+    "hip_yaw_error_torque_correlation": 0.9994461543148462,
+    "left_pulse_positive_delta_positive": true,
+    "peak_abs_hip_yaw_error": 0.10922476649284363,
+    "peak_abs_shape_torque": 0.58455884,
+    "percent_time_abs_error_gt_0p05": 22.6,
+    "percent_time_abs_error_gt_0p10": 1.95,
+    "right_pulse_positive_delta_positive": true,
+    "rms_hip_yaw_error": 0.04160900948189819,
+    "rms_shape_torque": 0.21532531996004728,
+    "shape_torque_reduces_left_error": true,
+    "shape_torque_reduces_right_error": true,
+    "yaw_drift_final_rad": -0.00510212094521623,
+    "yaw_z_range_rad": 0.02560618198415013
+  }
+}

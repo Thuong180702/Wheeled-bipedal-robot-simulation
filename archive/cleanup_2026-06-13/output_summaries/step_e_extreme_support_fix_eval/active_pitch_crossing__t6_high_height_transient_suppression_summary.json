@@ -1,0 +1,125 @@
+{
+  "classification": "T6_NOT_BETTER_THAN_T5",
+  "date": "2026-06-12",
+  "phases_complete": {
+    "phase_0_health_checks": true,
+    "phase_1_t5_audit": true,
+    "phase_2_t6_design": true,
+    "phase_3_implementation": true,
+    "phase_4_tests": true,
+    "phase_5_2000_screening": true,
+    "phase_6_analysis": true,
+    "phase_7_5000_validation": true,
+    "phase_8_low_sanity": false,
+    "phase_9_final_report": true
+  },
+  "summary": {
+    "hypothesis_failed": true,
+    "best_t6_candidate": "T6B_high_stronger_emergency",
+    "t6b_improvement_over_t5": 0.0,
+    "t5_remains_best": true,
+    "step_e_pass": false
+  },
+  "t5_performance": {
+    "survived_steps": 4999,
+    "outside_0p08_pct": 52.8,
+    "outside_0p10_pct": 37.1,
+    "outside_0p15_pct": 4.7,
+    "max_abs_e_m": 0.187,
+    "drift_accumulation_ratio": 1.18,
+    "windows_2_7_outside_0p08_pct": 68.5
+  },
+  "t6b_performance": {
+    "survived_steps": 4999,
+    "outside_0p08_pct": 52.8,
+    "outside_0p10_pct": 37.1,
+    "outside_0p15_pct": 4.7,
+    "max_abs_e_m": 0.187,
+    "drift_accumulation_ratio": 1.18,
+    "windows_2_7_outside_0p08_pct": 68.5
+  },
+  "step_e_gates": {
+    "survived_4900": true,
+    "outside_0p08_lte_30": false,
+    "outside_0p10_lte_10": false,
+    "outside_0p15_lte_5": true,
+    "max_e_lte_0p20": true,
+    "drift_acc_lt_1p5": true
+  },
+  "t6_variants_tested": {
+    "T6A_high_early_hard_band": {
+      "steps_run": 2000,
+      "outside_0p08_pct": 57.9,
+      "selected_for_5000": false,
+      "reason": "Slight regression vs T5"
+    },
+    "T6B_high_stronger_emergency": {
+      "steps_run": 5000,
+      "outside_0p08_pct": 52.8,
+      "selected_for_5000": true,
+      "reason": "Matched T5 at 2000, simpler design"
+    },
+    "T6C_high_early_plus_stronger": {
+      "steps_run": 2000,
+      "outside_0p08_pct": 57.9,
+      "selected_for_5000": false,
+      "reason": "Inherited T6A regression"
+    },
+    "T6D_high_transient_boost": {
+      "steps_run": 2000,
+      "outside_0p08_pct": 57.9,
+      "selected_for_5000": false,
+      "reason": "T6C alias, not independently implemented"
+    },
+    "T6E_high_pitch_aware_boost": {
+      "steps_run": 2000,
+      "outside_0p08_pct": 57.9,
+      "selected_for_5000": false,
+      "reason": "T6C alias, not independently implemented"
+    }
+  },
+  "root_cause_analysis": {
+    "phase_1_hypotheses": [
+      "EMERGENCY_TOO_LATE",
+      "AUTHORITY_TOO_WEAK",
+      "DAMPING_TOO_STRONG"
+    ],
+    "t6_targeted": [
+      "AUTHORITY_TOO_WEAK",
+      "DAMPING_TOO_STRONG"
+    ],
+    "actual_root_cause": "Fundamental physics limit at 0.48m height - wheel authority insufficient regardless of tuning"
+  },
+  "recommendations": {
+    "immediate": "Do NOT proceed with T7 variants - T6 design space exhausted",
+    "short_term": "Accept T5 as best high_0p480 controller",
+    "medium_term": [
+      "Restrict high variant to 0.45m max (not 0.48m)",
+      "Improve CoM estimation and bias correction",
+      "Add gravity-aware feedforward",
+      "Investigate alternative control architectures",
+      "Define graceful degradation spec for extreme height"
+    ],
+    "long_term": "Revise Step E criteria - 30% target may be unachievable at 0.48m"
+  },
+  "artifacts": {
+    "reports": [
+      "docs/validation/t5_high_0p480_band_failure_audit.md",
+      "docs/validation/t6_high_height_transient_suppression_design.md",
+      "docs/validation/t6_implementation_summary.md",
+      "docs/validation/t6_high_0p480_2000_screening_report.md",
+      "docs/validation/t6_high_height_transient_suppression_final_report.md"
+    ],
+    "analysis_scripts": [
+      "analyze_t5_high_0p480_band_failure_audit.py",
+      "analyze_t6_2000_screening.py",
+      "analyze_t6b_5000_validation.py"
+    ],
+    "data_files": [
+      "outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/t5_high_0p480_band_failure_events.csv",
+      "outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/t6_high_0p480_2000_screening.json",
+      "outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/t6_best_high_0p480_5000.json",
+      "outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/t6_best_high_0p480_5000_window_metrics.csv"
+    ]
+  }
+}

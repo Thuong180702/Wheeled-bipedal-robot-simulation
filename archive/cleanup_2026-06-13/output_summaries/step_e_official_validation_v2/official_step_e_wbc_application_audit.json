@@ -1,0 +1,33 @@
+{
+  "active_torque_owner_includes_wbc": false,
+  "applied_wbc_contribution_norm": {
+    "final": 0.0,
+    "max": 0.0,
+    "max_abs": 0.0,
+    "min": 0.0,
+    "rms": 0.0,
+    "status": "ok"
+  },
+  "applied_wbc_contribution_source": "tau_wbc_correction",
+  "four_source_residual_norm": {
+    "final": 0.7555033081029949,
+    "max": 3.6151130210004494,
+    "max_abs": 3.6151130210004494,
+    "min": 0.0,
+    "rms": 0.6153845651332629,
+    "status": "ok"
+  },
+  "raw_wbc_computed_norm": {
+    "final": 11.253582954406738,
+    "max": 14.207267761230469,
+    "max_abs": 14.207267761230469,
+    "min": 9.965167045593262,
+    "rms": 11.29088623564724,
+    "status": "ok"
+  },
+  "raw_wbc_norm_column": "tau_wbc_norm",
+  "tau_total_raw_matches_four_source_sum": false,
+  "wbc_applied": false,
+  "wbc_computed_only_as_diagnostic": true,
+  "wbc_contributed_to_tau_total_raw": false
+}

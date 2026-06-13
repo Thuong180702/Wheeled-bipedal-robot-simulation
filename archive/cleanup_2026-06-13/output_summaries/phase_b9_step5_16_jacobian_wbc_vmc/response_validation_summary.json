@@ -1,0 +1,12 @@
+{
+  "baseline": {
+    "survival_s": 0.52,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 0.8745,
+    "roll_rms_deg": 16.493,
+    "action_saturation": 0.0
+  },
+  "result": "diagnostic_response_only",
+  "can_produce_contact_force_redistribution": true,
+  "torque_level_wbc_supported": false
+}

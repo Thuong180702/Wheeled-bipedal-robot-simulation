@@ -1,0 +1,11 @@
+{
+  "variant_name": "nominal",
+  "target_com_z_m": 0.4039993119017284,
+  "hip_pitch_ref": 0.926052,
+  "knee_ref": 1.748364,
+  "hip_roll_left": 0.0,
+  "hip_roll_right": 0.0,
+  "hip_yaw_left": 0.0,
+  "hip_yaw_right": 0.0,
+  "calibrated_root_z_m": 0.5357421875000001
+}

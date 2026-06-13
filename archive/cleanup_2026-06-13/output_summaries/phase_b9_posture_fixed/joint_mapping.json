@@ -1,0 +1,113 @@
+{
+  "model_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\assets\\robot\\wheeled_biped_real.xml",
+  "joint_mapping": [
+    {
+      "joint_name": "l_hip_roll",
+      "qpos_idx": 7,
+      "qvel_idx": 6,
+      "action_idx": 0,
+      "axis_local_x": 0.0,
+      "axis_local_y": 1.0,
+      "axis_local_z": 0.0
+    },
+    {
+      "joint_name": "l_hip_yaw",
+      "qpos_idx": 8,
+      "qvel_idx": 7,
+      "action_idx": 1,
+      "axis_local_x": 0.0,
+      "axis_local_y": 0.9999975486805301,
+      "axis_local_z": -0.0022141890006909444
+    },
+    {
+      "joint_name": "l_hip_pitch",
+      "qpos_idx": 9,
+      "qvel_idx": 8,
+      "action_idx": 2,
+      "axis_local_x": 0.0,
+      "axis_local_y": -1.0,
+      "axis_local_z": 0.0
+    },
+    {
+      "joint_name": "l_knee",
+      "qpos_idx": 10,
+      "qvel_idx": 9,
+      "action_idx": 3,
+      "axis_local_x": 0.0,
+      "axis_local_y": -1.0,
+      "axis_local_z": 0.0
+    },
+    {
+      "joint_name": "l_wheel",
+      "qpos_idx": 11,
+      "qvel_idx": 10,
+      "action_idx": 4,
+      "axis_local_x": -1.0,
+      "axis_local_y": 0.0,
+      "axis_local_z": 0.0
+    },
+    {
+      "joint_name": "r_hip_roll",
+      "qpos_idx": 12,
+      "qvel_idx": 11,
+      "action_idx": 5,
+      "axis_local_x": 0.0,
+      "axis_local_y": 1.0,
+      "axis_local_z": 0.0
+    },
+    {
+      "joint_name": "r_hip_yaw",
+      "qpos_idx": 13,
+      "qvel_idx": 12,
+      "action_idx": 6,
+      "axis_local_x": 0.0,
+      "axis_local_y": 0.0,
+      "axis_local_z": -1.0
+    },
+    {
+      "joint_name": "r_hip_pitch",
+      "qpos_idx": 14,
+      "qvel_idx": 13,
+      "action_idx": 7,
+      "axis_local_x": 0.0,
+      "axis_local_y": 1.0,
+      "axis_local_z": 0.0
+    },
+    {
+      "joint_name": "r_knee",
+      "qpos_idx": 15,
+      "qvel_idx": 14,
+      "action_idx": 8,
+      "axis_local_x": 0.0,
+      "axis_local_y": 1.0,
+      "axis_local_z": 0.0
+    },
+    {
+      "joint_name": "r_wheel",
+      "qpos_idx": 16,
+      "qvel_idx": 15,
+      "action_idx": 9,
+      "axis_local_x": 1.0,
+      "axis_local_y": 0.0,
+      "axis_local_z": 0.0
+    }
+  ],
+  "action_order": [
+    "l_hip_roll",
+    "l_hip_yaw",
+    "l_hip_pitch",
+    "l_knee",
+    "l_wheel",
+    "r_hip_roll",
+    "r_hip_yaw",
+    "r_hip_pitch",
+    "r_knee",
+    "r_wheel"
+  ],
+  "world_axes": {
+    "x": "lateral",
+    "y_positive": "backward",
+    "y_negative": "forward",
+    "z": "up"
+  }
+}

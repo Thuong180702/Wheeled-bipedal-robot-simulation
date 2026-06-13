@@ -1,0 +1,50 @@
+{
+  "guard_version": "1.0",
+  "created": "2026-06-09",
+  "purpose": "Enforce correct physical drift column for all APCR analyzer scripts",
+  "required_drift_columns": [
+    "active_pitch_crossing_signed_error_m",
+    "sagittal_position_error_m",
+    "support_position_error_m",
+    "hip_yaw_comp_support_error_m"
+  ],
+  "forbidden_columns": [
+    {
+      "column": "support_center_x - support_center_ref_x",
+      "reason": "Reference-tracking artifact, not physical drift"
+    },
+    {
+      "column": "cp_x",
+      "reason": "Capture point position, not drift measurement"
+    },
+    {
+      "column": "error_rate",
+      "reason": "Derivative of position, not position itself"
+    }
+  ],
+  "required_metrics": [
+    "min",
+    "max",
+    "peak_to_peak",
+    "max_abs",
+    "outside_0p08_pct",
+    "outside_0p15_pct"
+  ],
+  "mirage_detection": {
+    "ref_tracking_artifact": {
+      "condition": "P2P < 0.01 AND mean_abs > 0.02",
+      "likely_cause": "Using support_center_ref_x column"
+    },
+    "clipped_range": {
+      "condition": "Values cluster at threshold boundaries",
+      "likely_cause": "Capped at ±0.15 or similar limit"
+    }
+  },
+  "required_output_fields": [
+    "physical_drift_column_used",
+    "p2p_m",
+    "max_positive_m",
+    "min_negative_m",
+    "outside_0p15_pct"
+  ]
+}

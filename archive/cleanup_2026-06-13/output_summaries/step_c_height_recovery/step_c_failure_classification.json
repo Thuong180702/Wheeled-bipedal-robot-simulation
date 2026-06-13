@@ -1,0 +1,9 @@
+{
+  "nominal": [],
+  "low_tiny": [],
+  "high_tiny": [
+    "position_regression",
+    "posture_regression",
+    "wheel_velocity_runaway"
+  ]
+}

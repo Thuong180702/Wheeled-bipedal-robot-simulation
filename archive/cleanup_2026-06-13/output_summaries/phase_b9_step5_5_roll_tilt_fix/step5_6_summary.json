@@ -1,0 +1,79 @@
+{
+  "baseline_config_source": "outputs/phase_b9_lqr_gain_strengthening/best_lqr_config.yaml",
+  "early_time_window_s": [
+    0.0,
+    0.3
+  ],
+  "root_cause": "hip_roll_response_delay_or_disabled_in_early_window",
+  "root_cause_evidence": {
+    "roll_action_initially_zero_ratio": 1.0,
+    "per_height": [
+      {
+        "height": 0.4,
+        "t_roll_diverge_s": 0.12,
+        "t_hip_roll_action_nonzero_s": null,
+        "roll_action_initially_zero": true
+      },
+      {
+        "height": 0.45,
+        "t_roll_diverge_s": 0.08,
+        "t_hip_roll_action_nonzero_s": null,
+        "roll_action_initially_zero": true
+      },
+      {
+        "height": 0.5,
+        "t_roll_diverge_s": 0.08,
+        "t_hip_roll_action_nonzero_s": null,
+        "roll_action_initially_zero": true
+      },
+      {
+        "height": 0.55,
+        "t_roll_diverge_s": 0.12,
+        "t_hip_roll_action_nonzero_s": null,
+        "roll_action_initially_zero": true
+      },
+      {
+        "height": 0.6,
+        "t_roll_diverge_s": 0.08,
+        "t_hip_roll_action_nonzero_s": null,
+        "roll_action_initially_zero": true
+      },
+      {
+        "height": 0.65,
+        "t_roll_diverge_s": 0.08,
+        "t_hip_roll_action_nonzero_s": null,
+        "roll_action_initially_zero": true
+      }
+    ]
+  },
+  "targeted_fix": {
+    "type": "A_weak_hip_roll_pd",
+    "params": {
+      "roll_kp": 0.3,
+      "roll_kd": 0.05,
+      "roll_max_correction": 0.15
+    }
+  },
+  "baseline_metrics": {
+    "mean_survival_s": 3.8926666666666665,
+    "mean_fall_rate": 0.8333333333333334,
+    "mean_pitch_rms_deg": 1.0109260130054514,
+    "mean_roll_rms_deg": 21.168228816065504,
+    "mean_wheel_speed_rms": 18.449039459228516,
+    "mean_action_sat_rate": 0.0,
+    "dominant_fall_reason": "tilt",
+    "fall_reason_counts_json": "{\"tilt\": 25, \"none\": 5}"
+  },
+  "targeted_fix_metrics": {
+    "mean_survival_s": 3.3353333333333333,
+    "mean_fall_rate": 0.8666666666666667,
+    "mean_pitch_rms_deg": 0.9983779734186918,
+    "mean_roll_rms_deg": 20.711331259133722,
+    "mean_wheel_speed_rms": 18.441186904907227,
+    "mean_action_sat_rate": 0.0,
+    "dominant_fall_reason": "tilt",
+    "fall_reason_counts_json": "{\"tilt\": 26, \"none\": 4}"
+  },
+  "roll_divergence_reduced": true,
+  "step6_ready": false
+}

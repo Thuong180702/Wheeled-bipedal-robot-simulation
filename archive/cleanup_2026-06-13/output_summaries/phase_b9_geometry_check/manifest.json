@@ -1,0 +1,16 @@
+{
+  "original_path": "outputs/phase_b9_geometry_check",
+  "original_size": "1.3M",
+  "original_size_bytes": 1412228,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "joint_axis_inspection.json",
+      "size_bytes": 2244
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

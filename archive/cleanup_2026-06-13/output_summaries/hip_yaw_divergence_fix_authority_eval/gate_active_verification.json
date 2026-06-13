@@ -1,0 +1,20 @@
+{
+  "A0_nominal": {
+    "enabled_pct": 0.0,
+    "gate_active_pct": 0.0,
+    "gate_mean": 0.0,
+    "z_high": 0.393
+  },
+  "A0_low": {
+    "enabled_pct": 0.0,
+    "gate_active_pct": 0.0,
+    "gate_mean": 1.0,
+    "z_high": 0.393
+  },
+  "B1_nominal": {
+    "enabled_pct": 0.0,
+    "gate_active_pct": 0.0,
+    "gate_mean": 0.5,
+    "z_high": 0.5
+  }
+}

@@ -1,0 +1,72 @@
+[
+  {
+    "label": "low_0p300",
+    "setup_path": "outputs/physical_target_height_setups/low_0p300_setup.json",
+    "exists": true,
+    "height_target": 0.3,
+    "notes": ""
+  },
+  {
+    "label": "low_0p320",
+    "setup_path": "outputs/physical_target_height_setups/low_0p320_setup.json",
+    "exists": true,
+    "height_target": 0.32,
+    "notes": ""
+  },
+  {
+    "label": "low_0p330",
+    "setup_path": "outputs/physical_target_height_setups/low_0p330_setup.json",
+    "exists": true,
+    "height_target": 0.33,
+    "notes": ""
+  },
+  {
+    "label": "low_0p340",
+    "setup_path": "outputs/physical_target_height_setups/low_0p340_setup.json",
+    "exists": true,
+    "height_target": 0.34,
+    "notes": ""
+  },
+  {
+    "label": "low_0p360",
+    "setup_path": "outputs/physical_target_height_setups/low_0p360_setup.json",
+    "exists": true,
+    "height_target": 0.36,
+    "notes": ""
+  },
+  {
+    "label": "low_0p380",
+    "setup_path": "outputs/physical_target_height_setups/low_0p380_setup.json",
+    "exists": true,
+    "height_target": 0.38,
+    "notes": ""
+  },
+  {
+    "label": "high_0p430",
+    "setup_path": "outputs/physical_target_height_setups/high_0p430_setup.json",
+    "exists": true,
+    "height_target": 0.43,
+    "notes": ""
+  },
+  {
+    "label": "high_0p450",
+    "setup_path": "outputs/physical_target_height_setups/high_0p450_setup.json",
+    "exists": true,
+    "height_target": 0.45,
+    "notes": ""
+  },
+  {
+    "label": "high_0p465",
+    "setup_path": "outputs/physical_target_height_setups/high_0p465_setup.json",
+    "exists": true,
+    "height_target": 0.465,
+    "notes": ""
+  },
+  {
+    "label": "high_0p480",
+    "setup_path": "outputs/physical_target_height_setups/high_0p480_setup.json",
+    "exists": true,
+    "height_target": 0.48,
+    "notes": ""
+  }
+]

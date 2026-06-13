@@ -1,0 +1,216 @@
+{
+  "date": "2026-06-12",
+  "classification": "T6F_SIGN_CONVENTION_CLEAR",
+  "summary": "Base position torque sign convention is correct. APCR torque sign requires audit.",
+  "physical_drift_sign_convention": {
+    "positive_error": "forward_of_reference",
+    "negative_error": "backward_of_reference",
+    "expected_correction_sign_rule": "tau_sign_opposes_error_sign"
+  },
+  "signal_trace": {
+    "sagittal_position_error_m": {
+      "sign_convention": "positive_forward_negative_backward",
+      "status": "CORRECT"
+    },
+    "tau_position_p": {
+      "formula": "-k_position * error",
+      "sign_check": {
+        "positive_error": "negative_torque",
+        "negative_error": "positive_torque"
+      },
+      "status": "CORRECT"
+    },
+    "tau_position_after_clip": {
+      "operation": "clip_magnitude_only",
+      "sign_preservation": true,
+      "arch_fix_raises_cap": true,
+      "arch_fix_flips_sign": false,
+      "status": "CORRECT"
+    },
+    "tau_wheel_velocity": {
+      "formula": "-k_wheel_velocity * wheel_vel",
+      "purpose": "oppose_wheel_velocity",
+      "status": "CORRECT"
+    },
+    "tau_common_unclipped": {
+      "composition": "additive_sum_of_all_terms",
+      "includes": [
+        "tau_pitch",
+        "tau_pitch_rate",
+        "tau_sagittal_velocity",
+        "tau_support_velocity",
+        "tau_position",
+        "tau_cp",
+        "tau_com_vy",
+        "recenter_tau_clipped",
+        "hyst_tau_clipped",
+        "bias_tau_clipped",
+        "apc_tau_clipped"
+      ],
+      "sign_flips_in_composition": false,
+      "status": "CORRECT"
+    },
+    "wheel_torque_sign_multiplier": {
+      "current_value": 1.0,
+      "purpose": "global_sign_correction_if_needed",
+      "t5_value": 1.0,
+      "t6f_value": 1.0,
+      "status": "CORRECT"
+    },
+    "tau_common": {
+      "formula": "wheel_torque_sign * tau_common_unclipped",
+      "status": "CORRECT"
+    },
+    "tau_left_tau_right": {
+      "formula": "tau_common + individual_wheel_damping",
+      "sign_preservation": true,
+      "status": "CORRECT"
+    },
+    "apc_tau_clipped": {
+      "expected_sign_rule": "oppose_drift_error",
+      "status": "NEEDS_AUDIT",
+      "priority": "HIGH",
+      "reason": "T6F torque opposes drift only 47.5% of time"
+    },
+    "hip_yaw_compensation": {
+      "affects_wheel_torque": false,
+      "status": "NOT_RELEVANT"
+    }
+  },
+  "potential_sign_bug_locations": [
+    {
+      "location": "APCR_torque_sign",
+      "priority": "HIGH",
+      "hypothesis": "APCR torque may have wrong sign in certain conditions",
+      "evidence": [
+        "T6F torque opposes drift only 47.5% of time",
+        "APCR activates at high authority 7.0 Nm",
+        "Sign bug becomes visible at high magnitude"
+      ],
+      "file": "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
+      "audit_required": [
+        "APCR state machine torque sign logic",
+        "apc_tau_clipped computation in all states",
+        "Sign flips based on band state or error magnitude"
+      ]
+    },
+    {
+      "location": "architecture_fix_cap_composition",
+      "priority": "MEDIUM",
+      "hypothesis": "Raised cap might interact with existing logic incorrectly",
+      "evidence": [
+        "Sign bug present in both normal 4.0 Nm and raised 7.0 Nm regimes",
+        "Degradation only severe at 7.0 Nm"
+      ],
+      "file": "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
+      "lines": "2105-2171 (arch fix), 2190-2344 (APCR1nD)",
+      "audit_required": [
+        "Verify effective_max_position_tau does not flip sign",
+        "Check if conditional logic uses cap value as sign indicator",
+        "Verify APCR1nD band state does not invert sign convention"
+      ]
+    },
+    {
+      "location": "apcr1n_wheel_damping_override_sign_logic",
+      "priority": "LOW",
+      "hypothesis": "Damping override may invert helps_vs_fights detection if upstream sign is wrong",
+      "evidence": [
+        "APCR1n damping override depends on tau_position sign",
+        "If tau_position sign is wrong, override logic inverts"
+      ],
+      "file": "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
+      "audit_required": [
+        "Verify APCR1n correctly detects when damping opposes position torque",
+        "Check if damping scale factor is applied with correct sign"
+      ]
+    },
+    {
+      "location": "wheel_torque_sign_configuration",
+      "priority": "LOW",
+      "hypothesis": "wheel_torque_sign might be inadvertently flipped for T6F",
+      "evidence": [
+        "Global sign multiplier at final composition"
+      ],
+      "file": "scripts/simulate_hierarchical_controller.py or profile config",
+      "audit_required": [
+        "Check T6F profile configuration",
+        "Verify wheel_torque_sign parameter is not overridden"
+      ]
+    }
+  ],
+  "sign_convention_verification_table": {
+    "sagittal_position_error_m": {
+      "expected_rule": "positive_forward_negative_backward",
+      "implementation": "correct",
+      "status": "PASS"
+    },
+    "tau_position_p": {
+      "expected_rule": "oppose_error_sign",
+      "implementation": "minus_k_times_error",
+      "status": "PASS"
+    },
+    "tau_position_after_clip": {
+      "expected_rule": "preserve_tau_position_p_sign",
+      "implementation": "clip_magnitude_only",
+      "status": "PASS"
+    },
+    "tau_wheel_vel": {
+      "expected_rule": "oppose_wheel_velocity",
+      "implementation": "minus_k_times_wheel_vel",
+      "status": "PASS"
+    },
+    "tau_common_unclipped": {
+      "expected_rule": "sum_all_terms",
+      "implementation": "additive_composition",
+      "status": "PASS"
+    },
+    "wheel_torque_sign": {
+      "expected_rule": "global_multiplier",
+      "implementation": "currently_plus_1_point_0",
+      "status": "PASS"
+    },
+    "tau_common": {
+      "expected_rule": "wheel_torque_sign_times_tau_common_unclipped",
+      "implementation": "correctly_applied",
+      "status": "PASS"
+    },
+    "tau_left_tau_right": {
+      "expected_rule": "tau_common_plus_damping",
+      "implementation": "additive",
+      "status": "PASS"
+    },
+    "apc_tau_clipped": {
+      "expected_rule": "oppose_drift_error",
+      "implementation": "NEEDS_AUDIT",
+      "status": "PENDING"
+    },
+    "hip_yaw_compensation": {
+      "expected_rule": "antisymmetric_L_R",
+      "implementation": "does_not_affect_wheels",
+      "status": "PASS"
+    }
+  },
+  "physical_wheel_sign_convention": {
+    "positive_wheel_torque": "forward_motion",
+    "negative_wheel_torque": "backward_motion",
+    "verified_by": "wheel_velocity_damping_sign_convention"
+  },
+  "recommended_action": {
+    "priority_1": "Audit APCR torque sign logic in state machine",
+    "focus_areas": [
+      "RECENTER_FROM_POSITIVE state should produce NEGATIVE torque",
+      "RECENTER_FROM_NEGATIVE state should produce POSITIVE torque",
+      "Emergency/hard band escalation verify sign preserved",
+      "Architecture fix raised cap verify no sign interaction"
+    ],
+    "if_apcr_sign_wrong": {
+      "fix_at": "APCR_torque_computation",
+      "do_not_patch_at": [
+        "wheel_torque_sign",
+        "final_composition"
+      ],
+      "reason": "Fix at earliest point in pipeline to avoid breaking T5"
+    }
+  },
+  "next_phase": "Phase 2: Component-level sign audit using existing T5 and T6F telemetry"
+}

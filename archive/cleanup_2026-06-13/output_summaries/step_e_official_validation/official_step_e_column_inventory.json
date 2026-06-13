@@ -1,0 +1,1751 @@
+{
+  "column_count": 353,
+  "columns": [
+    "source_step_index",
+    "time",
+    "mass_kg",
+    "weight_N",
+    "com_x",
+    "com_y",
+    "com_z",
+    "com_vx",
+    "com_vy",
+    "com_vz",
+    "cp_x",
+    "cp_y",
+    "tau_wbc_max",
+    "tau_wheel_actual_max",
+    "tau_posture_max",
+    "tau_total_max",
+    "euler_roll_x",
+    "euler_pitch_y",
+    "euler_yaw_z",
+    "robot_pitch_x",
+    "robot_roll_y",
+    "robot_yaw_z",
+    "roll_rate_rad_s",
+    "pitch_rate_rad_s",
+    "yaw_rate_rad_s",
+    "height_cmd",
+    "left_contact_active",
+    "right_contact_active",
+    "n_contacts",
+    "contact_force_valid",
+    "left_contact_force_world_x",
+    "left_contact_force_world_y",
+    "left_contact_force_world_z",
+    "right_contact_force_world_x",
+    "right_contact_force_world_y",
+    "right_contact_force_world_z",
+    "total_contact_force_z",
+    "joint_pos",
+    "joint_vel",
+    "terminated",
+    "termination_reason",
+    "qp_solve_time_ms",
+    "qp_converged",
+    "qp_error",
+    "wrench_error_norm",
+    "f_left_z",
+    "f_right_z",
+    "force_distribution_feasible",
+    "force_distribution_reason",
+    "distributed_left_fx",
+    "distributed_left_fy",
+    "distributed_left_fz",
+    "distributed_right_fx",
+    "distributed_right_fy",
+    "distributed_right_fz",
+    "tau_saturation_rate",
+    "desired_wrench_Fx",
+    "desired_wrench_Fy",
+    "desired_wrench_Fz",
+    "desired_wrench_Mx",
+    "desired_wrench_My",
+    "desired_wrench_Mz",
+    "target_joint_pos",
+    "joint_pos_error",
+    "joint_pos_error_norm",
+    "joint_vel_norm",
+    "tau_wbc_norm",
+    "tau_posture_norm",
+    "tau_inverse_dynamics_norm",
+    "tau_total_norm",
+    "tau_rate_unlimited",
+    "tau_rate_limited",
+    "active_wheels",
+    "left_wheel_floor_contact",
+    "right_wheel_floor_contact",
+    "non_wheel_floor_contacts",
+    "total_wheel_floor_fz",
+    "correction_wrench_norm",
+    "correction_wrench_Fx",
+    "correction_wrench_Fy",
+    "correction_wrench_Fz",
+    "correction_wrench_Mx",
+    "correction_wrench_My",
+    "correction_wrench_Mz",
+    "ablation_mode",
+    "pitch_x",
+    "pitch_rate_x",
+    "roll_y",
+    "roll_rate_y",
+    "yaw_z",
+    "hip_roll_left_rad",
+    "hip_roll_right_rad",
+    "hip_roll_common_component_rad",
+    "hip_roll_symmetric_component_rad",
+    "hip_roll_abs_max_rad",
+    "hip_roll_ref_left_rad",
+    "hip_roll_ref_right_rad",
+    "hip_roll_error_left_rad",
+    "hip_roll_error_right_rad",
+    "yaw_drift_from_initial_rad",
+    "com_error_x",
+    "com_error_y",
+    "com_error_z",
+    "cp_error_x",
+    "cp_error_y",
+    "pitch_error",
+    "roll_error",
+    "height_error",
+    "left_fz_actual",
+    "right_fz_actual",
+    "fz_asymmetry_actual",
+    "contact_dist_min",
+    "contact_dist_max",
+    "correction_Fy_com",
+    "correction_Fy_cp",
+    "correction_Fy_pitch",
+    "correction_My_roll",
+    "distributor_f_left",
+    "distributor_f_right",
+    "tau_hip_roll",
+    "tau_contact",
+    "tau_wbc_correction",
+    "tau_wbc_after_authority_clip",
+    "tau_static_feedforward",
+    "tau_static_posture",
+    "saturation_flags",
+    "rate_limit_flags",
+    "tau_stage2b_sagittal_wheel_l",
+    "tau_stage2b_sagittal_wheel_r",
+    "tau_total_raw_l_wheel",
+    "tau_total_raw_r_wheel",
+    "tau_total_clipped_l_wheel",
+    "tau_total_clipped_r_wheel",
+    "tau_smooth_l_wheel",
+    "tau_smooth_r_wheel",
+    "ctrl_l_wheel",
+    "ctrl_r_wheel",
+    "qvel_l_wheel",
+    "qvel_r_wheel",
+    "sagittal_term_pitch",
+    "sagittal_term_pitch_rate",
+    "sagittal_term_cp",
+    "sagittal_term_com_vy",
+    "sagittal_term_wheel_vel_left",
+    "sagittal_term_wheel_vel_right",
+    "sagittal_balance_torque_raw",
+    "sagittal_balance_torque_clipped",
+    "sagittal_balance_torque_final",
+    "sagittal_pitch_error",
+    "sagittal_cp_error_y",
+    "sagittal_tau_wheel_cmd",
+    "sagittal_saturated",
+    "stage2c_pitch_error",
+    "stage2c_pitch_rate_x",
+    "stage2c_com_y_error",
+    "stage2c_com_vy",
+    "stage2c_cp_y_error",
+    "stage2c_wheel_vel_left",
+    "stage2c_wheel_vel_right",
+    "stage2c_wheel_vel_mean",
+    "stage2c_term_pitch",
+    "stage2c_term_pitch_rate",
+    "stage2c_term_com_y",
+    "stage2c_term_com_vy",
+    "stage2c_term_cp_y",
+    "stage2c_term_wheel_vel",
+    "stage2c_tau_wheel_raw",
+    "stage2c_tau_wheel_clipped",
+    "stage2c_saturated",
+    "stage2d_pitch_x",
+    "stage2d_pitch_rate_x",
+    "stage2d_cp_error_y",
+    "stage2d_com_vy",
+    "stage2d_wheel_vel_mean",
+    "stage2d_u_raw",
+    "stage2d_u_clipped",
+    "stage2d_saturated",
+    "stage2d_contrib_pitch_x",
+    "stage2d_contrib_pitch_rate_x",
+    "stage2d_contrib_cp_error_y",
+    "stage2d_contrib_com_vy",
+    "stage2d_contrib_wheel_vel_mean",
+    "stage2d_config",
+    "control_pitch_x",
+    "control_pitch_rate_x",
+    "control_roll_y",
+    "control_roll_rate_y",
+    "log_pitch_x",
+    "log_pitch_rate_x",
+    "log_roll_y",
+    "log_roll_rate_y",
+    "fd_pitch_rate_x",
+    "fd_roll_rate_y",
+    "sagittal_controller_input_pitch_x",
+    "sagittal_controller_input_pitch_rate_x",
+    "sagittal_controller_input_cp_y",
+    "sagittal_controller_input_com_y",
+    "sagittal_controller_input_com_vy",
+    "sagittal_position_error_m",
+    "sagittal_velocity_m_s",
+    "support_position_velocity_m_s",
+    "tau_position",
+    "tau_position_raw",
+    "position_integral_error",
+    "tau_position_integral",
+    "integral_active",
+    "integral_gate_reason",
+    "integral_saturation_flag",
+    "tau_position_p",
+    "tau_position_i",
+    "tau_position_total",
+    "tau_position_clipped",
+    "tau_support_velocity",
+    "max_position_tau",
+    "tau_position_saturation_flag",
+    "tau_position_saturation_reason",
+    "tau_balance_before_position",
+    "tau_position_budget_available",
+    "tau_position_budget_allowed",
+    "tau_position_budget_cap",
+    "pitch_reserve_tau",
+    "tau_pitch_reserve_applied",
+    "enable_torque_budget_aware_position",
+    "tau_position_lower_bound",
+    "tau_position_upper_bound",
+    "tau_position_total_bound_clipped",
+    "position_authority_mode",
+    "position_authority_reason",
+    "tau_total_unclipped",
+    "tau_total_clipped",
+    "tau_total_before_final_clip",
+    "tau_total_after_final_clip",
+    "final_wheel_torque_margin",
+    "k_support_velocity",
+    "support_position_error_m",
+    "com_position_error_sagittal_m",
+    "pitch_x_ref_rad",
+    "pitch_x_error_rad",
+    "wheel_torque_saturation_left",
+    "wheel_torque_saturation_right",
+    "wheel_torque_rate_saturation_left",
+    "wheel_torque_rate_saturation_right",
+    "capture_gate_enabled",
+    "capture_gate_required_direction",
+    "capture_gate_tau_position_direction",
+    "capture_gate_position_opposes_capture",
+    "capture_gate_factor",
+    "capture_gate_active",
+    "capture_gate_reason",
+    "capture_gate_pitch_reversal",
+    "capture_gate_capture_recovery",
+    "capture_gate_tau_position_gated",
+    "capture_gate_cp_relative_to_support_m",
+    "capture_gate_com_support_error_m",
+    "pitch_rate_measured_x_rad_s",
+    "pitch_rate_fd_x_rad_s",
+    "pitch_rate_corrected_x_rad_s",
+    "pitch_rate_consistency_error_rad_s",
+    "pitch_rate_sign_mismatch",
+    "pitch_rate_source_used",
+    "transient_detected",
+    "transient_by_pitch",
+    "transient_by_pitch_rate",
+    "transient_by_height",
+    "pitch_rate_boost_factor",
+    "pitch_rate_for_control_boosted",
+    "transient_capture_mode",
+    "tau_wbc_per_joint",
+    "tau_wbc_scaled_per_joint",
+    "tau_hip_roll_centering_per_joint",
+    "tau_posture_per_joint",
+    "tau_leg_position_per_joint",
+    "tau_wheel_balance_per_joint",
+    "tau_static_feedforward_per_joint",
+    "tau_total_per_joint",
+    "tau_total_raw_per_joint",
+    "tau_total_clipped_per_joint",
+    "tau_smooth_per_joint",
+    "support_ratio_support_joints",
+    "support_ratio_mean",
+    "torque_rate_limit_enabled",
+    "per_actuator_wbc_authority_enabled",
+    "wbc_joint_scaling_enabled",
+    "initialize_tau_prev_from_wbc_enabled",
+    "hip_roll_abs_max",
+    "hip_yaw_abs_max",
+    "hip_pitch_error_max",
+    "knee_error_max",
+    "wheel_balance_torque",
+    "control_mode",
+    "feedforward_enabled",
+    "feedforward_norm",
+    "initial_root_z_perturbation_m",
+    "nominal_equilibrium_com_z_m",
+    "initial_com_z_m_after_perturbation",
+    "perturbation_applied_after_equilibrium_capture",
+    "pitch_x_rad",
+    "roll_y_rad",
+    "yaw_z_rad",
+    "pitch_rate_x_rad_s",
+    "roll_rate_y_rad_s",
+    "yaw_rate_z_rad_s",
+    "com_x_m",
+    "com_y_m",
+    "com_z_m",
+    "com_vx_m_s",
+    "com_vy_m_s",
+    "com_vz_m_s",
+    "cp_x_m",
+    "cp_y_m",
+    "cp_error_y_m",
+    "wheel_vel_left_rad_s",
+    "wheel_vel_right_rad_s",
+    "wheel_vel_mean_rad_s",
+    "wheel_acc_left_rad_s2",
+    "wheel_acc_right_rad_s2",
+    "wheel_acc_mean_rad_s2",
+    "left_wheel_contact",
+    "right_wheel_contact",
+    "contact_supervisor_state",
+    "contact_previous_state",
+    "contact_duration_s",
+    "contact_transition_event",
+    "contact_recovery_hook_fields",
+    "tau_shape_posture_per_joint",
+    "tau_support_feedforward_per_joint",
+    "tau_sagittal_wheel_balance_per_joint",
+    "tau_lateral_roll_balance_per_joint",
+    "tau_final_per_joint",
+    "active_torque_owner_per_joint",
+    "ownership_violation_count",
+    "torque_saturation_mask_per_joint",
+    "torque_rate_saturation_mask_per_joint",
+    "step",
+    "sim_time_s",
+    "control_dt_s",
+    "controller_mode",
+    "survival_steps",
+    "telemetry_file_path",
+    "joint_positions",
+    "joint_velocities",
+    "joint_error_per_joint",
+    "support_joint_error_norm",
+    "knee_error_left_rad",
+    "knee_error_right_rad",
+    "hip_pitch_error_left_rad",
+    "hip_pitch_error_right_rad",
+    "actuator_ctrl_per_joint",
+    "tau_legacy_wheel_balance_norm",
+    "tau_legacy_hip_roll_centering_norm",
+    "tau_posture_regularizer_norm",
+    "tau_leg_position_norm",
+    "hidden_torque_norm"
+  ],
+  "row_count": 5000,
+  "vector_like_columns": [
+    {
+      "column": "time",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "com_y",
+      "parsed_length": 6,
+      "sample": "-0.013560576364398003"
+    },
+    {
+      "column": "com_z",
+      "parsed_length": 9,
+      "sample": "0.4041108191013336"
+    },
+    {
+      "column": "com_vx",
+      "parsed_length": 4,
+      "sample": "3.720082531799562e-05"
+    },
+    {
+      "column": "com_vy",
+      "parsed_length": 6,
+      "sample": "-0.0025162473320961"
+    },
+    {
+      "column": "com_vz",
+      "parsed_length": 11,
+      "sample": "-0.00010132789611816406"
+    },
+    {
+      "column": "cp_x",
+      "parsed_length": 2,
+      "sample": "7.848294444556814e-06"
+    },
+    {
+      "column": "cp_y",
+      "parsed_length": 8,
+      "sample": "-0.014071280136704445"
+    },
+    {
+      "column": "tau_wbc_max",
+      "parsed_length": 5,
+      "sample": "8.15121841430664"
+    },
+    {
+      "column": "tau_wheel_actual_max",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_posture_max",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "euler_roll_x",
+      "parsed_length": 7,
+      "sample": "0.0003843643107758703"
+    },
+    {
+      "column": "euler_pitch_y",
+      "parsed_length": 3,
+      "sample": "2.5593164454837064e-05"
+    },
+    {
+      "column": "euler_yaw_z",
+      "parsed_length": 2,
+      "sample": "9.468842619432285e-05"
+    },
+    {
+      "column": "robot_pitch_x",
+      "parsed_length": 7,
+      "sample": "0.0003843643107758703"
+    },
+    {
+      "column": "robot_roll_y",
+      "parsed_length": 3,
+      "sample": "2.5593164454837064e-05"
+    },
+    {
+      "column": "robot_yaw_z",
+      "parsed_length": 2,
+      "sample": "9.468842619432285e-05"
+    },
+    {
+      "column": "roll_rate_rad_s",
+      "parsed_length": 6,
+      "sample": "0.11994132399559021"
+    },
+    {
+      "column": "pitch_rate_rad_s",
+      "parsed_length": 6,
+      "sample": "0.006399261299520731"
+    },
+    {
+      "column": "yaw_rate_rad_s",
+      "parsed_length": 6,
+      "sample": "0.017384059727191925"
+    },
+    {
+      "column": "left_contact_force_world_y",
+      "parsed_length": 5,
+      "sample": "1.901698112487793"
+    },
+    {
+      "column": "left_contact_force_world_z",
+      "parsed_length": 5,
+      "sample": "20.508811950683594"
+    },
+    {
+      "column": "right_contact_force_world_x",
+      "parsed_length": 4,
+      "sample": "3.181489944458008"
+    },
+    {
+      "column": "right_contact_force_world_y",
+      "parsed_length": 2,
+      "sample": "0.9766565561294556"
+    },
+    {
+      "column": "total_contact_force_z",
+      "parsed_length": 3,
+      "sample": "42.55841064453125"
+    },
+    {
+      "column": "joint_pos",
+      "parsed_length": 36,
+      "sample": "0.0000,0.0000,0.9261,1.7484,0.0000,0.0000,0.0000,0.9261,1.7484,0.0000"
+    },
+    {
+      "column": "joint_vel",
+      "parsed_length": 26,
+      "sample": "-0.0003,-0.0086,0.3159,0.2581,0.0010,-0.0065,-0.0033,0.2857,0.2447,-0.0487"
+    },
+    {
+      "column": "qp_error",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "wrench_error_norm",
+      "parsed_length": 7,
+      "sample": "0.010493816807866096"
+    },
+    {
+      "column": "f_left_z",
+      "parsed_length": 2,
+      "sample": "39.73064422607422"
+    },
+    {
+      "column": "f_right_z",
+      "parsed_length": 4,
+      "sample": "39.73035430908203"
+    },
+    {
+      "column": "distributed_left_fx",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "distributed_left_fy",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "distributed_left_fz",
+      "parsed_length": 2,
+      "sample": "39.73064422607422"
+    },
+    {
+      "column": "distributed_right_fx",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "distributed_right_fy",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "distributed_right_fz",
+      "parsed_length": 4,
+      "sample": "39.73035430908203"
+    },
+    {
+      "column": "tau_saturation_rate",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "desired_wrench_Fx",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "desired_wrench_Fy",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "desired_wrench_Fz",
+      "parsed_length": 2,
+      "sample": "79.46099853515625"
+    },
+    {
+      "column": "desired_wrench_Mx",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "desired_wrench_My",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "desired_wrench_Mz",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "target_joint_pos",
+      "parsed_length": 34,
+      "sample": "0.0000,-0.0007,0.9261,1.7484,0.0000,0.0000,0.0009,0.9261,1.7484,0.0000"
+    },
+    {
+      "column": "joint_pos_error",
+      "parsed_length": 48,
+      "sample": "0.0000,-0.0007,0.0000,0.0000,0.0000,0.0000,0.0009,0.0000,0.0000,0.0000"
+    },
+    {
+      "column": "joint_pos_error_norm",
+      "parsed_length": 6,
+      "sample": "0.0011337905889376998"
+    },
+    {
+      "column": "joint_vel_norm",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_wbc_norm",
+      "parsed_length": 4,
+      "sample": "11.987911224365234"
+    },
+    {
+      "column": "tau_posture_norm",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_inverse_dynamics_norm",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_total_norm",
+      "parsed_length": 3,
+      "sample": "11.368157386779785"
+    },
+    {
+      "column": "tau_rate_unlimited",
+      "parsed_length": 6,
+      "sample": "541.0407104492188"
+    },
+    {
+      "column": "tau_rate_limited",
+      "parsed_length": 6,
+      "sample": "541.0407104492188"
+    },
+    {
+      "column": "total_wheel_floor_fz",
+      "parsed_length": 4,
+      "sample": "42.558410544987105"
+    },
+    {
+      "column": "correction_wrench_norm",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "correction_wrench_Fx",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "correction_wrench_Fy",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "correction_wrench_Fz",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "correction_wrench_Mx",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "correction_wrench_My",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "correction_wrench_Mz",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "pitch_x",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "pitch_rate_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "roll_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "roll_rate_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "yaw_z",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_roll_left_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_roll_right_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_roll_common_component_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_roll_symmetric_component_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_roll_abs_max_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_roll_ref_left_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_roll_ref_right_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_roll_error_left_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_roll_error_right_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "yaw_drift_from_initial_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "com_error_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "com_error_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "com_error_z",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "cp_error_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "cp_error_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "pitch_error",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "roll_error",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "height_error",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "left_fz_actual",
+      "parsed_length": 5,
+      "sample": "20.508811950683594"
+    },
+    {
+      "column": "fz_asymmetry_actual",
+      "parsed_length": 4,
+      "sample": "-1.5407867431640625"
+    },
+    {
+      "column": "contact_dist_min",
+      "parsed_length": 3,
+      "sample": "-7.341287798914853e-05"
+    },
+    {
+      "column": "contact_dist_max",
+      "parsed_length": 3,
+      "sample": "-6.752272892115996e-05"
+    },
+    {
+      "column": "correction_Fy_com",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "correction_Fy_cp",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "correction_Fy_pitch",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "correction_My_roll",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "distributor_f_left",
+      "parsed_length": 11,
+      "sample": "0.0000,0.0000,39.7306"
+    },
+    {
+      "column": "distributor_f_right",
+      "parsed_length": 11,
+      "sample": "0.0000,0.0000,39.7304"
+    },
+    {
+      "column": "tau_hip_roll",
+      "parsed_length": 10,
+      "sample": "0.0000,-0.0000"
+    },
+    {
+      "column": "tau_contact",
+      "parsed_length": 50,
+      "sample": "0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+    },
+    {
+      "column": "tau_wbc_correction",
+      "parsed_length": 50,
+      "sample": "0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+    },
+    {
+      "column": "tau_wbc_after_authority_clip",
+      "parsed_length": 50,
+      "sample": "0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+    },
+    {
+      "column": "tau_static_feedforward",
+      "parsed_length": 42,
+      "sample": "0.0000,0.0000,2.0500,-7.7500,0.0000,0.0000,0.0000,1.6000,-7.9000,0.0000"
+    },
+    {
+      "column": "tau_static_posture",
+      "parsed_length": 50,
+      "sample": "0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+    },
+    {
+      "column": "saturation_flags",
+      "parsed_length": 10,
+      "sample": "0,0,0,0,0,0,0,0,0,0"
+    },
+    {
+      "column": "rate_limit_flags",
+      "parsed_length": 10,
+      "sample": "0,0,0,0,0,0,0,0,0,0"
+    },
+    {
+      "column": "tau_stage2b_sagittal_wheel_l",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_stage2b_sagittal_wheel_r",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_total_raw_l_wheel",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_total_raw_r_wheel",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_total_clipped_l_wheel",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_total_clipped_r_wheel",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_smooth_l_wheel",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_smooth_r_wheel",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "ctrl_l_wheel",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "ctrl_r_wheel",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "qvel_l_wheel",
+      "parsed_length": 6,
+      "sample": "0.0009947374565074177"
+    },
+    {
+      "column": "qvel_r_wheel",
+      "parsed_length": 3,
+      "sample": "-0.04868555084724539"
+    },
+    {
+      "column": "sagittal_term_pitch",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_term_pitch_rate",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_term_cp",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_term_com_vy",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "sagittal_term_wheel_vel_left",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "sagittal_term_wheel_vel_right",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "sagittal_balance_torque_raw",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_balance_torque_clipped",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_balance_torque_final",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_pitch_error",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_cp_error_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_tau_wheel_cmd",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_pitch_error",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_pitch_rate_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_com_y_error",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_com_vy",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_cp_y_error",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_wheel_vel_left",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_wheel_vel_right",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_wheel_vel_mean",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_term_pitch",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_term_pitch_rate",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_term_com_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_term_com_vy",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_term_cp_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_term_wheel_vel",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_tau_wheel_raw",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2c_tau_wheel_clipped",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_pitch_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_pitch_rate_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_cp_error_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_com_vy",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_wheel_vel_mean",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_u_raw",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_u_clipped",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_contrib_pitch_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_contrib_pitch_rate_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_contrib_cp_error_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_contrib_com_vy",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "stage2d_contrib_wheel_vel_mean",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "control_pitch_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "control_pitch_rate_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "control_roll_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "control_roll_rate_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "log_pitch_x",
+      "parsed_length": 7,
+      "sample": "0.0003843643107758703"
+    },
+    {
+      "column": "log_pitch_rate_x",
+      "parsed_length": 6,
+      "sample": "0.11994132399559021"
+    },
+    {
+      "column": "log_roll_y",
+      "parsed_length": 3,
+      "sample": "2.5593164454837064e-05"
+    },
+    {
+      "column": "log_roll_rate_y",
+      "parsed_length": 6,
+      "sample": "0.006399261299520731"
+    },
+    {
+      "column": "fd_pitch_rate_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "fd_roll_rate_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_controller_input_pitch_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_controller_input_pitch_rate_x",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_controller_input_cp_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_controller_input_com_y",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_controller_input_com_vy",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_position_error_m",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "sagittal_velocity_m_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "support_position_velocity_m_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_position",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_position_raw",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "position_integral_error",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_position_integral",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_position_p",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "tau_position_i",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_position_total",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_position_clipped",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_support_velocity",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "tau_balance_before_position",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_position_budget_available",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_position_budget_allowed",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "pitch_reserve_tau",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_pitch_reserve_applied",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_total_unclipped",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_total_clipped",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_total_before_final_clip",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_total_after_final_clip",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "k_support_velocity",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "support_position_error_m",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "com_position_error_sagittal_m",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "pitch_x_ref_rad",
+      "parsed_length": 2,
+      "sample": "-0.0"
+    },
+    {
+      "column": "pitch_x_error_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "capture_gate_required_direction",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "capture_gate_tau_position_direction",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "capture_gate_factor",
+      "parsed_length": 2,
+      "sample": "1.0"
+    },
+    {
+      "column": "capture_gate_tau_position_gated",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "capture_gate_cp_relative_to_support_m",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "capture_gate_com_support_error_m",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "pitch_rate_measured_x_rad_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "pitch_rate_fd_x_rad_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "pitch_rate_corrected_x_rad_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "pitch_rate_consistency_error_rad_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "pitch_rate_boost_factor",
+      "parsed_length": 2,
+      "sample": "1.0"
+    },
+    {
+      "column": "pitch_rate_for_control_boosted",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_wbc_per_joint",
+      "parsed_length": 31,
+      "sample": "-0.0000,-2.3242,0.1051,8.1512,0.0000,-0.0000,2.3242,0.1049,8.1512,0.0000"
+    },
+    {
+      "column": "tau_wbc_scaled_per_joint",
+      "parsed_length": 50,
+      "sample": "0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+    },
+    {
+      "column": "tau_hip_roll_centering_per_joint",
+      "parsed_length": 50,
+      "sample": "0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+    },
+    {
+      "column": "tau_posture_per_joint",
+      "parsed_length": 50,
+      "sample": "0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+    },
+    {
+      "column": "tau_leg_position_per_joint",
+      "parsed_length": 50,
+      "sample": "0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+    },
+    {
+      "column": "tau_wheel_balance_per_joint",
+      "parsed_length": 50,
+      "sample": "0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000"
+    },
+    {
+      "column": "tau_static_feedforward_per_joint",
+      "parsed_length": 42,
+      "sample": "0.0000,0.0000,2.0500,-7.7500,0.0000,0.0000,0.0000,1.6000,-7.9000,0.0000"
+    },
+    {
+      "column": "tau_total_per_joint",
+      "parsed_length": 45,
+      "sample": "0.0000,0.0000,2.0500,-4.0000,0.0000,0.0000,0.0000,1.6000,-4.0000,0.0000"
+    },
+    {
+      "column": "tau_total_raw_per_joint",
+      "parsed_length": 28,
+      "sample": "0.0,0.0,2.049999952316284,-7.75,0.0,0.0,0.0,1.600000023841858,-7.900000095367432,0.0"
+    },
+    {
+      "column": "tau_total_clipped_per_joint",
+      "parsed_length": 28,
+      "sample": "0.0,0.0,2.049999952316284,-7.75,0.0,0.0,0.0,1.600000023841858,-7.900000095367432,0.0"
+    },
+    {
+      "column": "tau_smooth_per_joint",
+      "parsed_length": 45,
+      "sample": "0.0000,0.0000,2.0500,-4.0000,0.0000,0.0000,0.0000,1.6000,-4.0000,0.0000"
+    },
+    {
+      "column": "support_ratio_support_joints",
+      "parsed_length": 8,
+      "sample": "19.5051,0.4907,15.2494,0.4907"
+    },
+    {
+      "column": "support_ratio_mean",
+      "parsed_length": 4,
+      "sample": "8.933984510600567"
+    },
+    {
+      "column": "hip_roll_abs_max",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_yaw_abs_max",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_pitch_error_max",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "knee_error_max",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "wheel_balance_torque",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "feedforward_norm",
+      "parsed_length": 3,
+      "sample": "11.368157386779785"
+    },
+    {
+      "column": "initial_root_z_perturbation_m",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "nominal_equilibrium_com_z_m",
+      "parsed_length": 6,
+      "sample": "0.4041118323802948"
+    },
+    {
+      "column": "initial_com_z_m_after_perturbation",
+      "parsed_length": 6,
+      "sample": "0.4041118323802948"
+    },
+    {
+      "column": "pitch_x_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "roll_y_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "yaw_z_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "pitch_rate_x_rad_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "roll_rate_y_rad_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "yaw_rate_z_rad_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "com_x_m",
+      "parsed_length": 4,
+      "sample": "-7.408496571770229e-08"
+    },
+    {
+      "column": "com_y_m",
+      "parsed_length": 7,
+      "sample": "-0.013535413891077042"
+    },
+    {
+      "column": "com_z_m",
+      "parsed_length": 6,
+      "sample": "0.4041118323802948"
+    },
+    {
+      "column": "com_vx_m_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "com_vy_m_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "com_vz_m_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "cp_x_m",
+      "parsed_length": 4,
+      "sample": "-7.408496571770229e-08"
+    },
+    {
+      "column": "cp_y_m",
+      "parsed_length": 7,
+      "sample": "-0.013535413891077042"
+    },
+    {
+      "column": "cp_error_y_m",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "wheel_vel_left_rad_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "wheel_vel_right_rad_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "wheel_vel_mean_rad_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "wheel_acc_left_rad_s2",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "wheel_acc_right_rad_s2",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "wheel_acc_mean_rad_s2",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "contact_duration_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "contact_recovery_hook_fields",
+      "parsed_length": 3,
+      "sample": "{'entered_single_contact': False, 'entered_no_contact': False, 'force_valid_for_recovery': False}"
+    },
+    {
+      "column": "tau_shape_posture_per_joint",
+      "parsed_length": 20,
+      "sample": "0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0"
+    },
+    {
+      "column": "tau_support_feedforward_per_joint",
+      "parsed_length": 28,
+      "sample": "0.0,0.0,2.049999952316284,-7.75,0.0,0.0,0.0,1.600000023841858,-7.900000095367432,0.0"
+    },
+    {
+      "column": "tau_sagittal_wheel_balance_per_joint",
+      "parsed_length": 20,
+      "sample": "0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0"
+    },
+    {
+      "column": "tau_lateral_roll_balance_per_joint",
+      "parsed_length": 20,
+      "sample": "0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0"
+    },
+    {
+      "column": "tau_final_per_joint",
+      "parsed_length": 18,
+      "sample": "0.0,0.0,2.049999952316284,-4.0,0.0,0.0,0.0,1.5999999046325684,-4.0,0.0"
+    },
+    {
+      "column": "torque_saturation_mask_per_joint",
+      "parsed_length": 10,
+      "sample": "False,False,False,False,False,False,False,False,False,False"
+    },
+    {
+      "column": "torque_rate_saturation_mask_per_joint",
+      "parsed_length": 10,
+      "sample": "False,False,False,True,False,False,False,False,True,False"
+    },
+    {
+      "column": "sim_time_s",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "control_dt_s",
+      "parsed_length": 3,
+      "sample": "0.01"
+    },
+    {
+      "column": "survival_steps",
+      "parsed_length": 3,
+      "sample": "5000"
+    },
+    {
+      "column": "telemetry_file_path",
+      "parsed_length": 4,
+      "sample": "outputs\\hierarchical_controller_sim\\telemetry_1780289121.csv"
+    },
+    {
+      "column": "joint_positions",
+      "parsed_length": 36,
+      "sample": "0.0000,0.0000,0.9261,1.7484,0.0000,0.0000,0.0000,0.9261,1.7484,0.0000"
+    },
+    {
+      "column": "joint_velocities",
+      "parsed_length": 26,
+      "sample": "-0.0003,-0.0086,0.3159,0.2581,0.0010,-0.0065,-0.0033,0.2857,0.2447,-0.0487"
+    },
+    {
+      "column": "joint_error_per_joint",
+      "parsed_length": 68,
+      "sample": "0.000000,-0.000700,0.000000,0.000000,0.000000,0.000000,0.000900,0.000000,0.000000,0.000000"
+    },
+    {
+      "column": "support_joint_error_norm",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "knee_error_left_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "knee_error_right_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_pitch_error_left_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hip_pitch_error_right_rad",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "actuator_ctrl_per_joint",
+      "parsed_length": 18,
+      "sample": "0.0,0.0,2.049999952316284,-4.0,0.0,0.0,0.0,1.5999999046325684,-4.0,0.0"
+    },
+    {
+      "column": "tau_legacy_wheel_balance_norm",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_legacy_hip_roll_centering_norm",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_posture_regularizer_norm",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "tau_leg_position_norm",
+      "parsed_length": 2,
+      "sample": "0.0"
+    },
+    {
+      "column": "hidden_torque_norm",
+      "parsed_length": 2,
+      "sample": "0.0"
+    }
+  ]
+}

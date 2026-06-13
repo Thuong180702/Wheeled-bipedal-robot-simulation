@@ -1,0 +1,156 @@
+{
+  "audit_metadata": {
+    "title": "Step E Extreme Height Root Cause Audit",
+    "date": "2026-06-07",
+    "baseline": "D2 official",
+    "cases": ["low_0p300 (0.300m)", "high_0p480 (0.480m)"],
+    "scope": "Validator fix only (no controller modifications)"
+  },
+  "executive_summary": {
+    "total_gate_failures": 8,
+    "fixable_by_validator": 2,
+    "requiring_controller_change": 6,
+    "root_cause_count": 5,
+    "primary_finding": "wbc_applied gate is a FALSE POSITIVE — fires on QP structural artifact"
+  },
+  "phase_results": {
+    "phase_0": {
+      "name": "Health Check and Artifact Inventory",
+      "status": "COMPLETE",
+      "output": "outputs/step_e_extreme_failure_root_cause_audit/artifact_inventory.json"
+    },
+    "phase_1": {
+      "name": "WBC Artifact Audit",
+      "status": "COMPLETE",
+      "classification": "WBC_FALSE_POSITIVE_SUPPORT_FEEDFORWARD",
+      "output": "outputs/step_e_extreme_failure_root_cause_audit/wbc_artifact_audit.md"
+    },
+    "phase_2": {
+      "name": "Event Order Audit",
+      "status": "COMPLETE",
+      "low_0p300": "SUPPORT_DRIFT_FIRST (step 91)",
+      "high_0p480": "WHEEL_VELOCITY_FIRST (step 73)",
+      "output": "outputs/step_e_extreme_failure_root_cause_audit/event_order/event_order_summary.json"
+    },
+    "phase_3": {
+      "name": "Support Drift Root Cause",
+      "status": "COMPLETE",
+      "findings": ["POSITION_AUTHORITY_SATURATED", "NO_POSITION_INTEGRAL", "OSCILLATORY_DRIFT"],
+      "output": "outputs/step_e_extreme_failure_root_cause_audit/support_drift/support_drift_audit.json"
+    },
+    "phase_4": {
+      "name": "Hip-Yaw Failure Root Cause",
+      "status": "COMPLETE",
+      "findings": ["DIVERGENCE_PRIMARY", "HY2_DIV_DISABLED", "SECONDARY_TO_SUPPORT_DRIFT"],
+      "output": "outputs/step_e_extreme_failure_root_cause_audit/hip_yaw/hip_yaw_audit.json"
+    },
+    "phase_5": {
+      "name": "Wheel Velocity Failure (high_0p480)",
+      "status": "COMPLETE",
+      "findings": ["TRANSIENT_EXCEEDANCE", "WHEEL_VEL_LEADS_SUPPORT"],
+      "output": "outputs/step_e_extreme_failure_root_cause_audit/wheel_velocity/wheel_velocity_audit.json"
+    },
+    "phase_6": {
+      "name": "Cross-Failure Causal Map",
+      "status": "COMPLETE",
+      "output": "outputs/step_e_extreme_failure_root_cause_audit/causal_map.md"
+    },
+    "phase_7": {
+      "name": "Fix Strategy Plan",
+      "status": "COMPLETE",
+      "output": "outputs/step_e_extreme_failure_root_cause_audit/fix_strategy_plan.md"
+    }
+  },
+  "gate_results": {
+    "support_position_error": {
+      "low_0p300": {"exceeds": true, "max_m": 0.1757, "gate_m": 0.15, "root_cause": "POSITION_AUTHORITY_SATURATED"},
+      "high_0p480": {"exceeds": true, "max_m": 0.1733, "gate_m": 0.15, "root_cause": "POSITION_AUTHORITY_SATURATED"},
+      "fixable": false
+    },
+    "wheel_velocity": {
+      "low_0p300": {"exceeds": false, "max_rad_s": 4.39, "gate_rad_s": 5.0},
+      "high_0p480": {"exceeds": true, "max_rad_s": 5.26, "gate_rad_s": 5.0, "root_cause": "TRANSIENT_EXCEEDANCE"},
+      "fixable": false
+    },
+    "hip_yaw": {
+      "low_0p300": {"exceeds": true, "max_rad": 0.3127, "gate_rad": 0.10, "root_cause": "HY2_DIV_DISABLED"},
+      "high_0p480": {"exceeds": true, "max_rad": 0.2753, "gate_rad": 0.10, "root_cause": "HY2_DIV_DISABLED"},
+      "fixable": false
+    },
+    "wbc_applied": {
+      "low_0p300": {"exceeds": true, "reason": "FALSE_POSITIVE", "fixable": true},
+      "high_0p480": {"exceeds": true, "reason": "FALSE_POSITIVE", "fixable": true},
+      "fixable": true
+    }
+  },
+  "root_causes": {
+    "WBC_FALSE_POSITIVE": {
+      "description": "wbc_applied gate fires on QP structural output, not active WBC",
+      "evidence": {
+        "tau_wbc_norm": "14.49 Nm (low), 20.13 Nm (high)",
+        "per_actuator_wbc_authority_enabled": false,
+        "active_torque_owner": "support_feedforward"
+      },
+      "fixable": true,
+      "fix": "Change gate from 'tau_wbc_norm > 0.001' to 'per_actuator_wbc_authority_enabled == True'"
+    },
+    "POSITION_AUTHORITY_SATURATED": {
+      "description": "tau_position saturates at 4.0 Nm immediately, exhausting position authority",
+      "evidence": {
+        "tau_position_max": 4.0,
+        "tau_position_saturated_at_step": 108,
+        "low_0p300": true,
+        "high_0p480": true
+      },
+      "fixable": false,
+      "fix": "Increase position authority limit (out of scope)"
+    },
+    "NO_POSITION_INTEGRAL": {
+      "description": "Position integral never activates (integral_active_ratio = 0.0)",
+      "evidence": {
+        "integral_active_count": 0,
+        "integral_active_ratio": 0.0,
+        "tau_position_integral_max": 0.0
+      },
+      "fixable": false,
+      "fix": "Enable position integral term (out of scope)"
+    },
+    "HY2_DIV_DISABLED": {
+      "description": "Hip yaw differential (HY2-DIV) is disabled, no corrective yaw torque",
+      "evidence": {
+        "hip_yaw_div_enabled_count": 0,
+        "hip_yaw_div_active_count": 0,
+        "hip_yaw_div_torques_used": false,
+        "mode": "DIVERGENCE"
+      },
+      "fixable": false,
+      "fix": "Enable HY2-DIV (out of scope)"
+    },
+    "WHEEL_VELOCITY_TRANSIENT": {
+      "description": "Transient wheel velocity spike at high height (0.34% of time above gate)",
+      "evidence": {
+        "max_velocity": 5.26,
+        "peak_step": 83,
+        "time_above_gate_pct": 0.34,
+        "wheel_vel_leads_support": true
+      },
+      "fixable": false,
+      "fix": "Reduce initial pitch disturbance or increase wheel authority (out of scope)"
+    }
+  },
+  "recommendations": {
+    "immediate": [
+      "Fix wbc_applied gate in validator to check per_actuator_wbc_authority_enabled"
+    ],
+    "for_step_c_d": [
+      "Enable position integral in D2+controller_fixes profile",
+      "Increase position authority saturation limit",
+      "Consider HY2-DIV for hip yaw correction (if scope allows)"
+    ],
+    "not_recommended": [
+      "Relaxing gates (hides real issues)",
+      "Adding WBC (not needed, gate bug is the real issue)",
+      "Tuning gains without root cause understanding"
+    ]
+  }
+}

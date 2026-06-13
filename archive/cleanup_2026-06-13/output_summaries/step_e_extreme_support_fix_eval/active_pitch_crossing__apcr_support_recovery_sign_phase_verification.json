@@ -1,0 +1,35 @@
+{
+  "classification": "SUPPORT_RECOVERY_SIGN_CONFIRMED",
+  "details": {
+    "apcr1f_correct_sign": true,
+    "apcr1g_correct_sign": false,
+    "apcr1f_tau_when_positive_drift": "negative (correct)",
+    "apcr1g_tau_when_positive_drift": "positive (WRONG)"
+  },
+  "evidence": {
+    "drift_gt_0p10": {
+      "apcr1f": {
+        "n_steps": 652,
+        "tau_mean": -1.0011,
+        "tau_correct_sign_pct": 100.0
+      },
+      "apcr1g": {
+        "n_steps": 1019,
+        "tau_mean": 1.3276,
+        "tau_correct_sign_pct": 0.0
+      }
+    },
+    "first_50_steps_after_0p15": {
+      "apcr1f": {
+        "tau_lt_0_pct": 100.0,
+        "tau_mean": -0.9184
+      },
+      "apcr1g": {
+        "tau_lt_0_pct": 0.0,
+        "tau_mean": 1.3574
+      }
+    }
+  },
+  "conclusion": "APCR1f applies correct torque sign. APCR1g applies wrong torque sign (reversed).",
+  "fix_required": "APCR1h must use APCR1f torque sign convention."
+}

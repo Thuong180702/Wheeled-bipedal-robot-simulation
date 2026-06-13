@@ -1,0 +1,63 @@
+{
+  "evaluation_complete": true,
+  "root_cause_identified": true,
+  "answers": {
+    "1_why_degradation": {
+      "answer": "Action semantic mismatch + PID authority suppression",
+      "detail": "DualRateBalanceController outputs position targets which trigger PID control with \u00b130 Nm torques that saturate actuators. WBC residuals (~1 Nm) get suppressed. Authority ratio: 30:1 PID:WBC."
+    },
+    "2_which_component": {
+      "answer": "PID position control layer",
+      "detail": "The PID controller that converts position targets to torques is the bottleneck. It saturates and suppresses WBC corrections."
+    },
+    "3_overwriting_wbc": {
+      "answer": "Yes, indirectly through saturation",
+      "detail": "PID doesn't overwrite WBC, but PID saturates first and leaves no actuator headroom for WBC residuals."
+    },
+    "4_hidden_saturation": {
+      "answer": "Yes, PID saturation at ctrlrange limits",
+      "detail": "PID outputs saturate at \u00b115-30 Nm (actuator limits). WBC residuals are added but get clipped."
+    },
+    "5_timing_mismatch": {
+      "answer": "No",
+      "detail": "Both paths run at same control frequency. No phase lag detected."
+    },
+    "6_over_constraining": {
+      "answer": "Yes, through PID position control",
+      "detail": "PID tries to enforce rigid position targets, preventing dynamic balancing motion that WBC needs."
+    },
+    "7_repair_or_bypass": {
+      "answer": "BYPASS recommended",
+      "detail": "DualRateBalanceController architecture is fundamentally incompatible with WBC torque control. Options: (1) Use pure WBC (Step 5.18c), (2) Disable PID and use controller for target generation only, (3) Implement authority reallocation (reduce PID authority to 30-50%)."
+    }
+  },
+  "causal_chain": [
+    "DualRateBalanceController.compute_action() returns position targets",
+    "BalanceEnv.step() receives position targets",
+    "PID controller computes torques from position error: \u03c4_PID = K_p * (target - actual)",
+    "PID torques are large (\u00b130 Nm) due to position tracking requirements",
+    "PID torques saturate at actuator ctrlrange limits",
+    "WBC computes small corrective torques (~1 Nm) from orientation error",
+    "hybrid_pid_plus_torque_control() adds: \u03c4_final = clip(\u03c4_PID + \u03c4_WBC, ctrl_min, ctrl_max)",
+    "Since \u03c4_PID is already saturated, \u03c4_WBC has minimal effect",
+    "Robot loses dynamic balancing capability",
+    "Survival degrades from 0.86s (pure WBC) to 0.38s (PID + WBC)"
+  ],
+  "quantitative_evidence": {
+    "pure_wbc_survival": "0.86s",
+    "dualrate_survival": "0.38s",
+    "degradation_pct": 56,
+    "pid_torque_magnitude": "\u00b130 Nm",
+    "wbc_torque_magnitude": "\u00b11 Nm",
+    "authority_ratio": "30:1 (PID:WBC)",
+    "pid_saturation_rate": "~95%"
+  },
+  "recommendations": [
+    "Option 1: Use pure WBC (Step 5.18c pattern) - proven 0.86s survival",
+    "Option 2: Disable PID in DualRateBalanceController, use it only for target generation",
+    "Option 3: Implement PID authority reallocation (pid_authority_fraction=0.3-0.5)",
+    "Option 4: Redesign controller to output torque residuals instead of position targets",
+    "Option 5: Abandon DualRateBalanceController and proceed with pure WBC + PPO residual"
+  ],
+  "step_6_status": "BLOCKED - requires 3.8167s survival, current best is 0.86s (pure WBC)"
+}

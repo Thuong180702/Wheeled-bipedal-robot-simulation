@@ -1,0 +1,87 @@
+{
+  "profile": "APCR1j_support_hysteresis_higher_authority",
+  "classification": "APCR1J_1000_IMPROVES_BUT_NOT_ENOUGH",
+  "survived": true,
+  "steps": 1000,
+  "root_cause_fix_verified": true,
+  "root_cause_fix_details": "apc_max_cross_tau set to 2.0 Nm, APCR1j reaches 2.0 Nm vs 1.5 Nm for APCR1i",
+
+  "drift_metrics": {
+    "min_e_m": -0.0688,
+    "max_e_m": 0.1826,
+    "p2p_m": 0.2514,
+    "outside_015_pct": 25.8,
+    "mean_e_m": 0.0791,
+    "abs_mean_e_m": 0.0919
+  },
+
+  "comparison_vs_apcr1i": {
+    "max_e_improved": true,
+    "max_e_apcr1i": 0.2550,
+    "max_e_apcr1j": 0.1826,
+    "max_e_reduction_pct": 28.4,
+    "p2p_improved": true,
+    "p2p_apcr1i": 0.3424,
+    "p2p_apcr1j": 0.2514,
+    "p2p_reduction_pct": 26.6,
+    "outside_015_improved": true,
+    "outside_015_apcr1i": 29.6,
+    "outside_015_apcr1j": 25.8,
+    "outside_015_reduction_pct": 12.8
+  },
+
+  "comparison_vs_apcr1h": {
+    "max_e_worse_than_apcr1h": true,
+    "max_e_apcr1h": 0.1572,
+    "max_e_apcr1j": 0.1826,
+    "target_not_met": true,
+    "target": 0.15
+  },
+
+  "torque_authority": {
+    "apc_max_cross_tau_configured": 2.0,
+    "apc_max_cross_tau_observed": 2.0,
+    "observed_max_tau": 2.0,
+    "torque_clipping_events": 0,
+    "fix_working": true
+  },
+
+  "hysteresis_behavior": {
+    "episode_count": 4,
+    "total_recenter_steps": 611,
+    "recenter_states": ["RECENTER_FROM_POSITIVE", "NEUTRAL"],
+    "no_negative_recenter": true,
+    "max_tau_reached": 2.0
+  },
+
+  "stability": {
+    "contact_double_pct": 94.4,
+    "height_min_m": 0.2875,
+    "height_max_m": 0.2954,
+    "pitch_rms_deg": 4.45,
+    "roll_rms_deg": 0.41,
+    "wheel_vel_rms_rad_s": 3.06,
+    "wheel_vel_gt_5_pct": 7.0
+  },
+
+  "key_findings": [
+    "Torque authority fix verified: APCR1j reaches 2.0 Nm",
+    "Drift improved vs APCR1i: max_e reduced by 28.4%",
+    "Drift still worse than APCR1h: max_e = 0.183 m vs 0.157 m",
+    "Target max_e < 0.15 m NOT achieved",
+    "Higher torque causes higher pitch oscillation (4.45 deg RMS)"
+  ],
+
+  "decision": "Do NOT proceed to 2000-step. APCR1j improved on APCR1i but not enough to beat APCR1h.",
+
+  "recommendations": [
+    "Investigate why higher torque doesn't fully eliminate drift",
+    "Check if safety gates block APCR during critical moments",
+    "Consider APCR1h as current best profile",
+    "Consider combining APCR1h drift_priority with higher authority"
+  ],
+
+  "current_best_profile": "APCR1h",
+
+  "created": "2026-06-10"
+}

@@ -1,0 +1,143 @@
+{
+  "audit_date": "2026-06-05",
+  "root_cause_map_version": "1.0",
+  "decision": "DIVERGENCE_ROOT_CAUSE_IDENTIFIED_READY_FOR_FIX",
+  "classifications": [
+    {
+      "id": "RC-001",
+      "classification": "per_joint_pd_inadequate_for_divergence",
+      "confidence": "HIGH",
+      "evidence": [
+        "Per-joint PD produces divergence-mode torques that accelerate divergence 97-99% of the time",
+        "Divergence torque correcting_pct: 0.32-2.24% (essentially never corrects)",
+        "Divergence torque accelerating_pct: 97.76-99.68% (essentially always accelerates)",
+        "Sign fix increased torque coherence, which worsened divergence growth"
+      ],
+      "affected_heights": ["nominal", "low_0p300", "high_0p480"],
+      "first_event_timing": {
+        "nominal": "step 1145 (divergence > 0.07 rad)",
+        "low_0p300": "step 414 (divergence > 0.07 rad)",
+        "high_0p480": "step 965 (divergence > 0.07 rad)"
+      },
+      "ruled_out_mechanisms": [
+        "sign_convention_error (sign fix is correct)",
+        "torque_saturation (saturation not primary driver)",
+        "initialization_bias (initial divergence = 0)",
+        "reference_mismatch (refs are symmetric)"
+      ],
+      "blocks_step_e": true,
+      "validation_needed": "Enable HY2-DIV divergence damping layer"
+    },
+    {
+      "id": "RC-002",
+      "classification": "divergence_authority_insufficient",
+      "confidence": "HIGH",
+      "evidence": [
+        "No dedicated divergence damping layer exists",
+        "HY2-DIV code exists but is not enabled",
+        "Per-joint PD kp=15, kd=3 provides error correction but not divergence damping"
+      ],
+      "affected_heights": ["nominal", "low_0p300", "high_0p480"],
+      "first_event_timing": "Same as RC-001",
+      "ruled_out_mechanisms": [
+        "gain_tuning (per-joint gains are correct for error correction)",
+        "torque_clipping (clips are not the primary issue)"
+      ],
+      "blocks_step_e": true,
+      "validation_needed": "Enable HY2-DIV with conservative gains"
+    },
+    {
+      "id": "RC-003",
+      "classification": "setup_height_coupled_divergence",
+      "confidence": "MEDIUM",
+      "evidence": [
+        "high_0p480 shows strong correlation: corr_div_support_error = -0.517",
+        "high_0p480 shows strong correlation: corr_div_roll = -0.465",
+        "high_0p480 shows strong correlation: corr_div_l_hip_yaw_vel = -0.755",
+        "Divergence growth ratio increased from 23.87 to 72.51 at high_0p480"
+      ],
+      "affected_heights": ["high_0p480"],
+      "first_event_timing": "step 965 (divergence > 0.07 rad)",
+      "ruled_out_mechanisms": [
+        "nominal_height_coupling (corr near 0 at nominal)",
+        "low_height_coupling (corr moderate at low)"
+      ],
+      "blocks_step_e": false,
+      "validation_needed": "Monitor coupling after HY2-DIV enable"
+    },
+    {
+      "id": "RC-004",
+      "classification": "position_drift_accumulation",
+      "confidence": "MEDIUM",
+      "evidence": [
+        "Large position drift develops over 5000 steps",
+        "nominal post-fix: L=-0.2534, R=+0.2538 (div=-0.5072 rad)",
+        "high_0p480 post-fix: L=-0.3442, R=+0.3451 (div=-0.6893 rad)"
+      ],
+      "affected_heights": ["nominal", "high_0p480"],
+      "first_event_timing": "step ~1000+ (gradual drift)",
+      "ruled_out_mechanisms": [
+        "initial_error_bias (initial divergence = 0)"
+      ],
+      "blocks_step_e": false,
+      "validation_needed": "Monitor position drift after HY2-DIV enable"
+    }
+  ],
+  "root_cause_chain": {
+    "primary": {
+      "mechanism": "per_joint_pd_inadequate_for_divergence",
+      "chain": [
+        "1. Per-joint PD computes: tau_L = kp*error_L - kd*vel_L",
+        "2. When divergence exists (error_L > 0, error_R < 0):",
+        "3. tau_L = kp*(+error) → positive",
+        "4. tau_R = kp*(-error) → negative",
+        "5. div_torque = (tau_L - tau_R)/2 ≈ kp*error (same sign as divergence)",
+        "6. Result: torque ACCELERATES divergence, not DAMP it"
+      ],
+      "why_per_joint_pd_fails": "Per-joint PD is symmetric: same kp/kd for left and right. When errors are opposite sign, torques are opposite sign, producing pure divergence-mode torque."
+    },
+    "secondary": {
+      "mechanism": "no_divergence_specific_damping",
+      "chain": [
+        "1. No dedicated antisymmetric torque layer exists",
+        "2. HY2-DIV is defined but not enabled",
+        "3. Divergence can only be corrected indirectly via per-joint PD",
+        "4. Per-joint PD correction happens at wrong mode (common mode)"
+      ]
+    }
+  },
+  "fix_priority": [
+    {
+      "priority": 1,
+      "fix": "enable_hy2_div",
+      "rationale": "Addresses RC-001 and RC-002. HY2-DIV applies antisymmetric torque that opposes divergence.",
+      "conservative_gains": {
+        "k_divergence": 5.0,
+        "k_divergence_rate": 1.0,
+        "tau_max_divergence": 0.5
+      },
+      "expected_outcome": "Reduce divergence RMS to < 0.10 rad at nominal, < 0.30 rad at low, < 0.25 rad at high"
+    },
+    {
+      "priority": 2,
+      "fix": "monitor_coupling_at_high_height",
+      "rationale": "Addresses RC-003. May need sagittal controller adjustment if coupling persists after HY2-DIV.",
+      "expected_outcome": "Correlation with support/roll should decrease after HY2-DIV enables"
+    }
+  ],
+  "do_not_touch": [
+    "per_joint_pd_gains",
+    "hip_roll_controller",
+    "sagittal_controller",
+    "support_position_controller",
+    "wbc_paths"
+  ],
+  "validation_gates": {
+    "gate_1_divergence_rms_nominal": {"threshold": "< 0.10 rad", "status": "pending"},
+    "gate_2_divergence_rms_low": {"threshold": "< 0.30 rad", "status": "pending"},
+    "gate_3_divergence_rms_high": {"threshold": "< 0.25 rad", "status": "pending"},
+    "gate_4_sign_correct_left": {"threshold": "> 90%", "status": "pending"},
+    "gate_5_sign_correct_right": {"threshold": "> 95%", "status": "pending"},
+    "gate_6_survival": {"threshold": ">= 5000 steps", "status": "pending"}
+  }
+}

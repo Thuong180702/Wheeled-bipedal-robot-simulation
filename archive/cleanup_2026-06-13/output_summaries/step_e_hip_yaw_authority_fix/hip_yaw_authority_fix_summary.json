@@ -1,0 +1,1121 @@
+{
+  "baseline_reference": {
+    "com_z_min": 0.36227157711982727,
+    "peak_abs_hip_yaw_error": 0.10922476649284363,
+    "pitch_x_max_abs": 0.1254399667535688,
+    "rms_hip_yaw_error": 0.04160900948189819,
+    "roll_y_max_abs": 0.04496472382335462,
+    "support_position_error_final": -0.0059573465213673266,
+    "support_position_error_max_abs": 0.5433812576321346,
+    "wheel_vel_mean_max_abs": 7.0356128215789795
+  },
+  "candidate_payloads": [
+    {
+      "candidate": {
+        "kd_hip_yaw": 1.0,
+        "kp_hip_yaw": 5.0,
+        "name": "baseline_current"
+      },
+      "run_steps": 1000,
+      "summary": {
+        "acceptance_failures": [
+          "hip_yaw_error_above_minimum_threshold",
+          "hip_yaw_error_exceeds_0p10"
+        ],
+        "candidate_name": "baseline_current",
+        "com_position_error_sagittal_m": {
+          "final": 0.04031026363372803,
+          "max": 0.10126454755663872,
+          "max_abs": 0.10126454755663872,
+          "min": -0.0004041707143187523,
+          "rms": 0.05994661691669566
+        },
+        "com_z_m": {
+          "final": 0.4052211046218872,
+          "max": 0.4085761606693268,
+          "max_abs": 0.4085761606693268,
+          "min": 0.40383532643318176,
+          "rms": 0.4071505068844072
+        },
+        "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\baseline_current_1000.csv",
+        "final_sim_time_s": 10.000000000000009,
+        "hidden_torque_norm_max": 0.0,
+        "kd_hip_yaw": 1.0,
+        "kp_hip_yaw": 5.0,
+        "legacy_torque_paths_off": true,
+        "max_abs_hip_yaw_error_rad": 0.10922476649284363,
+        "ownership_violation_count_max": 0,
+        "passes_acceptance": false,
+        "peak_abs_shape_hip_yaw_torque_nm": 0.58455884,
+        "percent_time_abs_hip_yaw_error_gt_0p05": 22.6,
+        "percent_time_abs_hip_yaw_error_gt_0p10": 1.95,
+        "pitch_x_error_rad": {
+          "final": 0.023895294212779694,
+          "max": 0.07314189682292009,
+          "max_abs": 0.07314189682292009,
+          "min": -0.007520999992352605,
+          "rms": 0.04376755814540407
+        },
+        "pitch_x_rad": {
+          "final": 0.02469042045174124,
+          "max": 0.07314189682292009,
+          "max_abs": 0.07314189682292009,
+          "min": -0.007520999992352605,
+          "rms": 0.04377452184631387
+        },
+        "requested_steps": 1000,
+        "rms_hip_yaw_error_rad": 0.04160900948189819,
+        "rms_shape_hip_yaw_torque_nm": 0.21532531996004733,
+        "roll_y_rad": {
+          "final": -0.0016161362607500923,
+          "max": 0.0034691536281894054,
+          "max_abs": 0.0034691536281894054,
+          "min": -0.0017911192227273304,
+          "rms": 0.0019117697923366167
+        },
+        "sagittal_position_error_m": {
+          "final": 0.03422215790868051,
+          "max": 0.11221839637742867,
+          "max_abs": 0.11221839637742867,
+          "min": -0.009161917054005458,
+          "rms": 0.06446036119926266
+        },
+        "support_position_error_m": {
+          "final": 0.03422215790868051,
+          "max": 0.11221839637742867,
+          "max_abs": 0.11221839637742867,
+          "min": -0.009161917054005458,
+          "rms": 0.06446036119926266
+        },
+        "survived_steps": 1000,
+        "tau_pitch": {
+          "final": 1.1947647106389847,
+          "max": 3.6570948411460047,
+          "max_abs": 3.6570948411460047,
+          "min": -0.37604999961763025,
+          "rms": 2.1883779072702034
+        },
+        "tau_position": {
+          "final": -1.3688863515853882,
+          "max": 0.3664766848087311,
+          "max_abs": 3.0,
+          "min": -3.0,
+          "rms": 2.1328640302659103
+        },
+        "tau_sagittal_velocity": {
+          "final": -1.2649772688746452,
+          "max": 1.7024818807840347,
+          "max_abs": 2.0324382930994034,
+          "min": -2.0324382930994034,
+          "rms": 1.217515044322007
+        },
+        "tau_wbc_norm_max": 0.0,
+        "terminated": false,
+        "termination_reason": "",
+        "torque_rate_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.2,
+          "max_abs": 0.2,
+          "min": 0.0,
+          "rms": 0.00894427190999916
+        },
+        "torque_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.0,
+          "max_abs": 0.0,
+          "min": 0.0,
+          "rms": 0.0
+        },
+        "wheel_vel_mean_rad_s": {
+          "final": -1.945724606513977,
+          "max": 2.511461853981018,
+          "max_abs": 3.1634167432785034,
+          "min": -3.1634167432785034,
+          "rms": 1.8076679626346934
+        },
+        "yaw_z_rad": {
+          "final": -0.005007432519021907,
+          "max": 0.020598749465128224,
+          "max_abs": 0.020598749465128224,
+          "min": -0.005007432519021907,
+          "rms": 0.00954345227950678
+        }
+      }
+    },
+    {
+      "candidate": {
+        "kd_hip_yaw": 2.0,
+        "kp_hip_yaw": 10.0,
+        "name": "candidate_a"
+      },
+      "run_steps": 1000,
+      "summary": {
+        "acceptance_failures": [
+          "hip_yaw_error_above_minimum_threshold"
+        ],
+        "candidate_name": "candidate_a",
+        "com_position_error_sagittal_m": {
+          "final": 0.012635232298634946,
+          "max": 0.09089905396103859,
+          "max_abs": 0.09089905396103859,
+          "min": -0.023862335830926895,
+          "rms": 0.04873455141209403
+        },
+        "com_z_m": {
+          "final": 0.4066801369190216,
+          "max": 0.4085524380207062,
+          "max_abs": 0.4085524380207062,
+          "min": 0.4038352966308594,
+          "rms": 0.40749831439267004
+        },
+        "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\candidate_a_1000.csv",
+        "final_sim_time_s": 10.000000000000009,
+        "hidden_torque_norm_max": 0.0,
+        "kd_hip_yaw": 2.0,
+        "kp_hip_yaw": 10.0,
+        "legacy_torque_paths_off": true,
+        "max_abs_hip_yaw_error_rad": 0.07174527645111084,
+        "ownership_violation_count_max": 0,
+        "passes_acceptance": false,
+        "peak_abs_shape_hip_yaw_torque_nm": 0.7615485,
+        "percent_time_abs_hip_yaw_error_gt_0p05": 8.05,
+        "percent_time_abs_hip_yaw_error_gt_0p10": 0.0,
+        "pitch_x_error_rad": {
+          "final": -0.0026881898911088973,
+          "max": 0.07048080671031852,
+          "max_abs": 0.07048080671031852,
+          "min": -0.03459143685880379,
+          "rms": 0.04003892281753931
+        },
+        "pitch_x_rad": {
+          "final": -0.0013415969688054827,
+          "max": 0.07048080671031852,
+          "max_abs": 0.07048080671031852,
+          "min": -0.03459143685880379,
+          "rms": 0.04003894529419197
+        },
+        "requested_steps": 1000,
+        "rms_hip_yaw_error_rad": 0.02476050123445611,
+        "rms_shape_hip_yaw_torque_nm": 0.2579649255228028,
+        "roll_y_rad": {
+          "final": 0.009319025463454323,
+          "max": 0.01299778741579107,
+          "max_abs": 0.01299778741579107,
+          "min": 2.5593164454837064e-05,
+          "rms": 0.0070791767872417696
+        },
+        "sagittal_position_error_m": {
+          "final": 0.005578710358811009,
+          "max": 0.10211658829355846,
+          "max_abs": 0.10211658829355846,
+          "min": -0.041339994881176206,
+          "rms": 0.05508886702610568
+        },
+        "support_position_error_m": {
+          "final": 0.005578710358811009,
+          "max": 0.10211658829355846,
+          "max_abs": 0.10211658829355846,
+          "min": -0.041339994881176206,
+          "rms": 0.05508886702610568
+        },
+        "survived_steps": 1000,
+        "tau_pitch": {
+          "final": -0.13440949455544488,
+          "max": 3.524040335515926,
+          "max_abs": 3.524040335515926,
+          "min": -1.7295718429401894,
+          "rms": 2.0019461408769654
+        },
+        "tau_position": {
+          "final": -0.2231484204530716,
+          "max": 1.653599739074707,
+          "max_abs": 3.0,
+          "min": -3.0,
+          "rms": 1.966703474586941
+        },
+        "tau_sagittal_velocity": {
+          "final": -1.9846075773239136,
+          "max": 2.0584794133901596,
+          "max_abs": 2.0584794133901596,
+          "min": -2.0508337765932083,
+          "rms": 1.3470459060627884
+        },
+        "tau_wbc_norm_max": 0.0,
+        "terminated": false,
+        "termination_reason": "",
+        "torque_rate_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.2,
+          "max_abs": 0.2,
+          "min": 0.0,
+          "rms": 0.00894427190999916
+        },
+        "torque_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.0,
+          "max_abs": 0.0,
+          "min": 0.0,
+          "rms": 0.0
+        },
+        "wheel_vel_mean_rad_s": {
+          "final": -3.038762092590332,
+          "max": 3.0977503061294556,
+          "max_abs": 3.1404757499694824,
+          "min": -3.1404757499694824,
+          "rms": 2.019803115257845
+        },
+        "yaw_z_rad": {
+          "final": -0.03215962359628965,
+          "max": 0.020059933898852324,
+          "max_abs": 0.04005210095348001,
+          "min": -0.04005210095348001,
+          "rms": 0.01735694639471577
+        }
+      }
+    },
+    {
+      "candidate": {
+        "kd_hip_yaw": 3.0,
+        "kp_hip_yaw": 15.0,
+        "name": "candidate_b"
+      },
+      "run_steps": 1000,
+      "summary": {
+        "acceptance_failures": [],
+        "candidate_name": "candidate_b",
+        "com_position_error_sagittal_m": {
+          "final": 0.058978620916604996,
+          "max": 0.0912247858941555,
+          "max_abs": 0.0912247858941555,
+          "min": -0.011650143191218376,
+          "rms": 0.04849491192262402
+        },
+        "com_z_m": {
+          "final": 0.40809366106987,
+          "max": 0.40854722261428833,
+          "max_abs": 0.40854722261428833,
+          "min": 0.4038352966308594,
+          "rms": 0.40778610231543017
+        },
+        "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\candidate_b_1000.csv",
+        "final_sim_time_s": 10.000000000000009,
+        "hidden_torque_norm_max": 0.0,
+        "kd_hip_yaw": 3.0,
+        "kp_hip_yaw": 15.0,
+        "legacy_torque_paths_off": true,
+        "max_abs_hip_yaw_error_rad": 0.0391579233109951,
+        "ownership_violation_count_max": 0,
+        "passes_acceptance": true,
+        "peak_abs_shape_hip_yaw_torque_nm": 0.62125105,
+        "percent_time_abs_hip_yaw_error_gt_0p05": 0.0,
+        "percent_time_abs_hip_yaw_error_gt_0p10": 0.0,
+        "pitch_x_error_rad": {
+          "final": 0.044654127863101786,
+          "max": 0.07055376368564745,
+          "max_abs": 0.07055376368564745,
+          "min": -0.02326512850996422,
+          "rms": 0.03925954125796138
+        },
+        "pitch_x_rad": {
+          "final": 0.04601915022540402,
+          "max": 0.07055376368564745,
+          "max_abs": 0.07055376368564745,
+          "min": -0.02326512850996422,
+          "rms": 0.039286503305499716
+        },
+        "requested_steps": 1000,
+        "rms_hip_yaw_error_rad": 0.01648792773781381,
+        "rms_shape_hip_yaw_torque_nm": 0.25802792968384985,
+        "roll_y_rad": {
+          "final": 0.005721445429363872,
+          "max": 0.011048350250430624,
+          "max_abs": 0.011048350250430624,
+          "min": 2.5593164454837064e-05,
+          "rms": 0.006043500808794872
+        },
+        "sagittal_position_error_m": {
+          "final": 0.06528983858770968,
+          "max": 0.10255919212904155,
+          "max_abs": 0.10255919212904155,
+          "min": -0.0285895041769698,
+          "rms": 0.05420539998312318
+        },
+        "support_position_error_m": {
+          "final": 0.06528983858770968,
+          "max": 0.10255919212904155,
+          "max_abs": 0.10255919212904155,
+          "min": -0.0285895041769698,
+          "rms": 0.05420539998312318
+        },
+        "survived_steps": 1000,
+        "tau_pitch": {
+          "final": 2.2327063931550892,
+          "max": 3.5276881842823724,
+          "max_abs": 3.5276881842823724,
+          "min": -1.163256425498211,
+          "rms": 1.962977062898069
+        },
+        "tau_position": {
+          "final": -2.61159348487854,
+          "max": 1.1435801982879639,
+          "max_abs": 3.0,
+          "min": -3.0,
+          "rms": 1.9435603967840935
+        },
+        "tau_sagittal_velocity": {
+          "final": -1.7978399991989136,
+          "max": 1.9461522996425629,
+          "max_abs": 2.0528174936771393,
+          "min": -2.0528174936771393,
+          "rms": 1.3359382446506154
+        },
+        "tau_wbc_norm_max": 0.0,
+        "terminated": false,
+        "termination_reason": "",
+        "torque_rate_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.2,
+          "max_abs": 0.2,
+          "min": 0.0,
+          "rms": 0.00894427190999916
+        },
+        "torque_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.0,
+          "max_abs": 0.0,
+          "min": 0.0,
+          "rms": 0.0
+        },
+        "wheel_vel_mean_rad_s": {
+          "final": -2.819721817970276,
+          "max": 2.960340142250061,
+          "max_abs": 3.1884818077087402,
+          "min": -3.1884818077087402,
+          "rms": 2.030263478788332
+        },
+        "yaw_z_rad": {
+          "final": -0.012603139404897134,
+          "max": 0.01981275208424531,
+          "max_abs": 0.021988013301112472,
+          "min": -0.021988013301112472,
+          "rms": 0.010140044944695751
+        }
+      }
+    },
+    {
+      "candidate": {
+        "kd_hip_yaw": 3.0,
+        "kp_hip_yaw": 15.0,
+        "name": "candidate_b"
+      },
+      "run_steps": 5000,
+      "summary": {
+        "acceptance_failures": [],
+        "candidate_name": "candidate_b",
+        "com_position_error_sagittal_m": {
+          "final": 0.07808520272374153,
+          "max": 0.0912247858941555,
+          "max_abs": 0.0912247858941555,
+          "min": -0.025619439780712128,
+          "rms": 0.04949172502756342
+        },
+        "com_z_m": {
+          "final": 0.408235639333725,
+          "max": 0.40854722261428833,
+          "max_abs": 0.40854722261428833,
+          "min": 0.4038352966308594,
+          "rms": 0.40749781153167375
+        },
+        "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\candidate_b_5000.csv",
+        "final_sim_time_s": 50.00000000001514,
+        "hidden_torque_norm_max": 0.0,
+        "kd_hip_yaw": 3.0,
+        "kp_hip_yaw": 15.0,
+        "legacy_torque_paths_off": true,
+        "max_abs_hip_yaw_error_rad": 0.057555120438337326,
+        "ownership_violation_count_max": 0,
+        "passes_acceptance": true,
+        "peak_abs_shape_hip_yaw_torque_nm": 0.9184436,
+        "percent_time_abs_hip_yaw_error_gt_0p05": 2.71,
+        "percent_time_abs_hip_yaw_error_gt_0p10": 0.0,
+        "pitch_x_error_rad": {
+          "final": 0.06565627452830587,
+          "max": 0.07077135067308149,
+          "max_abs": 0.07077135067308149,
+          "min": -0.036574578764748684,
+          "rms": 0.041090416346735936
+        },
+        "pitch_x_rad": {
+          "final": 0.06609960053792895,
+          "max": 0.07077135067308149,
+          "max_abs": 0.07077135067308149,
+          "min": -0.036574578764748684,
+          "rms": 0.041101048003504226
+        },
+        "requested_steps": 5000,
+        "rms_hip_yaw_error_rad": 0.023482027185474222,
+        "rms_shape_hip_yaw_torque_nm": 0.3680376052562823,
+        "roll_y_rad": {
+          "final": 0.004224455061470585,
+          "max": 0.012998944689273586,
+          "max_abs": 0.012998944689273586,
+          "min": 2.5593164454837064e-05,
+          "rms": 0.006894164847016327
+        },
+        "sagittal_position_error_m": {
+          "final": 0.09135177303814725,
+          "max": 0.1044567514034454,
+          "max_abs": 0.1044567514034454,
+          "min": -0.04500200615582148,
+          "rms": 0.05704655732559888
+        },
+        "support_position_error_m": {
+          "final": 0.09135177303814725,
+          "max": 0.1044567514034454,
+          "max_abs": 0.1044567514034454,
+          "min": -0.04500200615582148,
+          "rms": 0.05704655732559888
+        },
+        "survived_steps": 5000,
+        "tau_pitch": {
+          "final": 3.2828137264152937,
+          "max": 3.5385675336540743,
+          "max_abs": 3.5385675336540743,
+          "min": -1.8287289382374343,
+          "rms": 2.054520817336797
+        },
+        "tau_position": {
+          "final": -3.0,
+          "max": 1.8000802993774414,
+          "max_abs": 3.0,
+          "min": -3.0,
+          "rms": 2.028081752055909
+        },
+        "tau_sagittal_velocity": {
+          "final": -0.9205900132656097,
+          "max": 2.2210659831762314,
+          "max_abs": 2.4014487862586975,
+          "min": -2.4014487862586975,
+          "rms": 1.507534334699366
+        },
+        "tau_wbc_norm_max": 0.0,
+        "terminated": false,
+        "termination_reason": "",
+        "torque_rate_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.2,
+          "max_abs": 0.2,
+          "min": 0.0,
+          "rms": 0.004
+        },
+        "torque_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.0,
+          "max_abs": 0.0,
+          "min": 0.0,
+          "rms": 0.0
+        },
+        "wheel_vel_mean_rad_s": {
+          "final": -1.1942153573036194,
+          "max": 3.382152557373047,
+          "max_abs": 3.8395681381225586,
+          "min": -3.8395681381225586,
+          "rms": 2.3091020277538856
+        },
+        "yaw_z_rad": {
+          "final": -0.07936069496591767,
+          "max": 0.01981275208424531,
+          "max_abs": 0.09455184433860343,
+          "min": -0.09455184433860343,
+          "rms": 0.045917107764256046
+        }
+      }
+    },
+    {
+      "candidate": {
+        "kd_hip_yaw": 4.0,
+        "kp_hip_yaw": 20.0,
+        "name": "candidate_c"
+      },
+      "run_steps": 1000,
+      "summary": {
+        "acceptance_failures": [],
+        "candidate_name": "candidate_c",
+        "com_position_error_sagittal_m": {
+          "final": 0.0726236030459404,
+          "max": 0.09138732776045799,
+          "max_abs": 0.09138732776045799,
+          "min": -0.009639458730816841,
+          "rms": 0.04997191071549435
+        },
+        "com_z_m": {
+          "final": 0.4081203043460846,
+          "max": 0.40854763984680176,
+          "max_abs": 0.40854763984680176,
+          "min": 0.403835266828537,
+          "rms": 0.4078438363960851
+        },
+        "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\candidate_c_1000.csv",
+        "final_sim_time_s": 10.000000000000009,
+        "hidden_torque_norm_max": 0.0,
+        "kd_hip_yaw": 4.0,
+        "kp_hip_yaw": 20.0,
+        "legacy_torque_paths_off": true,
+        "max_abs_hip_yaw_error_rad": 0.03226493299007416,
+        "ownership_violation_count_max": 0,
+        "passes_acceptance": true,
+        "peak_abs_shape_hip_yaw_torque_nm": 0.68379164,
+        "percent_time_abs_hip_yaw_error_gt_0p05": 0.0,
+        "percent_time_abs_hip_yaw_error_gt_0p10": 0.0,
+        "pitch_x_error_rad": {
+          "final": 0.05750709143068657,
+          "max": 0.07059031395305028,
+          "max_abs": 0.07059031395305028,
+          "min": -0.02143532741073162,
+          "rms": 0.0398500587279682
+        },
+        "pitch_x_rad": {
+          "final": 0.0586781705465747,
+          "max": 0.07059031395305028,
+          "max_abs": 0.07059031395305028,
+          "min": -0.02143532741073162,
+          "rms": 0.03989323637311477
+        },
+        "requested_steps": 1000,
+        "rms_hip_yaw_error_rad": 0.01512112711856749,
+        "rms_shape_hip_yaw_torque_nm": 0.3157493296449065,
+        "roll_y_rad": {
+          "final": 0.007452548617390102,
+          "max": 0.010760618731907656,
+          "max_abs": 0.010760618731907656,
+          "min": 2.5593164454837064e-05,
+          "rms": 0.005424238687368602
+        },
+        "sagittal_position_error_m": {
+          "final": 0.08282199267143323,
+          "max": 0.10279112373464067,
+          "max_abs": 0.10279112373464067,
+          "min": -0.026538102235055885,
+          "rms": 0.055692071242422106
+        },
+        "support_position_error_m": {
+          "final": 0.08282199267143323,
+          "max": 0.10279112373464067,
+          "max_abs": 0.10279112373464067,
+          "min": -0.026538102235055885,
+          "rms": 0.055692071242422106
+        },
+        "survived_steps": 1000,
+        "tau_pitch": {
+          "final": 2.8753545715343285,
+          "max": 3.529515697652514,
+          "max_abs": 3.529515697652514,
+          "min": -1.071766370536581,
+          "rms": 1.99250293639841
+        },
+        "tau_position": {
+          "final": -3.0,
+          "max": 1.0615240335464478,
+          "max_abs": 3.0,
+          "min": -3.0,
+          "rms": 1.9753414805277305
+        },
+        "tau_sagittal_velocity": {
+          "final": -1.7046108841896057,
+          "max": 1.9303440302610397,
+          "max_abs": 2.2453247755765915,
+          "min": -2.2453247755765915,
+          "rms": 1.365276727214054
+        },
+        "tau_wbc_norm_max": 0.0,
+        "terminated": false,
+        "termination_reason": "",
+        "torque_rate_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.2,
+          "max_abs": 0.2,
+          "min": 0.0,
+          "rms": 0.00894427190999916
+        },
+        "torque_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.0,
+          "max_abs": 0.0,
+          "min": 0.0,
+          "rms": 0.0
+        },
+        "wheel_vel_mean_rad_s": {
+          "final": -2.5775283575057983,
+          "max": 2.9342713356018066,
+          "max_abs": 3.57081937789917,
+          "min": -3.57081937789917,
+          "rms": 2.0817949195367005
+        },
+        "yaw_z_rad": {
+          "final": -0.01358496135067351,
+          "max": 0.01969993810084585,
+          "max_abs": 0.01969993810084585,
+          "min": -0.013649407835781618,
+          "rms": 0.009752216700390323
+        }
+      }
+    },
+    {
+      "candidate": {
+        "kd_hip_yaw": 4.0,
+        "kp_hip_yaw": 20.0,
+        "name": "candidate_c"
+      },
+      "run_steps": 5000,
+      "summary": {
+        "acceptance_failures": [
+          "hip_yaw_error_above_minimum_threshold",
+          "hip_yaw_error_exceeds_0p10"
+        ],
+        "candidate_name": "candidate_c",
+        "com_position_error_sagittal_m": {
+          "final": 0.09751452878117561,
+          "max": 0.12674269452691078,
+          "max_abs": 0.12674269452691078,
+          "min": -0.04672061279416084,
+          "rms": 0.060251644145003065
+        },
+        "com_z_m": {
+          "final": 0.4001365900039673,
+          "max": 0.40854763984680176,
+          "max_abs": 0.40854763984680176,
+          "min": 0.3986126780509949,
+          "rms": 0.40431829011916565
+        },
+        "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\candidate_c_5000.csv",
+        "final_sim_time_s": 50.00000000001514,
+        "hidden_torque_norm_max": 0.0,
+        "kd_hip_yaw": 4.0,
+        "kp_hip_yaw": 20.0,
+        "legacy_torque_paths_off": true,
+        "max_abs_hip_yaw_error_rad": 0.14877082407474518,
+        "ownership_violation_count_max": 0,
+        "passes_acceptance": false,
+        "peak_abs_shape_hip_yaw_torque_nm": 2.9975953,
+        "percent_time_abs_hip_yaw_error_gt_0p05": 62.53999999999999,
+        "percent_time_abs_hip_yaw_error_gt_0p10": 37.6,
+        "pitch_x_error_rad": {
+          "final": 0.06850649827457515,
+          "max": 0.08344865771674936,
+          "max_abs": 0.08344865771674936,
+          "min": -0.05838673706548698,
+          "rms": 0.04452241449088169
+        },
+        "pitch_x_rad": {
+          "final": 0.06808393812031092,
+          "max": 0.08344865771674936,
+          "max_abs": 0.08344865771674936,
+          "min": -0.05838673706548698,
+          "rms": 0.044532824709688765
+        },
+        "requested_steps": 5000,
+        "rms_hip_yaw_error_rad": 0.08741492187247625,
+        "rms_shape_hip_yaw_torque_nm": 1.7606533285525239,
+        "roll_y_rad": {
+          "final": -0.0003028819877117662,
+          "max": 0.010760618731907656,
+          "max_abs": 0.010760618731907656,
+          "min": -0.0003028819877117662,
+          "rms": 0.004328587813733547
+        },
+        "sagittal_position_error_m": {
+          "final": 0.10909637311270619,
+          "max": 0.14397591478168814,
+          "max_abs": 0.14397591478168814,
+          "min": -0.07319367246675601,
+          "rms": 0.06774359570444245
+        },
+        "support_position_error_m": {
+          "final": 0.10909637311270619,
+          "max": 0.14397591478168814,
+          "max_abs": 0.14397591478168814,
+          "min": -0.07319367246675601,
+          "rms": 0.06774359570444245
+        },
+        "survived_steps": 5000,
+        "tau_pitch": {
+          "final": 3.425324913728758,
+          "max": 4.172432885837468,
+          "max_abs": 4.172432885837468,
+          "min": -2.919336853274349,
+          "rms": 2.2261207245440846
+        },
+        "tau_position": {
+          "final": -3.0,
+          "max": 2.9277470111846924,
+          "max_abs": 3.0,
+          "min": -3.0,
+          "rms": 2.153676434642165
+        },
+        "tau_sagittal_velocity": {
+          "final": 0.37385523319244385,
+          "max": 2.986699864268303,
+          "max_abs": 3.653045743703842,
+          "min": -3.653045743703842,
+          "rms": 1.6294941555081681
+        },
+        "tau_wbc_norm_max": 0.0,
+        "terminated": false,
+        "termination_reason": "",
+        "torque_rate_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.2,
+          "max_abs": 0.2,
+          "min": 0.0,
+          "rms": 0.004
+        },
+        "torque_saturation_fraction": {
+          "final": 0.0,
+          "max": 0.0,
+          "max_abs": 0.0,
+          "min": 0.0,
+          "rms": 0.0
+        },
+        "wheel_vel_mean_rad_s": {
+          "final": 0.7441945374011993,
+          "max": 4.388101577758789,
+          "max_abs": 5.700390577316284,
+          "min": -5.700390577316284,
+          "rms": 2.441679424990595
+        },
+        "yaw_z_rad": {
+          "final": -0.056044797187627025,
+          "max": 0.01969993810084585,
+          "max_abs": 0.05706111205878453,
+          "min": -0.05706111205878453,
+          "rms": 0.03255089913078894
+        }
+      }
+    }
+  ],
+  "candidate_rows": [
+    {
+      "acceptance_failures": "hip_yaw_error_above_minimum_threshold;hip_yaw_error_exceeds_0p10",
+      "candidate_name": "baseline_current",
+      "com_z_min_m": 0.40383532643318176,
+      "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\baseline_current_1000.csv",
+      "hidden_torque_norm_max": 0.0,
+      "kd_hip_yaw": 1.0,
+      "kp_hip_yaw": 5.0,
+      "legacy_torque_paths_off": true,
+      "max_abs_hip_yaw_error_rad": 0.10922476649284363,
+      "ownership_violation_count_max": 0,
+      "passes_acceptance": false,
+      "percent_time_abs_hip_yaw_error_gt_0p10": 1.95,
+      "pitch_x_max_abs_rad": 0.07314189682292009,
+      "rms_hip_yaw_error_rad": 0.04160900948189819,
+      "roll_y_max_abs_rad": 0.0034691536281894054,
+      "run_steps": 1000,
+      "support_position_error_final_m": 0.03422215790868051,
+      "support_position_error_max_abs_m": 0.11221839637742867,
+      "survived_steps": 1000,
+      "tau_wbc_norm_max": 0.0,
+      "terminated": false,
+      "torque_rate_saturation_max_fraction": 0.2,
+      "torque_rate_saturation_rms_fraction": 0.00894427190999916,
+      "torque_saturation_max_fraction": 0.0,
+      "wheel_vel_mean_max_abs_rad_s": 3.1634167432785034
+    },
+    {
+      "acceptance_failures": "hip_yaw_error_above_minimum_threshold",
+      "candidate_name": "candidate_a",
+      "com_z_min_m": 0.4038352966308594,
+      "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\candidate_a_1000.csv",
+      "hidden_torque_norm_max": 0.0,
+      "kd_hip_yaw": 2.0,
+      "kp_hip_yaw": 10.0,
+      "legacy_torque_paths_off": true,
+      "max_abs_hip_yaw_error_rad": 0.07174527645111084,
+      "ownership_violation_count_max": 0,
+      "passes_acceptance": false,
+      "percent_time_abs_hip_yaw_error_gt_0p10": 0.0,
+      "pitch_x_max_abs_rad": 0.07048080671031852,
+      "rms_hip_yaw_error_rad": 0.02476050123445611,
+      "roll_y_max_abs_rad": 0.01299778741579107,
+      "run_steps": 1000,
+      "support_position_error_final_m": 0.005578710358811009,
+      "support_position_error_max_abs_m": 0.10211658829355846,
+      "survived_steps": 1000,
+      "tau_wbc_norm_max": 0.0,
+      "terminated": false,
+      "torque_rate_saturation_max_fraction": 0.2,
+      "torque_rate_saturation_rms_fraction": 0.00894427190999916,
+      "torque_saturation_max_fraction": 0.0,
+      "wheel_vel_mean_max_abs_rad_s": 3.1404757499694824
+    },
+    {
+      "acceptance_failures": "",
+      "candidate_name": "candidate_b",
+      "com_z_min_m": 0.4038352966308594,
+      "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\candidate_b_1000.csv",
+      "hidden_torque_norm_max": 0.0,
+      "kd_hip_yaw": 3.0,
+      "kp_hip_yaw": 15.0,
+      "legacy_torque_paths_off": true,
+      "max_abs_hip_yaw_error_rad": 0.0391579233109951,
+      "ownership_violation_count_max": 0,
+      "passes_acceptance": true,
+      "percent_time_abs_hip_yaw_error_gt_0p10": 0.0,
+      "pitch_x_max_abs_rad": 0.07055376368564745,
+      "rms_hip_yaw_error_rad": 0.01648792773781381,
+      "roll_y_max_abs_rad": 0.011048350250430624,
+      "run_steps": 1000,
+      "support_position_error_final_m": 0.06528983858770968,
+      "support_position_error_max_abs_m": 0.10255919212904155,
+      "survived_steps": 1000,
+      "tau_wbc_norm_max": 0.0,
+      "terminated": false,
+      "torque_rate_saturation_max_fraction": 0.2,
+      "torque_rate_saturation_rms_fraction": 0.00894427190999916,
+      "torque_saturation_max_fraction": 0.0,
+      "wheel_vel_mean_max_abs_rad_s": 3.1884818077087402
+    },
+    {
+      "acceptance_failures": "",
+      "candidate_name": "candidate_b",
+      "com_z_min_m": 0.4038352966308594,
+      "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\candidate_b_5000.csv",
+      "hidden_torque_norm_max": 0.0,
+      "kd_hip_yaw": 3.0,
+      "kp_hip_yaw": 15.0,
+      "legacy_torque_paths_off": true,
+      "max_abs_hip_yaw_error_rad": 0.057555120438337326,
+      "ownership_violation_count_max": 0,
+      "passes_acceptance": true,
+      "percent_time_abs_hip_yaw_error_gt_0p10": 0.0,
+      "pitch_x_max_abs_rad": 0.07077135067308149,
+      "rms_hip_yaw_error_rad": 0.023482027185474222,
+      "roll_y_max_abs_rad": 0.012998944689273586,
+      "run_steps": 5000,
+      "support_position_error_final_m": 0.09135177303814725,
+      "support_position_error_max_abs_m": 0.1044567514034454,
+      "survived_steps": 5000,
+      "tau_wbc_norm_max": 0.0,
+      "terminated": false,
+      "torque_rate_saturation_max_fraction": 0.2,
+      "torque_rate_saturation_rms_fraction": 0.004,
+      "torque_saturation_max_fraction": 0.0,
+      "wheel_vel_mean_max_abs_rad_s": 3.8395681381225586
+    },
+    {
+      "acceptance_failures": "",
+      "candidate_name": "candidate_c",
+      "com_z_min_m": 0.403835266828537,
+      "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\candidate_c_1000.csv",
+      "hidden_torque_norm_max": 0.0,
+      "kd_hip_yaw": 4.0,
+      "kp_hip_yaw": 20.0,
+      "legacy_torque_paths_off": true,
+      "max_abs_hip_yaw_error_rad": 0.03226493299007416,
+      "ownership_violation_count_max": 0,
+      "passes_acceptance": true,
+      "percent_time_abs_hip_yaw_error_gt_0p10": 0.0,
+      "pitch_x_max_abs_rad": 0.07059031395305028,
+      "rms_hip_yaw_error_rad": 0.01512112711856749,
+      "roll_y_max_abs_rad": 0.010760618731907656,
+      "run_steps": 1000,
+      "support_position_error_final_m": 0.08282199267143323,
+      "support_position_error_max_abs_m": 0.10279112373464067,
+      "survived_steps": 1000,
+      "tau_wbc_norm_max": 0.0,
+      "terminated": false,
+      "torque_rate_saturation_max_fraction": 0.2,
+      "torque_rate_saturation_rms_fraction": 0.00894427190999916,
+      "torque_saturation_max_fraction": 0.0,
+      "wheel_vel_mean_max_abs_rad_s": 3.57081937789917
+    },
+    {
+      "acceptance_failures": "hip_yaw_error_above_minimum_threshold;hip_yaw_error_exceeds_0p10",
+      "candidate_name": "candidate_c",
+      "com_z_min_m": 0.3986126780509949,
+      "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\candidate_c_5000.csv",
+      "hidden_torque_norm_max": 0.0,
+      "kd_hip_yaw": 4.0,
+      "kp_hip_yaw": 20.0,
+      "legacy_torque_paths_off": true,
+      "max_abs_hip_yaw_error_rad": 0.14877082407474518,
+      "ownership_violation_count_max": 0,
+      "passes_acceptance": false,
+      "percent_time_abs_hip_yaw_error_gt_0p10": 37.6,
+      "pitch_x_max_abs_rad": 0.08344865771674936,
+      "rms_hip_yaw_error_rad": 0.08741492187247625,
+      "roll_y_max_abs_rad": 0.010760618731907656,
+      "run_steps": 5000,
+      "support_position_error_final_m": 0.10909637311270619,
+      "support_position_error_max_abs_m": 0.14397591478168814,
+      "survived_steps": 5000,
+      "tau_wbc_norm_max": 0.0,
+      "terminated": false,
+      "torque_rate_saturation_max_fraction": 0.2,
+      "torque_rate_saturation_rms_fraction": 0.004,
+      "torque_saturation_max_fraction": 0.0,
+      "wheel_vel_mean_max_abs_rad_s": 5.700390577316284
+    }
+  ],
+  "candidates": [
+    {
+      "kd_hip_yaw": 1.0,
+      "kp_hip_yaw": 5.0,
+      "name": "baseline_current"
+    },
+    {
+      "kd_hip_yaw": 2.0,
+      "kp_hip_yaw": 10.0,
+      "name": "candidate_a"
+    },
+    {
+      "kd_hip_yaw": 3.0,
+      "kp_hip_yaw": 15.0,
+      "name": "candidate_b"
+    },
+    {
+      "kd_hip_yaw": 4.0,
+      "kp_hip_yaw": 20.0,
+      "name": "candidate_c"
+    }
+  ],
+  "commands_run": [
+    "python scripts/evaluate_step_e_hip_yaw_authority.py"
+  ],
+  "commit": "9971615447f36e0127482db28c5b4139b742bc3b",
+  "controller_ownership_rules_modified": false,
+  "datetime_utc": "2026-06-01T04:02:31.041247+00:00",
+  "height_recovery_logic_modified": false,
+  "hip_roll_modified": false,
+  "legacy_torque_paths_introduced": false,
+  "missing_artifacts": [
+    "hip_yaw_authority_fix_summary.json"
+  ],
+  "platform": "Windows-10-10.0.26200-SP0",
+  "position_gains_modified": false,
+  "python_version": "3.10.2 (tags/v3.10.2:a58ebcc, Jan 17 2022, 14:12:15) [MSC v.1929 64 bit (AMD64)]",
+  "sagittal_axis_flipped": false,
+  "sagittal_velocity_damping_modified": false,
+  "selected_best_candidate": {
+    "acceptance_failures": [],
+    "candidate_name": "candidate_b",
+    "com_position_error_sagittal_m": {
+      "final": 0.07808520272374153,
+      "max": 0.0912247858941555,
+      "max_abs": 0.0912247858941555,
+      "min": -0.025619439780712128,
+      "rms": 0.04949172502756342
+    },
+    "com_z_m": {
+      "final": 0.408235639333725,
+      "max": 0.40854722261428833,
+      "max_abs": 0.40854722261428833,
+      "min": 0.4038352966308594,
+      "rms": 0.40749781153167375
+    },
+    "csv": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\step_e_hip_yaw_authority_fix\\candidate_b_5000.csv",
+    "final_sim_time_s": 50.00000000001514,
+    "hidden_torque_norm_max": 0.0,
+    "kd_hip_yaw": 3.0,
+    "kp_hip_yaw": 15.0,
+    "legacy_torque_paths_off": true,
+    "max_abs_hip_yaw_error_rad": 0.057555120438337326,
+    "ownership_violation_count_max": 0,
+    "passes_acceptance": true,
+    "peak_abs_shape_hip_yaw_torque_nm": 0.9184436,
+    "percent_time_abs_hip_yaw_error_gt_0p05": 2.71,
+    "percent_time_abs_hip_yaw_error_gt_0p10": 0.0,
+    "pitch_x_error_rad": {
+      "final": 0.06565627452830587,
+      "max": 0.07077135067308149,
+      "max_abs": 0.07077135067308149,
+      "min": -0.036574578764748684,
+      "rms": 0.041090416346735936
+    },
+    "pitch_x_rad": {
+      "final": 0.06609960053792895,
+      "max": 0.07077135067308149,
+      "max_abs": 0.07077135067308149,
+      "min": -0.036574578764748684,
+      "rms": 0.041101048003504226
+    },
+    "requested_steps": 5000,
+    "rms_hip_yaw_error_rad": 0.023482027185474222,
+    "rms_shape_hip_yaw_torque_nm": 0.3680376052562823,
+    "roll_y_rad": {
+      "final": 0.004224455061470585,
+      "max": 0.012998944689273586,
+      "max_abs": 0.012998944689273586,
+      "min": 2.5593164454837064e-05,
+      "rms": 0.006894164847016327
+    },
+    "sagittal_position_error_m": {
+      "final": 0.09135177303814725,
+      "max": 0.1044567514034454,
+      "max_abs": 0.1044567514034454,
+      "min": -0.04500200615582148,
+      "rms": 0.05704655732559888
+    },
+    "support_position_error_m": {
+      "final": 0.09135177303814725,
+      "max": 0.1044567514034454,
+      "max_abs": 0.1044567514034454,
+      "min": -0.04500200615582148,
+      "rms": 0.05704655732559888
+    },
+    "survived_steps": 5000,
+    "tau_pitch": {
+      "final": 3.2828137264152937,
+      "max": 3.5385675336540743,
+      "max_abs": 3.5385675336540743,
+      "min": -1.8287289382374343,
+      "rms": 2.054520817336797
+    },
+    "tau_position": {
+      "final": -3.0,
+      "max": 1.8000802993774414,
+      "max_abs": 3.0,
+      "min": -3.0,
+      "rms": 2.028081752055909
+    },
+    "tau_sagittal_velocity": {
+      "final": -0.9205900132656097,
+      "max": 2.2210659831762314,
+      "max_abs": 2.4014487862586975,
+      "min": -2.4014487862586975,
+      "rms": 1.507534334699366
+    },
+    "tau_wbc_norm_max": 0.0,
+    "terminated": false,
+    "termination_reason": "",
+    "torque_rate_saturation_fraction": {
+      "final": 0.0,
+      "max": 0.2,
+      "max_abs": 0.2,
+      "min": 0.0,
+      "rms": 0.004
+    },
+    "torque_saturation_fraction": {
+      "final": 0.0,
+      "max": 0.0,
+      "max_abs": 0.0,
+      "min": 0.0,
+      "rms": 0.0
+    },
+    "wheel_vel_mean_rad_s": {
+      "final": -1.1942153573036194,
+      "max": 3.382152557373047,
+      "max_abs": 3.8395681381225586,
+      "min": -3.8395681381225586,
+      "rms": 2.3091020277538856
+    },
+    "yaw_z_rad": {
+      "final": -0.07936069496591767,
+      "max": 0.01981275208424531,
+      "max_abs": 0.09455184433860343,
+      "min": -0.09455184433860343,
+      "rms": 0.045917107764256046
+    }
+  },
+  "wbc_introduced": false
+}

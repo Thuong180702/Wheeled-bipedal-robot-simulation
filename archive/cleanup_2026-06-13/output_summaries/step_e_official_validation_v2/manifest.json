@@ -1,0 +1,28 @@
+{
+  "original_path": "outputs/step_e_official_validation_v2",
+  "original_size": "12.5K",
+  "original_size_bytes": 12806,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "official_step_e_pass_fail_summary_v2.json",
+      "size_bytes": 2023
+    },
+    {
+      "file": "official_step_e_validation_metrics_v2.json",
+      "size_bytes": 7200
+    },
+    {
+      "file": "official_step_e_validation_report_v2.md",
+      "size_bytes": 2680
+    },
+    {
+      "file": "official_step_e_wbc_application_audit.json",
+      "size_bytes": 903
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

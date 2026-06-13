@@ -1,0 +1,18 @@
+{
+  "classification": "INIT_SETUP_REFERENCE_SPLIT_BUG",
+  "root_cause": "target_joint_pos uses posture_regularizer.height_targets (hardcoded at 0.9261 rad hip_pitch) instead of height_variant_setup.equilibrium_joint_pos (1.3761 rad hip_pitch)",
+  "evidence": {
+    "setup_equilibrium_hip_pitch": 1.376052,
+    "posture_regularizer_hip_pitch_at_0p40": 0.926052,
+    "hip_pitch_error_computed": -0.45,
+    "actual_qpos_correct": true,
+    "qpos_indices_correct": true
+  },
+  "fix_strategy": "When height_variant_setup is provided, use setup.equilibrium_joint_pos for target_joint_pos instead of posture_regularizer.compute_target_posture_from_height",
+  "files_to_modify": [
+    "scripts/simulate_hierarchical_controller.py"
+  ],
+  "verification": {
+    "hip_pitch_error_max_at_step_0": "< 0.05 rad"
+  }
+}

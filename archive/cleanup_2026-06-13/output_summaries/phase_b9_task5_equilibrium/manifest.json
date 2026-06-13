@@ -1,0 +1,16 @@
+{
+  "original_path": "outputs/phase_b9_task5_equilibrium",
+  "original_size": "2.8K",
+  "original_size_bytes": 2913,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "equilibrium_postures.json",
+      "size_bytes": 2913
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

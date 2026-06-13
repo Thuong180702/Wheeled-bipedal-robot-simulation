@@ -1,0 +1,11 @@
+{
+  "original_path": "outputs/phase_b9_step5_19_controller_authority_reallocation",
+  "original_size": "1.7K",
+  "original_size_bytes": 1725,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 3,
+  "copied_files": [],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "no small summaries found; raw regenerable output safe to delete."
+}

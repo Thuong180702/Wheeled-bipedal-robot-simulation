@@ -1,0 +1,176 @@
+{
+  "original_path": "outputs/step_e_height_variant_position_hold_audit_v2",
+  "original_size": "464.1M",
+  "original_size_bytes": 486639390,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "gate_500/step_c_failure_classification.json",
+      "size_bytes": 101
+    },
+    {
+      "file": "gate_500/step_c_height_case_matrix.json",
+      "size_bytes": 3008
+    },
+    {
+      "file": "gate_500/step_c_height_recovery_metrics.json",
+      "size_bytes": 16223
+    },
+    {
+      "file": "gate_500/step_c_height_recovery_report.md",
+      "size_bytes": 1108
+    },
+    {
+      "file": "gate_500/step_c_height_reference.json",
+      "size_bytes": 435
+    },
+    {
+      "file": "gate_500/step_c_pass_fail_summary.json",
+      "size_bytes": 925
+    },
+    {
+      "file": "high_small_failure_audit.json",
+      "size_bytes": 1262
+    },
+    {
+      "file": "high_small_metrics.json",
+      "size_bytes": 2654
+    },
+    {
+      "file": "high_small_peak_hip_yaw_window.csv",
+      "size_bytes": 3266281
+    },
+    {
+      "file": "high_small_peak_support_window.csv",
+      "size_bytes": 2781664
+    },
+    {
+      "file": "high_small_peak_wheel_vel_window.csv",
+      "size_bytes": 3236610
+    },
+    {
+      "file": "high_tiny_failure_audit.json",
+      "size_bytes": 1260
+    },
+    {
+      "file": "high_tiny_metrics.json",
+      "size_bytes": 2641
+    },
+    {
+      "file": "high_tiny_peak_hip_yaw_window.csv",
+      "size_bytes": 1990472
+    },
+    {
+      "file": "high_tiny_peak_support_window.csv",
+      "size_bytes": 3273009
+    },
+    {
+      "file": "high_tiny_peak_wheel_vel_window.csv",
+      "size_bytes": 3270158
+    },
+    {
+      "file": "low_small_failure_audit.json",
+      "size_bytes": 874
+    },
+    {
+      "file": "low_small_metrics.json",
+      "size_bytes": 2646
+    },
+    {
+      "file": "low_small_peak_hip_yaw_window.csv",
+      "size_bytes": 3279446
+    },
+    {
+      "file": "low_small_peak_support_window.csv",
+      "size_bytes": 3280800
+    },
+    {
+      "file": "low_small_peak_wheel_vel_window.csv",
+      "size_bytes": 3279933
+    },
+    {
+      "file": "low_tiny_failure_audit.json",
+      "size_bytes": 871
+    },
+    {
+      "file": "low_tiny_metrics.json",
+      "size_bytes": 2643
+    },
+    {
+      "file": "low_tiny_peak_hip_yaw_window.csv",
+      "size_bytes": 3276478
+    },
+    {
+      "file": "low_tiny_peak_support_window.csv",
+      "size_bytes": 3278149
+    },
+    {
+      "file": "low_tiny_peak_wheel_vel_window.csv",
+      "size_bytes": 3276076
+    },
+    {
+      "file": "nominal_failure_audit.json",
+      "size_bytes": 868
+    },
+    {
+      "file": "nominal_metrics.json",
+      "size_bytes": 2626
+    },
+    {
+      "file": "nominal_peak_hip_yaw_window.csv",
+      "size_bytes": 3267785
+    },
+    {
+      "file": "nominal_peak_support_window.csv",
+      "size_bytes": 3269153
+    },
+    {
+      "file": "nominal_peak_wheel_vel_window.csv",
+      "size_bytes": 3267885
+    },
+    {
+      "file": "official_5000/step_c_failure_classification.json",
+      "size_bytes": 279
+    },
+    {
+      "file": "official_5000/step_c_height_case_matrix.json",
+      "size_bytes": 3008
+    },
+    {
+      "file": "official_5000/step_c_height_recovery_metrics.json",
+      "size_bytes": 16495
+    },
+    {
+      "file": "official_5000/step_c_height_recovery_report.md",
+      "size_bytes": 1185
+    },
+    {
+      "file": "official_5000/step_c_height_reference.json",
+      "size_bytes": 435
+    },
+    {
+      "file": "official_5000/step_c_pass_fail_summary.json",
+      "size_bytes": 1046
+    },
+    {
+      "file": "step_e_height_variant_case_matrix.json",
+      "size_bytes": 221
+    },
+    {
+      "file": "step_e_height_variant_metrics.json",
+      "size_bytes": 13938
+    },
+    {
+      "file": "step_e_height_variant_position_hold_report.md",
+      "size_bytes": 2467
+    },
+    {
+      "file": "step_e_height_variant_position_hold_summary.json",
+      "size_bytes": 930
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

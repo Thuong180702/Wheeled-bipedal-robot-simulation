@@ -1,0 +1,11 @@
+{
+  "overall_step_e_boundary_verdict": "FAIL",
+  "boundary_cases": {
+    "low_0p300": "FAIL",
+    "high_0p480": "FAIL"
+  },
+  "nominal_regression": "FAIL",
+  "controller_behavior_changed": true,
+  "hip_yaw_gains_changed": "kp=15->25, kd=3->5",
+  "D2_boundary_variants_added": true
+}

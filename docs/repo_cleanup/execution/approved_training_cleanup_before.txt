@@ -1,0 +1,14 @@
+=== Training cleanup BEFORE sizes (Sat Jun 13 22:01:46 SEAST 2026) ===
+--- top-level dirs ---
+8.6G	outputs
+13M	outputs_residual_smoke
+37M	outputs_residual_test
+19M	backup_checkpoints
+--- approved-delete target ---
+417M	outputs/step_e_height_variant_sagittal_schedule_fix_damping
+--- protected seeds ---
+119M	outputs/balance/rl/seed42
+94M	outputs/balance/rl/seed113
+62M	outputs/balance/rl/seed999
+--- protected setups ---
+56K	outputs/physical_target_height_setups

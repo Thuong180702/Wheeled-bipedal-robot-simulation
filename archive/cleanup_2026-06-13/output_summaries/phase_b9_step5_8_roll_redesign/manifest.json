@@ -1,0 +1,16 @@
+{
+  "original_path": "outputs/phase_b9_step5_8_roll_redesign",
+  "original_size": "16.1K",
+  "original_size_bytes": 16446,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "best_roll_redesign_summary.json",
+      "size_bytes": 4115
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,71 @@
+{
+  "D2": {
+    "variant": "D2",
+    "n_steps": 5000,
+    "pitch_reversals": [
+      {
+        "step": 8,
+        "pitch_at_reversal": -2.749921623035334e-05,
+        "pitch_rate_at_reversal": 0.0217421874403953,
+        "support_err_at_reversal": 0.0002783735691867,
+        "hip_yaw_at_reversal": 0.0015822184504941,
+        "tau_position_at_reversal": -0.0111349429935216,
+        "support_error_large": false,
+        "support_err_min_future": 0.0002783735691867,
+        "support_err_max_future": 0.0162634701331237,
+        "support_err_reduced": false
+      }
+    ],
+    "support_error_reversals": [],
+    "premature_reversal_count": 0,
+    "good_recovery_count": 0,
+    "total_pitch_reversals": 1,
+    "large_support_error_reversals": 0
+  },
+  "E2": {
+    "variant": "E2",
+    "n_steps": 500,
+    "pitch_reversals": [
+      {
+        "step": 8,
+        "pitch_at_reversal": -2.7519754439708777e-05,
+        "pitch_rate_at_reversal": 0.0217410735785961,
+        "support_err_at_reversal": 0.0002783655207807,
+        "hip_yaw_at_reversal": 0.00158221879974,
+        "tau_position_at_reversal": -0.0111333997920155,
+        "support_error_large": false,
+        "support_err_min_future": 0.0002783655207807,
+        "support_err_max_future": 0.016263471637853,
+        "support_err_reduced": false
+      }
+    ],
+    "support_error_reversals": [],
+    "premature_reversal_count": 0,
+    "good_recovery_count": 0,
+    "total_pitch_reversals": 1,
+    "large_support_error_reversals": 0
+  },
+  "E2b": {
+    "variant": "E2b",
+    "n_steps": 500,
+    "pitch_reversals": [
+      {
+        "step": 8,
+        "pitch_at_reversal": -2.7519754439708777e-05,
+        "pitch_rate_at_reversal": 0.0217410735785961,
+        "support_err_at_reversal": 0.0002783655207807,
+        "hip_yaw_at_reversal": 0.00158221879974,
+        "tau_position_at_reversal": -0.0111333997920155,
+        "support_error_large": false,
+        "support_err_min_future": 0.0002783655207807,
+        "support_err_max_future": 0.016263471637853,
+        "support_err_reduced": false
+      }
+    ],
+    "support_error_reversals": [],
+    "premature_reversal_count": 0,
+    "good_recovery_count": 0,
+    "total_pitch_reversals": 1,
+    "large_support_error_reversals": 0
+  }
+}

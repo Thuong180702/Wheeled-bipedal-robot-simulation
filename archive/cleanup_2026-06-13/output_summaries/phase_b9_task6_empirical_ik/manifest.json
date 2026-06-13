@@ -1,0 +1,20 @@
+{
+  "original_path": "outputs/phase_b9_task6_empirical_ik",
+  "original_size": "519.9K",
+  "original_size_bytes": 532379,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 3,
+  "copied_files": [
+    {
+      "file": "empirical_ik_targets.json",
+      "size_bytes": 899
+    },
+    {
+      "file": "raw_configurations.json",
+      "size_bytes": 527082
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

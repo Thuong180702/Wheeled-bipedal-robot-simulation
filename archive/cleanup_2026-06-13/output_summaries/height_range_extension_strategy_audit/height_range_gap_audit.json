@@ -1,0 +1,93 @@
+{
+  "phase": "Phase 3: Height-Range Gap Audit",
+  "audit_date": "2026-06-06",
+
+  "three_range_comparison": {
+    "validated_dynamic": {
+      "min_m": 0.3933,
+      "max_m": 0.4128,
+      "span_cm": 1.95,
+      "variants": 5,
+      "status": "Step E/C PASS"
+    },
+    "target_extreme": {
+      "low_m": 0.300,
+      "high_m": 0.480,
+      "gap_from_validated_cm": {
+        "low": -9.33,
+        "high": 6.72
+      }
+    },
+    "physical_static": {
+      "min_m": 0.2919,
+      "max_m": 0.4908,
+      "span_cm": 19.89,
+      "valid_candidates": "61/61 (100%)"
+    }
+  },
+
+  "height_evidence_table": {
+    "validated_range": [
+      {"height_m": 0.394, "classification": "VALIDATED_DYNAMIC_ENVELOPE", "step_e": "PASS", "step_c": "PASS"},
+      {"height_m": 0.399, "classification": "VALIDATED_DYNAMIC_ENVELOPE", "step_e": "PASS", "step_c": "PASS"},
+      {"height_m": 0.404, "classification": "VALIDATED_DYNAMIC_ENVELOPE", "step_e": "PASS", "step_c": "PASS"},
+      {"height_m": 0.409, "classification": "VALIDATED_DYNAMIC_ENVELOPE", "step_e": "PASS", "step_c": "PASS"},
+      {"height_m": 0.414, "classification": "VALIDATED_DYNAMIC_ENVELOPE", "step_e": "PASS", "step_c": "PASS"}
+    ],
+    "intermediate_low": [
+      {"height_m": 0.300, "classification": "CONTACT_HEIGHT_SAFE_BUT_POSTURE_FAILS", "step_e": "UNTESTED", "posture": "FAIL (div 0.493)"},
+      {"height_m": 0.330, "classification": "UNKNOWN_REQUIRES_TEST", "step_e": "UNTESTED", "posture": "UNTESTED"},
+      {"height_m": 0.360, "classification": "UNKNOWN_REQUIRES_TEST", "step_e": "UNTESTED", "posture": "UNTESTED"},
+      {"height_m": 0.380, "classification": "UNKNOWN_REQUIRES_TEST", "step_e": "UNTESTED", "posture": "UNTESTED"}
+    ],
+    "intermediate_high": [
+      {"height_m": 0.420, "classification": "UNKNOWN_REQUIRES_TEST", "step_e": "UNTESTED", "posture": "UNTESTED"},
+      {"height_m": 0.430, "classification": "UNKNOWN_REQUIRES_TEST", "step_e": "UNTESTED", "posture": "UNTESTED"},
+      {"height_m": 0.450, "classification": "UNKNOWN_REQUIRES_TEST", "step_e": "UNTESTED", "posture": "UNTESTED"},
+      {"height_m": 0.465, "classification": "UNKNOWN_REQUIRES_TEST", "step_e": "UNTESTED", "posture": "UNTESTED"},
+      {"height_m": 0.480, "classification": "CONTACT_HEIGHT_SAFE_BUT_POSTURE_FAILS", "step_e": "UNTESTED", "posture": "FAIL (div 0.340)"}
+    ]
+  },
+
+  "gap_analysis": {
+    "low_side": {
+      "validated_min_m": 0.3933,
+      "target_low_m": 0.300,
+      "gap_cm": 9.33,
+      "physical_min_m": 0.2919,
+      "gap_to_physical_cm": 10.14,
+      "setup_files_exist": ["0.300", "0.330", "0.360"]
+    },
+    "high_side": {
+      "validated_max_m": 0.4128,
+      "target_high_m": 0.480,
+      "gap_cm": 6.72,
+      "physical_max_m": 0.4908,
+      "gap_to_physical_cm": 7.80,
+      "setup_files_exist": ["0.450", "0.480"]
+    }
+  },
+
+  "region_classification": {
+    "VALIDATED_DYNAMIC_ENVELOPE": {
+      "heights": [0.394, 0.399, 0.404, 0.409, 0.414],
+      "evidence": "Step E/C 5/5 PASS"
+    },
+    "CONTACT_HEIGHT_SAFE_BUT_POSTURE_FAILS": {
+      "heights": [0.300, 0.480],
+      "evidence": "Survived 5000 steps but divergence exceeds targets"
+    },
+    "UNKNOWN_REQUIRES_TEST": {
+      "heights": [0.330, 0.360, 0.380, 0.420, 0.430, 0.450, 0.465],
+      "evidence": "Static feasible, no dynamic validation"
+    }
+  },
+
+  "key_findings": [
+    "Physical envelope is 10x broader than validated dynamic envelope",
+    "Low-side gap is larger than high-side gap (9.93cm vs 6.72cm)",
+    "Intermediate heights are UNTESTED - no dynamic validation between 0.394m and 0.300m",
+    "Extreme targets (0.300/0.480) survive but diverge - contact/height safe, posture fails",
+    "Setup files exist for 0.330, 0.360, 0.450m - intermediate validation is feasible"
+  ]
+}

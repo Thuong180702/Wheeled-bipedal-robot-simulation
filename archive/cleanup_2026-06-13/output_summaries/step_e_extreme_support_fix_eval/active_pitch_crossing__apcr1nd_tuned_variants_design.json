@@ -1,0 +1,106 @@
+{
+  "design_goal": "Achieve stricter band-limited support drift control within ±0.08 m",
+  "current_apcr1nd_performance": {
+    "outside_08_pct": 37.7,
+    "outside_10_pct": 22.3,
+    "max_abs_e": 0.1691,
+    "target_outside_08_pct": 20.0
+  },
+  "root_causes": [
+    "Moving-away gating too strict (53.6% inactive outside band)",
+    "Authority too weak (349/350 active steps ineffective)",
+    "Entry threshold too late (0.08 = target limit)",
+    "Release too early (11 events while outside ±0.08)",
+    "Damping override too rare (0.9%)"
+  ],
+  "variants": {
+    "T1_early_entry": {
+      "purpose": "Enter support recenter before reaching target band",
+      "key_changes": {
+        "direct_enter_m": 0.06,
+        "soft_enter_m": 0.05,
+        "moving_away_required": true,
+        "release_logic": "same as APCR1nD"
+      },
+      "expected_outside_08_pct": "30-35",
+      "complexity": "low",
+      "risk": "may activate too frequently"
+    },
+    "T2_hold_outside_band": {
+      "purpose": "Keep feature active while outside desired band, even if converging",
+      "key_changes": {
+        "direct_enter_m": 0.08,
+        "desired_band_m": 0.08,
+        "release_inner_m": 0.05,
+        "hold_if_outside_band": true,
+        "moving_away_required": "only for initial entry"
+      },
+      "expected_outside_08_pct": "25-30",
+      "complexity": "moderate",
+      "risk": "may stay active too long"
+    },
+    "T3_early_entry_plus_hold": {
+      "purpose": "Combine early entry and band hold",
+      "key_changes": {
+        "soft_enter_m": 0.05,
+        "direct_enter_m": 0.06,
+        "desired_band_m": 0.08,
+        "release_inner_m": 0.03,
+        "activate_if_outside_08": true,
+        "hold_until_inner_band": true
+      },
+      "expected_outside_08_pct": "20-25",
+      "complexity": "moderate",
+      "risk": "most aggressive; may oscillate"
+    },
+    "T4_stronger_authority": {
+      "purpose": "Increase torque authority when fighting drift",
+      "key_changes": {
+        "direct_enter_m": 0.06,
+        "release_inner_m": 0.03,
+        "position_cap_normal": 4.0,
+        "position_cap_recenter": 6.0,
+        "position_cap_emergency": 7.0,
+        "wheel_damping_desired_band": 0.20,
+        "wheel_damping_hard_band": 0.10
+      },
+      "expected_outside_08_pct": "30-35",
+      "complexity": "moderate",
+      "risk": "may increase wheel velocity"
+    },
+    "T5_band_limited_balanced": {
+      "purpose": "Best practical tuned profile combining all improvements",
+      "key_changes": {
+        "soft_enter_m": 0.05,
+        "direct_enter_m": 0.06,
+        "desired_band_m": 0.08,
+        "hard_band_m": 0.10,
+        "emergency_band_m": 0.12,
+        "release_inner_m": 0.03,
+        "graduated_position_cap": [4.0, 4.5, 5.5, 6.5, 7.0],
+        "graduated_damping_scale": [1.0, 0.50, 0.30, 0.15, 0.10],
+        "preserve_damping_if_helps": true,
+        "band_aware_authority": true
+      },
+      "expected_outside_08_pct": "15-20",
+      "complexity": "high",
+      "risk": "most complex; requires careful testing",
+      "recommended": true
+    }
+  },
+  "success_criteria": {
+    "primary": {
+      "outside_08_pct": "<20%",
+      "survives_2000": true,
+      "contact_height_roll_stable": true
+    },
+    "secondary": {
+      "outside_10_pct": "<10%",
+      "max_abs_e": "<0.15",
+      "p2p": "<0.18",
+      "wheel_velocity": "acceptable"
+    }
+  },
+  "testing_order": ["T5", "T3", "T2", "T4", "T1"],
+  "recommendation": "Start with T5 (Band-Limited Balanced) as the most comprehensive solution"
+}

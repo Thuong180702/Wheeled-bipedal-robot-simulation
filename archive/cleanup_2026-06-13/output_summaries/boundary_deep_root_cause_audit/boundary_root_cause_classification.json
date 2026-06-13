@@ -1,0 +1,8 @@
+{
+  "low_0p300_has_hip_yaw_holding_torque": false,
+  "high_0p480_has_hip_yaw_holding_torque": false,
+  "low_0p300_max_deficit_nm": 5.995204332975845e-15,
+  "high_0p480_max_deficit_nm": 3.452793606584237e-14,
+  "primary_root_cause": "unclear_requires_more_telemetry",
+  "recommendation": "Hip yaw holding torque is near-zero. Need dynamic simulation telemetry."
+}

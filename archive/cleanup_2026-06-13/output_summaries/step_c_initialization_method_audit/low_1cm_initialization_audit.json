@@ -1,0 +1,414 @@
+{
+  "input_telemetry": "outputs\\step_c_height_recovery_short_v2\\low_1cm_telemetry.csv",
+  "comparison_telemetry": "outputs\\step_c_height_recovery_short_v2\\nominal_telemetry.csv",
+  "classification": "physically_inconsistent_height_perturbation",
+  "root_z_only_perturbation_confirmed": true,
+  "root_z_only_perturbation_suspected_invalid_for_official_step_c": true,
+  "evidence_summary": {
+    "simulator_applies_only_qpos_2_then_mj_forward": true,
+    "perturbation_applied_after_equilibrium_capture": true,
+    "low_1cm_initial_root_z_perturbation_m": -0.01,
+    "nominal_initial_root_z_perturbation_m": 0.0,
+    "low_1cm_invalid_contact_steps": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "low_1cm_invalid_contact_times_s": [
+      0.0,
+      0.01,
+      0.02,
+      0.03,
+      0.04,
+      0.05,
+      0.06,
+      0.07,
+      0.08,
+      0.09
+    ],
+    "low_1cm_raw_contact_valid_percent": 98.0,
+    "low_1cm_adjusted_contact_valid_percent": 98.0,
+    "low_1cm_wheel_velocity_max_abs_rad_s": 21.34300994873047,
+    "nominal_raw_contact_valid_percent": 99.8,
+    "nominal_adjusted_contact_valid_percent": 100.0,
+    "nominal_invalid_contact_steps": [
+      0
+    ],
+    "wbc_applied": false,
+    "step_e_invariants_preserved": true,
+    "wheel_contacts_true_first_20_steps": false,
+    "wheel_floor_contacts_true_first_20_steps": false,
+    "contact_supervisor_double_contact_first_20_steps": false,
+    "non_wheel_floor_contacts_zero_first_20_steps": true,
+    "pitch_safe_first_20_steps": true,
+    "roll_safe_first_20_steps": true,
+    "support_position_safe_first_20_steps": true,
+    "wheel_velocity_spike_max_abs_first_20_steps_rad_s": 21.34300994873047,
+    "missing_requested_columns": [
+      "height_error_m",
+      "tau_pitch",
+      "tau_sagittal_velocity",
+      "applied_wbc_contribution_norm"
+    ]
+  },
+  "first_20_stats": {
+    "low_1cm": {
+      "com_z_m": {
+        "min": 0.3941118419170379,
+        "max": 0.4064311981201172,
+        "first": 0.3941118419170379,
+        "last_in_window": 0.398575484752655
+      },
+      "left_contact_force_world_z": {
+        "min": 0.0,
+        "max": 77.47859191894531,
+        "first": 0.0,
+        "last_in_window": 39.15208053588867
+      },
+      "right_contact_force_world_z": {
+        "min": 0.0,
+        "max": 78.56104278564453,
+        "first": 0.0,
+        "last_in_window": 39.29166412353516
+      },
+      "total_wheel_floor_fz": {
+        "min": 0.0,
+        "max": 156.03963125994073,
+        "first": 0.0,
+        "last_in_window": 78.44374254189597
+      },
+      "non_wheel_floor_contacts": {
+        "min": 0.0,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": 0.0
+      },
+      "support_position_error_m": {
+        "min": -0.0439723882449251,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": -0.0204458785516365
+      },
+      "pitch_x_rad": {
+        "min": -0.0921078395921607,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": -0.062544254983201
+      },
+      "roll_y_rad": {
+        "min": 0.0,
+        "max": 0.0011605463361593,
+        "first": 0.0,
+        "last_in_window": 0.0011605463361593
+      },
+      "yaw_z_rad": {
+        "min": -0.0027855623299629,
+        "max": 0.0012394251219098,
+        "first": 0.0,
+        "last_in_window": -0.0025333442362142
+      },
+      "hip_yaw_abs_max": {
+        "min": 0.0,
+        "max": 0.0065796193666756,
+        "first": 0.0,
+        "last_in_window": 0.0065796193666756
+      },
+      "wheel_vel_mean_rad_s": {
+        "min": -21.34300994873047,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": -2.2329468727111816
+      },
+      "wheel_vel_left_rad_s": {
+        "min": -21.343080520629883,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": -2.207979679107666
+      },
+      "wheel_vel_right_rad_s": {
+        "min": -21.34293937683105,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": -2.2579140663146973
+      },
+      "tau_saturation_rate": {
+        "min": 0.0,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": 0.0
+      },
+      "hidden_torque_norm": {
+        "min": 0.0,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": 0.0
+      },
+      "ownership_violation_count": {
+        "min": 0.0,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": 0.0
+      },
+      "contact_duration_s": {
+        "min": 0.0,
+        "max": 0.0999999999999999,
+        "first": 0.0,
+        "last_in_window": 0.0999999999999999
+      }
+    },
+    "nominal": {
+      "com_z_m": {
+        "min": 0.4038352966308594,
+        "max": 0.4065277278423309,
+        "first": 0.4041118323802948,
+        "last_in_window": 0.4065277278423309
+      },
+      "left_contact_force_world_z": {
+        "min": 20.508811950683597,
+        "max": 46.22621536254883,
+        "first": 20.508811950683597,
+        "last_in_window": 39.06675720214844
+      },
+      "right_contact_force_world_z": {
+        "min": 22.049598693847656,
+        "max": 46.88473510742188,
+        "first": 22.049598693847656,
+        "last_in_window": 39.6928596496582
+      },
+      "total_wheel_floor_fz": {
+        "min": 42.55841054498711,
+        "max": 93.11095157716872,
+        "first": 42.55841054498711,
+        "last_in_window": 78.75962146255979
+      },
+      "non_wheel_floor_contacts": {
+        "min": 0.0,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": 0.0
+      },
+      "support_position_error_m": {
+        "min": -0.0066243786426997,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": -0.0066243786426997
+      },
+      "pitch_x_rad": {
+        "min": 0.0,
+        "max": 0.002604294206445,
+        "first": 0.0,
+        "last_in_window": 0.0024364249494162
+      },
+      "roll_y_rad": {
+        "min": 0.0,
+        "max": 0.0014761238250706,
+        "first": 0.0,
+        "last_in_window": 0.0014761238250706
+      },
+      "yaw_z_rad": {
+        "min": 0.0,
+        "max": 0.005758278379704,
+        "first": 0.0,
+        "last_in_window": 0.005758278379704
+      },
+      "hip_yaw_abs_max": {
+        "min": 0.0,
+        "max": 0.0022284635342657,
+        "first": 0.0,
+        "last_in_window": 0.0022284635342657
+      },
+      "wheel_vel_mean_rad_s": {
+        "min": -0.0238454065984115,
+        "max": 1.235780954360962,
+        "first": 0.0,
+        "last_in_window": 0.5164320021867752
+      },
+      "wheel_vel_left_rad_s": {
+        "min": 0.0,
+        "max": 1.26848042011261,
+        "first": 0.0,
+        "last_in_window": 0.5375068783760071
+      },
+      "wheel_vel_right_rad_s": {
+        "min": -0.0486855506896972,
+        "max": 1.203081488609314,
+        "first": 0.0,
+        "last_in_window": 0.4953571259975433
+      },
+      "tau_saturation_rate": {
+        "min": 0.0,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": 0.0
+      },
+      "hidden_torque_norm": {
+        "min": 0.0,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": 0.0
+      },
+      "ownership_violation_count": {
+        "min": 0.0,
+        "max": 0.0,
+        "first": 0.0,
+        "last_in_window": 0.0
+      },
+      "contact_duration_s": {
+        "min": 0.0,
+        "max": 0.19,
+        "first": 0.0,
+        "last_in_window": 0.19
+      }
+    }
+  },
+  "invalid_contact_rows": {
+    "low_1cm_count": 10,
+    "low_1cm_steps": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "low_1cm_times_s": [
+      0.0,
+      0.01,
+      0.02,
+      0.03,
+      0.04,
+      0.05,
+      0.06,
+      0.07,
+      0.08,
+      0.09
+    ],
+    "nominal_count": 1,
+    "nominal_steps": [
+      0
+    ],
+    "nominal_times_s": [
+      0.0
+    ]
+  },
+  "step_b_height_variant_reuse_evidence": {
+    "report_path": "outputs\\balance_core_true_height_variants\\true_height_variant_setup_report.json",
+    "search_method": "multiobjective_com_calibrated",
+    "ready_for_b5_b10": true,
+    "valid_variants": [
+      "nominal",
+      "high_tiny",
+      "high_small",
+      "low_tiny",
+      "low_small"
+    ],
+    "nominal_com_z_m": 0.4039993119017284,
+    "variants": {
+      "nominal": {
+        "target_com_z_m": 0.4039993119017284,
+        "achieved_com_z_m": 0.4039993119017284,
+        "calibrated_root_z_m": 0.5357421875000001,
+        "hip_pitch_ref": 0.926052,
+        "knee_ref": 1.748364,
+        "left_wheel_contact": true,
+        "right_wheel_contact": true,
+        "non_wheel_floor_contact_count": 0,
+        "com_support_error_norm_xy": 0.00013185080431043475,
+        "pitch_x_rad": 0.0,
+        "roll_y_rad": 0.0,
+        "setup_valid": true,
+        "posture_search_method": "keyframe_baseline"
+      },
+      "high_tiny": {
+        "target_com_z_m": 0.4089993119017284,
+        "achieved_com_z_m": 0.4093813621361716,
+        "calibrated_root_z_m": 0.5421875,
+        "hip_pitch_ref": 0.9155256842105263,
+        "knee_ref": 1.7167850526315789,
+        "left_wheel_contact": true,
+        "right_wheel_contact": true,
+        "non_wheel_floor_contact_count": 0,
+        "com_support_error_norm_xy": 0.0021772141982504285,
+        "pitch_x_rad": 0.0,
+        "roll_y_rad": 0.0,
+        "setup_valid": true,
+        "posture_search_method": "multiobjective_com_calibrated_search"
+      },
+      "high_small": {
+        "target_com_z_m": 0.4139993119017284,
+        "achieved_com_z_m": 0.4128130092062859,
+        "calibrated_root_z_m": 0.5466796875,
+        "hip_pitch_ref": 0.894473052631579,
+        "knee_ref": 1.6957324210526317,
+        "left_wheel_contact": true,
+        "right_wheel_contact": true,
+        "non_wheel_floor_contact_count": 0,
+        "com_support_error_norm_xy": 0.0003707630357800032,
+        "pitch_x_rad": 0.0,
+        "roll_y_rad": 0.0,
+        "setup_valid": true,
+        "posture_search_method": "multiobjective_com_calibrated_search"
+      },
+      "low_tiny": {
+        "target_com_z_m": 0.3989993119017284,
+        "achieved_com_z_m": 0.3986319235445995,
+        "calibrated_root_z_m": 0.529296875,
+        "hip_pitch_ref": 0.9365783157894737,
+        "knee_ref": 1.7799429473684212,
+        "left_wheel_contact": true,
+        "right_wheel_contact": true,
+        "non_wheel_floor_contact_count": 0,
+        "com_support_error_norm_xy": 0.0023785304673077344,
+        "pitch_x_rad": 0.0,
+        "roll_y_rad": 0.0,
+        "setup_valid": true,
+        "posture_search_method": "multiobjective_com_calibrated_search"
+      },
+      "low_small": {
+        "target_com_z_m": 0.3939993119017284,
+        "achieved_com_z_m": 0.3952343994492738,
+        "calibrated_root_z_m": 0.5248046875000001,
+        "hip_pitch_ref": 0.957630947368421,
+        "knee_ref": 1.8009955789473684,
+        "left_wheel_contact": true,
+        "right_wheel_contact": true,
+        "non_wheel_floor_contact_count": 0,
+        "com_support_error_norm_xy": 3.064547378778746e-05,
+        "pitch_x_rad": 0.0,
+        "roll_y_rad": 0.0,
+        "setup_valid": true,
+        "posture_search_method": "multiobjective_com_calibrated_search"
+      }
+    },
+    "true_variants_not_root_z_only": true
+  },
+  "recommended_step_c_initialization_strategy": {
+    "primary": "reuse_existing_step_b_true_height_variant_setups_when target height matches available ?5mm/?10mm variants",
+    "fallback": "add diagnostic-only symmetric hip_pitch/knee CoM-calibrated pose generator before dynamic Step C",
+    "static_validation_required_before_rollout": [
+      "both wheel contacts valid after reset",
+      "left/right wheel floor contacts true",
+      "non_wheel_floor_contacts == 0",
+      "contact force positive and reasonable",
+      "pitch/roll/yaw near equilibrium",
+      "com_z close to requested target",
+      "support center error near zero",
+      "hip/knee within joint limits",
+      "left/right leg symmetry preserved"
+    ]
+  },
+  "controller_behavior_changed": false,
+  "wbc_applied": false,
+  "step_e_invariants_preserved": true
+}

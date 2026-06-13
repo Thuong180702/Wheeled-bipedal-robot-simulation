@@ -1,0 +1,223 @@
+{
+  "report_type": "step_e_equilibrium_and_authority_root_cause_report",
+  "date": "2026-05-31",
+  "status": "AUDIT_COMPLETE_NO_FIX_IMPLEMENTED",
+  "telemetry_path": "outputs/hierarchical_controller_sim/telemetry_1780225291.csv",
+  "regenerated_telemetry": true,
+  "telemetry_rows": 5000,
+  "telemetry_column_mapping": {
+    "tau_pitch": "sagittal_term_pitch",
+    "tau_pitch_rate": "sagittal_term_pitch_rate",
+    "tau_sagittal_velocity": "sagittal_term_com_vy",
+    "tau_wheel_velocity_left": "sagittal_term_wheel_vel_left",
+    "tau_wheel_velocity_right": "sagittal_term_wheel_vel_right",
+    "tau_support_velocity": "tau_support_velocity",
+    "tau_position_raw": "tau_position_raw",
+    "tau_position_clipped": "tau_position_clipped",
+    "tau_balance_before_position": "tau_balance_before_position",
+    "tau_total_unclipped": "tau_total_unclipped",
+    "tau_total_clipped": "tau_total_clipped",
+    "actuator_ctrl_per_joint_4": "actuator_ctrl_per_joint[4]",
+    "actuator_ctrl_per_joint_9": "actuator_ctrl_per_joint[9]",
+    "final_actuator_torque_saturation_left": "wheel_torque_saturation_left",
+    "final_actuator_torque_saturation_right": "wheel_torque_saturation_right",
+    "final_actuator_torque_rate_saturation_left": "wheel_torque_rate_saturation_left",
+    "final_actuator_torque_rate_saturation_right": "wheel_torque_rate_saturation_right"
+  },
+  "primary_metric": {
+    "support_position_error_m": {
+      "min": -0.0082811636828038,
+      "max": 0.4590434170020071,
+      "max_abs": 0.4590434170020071,
+      "final": 0.0526678628066149
+    }
+  },
+  "steady_state_last_20_percent": {
+    "support_position_error_mean_m": 0.05266785990281649,
+    "support_position_error_rms_m": 0.05266785990281673,
+    "support_position_velocity_mean_m_s": -8.445037155691004e-10,
+    "support_position_velocity_rms_m_s": 6.3066888220312e-08,
+    "wheel_velocity_mean_rad_s": 1.2720471081195672e-08,
+    "wheel_velocity_rms_rad_s": 1.5656475834592412e-06,
+    "pitch_error_mean_rad": 0.02106714334982312,
+    "pitch_error_rms_rad": 0.021067143349823788,
+    "pitch_rate_mean_rad_s": 1.0427354089070918e-09,
+    "pitch_rate_rms_rad_s": 1.5915226662940533e-07,
+    "com_position_error_mean_m": 0.05558565666899076,
+    "com_z_mean_m": 0.3680269122123718,
+    "torque_terms": {
+      "tau_pitch": {
+        "mean": 1.0533571674911584,
+        "rms": 1.053357167491192,
+        "min": 1.053356230434113,
+        "max": 1.0533578206733207
+      },
+      "tau_pitch_rate": {
+        "mean": 1.0427354089070918e-08,
+        "rms": 1.5915226662940532e-06,
+        "min": -5.79442996695434e-06,
+        "max": 6.844461495347787e-06
+      },
+      "tau_sagittal_velocity": {
+        "mean": 1.6763806343078613e-08,
+        "rms": 8.474523697851096e-07,
+        "min": -5.587935447692871e-06,
+        "max": 5.587935447692871e-06
+      },
+      "tau_wheel_velocity_left": {
+        "mean": -7.552579268954584e-08,
+        "rms": 7.855165815006081e-07,
+        "min": -4.611564691003878e-06,
+        "max": 4.180099494988099e-06
+      },
+      "tau_wheel_velocity_right": {
+        "mean": 6.280532160835018e-08,
+        "rms": 7.881002050922394e-07,
+        "min": -4.452850589586888e-06,
+        "max": 4.343506134318886e-06
+      },
+      "tau_support_velocity": {
+        "mean": 8.445037155691004e-09,
+        "rms": 6.306688822031199e-07,
+        "min": -2.94151439317325e-06,
+        "max": 3.1670964878438568e-06
+      },
+      "tau_position_raw": {
+        "mean": -1.0533571980563305,
+        "rms": 1.0533571980563354,
+        "min": -1.0533574583657694,
+        "max": -1.0533569053402083
+      },
+      "tau_position_clipped": {
+        "mean": -1.0533571964502335,
+        "rms": 1.0533571964502388,
+        "min": -1.053357481956482,
+        "max": -1.0533568859100342
+      },
+      "tau_balance_before_position": {
+        "mean": 1.053357202355056,
+        "rms": 1.0533572023567388,
+        "min": 1.0533476462503857,
+        "max": 1.0533652812401018
+      },
+      "tau_total_unclipped": {
+        "mean": 5.904822433316914e-09,
+        "rms": 1.8720939454477183e-06,
+        "min": -9.597287517149056e-06,
+        "max": 8.03770219892641e-06
+      },
+      "tau_total_clipped": {
+        "mean": 5.904822433316914e-09,
+        "rms": 1.8720939454477183e-06,
+        "min": -9.597287517149056e-06,
+        "max": 8.03770219892641e-06
+      }
+    },
+    "net_balance_mean_nm": 5.904822408808741e-09,
+    "final_wheel_torque_margin_mean_nm": 4.999998654038518,
+    "classification": {
+      "primary_classification": "steady_state_balance_torque_bias",
+      "physical_motor_limit": false,
+      "sign_error": false,
+      "continuous_position_drift": false,
+      "WBC_active": false,
+      "E0_logic_active": false
+    }
+  },
+  "transient_window_1300_1500": {
+    "support_position_error_mean_m": 0.4079095841805658,
+    "support_position_error_rms_m": 0.41158928195736316,
+    "support_position_velocity_mean_m_s": 0.07748751399041036,
+    "support_position_velocity_rms_m_s": 0.12321087535493593,
+    "wheel_velocity_mean_rad_s": -1.3671073203267001,
+    "wheel_velocity_rms_rad_s": 2.192413044611889,
+    "pitch_error_mean_rad": 0.1226751167288624,
+    "pitch_error_rms_rad": 0.12612924264657963,
+    "pitch_rate_mean_rad_s": -0.03401962131975954,
+    "pitch_rate_rms_rad_s": 0.06110918328370971,
+    "com_z_mean_m": 0.3695840945291282,
+    "torque_terms": {
+      "tau_pitch_mean": 6.1337558364431235,
+      "tau_pitch_rate_mean": -0.3401962131975955,
+      "tau_sagittal_velocity_mean": -1.1720928683209775,
+      "tau_wheel_velocity_left_mean": 0.6930481938422838,
+      "tau_wheel_velocity_right_mean": 0.6740591264844163,
+      "tau_support_velocity_mean": -0.7748751399041035,
+      "tau_position_raw_mean": -8.158191683611316,
+      "tau_position_clipped_mean": -4.0,
+      "tau_balance_before_position_mean": 4.139447652410136,
+      "tau_total_unclipped_mean": 0.13944765241013718,
+      "tau_total_clipped_mean": 0.13944765241013718
+    },
+    "tau_position_raw_clipped_count": 201,
+    "tau_position_raw_clipped_fraction": 1.0,
+    "final_actuator_torque_saturation_left_count": 0,
+    "final_actuator_torque_saturation_right_count": 0,
+    "final_actuator_torque_rate_saturation_left_count": 0,
+    "final_actuator_torque_rate_saturation_right_count": 0,
+    "internal_position_authority_cap_only_limiter": true,
+    "sample_steps": {
+      "1300": {
+        "tau_position_raw": -5.575428653206077,
+        "tau_position_clipped": -4.0,
+        "tau_balance_before_position": 4.064241011865886,
+        "actuator_ctrl_per_joint_4": 0.10504981130361557,
+        "actuator_ctrl_per_joint_9": 0.023432215675711632
+      },
+      "1411": {
+        "tau_position_raw": -9.04328934073823,
+        "tau_position_clipped": -4.0,
+        "tau_balance_before_position": 4.21838142642461,
+        "actuator_ctrl_per_joint_4": 0.21594290435314178,
+        "actuator_ctrl_per_joint_9": 0.22081993520259857
+      },
+      "1435": {
+        "tau_position_raw": -9.180868340040142,
+        "tau_position_clipped": -4.0,
+        "tau_balance_before_position": 4.177409960217527,
+        "actuator_ctrl_per_joint_4": 0.1723969280719757,
+        "actuator_ctrl_per_joint_9": 0.18242298066616058
+      },
+      "1500": {
+        "tau_position_raw": -8.645104837370464,
+        "tau_position_clipped": -4.0,
+        "tau_balance_before_position": 4.082575316031178,
+        "actuator_ctrl_per_joint_4": 0.07799821346998215,
+        "actuator_ctrl_per_joint_9": 0.08715241402387619
+      }
+    }
+  },
+  "actuator_torque_margin_proof": {
+    "old_physical_motor_limit_explanation_supported": false,
+    "reason": "Final actuator torque saturation count is zero on both wheel joints throughout the transient while internal tau_position clipping is active 100% of the time and final wheel torque margin remains large.",
+    "transient_final_wheel_torque_margin_mean_nm": 4.846731565452857
+  },
+  "root_cause_classification": {
+    "primary_blocker": "internal_position_authority_allocation_limit",
+    "secondary_contributing_factors": [
+      "steady_state_balance_torque_bias",
+      "nonzero_pitch_equilibrium_requirement",
+      "one_sided_positive_transient_directionality"
+    ]
+  },
+  "proposed_minimal_fix": {
+    "implemented": false,
+    "path": "Revise internal position-authority allocation so tau_position can use true safe final actuator margin during the transient without stealing required pitch-balance authority. Treat the steady-state balance torque bias as a secondary issue for later bounded bias compensation or pitch-reference calibration after the transient bottleneck is fixed."
+  },
+  "integrity_checks": {
+    "no_WBC": true,
+    "no_E0b_E0c_E0d": true,
+    "kp_cp_disabled": true,
+    "torque_ownership_unchanged": true,
+    "ownership_violation_count_zero": true,
+    "hidden_torque_norm_zero": true
+  },
+  "tests_run": [
+    "pytest tests/test_simulate_hierarchical_controller_telemetry.py -q",
+    "pytest tests/test_balance_core_validation_workflow.py -q",
+    "pytest tests/test_balance_core_components.py -q",
+    "pytest tests/test_torque_budget_aware_position.py -q",
+    "pytest tests -q -k \"torque_budget or support_position or support_velocity or equilibrium or sagittal_velocity_damped\""
+  ],
+  "step_c_recommendation": "DO_NOT_PROCEED"
+}

@@ -1,0 +1,1427 @@
+[
+  {
+    "k_com": 0.0,
+    "k_com_dot": 0.0,
+    "score": -1.19082426071167,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.39799999999999996,
+        "survival_time_std": 0.1555506348428061,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.45176124572754,
+        "roll_rms_deg": 8.821093559265137,
+        "height_rmse": 0.41692742705345154,
+        "wheel_speed_rms": 101.8890609741211,
+        "action_saturation_rate": 0.034673417518154365
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.404,
+        "survival_time_std": 0.18499729727755485,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.634920120239258,
+        "roll_rms_deg": 10.681599617004395,
+        "height_rmse": 0.4318333566188812,
+        "wheel_speed_rms": 103.5647964477539,
+        "action_saturation_rate": 0.03926127414790206
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.354,
+        "survival_time_std": 0.14368020044529448,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.023136138916016,
+        "roll_rms_deg": 8.466805458068848,
+        "height_rmse": 0.43867677450180054,
+        "wheel_speed_rms": 102.19356536865234,
+        "action_saturation_rate": 0.041472507778959396
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.40800000000000003,
+        "survival_time_std": 0.17045820602130013,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.62347412109375,
+        "roll_rms_deg": 9.329068183898926,
+        "height_rmse": 0.455775648355484,
+        "wheel_speed_rms": 107.00154876708984,
+        "action_saturation_rate": 0.0412141577060932
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.39,
+        "survival_time_std": 0.13892443989449801,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.6788387298584,
+        "roll_rms_deg": 8.364182472229004,
+        "height_rmse": 0.48296791315078735,
+        "wheel_speed_rms": 93.21501922607422,
+        "action_saturation_rate": 0.03633149250296959
+      }
+    }
+  },
+  {
+    "k_com": 0.0,
+    "k_com_dot": 1.0,
+    "score": -1.19340030670166,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.404,
+        "survival_time_std": 0.168,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.751047134399414,
+        "roll_rms_deg": 9.588007926940918,
+        "height_rmse": 0.41817158460617065,
+        "wheel_speed_rms": 107.45450592041016,
+        "action_saturation_rate": 0.042645667363197075
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.42400000000000004,
+        "survival_time_std": 0.2172187837181674,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.562702178955078,
+        "roll_rms_deg": 9.31068229675293,
+        "height_rmse": 0.43233782052993774,
+        "wheel_speed_rms": 113.0127944946289,
+        "action_saturation_rate": 0.04339778325123153
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.35,
+        "survival_time_std": 0.14233762678926468,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.6990909576416,
+        "roll_rms_deg": 8.451210021972656,
+        "height_rmse": 0.4389646053314209,
+        "wheel_speed_rms": 103.22920989990234,
+        "action_saturation_rate": 0.03936934069043577
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.36000000000000004,
+        "survival_time_std": 0.1293058390019569,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.611257553100586,
+        "roll_rms_deg": 8.269415855407715,
+        "height_rmse": 0.4562619626522064,
+        "wheel_speed_rms": 100.92495727539062,
+        "action_saturation_rate": 0.037138892141365655
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.364,
+        "survival_time_std": 0.11341957503006259,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.0760555267334,
+        "roll_rms_deg": 8.42609691619873,
+        "height_rmse": 0.48385921120643616,
+        "wheel_speed_rms": 99.53965759277344,
+        "action_saturation_rate": 0.04693283208020051
+      }
+    }
+  },
+  {
+    "k_com": 0.0,
+    "k_com_dot": 2.0,
+    "score": -1.1942488327026366,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.39399999999999996,
+        "survival_time_std": 0.15285287043428397,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.245023727416992,
+        "roll_rms_deg": 9.180638313293457,
+        "height_rmse": 0.4100588262081146,
+        "wheel_speed_rms": 106.29182434082031,
+        "action_saturation_rate": 0.046614033764652965
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.426,
+        "survival_time_std": 0.31837713485738894,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.850914001464844,
+        "roll_rms_deg": 9.385737419128418,
+        "height_rmse": 0.43412885069847107,
+        "wheel_speed_rms": 116.1676025390625,
+        "action_saturation_rate": 0.03774262615493959
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.35600000000000004,
+        "survival_time_std": 0.14934523762075574,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.0142765045166,
+        "roll_rms_deg": 8.181388854980469,
+        "height_rmse": 0.43618330359458923,
+        "wheel_speed_rms": 103.24867248535156,
+        "action_saturation_rate": 0.04341612921600189
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.386,
+        "survival_time_std": 0.13298120167903432,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.591976165771484,
+        "roll_rms_deg": 9.141244888305664,
+        "height_rmse": 0.4575447142124176,
+        "wheel_speed_rms": 109.55413818359375,
+        "action_saturation_rate": 0.049406763299165365
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.336,
+        "survival_time_std": 0.10190191362285596,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.422225952148438,
+        "roll_rms_deg": 8.214971542358398,
+        "height_rmse": 0.4744682312011719,
+        "wheel_speed_rms": 95.36710357666016,
+        "action_saturation_rate": 0.04446922788846564
+      }
+    }
+  },
+  {
+    "k_com": 0.0,
+    "k_com_dot": 3.0,
+    "score": -1.194149314880371,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.396,
+        "survival_time_std": 0.1648757107641996,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.825809478759766,
+        "roll_rms_deg": 10.373950004577637,
+        "height_rmse": 0.39666038751602173,
+        "wheel_speed_rms": 113.71527099609375,
+        "action_saturation_rate": 0.048626953601953606
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.434,
+        "survival_time_std": 0.33764478375950074,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.257158279418945,
+        "roll_rms_deg": 8.612971305847168,
+        "height_rmse": 0.4394257664680481,
+        "wheel_speed_rms": 108.56087493896484,
+        "action_saturation_rate": 0.03758991228070176
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.356,
+        "survival_time_std": 0.14527215837867902,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.286235809326172,
+        "roll_rms_deg": 7.985825538635254,
+        "height_rmse": 0.4351840913295746,
+        "wheel_speed_rms": 105.9646987915039,
+        "action_saturation_rate": 0.042174270904534066
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.346,
+        "survival_time_std": 0.11525623627379127,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.229528427124023,
+        "roll_rms_deg": 8.806123733520508,
+        "height_rmse": 0.4465141296386719,
+        "wheel_speed_rms": 111.530517578125,
+        "action_saturation_rate": 0.05039570400359874
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.35,
+        "survival_time_std": 0.11357816691600546,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.47592544555664,
+        "roll_rms_deg": 7.678764343261719,
+        "height_rmse": 0.47138261795043945,
+        "wheel_speed_rms": 92.02582550048828,
+        "action_saturation_rate": 0.04833884339881342
+      }
+    }
+  },
+  {
+    "k_com": 0.0,
+    "k_com_dot": 5.0,
+    "score": -1.1959041938781738,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.384,
+        "survival_time_std": 0.15304901175767194,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.28798484802246,
+        "roll_rms_deg": 8.734705924987793,
+        "height_rmse": 0.41379696130752563,
+        "wheel_speed_rms": 93.95671081542969,
+        "action_saturation_rate": 0.040607805571621365
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.38,
+        "survival_time_std": 0.2027806696901852,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.090295791625977,
+        "roll_rms_deg": 8.995687484741211,
+        "height_rmse": 0.43235987424850464,
+        "wheel_speed_rms": 103.48526763916016,
+        "action_saturation_rate": 0.04056150793650794
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.316,
+        "survival_time_std": 0.10575443253121827,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.214763641357422,
+        "roll_rms_deg": 8.360387802124023,
+        "height_rmse": 0.4208753705024719,
+        "wheel_speed_rms": 101.58731842041016,
+        "action_saturation_rate": 0.047636760169654915
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.356,
+        "survival_time_std": 0.12126005112979295,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.127605438232422,
+        "roll_rms_deg": 9.405943870544434,
+        "height_rmse": 0.44444671273231506,
+        "wheel_speed_rms": 102.6630630493164,
+        "action_saturation_rate": 0.04712700895595633
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.33799999999999997,
+        "survival_time_std": 0.10599999999999998,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.231447219848633,
+        "roll_rms_deg": 8.14504337310791,
+        "height_rmse": 0.47093549370765686,
+        "wheel_speed_rms": 102.2494888305664,
+        "action_saturation_rate": 0.05084975369458128
+      }
+    }
+  },
+  {
+    "k_com": 2.0,
+    "k_com_dot": 0.0,
+    "score": -1.1918781471252442,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.4,
+        "survival_time_std": 0.1517893276880822,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.653728485107422,
+        "roll_rms_deg": 8.717947006225586,
+        "height_rmse": 0.4180848002433777,
+        "wheel_speed_rms": 97.80455017089844,
+        "action_saturation_rate": 0.03414770707268586
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.404,
+        "survival_time_std": 0.17861690849412887,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.857608795166016,
+        "roll_rms_deg": 9.804855346679688,
+        "height_rmse": 0.43708187341690063,
+        "wheel_speed_rms": 104.1067123413086,
+        "action_saturation_rate": 0.039212108013937284
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.358,
+        "survival_time_std": 0.15295751043999115,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.939266204833984,
+        "roll_rms_deg": 8.404069900512695,
+        "height_rmse": 0.44067907333374023,
+        "wheel_speed_rms": 100.98887634277344,
+        "action_saturation_rate": 0.03619586364649034
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.374,
+        "survival_time_std": 0.14312232530251875,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.836944580078125,
+        "roll_rms_deg": 7.903672218322754,
+        "height_rmse": 0.45727235078811646,
+        "wheel_speed_rms": 100.23338317871094,
+        "action_saturation_rate": 0.03819424319092252
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.41200000000000003,
+        "survival_time_std": 0.1690443728729235,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.651525497436523,
+        "roll_rms_deg": 8.766359329223633,
+        "height_rmse": 0.47639912366867065,
+        "wheel_speed_rms": 95.55611419677734,
+        "action_saturation_rate": 0.04101503759398496
+      }
+    }
+  },
+  {
+    "k_com": 2.0,
+    "k_com_dot": 1.0,
+    "score": -1.1917518882751466,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.388,
+        "survival_time_std": 0.1380434714138992,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.853466033935547,
+        "roll_rms_deg": 9.612544059753418,
+        "height_rmse": 0.4150639474391937,
+        "wheel_speed_rms": 107.26005554199219,
+        "action_saturation_rate": 0.04171885402609087
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.4,
+        "survival_time_std": 0.17227884373886423,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.183326721191406,
+        "roll_rms_deg": 9.97905445098877,
+        "height_rmse": 0.4331074655056,
+        "wheel_speed_rms": 105.74595642089844,
+        "action_saturation_rate": 0.04198611111111112
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.346,
+        "survival_time_std": 0.1382895513045002,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.594703674316406,
+        "roll_rms_deg": 8.512247085571289,
+        "height_rmse": 0.4387180209159851,
+        "wheel_speed_rms": 101.20118713378906,
+        "action_saturation_rate": 0.041281810035842297
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.358,
+        "survival_time_std": 0.12600000000000003,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.67149543762207,
+        "roll_rms_deg": 8.163961410522461,
+        "height_rmse": 0.4551617205142975,
+        "wheel_speed_rms": 101.68394470214844,
+        "action_saturation_rate": 0.03836201390573208
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.39,
+        "survival_time_std": 0.14289856542317,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.572952270507812,
+        "roll_rms_deg": 8.687406539916992,
+        "height_rmse": 0.4862194061279297,
+        "wheel_speed_rms": 94.4365463256836,
+        "action_saturation_rate": 0.044710184552289825
+      }
+    }
+  },
+  {
+    "k_com": 2.0,
+    "k_com_dot": 2.0,
+    "score": -1.1939188461303711,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.404,
+        "survival_time_std": 0.1722324011328879,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.746578216552734,
+        "roll_rms_deg": 9.752548217773438,
+        "height_rmse": 0.41277727484703064,
+        "wheel_speed_rms": 111.9071273803711,
+        "action_saturation_rate": 0.04575313765182187
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.454,
+        "survival_time_std": 0.38915806557233273,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.689483642578125,
+        "roll_rms_deg": 8.716453552246094,
+        "height_rmse": 0.4391879141330719,
+        "wheel_speed_rms": 103.41316223144531,
+        "action_saturation_rate": 0.03717442736588307
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.366,
+        "survival_time_std": 0.16590358645912393,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.288358688354492,
+        "roll_rms_deg": 8.497485160827637,
+        "height_rmse": 0.44141465425491333,
+        "wheel_speed_rms": 103.313720703125,
+        "action_saturation_rate": 0.042704625556917584
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.398,
+        "survival_time_std": 0.15005332385522155,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.607759475708008,
+        "roll_rms_deg": 10.03001880645752,
+        "height_rmse": 0.45394396781921387,
+        "wheel_speed_rms": 103.78123474121094,
+        "action_saturation_rate": 0.0479471646185356
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.34199999999999997,
+        "survival_time_std": 0.10934349546269315,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.627243041992188,
+        "roll_rms_deg": 8.57055377960205,
+        "height_rmse": 0.4718948006629944,
+        "wheel_speed_rms": 93.54490661621094,
+        "action_saturation_rate": 0.04666822066822068
+      }
+    }
+  },
+  {
+    "k_com": 2.0,
+    "k_com_dot": 3.0,
+    "score": -1.195567512512207,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.42800000000000005,
+        "survival_time_std": 0.25031180555459226,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.325407028198242,
+        "roll_rms_deg": 10.046506881713867,
+        "height_rmse": 0.40559807419776917,
+        "wheel_speed_rms": 109.3434829711914,
+        "action_saturation_rate": 0.04518667802449267
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.358,
+        "survival_time_std": 0.14351306560728191,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.591339111328125,
+        "roll_rms_deg": 8.669088363647461,
+        "height_rmse": 0.42447739839553833,
+        "wheel_speed_rms": 103.77862548828125,
+        "action_saturation_rate": 0.03892324561403509
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.362,
+        "survival_time_std": 0.15708596372687156,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.38821792602539,
+        "roll_rms_deg": 8.552396774291992,
+        "height_rmse": 0.4390546679496765,
+        "wheel_speed_rms": 106.2965087890625,
+        "action_saturation_rate": 0.045453068154256614
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.34800000000000003,
+        "survival_time_std": 0.1197330363767661,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.073850631713867,
+        "roll_rms_deg": 8.896750450134277,
+        "height_rmse": 0.44521498680114746,
+        "wheel_speed_rms": 112.41715240478516,
+        "action_saturation_rate": 0.05174695848388548
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.35,
+        "survival_time_std": 0.11357816691600546,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.40494155883789,
+        "roll_rms_deg": 7.771270751953125,
+        "height_rmse": 0.4728236794471741,
+        "wheel_speed_rms": 92.30099487304688,
+        "action_saturation_rate": 0.04792217673214676
+      }
+    }
+  },
+  {
+    "k_com": 2.0,
+    "k_com_dot": 5.0,
+    "score": -1.1949677467346191,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.366,
+        "survival_time_std": 0.1277654100294755,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.11945915222168,
+        "roll_rms_deg": 8.920012474060059,
+        "height_rmse": 0.41167697310447693,
+        "wheel_speed_rms": 100.93321990966797,
+        "action_saturation_rate": 0.042125327999771825
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.442,
+        "survival_time_std": 0.37400000000000005,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.965023040771484,
+        "roll_rms_deg": 9.360137939453125,
+        "height_rmse": 0.43951278924942017,
+        "wheel_speed_rms": 108.34416198730469,
+        "action_saturation_rate": 0.041820175438596494
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.31399999999999995,
+        "survival_time_std": 0.10584894897919392,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.816423416137695,
+        "roll_rms_deg": 8.188530921936035,
+        "height_rmse": 0.4197675585746765,
+        "wheel_speed_rms": 100.87841796875,
+        "action_saturation_rate": 0.047834128590707535
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.352,
+        "survival_time_std": 0.11634431657799188,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.353960037231445,
+        "roll_rms_deg": 9.123817443847656,
+        "height_rmse": 0.4444901943206787,
+        "wheel_speed_rms": 102.17510986328125,
+        "action_saturation_rate": 0.048094374923322296
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.33799999999999997,
+        "survival_time_std": 0.10599999999999998,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.229007720947266,
+        "roll_rms_deg": 8.23749828338623,
+        "height_rmse": 0.4698060154914856,
+        "wheel_speed_rms": 101.6917953491211,
+        "action_saturation_rate": 0.051353311439518344
+      }
+    }
+  },
+  {
+    "k_com": 5.0,
+    "k_com_dot": 0.0,
+    "score": -1.186188648223877,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.388,
+        "survival_time_std": 0.13541048703848604,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.754650115966797,
+        "roll_rms_deg": 8.777424812316895,
+        "height_rmse": 0.41714468598365784,
+        "wheel_speed_rms": 93.03128814697266,
+        "action_saturation_rate": 0.03413640593561998
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.446,
+        "survival_time_std": 0.2805779749018087,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.621387481689453,
+        "roll_rms_deg": 11.151287078857422,
+        "height_rmse": 0.4422271251678467,
+        "wheel_speed_rms": 103.6444091796875,
+        "action_saturation_rate": 0.040427955665024634
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.354,
+        "survival_time_std": 0.1536359332968691,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.450576782226562,
+        "roll_rms_deg": 8.429936408996582,
+        "height_rmse": 0.43930214643478394,
+        "wheel_speed_rms": 100.972900390625,
+        "action_saturation_rate": 0.03971590909090909
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.396,
+        "survival_time_std": 0.15435025105259792,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.09426498413086,
+        "roll_rms_deg": 9.449769973754883,
+        "height_rmse": 0.4579342007637024,
+        "wheel_speed_rms": 110.10502624511719,
+        "action_saturation_rate": 0.042030748915299
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.41400000000000003,
+        "survival_time_std": 0.17800000000000002,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.173444747924805,
+        "roll_rms_deg": 9.078852653503418,
+        "height_rmse": 0.48230209946632385,
+        "wheel_speed_rms": 96.0322265625,
+        "action_saturation_rate": 0.041887139443591064
+      }
+    }
+  },
+  {
+    "k_com": 5.0,
+    "k_com_dot": 1.0,
+    "score": -1.189083782196045,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.392,
+        "survival_time_std": 0.142884568795934,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.07366180419922,
+        "roll_rms_deg": 8.803773880004883,
+        "height_rmse": 0.42016682028770447,
+        "wheel_speed_rms": 104.8086929321289,
+        "action_saturation_rate": 0.03575598852901485
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.466,
+        "survival_time_std": 0.36078248294505655,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.76688575744629,
+        "roll_rms_deg": 10.583394050598145,
+        "height_rmse": 0.44163423776626587,
+        "wheel_speed_rms": 103.33491516113281,
+        "action_saturation_rate": 0.04116997354497355
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.346,
+        "survival_time_std": 0.13085870242364472,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.61370277404785,
+        "roll_rms_deg": 8.183110237121582,
+        "height_rmse": 0.43518370389938354,
+        "wheel_speed_rms": 98.82099914550781,
+        "action_saturation_rate": 0.0377834808796184
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.362,
+        "survival_time_std": 0.12851459061133874,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.087406158447266,
+        "roll_rms_deg": 7.883042812347412,
+        "height_rmse": 0.45644813776016235,
+        "wheel_speed_rms": 101.52409362792969,
+        "action_saturation_rate": 0.03995332695847889
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.43200000000000005,
+        "survival_time_std": 0.21226398658274556,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.000234603881836,
+        "roll_rms_deg": 9.121070861816406,
+        "height_rmse": 0.48632898926734924,
+        "wheel_speed_rms": 93.48731994628906,
+        "action_saturation_rate": 0.04373809523809524
+      }
+    }
+  },
+  {
+    "k_com": 5.0,
+    "k_com_dot": 2.0,
+    "score": -1.1935427284240723,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.38599999999999995,
+        "survival_time_std": 0.13207573584879248,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.625579833984375,
+        "roll_rms_deg": 8.773744583129883,
+        "height_rmse": 0.4151117205619812,
+        "wheel_speed_rms": 106.73069763183594,
+        "action_saturation_rate": 0.04311670281472914
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.398,
+        "survival_time_std": 0.24354876308452075,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.116121292114258,
+        "roll_rms_deg": 8.957090377807617,
+        "height_rmse": 0.4386018216609955,
+        "wheel_speed_rms": 97.7833251953125,
+        "action_saturation_rate": 0.038254019129019136
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.36000000000000004,
+        "survival_time_std": 0.15773395322504286,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.927515029907227,
+        "roll_rms_deg": 7.779156684875488,
+        "height_rmse": 0.4393959045410156,
+        "wheel_speed_rms": 105.832763671875,
+        "action_saturation_rate": 0.04290252849866603
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.366,
+        "survival_time_std": 0.13146862743635834,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.920127868652344,
+        "roll_rms_deg": 9.002145767211914,
+        "height_rmse": 0.45606470108032227,
+        "wheel_speed_rms": 97.28572082519531,
+        "action_saturation_rate": 0.04344991348411816
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.34,
+        "survival_time_std": 0.10770329614269007,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.18202018737793,
+        "roll_rms_deg": 8.447315216064453,
+        "height_rmse": 0.47419190406799316,
+        "wheel_speed_rms": 97.9299545288086,
+        "action_saturation_rate": 0.0440946275946276
+      }
+    }
+  },
+  {
+    "k_com": 5.0,
+    "k_com_dot": 3.0,
+    "score": -1.1945877113342285,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.388,
+        "survival_time_std": 0.1442775103749715,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.782093048095703,
+        "roll_rms_deg": 9.334768295288086,
+        "height_rmse": 0.40873345732688904,
+        "wheel_speed_rms": 114.42015075683594,
+        "action_saturation_rate": 0.04874794759334234
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.402,
+        "survival_time_std": 0.2541574315262098,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.41345977783203,
+        "roll_rms_deg": 8.997090339660645,
+        "height_rmse": 0.4366283416748047,
+        "wheel_speed_rms": 106.7070083618164,
+        "action_saturation_rate": 0.039972687400318986
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.362,
+        "survival_time_std": 0.16648123017325406,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.74472427368164,
+        "roll_rms_deg": 8.308148384094238,
+        "height_rmse": 0.43885135650634766,
+        "wheel_speed_rms": 104.00187683105469,
+        "action_saturation_rate": 0.04569539412684574
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.366,
+        "survival_time_std": 0.14941218156495809,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.82620620727539,
+        "roll_rms_deg": 9.274873733520508,
+        "height_rmse": 0.44230008125305176,
+        "wheel_speed_rms": 107.18900299072266,
+        "action_saturation_rate": 0.04882303996867565
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.388,
+        "survival_time_std": 0.18247191564731272,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.527372360229492,
+        "roll_rms_deg": 8.461935997009277,
+        "height_rmse": 0.4699115753173828,
+        "wheel_speed_rms": 94.58595275878906,
+        "action_saturation_rate": 0.04931785490931833
+      }
+    }
+  },
+  {
+    "k_com": 5.0,
+    "k_com_dot": 5.0,
+    "score": -1.1978252983093263,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.364,
+        "survival_time_std": 0.13047605144240074,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.312702178955078,
+        "roll_rms_deg": 8.539728164672852,
+        "height_rmse": 0.42197084426879883,
+        "wheel_speed_rms": 93.98143005371094,
+        "action_saturation_rate": 0.04214069349795895
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.41,
+        "survival_time_std": 0.2830194339616981,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.798145294189453,
+        "roll_rms_deg": 8.805818557739258,
+        "height_rmse": 0.4372168183326721,
+        "wheel_speed_rms": 115.44703674316406,
+        "action_saturation_rate": 0.041568609022556394
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.31000000000000005,
+        "survival_time_std": 0.0917605579756357,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.9864444732666,
+        "roll_rms_deg": 7.854470729827881,
+        "height_rmse": 0.4219747483730316,
+        "wheel_speed_rms": 97.93157196044922,
+        "action_saturation_rate": 0.04362652625152626
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.36000000000000004,
+        "survival_time_std": 0.13084341787036902,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.470178604125977,
+        "roll_rms_deg": 8.955967903137207,
+        "height_rmse": 0.4440488815307617,
+        "wheel_speed_rms": 105.03840637207031,
+        "action_saturation_rate": 0.04848333118494409
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.33799999999999997,
+        "survival_time_std": 0.10599999999999998,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.345178604125977,
+        "roll_rms_deg": 8.231653213500977,
+        "height_rmse": 0.47087544202804565,
+        "wheel_speed_rms": 101.34210205078125,
+        "action_saturation_rate": 0.0512624521072797
+      }
+    }
+  },
+  {
+    "k_com": 8.0,
+    "k_com_dot": 0.0,
+    "score": -1.184762119293213,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.38599999999999995,
+        "survival_time_std": 0.1344767637921139,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.52287483215332,
+        "roll_rms_deg": 9.134531021118164,
+        "height_rmse": 0.4187506139278412,
+        "wheel_speed_rms": 94.03463745117188,
+        "action_saturation_rate": 0.03260525046072585
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.42200000000000004,
+        "survival_time_std": 0.23193964732231528,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.74182891845703,
+        "roll_rms_deg": 10.399435043334961,
+        "height_rmse": 0.4316195845603943,
+        "wheel_speed_rms": 114.11100769042969,
+        "action_saturation_rate": 0.04445273109243698
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.358,
+        "survival_time_std": 0.15657586020839867,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.63640022277832,
+        "roll_rms_deg": 8.593584060668945,
+        "height_rmse": 0.440291166305542,
+        "wheel_speed_rms": 101.56440734863281,
+        "action_saturation_rate": 0.04105465367965368
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.392,
+        "survival_time_std": 0.156,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.71257209777832,
+        "roll_rms_deg": 9.566611289978027,
+        "height_rmse": 0.45890751481056213,
+        "wheel_speed_rms": 110.28276062011719,
+        "action_saturation_rate": 0.04533344420452646
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.4840000000000001,
+        "survival_time_std": 0.26785070468453126,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.767383575439453,
+        "roll_rms_deg": 8.794130325317383,
+        "height_rmse": 0.478923499584198,
+        "wheel_speed_rms": 90.97274017333984,
+        "action_saturation_rate": 0.03823149999838984
+      }
+    }
+  },
+  {
+    "k_com": 8.0,
+    "k_com_dot": 1.0,
+    "score": -1.186851043701172,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.396,
+        "survival_time_std": 0.14691494137765568,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.990861892700195,
+        "roll_rms_deg": 9.030516624450684,
+        "height_rmse": 0.4203817844390869,
+        "wheel_speed_rms": 99.27489471435547,
+        "action_saturation_rate": 0.03630977555033158
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.45200000000000007,
+        "survival_time_std": 0.3166322788346128,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.48338508605957,
+        "roll_rms_deg": 10.068817138671875,
+        "height_rmse": 0.4383930265903473,
+        "wheel_speed_rms": 109.4587631225586,
+        "action_saturation_rate": 0.046909577114427864
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.354,
+        "survival_time_std": 0.1536359332968691,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.304988861083984,
+        "roll_rms_deg": 8.248583793640137,
+        "height_rmse": 0.43984317779541016,
+        "wheel_speed_rms": 104.2585220336914,
+        "action_saturation_rate": 0.039931457431457436
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.362,
+        "survival_time_std": 0.13249905660041508,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.91263198852539,
+        "roll_rms_deg": 8.482900619506836,
+        "height_rmse": 0.45838087797164917,
+        "wheel_speed_rms": 103.56683349609375,
+        "action_saturation_rate": 0.0449389367816092
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.502,
+        "survival_time_std": 0.306,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.733654022216797,
+        "roll_rms_deg": 9.480076789855957,
+        "height_rmse": 0.47891297936439514,
+        "wheel_speed_rms": 94.24593353271484,
+        "action_saturation_rate": 0.04479540891996399
+      }
+    }
+  },
+  {
+    "k_com": 8.0,
+    "k_com_dot": 2.0,
+    "score": -1.1918071670532226,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.392,
+        "survival_time_std": 0.14455448799674123,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.949207305908203,
+        "roll_rms_deg": 9.72531509399414,
+        "height_rmse": 0.4177061915397644,
+        "wheel_speed_rms": 110.57051086425781,
+        "action_saturation_rate": 0.04556183648223123
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.37600000000000006,
+        "survival_time_std": 0.1832593790232849,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.3898868560791,
+        "roll_rms_deg": 8.94608211517334,
+        "height_rmse": 0.4346117079257965,
+        "wheel_speed_rms": 96.65311431884766,
+        "action_saturation_rate": 0.03884014704072844
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.35200000000000004,
+        "survival_time_std": 0.1499866660740214,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.519123077392578,
+        "roll_rms_deg": 7.892452239990234,
+        "height_rmse": 0.43722328543663025,
+        "wheel_speed_rms": 104.40262603759766,
+        "action_saturation_rate": 0.044186711585905133
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.368,
+        "survival_time_std": 0.1336263447079205,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.997413635253906,
+        "roll_rms_deg": 8.689064979553223,
+        "height_rmse": 0.45521172881126404,
+        "wheel_speed_rms": 97.91258239746094,
+        "action_saturation_rate": 0.04521209633278599
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.34199999999999997,
+        "survival_time_std": 0.1089770618066022,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.04795265197754,
+        "roll_rms_deg": 8.835062026977539,
+        "height_rmse": 0.47489649057388306,
+        "wheel_speed_rms": 98.06256103515625,
+        "action_saturation_rate": 0.04213431013431014
+      }
+    }
+  },
+  {
+    "k_com": 8.0,
+    "k_com_dot": 3.0,
+    "score": -1.1928966407775878,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.38199999999999995,
+        "survival_time_std": 0.13636715146984627,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.81254768371582,
+        "roll_rms_deg": 9.777814865112305,
+        "height_rmse": 0.40918079018592834,
+        "wheel_speed_rms": 106.260498046875,
+        "action_saturation_rate": 0.04527632923585441
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.382,
+        "survival_time_std": 0.21117765033260502,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.362850189208984,
+        "roll_rms_deg": 8.517518997192383,
+        "height_rmse": 0.435481458902359,
+        "wheel_speed_rms": 101.9908447265625,
+        "action_saturation_rate": 0.03894044138123086
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.358,
+        "survival_time_std": 0.1575944161447353,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.585712432861328,
+        "roll_rms_deg": 8.431645393371582,
+        "height_rmse": 0.43583035469055176,
+        "wheel_speed_rms": 105.93050384521484,
+        "action_saturation_rate": 0.04336629544290835
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.33000000000000007,
+        "survival_time_std": 0.10779610382569492,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.888957977294922,
+        "roll_rms_deg": 7.955533504486084,
+        "height_rmse": 0.4439041018486023,
+        "wheel_speed_rms": 100.92472839355469,
+        "action_saturation_rate": 0.0426553547848115
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.37,
+        "survival_time_std": 0.1296919426949878,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.79825210571289,
+        "roll_rms_deg": 8.680540084838867,
+        "height_rmse": 0.4700959622859955,
+        "wheel_speed_rms": 100.07623291015625,
+        "action_saturation_rate": 0.049948717948717955
+      }
+    }
+  },
+  {
+    "k_com": 8.0,
+    "k_com_dot": 5.0,
+    "score": -1.1920330696105956,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.418,
+        "survival_time_std": 0.17628386199536247,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.205698013305664,
+        "roll_rms_deg": 9.198537826538086,
+        "height_rmse": 0.4182165265083313,
+        "wheel_speed_rms": 107.0428237915039,
+        "action_saturation_rate": 0.046343115129299346
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.42800000000000005,
+        "survival_time_std": 0.3338502658378454,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.26410675048828,
+        "roll_rms_deg": 9.375325202941895,
+        "height_rmse": 0.4309985637664795,
+        "wheel_speed_rms": 116.51811218261719,
+        "action_saturation_rate": 0.04217833987141768
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.316,
+        "survival_time_std": 0.11128342194594844,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.904857635498047,
+        "roll_rms_deg": 7.97415018081665,
+        "height_rmse": 0.41894596815109253,
+        "wheel_speed_rms": 100.61628723144531,
+        "action_saturation_rate": 0.04545240816060001
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.35600000000000004,
+        "survival_time_std": 0.12515590277729613,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.996610641479492,
+        "roll_rms_deg": 9.482709884643555,
+        "height_rmse": 0.44504958391189575,
+        "wheel_speed_rms": 103.83409118652344,
+        "action_saturation_rate": 0.04943238213399504
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.35,
+        "survival_time_std": 0.11567194992737001,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.645261764526367,
+        "roll_rms_deg": 8.83758544921875,
+        "height_rmse": 0.4717613756656647,
+        "wheel_speed_rms": 109.5916976928711,
+        "action_saturation_rate": 0.05468505747126438
+      }
+    }
+  },
+  {
+    "k_com": 10.0,
+    "k_com_dot": 0.0,
+    "score": -1.181243293762207,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.392,
+        "survival_time_std": 0.145657131648265,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.38636589050293,
+        "roll_rms_deg": 9.118732452392578,
+        "height_rmse": 0.41919606924057007,
+        "wheel_speed_rms": 96.58223724365234,
+        "action_saturation_rate": 0.03458724497896325
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.43000000000000005,
+        "survival_time_std": 0.244989795705862,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.236156463623047,
+        "roll_rms_deg": 10.526890754699707,
+        "height_rmse": 0.43822211027145386,
+        "wheel_speed_rms": 110.5755615234375,
+        "action_saturation_rate": 0.042867069627465164
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.35600000000000004,
+        "survival_time_std": 0.14691494137765568,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.613300323486328,
+        "roll_rms_deg": 8.257863998413086,
+        "height_rmse": 0.4388957917690277,
+        "wheel_speed_rms": 101.87516021728516,
+        "action_saturation_rate": 0.03957983193277311
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.392,
+        "survival_time_std": 0.156,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.37479019165039,
+        "roll_rms_deg": 8.969406127929688,
+        "height_rmse": 0.4582187235355377,
+        "wheel_speed_rms": 107.87093353271484,
+        "action_saturation_rate": 0.04386569136367933
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.47800000000000004,
+        "survival_time_std": 0.2508306201403649,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.01103401184082,
+        "roll_rms_deg": 9.658792495727539,
+        "height_rmse": 0.47673025727272034,
+        "wheel_speed_rms": 94.59617614746094,
+        "action_saturation_rate": 0.043178451818079486
+      }
+    }
+  },
+  {
+    "k_com": 10.0,
+    "k_com_dot": 1.0,
+    "score": -1.1899301490783691,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.38999999999999996,
+        "survival_time_std": 0.13834738884417008,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.68722915649414,
+        "roll_rms_deg": 9.182146072387695,
+        "height_rmse": 0.415088415145874,
+        "wheel_speed_rms": 96.25386047363281,
+        "action_saturation_rate": 0.0352194977725538
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.41600000000000004,
+        "survival_time_std": 0.20548479262466116,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.173526763916016,
+        "roll_rms_deg": 10.410375595092773,
+        "height_rmse": 0.43938225507736206,
+        "wheel_speed_rms": 101.09699249267578,
+        "action_saturation_rate": 0.04172385486182821
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.36,
+        "survival_time_std": 0.15543487382180357,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.109844207763672,
+        "roll_rms_deg": 8.552606582641602,
+        "height_rmse": 0.43964776396751404,
+        "wheel_speed_rms": 104.91560363769531,
+        "action_saturation_rate": 0.04146180780004309
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.368,
+        "survival_time_std": 0.14316424134538625,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.83966827392578,
+        "roll_rms_deg": 8.205988883972168,
+        "height_rmse": 0.46164679527282715,
+        "wheel_speed_rms": 102.46479797363281,
+        "action_saturation_rate": 0.04489583333333334
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.42200000000000004,
+        "survival_time_std": 0.17537388631150305,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.15480613708496,
+        "roll_rms_deg": 9.50544548034668,
+        "height_rmse": 0.4749343991279602,
+        "wheel_speed_rms": 98.0938720703125,
+        "action_saturation_rate": 0.04159813304974596
+      }
+    }
+  },
+  {
+    "k_com": 10.0,
+    "k_com_dot": 2.0,
+    "score": -1.191812702178955,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.384,
+        "survival_time_std": 0.1313925416452547,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.800233840942383,
+        "roll_rms_deg": 9.387491226196289,
+        "height_rmse": 0.4140710234642029,
+        "wheel_speed_rms": 105.4786605834961,
+        "action_saturation_rate": 0.04107900524999788
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.40800000000000003,
+        "survival_time_std": 0.2727929617860402,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.8727970123291,
+        "roll_rms_deg": 9.479508399963379,
+        "height_rmse": 0.43501806259155273,
+        "wheel_speed_rms": 102.07162475585938,
+        "action_saturation_rate": 0.03892211991844017
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.34400000000000003,
+        "survival_time_std": 0.13469966592386187,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.53263282775879,
+        "roll_rms_deg": 7.892325401306152,
+        "height_rmse": 0.4357418119907379,
+        "wheel_speed_rms": 103.39717102050781,
+        "action_saturation_rate": 0.045049029344774616
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.366,
+        "survival_time_std": 0.13595587519485872,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.185224533081055,
+        "roll_rms_deg": 8.011541366577148,
+        "height_rmse": 0.4590596556663513,
+        "wheel_speed_rms": 104.4259262084961,
+        "action_saturation_rate": 0.04593128654970761
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.346,
+        "survival_time_std": 0.10809255293497327,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.51546287536621,
+        "roll_rms_deg": 8.887468338012695,
+        "height_rmse": 0.4728367328643799,
+        "wheel_speed_rms": 98.8067626953125,
+        "action_saturation_rate": 0.04311528822055139
+      }
+    }
+  },
+  {
+    "k_com": 10.0,
+    "k_com_dot": 3.0,
+    "score": -1.1945997123718262,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.37799999999999995,
+        "survival_time_std": 0.12663332894621385,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.24312400817871,
+        "roll_rms_deg": 9.977721214294434,
+        "height_rmse": 0.4069153666496277,
+        "wheel_speed_rms": 106.92573547363281,
+        "action_saturation_rate": 0.04759577368029886
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.352,
+        "survival_time_std": 0.1383329317263247,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.427597045898438,
+        "roll_rms_deg": 8.73847770690918,
+        "height_rmse": 0.4260515570640564,
+        "wheel_speed_rms": 96.02162170410156,
+        "action_saturation_rate": 0.03864485733564681
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.36000000000000004,
+        "survival_time_std": 0.16198765385053268,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.57965660095215,
+        "roll_rms_deg": 8.158814430236816,
+        "height_rmse": 0.43512916564941406,
+        "wheel_speed_rms": 106.8636703491211,
+        "action_saturation_rate": 0.04184530209933436
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.36000000000000004,
+        "survival_time_std": 0.1293058390019569,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.333560943603516,
+        "roll_rms_deg": 8.285835266113281,
+        "height_rmse": 0.45756250619888306,
+        "wheel_speed_rms": 106.50196838378906,
+        "action_saturation_rate": 0.046399708252834536
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.372,
+        "survival_time_std": 0.13151425778218878,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.715917587280273,
+        "roll_rms_deg": 8.594010353088379,
+        "height_rmse": 0.4707407057285309,
+        "wheel_speed_rms": 100.89774322509766,
+        "action_saturation_rate": 0.049180769230769236
+      }
+    }
+  },
+  {
+    "k_com": 10.0,
+    "k_com_dot": 5.0,
+    "score": -1.1903185997009278,
+    "height_results": {
+      "h_0.70": {
+        "survival_time_mean": 0.4119999999999999,
+        "survival_time_std": 0.1659397481015323,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 17.915813446044922,
+        "roll_rms_deg": 9.78272533416748,
+        "height_rmse": 0.41802048683166504,
+        "wheel_speed_rms": 109.098876953125,
+        "action_saturation_rate": 0.04699128264666191
+      },
+      "h_0.65": {
+        "survival_time_mean": 0.384,
+        "survival_time_std": 0.21237702323933255,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.757238388061523,
+        "roll_rms_deg": 9.13571834564209,
+        "height_rmse": 0.4386224150657654,
+        "wheel_speed_rms": 98.49856567382812,
+        "action_saturation_rate": 0.03789130405801739
+      },
+      "h_0.60": {
+        "survival_time_mean": 0.30999999999999994,
+        "survival_time_std": 0.10516653460107925,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 19.527578353881836,
+        "roll_rms_deg": 8.110784530639648,
+        "height_rmse": 0.41941261291503906,
+        "wheel_speed_rms": 101.01087951660156,
+        "action_saturation_rate": 0.04661065323565324
+      },
+      "h_0.55": {
+        "survival_time_mean": 0.358,
+        "survival_time_std": 0.12789057822998534,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 18.87165641784668,
+        "roll_rms_deg": 9.697745323181152,
+        "height_rmse": 0.44533395767211914,
+        "wheel_speed_rms": 102.92799377441406,
+        "action_saturation_rate": 0.04806486076647367
+      },
+      "h_0.50": {
+        "survival_time_mean": 0.346,
+        "survival_time_std": 0.11065260954898441,
+        "fall_rate": 1.0,
+        "pitch_rms_deg": 20.087013244628906,
+        "roll_rms_deg": 8.22416877746582,
+        "height_rmse": 0.4727274775505066,
+        "wheel_speed_rms": 101.50923156738281,
+        "action_saturation_rate": 0.052737199582027175
+      }
+    }
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "profile": "APCR1j_support_hysteresis_higher_authority",
+  "classification": "APCR1J_TAU_LIMIT_WORKING",
+  "configured_apc_max_cross_tau": 2.0,
+  "observed_apc_max_cross_tau": 2.0,
+  "observed_max_tau": 2.0,
+  "torque_clipping_events": 0,
+  "findings": [
+    "apc_max_cross_tau = 2.0 verified",
+    "APCR1j reaches 2.0 Nm",
+    "No clipping at 2.0 Nm",
+    "Final wheel torque limited to 1.64 Nm despite APCR reaching 2.0 Nm"
+  ]
+}

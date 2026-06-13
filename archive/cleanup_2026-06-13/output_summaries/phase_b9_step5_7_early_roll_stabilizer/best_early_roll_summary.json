@@ -1,0 +1,24 @@
+{
+  "baseline_reference": {
+    "mean_survival_s": 3.8926666666666665,
+    "mean_fall_rate": 0.8333333333333334,
+    "mean_pitch_rms_deg": 1.0109260130054514,
+    "mean_action_sat_rate": 0.0,
+    "mean_roll_rms_deg": 21.168228816065504
+  },
+  "kept_variants": [
+    "A_roll_rate_damping_from_t0"
+  ],
+  "best_variant": "A_roll_rate_damping_from_t0",
+  "best_full_validation_metrics": {
+    "survival_time_s": 3.4179999999999997,
+    "fall_rate": 0.8666666666666667,
+    "roll_RMS_deg": 21.227106930866874,
+    "pitch_RMS_deg": 0.9731843437476957,
+    "action_saturation_rate": 0.0,
+    "first_roll_divergence_time_s": 0.168,
+    "hip_roll_action_nonzero_time_s": 0.02
+  },
+  "step6_ready": false,
+  "decision_rule": "Only allow Step 6 if Step 5.7 improves full validation over Step 5 best_lqr_config.yaml"
+}

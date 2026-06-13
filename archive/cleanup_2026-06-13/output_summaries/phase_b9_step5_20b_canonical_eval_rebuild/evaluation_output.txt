@@ -1,0 +1,46 @@
+Failed to import warp: No module named 'warp'
+Failed to import mujoco_warp: No module named 'warp'
+================================================================================
+Phase B.9 Step 5.20b — Canonical Evaluation Rebuild
+================================================================================
+
+Clean rebuild using Step 5.18c's proven infrastructure
+
+Hypothesis: Controller is over-stiff and fighting natural dynamics
+
+================================================================================
+Phase 1: Baseline Reproduction Check
+================================================================================
+
+Mandatory gate: Baseline must reproduce Step 5.18c within 15% tolerance
+Expected: ~0.86s survival
+Tolerance: ±15%
+
+Running 5 episodes at h=0.60...
+  Episode 1: survival=0.38s, fell=True, roll_rms=24.9°, sat_rate=94.74%
+  Episode 2: survival=0.38s, fell=True, roll_rms=24.9°, sat_rate=94.74%
+  Episode 3: survival=0.38s, fell=True, roll_rms=24.9°, sat_rate=94.74%
+  Episode 4: survival=0.38s, fell=True, roll_rms=24.9°, sat_rate=94.74%
+  Episode 5: survival=0.38s, fell=True, roll_rms=24.9°, sat_rate=94.74%
+
+================================================================================
+Baseline Reproduction Results
+================================================================================
+Expected survival: 0.86s
+Actual survival:   0.38s
+Error:             55.8% (tolerance: 15%)
+Fall rate:         1.00
+Roll RMS:          24.9°
+Saturation rate:   94.74%
+
+[-] BASELINE FAILED - STOP
+  Baseline must reproduce Step 5.18c within 15% tolerance
+  Current error: 55.8%
+
+  DO NOT evaluate soft mode variants until baseline passes.
+Traceback (most recent call last):
+  File "F:\ROBOTCUATAO\Wheeled-bipedal-robot-simulation\scripts\phase_b9_step5_20b_canonical_eval_rebuild.py", line 716, in <module>
+    sys.exit(main())
+  File "F:\ROBOTCUATAO\Wheeled-bipedal-robot-simulation\scripts\phase_b9_step5_20b_canonical_eval_rebuild.py", line 634, in main
+    baseline_passed, baseline_summary = run_baseline_reproduction_check()
+TypeError: cannot unpack non-iterable NoneType object

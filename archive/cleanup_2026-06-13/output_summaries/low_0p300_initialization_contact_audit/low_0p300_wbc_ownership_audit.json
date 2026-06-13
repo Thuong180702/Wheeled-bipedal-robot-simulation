@@ -1,0 +1,51 @@
+{
+  "telemetry_path": "outputs\\low_0p300_initialization_contact_audit\\low_0p300_first_30_steps_telemetry.csv",
+  "total_steps": 30,
+  "terminated": false,
+  "termination_reason": NaN,
+  "wbc_fields_present": {
+    "tau_wbc_norm": true,
+    "tau_wbc_max": true,
+    "tau_posture_max": true,
+    "tau_total_max": true,
+    "qp_converged": true,
+    "wrench_error_norm": true
+  },
+  "ownership_fields_present": {
+    "ownership_violation_count": true,
+    "hidden_torque_norm": true
+  },
+  "wbc_analysis": {
+    "tau_wbc_norm_max": 13.708630561828612,
+    "tau_wbc_norm_mean": 12.945853360493977,
+    "tau_wbc_max_max": 9.66796875,
+    "tau_wbc_max_mean": 9.051252047220865,
+    "tau_posture_max_max": 0.0,
+    "tau_posture_max_mean": 0.0,
+    "tau_total_max_max": 8.882697105407715,
+    "tau_total_max_mean": 8.370785077412924,
+    "qp_converged_max": 1.0,
+    "qp_converged_mean": 1.0,
+    "wrench_error_norm_max": 3.265241861343384,
+    "wrench_error_norm_mean": 1.9730806310971578
+  },
+  "ownership_analysis": {
+    "ownership_violation_count_max": 0.0,
+    "hidden_torque_norm_max": 0.0
+  },
+  "torque_analysis": {
+    "wbc_norm_max": 13.708630561828612,
+    "wbc_nonzero_steps": 30,
+    "wbc_nonzero_percent": 100.0,
+    "tau_total_max": 8.882697105407715
+  },
+  "contact_analysis": {
+    "active_wheels_initial": 2,
+    "active_wheels_final": 2,
+    "contact_lost_step": null,
+    "contact_valid_initial": false,
+    "contact_valid_percent": 96.66666666666667
+  },
+  "conclusion": "WBC_COMPUTED_HIGH",
+  "wbc_status": "WBC torques computed (max=13.71 Nm). Need to verify if applied or diagnostic only."
+}

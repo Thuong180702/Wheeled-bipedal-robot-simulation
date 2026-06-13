@@ -1,0 +1,218 @@
+{
+  "profile": "APCR1nD_T5_band_limited_balanced",
+  "steps": 5000,
+  "phase_2_drift": {
+    "survived_steps": 5000,
+    "terminated": false,
+    "drift_col_used": "active_pitch_crossing_signed_error_m",
+    "min_e": -0.0063206385448309,
+    "max_e": 0.1714862686352642,
+    "max_abs_e": 0.1714862686352642,
+    "p2p": 0.1778069071800951,
+    "mean_e": 0.05607945751266958,
+    "mean_abs_e": 0.05614862743798626,
+    "final_e": 0.0401543405463008,
+    "positive_pct": 99.06,
+    "negative_pct": 0.92,
+    "zero_crossings": 5,
+    "band_metrics": {
+      "outside_0.03": {
+        "count": 4221,
+        "pct": 84.42
+      },
+      "outside_0.05": {
+        "count": 2759,
+        "pct": 55.18
+      },
+      "outside_0.08": {
+        "count": 1008,
+        "pct": 20.16
+      },
+      "outside_0.10": {
+        "count": 100,
+        "pct": 2.0
+      },
+      "outside_0.12": {
+        "count": 83,
+        "pct": 1.66
+      },
+      "outside_0.15": {
+        "count": 51,
+        "pct": 1.02
+      }
+    },
+    "pos_gt_0p08": 1008,
+    "neg_lt_neg_0p08": 0,
+    "pos_gt_0p10": 100,
+    "neg_lt_neg_0p10": 0,
+    "pos_gt_0p15": 51,
+    "neg_lt_neg_0p15": 0
+  },
+  "phase_3_windows": {
+    "windows": [
+      {
+        "window": 1,
+        "start_step": 0,
+        "end_step": 500,
+        "max_abs_e": 0.1714862686352642,
+        "p2p": 0.1778069071800951,
+        "mean_abs_e": 0.06096794873835447,
+        "final_e": 0.03309834729333,
+        "outside_0p08_pct": 23.6,
+        "outside_0p10_pct": 20.0,
+        "outside_0p15_pct": 10.2,
+        "zero_crossings": 5
+      },
+      {
+        "window": 2,
+        "start_step": 500,
+        "end_step": 1000,
+        "max_abs_e": 0.094829184828062,
+        "p2p": 0.08559037555178571,
+        "mean_abs_e": 0.055331540630479896,
+        "final_e": 0.0936666551622223,
+        "outside_0p08_pct": 26.6,
+        "outside_0p10_pct": 0.0,
+        "outside_0p15_pct": 0.0,
+        "zero_crossings": 0
+      },
+      {
+        "window": 3,
+        "start_step": 1000,
+        "end_step": 1500,
+        "max_abs_e": 0.0938664748800379,
+        "p2p": 0.0638050956505741,
+        "mean_abs_e": 0.06263505961734828,
+        "final_e": 0.0455209985427692,
+        "outside_0p08_pct": 30.0,
+        "outside_0p10_pct": 0.0,
+        "outside_0p15_pct": 0.0,
+        "zero_crossings": 0
+      },
+      {
+        "window": 4,
+        "start_step": 1500,
+        "end_step": 2000,
+        "max_abs_e": 0.0876736800106668,
+        "p2p": 0.05431456610230521,
+        "mean_abs_e": 0.05700604938818348,
+        "final_e": 0.049268926895633,
+        "outside_0p08_pct": 20.4,
+        "outside_0p10_pct": 0.0,
+        "outside_0p15_pct": 0.0,
+        "zero_crossings": 0
+      },
+      {
+        "window": 5,
+        "start_step": 2000,
+        "end_step": 2500,
+        "max_abs_e": 0.0855510240639522,
+        "p2p": 0.054376690014049996,
+        "mean_abs_e": 0.06033558250775138,
+        "final_e": 0.0843982884914919,
+        "outside_0p08_pct": 23.0,
+        "outside_0p10_pct": 0.0,
+        "outside_0p15_pct": 0.0,
+        "zero_crossings": 0
+      },
+      {
+        "window": 6,
+        "start_step": 2500,
+        "end_step": 3000,
+        "max_abs_e": 0.084322339381748,
+        "p2p": 0.0555837757473496,
+        "mean_abs_e": 0.057469185818750865,
+        "final_e": 0.0362655238941798,
+        "outside_0p08_pct": 18.2,
+        "outside_0p10_pct": 0.0,
+        "outside_0p15_pct": 0.0,
+        "zero_crossings": 0
+      },
+      {
+        "window": 7,
+        "start_step": 3000,
+        "end_step": 3500,
+        "max_abs_e": 0.0836285719189914,
+        "p2p": 0.058229621659766695,
+        "mean_abs_e": 0.05148657389202618,
+        "final_e": 0.0456514704220676,
+        "outside_0p08_pct": 14.2,
+        "outside_0p10_pct": 0.0,
+        "outside_0p15_pct": 0.0,
+        "zero_crossings": 0
+      },
+      {
+        "window": 8,
+        "start_step": 3500,
+        "end_step": 4000,
+        "max_abs_e": 0.0832536905066874,
+        "p2p": 0.06011963916216571,
+        "mean_abs_e": 0.05568686805101453,
+        "final_e": 0.0828423973299575,
+        "outside_0p08_pct": 18.0,
+        "outside_0p10_pct": 0.0,
+        "outside_0p15_pct": 0.0,
+        "zero_crossings": 0
+      },
+      {
+        "window": 9,
+        "start_step": 4000,
+        "end_step": 4500,
+        "max_abs_e": 0.0832620574653903,
+        "p2p": 0.06192543188525179,
+        "mean_abs_e": 0.05315213971447776,
+        "final_e": 0.0301362862760622,
+        "outside_0p08_pct": 15.0,
+        "outside_0p10_pct": 0.0,
+        "outside_0p15_pct": 0.0,
+        "zero_crossings": 0
+      },
+      {
+        "window": 10,
+        "start_step": 4500,
+        "end_step": 5000,
+        "max_abs_e": 0.0832167145577551,
+        "p2p": 0.0645811814349181,
+        "mean_abs_e": 0.047415326021475794,
+        "final_e": 0.0401543405463008,
+        "outside_0p08_pct": 12.6,
+        "outside_0p10_pct": 0.0,
+        "outside_0p15_pct": 0.0,
+        "zero_crossings": 0
+      }
+    ],
+    "accumulation": {
+      "first_1000_mean_abs_e": 0.05814974468441718,
+      "last_1000_mean_abs_e": 0.05028373286797678,
+      "accumulation_ratio": 0.8647283516182263,
+      "classification": "stable"
+    }
+  },
+  "phase_4_features": {},
+  "phase_5_stability": {
+    "contact_pct": 100.0,
+    "double_contact_pct": 99.4,
+    "com_z_min": 0.2737008035182953,
+    "com_z_mean": 0.28222705865502357,
+    "com_z_max": 0.2954845726490021,
+    "height_error_max": 0.0217837559943863,
+    "height_error_mean": 0.013257500862912507,
+    "height_error_final": -0.0211233365302749,
+    "pitch_min_deg": -0.0084846931867566,
+    "pitch_max_deg": 0.1364058947687286,
+    "pitch_rms_deg": 0.049461514087343325,
+    "roll_min_deg": 4.03279389237773e-05,
+    "roll_max_deg": 0.0149024187818403,
+    "roll_rms_deg": 0.0046966150215182354,
+    "wheel_vel_max_rad_s": 4.3887152671813965,
+    "wheel_vel_rms_rad_s": 1.2409253696188836,
+    "wheel_vel_gt_5_count": 0,
+    "wheel_vel_gt_5_pct": 0.0,
+    "wheel_vel_gt_6_count": 0,
+    "wheel_vel_gt_6_pct": 0.0,
+    "wheel_vel_gt_7_count": 0,
+    "wheel_vel_gt_7_pct": 0.0,
+    "hidden_torque_max": 0.0,
+    "ownership_violation_max": 0
+  }
+}

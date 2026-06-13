@@ -1,0 +1,266 @@
+{
+  "report_type": "cp_coupling_fix",
+  "date": "2026-05-30",
+  "status": "FIX_IMPLEMENTED_GATES_NOT_MET",
+  "configuration": {
+    "name": "F4c with kp_cp=0.0",
+    "sagittal_controller": "SagittalVelocityDampedBalanceController",
+    "gains": {
+      "kp_pitch": 50.0,
+      "kd_pitch": 10.0,
+      "kp_cp": 0.0,
+      "kd_com_vy": 5.0,
+      "k_velocity": 15.0,
+      "k_wheel_velocity": 0.5,
+      "k_position": 10.0,
+      "max_tau_wheel": 5.0
+    }
+  },
+  "code_changes": [
+    {
+      "file": "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
+      "line": 48,
+      "before": "kp_cp: float = 30.0,",
+      "after": "kp_cp: float = 0.0,",
+      "reason": "Disable tau_cp to prevent destructive cancellation with tau_pitch"
+    },
+    {
+      "file": "scripts/simulate_hierarchical_controller.py",
+      "line": 654,
+      "before": "kp_cp=30.0,",
+      "after": "kp_cp=0.0,  # Step E coupling fix: disable tau_cp to prevent destructive cancellation with tau_pitch",
+      "reason": "Apply kp_cp=0.0 in simulator instantiation"
+    },
+    {
+      "file": "scripts/simulate_hierarchical_controller.py",
+      "line": 2128,
+      "before": "# Balance-core runtime branch: route torque through composer\n        if is_balance_core_mode(args):",
+      "after": "# Default sagittal diagnostics — overwritten inside balance-core branch\n        sagittal_diag = {}\n\n        # Balance-core runtime branch: route torque through composer\n        if is_balance_core_mode(args):",
+      "reason": "Fix pre-existing UnboundLocalError when sagittal_diag is accessed outside balance-core mode"
+    }
+  ],
+  "why_tau_cp_was_disabled": {
+    "summary": "tau_cp uses sagittal_position_error as a capture-point proxy, creating near-cancellation with tau_pitch at large displacements",
+    "mechanism": "At peak drift (pitch=11.8 deg, pos_err=0.254 m): tau_pitch (+10.3 Nm) + tau_cp (-7.6 Nm) + tau_position (-2.5 Nm) = net +0.28 Nm tau_common, leaving only ~0.37 Nm actual wheel torque",
+    "root_cause_classification": "pitch_transient_from_sagittal_gain_coupling"
+  },
+  "term_decomposition": {
+    "at_peak_drift_state": {
+      "pitch_deg": 11.8,
+      "sagittal_position_error_m": 0.254,
+      "before_kp_cp_30": {
+        "tau_pitch_Nm": 10.3,
+        "tau_cp_Nm": -7.6,
+        "tau_position_Nm": -2.5,
+        "tau_sag_vel_Nm": -0.03,
+        "tau_com_vy_Nm": -0.01,
+        "tau_common_Nm": 0.28,
+        "actual_wheel_torque_Nm": 0.37
+      },
+      "after_kp_cp_0": {
+        "tau_pitch_Nm": 10.3,
+        "tau_cp_Nm": 0.0,
+        "tau_position_Nm": -2.5,
+        "tau_sag_vel_Nm": -0.03,
+        "tau_com_vy_Nm": -0.01,
+        "tau_common_Nm": 7.76,
+        "actual_wheel_torque_Nm": 7.76
+      },
+      "improvement_factor": 28
+    }
+  },
+  "before_after_comparison": {
+    "old_f4c_kp_cp_30": {
+      "max_drift_m": 0.254,
+      "final_drift_m": 0.028,
+      "max_pitch_deg": 11.84,
+      "steady_state_range_m": [-0.013, 0.033],
+      "completed_5000_steps": true,
+      "gate_0_10m": "FAIL",
+      "gate_0_15m": "FAIL"
+    },
+    "new_kp_cp_0": {
+      "max_drift_m": 0.606,
+      "final_drift_m": 0.105,
+      "max_pitch_deg": 8.86,
+      "steady_state_range_m": [0.105, 0.105],
+      "completed_5000_steps": true,
+      "gate_0_10m": "FAIL",
+      "gate_0_15m": "FAIL"
+    },
+    "changes": {
+      "max_drift_change_percent": 139,
+      "final_drift_change_percent": 275,
+      "max_pitch_change_percent": -25,
+      "pitch_improved": true,
+      "drift_worsened": true
+    }
+  },
+  "root_cause_of_worsened_drift": {
+    "summary": "tau_cp was doing double duty: creating destructive cancellation AND providing position return force",
+    "effective_position_return_coefficient": {
+      "with_kp_cp_30": -40.0,
+      "with_kp_cp_0": -10.0,
+      "reduction_percent": 75
+    },
+    "steady_state_equilibrium_analysis": {
+      "equation": "sag_pos_err_ss = (kp_pitch / (kp_cp + k_position)) * pitch_ss",
+      "with_kp_cp_30": {
+        "pitch_ss_deg": 1.2,
+        "predicted_drift_m": 0.026,
+        "observed_drift_m": 0.028
+      },
+      "with_kp_cp_0": {
+        "pitch_ss_deg": 1.2,
+        "predicted_drift_m": 0.105,
+        "observed_drift_m": 0.105
+      },
+      "match": "exact"
+    }
+  },
+  "tests_run": {
+    "targeted_tests": {
+      "command": "pytest tests -q -k \"sagittal_velocity_damped or sagittal_position or tau_cp or position_error\"",
+      "passed": 29,
+      "deselected": 1187,
+      "result": "PASS"
+    },
+    "broader_balance_core_tests": {
+      "command": "pytest tests/test_sagittal_balance_state.py tests/test_balance_core_components.py tests/test_balance_core_validation_workflow.py -q",
+      "passed": 56,
+      "result": "PASS"
+    },
+    "new_tests_added": [
+      "test_tau_cp_disabled_by_default",
+      "test_tau_cp_can_be_explicitly_enabled",
+      "test_no_destructive_cancellation_between_tau_pitch_and_tau_cp",
+      "test_tau_position_remains_active_with_tau_cp_disabled"
+    ]
+  },
+  "nominal_1000_step_validation": {
+    "max_drift_m": 0.230,
+    "min_drift_m": -0.000,
+    "final_drift_m": 0.230,
+    "max_pitch_deg": 2.98,
+    "completed_without_falling": true,
+    "gate_0_10m": "FAIL",
+    "gate_0_15m": "FAIL",
+    "note": "At 1000 steps the robot is still in transient phase"
+  },
+  "nominal_5000_step_validation": {
+    "max_drift_m": 0.606,
+    "min_drift_m": -0.000,
+    "final_drift_m": 0.105,
+    "max_abs_drift_m": 0.606,
+    "within_0_10m": false,
+    "within_0_15m": false,
+    "steps_exceeding_0_10m": 4612,
+    "steps_exceeding_0_15m": 1603,
+    "last_20_percent_range_m": [0.105, 0.105],
+    "max_pitch_deg": 8.86,
+    "pitch_range_deg": [0.00, 8.86],
+    "roll_range_deg": [-2.51, 0.17],
+    "com_z_range_m": [0.363, 0.409],
+    "wheel_torque_range_l_Nm": [-1.29, 1.27],
+    "sagittal_saturated_steps": 0,
+    "completed_without_falling": true,
+    "gate_0_10m_preferred": "FAIL",
+    "gate_0_15m_fallback": "FAIL",
+    "phase_breakdown": [
+      {"phase": "initial", "steps": "0-500", "mean_pos_error_m": 0.134, "max_pos_error_m": 0.184},
+      {"phase": "buildup", "steps": "500-1000", "mean_pos_error_m": 0.187, "max_pos_error_m": 0.230},
+      {"phase": "transient", "steps": "1000-2000", "mean_pos_error_m": 0.291, "max_pos_error_m": 0.606},
+      {"phase": "recovery", "steps": "2000-3000", "mean_pos_error_m": 0.103, "max_pos_error_m": 0.106},
+      {"phase": "return", "steps": "3000-4000", "mean_pos_error_m": 0.105, "max_pos_error_m": 0.105},
+      {"phase": "steady", "steps": "4000-5000", "mean_pos_error_m": 0.105, "max_pos_error_m": 0.105}
+    ],
+    "term_statistics": {
+      "tau_pitch": {"rms": 1.939, "mean": 1.559, "min": 0.000, "max": 7.734},
+      "tau_cp": {"rms": 0.000, "mean": 0.000, "min": 0.000, "max": 0.000},
+      "tau_position": {"rms": 1.832, "mean": -1.532, "min": -6.059, "max": 0.004},
+      "tau_com_vy": {"rms": 0.840, "mean": -0.032, "min": -4.166, "max": 3.599},
+      "sagittal_balance_torque_final": {"rms": 0.061, "mean": 0.009, "min": -1.312, "max": 1.281}
+    }
+  },
+  "height_variant_regression": {
+    "status": "NOT_RUN",
+    "reason": "Gates not met — per acceptance criteria, height variant regression only runs if nominal 5000-step passes at least the ±0.15 m fallback gate"
+  },
+  "acceptance_gates": {
+    "preferred_target": {
+      "threshold_m": 0.10,
+      "result_m": 0.606,
+      "status": "FAIL",
+      "margin_m": -0.506
+    },
+    "acceptable_fallback": {
+      "threshold_m": 0.15,
+      "result_m": 0.606,
+      "status": "FAIL",
+      "margin_m": -0.456
+    },
+    "final_absolute_drift": {
+      "threshold_m": 0.05,
+      "result_m": 0.105,
+      "status": "FAIL"
+    },
+    "stability_no_pitch_regression": {
+      "status": "PASS",
+      "note": "Pitch improved from 11.84 deg to 8.86 deg"
+    },
+    "completed_without_falling": {
+      "status": "PASS"
+    }
+  },
+  "failure_classification": "position_term_too_weak_after_cp_removal",
+  "architectural_insight": {
+    "summary": "tau_cp was simultaneously harmful (near-cancelling tau_pitch) and useful (providing 75% of position return force)",
+    "equilibrium_formula": "sag_pos_err_ss = (kp_pitch / (kp_cp + k_position)) * pitch_ss",
+    "configurations": [
+      {
+        "kp_cp": 30.0,
+        "k_position": 10.0,
+        "effective_pos_return": 40.0,
+        "steady_drift_at_1_2_deg_pitch": 0.026
+      },
+      {
+        "kp_cp": 0.0,
+        "k_position": 10.0,
+        "effective_pos_return": 10.0,
+        "steady_drift_at_1_2_deg_pitch": 0.105
+      },
+      {
+        "kp_cp": 0.0,
+        "k_position": 40.0,
+        "effective_pos_return": 40.0,
+        "steady_drift_at_1_2_deg_pitch": 0.026,
+        "note": "Predicted — restores same equilibrium while eliminating destructive cancellation"
+      }
+    ]
+  },
+  "verification": {
+    "no_wbc_changes": true,
+    "no_e0b_e0c_e0d_reintroduced": true,
+    "torque_ownership_unchanged": true,
+    "sagittal_controllers_mutually_exclusive": true,
+    "balance_core_mode": true,
+    "velocity_damped_controller": true,
+    "tau_cp_zero_throughout": true,
+    "tau_position_active": true
+  },
+  "recommendation": {
+    "status": "DO_NOT_PROCEED_TO_STEP_C",
+    "reason": "Gates not met — deeper architectural issue identified",
+    "next_step": "Option A (minimal): Set k_position=40.0 with kp_cp=0.0 to restore position return force while eliminating destructive cancellation",
+    "alternative": "Option B (architectural): Redesign position return term to be independent of pitch term",
+    "do_not": [
+      "Reintroduce kp_cp=30.0 (restores destructive cancellation)",
+      "Tune k_velocity further (confirmed diminishing returns)",
+      "Proceed to Step C without resolving position return deficit"
+    ]
+  },
+  "telemetry_files": {
+    "nominal_1000_step": "outputs/hierarchical_controller_sim/telemetry_1780142872.csv",
+    "nominal_5000_step": "outputs/hierarchical_controller_sim/telemetry_1780143456.csv"
+  }
+}

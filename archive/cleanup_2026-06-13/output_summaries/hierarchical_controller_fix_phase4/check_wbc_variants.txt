@@ -1,0 +1,83 @@
+WBC variant rollout diagnostic
+model=assets/robot/wheeled_biped_real.xml
+height_cmd=0.4
+
+variant=current_negated_jtf_same_hip
+  steps_completed=100
+  termination_reason=none
+  pitch_range_deg=[-0.08, +0.05]
+  roll_range_deg=[-23.00, -0.47]
+  joint_error_final=2.4033
+  max_tau_norm=19.0810 Nm
+  max_tau_rate=1008.6578 Nm/s
+  max_wbc_tau_norm=22.1723 Nm
+  max_posture_tau_norm=5.0269 Nm
+  mean_wrench_error_norm=18.6079
+  first_tau=[-0.0009  0.0814  0.0074 -0.826  -0.0026  0.0009 -0.0814  0.0074 -0.826
+ -0.0026]
+  final_joint_pos=[ 0.7078 -0.2696  0.8538  1.6973  1.5222 -0.7079  0.2703  0.8539  1.6984
+  1.5154]
+
+variant=no_global_negation_same_hip
+  steps_completed=14
+  termination_reason=height_too_low
+  pitch_range_deg=[-0.03, -0.00]
+  roll_range_deg=[-8.00, -0.48]
+  joint_error_final=1.1090
+  max_tau_norm=17.8232 Nm
+  max_tau_rate=1008.6796 Nm/s
+  max_wbc_tau_norm=24.8222 Nm
+  max_posture_tau_norm=17.3821 Nm
+  mean_wrench_error_norm=15.3255
+  first_tau=[ 0.0009 -0.0814 -0.0074  0.826   0.0026 -0.0009  0.0814 -0.0074  0.826
+  0.0026]
+  final_joint_pos=[-0.6325 -0.1726  0.8428  2.1574 -0.1072  0.6324  0.1722  0.8426  2.1573
+ -0.1054]
+
+variant=negated_jtf_opposite_hip
+  steps_completed=100
+  termination_reason=none
+  pitch_range_deg=[-4.83, +0.10]
+  roll_range_deg=[-41.64, -0.47]
+  joint_error_final=1.6253
+  max_tau_norm=20.1985 Nm
+  max_tau_rate=1008.6578 Nm/s
+  max_wbc_tau_norm=23.3493 Nm
+  max_posture_tau_norm=7.7740 Nm
+  mean_wrench_error_norm=25.5485
+  first_tau=[-0.0009  0.0814  0.0074 -0.826  -0.0026  0.0009 -0.0814  0.0074 -0.826
+ -0.0026]
+  final_joint_pos=[ 0.7083 -0.405   0.7843  1.7314  1.1658  0.7084 -0.2733  0.8068  1.747
+  0.0765]
+
+variant=no_global_negation_opposite_hip
+  steps_completed=14
+  termination_reason=height_too_low
+  pitch_range_deg=[-0.39, +0.92]
+  roll_range_deg=[-11.55, -0.48]
+  joint_error_final=1.2551
+  max_tau_norm=22.2463 Nm
+  max_tau_rate=1008.6796 Nm/s
+  max_wbc_tau_norm=28.1429 Nm
+  max_posture_tau_norm=18.2730 Nm
+  mean_wrench_error_norm=38.3550
+  first_tau=[ 0.0009 -0.0814 -0.0074  0.826   0.0026 -0.0009  0.0814 -0.0074  0.826
+  0.0026]
+  final_joint_pos=[-0.7697 -0.1176  0.8654  2.1736 -0.0104 -0.7655  0.052   0.8448  2.1836
+ -0.0091]
+
+variant=no_global_negation_zero_hip
+  steps_completed=14
+  termination_reason=height_too_low
+  pitch_range_deg=[-0.03, -0.00]
+  roll_range_deg=[-10.24, -0.48]
+  joint_error_final=0.6127
+  max_tau_norm=12.3725 Nm
+  max_tau_rate=719.3307 Nm/s
+  max_wbc_tau_norm=17.9740 Nm
+  max_posture_tau_norm=17.0063 Nm
+  mean_wrench_error_norm=17.7557
+  first_tau=[ 0.0009 -0.0814 -0.0074  0.826   0.0026 -0.0009  0.0814 -0.0074  0.826
+  0.0026]
+  final_joint_pos=[-0.0239 -0.0689  0.8761  2.1597 -0.1053  0.0237  0.0686  0.8758  2.1596
+ -0.1034]

@@ -1,0 +1,19 @@
+{
+  "current_best_controller": "outputs/phase_b9_lqr_gain_strengthening/best_lqr_config.yaml",
+  "step6_ready": false,
+  "dominant_mechanism": "F_timing_delay_and_early_transient_mismatch",
+  "why_step58_failed": "No single actuator saturates, but early transient correction remains too late/weak.",
+  "classical_roll_control_feasibility": "Marginal with current architecture.",
+  "recommended_next_path": "Keep Step 5 best as prior; do not advance Step 6 now.",
+  "aggregate_metrics": {
+    "mean_roll_amplification": 5.545023565186418,
+    "mean_hip_roll_limit_margin_rad": 0.6435577363474295,
+    "mean_contact_force_shift": NaN,
+    "mean_wheel_slip_asym": 15.768403046463767
+  },
+  "artifacts": {
+    "roll_authority_tests_csv": "outputs/phase_b9_step5_9_roll_authority_audit/roll_authority_tests.csv",
+    "coupling_tests_csv": "outputs/phase_b9_step5_9_roll_authority_audit/coupling_tests.csv",
+    "summary_json": "outputs/phase_b9_step5_9_roll_authority_audit/summary.json"
+  }
+}

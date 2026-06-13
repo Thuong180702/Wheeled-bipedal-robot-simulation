@@ -1,0 +1,231 @@
+{
+  "report_type": "step_e_transient_root_cause_audit",
+  "date": "2026-05-30",
+  "status": "ROOT_CAUSE_IDENTIFIED_PITCH_RATE_MEASUREMENT_ARTIFACT",
+  "configuration": {
+    "kp_cp": 0.0,
+    "k_position": 20.0,
+    "k_velocity": 15.0,
+    "max_position_tau": 3.0,
+    "position_error_source": "wheel_support_center",
+    "pitch_reference": "pitch_x_eq",
+    "sagittal_controller": "velocity_damped"
+  },
+  "task_1_transient_localization": {
+    "max_support_position_error": {
+      "value_m": 0.595,
+      "step": 1360,
+      "time_s": 6.8
+    },
+    "max_pitch_error": {
+      "value_rad": 0.1255,
+      "value_deg": 7.19,
+      "step": 1313,
+      "time_s": 6.565
+    },
+    "min_com_height": {
+      "value_m": 0.3623,
+      "step": 1324,
+      "time_s": 6.62
+    },
+    "max_wheel_velocity": {
+      "value_rad_s": 7.04,
+      "step": 1285,
+      "time_s": 6.425
+    },
+    "event_sequence": [
+      {"event": "max_wheel_velocity", "step": 1285, "first": true},
+      {"event": "max_pitch_error", "step": 1313},
+      {"event": "min_com_height", "step": 1324},
+      {"event": "max_support_position_error", "step": 1360, "last": true}
+    ],
+    "first_event": "max_wheel_velocity",
+    "conclusion": "Wheel velocity peaks first, before pitch error, COM height drop, and support position error. This points toward wheel velocity as the initiating event."
+  },
+  "task_2_state_timeline": {
+    "window_analyzed": "steps 1000-1400",
+    "key_observations": [
+      "Wheel velocity already large (-5.7 rad/s) at step 1250",
+      "Sharp jump in wheel velocity between steps 1230-1240 (from -2.30 to -4.65 rad/s)",
+      "Pitch angle increases continuously from 5.348° to 5.576° during steps 1230-1236",
+      "Pitch rate flips sign at step 1236 while pitch angle is still increasing",
+      "COM height drops gradually from 0.3923 to 0.3852 m during steps 1230-1250"
+    ],
+    "critical_window": "steps 1234-1242"
+  },
+  "task_3_torque_timeline": {
+    "tau_position_saturation": {
+      "saturated_throughout_transient": true,
+      "tau_position_raw_range_Nm": [-11.9, 0.139],
+      "tau_position_clipped_range_Nm": [-3.0, 0.139],
+      "saturation_steps": 564,
+      "saturation_pct": 11.3
+    },
+    "wheel_acceleration_spike": {
+      "step": 1237,
+      "value_rad_s2": -106.14,
+      "trigger": "pitch_rate_sign_flip_at_step_1236"
+    },
+    "sagittal_balance_torque": {
+      "step_1235": {
+        "pitch_rate": 0.0572,
+        "sag_term_pitch_rate": 0.5724,
+        "sag_raw": -1.3089,
+        "interpretation": "damping opposes forward pitch rate"
+      },
+      "step_1236": {
+        "pitch_rate": -0.0503,
+        "sag_term_pitch_rate": -0.5030,
+        "sag_raw": -2.4455,
+        "interpretation": "damping term FLIPS SIGN, removes damping"
+      },
+      "step_1237": {
+        "pitch_rate": -0.0693,
+        "sag_term_pitch_rate": -0.6929,
+        "sag_raw": -2.7497,
+        "interpretation": "damping term AMPLIFIES backward pitch rate"
+      }
+    }
+  },
+  "pitch_rate_consistency_check": {
+    "step_1235_to_1236": {
+      "pitch_angle_1235_deg": 5.5558,
+      "pitch_angle_1236_deg": 5.5757,
+      "pitch_delta_deg": 0.0199,
+      "expected_pitch_rate_rad_s": 0.0695,
+      "measured_pitch_rate_rad_s": -0.0503,
+      "sign_consistent": false,
+      "conclusion": "Pitch angle increases but pitch rate flips to negative — physically inconsistent measurement artifact"
+    }
+  },
+  "task_4_support_posture_interaction": {
+    "com_height_behavior": "Drops gradually from 0.3923 to 0.3870 m during steps 1230-1245, AFTER pitch rate flip",
+    "support_joint_error_norm": "Increases slightly from 0.0762 to 0.0855 during steps 1230-1245",
+    "shape_support_torques": "Remain relatively stable, no sudden changes",
+    "conclusion": "Height/support system does NOT trigger the pitch event. COM height drop is a consequence, not a cause."
+  },
+  "task_5_contact_and_frame_audit": {
+    "contact_state": {
+      "left_wheel_contact": "True throughout",
+      "right_wheel_contact": "True throughout",
+      "contact_supervisor_state": "double_contact throughout",
+      "non_wheel_contacts": 0,
+      "conclusion": "Contact is stable, no contact transient"
+    },
+    "frame_artifact_check": {
+      "support_position_error_vs_com_position_error_ratio": 0.96,
+      "conclusion": "Support position error and COM position error track closely. This is real motion, NOT a frame projection artifact."
+    },
+    "yaw_drift": {
+      "range_rad": [-0.2089, -0.1699],
+      "conclusion": "Yaw drift is small and gradual, not a sudden frame rotation"
+    }
+  },
+  "task_6_repeatability": {
+    "status": "completed",
+    "runs_completed": 4,
+    "classification": "DETERMINISTIC",
+    "results": [
+      {
+        "run": "original",
+        "max_support_error_m": 0.595,
+        "max_support_step": 1360,
+        "max_pitch_error_deg": 7.19,
+        "max_pitch_step": 1313,
+        "pitch_rate_flip_step": 1236
+      },
+      {
+        "run": "repeatability_1",
+        "max_support_error_m": 0.595,
+        "max_support_step": 1360,
+        "max_pitch_error_deg": 7.19,
+        "max_pitch_step": 1313,
+        "pitch_rate_flip_step": 1236
+      },
+      {
+        "run": "repeatability_2",
+        "max_support_error_m": 0.595,
+        "max_support_step": 1360,
+        "max_pitch_error_deg": 7.19,
+        "max_pitch_step": 1313,
+        "pitch_rate_flip_step": 1236
+      },
+      {
+        "run": "repeatability_3",
+        "max_support_error_m": 0.595,
+        "max_support_step": 1360,
+        "max_pitch_error_deg": 7.19,
+        "max_pitch_step": 1313,
+        "pitch_rate_flip_step": 1236
+      }
+    ],
+    "conclusion": "All 4 runs are identical. Pitch rate flip occurs at exactly step 1236 in every run. Max support position error occurs at exactly step 1360 in every run. This is a DETERMINISTIC event, not stochastic. The pitch rate measurement artifact is reproducible and occurs at the same simulation step every time."
+  },
+  "task_7_root_cause_classification": {
+    "primary_classification": "B_pitch_damping_insufficient",
+    "specific_sub_cause": "pitch_rate_measurement_artifact_causing_damping_sign_flip",
+    "detailed_explanation": "At step 1236, pitch rate measurement flips sign from +0.0572 to -0.0503 rad/s while pitch angle is still increasing (5.556° → 5.576°). This is physically inconsistent and represents a measurement artifact (likely gyro noise spike or numerical differentiation error). The sagittal velocity-damped controller uses pitch_rate directly without filtering or consistency checking. When pitch_rate flips sign, the pitch rate damping term (k_pitch_rate * pitch_rate) flips from +0.5724 Nm (opposing forward pitch rate) to -0.5030 Nm (amplifying backward pitch rate). This sudden removal of damping and addition of acceleration causes wheel acceleration to spike from -3.4 to -106.14 rad/s² at step 1237, initiating the transient cascade.",
+    "why_not_other_classifications": {
+      "A_height_support_transient": "COM height drops AFTER pitch rate flip (step 1324), not before. Height/support system is not the trigger.",
+      "C_torque_rate_limit_delay": "The issue is the damping term itself flipping sign, not rate limiting delaying correction.",
+      "D_position_authority_conflicts_with_pitch_balance": "tau_position is already saturated before the spike. Position authority limiting is working as intended.",
+      "E_wheel_velocity_damping_insufficient": "Wheel velocity damping cannot fix a pitch rate measurement artifact that removes pitch damping.",
+      "F_contact_transient": "Contact is stable throughout (double_contact, no non-wheel contacts).",
+      "G_yaw_frame_projection_artifact": "Support position error is real motion, tracks COM position error closely.",
+      "H_unknown_transient": "Root cause is known and identified."
+    }
+  },
+  "task_8_fix_recommendations": {
+    "no_fix_implemented": true,
+    "minimal_correct_fix": "Add pitch rate consistency checking or filtering to prevent measurement artifacts from flipping the damping term sign",
+    "recommended_options": [
+      {
+        "option": 1,
+        "name": "Pitch rate consistency check",
+        "recommended": true,
+        "description": "Before using pitch_rate in the sagittal controller, verify it's consistent with the pitch angle finite-difference derivative. If inconsistent (opposite signs), use the finite-difference estimate instead.",
+        "implementation_scope": "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
+        "pseudocode": "pitch_rate_fd = (pitch_x - pitch_x_prev) / dt\nif sign(pitch_rate_measured) != sign(pitch_rate_fd) and abs(pitch_rate_fd) > threshold:\n    pitch_rate_safe = pitch_rate_fd\nelse:\n    pitch_rate_safe = pitch_rate_measured",
+        "rationale": "Catches physically inconsistent measurements without adding lag. Finite-difference is noisy but sign-consistent."
+      },
+      {
+        "option": 2,
+        "name": "Pitch rate low-pass filter",
+        "recommended": false,
+        "description": "Add a low-pass filter (e.g., exponential moving average) to pitch_rate to smooth out measurement artifacts.",
+        "implementation_scope": "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
+        "pseudocode": "pitch_rate_filtered = alpha * pitch_rate_measured + (1 - alpha) * pitch_rate_filtered_prev",
+        "rationale": "Smooths artifacts but adds phase lag, which can destabilize damping. Not recommended for real-time balance control."
+      },
+      {
+        "option": 3,
+        "name": "Pitch rate deadband",
+        "recommended": false,
+        "description": "Add a small deadband around zero pitch_rate (e.g., ±0.01 rad/s) to prevent sign flips during near-zero rates.",
+        "implementation_scope": "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
+        "pseudocode": "if abs(pitch_rate) < deadband:\n    pitch_rate_safe = 0.0\nelse:\n    pitch_rate_safe = pitch_rate",
+        "rationale": "Prevents sign flips near zero but doesn't fix the underlying measurement artifact. May mask the problem without solving it."
+      }
+    ],
+    "recommended_fix": "Option 1: Pitch rate consistency check. This is the minimal correct fix that addresses the root cause without adding lag or masking the problem."
+  },
+  "verification": {
+    "no_wbc_changes": true,
+    "no_e0b_e0c_e0d_reintroduced": true,
+    "torque_ownership_unchanged": true,
+    "sagittal_controllers_mutually_exclusive": true,
+    "balance_core_mode": true,
+    "velocity_damped_controller": true,
+    "kp_cp_zero": true,
+    "tau_cp_zero": true,
+    "term_level_position_authority_limiting": true,
+    "ownership_violation_count_zero": true,
+    "hidden_torque_norm_zero": true
+  },
+  "conclusion": {
+    "root_cause": "Pitch rate measurement artifact at step 1236 causes damping sign flip, triggering wheel acceleration spike and subsequent transient.",
+    "fix_scope": "Add pitch rate consistency checking in SagittalVelocityDampedBalanceController before using pitch_rate in damping term.",
+    "fix_complexity": "Low — single function modification, no architectural changes.",
+    "step_c_recommendation": "DO_NOT_PROCEED until pitch rate consistency check is implemented and validated."
+  }
+}

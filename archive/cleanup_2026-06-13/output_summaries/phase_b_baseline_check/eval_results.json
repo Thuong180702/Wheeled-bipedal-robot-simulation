@@ -1,0 +1,67 @@
+{
+  "controller": "baseline_lqr",
+  "checkpoints": [],
+  "scenarios": [
+    "nominal"
+  ],
+  "num_episodes": 5,
+  "num_steps": 500,
+  "seeds": [
+    0
+  ],
+  "results": [
+    {
+      "scenario": "nominal",
+      "checkpoint": "baseline_lqr",
+      "num_episodes": 5,
+      "fall_rate": 1.0,
+      "survival_rate": 0.0,
+      "survival_time_mean_s": 0.52,
+      "survival_time_std_s": 0.0,
+      "pitch_rms_deg": 0.9000427193286861,
+      "roll_rms_deg": 23.99894991681056,
+      "pitch_rate_rms_rads": 0.5622773284964577,
+      "xy_drift_max_m": 0.15287292635105842,
+      "height_rmse_m": 0.042145454408785095,
+      "wheel_speed_rms_rads": 20.342959794206926,
+      "torque_rms_nm": 17.77894211618814,
+      "recovery_time_s": NaN,
+      "max_recoverable_push_n": NaN,
+      "extra": {
+        "scenario_height_cmd": 0.65,
+        "friction_scale": 1.0,
+        "action_delay_steps": 0,
+        "push_magnitude": 0.0,
+        "scenario_group": "nominal",
+        "scenario_param_name": "",
+        "scenario_param_value": ""
+      }
+    }
+  ],
+  "baseline_lqr": {
+    "gains": {
+      "lqr_gains_K": [
+        -87.73649953581176,
+        -20.628576443830166,
+        -5.210757171915385,
+        -0.6123724356957384
+      ],
+      "K_pitch": 87.73649953581176,
+      "K_pitch_rate": 20.628576443830166,
+      "K_fwd_vel": 5.210757171915385,
+      "K_fwd_pos": 0.6123724356957384,
+      "kp_roll": 0.4,
+      "kd_roll": 0.08,
+      "kp_yaw": 2.5,
+      "kd_yaw": 0.2,
+      "wheel_vel_limit_rads": 20.0,
+      "l_com_m": 0.54,
+      "r_wheel_m": 0.06,
+      "ik_h_min_m": 0.71,
+      "ik_h_max_m": 0.71
+    },
+    "is_stateful": true,
+    "lin_vel_mode": "clean",
+    "assumptions": "Requires lin_vel_mode='clean' or 'noisy' (42-dim obs). Reads forward velocity from obs[4] (body_lin_vel[1]). Stateful: integrates forward position drift per episode. Valid for Stages 1-3 (standing balance up to variable height). Limited for Stage 4 (push-robust): LQR linearisation breaks for |lean| > ~15-20 degrees under large impulse forces."
+  }
+}

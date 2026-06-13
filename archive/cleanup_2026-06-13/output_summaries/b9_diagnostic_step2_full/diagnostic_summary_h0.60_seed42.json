@@ -1,0 +1,14 @@
+{
+  "height_cmd": 0.6,
+  "survival_time_s": 0.24,
+  "fall_step": 12,
+  "pitch_rms_deg": 2.8288693902339994,
+  "pitch_max_deg": 3.7658709026634276,
+  "wheel_cmd_rms": 4.078833713745623,
+  "wheel_cmd_max": 6.641420397152896,
+  "num_slow_updates": 2,
+  "num_frozen_updates": 1,
+  "num_emergency_activations": 0,
+  "height_rmse_m": 0.07270277124568311,
+  "com_y_rms_m": 0.0
+}

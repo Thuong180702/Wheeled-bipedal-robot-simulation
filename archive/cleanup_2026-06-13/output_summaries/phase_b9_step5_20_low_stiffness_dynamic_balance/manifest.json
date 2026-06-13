@@ -1,0 +1,48 @@
+{
+  "original_path": "outputs/phase_b9_step5_20_low_stiffness_dynamic_balance",
+  "original_size": "64.6K",
+  "original_size_bytes": 66130,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "baseline_reproduction_check.json",
+      "size_bytes": 6794
+    },
+    {
+      "file": "candidate_results.json",
+      "size_bytes": 7010
+    },
+    {
+      "file": "controller_transition_design.md",
+      "size_bytes": 6872
+    },
+    {
+      "file": "corrected_candidate_results.json",
+      "size_bytes": 8209
+    },
+    {
+      "file": "corrected_evaluation_output.txt",
+      "size_bytes": 3751
+    },
+    {
+      "file": "evaluation_analysis.md",
+      "size_bytes": 6729
+    },
+    {
+      "file": "evaluation_output.txt",
+      "size_bytes": 3365
+    },
+    {
+      "file": "evaluation_pipeline_audit.md",
+      "size_bytes": 12093
+    },
+    {
+      "file": "step5_20_summary.md",
+      "size_bytes": 9559
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,36 @@
+{
+  "original_path": "outputs/hip_yaw_hy_ff_evaluation",
+  "original_size": "147.9M",
+  "original_size_bytes": 155045938,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 7,
+  "copied_files": [
+    {
+      "file": "comprehensive_eval_results.json",
+      "size_bytes": 6119
+    },
+    {
+      "file": "eval_log.txt",
+      "size_bytes": 4330
+    },
+    {
+      "file": "hip_yaw_disturbance_rejection_fix_summary.json",
+      "size_bytes": 8078
+    },
+    {
+      "file": "hip_yaw_disturbance_rejection_fix_summary_v2.json",
+      "size_bytes": 10543
+    },
+    {
+      "file": "hy_ff_evaluation_results.json",
+      "size_bytes": 885
+    },
+    {
+      "file": "simple_eval_results.json",
+      "size_bytes": 509
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "test_name": "baseline",
+    "kd_hip_yaw": 3.0,
+    "status": "not_implemented",
+    "reason": "requires --shape-kd-hip-yaw CLI argument in simulate_hierarchical_controller.py"
+  },
+  {
+    "test_name": "moderate_damping",
+    "kd_hip_yaw": 5.0,
+    "status": "not_implemented",
+    "reason": "requires --shape-kd-hip-yaw CLI argument in simulate_hierarchical_controller.py"
+  },
+  {
+    "test_name": "high_damping",
+    "kd_hip_yaw": 7.0,
+    "status": "not_implemented",
+    "reason": "requires --shape-kd-hip-yaw CLI argument in simulate_hierarchical_controller.py"
+  },
+  {
+    "test_name": "very_high_damping",
+    "kd_hip_yaw": 9.0,
+    "status": "not_implemented",
+    "reason": "requires --shape-kd-hip-yaw CLI argument in simulate_hierarchical_controller.py"
+  },
+  {
+    "test_name": "extreme_damping",
+    "kd_hip_yaw": 12.0,
+    "status": "not_implemented",
+    "reason": "requires --shape-kd-hip-yaw CLI argument in simulate_hierarchical_controller.py"
+  }
+]

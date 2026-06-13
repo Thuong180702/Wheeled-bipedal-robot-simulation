@@ -1,0 +1,20 @@
+{
+  "phase": "response_validation",
+  "candidates_tested": 5,
+  "perturbations_per_candidate": 2,
+  "total_tests": 10,
+  "non_saturating_candidates": [
+    "conservative_k10",
+    "moderate_k15",
+    "strong_k20",
+    "aggressive_k30",
+    "very_strong_k40"
+  ],
+  "mean_hip_roll_torque_by_candidate": {
+    "aggressive_k30": 0.0,
+    "conservative_k10": 0.0,
+    "moderate_k15": 0.0,
+    "strong_k20": 0.0,
+    "very_strong_k40": 0.0
+  }
+}

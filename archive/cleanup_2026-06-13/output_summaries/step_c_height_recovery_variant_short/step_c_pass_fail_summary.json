@@ -1,0 +1,24 @@
+{
+  "overall_step_c_verdict": "PASS",
+  "final_decision": "STEP_C_DONE",
+  "controller_behavior_changed": false,
+  "wbc_applied": false,
+  "step_e_invariants_preserved": true,
+  "case_count": 5,
+  "passed_cases": [
+    "nominal",
+    "low_tiny",
+    "high_tiny",
+    "low_small",
+    "high_small"
+  ],
+  "failed_cases": [],
+  "inconclusive_cases": [],
+  "failure_classifications": [],
+  "artifact_paths": {
+    "height_reference": "outputs\\step_c_height_recovery_variant_short\\step_c_height_reference.json",
+    "case_matrix": "outputs\\step_c_height_recovery_variant_short\\step_c_height_case_matrix.json",
+    "metrics": "outputs\\step_c_height_recovery_variant_short\\step_c_height_recovery_metrics.json",
+    "failure_classification": "outputs\\step_c_height_recovery_variant_short\\step_c_failure_classification.json"
+  }
+}

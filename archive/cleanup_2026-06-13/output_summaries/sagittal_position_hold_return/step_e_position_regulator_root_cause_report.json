@@ -1,0 +1,205 @@
+{
+  "report": {
+    "title": "Step E Position Regulator Root Cause Analysis",
+    "date": "2026-05-31",
+    "telemetry_file": "telemetry_1780208317.csv",
+    "run_steps": 2000,
+    "run_duration_s": 20.0,
+    "controller_mode": "balance-core",
+    "sagittal_controller": "velocity-damped",
+    "wbc_disabled": true
+  },
+  "capture_gate_diagnosis": {
+    "gate_enabled": true,
+    "gate_activated": false,
+    "activation_count": 0,
+    "total_steps": 2000,
+    "activation_rate": 0.0,
+    "reason": "capture_point_below_threshold",
+    "capture_point_stats": {
+      "min_m": -0.0330,
+      "max_m": 0.0640,
+      "max_abs_m": 0.0640,
+      "threshold_m": 0.10,
+      "exceeded_threshold": false
+    },
+    "required_capture_direction": {
+      "unique_values": [0.0],
+      "always_zero": true
+    },
+    "position_opposes_capture": {
+      "true_count": 0,
+      "false_count": 2000,
+      "always_false": true
+    },
+    "conclusion": "Gate logic is correct but irrelevant to this failure. Capture point stayed within threshold while support-center drifted 0.595m. This is a support-drift problem, not a capture-conflict problem."
+  },
+  "position_error_analysis": {
+    "support_position_error_m": {
+      "min": -0.007,
+      "max": 0.595,
+      "final": 0.039,
+      "peak_step": 1360
+    },
+    "support_position_velocity_m_s": {
+      "min": -0.1445,
+      "max": 0.3972,
+      "peak_step": 1289,
+      "growth_phase_mean": 0.0364,
+      "growth_phase_std": 0.0985
+    },
+    "position_gates": {
+      "preferred": {
+        "criteria": "max ±0.10m, final ≤0.05m",
+        "result": "FAIL",
+        "max_error_m": 0.595
+      },
+      "fallback": {
+        "criteria": "max ±0.15m, final ≤0.10m",
+        "result": "FAIL",
+        "max_error_m": 0.595
+      },
+      "hard_minimum": {
+        "criteria": "max ≤0.30m, final ≤0.10m",
+        "result": "FAIL",
+        "max_error_m": 0.595
+      }
+    }
+  },
+  "tau_position_saturation_analysis": {
+    "k_position_N_per_m": 20.0,
+    "max_position_tau_Nm": 3.0,
+    "saturation_threshold_m": 0.15,
+    "tau_position_raw": {
+      "min_Nm": -11.900,
+      "max_Nm": 0.139,
+      "at_peak_error_Nm": -11.900
+    },
+    "tau_position_clipped": {
+      "min_Nm": -3.000,
+      "max_Nm": 0.139,
+      "at_peak_error_Nm": -3.000
+    },
+    "saturation_stats": {
+      "saturated_steps": 558,
+      "total_steps": 2000,
+      "saturation_rate": 0.279,
+      "growth_phase_saturation_rate": 0.260
+    },
+    "effective_gain_at_saturation": {
+      "nominal_gain_N_per_m": 20.0,
+      "effective_gain_N_per_m": 5.04,
+      "reduction_percent": 74.8
+    }
+  },
+  "root_cause_classification": {
+    "primary_cause": "C. position_gain_or_authority_insufficient",
+    "primary_evidence": [
+      "tau_position_raw wanted -11.9 Nm but clipped to -3.0 Nm (74% reduction)",
+      "Position authority saturated for 558/2000 steps (27.9%)",
+      "At peak error (0.595m), controller wanted 11.9 Nm but could only apply 3.0 Nm",
+      "Effective gain dropped from 20.0 to 5.04 N/m during saturation",
+      "Final error (0.039m) is acceptable, proving controller works for small errors"
+    ],
+    "secondary_cause": "D. missing_position_velocity_regulation",
+    "secondary_evidence": [
+      "Support position velocity reached +0.397 m/s with no direct damping",
+      "Growth phase mean velocity: +0.0364 m/s (persistent forward drift)",
+      "No explicit support-center velocity damping term exists",
+      "k_velocity damps CoM velocity, not support-center velocity",
+      "High velocity + saturated position torque = continued drift"
+    ],
+    "rejected_causes": {
+      "A_capture_gate_condition_wrong": "Gate logic is correct. Capture point never exceeded threshold.",
+      "B_capture_point_diagnostic_not_relevant": "Correct. Gate is irrelevant to support-drift problem.",
+      "E_missing_integral_or_bias_rejection": "Final error is small (0.039m). No persistent bias.",
+      "F_torque_rate_or_saturation_limit": "Saturation is symptom, not root cause.",
+      "G_wheel_velocity_damping_conflict": "k_wheel_velocity = 0.5 is weak. Not blocking correction.",
+      "H_frame_or_metric_error": "support_position_error_m correctly measures support-center drift."
+    }
+  },
+  "current_control_law": {
+    "gains": {
+      "kp_pitch": 50.0,
+      "kd_pitch": 10.0,
+      "kp_cp": 0.0,
+      "kd_com_vy": 5.0,
+      "k_velocity": 15.0,
+      "k_wheel_velocity": 0.5,
+      "k_position": 20.0,
+      "max_position_tau": 3.0,
+      "max_tau_wheel": 5.0
+    },
+    "terms": [
+      "tau_pitch = kp_pitch * pitch_x_rad",
+      "tau_pitch_rate = kd_pitch * pitch_rate_x_rad_s",
+      "tau_sagittal_velocity = -k_velocity * sagittal_velocity_m_s",
+      "tau_position_raw = -k_position * sagittal_position_error_m",
+      "tau_position = clip(tau_position_raw, -max_position_tau, max_position_tau)",
+      "tau_cp = -kp_cp * sagittal_position_error_m (disabled)",
+      "tau_com_vy = -kd_com_vy * sagittal_velocity_m_s",
+      "tau_common = wheel_torque_sign * (sum of terms)",
+      "tau_left = tau_common + tau_wheel_vel_left",
+      "tau_right = tau_common + tau_wheel_vel_right"
+    ],
+    "missing_term": "tau_support_velocity = -k_support_velocity * support_position_velocity_m_s"
+  },
+  "recommended_fix": {
+    "fix_family": "B. Add explicit support-position velocity regulation",
+    "rationale": [
+      "Directly damps support-center velocity, preventing error growth",
+      "Preserves position authority limit (no destabilization risk)",
+      "Physics-based standard control technique",
+      "Clear testable input-output relationship"
+    ],
+    "proposed_addition": {
+      "new_term": "tau_support_velocity = -k_support_velocity * support_position_velocity_m_s",
+      "computation": "support_position_velocity_m_s = (current_support_position_error_m - prev_support_position_error_m) / dt",
+      "proposed_gain": 10.0,
+      "gain_units": "N·s/m",
+      "expected_torque_at_peak_velocity": -3.97
+    },
+    "rejected_fixes": {
+      "A_repair_capture_gate": "Gate logic is correct. Not relevant to this failure.",
+      "C_integral_term": "No persistent bias. Final error is small. Integral not needed.",
+      "D_position_reference_governor": "More complex than direct velocity damping.",
+      "E_increase_position_authority": "Risky. Could destabilize pitch balance."
+    }
+  },
+  "implementation_plan": {
+    "step_1": "Add support position velocity computation to controller",
+    "step_2": "Add k_support_velocity parameter (default 10.0)",
+    "step_3": "Add tau_support_velocity term to control law",
+    "step_4": "Update telemetry to log new signals",
+    "step_5": "Add unit tests for velocity damping",
+    "step_6": "Run validation sequence (500, 1000, 2000, 5000 steps)"
+  },
+  "validation_criteria": {
+    "preferred": {
+      "max_abs_support_position_error_m": 0.10,
+      "final_support_position_error_m": 0.05
+    },
+    "fallback": {
+      "max_abs_support_position_error_m": 0.15,
+      "final_support_position_error_m": 0.10
+    },
+    "hard_minimum": {
+      "max_abs_support_position_error_m": 0.30,
+      "final_support_position_error_m": 0.10
+    },
+    "additional_requirements": [
+      "No posture regression",
+      "WBC disabled (verified in telemetry)",
+      "No ownership violations",
+      "No E0b/E0c/E0d active",
+      "kp_cp = 0.0"
+    ]
+  },
+  "status": {
+    "step_e_position_hold": "FAILED",
+    "root_cause_identified": true,
+    "fix_selected": true,
+    "ready_for_implementation": true,
+    "can_proceed_to_step_c": false
+  }
+}

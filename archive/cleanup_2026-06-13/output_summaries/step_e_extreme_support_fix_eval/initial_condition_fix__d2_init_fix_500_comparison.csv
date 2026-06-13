@@ -1,0 +1,8 @@
+Metric,Old D2,New D2,Improvement
+hip_pitch_error_max (rad),0.4500,0.0000,0.4500
+hip_pitch_error_left (rad),-0.4500,0.0000,-0.4500
+tau_pitch_mean (Nm),2.5992,2.5992,0.0000
+tau_pitch_positive_pct,89.2,89.2,0.0
+tau_position_saturation_pct,35.4,35.4,0.0
+survived_500,True,True,-
+pitch_x_max (rad),0.1111,0.1111,0.0000

@@ -1,0 +1,11 @@
+{
+  "baseline_all_height": {
+    "mean_survival_s": 3.8167,
+    "fall_rate": 0.8333,
+    "pitch_rms_deg": 1.1938,
+    "roll_rms_deg": 21.163,
+    "action_saturation": 0.0
+  },
+  "full_validation_run": false,
+  "step6_status": "BLOCKED"
+}

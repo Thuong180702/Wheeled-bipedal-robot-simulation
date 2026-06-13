@@ -1,0 +1,126 @@
+{
+  "audit_date": "2026-06-09",
+  "classification": "APCR1C_BETTER_CENTERING_BUT_LARGER_AMPLITUDE",
+  "user_concern": "APCR1c may reduce positive bias but increase oscillation amplitude",
+
+  "profiles_analyzed": ["D2", "APCR1", "APCR1b", "APCR1c"],
+  "horizons_analyzed": [500, 2000],
+
+  "amplitude_metrics_500": {
+    "d2": {
+      "mean": 0.0824, "final": 0.0580, "min": 0.0142, "max": 0.1757,
+      "peak_to_peak": 0.1615, "max_abs_drift": 0.1757,
+      "positive_pct": 93.2, "negative_pct": 6.8,
+      "outside_pct": 19.2, "zero_crossings": 2
+    },
+    "apcr1": {
+      "mean": 0.0674, "final": -0.0721, "min": -0.0721, "max": 0.1714,
+      "peak_to_peak": 0.2435, "max_abs_drift": 0.1714,
+      "positive_pct": 79.4, "negative_pct": 20.6,
+      "outside_pct": 13.8, "zero_crossings": 8
+    },
+    "apcr1b": {
+      "mean": 0.066, "final": -0.0694, "min": -0.0694, "max": 0.1714,
+      "peak_to_peak": 0.2408, "max_abs_drift": 0.1714,
+      "positive_pct": 79.2, "negative_pct": 20.8,
+      "outside_pct": 13.8, "zero_crossings": 5
+    },
+    "apcr1c": {
+      "mean": 0.0620, "final": -0.0713, "min": -0.0716, "max": 0.1682,
+      "peak_to_peak": 0.2398, "max_abs_drift": 0.1682,
+      "positive_pct": 77.8, "negative_pct": 22.2,
+      "outside_pct": 12.6, "zero_crossings": 5
+    }
+  },
+
+  "amplitude_metrics_2000": {
+    "d2": {
+      "mean": 0.0646, "final": 0.0979, "min": -0.0035, "max": 0.1757,
+      "peak_to_peak": 0.1792, "max_abs_drift": 0.1757,
+      "positive_pct": 98.3, "negative_pct": 1.7,
+      "outside_pct": 4.8, "zero_crossings": 5
+    },
+    "apcr1": {
+      "mean": 0.0616, "final": 0.0047, "min": -0.0805, "max": 0.1721,
+      "peak_to_peak": 0.2526, "max_abs_drift": 0.1721,
+      "positive_pct": 72.7, "negative_pct": 27.3,
+      "outside_pct": 12.2, "zero_crossings": 19
+    },
+    "apcr1c": {
+      "mean": 0.0610, "final": 0.1441, "min": -0.0716, "max": 0.1682,
+      "peak_to_peak": 0.2398, "max_abs_drift": 0.1682,
+      "positive_pct": 74.4, "negative_pct": 25.6,
+      "outside_pct": 6.3, "zero_crossings": 18
+    }
+  },
+
+  "apcr1c_window_analysis_2000": {
+    "steps_0_500": {
+      "min": -0.0716, "max": 0.1682, "peak_to_peak": 0.2398,
+      "max_abs_drift": 0.1682, "final": -0.0713,
+      "outside_pct": 12.6, "zero_crossings": 5
+    },
+    "steps_500_1000": {
+      "min": -0.0710, "max": 0.1601, "peak_to_peak": 0.2311,
+      "max_abs_drift": 0.1601, "final": -0.0110,
+      "outside_pct": 12.6, "zero_crossings": 4
+    },
+    "steps_1000_1500": {
+      "min": -0.0284, "max": 0.1480, "peak_to_peak": 0.1764,
+      "max_abs_drift": 0.1480, "final": 0.0772,
+      "outside_pct": 0.0, "zero_crossings": 5
+    },
+    "steps_1500_2000": {
+      "min": -0.0316, "max": 0.1452, "peak_to_peak": 0.1768,
+      "max_abs_drift": 0.1452, "final": 0.1441,
+      "outside_pct": 0.0, "zero_crossings": 4
+    }
+  },
+
+  "key_findings": {
+    "max_positive_drift": {
+      "answer": "YES_reduced",
+      "d2_500": 0.1757, "apcr1c_500": 0.1682,
+      "reduction": 0.0075, "reduction_pct": 4.3
+    },
+    "negative_drift": {
+      "answer": "YES_introduced",
+      "d2_500_min": 0.0142, "apcr1c_500_min": -0.0716,
+      "d2_2000_min": -0.0035, "apcr1c_2000_min": -0.0716
+    },
+    "peak_to_peak": {
+      "answer": "YES_larger",
+      "d2_500_p2p": 0.1615, "apcr1c_500_p2p": 0.2398,
+      "increase_pct_500": 48.5,
+      "d2_2000_p2p": 0.1792, "apcr1c_2000_p2p": 0.2398,
+      "increase_pct_2000": 33.8
+    },
+    "max_abs_drift": {
+      "answer": "SIMILAR",
+      "d2_500": 0.1757, "apcr1c_500": 0.1682,
+      "reduction_pct": 4.3
+    },
+    "final_error": {
+      "500": "APCR1c_better",
+      "500_d2": 0.0580, "500_apcr1c": -0.0713,
+      "2000": "D2_better",
+      "2000_d2": 0.0979, "2000_apcr1c": 0.1441
+    },
+    "amplitude_shrinks_over_time": {
+      "answer": "YES_but_insufficient",
+      "early_p2p": 0.24,
+      "late_p2p": 0.18,
+      "note": "Even stabilized P2P is 12x larger than D2 late window P2P (0.015)"
+    }
+  },
+
+  "best_by_metric": {
+    "lowest_max_abs_drift": {"profile": "APCR1c", "value": 0.1682},
+    "lowest_peak_to_peak": {"profile": "D2", "value": "0.1615 (500), 0.1792 (2000)"},
+    "lowest_outside_pct_500": {"profile": "APCR1c", "value": "12.6%"},
+    "lowest_outside_pct_2000": {"profile": "D2", "value": "4.8%"},
+    "best_final_error_500": {"profile": "APCR1c", "value": -0.0713},
+    "best_final_error_2000": {"profile": "APCR1", "value": 0.0047},
+    "best_bias_reduction": {"profile": "APCR1c", "value": "77.8% positive"}
+  }
+}

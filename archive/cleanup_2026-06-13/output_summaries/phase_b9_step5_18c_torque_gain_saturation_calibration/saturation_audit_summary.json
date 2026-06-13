@@ -1,0 +1,53 @@
+{
+  "phase": "saturation_root_cause_audit",
+  "baseline_h060": {
+    "survival_s": 0.52,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 0.8745,
+    "roll_rms_deg": 16.493,
+    "action_saturation": 0.0
+  },
+  "step5_18b_best_candidate": {
+    "name": "hybrid_roll_pitch_damping",
+    "survival_s": 0.32,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 0.0582,
+    "roll_rms_deg": 25.3383,
+    "actuator_saturation_rate": 0.9375,
+    "mean_torque_residual_abs": 0.4803,
+    "k_roll": 1.5,
+    "k_roll_rate": 0.15,
+    "k_pitch": 0.4,
+    "k_pitch_rate": 0.04,
+    "max_ctrl_fraction": 0.15
+  },
+  "root_cause": "PID_CONTROLLER_SATURATION_NOT_TORQUE_RESIDUAL",
+  "evidence": {
+    "raw_pid_ctrl_abs_max": 30.0,
+    "torque_residual_ctrl_abs_max": 0.96,
+    "final_actuator_ctrl_abs_max": 30.0,
+    "qfrc_applied_abs_max": 0.0,
+    "pid_saturation_onset_step": 5
+  },
+  "ctrlrange_limits": {
+    "hip_roll": 15.0,
+    "hip_yaw": 15.0,
+    "hip_pitch": 30.0,
+    "knee": 30.0,
+    "wheel": 15.0
+  },
+  "scaling_analysis": {
+    "torque_residual_physical_magnitude_Nm": "normalized_action * max_ctrl_fraction * ctrlrange_max",
+    "example_hip_pitch_torque_residual": "0.5 * 0.15 * 30 = 2.25 Nm",
+    "pid_output_magnitude_Nm": "up to ctrlrange_max = 30 Nm",
+    "magnitude_ratio": "PID output is 10-30x larger than torque residual"
+  },
+  "interpretation": "The torque residual gains (k_roll=1.5, k_pitch=0.4) produce small normalized actions that, after scaling by max_ctrl_fraction=0.15, result in physical torques of ~1-2 Nm. Meanwhile, the PID controller outputs 30 Nm and saturates at ctrlrange limits. The torque residual is too weak to influence the robot's behavior.",
+  "identical_saturation_across_candidates": true,
+  "identical_saturation_explanation": "All Step 5.18b candidates showed 0.9375 saturation rate despite different max_ctrl_fraction (0.10, 0.15, 0.20) because the PID controller dominates and saturates independently of the torque residual magnitude.",
+  "recommended_next_steps": [
+    "Phase 2: Verify torque unit semantics and check for scaling bugs",
+    "Phase 3: Test much larger torque gains (k_roll ~ 10-50) or reduce PID gains",
+    "Consider whether hybrid mode is viable or if pure torque control is needed"
+  ]
+}

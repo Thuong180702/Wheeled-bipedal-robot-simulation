@@ -1,0 +1,68 @@
+{
+  "profile": "APCR1e_adaptive_symmetric_soft_band",
+  "num_steps": 2000,
+  "survived": true,
+  "stability": {
+    "pitch_RMS_deg": 4.184305953778872,
+    "pitch_max_deg": 7.306715609437424,
+    "roll_RMS_deg": 0.36568395981838664,
+    "roll_max_deg": 0.7212612721359579,
+    "com_z_min": 0.2801797688007355,
+    "com_z_max": 0.2954497933387756,
+    "double_contact_pct": 100.0
+  },
+  "apcr": {
+    "apcr_tau_max": 1.155573939745025,
+    "apcr_tau_mean": 0.530177662453209,
+    "apcr_tau_rms": 0.670462902404437,
+    "signed_error_min": -0.0643858234522505,
+    "signed_error_max": 0.1708317235467661,
+    "signed_error_mean": 0.06182439618128885,
+    "signed_error_abs_mean": 0.0760622318069012,
+    "apcr_active_pct": 60.550000000000004
+  },
+  "windows": {
+    "0-500": {
+      "min_drift": -0.0272691791596065,
+      "max_drift": 0.1618997666994204,
+      "peak_to_peak": 0.1891689458590269,
+      "max_abs_drift": 0.1618997666994204,
+      "mean": 0.060287594130291396,
+      "final": -0.0073380037187238,
+      "positive_pct": 76.0,
+      "negative_pct": 23.799999999999997,
+      "outside_0p08": 42.4,
+      "outside_0p15": 9.8,
+      "drift_column_used": "active_pitch_crossing_signed_error_m",
+      "zero_crossings": 5
+    },
+    "500-1000": {
+      "min_drift": -0.0643858234522505,
+      "max_drift": 0.1708317235467661,
+      "peak_to_peak": 0.2352175469990166,
+      "max_abs_drift": 0.1708317235467661,
+      "mean": 0.051930322676083385,
+      "final": 0.0705862285515091,
+      "positive_pct": 68.8,
+      "negative_pct": 31.2,
+      "outside_0p08": 40.6,
+      "outside_0p15": 10.4,
+      "drift_column_used": "active_pitch_crossing_signed_error_m",
+      "zero_crossings": 5
+    },
+    "1000-1500": {
+      "min_drift": -0.0403071331144273,
+      "max_drift": 0.1666104916107666,
+      "peak_to_peak": 0.2069176247251939,
+      "max_abs_drift": 0.1666104916107666,
+      "mean": 0.06766793595813911,
+      "final": 0.1370620992984426,
+      "positive_pct": 74.4,
+      "negative_pct": 25.6,
+      "outside_0p08": 49.0,
+      "outside_0p15": 14.399999999999999,
+      "drift_column_used": "active_pitch_crossing_signed_error_m",
+      "zero_crossings": 4
+    }
+  }
+}

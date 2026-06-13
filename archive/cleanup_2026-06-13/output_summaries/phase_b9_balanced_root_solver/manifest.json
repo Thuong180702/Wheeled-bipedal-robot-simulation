@@ -1,0 +1,16 @@
+{
+  "original_path": "outputs/phase_b9_balanced_root_solver",
+  "original_size": "4.1K",
+  "original_size_bytes": 4249,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "optimization_debug.json",
+      "size_bytes": 1623
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

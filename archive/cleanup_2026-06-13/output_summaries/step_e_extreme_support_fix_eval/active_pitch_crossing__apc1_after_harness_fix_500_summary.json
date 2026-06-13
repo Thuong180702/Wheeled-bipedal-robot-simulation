@@ -1,0 +1,31 @@
+{
+  "classification": "APC_HARNESS_FIXED_APC1_NO_EFFECT",
+  "timestamp": "2026-06-08T19:35:00",
+  "phase_6_result": {
+    "apc1_survived": 500,
+    "apc1_sagittal_position_error_m": 1.6,
+    "apc1_never_activated": true,
+    "apc1_apc_state": "NEUTRAL"
+  },
+  "phase_7_comparison": {
+    "d2_recheck": {
+      "survived": 500,
+      "pitch_x_min_deg": -6.51,
+      "pitch_x_max_deg": 12.00,
+      "pitch_x_rms_deg": 4.87
+    },
+    "apc1_after_fix": {
+      "survived": 500,
+      "pitch_x_min_deg": -15.90,
+      "pitch_x_max_deg": 14.96,
+      "pitch_x_rms_deg": 7.50
+    }
+  },
+  "apc_analysis": {
+    "entry_threshold_exceeded": true,
+    "why_never_activated": "Pitch oscillates wildly (up to 15.9 deg) exceeding danger threshold (5.73 deg)",
+    "root_cause": "low_0p300 configuration has fundamental pitch instability that blocks APC safety gates"
+  },
+  "conclusion": "APC design is sound but cannot help low_0p300 due to pitch oscillation. Focus on pitch stability first.",
+  "recommendation": "Stop APC tuning. Investigate tau_pitch bias causing pitch oscillation."
+}

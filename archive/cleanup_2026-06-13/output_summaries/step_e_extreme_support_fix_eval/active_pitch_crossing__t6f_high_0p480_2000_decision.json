@@ -1,0 +1,6 @@
+{
+  "classification": "T6F_2000_NOT_BETTER_THAN_T5",
+  "reason": "Drift degraded: 0.10 band=-115, 0.15 band=-512",
+  "date": "2026-06-12",
+  "proceed_to_5000": false
+}

@@ -1,0 +1,20 @@
+{
+  "original_path": "outputs/hierarchical_controller_fix_phase5",
+  "original_size": "112.2K",
+  "original_size_bytes": 114880,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "check_controller_isolation_modes.txt",
+      "size_bytes": 1453
+    },
+    {
+      "file": "simulate_hierarchical_controller.txt",
+      "size_bytes": 113427
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,4 @@
+case,hip_yaw_003,hip_yaw_007,hip_yaw_010,support_005,support_010,support_015,height_002,roll_005,pitch_010,pitch_015,pitch_020,contact_invalid,non_wheel_contact,classification
+low_0p300,273,552,699,42,779,-1,4221,-1,50,783,-1,-1,-1,support_first
+nominal,464,-1,-1,84,124,-1,-1,-1,-1,-1,-1,-1,-1,support_first
+high_0p480,716,1629,2258,71,87,108,-1,-1,-1,-1,-1,-1,-1,support_first

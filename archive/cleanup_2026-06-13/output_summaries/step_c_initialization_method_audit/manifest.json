@@ -1,0 +1,28 @@
+{
+  "original_path": "outputs/step_c_initialization_method_audit",
+  "original_size": "440.4K",
+  "original_size_bytes": 450947,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "low_1cm_initialization_audit.json",
+      "size_bytes": 12413
+    },
+    {
+      "file": "low_1cm_initialization_audit_report.md",
+      "size_bytes": 3593
+    },
+    {
+      "file": "low_1cm_startup_window.csv",
+      "size_bytes": 359117
+    },
+    {
+      "file": "nominal_vs_low_1cm_startup_comparison.csv",
+      "size_bytes": 75824
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

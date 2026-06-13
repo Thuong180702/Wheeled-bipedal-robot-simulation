@@ -1,0 +1,45 @@
+{
+  "selection_timestamp": "2026-06-05T14:14:14+08:00",
+  "selected_profile": "J3",
+  "selection_reason": "lowest_normalized_max_violation",
+  "candidates_evaluated": {
+    "J2": {
+      "k_position": 80.0,
+      "max_position_tau": 6.0,
+      "k_velocity": 25.0,
+      "source": "outputs/visual_inspection_low_0p300/J2_telemetry.csv",
+      "rows": 1000,
+      "support_error_max_abs": 0.1142,
+      "hip_yaw_abs_max": 0.1370,
+      "pitch_x_max_abs": 0.1571,
+      "normalized_max_violation": 1.957
+    },
+    "J3": {
+      "k_position": 80.0,
+      "max_position_tau": 6.0,
+      "k_velocity": 30.0,
+      "source": "outputs/visual_inspection_low_0p300/J3_telemetry.csv",
+      "rows": 1000,
+      "support_error_max_abs": 0.1252,
+      "hip_yaw_abs_max": 0.0884,
+      "pitch_x_max_abs": 0.1513,
+      "normalized_max_violation": 1.513
+    }
+  },
+  "selection_criteria": {
+    "support_position_error_threshold": 0.15,
+    "hip_yaw_abs_max_threshold": 0.07,
+    "pitch_x_max_abs_threshold": 0.10,
+    "method": "min(max(support/0.15, hip_yaw/0.07, pitch/0.10))"
+  },
+  "profile_parameters": {
+    "k_position": 80.0,
+    "max_position_tau": 6.0,
+    "k_velocity": 30.0,
+    "schedule_type": "continuous_smoothstep",
+    "schedule_range": {
+      "z_low": 0.300,
+      "z_high": 0.393
+    }
+  }
+}

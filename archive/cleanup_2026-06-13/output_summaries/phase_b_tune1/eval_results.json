@@ -1,0 +1,47 @@
+{
+  "controller": "lqr_ik",
+  "checkpoints": [],
+  "scenarios": [
+    "nominal"
+  ],
+  "num_episodes": 5,
+  "num_steps": 500,
+  "seeds": [
+    0
+  ],
+  "results": [
+    {
+      "scenario": "nominal",
+      "checkpoint": "lqr_ik",
+      "num_episodes": 5,
+      "fall_rate": 1.0,
+      "survival_rate": 0.0,
+      "survival_time_mean_s": 0.42000000000000004,
+      "survival_time_std_s": 5.551115123125783e-17,
+      "pitch_rms_deg": 1.1778950315669467,
+      "roll_rms_deg": 24.41210730371001,
+      "pitch_rate_rms_rads": 0.5375939434019769,
+      "xy_drift_max_m": 0.14860035082450815,
+      "height_rmse_m": 0.0507181668865012,
+      "wheel_speed_rms_rads": 18.433276070774568,
+      "torque_rms_nm": 16.50745711291674,
+      "recovery_time_s": NaN,
+      "max_recoverable_push_n": NaN,
+      "extra": {
+        "scenario_height_cmd": 0.65,
+        "friction_scale": 1.0,
+        "action_delay_steps": 0,
+        "push_magnitude": 0.0,
+        "scenario_group": "nominal",
+        "scenario_param_name": "",
+        "scenario_param_value": ""
+      }
+    }
+  ],
+  "lqr_ik": {
+    "config_path": "D:\\2CHAN\\Wheeled-bipedal-robot-simulation\\configs\\controllers\\gain_scheduled_lqr.yaml",
+    "is_stateless": true,
+    "lin_vel_mode": "clean",
+    "assumptions": "Height-dependent LQR/IK nominal prior for residual RL architecture. Requires lin_vel_mode='clean' or 'noisy' (42-dim obs). Stateless: no position integration (suitable for JAX env). Outputs base_action_abs in canonical action semantics. Current implementation uses single LQR gain at nominal height (conservative but functional). True per-height gain scheduling is a future enhancement."
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "original_path": "outputs/phase_b9_step5_11_corrective_path_audit",
+  "original_size": "10.3K",
+  "original_size_bytes": 10552,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "authority_probe_summary.json",
+      "size_bytes": 115
+    },
+    {
+      "file": "baseline_replay_summary.json",
+      "size_bytes": 214
+    },
+    {
+      "file": "latency_semantics_summary.json",
+      "size_bytes": 164
+    },
+    {
+      "file": "sign_audit_summary.json",
+      "size_bytes": 539
+    },
+    {
+      "file": "state_leakage_audit.json",
+      "size_bytes": 210
+    },
+    {
+      "file": "step5_11_summary.json",
+      "size_bytes": 2533
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

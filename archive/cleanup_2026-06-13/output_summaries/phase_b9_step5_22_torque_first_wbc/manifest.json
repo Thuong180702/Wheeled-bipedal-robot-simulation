@@ -1,0 +1,24 @@
+{
+  "original_path": "outputs/phase_b9_step5_22_torque_first_wbc",
+  "original_size": "12.4K",
+  "original_size_bytes": 12712,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "architecture_transition_report.md",
+      "size_bytes": 3071
+    },
+    {
+      "file": "candidate_summary.json",
+      "size_bytes": 382
+    },
+    {
+      "file": "performance_degradation_analysis.md",
+      "size_bytes": 8722
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

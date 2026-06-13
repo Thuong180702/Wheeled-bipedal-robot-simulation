@@ -1,0 +1,99 @@
+{
+  "profile": "APCR1n_recenter_priority_torque_boost",
+  "audit_date": "2026-06-11",
+  "classification": "APCR1N_RUNTIME_CONFIG_FEATURE_CODE_NOT_PRESENT",
+  "run_timestamps": {
+    "apcr1n_1000": "2026-06-11 09:41",
+    "apcr1n_2000": "2026-06-11 18:03",
+    "apcr1n_5000": "2026-06-11 18:19"
+  },
+  "config_location": {
+    "file": "scripts/simulate_hierarchical_controller.py",
+    "lines": "1204-1269",
+    "status": "committed or present before runs"
+  },
+  "feature_code_location": {
+    "file": "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
+    "lines": "1601-1730, 3177-3192",
+    "status": "uncommitted, added AFTER successful runs"
+  },
+  "telemetry_evidence": {
+    "expected_apcr1n_columns": [
+      "apcr1n_recenter_priority_active",
+      "apcr1n_startup_guard_active",
+      "apcr1n_wheel_damping_override_active",
+      "apcr1n_wheel_damping_scale",
+      "apcr1n_position_cap_boost_active",
+      "apcr1n_position_cap_current",
+      "apcr1n_safety_gate_pass"
+    ],
+    "actual_columns_found": 0,
+    "missing_columns": "all APCR1n-specific columns absent"
+  },
+  "runtime_config_values": {
+    "expected": {
+      "continuous_max_position_tau": true,
+      "max_position_tau_nominal": 4.0,
+      "velocity_damping_scale": 1.10,
+      "position_cap_normal_nm": 4.0
+    },
+    "actual": {
+      "effective_max_position_tau": 3.0,
+      "effective_velocity_damping_scale": 1.0,
+      "position_cap": 3.0,
+      "source": "default base class values"
+    },
+    "mismatch_reason": "config values exist but controller code to consume them was not present at runtime"
+  },
+  "feature_activation_analysis": {
+    "drift_eligible_steps": {
+      "abs_e_gt_0p08": 626,
+      "moving_away": 485,
+      "eligible_combined": 280,
+      "total_steps": 1000,
+      "eligible_percent": 28.0
+    },
+    "expected_behavior_if_code_present": "drift_priority should activate for 280 steps",
+    "actual_behavior": "no drift_priority telemetry columns exist"
+  },
+  "what_actually_ran": {
+    "apc_mode": "soft_band_proportional",
+    "apc_state": "NEUTRAL for all steps",
+    "hysteresis": false,
+    "drift_priority": "unknown - no telemetry",
+    "recenter_features": "none - code not present",
+    "effective_profile": "APCR1h-lite with default D2 parameters"
+  },
+  "success_validity": {
+    "apcr1n_5000_valid": true,
+    "succeeded_without_features": true,
+    "baseline_quality": "APCR1h soft-band mode with default parameters",
+    "max_abs_e_5000": 0.1714,
+    "p2p_5000": 0.2099,
+    "outside_0p15_5000": "1.1%"
+  },
+  "phase_1_resolution": {
+    "config_inconsistency_explained": true,
+    "reason": "config values defined but never consumed by controller logic",
+    "runtime_code_version": "pre-APCR1n feature implementation",
+    "current_code_version": "post-APCR1n feature implementation (uncommitted)"
+  },
+  "implications": [
+    "APCR1n 5000-step success is valid but WITHOUT new features",
+    "Feature activation audit (Phase 2) is unnecessary - features didn't exist",
+    "Ablation study must compare: APCR1n baseline (no features) vs APCR1n with features enabled",
+    "Config parameters need runtime wiring verification before retraining",
+    "Current uncommitted code has APCR1n features but they are untested"
+  ],
+  "recommendations": [
+    "DO NOT re-run APCR1n 5000 until feature wiring verified",
+    "Commit current APCR1n feature code",
+    "Add tests for APCR1n feature activation logic",
+    "Run smoke test (100 steps) with full telemetry validation",
+    "Verify telemetry columns exist and features can activate",
+    "Verify config consumption: continuous_max_position_tau, max_position_tau_nominal, velocity_damping_scale",
+    "Only then proceed to ablation study"
+  ],
+  "next_phase": "Phase 1b: Verify current APCR1n feature code runtime behavior before ablation design",
+  "skip_phases": ["Phase 2: activation audit - features were never present"]
+}

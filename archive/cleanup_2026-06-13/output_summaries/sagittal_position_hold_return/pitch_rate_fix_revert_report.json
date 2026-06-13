@@ -1,0 +1,47 @@
+{
+  "report_type": "pitch_rate_fix_revert",
+  "date": "2026-05-31",
+  "status": "REVERTED",
+  "action_taken": "Disabled pitch rate consistency correction in active control by default",
+  "code_changes": {
+    "file": "scripts/simulate_hierarchical_controller.py",
+    "changes": [
+      "Added --vd-enable-pitch-rate-correction flag (default: False)",
+      "Modified velocity-damped controller to use raw pitch rate by default",
+      "Estimator still called for diagnostic telemetry only"
+    ]
+  },
+  "reason_for_revert": {
+    "transient_peak_unchanged": {
+      "before": 0.595,
+      "after": 0.5951,
+      "unit": "m"
+    },
+    "height_variant_regressions": {
+      "high_5cm": "FELL (was stable)",
+      "low_5cm": "FELL (was stable)"
+    },
+    "root_cause_incorrect": "Pitch rate artifact was symptom, not cause"
+  },
+  "baseline_reproduction_after_revert": {
+    "max_support_position_error_m": 0.5950,
+    "max_error_step": 1360,
+    "final_support_position_error_m": 0.0527,
+    "steady_state_mean_m": 0.0527,
+    "survived_5000_steps": true,
+    "matches_expected": true
+  },
+  "verification": {
+    "no_pitch_rate_correction_active": true,
+    "no_corrected_pitch_rate_used": true,
+    "wbc_off": true,
+    "e0b_e0c_e0d_absent": true,
+    "torque_ownership_unchanged": true,
+    "kp_cp_disabled": true
+  },
+  "files_preserved": [
+    "wheeled_biped/controllers/pitch_rate_consistency_estimator.py",
+    "tests/test_pitch_rate_consistency_estimator.py"
+  ],
+  "recommendation": "Keep estimator as diagnostic tool only. Do not use in active control."
+}

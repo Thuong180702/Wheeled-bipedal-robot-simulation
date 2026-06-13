@@ -1,0 +1,31 @@
+{
+  "phase": "torque_unit_and_scaling_check",
+  "code_audit": {
+    "normalized_motor_torque_control_function": "wheeled_biped/sim/low_level_control.py:154-167",
+    "hybrid_pid_plus_torque_control_function": "wheeled_biped/sim/low_level_control.py:170-186",
+    "scaling_formula": "physical_torque_Nm = normalized_action * max_ctrl_fraction * ctrlrange_max",
+    "scaling_implementation_correct": true
+  },
+  "magnitude_analysis": {
+    "example_scenario": "10 deg roll error, k_roll=1.5, max_ctrl_fraction=0.15",
+    "roll_error_rad": 0.1745,
+    "normalized_roll_cmd": -0.262,
+    "hip_roll_ctrlrange_max_Nm": 15.0,
+    "physical_torque_residual_Nm": -0.59,
+    "pid_output_magnitude_Nm": "up to 15 Nm (hip roll) or 30 Nm (hip pitch/knee)",
+    "magnitude_ratio": "PID is 25-50x larger than torque residual"
+  },
+  "step5_18b_observed_magnitudes": {
+    "raw_pid_ctrl_abs_max_Nm": 30.0,
+    "torque_residual_ctrl_abs_max_Nm": 0.96,
+    "ratio": 31.25
+  },
+  "root_cause_confirmed": "Torque gains (k_roll=1.5, k_pitch=0.4) combined with max_ctrl_fraction (0.10-0.20) produce physical torques that are negligible compared to PID output. The PID controller saturates at ctrlrange limits while the torque residual has no measurable effect on robot behavior.",
+  "scaling_bug_found": false,
+  "recommended_fix_directions": [
+    "Option A: Increase torque gains by 10-50x (k_roll ~ 15-75, k_pitch ~ 4-20)",
+    "Option B: Reduce PID gains to allow torque residual to compete",
+    "Option C: Increase max_ctrl_fraction to 0.5-1.0 (but this may still be insufficient)",
+    "Option D: Switch to pure motor torque control (disable PID path)"
+  ]
+}

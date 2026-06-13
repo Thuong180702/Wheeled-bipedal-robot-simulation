@@ -1,0 +1,52 @@
+{
+  "original_path": "outputs/hip_yaw_boundary_audit",
+  "original_size": "24.9M",
+  "original_size_bytes": 26064346,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 3,
+  "copied_files": [
+    {
+      "file": "hip_yaw_audit_final_report.md",
+      "size_bytes": 11850
+    },
+    {
+      "file": "hip_yaw_baseline_metrics.json",
+      "size_bytes": 3887
+    },
+    {
+      "file": "hip_yaw_baseline_report.md",
+      "size_bytes": 1937
+    },
+    {
+      "file": "hip_yaw_mechanism_classification.json",
+      "size_bytes": 2285
+    },
+    {
+      "file": "hip_yaw_mechanism_classification_report.md",
+      "size_bytes": 6575
+    },
+    {
+      "file": "reference_command/hip_yaw_reference_consistency.json",
+      "size_bytes": 3657
+    },
+    {
+      "file": "reference_command/hip_yaw_reference_consistency_report.md",
+      "size_bytes": 2891
+    },
+    {
+      "file": "reference_command/phase_2_sign_error_investigation.md",
+      "size_bytes": 1241
+    },
+    {
+      "file": "torque_authority/hip_yaw_torque_authority_report.md",
+      "size_bytes": 2300
+    },
+    {
+      "file": "torque_authority/hip_yaw_torque_authority_summary.json",
+      "size_bytes": 11382
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

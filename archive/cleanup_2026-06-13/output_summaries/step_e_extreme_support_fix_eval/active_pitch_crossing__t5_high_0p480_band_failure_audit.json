@@ -1,0 +1,117 @@
+{
+  "classification": "T5_HIGH_FAIL_MIXED_CAUSES",
+  "root_causes": [
+    "EMERGENCY_TOO_LATE",
+    "AUTHORITY_TOO_WEAK",
+    "DAMPING_TOO_STRONG"
+  ],
+  "threshold_crossings": [
+    {
+      "threshold_m": 0.05,
+      "first_crossing_step": 71,
+      "first_crossing_e_m": 0.0522896685136238,
+      "band_state": "normal",
+      "band_state_id": 0,
+      "position_cap_current": 4.0,
+      "wheel_damping_scale": 1.0,
+      "recenter_active": false,
+      "pitch_rad": 0.0371276908282961,
+      "pitch_deg": 2.1272599875279425,
+      "wheel_vel_mean_rad_s": -4.970463991165161
+    },
+    {
+      "threshold_m": 0.08,
+      "first_crossing_step": 81,
+      "first_crossing_e_m": 0.0825323901674879,
+      "band_state": "normal",
+      "band_state_id": 0,
+      "position_cap_current": 4.0,
+      "wheel_damping_scale": 1.0,
+      "recenter_active": false,
+      "pitch_rad": 0.0570149752977838,
+      "pitch_deg": 3.2667174536056556,
+      "wheel_vel_mean_rad_s": -5.413406133651733
+    },
+    {
+      "threshold_m": 0.1,
+      "first_crossing_step": 87,
+      "first_crossing_e_m": 0.101444127354176,
+      "band_state": "normal",
+      "band_state_id": 0,
+      "position_cap_current": 4.0,
+      "wheel_damping_scale": 1.0,
+      "recenter_active": false,
+      "pitch_rad": 0.0701445309182824,
+      "pitch_deg": 4.0189855775424945,
+      "wheel_vel_mean_rad_s": -5.45823073387146
+    },
+    {
+      "threshold_m": 0.12,
+      "first_crossing_step": 94,
+      "first_crossing_e_m": 0.1221591056707612,
+      "band_state": "normal",
+      "band_state_id": 0,
+      "position_cap_current": 4.0,
+      "wheel_damping_scale": 1.0,
+      "recenter_active": false,
+      "pitch_rad": 0.0840290238896522,
+      "pitch_deg": 4.81450842548104,
+      "wheel_vel_mean_rad_s": -4.706706762313843
+    },
+    {
+      "threshold_m": 0.15,
+      "first_crossing_step": 106,
+      "first_crossing_e_m": 0.1508650391463533,
+      "band_state": "emergency",
+      "band_state_id": 4,
+      "position_cap_current": 7.0,
+      "wheel_damping_scale": 1.0,
+      "recenter_active": true,
+      "pitch_rad": 0.0990310678156925,
+      "pitch_deg": 5.67406222651302,
+      "wheel_vel_mean_rad_s": -3.422034740447998
+    }
+  ],
+  "windows_2_7_stats": {
+    "steps": "500-3500",
+    "outside_0p08_pct": 68.5,
+    "max_abs_e_m": 0.1223366579887021,
+    "mean_abs_e_m": 0.09183726845492728,
+    "band_state_distribution": {
+      "hard": 1095,
+      "soft": 785,
+      "desired": 737,
+      "emergency": 224,
+      "normal": 159
+    },
+    "emergency_steps": 224,
+    "emergency_pct": 7.466666666666668
+  },
+  "authority_analysis": {
+    "position_cap_mean_Nm": 5.617,
+    "position_cap_max_Nm": 7.0,
+    "wheel_damping_scale_mean": 0.6782,
+    "wheel_damping_scale_min": 0.1,
+    "emergency_cap_Nm": 7.0,
+    "emergency_damping": 0.5499999999999999
+  },
+  "pitch_coupling": {
+    "pitch_rms_deg": 4.06252170873626,
+    "pitch_max_deg": 4.965999965754141,
+    "pitch_min_deg": 1.7661219530973487
+  },
+  "window_comparison": {
+    "window_7": {
+      "steps": "3000-3500",
+      "outside_0p08_pct": 90.0,
+      "mean_abs_e_m": 0.09759993984315854,
+      "pitch_rms_deg": 4.377985084791993
+    },
+    "window_10": {
+      "steps": "4500-5000",
+      "outside_0p08_pct": 0.0,
+      "mean_abs_e_m": 0.03779741285915057,
+      "pitch_rms_deg": 1.9665128603694424
+    }
+  }
+}

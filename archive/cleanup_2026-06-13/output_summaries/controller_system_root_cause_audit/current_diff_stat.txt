@@ -1,0 +1,7 @@
+ docs/validation/step_c_height_recovery_done.md     |  24 +
+ .../step_e_height_variant_robustness_done.md       |  27 +
+ scripts/simulate_hierarchical_controller.py        | 679 ++++++++++++++++++++-
+ ..._sagittal_velocity_damped_balance_controller.py | 153 +++++
+ .../sagittal_velocity_damped_balance_controller.py | 313 +++++++++-
+ .../controllers/shape_posture_controller.py        | 198 +++++-
+ 6 files changed, 1376 insertions(+), 18 deletions(-)

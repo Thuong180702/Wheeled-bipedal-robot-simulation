@@ -1,0 +1,50 @@
+{
+  "stage": "1",
+  "stage_name": "100-step smoke",
+  "steps": 100,
+  "timestamp": "2026-06-07T16:43:31.284321",
+  "evaluations": {
+    "D2_baseline": {
+      "low_0p300": {
+        "error": "Simulation failed with code 2"
+      },
+      "high_0p480": {
+        "error": "Simulation failed with code 2"
+      }
+    },
+    "E1_support_integral": {
+      "low_0p300": {
+        "error": "Simulation failed with code 2"
+      },
+      "high_0p480": {
+        "error": "Simulation failed with code 2"
+      }
+    },
+    "E2_integral_higher_cap": {
+      "low_0p300": {
+        "error": "Simulation failed with code 2"
+      },
+      "high_0p480": {
+        "error": "Simulation failed with code 2"
+      }
+    },
+    "E3_integral_cap_wheel": {
+      "low_0p300": {
+        "error": "Simulation failed with code 2"
+      },
+      "high_0p480": {
+        "error": "Simulation failed with code 2"
+      }
+    }
+  },
+  "summary": {
+    "candidates_passed": [],
+    "candidates_failed": [],
+    "candidates_error": [
+      "D2_baseline",
+      "E1_support_integral",
+      "E2_integral_higher_cap",
+      "E3_integral_cap_wheel"
+    ]
+  }
+}

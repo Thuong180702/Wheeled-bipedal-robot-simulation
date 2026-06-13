@@ -1,0 +1,97 @@
+{
+  "phase": "phase_1_fresh_baseline_telemetry",
+  "date": "2026-06-04",
+  "controller_state": {
+    "wbc_enabled": false,
+    "experimental_hip_yaw_fix": false,
+    "sagittal_hybrid_fix": false,
+    "passive_feedforward_fix": false,
+    "global_hip_yaw_gain_change": false
+  },
+  "cases": [
+    {
+      "variant": "low_0p300",
+      "setup_json": "outputs\\physical_target_height_setups\\low_0p300_setup.json",
+      "status": "SUCCESS",
+      "telemetry_rows": 1000,
+      "metrics": {
+        "hip_yaw_abs_max": 0.2136730700731277,
+        "l_hip_yaw_error_max": 0.2063343226909637,
+        "l_hip_yaw_error_min": 0.0,
+        "l_hip_yaw_error_final": 0.1937002688646316,
+        "l_hip_yaw_error_rms": 0.13236056584811845,
+        "r_hip_yaw_error_max": 0.0,
+        "r_hip_yaw_error_min": -0.2136730700731277,
+        "r_hip_yaw_error_final": -0.1969140470027923,
+        "r_hip_yaw_error_rms": 0.1374541701709748,
+        "hip_yaw_divergence_max": 0.4199581891298293,
+        "hip_yaw_asymmetry_max": 0.022471729665994707,
+        "support_position_error_max_abs": 0.2429736536996408,
+        "pitch_x_max_abs": 0.0951421100580697,
+        "first_hip_yaw_0p03_rad_step": 348,
+        "first_hip_yaw_0p07_rad_step": 418,
+        "first_support_0p05_m_step": 46,
+        "first_support_0p15_m_step": 89,
+        "first_pitch_0p05_rad_step": 52,
+        "first_pitch_0p10_rad_step": null,
+        "event_order": "support_position_led"
+      }
+    },
+    {
+      "variant": "high_0p480",
+      "setup_json": "outputs\\physical_target_height_setups\\high_0p480_setup.json",
+      "status": "SUCCESS",
+      "telemetry_rows": 1000,
+      "metrics": {
+        "hip_yaw_abs_max": 0.0462040491402149,
+        "l_hip_yaw_error_max": 0.0256464630365371,
+        "l_hip_yaw_error_min": -2.6863776838581543e-06,
+        "l_hip_yaw_error_final": 0.0256464630365371,
+        "l_hip_yaw_error_rms": 0.013447456351668465,
+        "r_hip_yaw_error_max": 0.0025272201746702,
+        "r_hip_yaw_error_min": -0.0462040491402149,
+        "r_hip_yaw_error_final": -0.0462040491402149,
+        "r_hip_yaw_error_rms": 0.024220301166371392,
+        "hip_yaw_divergence_max": 0.07185051217675201,
+        "hip_yaw_asymmetry_max": 0.020724376663565598,
+        "support_position_error_max_abs": 0.2335530996951247,
+        "pitch_x_max_abs": 0.0926097019141943,
+        "first_hip_yaw_0p03_rad_step": 716,
+        "first_hip_yaw_0p07_rad_step": null,
+        "first_support_0p05_m_step": 71,
+        "first_support_0p15_m_step": 108,
+        "first_pitch_0p05_rad_step": 77,
+        "first_pitch_0p10_rad_step": null,
+        "event_order": "support_position_only"
+      }
+    },
+    {
+      "variant": "nominal",
+      "setup_json": null,
+      "status": "SUCCESS",
+      "telemetry_rows": 1000,
+      "metrics": {
+        "hip_yaw_abs_max": 0.0391579233109951,
+        "l_hip_yaw_error_max": 0.0225624255836009,
+        "l_hip_yaw_error_min": -0.001323293778114,
+        "l_hip_yaw_error_final": 0.0015984493074938,
+        "l_hip_yaw_error_rms": 0.010317199875825401,
+        "r_hip_yaw_error_max": 0.0006401247810572,
+        "r_hip_yaw_error_min": -0.0391579233109951,
+        "r_hip_yaw_error_final": -0.0131173273548483,
+        "r_hip_yaw_error_rms": 0.02091073668948576,
+        "hip_yaw_divergence_max": 0.061187585815787204,
+        "hip_yaw_asymmetry_max": 0.0223030848428607,
+        "support_position_error_max_abs": 0.1025591921290415,
+        "pitch_x_max_abs": 0.0705537636856474,
+        "first_hip_yaw_0p03_rad_step": 464,
+        "first_hip_yaw_0p07_rad_step": null,
+        "first_support_0p05_m_step": 84,
+        "first_support_0p15_m_step": null,
+        "first_pitch_0p05_rad_step": 94,
+        "first_pitch_0p10_rad_step": null,
+        "event_order": "none_exceeded"
+      }
+    }
+  ]
+}

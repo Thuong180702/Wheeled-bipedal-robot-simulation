@@ -1,0 +1,9 @@
+{
+  "candidate": "hybrid_roll_damping_conservative",
+  "hybrid_pid_plus_torque_activated": true,
+  "torque_control_enabled": true,
+  "torque_residual_nonzero": true,
+  "uses_deployable_actuator_ctrl_only": true,
+  "qfrc_applied_abs_max": 0.0,
+  "steps": 20
+}

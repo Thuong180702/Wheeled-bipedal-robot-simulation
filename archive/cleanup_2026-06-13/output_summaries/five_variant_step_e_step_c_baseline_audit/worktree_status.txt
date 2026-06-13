@@ -1,0 +1,42 @@
+# Worktree Status
+# Generated: 2026-06-06
+
+## Modified files (6):
+ M docs/validation/step_c_height_recovery_done.md
+ M docs/validation/step_e_height_variant_robustness_done.md
+ M scripts/simulate_hierarchical_controller.py
+ M tests/test_sagittal_velocity_damped_balance_controller.py
+ M wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py
+ M wheeled_biped/controllers/shape_posture_controller.py
+
+## Untracked files (80+):
+- Multiple validation reports
+- Multiple analysis scripts
+- New controller files
+- New test files
+
+## Recent commits (top 10):
+3ecbbc9 Add evaluation scripts for Step C and Step E sagittal schedule candidates
+64367b0 fix: Step E height-variant position hold robustness
+092dff6 Add Step C height recovery validation module
+e8f15ef Add Step C Height Recovery Specification document
+3a1c1eb Add tests for Step E diagnostics and validation helpers
+9971615 feat: add position integral control to sagittal velocity-damped balance controller
+e48fcb7 Add new controllers and tests for torque budget aware position and pitch rate consistency
+c45d903 feat: add telemetry for sagittal position and velocity errors
+d40abe2 feat: implement sagittal velocity-damped balance controller
+0e8f2ee feat: add sagittal dynamics identification
+
+## Syntax checks:
+- scripts/simulate_hierarchical_controller.py: PASS
+- wheeled_biped/controllers/shape_posture_controller.py: PASS
+- wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py: PASS
+- scripts/run_step_c_height_recovery.py: PASS
+
+## Key diff areas:
+1. shape_posture_controller.py - 311 lines added/changed
+2. sagittal_velocity_damped_balance_controller.py - 153 + 313 lines added/changed
+3. simulate_hierarchical_controller.py - 712 lines added/changed
+4. test_sagittal_velocity_damped_balance_controller.py - changed
+5. step_c_height_recovery_done.md - 24 lines changed
+6. step_e_height_variant_robustness_done.md - 27 lines changed

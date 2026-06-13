@@ -1,0 +1,229 @@
+{
+  "date": "2026-06-12",
+  "phase": 4,
+  "phase_name": "design_t6f_sign_corrected",
+  "status": "COMPLETE",
+  "classification": "T6F_SIGN_CORRECTED_DESIGN_READY",
+  "profile_name": "T6F_sign_corrected",
+  "base_profile": "T6F_budget_cap_raise",
+  "design_philosophy": "Keep what works (position torque, arch_fix), fix what fights (damping, pitch)",
+  "opt_in_only": true,
+  "features": {
+    "feature_1_enhanced_damping_override": {
+      "name": "Enhanced APCR1n Wheel Damping Override",
+      "description": "Disable damping completely (not 30% scale) when it fights position torque during arch_fix",
+      "activation_condition": "arch_fix_active AND sign(tau_position) * sign(tau_damping_mean) < 0",
+      "action": "Set tau_wheel_vel_left = 0.0, tau_wheel_vel_right = 0.0",
+      "preserves_helping_damping": true,
+      "only_active_during_arch_fix": true,
+      "expected_improvement_nm": "From +7.50 Nm cancellation to 0.0 Nm"
+    },
+    "feature_2_enhanced_pitch_suppression": {
+      "name": "Enhanced APCR1m Pitch Suppression",
+      "description": "Suppress pitch completely when arch_fix active AND abs(error) > 0.10 m",
+      "activation_condition": "arch_fix_active AND abs(sagittal_position_error_m) > 0.10",
+      "action": "Set tau_pitch = 0.0",
+      "preserves_small_error_pitch": true,
+      "threshold_m": 0.10,
+      "expected_improvement_nm": "From +1.50 Nm cancellation to 0.0 Nm"
+    }
+  },
+  "configuration_parameters": {
+    "sign_fix_enabled": true,
+    "sign_fix_disable_fighting_damping_during_arch_fix": true,
+    "sign_fix_suppress_pitch_during_arch_fix": true,
+    "sign_fix_pitch_error_threshold_m": 0.10,
+    "sign_fix_suppress_pitch_rate": false
+  },
+  "inherited_from_t6f": {
+    "arch_fix_enabled": true,
+    "arch_fix_height_threshold_m": 0.45,
+    "arch_fix_hard_max_position_tau": 6.5,
+    "arch_fix_emergency_max_position_tau": 7.0,
+    "apcr1nd_tuned_enabled": true,
+    "apcr1nd_tuned_variant_name": "T6F",
+    "apcr1nd_hard_band_m": 0.10,
+    "apcr1nd_emergency_band_m": 0.12,
+    "recenter_priority_direct_enabled": true,
+    "vd_wheel_damping_recenter_override_enabled": true,
+    "wbc_enabled": false,
+    "hy2_div_enabled": false
+  },
+  "telemetry_fields": {
+    "master_status": [
+      "sign_fix_enabled",
+      "sign_fix_active"
+    ],
+    "damping_override": [
+      "sign_fix_damping_disabled",
+      "sign_fix_damping_helped",
+      "sign_fix_damping_fought",
+      "sign_fix_damping_original_nm",
+      "sign_fix_damping_after_nm"
+    ],
+    "pitch_suppression": [
+      "sign_fix_pitch_suppressed",
+      "sign_fix_pitch_original_nm",
+      "sign_fix_pitch_after_nm"
+    ],
+    "sign_correctness": [
+      "sign_fix_tau_position_sign",
+      "sign_fix_damping_sign",
+      "sign_fix_pitch_sign",
+      "sign_fix_final_tau_sign",
+      "sign_fix_drift_sign",
+      "sign_fix_final_sign_correct"
+    ],
+    "diagnostic": [
+      "sign_fix_reason"
+    ]
+  },
+  "expected_performance": {
+    "sign_correctness": {
+      "t5_baseline_pct": 47.3,
+      "t6f_baseline_pct": 47.5,
+      "t6f_sign_corrected_target_pct": 80.0,
+      "improvement_over_t6f_pp": 32.5
+    },
+    "drift_control": {
+      "t5_outside_0p15m_pct": 4.4,
+      "t6f_outside_0p15m_pct": 30.1,
+      "t6f_sign_corrected_target_pct": 5.0,
+      "improvement_factor": 6.0
+    },
+    "authority_transmission": {
+      "t6f_position_torque_nm": 7.0,
+      "t6f_effective_net_nm": 2.5,
+      "t6f_sign_corrected_net_nm": 7.0,
+      "improvement_factor": 2.8
+    },
+    "worst_case_scenario": {
+      "without_fix_net_nm": 1.8,
+      "without_fix_direction": "wrong",
+      "with_fix_net_nm": -7.2,
+      "with_fix_direction": "correct",
+      "improvement": "From wrong direction to full correct authority"
+    }
+  },
+  "risk_analysis": {
+    "low_risk": [
+      "Position torque path unchanged",
+      "Architecture fix mechanism unchanged",
+      "Safety gates unchanged",
+      "T5/T6F baselines preserved",
+      "Only disables fighting terms",
+      "Opt-in profile only"
+    ],
+    "medium_risk": [
+      {
+        "risk": "Wheel velocity oscillation when damping disabled",
+        "mitigation": "Only disable when fighting, preserve when helping"
+      },
+      {
+        "risk": "Pitch excursion when pitch suppressed",
+        "mitigation": "Only suppress during large error (>0.10m), pitch hard-stop gate still enforced"
+      }
+    ],
+    "no_risk": [
+      "No global sign flips",
+      "No structural changes",
+      "No default profile changes"
+    ],
+    "overall_risk_level": "LOW"
+  },
+  "implementation_files": {
+    "controller": {
+      "file": "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
+      "estimated_new_lines": 150,
+      "sections": [
+        "Add sign fix fields to SagittalAuthoritySchedule",
+        "Add enhanced damping override logic",
+        "Add enhanced pitch suppression logic",
+        "Add sign correctness telemetry"
+      ]
+    },
+    "profile_config": {
+      "file": "wheeled_biped/configs/authority_schedules.py",
+      "estimated_new_lines": 30
+    },
+    "telemetry_writer": {
+      "file": "wheeled_biped/sim/simulation_telemetry_csv_writer.py",
+      "estimated_new_lines": 30
+    },
+    "tests": {
+      "files": [
+        "tests/test_t6f_torque_sign_convention.py (16 tests, already created)",
+        "tests/test_t6_high_height_variants.py (10 new tests)",
+        "tests/test_sagittal_velocity_damped_balance_controller.py (3 new tests)",
+        "tests/test_simulation_telemetry_csv_writer.py (1 new test)"
+      ],
+      "estimated_new_lines": 500
+    }
+  },
+  "validation_plan": {
+    "phase_5_500_step": {
+      "profiles": [
+        "T5 (reference)",
+        "T6F (baseline)",
+        "T6F_sign_corrected (sign fix)"
+      ],
+      "key_metrics": [
+        "Sign correctness by component",
+        "Final torque sign correctness",
+        "Sign fix activation rate",
+        "Drift metrics",
+        "Stability metrics"
+      ],
+      "pass_criteria": [
+        "Sign correctness >80%",
+        "Improvement >25pp vs T6F",
+        "No falls",
+        "Architecture fix transmits >4.0 Nm"
+      ]
+    },
+    "phase_6_2000_step": {
+      "condition": "Only if Phase 5 passes",
+      "profiles": [
+        "T6F_sign_corrected"
+      ],
+      "compare_against": [
+        "T5 first 2000 steps",
+        "T6F rejected 2000 steps"
+      ],
+      "pass_criteria": [
+        "Sign correctness >80%",
+        "Outside ±0.15m <5%",
+        "Max drift <0.20 m",
+        "Stable over 2000 steps"
+      ]
+    }
+  },
+  "what_not_to_do": [
+    "Do NOT modify position torque sign convention",
+    "Do NOT flip wheel_torque_sign",
+    "Do NOT patch at final composition",
+    "Do NOT modify T5/T6F/APCR1nD baselines",
+    "Do NOT make T6F_sign_corrected default",
+    "Do NOT enable WBC or HY2-DIV",
+    "Do NOT relax Step E gates",
+    "Do NOT run 5000-step yet",
+    "Do NOT commit yet"
+  ],
+  "what_to_do": [
+    "DO create opt-in profile",
+    "DO preserve all safety gates",
+    "DO preserve architecture fix mechanism",
+    "DO disable only fighting terms",
+    "DO preserve helping terms",
+    "DO add comprehensive telemetry",
+    "DO run 500-step diagnostic first"
+  ],
+  "design_complete": true,
+  "ready_for_implementation": true,
+  "next_phase": {
+    "phase_number": 5,
+    "phase_name": "implement_t6f_sign_corrected",
+    "ready_to_proceed": true,
+    "blocking_issues": []
+  }
+}

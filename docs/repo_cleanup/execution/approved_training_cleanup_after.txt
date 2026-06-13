@@ -1,0 +1,12 @@
+=== Training cleanup AFTER sizes (Sat Jun 13 22:03:00 SEAST 2026) ===
+--- top-level dirs ---
+8.2G	outputs
+19M	backup_checkpoints
+--- protected seeds ---
+119M	outputs/balance/rl/seed42
+94M	outputs/balance/rl/seed113
+62M	outputs/balance/rl/seed999
+--- protected setups ---
+56K	outputs/physical_target_height_setups
+--- deleted targets (should error/absent) ---
+(all absent)

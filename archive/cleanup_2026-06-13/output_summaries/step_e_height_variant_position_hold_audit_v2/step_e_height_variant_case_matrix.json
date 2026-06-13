@@ -1,0 +1,17 @@
+[
+  {
+    "variant_name": "nominal"
+  },
+  {
+    "variant_name": "low_tiny"
+  },
+  {
+    "variant_name": "high_tiny"
+  },
+  {
+    "variant_name": "low_small"
+  },
+  {
+    "variant_name": "high_small"
+  }
+]

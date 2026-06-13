@@ -1,0 +1,138 @@
+{
+  "D2": {
+    "torque": {
+      "tau_position_max": 9.8508778262768,
+      "tau_position_mean_abs": 3.6908102031585077,
+      "tau_position_saturation_percent": 48.25,
+      "wheel_damping_override_active_percent": 0.0,
+      "wheel_damping_before_mean_abs": 0.0,
+      "wheel_damping_after_mean_abs": 0.0,
+      "position_cap_boost_active_percent": 0.0,
+      "torque_direction_correct_percent": 100.0,
+      "torque_fights_drift_percent": 0.0
+    },
+    "wheel_velocity": {
+      "max": 0.0,
+      "mean": 0.0,
+      "over_5_count": 0,
+      "over_5_percent": 0.0
+    },
+    "stability": {
+      "com_z_min": 0.27879300713539124,
+      "com_z_mean": 0.28455081820487976,
+      "com_z_max": 0.29544979333877563,
+      "height_error_max": 0.016691552377290364,
+      "height_error_mean": 0.010925921534270003,
+      "pitch_min_deg": 0.002310790900332439,
+      "pitch_max_deg": 0.85538209618832,
+      "pitch_rms_deg": 0.3075778282390676,
+      "roll_min_deg": -1.4714181780730031,
+      "roll_max_deg": 5.450860783383401,
+      "roll_rms_deg": 2.960602897819553,
+      "hip_yaw_diff_max": 0.0,
+      "hip_yaw_diff_mean": 0.0
+    }
+  },
+  "APCR1h": {
+    "torque": {
+      "tau_position_max": 7.1007764451653905,
+      "tau_position_mean_abs": 3.0734376697886843,
+      "tau_position_saturation_percent": 37.65,
+      "wheel_damping_override_active_percent": 0.0,
+      "wheel_damping_before_mean_abs": 0.0,
+      "wheel_damping_after_mean_abs": 0.0,
+      "position_cap_boost_active_percent": 0.0,
+      "torque_direction_correct_percent": 100.0,
+      "torque_fights_drift_percent": 0.0
+    },
+    "wheel_velocity": {
+      "max": 0.0,
+      "mean": 0.0,
+      "over_5_count": 0,
+      "over_5_percent": 0.0
+    },
+    "stability": {
+      "com_z_min": 0.27975204586982727,
+      "com_z_mean": 0.2883337962925434,
+      "com_z_max": 0.29544979333877563,
+      "height_error_max": 0.015682445741243,
+      "height_error_mean": 0.007142896969884921,
+      "pitch_min_deg": 0.002310790900332439,
+      "pitch_max_deg": 0.7791546014867557,
+      "pitch_rms_deg": 0.37681729608420983,
+      "roll_min_deg": -4.125225919808833,
+      "roll_max_deg": 7.824353596968558,
+      "roll_rms_deg": 4.431240854338285,
+      "hip_yaw_diff_max": 0.0,
+      "hip_yaw_diff_mean": 0.0
+    }
+  },
+  "APCR1n": {
+    "torque": {
+      "tau_position_max": 6.856209506952553,
+      "tau_position_mean_abs": 2.43296728599245,
+      "tau_position_saturation_percent": 2.75,
+      "wheel_damping_override_active_percent": 0.0,
+      "wheel_damping_before_mean_abs": 0.0,
+      "wheel_damping_after_mean_abs": 0.0,
+      "position_cap_boost_active_percent": 0.0,
+      "torque_direction_correct_percent": 100.0,
+      "torque_fights_drift_percent": 0.0
+    },
+    "wheel_velocity": {
+      "max": 0.0,
+      "mean": 0.0,
+      "over_5_count": 0,
+      "over_5_percent": 0.0
+    },
+    "stability": {
+      "com_z_min": 0.2818024754524231,
+      "com_z_mean": 0.28875362980365754,
+      "com_z_max": 0.29544979333877563,
+      "height_error_max": 0.013682084060258504,
+      "height_error_mean": 0.006724090670317698,
+      "pitch_min_deg": 0.002310790900332439,
+      "pitch_max_deg": 0.7883982476972019,
+      "pitch_rms_deg": 0.3915134691582823,
+      "roll_min_deg": -0.9836280062914318,
+      "roll_max_deg": 7.816057770248152,
+      "roll_rms_deg": 3.4651678054741777,
+      "hip_yaw_diff_max": 0.0,
+      "hip_yaw_diff_mean": 0.0
+    }
+  },
+  "APCR1nD": {
+    "torque": {
+      "tau_position_max": 6.7656457670346,
+      "tau_position_mean_abs": 2.4292701902732796,
+      "tau_position_saturation_percent": 2.85,
+      "wheel_damping_override_active_percent": 0.95,
+      "wheel_damping_before_mean_abs": 0.0010090152744669468,
+      "wheel_damping_after_mean_abs": 0.00475,
+      "position_cap_boost_active_percent": 17.5,
+      "torque_direction_correct_percent": 100.0,
+      "torque_fights_drift_percent": 0.0
+    },
+    "wheel_velocity": {
+      "max": 0.0,
+      "mean": 0.0,
+      "over_5_count": 0,
+      "over_5_percent": 0.0
+    },
+    "stability": {
+      "com_z_min": 0.28158631920814514,
+      "com_z_mean": 0.2886178655177355,
+      "com_z_max": 0.29544979333877563,
+      "height_error_max": 0.013898240304536458,
+      "height_error_mean": 0.006859746103257228,
+      "pitch_min_deg": 0.002310790900332439,
+      "pitch_max_deg": 0.7574701888263906,
+      "pitch_rms_deg": 0.3859943581183159,
+      "roll_min_deg": -0.9118498712297197,
+      "roll_max_deg": 7.734251096367319,
+      "roll_rms_deg": 3.43266457076463,
+      "hip_yaw_diff_max": 0.0,
+      "hip_yaw_diff_mean": 0.0
+    }
+  }
+}

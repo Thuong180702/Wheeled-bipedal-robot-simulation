@@ -1,0 +1,16 @@
+{
+  "original_path": "outputs/stage2_gain_sweep",
+  "original_size": "58.5K",
+  "original_size_bytes": 59917,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "gain_sweep_results_1779584377.json",
+      "size_bytes": 59917
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

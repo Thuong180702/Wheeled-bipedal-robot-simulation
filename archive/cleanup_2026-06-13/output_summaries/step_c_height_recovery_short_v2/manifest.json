@@ -1,0 +1,36 @@
+{
+  "original_path": "outputs/step_c_height_recovery_short_v2",
+  "original_size": "7.0M",
+  "original_size_bytes": 7311124,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "step_c_failure_classification.json",
+      "size_bytes": 97
+    },
+    {
+      "file": "step_c_height_case_matrix.json",
+      "size_bytes": 1098
+    },
+    {
+      "file": "step_c_height_recovery_metrics.json",
+      "size_bytes": 5669
+    },
+    {
+      "file": "step_c_height_recovery_report.md",
+      "size_bytes": 922
+    },
+    {
+      "file": "step_c_height_reference.json",
+      "size_bytes": 435
+    },
+    {
+      "file": "step_c_pass_fail_summary.json",
+      "size_bytes": 846
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

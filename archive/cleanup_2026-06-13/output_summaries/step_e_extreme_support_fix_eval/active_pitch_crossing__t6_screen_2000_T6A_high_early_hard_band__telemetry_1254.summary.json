@@ -1,0 +1,56 @@
+{
+  "requested_steps": 5000,
+  "actual_steps": 1254,
+  "survived_steps": 1254,
+  "terminated": true,
+  "termination_reason": "height_too_low",
+  "final_sim_time_s": 12.540000000000001,
+  "telemetry_decimation": 1,
+  "failure_window_steps": 0,
+  "written_telemetry_rows": 1254,
+  "pitch_x": {
+    "min": -0.4064249098300934,
+    "max": 0.13744783401489258,
+    "rms": 0.05225353582354886
+  },
+  "roll_y": {
+    "min": -0.1114257276058197,
+    "max": 0.0032543486449867487,
+    "rms": 0.012432075419742427
+  },
+  "com_z": {
+    "min": 0.34934234619140625,
+    "max": 0.4086175858974457,
+    "drift": -0.05476847290992737
+  },
+  "wheel_vel_mean": {
+    "min": -195.34415435791016,
+    "max": 38.885271072387695,
+    "rms": 11.933891168983703
+  },
+  "wheel_velocity_trend": -195.34415435791016,
+  "ownership_violation_count_max": 0,
+  "hidden_torque_norm_max": 0.0,
+  "tau_wbc_norm_max": 46.18223571777344,
+  "torque_saturation": {
+    "fraction_max": 0.20000000298023224,
+    "fraction_mean": 0.005263157973164006
+  },
+  "torque_rate_saturation": {
+    "fraction_max": 0.6,
+    "fraction_mean": 0.011323763955342904
+  },
+  "contact_state_summary": {
+    "counts": {
+      "double_contact": 1217,
+      "flight_or_no_contact": 24,
+      "left_only": 12,
+      "right_only": 1
+    },
+    "most_common_state": "double_contact"
+  },
+  "metric_integrity": {
+    "source": "full_rate_online",
+    "limitations": []
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "date": "2026-06-13",
+  "branch": "repo-cleanup-t6j",
+  "classification": "DEEP_OUTPUTS_CLEANUP_PASS_WITH_REMAINING_REVIEW_ITEMS",
+  "disk": {
+    "outputs_before": "8.2G",
+    "outputs_after": "651M",
+    "freed_bytes": 8066814481,
+    "freed_human": "7.51G",
+    "summary_archive_size": "81M",
+    "summary_artifacts_copied": 1009
+  },
+  "deletion": {
+    "total_dirs_deleted": 158,
+    "summarize_then_delete_deleted": 146,
+    "delete_direct_deleted": 12,
+    "refused_protected": 12,
+    "refused_no_manifest": 0,
+    "failures": 0
+  },
+  "protected_verified": {
+    "seed42_final_checkpoint": true,
+    "seed113_final_checkpoint": true,
+    "seed999_final_checkpoint": true,
+    "per_seed_metrics_jsonl": true,
+    "per_seed_tb_dirs": true,
+    "physical_target_height_setups": true,
+    "backup_checkpoints": true,
+    "backup_checkpoints_git_rm": false
+  },
+  "verification": {
+    "compile": "OK",
+    "key_tests": "47 passed, 1 skipped",
+    "cli_help": "OK (train, evaluate, validate_checkpoint, simulate_hierarchical_controller)",
+    "t6j_smoke": "100/100 steps, no fall",
+    "runtime_classification": "DEEP_OUTPUTS_RUNTIME_VERIFICATION_PASS"
+  },
+  "preserved_dirs": [
+    "outputs/balance",
+    "outputs/physical_target_height_setups",
+    "backup_checkpoints"
+  ],
+  "remaining_review_items": {
+    "balance_core_dirs_over_refused": [
+      "outputs/balance_core_validation",
+      "outputs/balance_core_position_containment",
+      "outputs/balance_core_position_containment_e0b",
+      "outputs/balance_core_position_aware_precheck_5000",
+      "outputs/balance_core_e0_cleanup_validation_5000",
+      "outputs/balance_core_e0_cleanup_validation",
+      "outputs/balance_core_position_aware_precheck_1000",
+      "outputs/balance_core_true_height_variants",
+      "outputs/balance_core_extended_height_range",
+      "outputs/balance_core_longevity_height_sweep",
+      "outputs/balance_core_extended_longevity",
+      "outputs/balance_core_height_recovery"
+    ],
+    "approx_size": "377M",
+    "reason": "clean_outputs_bulk.py guard refuses any path containing 'outputs/balance', which over-matches 'outputs/balance_core_*'. Safe false-positive; summaries already extracted. Optional follow-up deletion."
+  },
+  "git_impact": "No tracked file deleted or modified by output cleanup (all deleted dirs were gitignored). New untracked: execution docs, 2 cleanup scripts, output_summaries archive tree."
+}

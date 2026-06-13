@@ -1,0 +1,78 @@
+{
+  "final_classification": "T6I_FULL_VALIDATION_PASS_WITH_MONITORING",
+  "date": "2026-06-13",
+  "profile": "T6I_phase_aware_release",
+  "phases": {
+    "phase_0_health_check": {
+      "status": "PASS",
+      "tests_total": 428,
+      "tests_failed": 0,
+      "compile_errors": 0
+    },
+    "phase_1_profile_telemetry": {
+      "status": "T6I_PROFILE_TELEMETRY_READY",
+      "profile_registered": true,
+      "telemetry_fields_complete": true
+    },
+    "phase_2_high_0p480_1200": {
+      "status": "T6I_HIGH_0P480_1200_PASS_WITH_MONITORING",
+      "survived_steps": 1199,
+      "max_abs_error": 0.2034,
+      "final_error": 0.0311
+    },
+    "phase_3_high_0p480_2000": {
+      "status": "T6I_HIGH_0P480_2000_PASS_PROCEED_5000",
+      "survived_steps": 1999,
+      "max_abs_error": 0.2122,
+      "final_error": 0.0294,
+      "accumulation_ratio": 1.219
+    },
+    "phase_4_high_0p480_5000": {
+      "status": "T6I_HIGH_0P480_5000_PASS_PROCEED_HEIGHT_LADDER",
+      "survived_steps": 4999,
+      "max_abs_error": 0.2122,
+      "final_error": 0.1309,
+      "accumulation_ratio": 1.051,
+      "outside_0p08_pct": 53.6,
+      "outside_0p10_pct": 46.7,
+      "outside_0p15_pct": 29.2,
+      "positive_drift_pct": 95.6,
+      "t6i_convergence_pct": 6.5
+    },
+    "phase_5_setup_discovery": {
+      "status": "COMPLETE",
+      "total_setups": 10,
+      "available_setups": 10
+    },
+    "phase_6_height_ladder": {
+      "status": "COMPLETE",
+      "total_setups_tested": 9,
+      "clean_passes": 8,
+      "marginal_fails": 1,
+      "hard_fails": 0,
+      "marginal_setup": "low_0p380 (0.0005m transient overshoot, 19 steps)"
+    },
+    "phase_7_low_0p300_regression": {
+      "status": "T6I_LOW_0P300_5000_REGRESSION_PASS",
+      "max_abs_error": 0.1715,
+      "accumulation_ratio": 0.865
+    }
+  },
+  "key_findings": [
+    "T6I survives all staged gates without falling",
+    "Drift is bounded and non-accumulating at all heights",
+    "Drift at high_0p480 is one-sided positive (95.6%) and not centered at zero",
+    "T6I convergence mechanism activates only 5-9% of steps with limited impact",
+    "low_0p380 has a marginal 0.0005m transient that self-corrects",
+    "No WBC, hidden torque, or ownership violations in any run",
+    "No falls in any configuration across 30,000+ total simulated steps",
+    "low_0p300 shows no regression over 5000 steps; drift improves over time"
+  ],
+  "comparison_vs_t6f": "T6I is broadly comparable to T6F. Not clearly superior. Both provide bounded drift at similar magnitudes.",
+  "step_e_readiness": "Stable but not precise. Passes hard gates but drift is one-sided and T6I mechanism impact is limited.",
+  "next_steps": [
+    "Decide whether Step E requires centered drift or only bounded drift",
+    "Investigate low_0p380 marginal transient (may be setup initialization)",
+    "Consider whether T6F is sufficient and T6I adds meaningful value"
+  ]
+}

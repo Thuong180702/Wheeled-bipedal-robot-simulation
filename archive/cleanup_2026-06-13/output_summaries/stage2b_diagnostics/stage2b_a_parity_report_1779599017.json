@@ -1,0 +1,93 @@
+{
+  "inputs": {
+    "steps": 500,
+    "compare_steps": 150,
+    "model_path": "assets/robot/wheeled_biped_real.xml",
+    "feedforward_scale": 0.6,
+    "feedforward_sign": "positive",
+    "feedforward_source": "fixed_validated_vector",
+    "feedforward_vector": [
+      0.0,
+      0.0,
+      0.0,
+      -15.5,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -15.8,
+      0.0
+    ]
+  },
+  "standalone_meta": {
+    "path": "validate_like",
+    "termination_reason": "height_too_low",
+    "steps_completed": 141,
+    "control_dt": 0.01,
+    "physics_dt": 0.002,
+    "n_substeps": 5,
+    "torque_rate_limit_enabled": true,
+    "termination_threshold": "check_termination(com_z<0.35 or tilt>45deg)",
+    "static_posture_gains": {
+      "kp_hip_pitch": 30.0,
+      "kd_hip_pitch": 4.0,
+      "kp_knee": 40.0,
+      "kd_knee": 5.0
+    },
+    "torque_limits": [
+      30.0,
+      30.0,
+      150.0,
+      150.0,
+      30.0,
+      30.0,
+      30.0,
+      150.0,
+      150.0,
+      30.0
+    ],
+    "max_torque_rate": 400.0
+  },
+  "main_a_meta": {
+    "path": "main_a_like",
+    "termination_reason": "height_too_low",
+    "steps_completed": 141,
+    "control_dt": 0.01,
+    "physics_dt": 0.002,
+    "n_substeps": 5,
+    "torque_rate_limit_enabled": true,
+    "termination_threshold": "check_termination(com_z<0.35 or tilt>45deg)",
+    "static_posture_gains": {
+      "kp_hip_pitch": 30.0,
+      "kd_hip_pitch": 4.0,
+      "kp_knee": 40.0,
+      "kd_knee": 5.0
+    },
+    "torque_limits": [
+      30.0,
+      30.0,
+      150.0,
+      150.0,
+      30.0,
+      30.0,
+      30.0,
+      150.0,
+      150.0,
+      30.0
+    ],
+    "max_torque_rate": 400.0
+  },
+  "decision": {
+    "root_cause": "equivalent_paths",
+    "first_mismatch": {
+      "step": null
+    },
+    "long_horizon_main_a": "roll_lateral_instability",
+    "standalone_termination": "height_too_low",
+    "main_a_termination": "height_too_low"
+  },
+  "artifacts": {
+    "standalone_csv": "outputs\\stage2b_diagnostics\\stage2b_a_parity_standalone_1779599017.csv",
+    "main_a_csv": "outputs\\stage2b_diagnostics\\stage2b_a_parity_main_a_1779599017.csv"
+  }
+}

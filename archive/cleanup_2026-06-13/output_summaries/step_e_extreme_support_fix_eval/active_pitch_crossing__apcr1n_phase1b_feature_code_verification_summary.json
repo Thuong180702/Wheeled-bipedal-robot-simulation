@@ -1,0 +1,227 @@
+{
+  "phase": "1b",
+  "phase_name": "Feature Code Verification",
+  "date": "2026-06-11",
+  "profile": "APCR1n_recenter_priority_torque_boost",
+  "classification": "APCR1N_PHASE1B_FEATURE_CODE_VERIFIED_READY_FOR_ABLATION",
+  "decision": "PROCEED_TO_ABLATION",
+
+  "sub_phases": {
+    "phase_0": {
+      "name": "Health Check",
+      "status": "PASS",
+      "classification": "PASS"
+    },
+    "phase_1": {
+      "name": "Feature Code Presence",
+      "status": "PASS_WITH_FIX",
+      "classification": "APCR1N_FEATURE_CODE_PRESENT_WITH_CONFIG_MISMATCH_FIXED",
+      "issues_found": [
+        "continuous_max_position_tau: expected True, found False",
+        "max_position_tau_nominal: expected 4.0, found 6.0",
+        "velocity_damping_scale: expected 1.10, found 1.0",
+        "position_cap_normal_nm: expected 4.0, found None"
+      ],
+      "issues_resolved": true
+    },
+    "phase_2": {
+      "name": "Unit Tests",
+      "status": "PASS",
+      "classification": "APCR1N_FEATURE_TESTS_PASS",
+      "tests_run": 326,
+      "tests_passed": 326,
+      "tests_failed": 0
+    },
+    "phase_3": {
+      "name": "100-Step Smoke Test",
+      "status": "PASS",
+      "classification": "APCR1N_SMOKE_100_TELEMETRY_PASS",
+      "steps_completed": 100,
+      "simulation_terminated": false,
+      "telemetry_columns": 16,
+      "telemetry_columns_populated": 16,
+      "startup_guard_active_steps": 100,
+      "feature_activations_during_startup": 0
+    },
+    "phase_4": {
+      "name": "Activation Trigger Test",
+      "status": "PASS",
+      "classification": "APCR1N_FEATURE_TRIGGER_CODE_VERIFIED",
+      "code_verification": "PASS",
+      "runtime_activation_test": "DEFERRED_TO_ABLATION"
+    },
+    "phase_5": {
+      "name": "Runtime Config Consumption",
+      "status": "PASS",
+      "classification": "APCR1N_RUNTIME_CONFIG_CONSUMED",
+      "config_fields_verified": 15,
+      "config_fields_consumed": 15
+    },
+    "phase_6": {
+      "name": "Final Decision Gate",
+      "status": "PASS",
+      "classification": "APCR1N_PHASE1B_FEATURE_CODE_VERIFIED_READY_FOR_ABLATION"
+    }
+  },
+
+  "verification_checklist": {
+    "feature_code_exists": true,
+    "config_mismatch_fixed": true,
+    "diagnostics_emitted": true,
+    "diagnostics_in_csv": true,
+    "startup_guard_works": true,
+    "runtime_config_consumed": true,
+    "recenter_priority_can_activate": true,
+    "wheel_damping_override_can_activate": true,
+    "position_cap_boost_can_activate": true,
+    "safety_gates_block_features": true,
+    "ready_for_ablation": true
+  },
+
+  "feature_implementation": {
+    "recenter_priority": {
+      "implemented": true,
+      "code_verified": true,
+      "runtime_tested": false,
+      "telemetry_column": "apcr1n_recenter_priority_active"
+    },
+    "wheel_damping_override": {
+      "implemented": true,
+      "code_verified": true,
+      "runtime_tested": false,
+      "scale": 0.30,
+      "telemetry_columns": [
+        "apcr1n_wheel_damping_override_active",
+        "apcr1n_wheel_damping_scale",
+        "apcr1n_wheel_damping_before",
+        "apcr1n_wheel_damping_after",
+        "apcr1n_wheel_damping_fights_drift"
+      ]
+    },
+    "position_cap_boost": {
+      "implemented": true,
+      "code_verified": true,
+      "runtime_tested": false,
+      "normal_cap_nm": 4.0,
+      "recenter_cap_nm": 5.0,
+      "emergency_cap_nm": 6.0,
+      "telemetry_columns": [
+        "apcr1n_position_cap_boost_active",
+        "apcr1n_position_cap_current",
+        "apcr1n_tau_position_raw",
+        "apcr1n_tau_position_after_cap",
+        "apcr1n_position_saturated"
+      ]
+    },
+    "startup_guard": {
+      "implemented": true,
+      "threshold_steps": 100,
+      "tested": true,
+      "telemetry_column": "apcr1n_startup_guard_active"
+    },
+    "safety_gates": {
+      "implemented": true,
+      "gates": [
+        "contact_valid",
+        "com_z >= 0.27",
+        "abs_roll <= 0.15",
+        "abs_pitch <= 0.15"
+      ],
+      "telemetry_column": "apcr1n_safety_gate_pass"
+    }
+  },
+
+  "config_consumption": {
+    "continuous_max_position_tau": {
+      "expected": true,
+      "runtime": true,
+      "status": "CONSUMED"
+    },
+    "max_position_tau_nominal": {
+      "expected": 4.0,
+      "runtime": 4.0,
+      "status": "CONSUMED",
+      "note": "Height-scheduled to 6.0 at low_0p300"
+    },
+    "velocity_damping_scale": {
+      "expected": 1.10,
+      "runtime": 1.10,
+      "status": "CONSUMED"
+    },
+    "position_cap_normal_nm": {
+      "expected": 4.0,
+      "runtime": 4.0,
+      "status": "CONSUMED"
+    },
+    "position_cap_recenter_nm": {
+      "expected": 5.0,
+      "runtime": 5.0,
+      "status": "READY"
+    },
+    "position_cap_emergency_nm": {
+      "expected": 6.0,
+      "runtime": 6.0,
+      "status": "DEFINED"
+    },
+    "vd_wheel_damping_recenter_scale": {
+      "expected": 0.30,
+      "runtime": 0.30,
+      "status": "READY"
+    },
+    "recenter_priority_startup_guard_steps": {
+      "expected": 100,
+      "runtime": 100,
+      "status": "CONSUMED"
+    }
+  },
+
+  "smoke_test_results": {
+    "setup": "low_0p300",
+    "steps": 100,
+    "terminated": false,
+    "com_height_range_m": [0.293, 0.295],
+    "pitch_range_deg": [-0.0, 7.7],
+    "roll_range_deg": [0.0, 0.2],
+    "max_torques_nm": {
+      "hip_roll": 9.63,
+      "wheels": 1.66,
+      "total": 8.88
+    },
+    "telemetry_file": "outputs/hierarchical_controller_sim/telemetry_1781185346.csv",
+    "telemetry_rows": 100,
+    "apcr1n_columns_present": 16,
+    "startup_guard_active_all_steps": true
+  },
+
+  "next_steps": {
+    "phase": "2",
+    "phase_name": "Ablation Study",
+    "action": "Run 2000-step comparison",
+    "profiles": [
+      "APCR1n_recenter_priority_torque_boost",
+      "APCR1h_support_drift_priority_fast_recenter",
+      "D2_baseline"
+    ],
+    "metrics": [
+      "survival_rate",
+      "support_drift_magnitude",
+      "drift_recovery_time",
+      "feature_activation_frequency",
+      "wheel_damping_magnitude",
+      "position_torque_saturation",
+      "final_torque_direction_correctness"
+    ],
+    "awaiting_approval": true
+  },
+
+  "reports_generated": [
+    "docs/validation/apcr1n_smoke_100_feature_verification_report.md",
+    "docs/validation/apcr1n_feature_activation_trigger_test_report.md",
+    "docs/validation/apcr1n_runtime_config_consumption_report.md",
+    "docs/validation/apcr1n_phase1b_feature_code_verification_final_report.md"
+  ],
+
+  "timestamp": "2026-06-11T18:30:00Z",
+  "verified_by": "Claude Code (Opus 4.8)",
+  "ready_for_ablation": true
+}

@@ -1,0 +1,60 @@
+{
+  "original_path": "outputs/height_range_extension_strategy_audit",
+  "original_size": "46.8K",
+  "original_size_bytes": 47878,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 7,
+  "copied_files": [
+    {
+      "file": "artifact_inventory.json",
+      "size_bytes": 7447
+    },
+    {
+      "file": "artifact_inventory.md",
+      "size_bytes": 4367
+    },
+    {
+      "file": "baseline_vs_extreme_failure_gap_analysis.json",
+      "size_bytes": 3461
+    },
+    {
+      "file": "current_diff_stat.txt",
+      "size_bytes": 454
+    },
+    {
+      "file": "height_range_extension_integrated_summary.json",
+      "size_bytes": 4740
+    },
+    {
+      "file": "height_range_extension_next_experiment_plan.json",
+      "size_bytes": 3229
+    },
+    {
+      "file": "height_range_extension_strategy.json",
+      "size_bytes": 3912
+    },
+    {
+      "file": "height_range_gap_audit.json",
+      "size_bytes": 3749
+    },
+    {
+      "file": "hy2_div_posture_fix_audit.json",
+      "size_bytes": 4390
+    },
+    {
+      "file": "old_baseline_controller_audit.json",
+      "size_bytes": 3081
+    },
+    {
+      "file": "recent_commits.txt",
+      "size_bytes": 2355
+    },
+    {
+      "file": "worktree_status.txt",
+      "size_bytes": 6693
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,206 @@
+{
+  "pitch_summary": {
+    "D2": {
+      "mean": 0.051964653053939366,
+      "final": 0.0474885813891887,
+      "min": -0.0082932719960808,
+      "max": 0.1110559850931167,
+      "std": 0.03542345696975617,
+      "rms": 0.06288995524489151,
+      "percent_positive": 89.0,
+      "percent_negative": 10.8,
+      "zero_crossings": 5,
+      "pitch_rate_zero_crossings": 8,
+      "recovery_windows": 289,
+      "recovery_percent": 57.8,
+      "longest_positive_interval_steps": 303,
+      "longest_negative_interval_steps": 48
+    },
+    "F1b": {
+      "mean": 0.05396288231775541,
+      "final": -0.0243940390646457,
+      "min": -0.0338479727506637,
+      "max": 0.1103187948465347,
+      "std": 0.04524248868832182,
+      "rms": 0.07041928323089384,
+      "percent_positive": 82.6,
+      "percent_negative": 17.2,
+      "zero_crossings": 6,
+      "pitch_rate_zero_crossings": 8,
+      "recovery_windows": 300,
+      "recovery_percent": 60.0,
+      "longest_positive_interval_steps": 256,
+      "longest_negative_interval_steps": 69
+    },
+    "F2a": {
+      "mean": 0.055958195732593564,
+      "final": -0.0058012260124087,
+      "min": -0.0421382337808609,
+      "max": 0.1110559850931167,
+      "std": 0.04752491518635844,
+      "rms": 0.07341619190013751,
+      "percent_positive": 83.39999999999999,
+      "percent_negative": 16.400000000000002,
+      "zero_crossings": 6,
+      "pitch_rate_zero_crossings": 16,
+      "recovery_windows": 301,
+      "recovery_percent": 60.199999999999996,
+      "longest_positive_interval_steps": 252,
+      "longest_negative_interval_steps": 73
+    },
+    "F2b": {
+      "mean": 0.05771704243124257,
+      "final": 0.0130700087174773,
+      "min": -0.0544693693518638,
+      "max": 0.1115992292761802,
+      "std": 0.051191142401146056,
+      "rms": 0.07714784538368046,
+      "percent_positive": 83.2,
+      "percent_negative": 16.6,
+      "zero_crossings": 5,
+      "pitch_rate_zero_crossings": 26,
+      "recovery_windows": 298,
+      "recovery_percent": 59.599999999999994,
+      "longest_positive_interval_steps": 247,
+      "longest_negative_interval_steps": 77
+    }
+  },
+  "signed_support_summary": {
+    "D2": {
+      "mean": 0.08233315110347866,
+      "median": 0.08225909694327495,
+      "final": 0.0592818533092424,
+      "min": -0.0035276358269349,
+      "max": 0.1756866669578762,
+      "std": 0.05792451457141435,
+      "rms": 0.10066775630241415,
+      "mae": 0.08259903991957908,
+      "percent_positive": 93.0,
+      "percent_negative": 6.6000000000000005,
+      "zero_crossings": 5,
+      "outside_pos_0p15": 96,
+      "outside_neg_0p15": 0,
+      "outside_band": 96,
+      "longest_positive_interval_steps": 316,
+      "longest_negative_interval_steps": 28
+    },
+    "F1b": {
+      "mean": 0.07641035903184745,
+      "median": 0.08542942663099451,
+      "final": -0.0327057399621433,
+      "min": -0.0338593564367903,
+      "max": 0.1694888688016431,
+      "std": 0.06514641802952945,
+      "rms": 0.10041214443210558,
+      "mae": 0.08315603568214622,
+      "percent_positive": 82.8,
+      "percent_negative": 16.8,
+      "zero_crossings": 6,
+      "outside_pos_0p15": 81,
+      "outside_neg_0p15": 0,
+      "outside_band": 81,
+      "longest_positive_interval_steps": 256,
+      "longest_negative_interval_steps": 66
+    },
+    "F2a": {
+      "mean": 0.08033275803882577,
+      "median": 0.09277083544184445,
+      "final": -0.014876259180293,
+      "min": -0.0474476829987557,
+      "max": 0.1761055275332059,
+      "std": 0.0704469279550262,
+      "rms": 0.10684625249593539,
+      "mae": 0.08967103489948523,
+      "percent_positive": 82.8,
+      "percent_negative": 16.8,
+      "zero_crossings": 6,
+      "outside_pos_0p15": 92,
+      "outside_neg_0p15": 0,
+      "outside_band": 92,
+      "longest_positive_interval_steps": 251,
+      "longest_negative_interval_steps": 74
+    },
+    "F2b": {
+      "mean": 0.08305337590788854,
+      "median": 0.10025938190425304,
+      "final": 0.0024593636496264,
+      "min": -0.0637908826725012,
+      "max": 0.1763569838954413,
+      "std": 0.07605964957270038,
+      "rms": 0.11261853108089727,
+      "mae": 0.09632732825865466,
+      "percent_positive": 82.6,
+      "percent_negative": 17.0,
+      "zero_crossings": 5,
+      "outside_pos_0p15": 142,
+      "outside_neg_0p15": 0,
+      "outside_band": 142,
+      "longest_positive_interval_steps": 244,
+      "longest_negative_interval_steps": 80
+    }
+  },
+  "wheel_velocity_summary": {
+    "D2": {
+      "mean": -0.19860603291913867,
+      "final": 2.29912269115448,
+      "min": -4.3887152671813965,
+      "max": 2.5514637231826782,
+      "std": 1.9818936334298127,
+      "rms": 1.9918199543486612,
+      "percent_positive": 51.800000000000004,
+      "percent_negative": 48.0,
+      "zero_crossings": 7
+    },
+    "F1b": {
+      "mean": 0.13182432795560453,
+      "final": 4.198258876800537,
+      "min": -4.544600486755371,
+      "max": 5.004864931106567,
+      "std": 2.8698152233392036,
+      "rms": 2.8728412886113963,
+      "percent_positive": 51.6,
+      "percent_negative": 48.199999999999996,
+      "zero_crossings": 7
+    },
+    "F2a": {
+      "mean": 0.07216964654251933,
+      "final": 5.277382850646973,
+      "min": -4.862898349761963,
+      "max": 5.521620988845825,
+      "std": 3.0798857246691784,
+      "rms": 3.08073116887908,
+      "percent_positive": 50.6,
+      "percent_negative": 49.2,
+      "zero_crossings": 9
+    },
+    "F2b": {
+      "mean": 0.012434585603885353,
+      "final": 6.048660039901733,
+      "min": -5.718992471694946,
+      "max": 6.065079689025879,
+      "std": 3.3195563077010646,
+      "rms": 3.3195795967135755,
+      "percent_positive": 50.0,
+      "percent_negative": 49.8,
+      "zero_crossings": 9
+    }
+  },
+  "classifications": {
+    "D2": {
+      "pitch": "PITCH_REVERSES_BUT_SUPPORT_REMAINS_POSITIVE",
+      "wheel_support": "NORMAL"
+    },
+    "F1b": {
+      "pitch": "PITCH_REVERSES_BUT_SUPPORT_REMAINS_POSITIVE",
+      "wheel_support": "NORMAL"
+    },
+    "F2a": {
+      "pitch": "PITCH_REVERSES_BUT_SUPPORT_REMAINS_POSITIVE",
+      "wheel_support": "NORMAL"
+    },
+    "F2b": {
+      "pitch": "PITCH_REVERSES_BUT_SUPPORT_REMAINS_POSITIVE",
+      "wheel_support": "NORMAL"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "original_path": "outputs/b9_diagnostic_fixed_smoke",
+  "original_size": "7.7K",
+  "original_size_bytes": 7910,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "diagnostic_summary_h0.60_seed42.json",
+      "size_bytes": 400
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

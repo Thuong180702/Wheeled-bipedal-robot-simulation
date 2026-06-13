@@ -1,0 +1,15 @@
+{
+  "stage": "C",
+  "best_config_id": 1,
+  "best_metrics": {
+    "mean_survival_s": 3.8926666666666665,
+    "mean_fall_rate": 0.8333333333333334,
+    "mean_pitch_rms_deg": 1.0109260130054514,
+    "mean_roll_rms_deg": 21.168228816065504,
+    "mean_action_sat_rate": 0.0
+  },
+  "best_params": {
+    "com_rate_gain_mult": 1.0,
+    "filter_max_delta_mult": 1.0
+  }
+}

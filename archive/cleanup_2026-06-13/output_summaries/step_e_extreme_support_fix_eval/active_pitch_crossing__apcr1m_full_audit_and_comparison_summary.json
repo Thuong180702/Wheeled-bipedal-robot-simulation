@@ -1,0 +1,77 @@
+{
+  "classification": "APCR1M_AUDIT_NOT_BETTER_THAN_APCR1H",
+  "decision_date": "2026-06-11",
+  "task": "APCR1m full audit and comparison",
+  "phases_completed": [
+    "PHASE 0: Health check - DONE",
+    "PHASE 1: Telemetry gap fix - DONE",
+    "PHASE 2: APCR1m 1000-step run - DONE",
+    "PHASE 3: Comparison references - DONE",
+    "PHASE 4: Drift comparison table - DONE",
+    "PHASE 5: Blend behavior audit - DONE",
+    "PHASE 6: Torque composition audit - DONE",
+    "PHASE 7: Position cap audit - DONE",
+    "PHASE 8: Current best profile - DONE",
+    "PHASE 9: APCR1n design - DONE",
+    "PHASE 10: Final report - DONE"
+  ],
+  "key_findings": {
+    "startup_stable": true,
+    "telemetry_gap_fixed": true,
+    "apcr1m_blend_working": true,
+    "blend_blocked_by_safety": "38.7%",
+    "tau_pitch_reduction": "32.6%",
+    "apcr1m_drift_vs_apcr1h": "2.4x worse"
+  },
+  "root_causes": [
+    "wheel_velocity_damping_3.5x_larger_than_apcr1h",
+    "position_cap_saturated_77.3%",
+    "final_torque_fights_drift_62.8%"
+  ],
+  "comparison_summary": {
+    "max_abs_error_m": {"APCR1h": 0.178, "APCR1j": 0.183, "APCR1k": 0.232, "APCR1m": 0.434},
+    "p2p_m": {"APCR1h": 0.249, "APCR1j": 0.251, "APCR1k": 0.303, "APCR1m": 0.833},
+    "outside_pm_0.15_pct": {"APCR1h": 9.7, "APCR1j": 25.8, "APCR1k": 20.2, "APCR1m": 54.0},
+    "wheel_damping_abs_mean_nm": {"APCR1h": 1.42, "APCR1j": 1.34, "APCR1k": 1.31, "APCR1m": 5.00}
+  },
+  "current_best": "APCR1h",
+  "apcr1n_recommended": true,
+  "apcr1n_target": {
+    "max_abs_error_m": "< 0.200",
+    "wheel_damping_nm": "1.5-2.0",
+    "position_cap_recenter_nm": 5.0
+  },
+  "do_not_do": [
+    "Do NOT run 2000-step on APCR1m",
+    "Do NOT run 5000-step on APCR1m",
+    "Do NOT claim Step E pass",
+    "Do NOT make APCR1m the default",
+    "Do NOT implement APCR1n without testing"
+  ],
+  "files_generated": {
+    "reports": [
+      "docs/validation/apcr1m_vs_prior_profiles_drift_table.md",
+      "docs/validation/apcr1m_pitch_blend_behavior_audit.md",
+      "docs/validation/apcr1m_torque_composition_dominance_audit.md",
+      "docs/validation/apcr1m_position_torque_cap_audit.md",
+      "docs/validation/current_best_apcr_profile_decision.md",
+      "docs/validation/apcr1n_candidate_design_from_apcr1m_audit.md",
+      "docs/validation/apcr1m_full_audit_and_comparison_final_report.md"
+    ],
+    "json_outputs": [
+      "outputs/.../apcr1m_vs_prior_profiles_drift_table.json",
+      "outputs/.../apcr1m_pitch_blend_behavior_audit.json",
+      "outputs/.../apcr1m_torque_composition_dominance_audit.json",
+      "outputs/.../apcr1m_position_torque_cap_audit.json",
+      "outputs/.../current_best_apcr_profile_decision.json",
+      "outputs/.../apcr1n_candidate_design_from_apcr1m_audit.json",
+      "outputs/.../apcr1m_full_audit_and_comparison_summary.json"
+    ],
+    "telemetry_data": [
+      "outputs/.../apcr1m_low_0p300_1000_full_telemetry/telemetry.csv",
+      "outputs/.../comparison_1000_apcr1h/telemetry.csv",
+      "outputs/.../comparison_1000_apcr1j/telemetry.csv",
+      "outputs/.../comparison_1000_apcr1k/telemetry.csv"
+    ]
+  }
+}

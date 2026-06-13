@@ -1,0 +1,118 @@
+{
+  "startup_guard": {
+    "active_count": 0,
+    "active_percent": 0.0,
+    "active_0_99": 0,
+    "inactive_after_100": 1900
+  },
+  "wheel_damping_override": {
+    "active_count": 0,
+    "active_percent": 0.0,
+    "before_mean": -0.001,
+    "before_max": 0.0013,
+    "after_mean": -0.0043,
+    "after_max": 0.5
+  },
+  "wheel_damping_scale_distribution": {
+    "1.0": 1981,
+    "0.3": 19
+  },
+  "position_cap_boost": {
+    "active_count": 0,
+    "active_percent": 0.0,
+    "cap_4p0_count": 0,
+    "cap_5p0_count": 350,
+    "cap_6p0_count": 1650
+  },
+  "drift": {
+    "min": -0.010357,
+    "max": 0.169141,
+    "max_abs": 0.169141,
+    "p2p": 0.179498,
+    "mean": 0.060186,
+    "mean_abs": 0.060732,
+    "final": 0.003845,
+    "positive_count": 1907,
+    "positive_percent": 95.35,
+    "negative_count": 92,
+    "negative_percent": 4.6,
+    "zero_count": 1,
+    "zero_crossings": 9,
+    "longest_positive_interval": 1094,
+    "longest_negative_interval": 44
+  },
+  "outside_pm_0.03": {
+    "count": 1347,
+    "percent": 67.35
+  },
+  "outside_pm_0.05": {
+    "count": 1101,
+    "percent": 55.05
+  },
+  "outside_pm_0.08": {
+    "count": 754,
+    "percent": 37.7
+  },
+  "outside_pm_0.1": {
+    "count": 446,
+    "percent": 22.3
+  },
+  "outside_pm_0.12": {
+    "count": 88,
+    "percent": 4.4
+  },
+  "outside_pm_0.15": {
+    "count": 55,
+    "percent": 2.75
+  },
+  "above_plus_0p15": {
+    "count": 55,
+    "percent": 2.75
+  },
+  "below_minus_0p15": {
+    "count": 0,
+    "percent": 0.0
+  },
+  "windows": {
+    "0_500": {
+      "max_abs": 0.169141,
+      "p2p": 0.179498,
+      "mean_abs": 0.069296,
+      "final": 0.04662,
+      "outside_pm_0p10": 158,
+      "outside_pm_0p15": 55,
+      "zero_crossings": 5
+    },
+    "500_1000": {
+      "max_abs": 0.106438,
+      "p2p": 0.116004,
+      "mean_abs": 0.051819,
+      "final": 0.106438,
+      "outside_pm_0p10": 27,
+      "outside_pm_0p15": 0,
+      "zero_crossings": 4
+    },
+    "1000_1500": {
+      "max_abs": 0.117459,
+      "p2p": 0.112477,
+      "mean_abs": 0.065737,
+      "final": 0.068289,
+      "outside_pm_0p10": 148,
+      "outside_pm_0p15": 0,
+      "zero_crossings": 0
+    },
+    "1500_2000": {
+      "max_abs": 0.118049,
+      "p2p": 0.115769,
+      "mean_abs": 0.056075,
+      "final": 0.003845,
+      "outside_pm_0p10": 113,
+      "outside_pm_0p15": 0,
+      "zero_crossings": 0
+    }
+  },
+  "torque_direction": {
+    "correct_percent": 51.05,
+    "fights_drift_percent": 48.9
+  }
+}

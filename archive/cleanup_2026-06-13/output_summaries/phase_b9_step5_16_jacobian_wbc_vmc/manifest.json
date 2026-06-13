@@ -1,0 +1,40 @@
+{
+  "original_path": "outputs/phase_b9_step5_16_jacobian_wbc_vmc",
+  "original_size": "8.8K",
+  "original_size_bytes": 9009,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "candidate_summary.json",
+      "size_bytes": 486
+    },
+    {
+      "file": "final_summary.json",
+      "size_bytes": 296
+    },
+    {
+      "file": "interface_audit.json",
+      "size_bytes": 2515
+    },
+    {
+      "file": "interface_audit.md",
+      "size_bytes": 367
+    },
+    {
+      "file": "jacobian_mapping_summary.json",
+      "size_bytes": 394
+    },
+    {
+      "file": "response_validation_summary.json",
+      "size_bytes": 297
+    },
+    {
+      "file": "wbc_formulation.md",
+      "size_bytes": 819
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

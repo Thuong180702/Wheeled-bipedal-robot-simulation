@@ -1,0 +1,95 @@
+{
+  "profile_name": "APCR1f_adaptive_fast_response_phase_brake",
+  "version": "1.0",
+  "created": "2026-06-09",
+  "design_principle": "React earlier when error growing away from zero, brake harder when error already returning toward zero",
+  "parent": "APCR1e_adaptive_authority",
+  "key_differences_from_apcr1e": [
+    "Earlier intervention at 0.035m vs 0.05m",
+    "Faster rate limit 0.55 Nm/step vs 0.35 Nm/step",
+    "Higher max_tau 1.40 Nm vs 1.20 Nm",
+    "Phase brake when returning toward zero",
+    "Boost when error growing 3 consecutive steps",
+    "Faster no-improvement boost (5 steps vs 8)"
+  ],
+  "parameters": {
+    "apc_proportional_soft_band_mode": true,
+    "apc_adaptive_authority_enabled": true,
+    "apc_adaptive_base_tau": 0.45,
+    "apc_adaptive_max_tau": 1.40,
+    "apc_adaptive_boost_tau_max": 0.95,
+    "apc_adaptive_boost_start_error_m": 0.06,
+    "apc_adaptive_full_boost_error_m": 0.10,
+    "apc_adaptive_no_improvement_window_steps": 5,
+    "apc_adaptive_startup_boost_steps": 50,
+    "apc_adaptive_startup_boost_max_tau": 1.20,
+    "apc_adaptive_disable_vd_when_abs_e_gt": 0.10,
+    "apc_adaptive_disable_vd_during_startup": true,
+    "apc_adaptive_max_rate_per_step": 0.55,
+    "apc_soft_enter_m": 0.035,
+    "apc_inner_exit_m": 0.015,
+    "apc_outer_enter_m": 0.10,
+    "apc_velocity_decay_enabled": true,
+    "apc_velocity_decay_factor": 0.5,
+    "apc_smooth_alpha": 0.18,
+    "fast_response_enabled": true,
+    "phase_brake_enabled": true,
+    "phase_brake_threshold_m": 0.08,
+    "phase_brake_damping_factor": 0.6,
+    "boost_rate_per_step": 0.25,
+    "decay_rate_per_step": 0.45,
+    "increasing_error_threshold_steps": 3,
+    "increasing_error_boost_factor": 0.3
+  },
+  "control_regions": {
+    "deadband": {
+      "condition": "abs_error <= 0.015",
+      "torque": 0
+    },
+    "early_soft": {
+      "condition": "0.015 < abs_error <= 0.035",
+      "torque": "light_proportional"
+    },
+    "active_response": {
+      "condition": "0.035 < abs_error <= 0.08",
+      "torque": "proportional_with_smoothstep"
+    },
+    "strong_response": {
+      "condition": "0.08 < abs_error <= 0.10",
+      "torque": "base_plus_adaptive_boost"
+    },
+    "emergency": {
+      "condition": "abs_error > 0.10 OR error_growing_3_consecutive_steps",
+      "torque": "max_adaptive_authority"
+    }
+  },
+  "phase_logic": {
+    "moving_away_from_zero": {
+      "velocity_decay": "disabled",
+      "boost_rate": "boost_rate_per_step",
+      "max_tau": 1.40
+    },
+    "moving_toward_zero_high_error": {
+      "velocity_decay": "maintain",
+      "torque": "maintain_base_level",
+      "condition": "abs_error > 0.10"
+    },
+    "moving_toward_zero_phase_brake": {
+      "velocity_decay": "apply",
+      "scale": "proportional_scale * 0.6",
+      "condition": "abs_error > 0.08 AND abs_error <= 0.10"
+    },
+    "moving_toward_zero_quick_decay": {
+      "velocity_decay": "fast",
+      "rate": "decay_rate_per_step",
+      "condition": "abs_error <= 0.08"
+    }
+  },
+  "target_metrics": {
+    "max_positive_drift_m": 0.14,
+    "min_negative_drift_m": -0.08,
+    "peak_to_peak_m": 0.18,
+    "outside_0p15_pct": 8.0
+  },
+  "applies_to_variants": ["low_0p300", "low_0p330", "low_0p360", "extreme_height"]
+}

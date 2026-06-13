@@ -1,0 +1,64 @@
+{
+  "profile": "APCR1i_support_hysteresis_recenter",
+  "steps": 1000,
+  "survived": true,
+  "decision": "APCR1I_1000_DIAGNOSTIC_ONLY_NEEDS_FIX",
+  "key_findings": {
+    "max_e_m": 0.2550,
+    "target_max_e_m": 0.15,
+    "outside_015_pct": 29.6,
+    "torque_cap_gap": 0.25,
+    "root_cause": "downstream_apc_max_cross_tau_1.5_overrides_profile_1.75"
+  },
+  "drift_metrics": {
+    "min_e_m": -0.0873,
+    "max_e_m": 0.2550,
+    "p2p_m": 0.3424,
+    "max_abs_e_m": 0.2550,
+    "mean_e_m": 0.0809,
+    "outside_008_pct": 54.6,
+    "outside_010_pct": 46.4,
+    "outside_012_pct": 40.4,
+    "outside_015_pct": 29.6
+  },
+  "state_machine": {
+    "total_recenter_episodes": 5,
+    "recenter_from_positive": 4,
+    "recenter_from_negative": 1,
+    "hold_through_zero": 0,
+    "correct_exits": 4,
+    "early_exits": 1
+  },
+  "torque_authority": {
+    "configured_recenter_max_tau": 1.75,
+    "configured_emergency_max_tau": 2.00,
+    "observed_max_tau": 1.5000,
+    "gap_nm": 0.25,
+    "classification": "APCR1I_TAU_LIMIT_DOWNSTREAM_CLIPPED"
+  },
+  "principle_verification": {
+    "p1_e_positive_recenter": "PASS",
+    "p2_e_negative_recenter": "PASS",
+    "p3_no_early_exit": "FAIL",
+    "p4_pitch_gate": "CAUTION",
+    "p5_bidirectional": "PASS",
+    "classification": "APCR1I_PRINCIPLE_FAILS_EARLY_EXIT"
+  },
+  "comparison": {
+    "apcr1h_max_e": 0.1572,
+    "apcr1h_outside_015_pct": 2.6,
+    "apcr1i_worse_by_pct": 62
+  },
+  "fix_recommendation": {
+    "action": "create_apcr1j",
+    "change": "increase_apc_max_cross_tau_to_2.0",
+    "rationale": "override_downstream_1.5Nm_cap"
+  },
+  "current_best_profile": "APCR1h",
+  "next_steps": [
+    "create_apcr1j_with_apc_max_cross_tau_2.0",
+    "run_apcr1j_1000_step_validation",
+    "do_not_modify_apcr1i",
+    "do_not_run_2000_step_until_apcr1j_improves"
+  ]
+}

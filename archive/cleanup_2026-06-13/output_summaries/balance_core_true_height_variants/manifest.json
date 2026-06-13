@@ -1,0 +1,60 @@
+{
+  "original_path": "outputs/balance_core_true_height_variants",
+  "original_size": "54.4K",
+  "original_size_bytes": 55666,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 19,
+  "copied_files": [
+    {
+      "file": "STEP_B_FINAL_REPORT.md",
+      "size_bytes": 10386
+    },
+    {
+      "file": "true_height_variant_dynamic_summary.json",
+      "size_bytes": 5516
+    },
+    {
+      "file": "true_height_variant_dynamic_summary.md",
+      "size_bytes": 2406
+    },
+    {
+      "file": "true_height_variant_full_validation_summary.json",
+      "size_bytes": 5596
+    },
+    {
+      "file": "true_height_variant_full_validation_summary.md",
+      "size_bytes": 580
+    },
+    {
+      "file": "true_height_variant_setup_report.json",
+      "size_bytes": 12896
+    },
+    {
+      "file": "true_height_variant_setup_report.md",
+      "size_bytes": 7969
+    },
+    {
+      "file": "variant_high_small/variant_setup.json",
+      "size_bytes": 2179
+    },
+    {
+      "file": "variant_high_tiny/variant_setup.json",
+      "size_bytes": 2173
+    },
+    {
+      "file": "variant_low_small/variant_setup.json",
+      "size_bytes": 2182
+    },
+    {
+      "file": "variant_low_tiny/variant_setup.json",
+      "size_bytes": 2175
+    },
+    {
+      "file": "variant_nominal/variant_setup.json",
+      "size_bytes": 1608
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

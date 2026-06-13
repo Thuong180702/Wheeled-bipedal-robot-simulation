@@ -1,0 +1,107 @@
+{
+  "audit_date": "2026-06-07",
+  "task": "E2 Hip-Yaw Regression Root Cause Audit",
+  "status": "COMPLETE",
+
+  "e2_support_improvement": {
+    "d2_support_crossings": 96,
+    "e2_support_crossings": 62,
+    "improvement_percent": 35,
+    "d2_support_max_m": 0.1757,
+    "e2_support_max_m": 0.1703,
+    "improvement_max_percent": 3.1,
+    "conclusion": "E2 significantly improves support_position_error_m"
+  },
+
+  "e2_hip_yaw_regression": {
+    "d2_hip_yaw_max_rad": 0.1018,
+    "e2_hip_yaw_max_rad": 0.1304,
+    "regression_percent": 28.1,
+    "gate_threshold_rad": 0.10,
+    "gate_status": "FAIL",
+    "conclusion": "E2 causes hip_yaw to exceed gate threshold by 30%"
+  },
+
+  "event_order": {
+    "e2_hip_yaw_gt_0.10_step": 447,
+    "e2_support_gt_0.15_step": 89,
+    "d2_hip_yaw_gt_0.10_step": 328,
+    "d2_support_gt_0.15_step": 91,
+    "conclusion": "E2 hip_yaw regression appears AFTER support improved, indicating correction coupling"
+  },
+
+  "torque_coupling": {
+    "e2_tau_position_raw_max_Nm": 1.28,
+    "d2_tau_position_raw_max_Nm": 0.14,
+    "e2_tau_position_raw_vs_hip_yaw_corr": 0.73,
+    "d2_tau_position_raw_vs_hip_yaw_corr": 0.63,
+    "e2_divergence_vs_tau_position_corr": 0.73,
+    "d2_divergence_vs_tau_position_corr": 0.64,
+    "conclusion": "Strong correlation between position torque and hip_yaw divergence in E2"
+  },
+
+  "integral_gate_comparison": {
+    "e2_pitch_threshold_rad": 0.03,
+    "e1_after_pitch_threshold_rad": 0.12,
+    "e2_position_cap_Nm": 5.0,
+    "e1_after_position_cap_Nm": 4.0,
+    "e2_integral_active_count": 31,
+    "e1_after_integral_active_count": 39,
+    "e1_after_hip_yaw_max_rad": 0.1018,
+    "conclusion": "E1_after (0.12 threshold) had NO hip_yaw regression. E2 (0.03 threshold) has regression."
+  },
+
+  "root_cause_classification": "E2_HIP_YAW_REGRESSION_FROM_RESTRICTIVE_INTEGRAL_GATE",
+
+  "root_cause_explanation": {
+    "primary": "RESTRICTIVE_INTEGRAL_GATE",
+    "primary_evidence": "E2 uses 0.03 rad pitch threshold (4x more restrictive than E1_after's 0.12). This delays integral activation, causing larger corrections that couple into hip_yaw through WBC/posture layer.",
+    "secondary": "HIGHER_POSITION_CAP",
+    "secondary_evidence": "E2 5.0 Nm cap (25% higher than D2/E1_after 4.0 Nm) allows more aggressive corrections when integral finally activates."
+  },
+
+  "decision": "E2_REQUIRES_E2B_GATE_ALIGNMENT",
+
+  "decision_rationale": [
+    "E2 significantly improves support_position_error_m (+35% fewer gate violations)",
+    "E2 causes hip_yaw_abs_max to exceed 0.10 rad gate (+28% regression)",
+    "Evidence strongly suggests restrictive 0.03 rad threshold is the primary cause",
+    "E2b isolates the gate parameter (0.12) while keeping the cap improvement (5.0 Nm)",
+    "If E2b passes, we have a viable E2 variant",
+    "If E2b fails, we know the cap is problematic and should try E2c"
+  ],
+
+  "proposed_next_candidate": {
+    "name": "E2b",
+    "description": "Gate alignment with cap increase",
+    "max_position_tau_low_max_Nm": 5.0,
+    "integral_pitch_error_threshold_rad": 0.12,
+    "purpose": "Isolate cap effect while using permissive E1_after gate",
+    "expected_benefit": "Support improvement + no hip_yaw regression",
+    "pass_criteria": {
+      "hip_yaw_abs_max_rad": "< 0.10",
+      "support_crossings": "<= 70"
+    }
+  },
+
+  "restrictions_maintained": [
+    "No 2000-step validation",
+    "No 5000-step validation",
+    "No Step C",
+    "No Step D",
+    "No HY2-DIV",
+    "No WBC",
+    "No commit"
+  ],
+
+  "files_generated": [
+    "outputs/step_e_extreme_support_fix_eval/e2_hip_yaw_regression_audit/event_order.csv",
+    "outputs/step_e_extreme_support_fix_eval/e2_hip_yaw_regression_audit/event_order_summary.json",
+    "outputs/step_e_extreme_support_fix_eval/e2_hip_yaw_regression_audit/torque_coupling_summary.json",
+    "outputs/step_e_extreme_support_fix_eval/e2_hip_yaw_regression_audit/integral_gate_comparison.json",
+    "outputs/step_e_extreme_support_fix_eval/e2_next_candidate_design_plan.json",
+    "docs/validation/e2_next_candidate_design_plan.md",
+    "docs/validation/e2_hip_yaw_regression_root_cause_audit.md",
+    "outputs/step_e_extreme_support_fix_eval/e2_hip_yaw_regression_audit_summary.json"
+  ]
+}

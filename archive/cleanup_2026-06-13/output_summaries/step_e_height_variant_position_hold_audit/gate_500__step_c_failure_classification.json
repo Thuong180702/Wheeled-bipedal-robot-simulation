@@ -1,0 +1,22 @@
+{
+  "nominal": [
+    "unclear_requires_more_telemetry",
+    "simulation_failed"
+  ],
+  "low_tiny": [
+    "unclear_requires_more_telemetry",
+    "simulation_failed"
+  ],
+  "high_tiny": [
+    "unclear_requires_more_telemetry",
+    "simulation_failed"
+  ],
+  "low_small": [
+    "unclear_requires_more_telemetry",
+    "simulation_failed"
+  ],
+  "high_small": [
+    "unclear_requires_more_telemetry",
+    "simulation_failed"
+  ]
+}

@@ -1,0 +1,280 @@
+{
+  "original_path": "outputs/sagittal_position_hold_return",
+  "original_size": "72.2M",
+  "original_size_bytes": 75671440,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "bug_fixed_f4c_validation_summary.json",
+      "size_bytes": 4940
+    },
+    {
+      "file": "bug_fixed_f4c_validation_summary.md",
+      "size_bytes": 4438
+    },
+    {
+      "file": "cp_coupling_fix_report.json",
+      "size_bytes": 9922
+    },
+    {
+      "file": "cp_coupling_fix_report.md",
+      "size_bytes": 10329
+    },
+    {
+      "file": "fix_d_implementation_summary.md",
+      "size_bytes": 9613
+    },
+    {
+      "file": "one_sided_error_audit/analysis_summary.json",
+      "size_bytes": 57046
+    },
+    {
+      "file": "one_sided_error_audit/fix_v1_1000_summary.json",
+      "size_bytes": 1624
+    },
+    {
+      "file": "one_sided_error_audit/step_e_one_sided_error_root_cause_report.md",
+      "size_bytes": 4759
+    },
+    {
+      "file": "one_sided_error_audit/telemetry_1780233599.summary.json",
+      "size_bytes": 1319
+    },
+    {
+      "file": "pitch_buildup_milestones.json",
+      "size_bytes": 1022
+    },
+    {
+      "file": "pitch_rate_consistency_fix_report.json",
+      "size_bytes": 6067
+    },
+    {
+      "file": "pitch_rate_consistency_fix_report.md",
+      "size_bytes": 9129
+    },
+    {
+      "file": "pitch_rate_fix_revert_report.json",
+      "size_bytes": 1567
+    },
+    {
+      "file": "pitch_rate_fix_revert_report.md",
+      "size_bytes": 2536
+    },
+    {
+      "file": "pitch_spike_root_cause_report.json",
+      "size_bytes": 9133
+    },
+    {
+      "file": "pitch_spike_root_cause_report.md",
+      "size_bytes": 11596
+    },
+    {
+      "file": "position_error_plumbing_fix_report.json",
+      "size_bytes": 3051
+    },
+    {
+      "file": "position_error_plumbing_fix_report.md",
+      "size_bytes": 5945
+    },
+    {
+      "file": "position_hold_refinement_report.json",
+      "size_bytes": 6510
+    },
+    {
+      "file": "position_hold_refinement_report.md",
+      "size_bytes": 9281
+    },
+    {
+      "file": "position_return_migration_report.json",
+      "size_bytes": 9850
+    },
+    {
+      "file": "position_return_migration_report.md",
+      "size_bytes": 9832
+    },
+    {
+      "file": "position_state_separation_report.json",
+      "size_bytes": 8753
+    },
+    {
+      "file": "position_state_separation_report.md",
+      "size_bytes": 9433
+    },
+    {
+      "file": "posture_regression_audit/correct_mode_visual_validation_report.md",
+      "size_bytes": 7127
+    },
+    {
+      "file": "posture_regression_audit/critical_bug_wbc_not_disabled_in_balance_core.json",
+      "size_bytes": 3698
+    },
+    {
+      "file": "posture_regression_audit/critical_bug_wbc_not_disabled_in_balance_core.md",
+      "size_bytes": 6995
+    },
+    {
+      "file": "posture_regression_audit/phase1_runtime_configuration_audit.json",
+      "size_bytes": 7107
+    },
+    {
+      "file": "posture_regression_audit/phase1_runtime_configuration_audit.md",
+      "size_bytes": 9409
+    },
+    {
+      "file": "sign_convention_verification.txt",
+      "size_bytes": 14044
+    },
+    {
+      "file": "step_e_authority_calibration_report.json",
+      "size_bytes": 7789
+    },
+    {
+      "file": "step_e_authority_calibration_report.md",
+      "size_bytes": 8752
+    },
+    {
+      "file": "step_e_complete_session_report.md",
+      "size_bytes": 11836
+    },
+    {
+      "file": "step_e_equilibrium_and_authority_root_cause_report.json",
+      "size_bytes": 9285
+    },
+    {
+      "file": "step_e_equilibrium_and_authority_root_cause_report.md",
+      "size_bytes": 12998
+    },
+    {
+      "file": "step_e_final_summary.md",
+      "size_bytes": 9740
+    },
+    {
+      "file": "step_e_final_validation_summary.json",
+      "size_bytes": 4949
+    },
+    {
+      "file": "step_e_final_validation_summary.md",
+      "size_bytes": 4583
+    },
+    {
+      "file": "step_e_no_pitch_reserve_revert_report.json",
+      "size_bytes": 5100
+    },
+    {
+      "file": "step_e_no_pitch_reserve_revert_report.md",
+      "size_bytes": 2772
+    },
+    {
+      "file": "step_e_position_regulator_fix_report.md",
+      "size_bytes": 11311
+    },
+    {
+      "file": "step_e_position_regulator_root_cause_report.json",
+      "size_bytes": 7544
+    },
+    {
+      "file": "step_e_position_regulator_root_cause_report.md",
+      "size_bytes": 12093
+    },
+    {
+      "file": "step_e_reanalysis_report.md",
+      "size_bytes": 13356
+    },
+    {
+      "file": "step_e_root_cause_and_fix_report.json",
+      "size_bytes": 5780
+    },
+    {
+      "file": "step_e_root_cause_and_fix_report.md",
+      "size_bytes": 10251
+    },
+    {
+      "file": "step_e_steady_state_integral_report.json",
+      "size_bytes": 5501
+    },
+    {
+      "file": "step_e_steady_state_integral_report.md",
+      "size_bytes": 3566
+    },
+    {
+      "file": "step_e_support_position_validation_summary.json",
+      "size_bytes": 6047
+    },
+    {
+      "file": "step_e_support_position_validation_summary.md",
+      "size_bytes": 5828
+    },
+    {
+      "file": "step_e_torque_budget_authority_report.md",
+      "size_bytes": 11114
+    },
+    {
+      "file": "step_e_torque_budget_comparison.json",
+      "size_bytes": 5014
+    },
+    {
+      "file": "step_e_total_torque_bound_authority_fix_report.json",
+      "size_bytes": 7834
+    },
+    {
+      "file": "step_e_total_torque_bound_authority_fix_report.md",
+      "size_bytes": 6793
+    },
+    {
+      "file": "step_e_transient_disambiguation_report.json",
+      "size_bytes": 6905
+    },
+    {
+      "file": "step_e_transient_disambiguation_report.md",
+      "size_bytes": 7614
+    },
+    {
+      "file": "step_e_transient_root_cause_report.json",
+      "size_bytes": 11289
+    },
+    {
+      "file": "step_e_transient_root_cause_report.md",
+      "size_bytes": 11834
+    },
+    {
+      "file": "step_e_v5_results_and_updated_analysis.md",
+      "size_bytes": 6963
+    },
+    {
+      "file": "step_e_validation_failure_report.json",
+      "size_bytes": 6731
+    },
+    {
+      "file": "step_e_validation_failure_report.md",
+      "size_bytes": 13501
+    },
+    {
+      "file": "step_e_work_summary.md",
+      "size_bytes": 8185
+    },
+    {
+      "file": "support_position_gain_calibration_report.json",
+      "size_bytes": 9647
+    },
+    {
+      "file": "support_position_gain_calibration_report.md",
+      "size_bytes": 7431
+    },
+    {
+      "file": "transient_capture_diagnostic_report.json",
+      "size_bytes": 5403
+    },
+    {
+      "file": "transient_capture_diagnostic_report.md",
+      "size_bytes": 7408
+    },
+    {
+      "file": "v1_telemetry_check_summary.json",
+      "size_bytes": 698
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

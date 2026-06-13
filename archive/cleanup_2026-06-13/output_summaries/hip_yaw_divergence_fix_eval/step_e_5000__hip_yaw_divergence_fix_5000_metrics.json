@@ -1,0 +1,77 @@
+{
+  "nominal": {
+    "file": "telemetry_1780668713.csv",
+    "steps": 5000,
+    "div_rms": 0.49340939757926905,
+    "div_max": 0.7848085761070251,
+    "div_final": 0.6751635074615479,
+    "common_rms": 0.0027575214226082086,
+    "common_max": 0.00926116481423378,
+    "sign_l": 98.43968793758752,
+    "sign_r": 99.75995199039808,
+    "hy2_left_max": 0.5,
+    "hy2_right_max": 0.5,
+    "hy2_left_rms": 0.47652549108217085,
+    "hy2_right_rms": 0.47652549108217085,
+    "hy2_clipped_pct": 88.74,
+    "hy2_active_pct": 100.0,
+    "l_drift": -0.3366642892360687,
+    "r_drift": 0.3384992182254791,
+    "support_rms": 0.06086861703540798,
+    "support_max": 0.11045397355365472
+  },
+  "low_0p300": {
+    "file": "telemetry_1780668714.csv",
+    "steps": 5000,
+    "div_rms": 0.24505023585630759,
+    "div_max": 0.5077396929264069,
+    "div_final": 0.5077396929264069,
+    "common_rms": 0.006521915353947298,
+    "common_max": 0.018605824559926987,
+    "sign_l": 93.91878375675134,
+    "sign_r": 99.73994798959792,
+    "hy2_left_max": 0.0,
+    "hy2_right_max": 0.0,
+    "hy2_left_rms": 0.0,
+    "hy2_right_rms": 0.0,
+    "hy2_clipped_pct": 0.0,
+    "hy2_active_pct": 0.0,
+    "l_drift": -0.2536723017692566,
+    "r_drift": 0.25406739115715027,
+    "support_rms": 0.06582963821764233,
+    "support_max": 0.15867475056779512
+  },
+  "high_0p480": {
+    "file": "telemetry_1780668722.csv",
+    "steps": 5000,
+    "div_rms": 0.3399375684633512,
+    "div_max": 0.6892560124397278,
+    "div_final": 0.6892560124397278,
+    "common_rms": 0.0004968562774041048,
+    "common_max": 0.002324242377653718,
+    "sign_l": 99.27985597119424,
+    "sign_r": 99.53990798159631,
+    "hy2_left_max": 0.0,
+    "hy2_right_max": 0.0,
+    "hy2_left_rms": 0.0,
+    "hy2_right_rms": 0.0,
+    "hy2_clipped_pct": 0.0,
+    "hy2_active_pct": 0.0,
+    "l_drift": -0.34419146180152893,
+    "r_drift": 0.34506455063819885,
+    "support_rms": 0.2781338432672247,
+    "support_max": 0.3777171566514994
+  },
+  "comparison": {
+    "post_sign_fix_baseline": {
+      "nominal_div_rms": 0.2446,
+      "low_0p300_div_rms": 0.369,
+      "high_0p480_div_rms": 0.3399
+    },
+    "hy2_div_with_sign_fix": {
+      "nominal_div_rms": 0.49340939757926905,
+      "low_0p300_div_rms": 0.24505023585630759,
+      "high_0p480_div_rms": 0.3399375684633512
+    }
+  }
+}

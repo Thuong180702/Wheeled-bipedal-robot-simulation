@@ -1,0 +1,104 @@
+{
+  "profile": "APCR1c_active_pitch_crossing_early_activation",
+  "steps": 500,
+  "variant": "low_0p300",
+  "survived": true,
+  "timestamp": "2026-06-09",
+
+  "signed_error": {
+    "mean": 0.0620,
+    "median": 0.0654,
+    "final": -0.0713,
+    "min": -0.0716,
+    "max": 0.1682,
+    "rms": 0.0915,
+    "mae": 0.0746,
+    "std": 0.0674,
+    "positive_percent": 77.8,
+    "negative_percent": 22.0,
+    "zero_crossings": 5,
+    "longest_positive_interval": 239,
+    "longest_negative_interval": 57,
+    "total_positive_intervals": 3,
+    "total_negative_intervals": 3
+  },
+
+  "band_violations": {
+    "outside_positive_0.15_count": 63,
+    "outside_positive_0.15_percent": 12.6,
+    "outside_negative_0.15_count": 0,
+    "outside_negative_0.15_percent": 0.0,
+    "outside_total_count": 63,
+    "outside_total_percent": 12.6
+  },
+
+  "apcr_behavior": {
+    "active_percent": 46.4,
+    "state_neutral_percent": 53.6,
+    "state_cross_from_positive_percent": 46.4,
+    "state_cross_from_negative_percent": 0.0,
+    "state_entry_count": 2,
+    "state_exit_count": 2,
+    "state_transitions": 4
+  },
+
+  "profile_parameters": {
+    "outer_enter_m": 0.08,
+    "inner_exit_m": 0.07,
+    "opposite_overshoot_m": 0.00,
+    "max_cross_tau": 1.0,
+    "max_rate_per_step": 0.4,
+    "recovery_gate_mode": true
+  },
+
+  "stability": {
+    "pitch_mean_rad": 0.0466,
+    "pitch_min_rad": -0.0618,
+    "pitch_max_rad": 0.1209,
+    "pitch_rms_rad": 0.0691,
+    "pitch_rate_rms": 0.1315,
+    "roll_mean_rad": 0.0093,
+    "roll_abs_max_rad": 0.0145,
+    "hip_yaw_abs_max_max_rad": 0.1621,
+    "wheel_vel_mean_rad_s": 0.2541,
+    "wheel_vel_abs_max_rad_s": 4.9106,
+    "wheel_vel_rms_rad_s": 2.7732,
+    "contact_valid_percent": 100.0,
+    "com_z_min_m": 0.2850,
+    "com_z_mean_m": 0.2920,
+    "height_error_mean_m": 0.0034
+  },
+
+  "comparison": {
+    "vs_d2": {
+      "mean_signed_error_reduction": "24.8% (0.0824 -> 0.0620)",
+      "positive_percent_reduction": "15.5% (93.2% -> 77.8%)",
+      "outside_band_improvement": "6.6pp (19.2% -> 12.6%)"
+    },
+    "vs_apcr1": {
+      "mean_signed_error_reduction": "8.0% (0.0674 -> 0.0620)",
+      "positive_percent_reduction": "2.0pp (79.4% -> 77.8%)",
+      "outside_band_improvement": "1.2pp (13.8% -> 12.6%)",
+      "zero_crossings_change": "same (8 -> 5)"
+    },
+    "vs_apcr1b": {
+      "mean_signed_error_reduction": "6.1% (0.066 -> 0.0620)",
+      "positive_percent_reduction": "1.4pp (79.2% -> 77.8%)",
+      "outside_band_improvement": "1.2pp (13.8% -> 12.6%)",
+      "zero_crossings_change": "same (5 -> 5)"
+    }
+  },
+
+  "classification": "APCR1C_500_PASS_PROCEED_TO_2000",
+  "rationale": [
+    "APCR1c activates earlier than APCR1b (outer_enter_m=0.08 vs 0.10)",
+    "outside ±0.15 reduced to 12.6% vs APCR1b's 13.8%",
+    "positive% reduced to 77.8% vs APCR1b's 79.2%",
+    "mean signed error reduced to 0.0620 vs APCR1b's 0.066",
+    "final signed error is -0.0713, within ±0.10",
+    "zero crossings not excessive (5, same as APCR1b)",
+    "no negative overshoot (outside -0.15 = 0%)",
+    "contact/height/roll stable throughout",
+    "APCR1c achieves best metrics across all profiles"
+  ]
+}

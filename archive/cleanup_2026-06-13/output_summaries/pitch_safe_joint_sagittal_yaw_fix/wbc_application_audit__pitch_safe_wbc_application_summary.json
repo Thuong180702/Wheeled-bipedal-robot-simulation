@@ -1,0 +1,106 @@
+{
+  "audit_date": "2026-06-05",
+  "profiles_audited": [
+    "J0",
+    "J2",
+    "J3",
+    "J2a",
+    "J2b",
+    "J2c",
+    "J2d"
+  ],
+  "audits": [
+    {
+      "profile": "J0",
+      "status": "FAILED",
+      "error": "usage: simulate_hierarchical_controller.py [-h] [--visual] [--steps STEPS]\n                                           [--controller-mode {legacy,balance-core,standing-balance}]\n                                           [--enable-secondary-wheel-balance]\n                                           [--disable-torque-rate-limit]\n                                           [--initialize-tau-prev-from-wbc]\n                                           [--disable-wbc-joint-scale]\n                         "
+    },
+    {
+      "profile": "J2",
+      "status": "SUCCESS",
+      "telemetry_path": "outputs\\pitch_safe_joint_sagittal_yaw_fix\\wbc_application_audit\\J2\\telemetry.csv",
+      "steps": 1000,
+      "raw_tau_wbc_norm_max": 17.140905380249023,
+      "raw_tau_wbc_norm_mean": 12.879144072532654,
+      "raw_tau_wbc_norm_nonzero_percent": 100.0,
+      "applied_wbc_contribution_norm_max": null,
+      "hidden_torque_norm_max": 0.0,
+      "ownership_violation_count_max": 0,
+      "wbc_classification": "WBC_TELEMETRY_AMBIGUOUS",
+      "wbc_classification_reason": "raw_tau_wbc_norm exists but applied_wbc_contribution_norm missing"
+    },
+    {
+      "profile": "J3",
+      "status": "SUCCESS",
+      "telemetry_path": "outputs\\pitch_safe_joint_sagittal_yaw_fix\\wbc_application_audit\\J3\\telemetry.csv",
+      "steps": 1000,
+      "raw_tau_wbc_norm_max": 19.299266815185547,
+      "raw_tau_wbc_norm_mean": 13.141596331596375,
+      "raw_tau_wbc_norm_nonzero_percent": 100.0,
+      "applied_wbc_contribution_norm_max": null,
+      "hidden_torque_norm_max": 0.0,
+      "ownership_violation_count_max": 0,
+      "wbc_classification": "WBC_TELEMETRY_AMBIGUOUS",
+      "wbc_classification_reason": "raw_tau_wbc_norm exists but applied_wbc_contribution_norm missing"
+    },
+    {
+      "profile": "J2a",
+      "status": "SUCCESS",
+      "telemetry_path": "outputs\\pitch_safe_joint_sagittal_yaw_fix\\wbc_application_audit\\J2a\\telemetry.csv",
+      "steps": 1000,
+      "raw_tau_wbc_norm_max": 15.092129707336426,
+      "raw_tau_wbc_norm_mean": 12.459043882369995,
+      "raw_tau_wbc_norm_nonzero_percent": 100.0,
+      "applied_wbc_contribution_norm_max": null,
+      "hidden_torque_norm_max": 0.0,
+      "ownership_violation_count_max": 0,
+      "wbc_classification": "WBC_TELEMETRY_AMBIGUOUS",
+      "wbc_classification_reason": "raw_tau_wbc_norm exists but applied_wbc_contribution_norm missing"
+    },
+    {
+      "profile": "J2b",
+      "status": "SUCCESS",
+      "telemetry_path": "outputs\\pitch_safe_joint_sagittal_yaw_fix\\wbc_application_audit\\J2b\\telemetry.csv",
+      "steps": 1000,
+      "raw_tau_wbc_norm_max": 15.918492317199709,
+      "raw_tau_wbc_norm_mean": 12.57122699546814,
+      "raw_tau_wbc_norm_nonzero_percent": 100.0,
+      "applied_wbc_contribution_norm_max": null,
+      "hidden_torque_norm_max": 0.0,
+      "ownership_violation_count_max": 0,
+      "wbc_classification": "WBC_TELEMETRY_AMBIGUOUS",
+      "wbc_classification_reason": "raw_tau_wbc_norm exists but applied_wbc_contribution_norm missing"
+    },
+    {
+      "profile": "J2c",
+      "status": "SUCCESS",
+      "telemetry_path": "outputs\\pitch_safe_joint_sagittal_yaw_fix\\wbc_application_audit\\J2c\\telemetry.csv",
+      "steps": 1000,
+      "raw_tau_wbc_norm_max": 13.718622207641602,
+      "raw_tau_wbc_norm_mean": 12.06406859111786,
+      "raw_tau_wbc_norm_nonzero_percent": 100.0,
+      "applied_wbc_contribution_norm_max": null,
+      "hidden_torque_norm_max": 0.0,
+      "ownership_violation_count_max": 0,
+      "wbc_classification": "WBC_TELEMETRY_AMBIGUOUS",
+      "wbc_classification_reason": "raw_tau_wbc_norm exists but applied_wbc_contribution_norm missing"
+    },
+    {
+      "profile": "J2d",
+      "status": "SUCCESS",
+      "telemetry_path": "outputs\\pitch_safe_joint_sagittal_yaw_fix\\wbc_application_audit\\J2d\\telemetry.csv",
+      "steps": 1000,
+      "raw_tau_wbc_norm_max": 15.941119194030762,
+      "raw_tau_wbc_norm_mean": 12.479631268501281,
+      "raw_tau_wbc_norm_nonzero_percent": 100.0,
+      "applied_wbc_contribution_norm_max": null,
+      "hidden_torque_norm_max": 0.0,
+      "ownership_violation_count_max": 0,
+      "wbc_classification": "WBC_TELEMETRY_AMBIGUOUS",
+      "wbc_classification_reason": "raw_tau_wbc_norm exists but applied_wbc_contribution_norm missing"
+    }
+  ],
+  "classification_counts": {
+    "WBC_TELEMETRY_AMBIGUOUS": 6
+  }
+}

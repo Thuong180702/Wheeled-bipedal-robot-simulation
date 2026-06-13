@@ -1,0 +1,28 @@
+{
+  "original_path": "outputs/hierarchical_controller_fix_phase2_selected",
+  "original_size": "94.8K",
+  "original_size_bytes": 97091,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "check_controller_isolation_modes.txt",
+      "size_bytes": 1406
+    },
+    {
+      "file": "check_wbc_torque_sign.txt",
+      "size_bytes": 1205
+    },
+    {
+      "file": "check_wbc_variants.txt",
+      "size_bytes": 2836
+    },
+    {
+      "file": "simulate_hierarchical_controller.txt",
+      "size_bytes": 91644
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

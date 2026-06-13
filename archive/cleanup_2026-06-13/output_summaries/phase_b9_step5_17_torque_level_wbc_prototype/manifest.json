@@ -1,0 +1,40 @@
+{
+  "original_path": "outputs/phase_b9_step5_17_torque_level_wbc_prototype",
+  "original_size": "21.5K",
+  "original_size_bytes": 22015,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "actuator_interface_audit.json",
+      "size_bytes": 5907
+    },
+    {
+      "file": "actuator_interface_audit.md",
+      "size_bytes": 706
+    },
+    {
+      "file": "best_torque_wbc_summary.json",
+      "size_bytes": 7452
+    },
+    {
+      "file": "candidate_summary.json",
+      "size_bytes": 3582
+    },
+    {
+      "file": "full_validation_summary.json",
+      "size_bytes": 386
+    },
+    {
+      "file": "response_validation_summary.json",
+      "size_bytes": 500
+    },
+    {
+      "file": "torque_wbc_design.md",
+      "size_bytes": 826
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

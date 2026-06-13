@@ -1,0 +1,92 @@
+{
+  "report_type": "position_error_plumbing_fix",
+  "date": "2026-05-30",
+  "status": "FIXED_AND_VALIDATED",
+  "bug": {
+    "location": "scripts/simulate_hierarchical_controller.py:2167",
+    "description": "Simulator computed sag_pos_error correctly but passed sag_cp_error (capture point error) to controller instead",
+    "impact": "Position term tau_position was always zero despite k_position=10.0 configuration",
+    "root_cause": "Wrong variable passed to sagittal_position_error_m parameter"
+  },
+  "fix": {
+    "file": "scripts/simulate_hierarchical_controller.py",
+    "line": 2167,
+    "change": "sagittal_position_error_m=sag_pos_error (was sag_cp_error)",
+    "telemetry_added": [
+      "sagittal_position_error_m",
+      "sagittal_velocity_m_s",
+      "tau_position"
+    ]
+  },
+  "tests": {
+    "new_tests": {
+      "file": "tests/test_sagittal_position_error_plumbing.py",
+      "count": 8,
+      "status": "PASS"
+    },
+    "existing_tests": {
+      "count": 47,
+      "status": "PASS"
+    }
+  },
+  "validation": {
+    "1000_step": {
+      "command": "python scripts/simulate_hierarchical_controller.py --controller-mode balance-core --sagittal-controller velocity-damped --steps 1000",
+      "telemetry": {
+        "sagittal_position_error_m_nonzero_count": "999/1000",
+        "tau_position_nonzero_count": "999/1000",
+        "tau_position_rms_Nm": 0.506
+      },
+      "drift": {
+        "max_m": 0.084,
+        "final_m": 0.058
+      }
+    },
+    "5000_step": {
+      "command": "python scripts/simulate_hierarchical_controller.py --controller-mode balance-core --sagittal-controller velocity-damped --steps 5000 --write-run-summary-sidecar",
+      "telemetry": {
+        "sagittal_position_error_m_nonzero_count": "4999/5000",
+        "tau_position_nonzero_count": "4999/5000",
+        "tau_position_rms_Nm": 0.886
+      },
+      "drift": {
+        "max_m": 0.254,
+        "final_m": 0.028,
+        "old_max_m": 3.876,
+        "improvement_percent": 93.4
+      }
+    }
+  },
+  "gates": {
+    "minimum_acceptable_drift": {
+      "threshold_m": 5.0,
+      "actual_m": 0.254,
+      "status": "PASS"
+    },
+    "step_e_full_target": {
+      "max_threshold_m": 0.30,
+      "final_threshold_m": 0.20,
+      "actual_max_m": 0.254,
+      "actual_final_m": 0.028,
+      "status": "PASS"
+    }
+  },
+  "conclusion": {
+    "summary": "Single-line bug fix achieved 93.4% drift reduction and Step E full target without gain tuning",
+    "position_term_status": "ACTIVE",
+    "architecture_changes_needed": false,
+    "gain_tuning_needed": false
+  },
+  "next_steps": [
+    "Height variant regression (high_5cm, low_5cm)",
+    "Step C: Curriculum advancement (if height variants pass)",
+    "Step D: Push recovery validation",
+    "Step F: Multi-seed training (if all gates pass)"
+  ],
+  "do_not": [
+    "Design new Step E architecture (target already achieved)",
+    "Tune gains before height variant regression",
+    "Reintroduce E0b/E0c/E0d position containment experiments",
+    "Proceed to Step C/D/F before height variant validation"
+  ]
+}

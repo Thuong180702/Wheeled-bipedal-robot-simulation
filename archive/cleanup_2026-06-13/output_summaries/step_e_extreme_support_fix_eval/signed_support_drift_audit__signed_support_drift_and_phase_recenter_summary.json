@@ -1,0 +1,83 @@
+{
+  "audit_date": "2026-06-08",
+  "decision": "SIGNED_DRIFT_CONFIRMED_PHASE_AWARE_RECENTER_READY",
+  "phases_completed": [
+    "Phase 1: Signed Support Drift Audit",
+    "Phase 2: Phase Reversal / Missed Recenter Analysis",
+    "Phase 3: Phase-Aware Recenter Strategy Design",
+    "Phase 4: Next Experiment Plan"
+  ],
+  "key_findings": {
+    "data_source": "support_position_error_m = hip_yaw_comp_support_error_m (yaw-induced sagittal position error)",
+    "root_cause": "Hip yaw divergence causes sagittal position error through coupling",
+    "D2_signed_drift": {
+      "classification": "POSITIVE_BIASED_STRONG",
+      "pct_positive": 97.5,
+      "zero_crossings": 13,
+      "max_same_sign_run": 4875
+    },
+    "E2_signed_drift": {
+      "classification": "POSITIVE_BIASED_STRONG",
+      "pct_positive": 88.4,
+      "zero_crossings": 4,
+      "max_same_sign_run": 442
+    },
+    "pitch_reversal_rate": "1 in 5000 steps (too low to analyze)",
+    "hip_yaw_regression_cause": "E2 increased position correction authority, causing more hip yaw coupling",
+    "trade_off": {
+      "E2_improvement": "hip_yaw_abs_max reduced 0.31 → 0.13 rad (2.4× better)",
+      "E2_regression": "position_error_crossings increased 9.6 → 62 normalized (6.5× worse)"
+    }
+  },
+  "strategy_recommendation": {
+    "candidate": "F1_phase_aware_recenter_velocity_shaping",
+    "principle": "Decouple recentering from tau_position to avoid hip yaw coupling",
+    "key_features": [
+      "Separate recenter term from position correction",
+      "Only activates when pitch is safe (recovering)",
+      "Bounded authority (max 1 Nm)",
+      "Does NOT affect tau_position",
+      "Smooth ramp-up/ramp-down"
+    ],
+    "expected_benefit": "Reduces position error crossings without increasing hip yaw"
+  },
+  "metrics_comparison": {
+    "D2": {
+      "support_error_mean_m": 0.058,
+      "support_error_max_m": 0.176,
+      "crossings_150_norm": 9.6,
+      "hip_yaw_abs_max_rad": 0.313,
+      "pitch_forward_pct": 94.6
+    },
+    "E2": {
+      "support_error_mean_m": 0.063,
+      "support_error_max_m": 0.170,
+      "crossings_150_norm": 62.0,
+      "hip_yaw_abs_max_rad": 0.130,
+      "pitch_forward_pct": 80.4
+    }
+  },
+  "answers_to_questions": {
+    "1_is_support_drift_biased": "YES - 97.5% positive for D2",
+    "2_oscillates_or_ratchets": "RATCHETING - feedback loop between position error and hip yaw",
+    "3_pitch_reversal_recenters": "INFREQUENT - only 1 reversal in 5000 steps",
+    "4_wheel_reverses_early": "INCONCLUSIVE - reversal rate too low to analyze",
+    "5_why_E2_regressed_hip_yaw": "Increased position correction authority caused more hip yaw coupling",
+    "6_safest_next_candidate": "F1_phase_aware_recenter_velocity_shaping",
+    "7_why_phase_aware_better": "Decouples recentering from tau_position, avoids feedback loop"
+  },
+  "output_files": {
+    "signed_drift_metrics_json": "outputs/step_e_extreme_support_fix_eval/signed_support_drift_audit/signed_drift_metrics.json",
+    "signed_drift_metrics_csv": "outputs/step_e_extreme_support_fix_eval/signed_support_drift_audit/signed_drift_metrics.csv",
+    "phase_behavior_summary_json": "outputs/step_e_extreme_support_fix_eval/signed_support_drift_audit/phase_behavior_summary.json",
+    "wheel_reversal_summary_json": "outputs/step_e_extreme_support_fix_eval/signed_support_drift_audit/wheel_reversal_summary.json",
+    "strategy_inputs_json": "outputs/step_e_extreme_support_fix_eval/signed_support_drift_audit/phase_aware_strategy_inputs.json"
+  },
+  "report_files": {
+    "signed_support_drift_audit_md": "docs/validation/signed_support_drift_audit.md",
+    "support_recenter_phase_behavior_audit_md": "docs/validation/support_recenter_phase_behavior_audit.md",
+    "phase_aware_support_recenter_strategy_md": "docs/validation/phase_aware_support_recenter_strategy.md",
+    "phase_aware_recenter_next_experiment_plan_md": "docs/validation/phase_aware_recenter_next_experiment_plan.md",
+    "final_report_md": "docs/validation/signed_support_drift_and_phase_recenter_audit_report.md"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "source": "step_e_hv_sagittal_schedule_fix_summary.json",
+  "profile": "candidate_D2_wheel_velocity_damping_light",
+  "steps": 5000,
+  "results": [
+    {
+      "variant": "nominal",
+      "verdict": "PASS",
+      "support_max": 0.1060617172825227,
+      "hip_yaw_max": 0.0564832426607608,
+      "pitch_max": 0.0711304926597348,
+      "roll_max": 0.0130751316192003,
+      "wheel_max": 3.867526888847351,
+      "contact_pct": 99.98,
+      "wbc_applied": false,
+      "hidden_torque": 0.0,
+      "ownership": 0
+    },
+    {
+      "variant": "low_tiny",
+      "verdict": "PASS",
+      "support_max": 0.109590027603286,
+      "hip_yaw_max": 0.0420027114450931,
+      "pitch_max": 0.0728116248189794,
+      "roll_max": 0.0119575616877646,
+      "wheel_max": 4.036306142807007,
+      "contact_pct": 99.98,
+      "wbc_applied": false,
+      "hidden_torque": 0.0,
+      "ownership": 0
+    },
+    {
+      "variant": "high_tiny",
+      "verdict": "PASS",
+      "support_max": 0.1241913834844777,
+      "hip_yaw_max": 0.0382067896425724,
+      "pitch_max": 0.0917569964071727,
+      "roll_max": 0.0110741610321453,
+      "wheel_max": 4.118019104003906,
+      "contact_pct": 99.98,
+      "wbc_applied": false,
+      "hidden_torque": 0.0,
+      "ownership": 0
+    },
+    {
+      "variant": "low_small",
+      "verdict": "PASS",
+      "support_max": 0.1062003425457684,
+      "hip_yaw_max": 0.0573853142559528,
+      "pitch_max": 0.0712435957923427,
+      "roll_max": 0.0141645682605854,
+      "wheel_max": 3.989667296409607,
+      "contact_pct": 99.98,
+      "wbc_applied": false,
+      "hidden_torque": 0.0,
+      "ownership": 0
+    },
+    {
+      "variant": "high_small",
+      "verdict": "PASS",
+      "support_max": 0.1354918956940817,
+      "hip_yaw_max": 0.0296155605465173,
+      "pitch_max": 0.0960037677193006,
+      "roll_max": 0.0091194582360069,
+      "wheel_max": 4.770036935806274,
+      "contact_pct": 99.98,
+      "wbc_applied": false,
+      "hidden_torque": 0.0,
+      "ownership": 0
+    }
+  ],
+  "all_passed": true,
+  "decision": "STEP_E_HEIGHT_VARIANT_HOLD_PASS"
+}

@@ -1,0 +1,369 @@
+{
+  "investigation": "hip_yaw_disturbance_rejection_hy_ff",
+  "date": "2026-06-04",
+  "status": "COMPLETE",
+  "final_decision": "HIP_YAW_AND_SUPPORT_COUPLED_NEED_JOINT_FIX",
+
+  "problem_statement": {
+    "metric": "hip_yaw_abs_max",
+    "baseline_value": 0.2137,
+    "threshold": 0.070,
+    "percent_over_threshold": 205.3,
+    "variant": "low_0p300",
+    "controller": "balance_core_velocity_damped"
+  },
+
+  "root_cause": {
+    "classification": "support_drift_induced_disturbance",
+    "mechanism": "Sagittal support position drift at low heights creates disturbance torque that hip-yaw controller must reject",
+    "coupling": "Hip-yaw and support position are coupled through robot dynamics",
+    "upstream_problem": "sagittal_support_position_drift"
+  },
+
+  "fix_approach": {
+    "method": "hip_yaw_support_error_feedforward",
+    "abbreviation": "HY-FF",
+    "description": "Height-gated feedforward compensation using support position error to generate corrective hip-yaw torque",
+    "formula": "tau_comp = sign * k_support * support_error * height_gate",
+    "height_gate": {
+      "z_low": 0.300,
+      "z_high": 0.393,
+      "function": "smoothstep"
+    }
+  },
+
+  "integration_bug": {
+    "detected": true,
+    "symptom": "Height gate never activated, compensation always zero",
+    "root_cause": "Shape controller runs before sagittal controller, support_position_error unavailable",
+    "fix": "Use previous-step support error (5ms delay acceptable)",
+    "fix_verified": true,
+    "smoke_test_results": {
+      "height_gate": 1.000,
+      "support_error_max": 0.2372,
+      "compensation_torque_max": 0.4745
+    }
+  },
+
+  "evaluation_summary": {
+    "total_experiments": 18,
+    "candidates_tested": 6,
+    "variants_per_candidate": 3,
+    "sign_determination": {
+      "sign_plus_1": {
+        "hip_yaw": 0.2379,
+        "change_vs_baseline": 0.0242,
+        "percent_change": 11.3,
+        "verdict": "WORSE"
+      },
+      "sign_minus_1": {
+        "hip_yaw": 0.1941,
+        "change_vs_baseline": -0.0196,
+        "percent_change": -9.2,
+        "verdict": "BETTER"
+      },
+      "best_sign": -1.0
+    },
+    "candidates": [
+      {
+        "id": "A",
+        "name": "baseline",
+        "sign": 0.0,
+        "k": 0.0,
+        "tau_max": 0.0,
+        "low_0p300": {
+          "hip_yaw": 0.2137,
+          "support": 0.2430
+        }
+      },
+      {
+        "id": "B",
+        "name": "sign_plus_conservative",
+        "sign": 1.0,
+        "k": 2.0,
+        "tau_max": 1.0,
+        "low_0p300": {
+          "hip_yaw": 0.2379,
+          "support": 0.2563
+        }
+      },
+      {
+        "id": "C",
+        "name": "sign_minus_conservative",
+        "sign": -1.0,
+        "k": 2.0,
+        "tau_max": 1.0,
+        "low_0p300": {
+          "hip_yaw": 0.1941,
+          "support": 0.2380
+        },
+        "is_best": true
+      },
+      {
+        "id": "D",
+        "name": "moderate_gain",
+        "sign": -1.0,
+        "k": 4.0,
+        "tau_max": 1.0,
+        "low_0p300": {
+          "hip_yaw": 0.1964,
+          "support": 0.2361
+        }
+      },
+      {
+        "id": "E",
+        "name": "higher_gain",
+        "sign": -1.0,
+        "k": 6.0,
+        "tau_max": 2.0,
+        "low_0p300": {
+          "hip_yaw": 0.1921,
+          "support": 0.2385
+        }
+      },
+      {
+        "id": "F",
+        "name": "aggressive_gain",
+        "sign": -1.0,
+        "k": 8.0,
+        "tau_max": 2.0,
+        "low_0p300": {
+          "hip_yaw": 0.2698,
+          "support": 0.6507
+        },
+        "regression": "SEVERE"
+      }
+    ]
+  },
+
+  "best_candidate": {
+    "id": "C",
+    "name": "sign_minus_conservative",
+    "parameters": {
+      "sign": -1.0,
+      "k_support": 2.0,
+      "tau_max": 1.0
+    },
+    "low_0p300_results": {
+      "hip_yaw": 0.1941,
+      "support": 0.2380,
+      "hip_yaw_improvement": -0.0196,
+      "hip_yaw_improvement_percent": -9.2,
+      "support_change": -0.0050,
+      "support_change_percent": -2.0
+    },
+    "acceptance_criteria": {
+      "hip_yaw_threshold": 0.070,
+      "hip_yaw_actual": 0.1941,
+      "percent_over_threshold": 177.3,
+      "passes": false
+    }
+  },
+
+  "acceptance_criteria_check": {
+    "primary_gate": {
+      "metric": "hip_yaw_abs_max",
+      "threshold": 0.070,
+      "best_candidate_value": 0.1941,
+      "passes": false,
+      "percent_over_threshold": 177.3
+    },
+    "secondary_criteria": {
+      "support_position_error": {
+        "baseline": 0.2430,
+        "best_candidate": 0.2380,
+        "change_percent": -2.0,
+        "acceptable_degradation": 10.0,
+        "passes": true
+      },
+      "wbc_applied": {
+        "value": false,
+        "required": false,
+        "passes": true
+      },
+      "ownership_violations": {
+        "value": 0,
+        "required": 0,
+        "passes": true
+      }
+    },
+    "overall_verdict": "NO_CANDIDATE_PASSES"
+  },
+
+  "key_findings": [
+    "HY-FF implementation is correct and functional after integration bug fix",
+    "Sign -1.0 provides 9.2% hip-yaw improvement vs 11.3% degradation for +1.0",
+    "Best candidate (C) reduces hip-yaw from 0.2137 to 0.1941 rad",
+    "Best candidate still 177% over 0.070 rad threshold",
+    "Support position error slightly worsened (~2%) with HY-FF",
+    "Aggressive gains (k=8.0) cause severe support regression (168% worse)",
+    "Optimal gain range: k=2.0 to k=6.0",
+    "Problem isolated to low_0p300 only (high_0p480 and nominal pass)",
+    "Root cause is sagittal support drift at low heights",
+    "Hip-yaw and support are coupled through robot dynamics"
+  ],
+
+  "final_decision": {
+    "code": "HIP_YAW_AND_SUPPORT_COUPLED_NEED_JOINT_FIX",
+    "rationale": [
+      "HY-FF provides modest improvement (9.2%) but cannot meet acceptance criteria",
+      "Even best candidate remains 177% over threshold",
+      "Root cause is support position drift creating disturbance input",
+      "Addressing symptom without fixing upstream cause",
+      "Joint fix required for both sagittal support drift and hip-yaw disturbance rejection"
+    ],
+    "hy_ff_deployment": "DO_NOT_DEPLOY",
+    "hy_ff_code_status": "LEAVE_IN_CODEBASE_DISABLED_BY_DEFAULT",
+    "hip_yaw_problem_status": "UNRESOLVED"
+  },
+
+  "recommended_path_forward": [
+    {
+      "priority": 1,
+      "task": "Fix sagittal support drift at low heights",
+      "approach": "Continuous low-height sagittal forward authority",
+      "target": "Reduce support position error from 0.2430 m to < 0.15 m",
+      "rationale": "Eliminate disturbance input at source",
+      "status": "Design work complete, ready for implementation"
+    },
+    {
+      "priority": 2,
+      "task": "Re-evaluate hip-yaw after sagittal fix",
+      "approach": "Re-run baseline and HY-FF candidates with stable support",
+      "success_criteria": "hip_yaw < 0.070 rad with support < 0.15 m",
+      "status": "Pending Priority 1 completion"
+    },
+    {
+      "priority": 3,
+      "task": "Coupled sagittal-yaw controller (if needed)",
+      "approach": "Joint LQR/MPC or more aggressive hip-yaw integral term",
+      "condition": "If hip-yaw problem persists after sagittal fix",
+      "status": "Contingency plan"
+    }
+  ],
+
+  "test_results": {
+    "hy_ff_unit_tests": {
+      "total": 9,
+      "passed": 9,
+      "failed": 0,
+      "pass_rate": 100.0
+    },
+    "sagittal_controller_tests": {
+      "total": 40,
+      "passed": 40,
+      "failed": 0,
+      "pass_rate": 100.0
+    },
+    "integration_tests": {
+      "smoke_test": "PASS",
+      "phase_5_evaluation": "COMPLETE",
+      "regression_detected": false
+    }
+  },
+
+  "files_changed": {
+    "created": [
+      "tests/test_hip_yaw_support_feedforward.py",
+      "scripts/evaluate_hip_yaw_hy_ff_candidates.py",
+      "scripts/simple_hy_ff_eval.py",
+      "scripts/comprehensive_hy_ff_eval.py",
+      "scripts/check_hy_ff_telemetry.py",
+      "scripts/analyze_hy_ff_smoke_test.py",
+      "scripts/analyze_phase5_reeval_results.py",
+      "scripts/monitor_phase5_evaluation.py",
+      "docs/validation/hip_yaw_disturbance_rejection_requirement.md",
+      "docs/validation/hip_yaw_isolation_experiments.md",
+      "docs/validation/hip_yaw_mechanism_classification.md",
+      "docs/validation/hip_yaw_integration_bug_fix_summary.md",
+      "docs/validation/hip_yaw_integration_fix_complete.md",
+      "docs/validation/hip_yaw_disturbance_rejection_fix_report.md",
+      "docs/validation/hip_yaw_disturbance_rejection_final_report_v2.md",
+      "outputs/hip_yaw_hy_ff_evaluation/hip_yaw_disturbance_rejection_fix_summary_v2.json"
+    ],
+    "modified": [
+      "wheeled_biped/controllers/shape_posture_controller.py",
+      "scripts/simulate_hierarchical_controller.py"
+    ]
+  },
+
+  "restrictions_compliance": {
+    "wbc_added": false,
+    "legacy_wbc_enabled": false,
+    "hip_roll_modified": false,
+    "hip_yaw_gains_changed_globally": false,
+    "variant_name_patches": false,
+    "discontinuous_schedules": false,
+    "thresholds_relaxed": false,
+    "target_heights_shrunk": false,
+    "step_d_proceeded": false,
+    "boundary_range_pass_claimed": false,
+    "all_restrictions_satisfied": true
+  },
+
+  "phases_completed": [
+    {
+      "phase": 0,
+      "name": "Verification",
+      "status": "COMPLETE"
+    },
+    {
+      "phase": 1,
+      "name": "Requirement Document",
+      "status": "COMPLETE"
+    },
+    {
+      "phase": 2,
+      "name": "Isolation Experiments",
+      "status": "COMPLETE"
+    },
+    {
+      "phase": 3,
+      "name": "Mechanism Classification",
+      "status": "COMPLETE"
+    },
+    {
+      "phase": 4,
+      "name": "HY-FF Implementation",
+      "status": "COMPLETE"
+    },
+    {
+      "phase": 4.5,
+      "name": "Integration Bug Fix",
+      "status": "COMPLETE"
+    },
+    {
+      "phase": 5,
+      "name": "Re-Evaluation with Functional HY-FF",
+      "status": "COMPLETE"
+    },
+    {
+      "phase": 6,
+      "name": "Tests",
+      "status": "COMPLETE"
+    },
+    {
+      "phase": 7,
+      "name": "Final Report",
+      "status": "COMPLETE"
+    }
+  ],
+
+  "next_steps": {
+    "immediate": "Implement continuous low-height sagittal forward authority fix",
+    "after_sagittal_fix": "Re-evaluate hip-yaw with stable support position",
+    "if_still_failing": "Consider coupled sagittal-yaw controller",
+    "do_not_deploy_hy_ff": true,
+    "ready_for_priority_1": true
+  },
+
+  "metadata": {
+    "investigation_start_date": "2026-06-04",
+    "investigation_end_date": "2026-06-04",
+    "total_duration_hours": 8,
+    "total_experiments": 18,
+    "total_test_coverage": 49,
+    "report_version": 2,
+    "generated_by": "Claude Code (Opus 4.7)"
+  }
+}

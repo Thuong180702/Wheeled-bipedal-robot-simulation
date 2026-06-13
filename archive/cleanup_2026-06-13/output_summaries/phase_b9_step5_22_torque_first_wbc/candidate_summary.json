@@ -1,0 +1,12 @@
+{
+  "evaluation_complete": true,
+  "architecture": "torque_first_wbc",
+  "wbc_authority_pct": 100.0,
+  "pid_authority_pct": 0.0,
+  "best_candidate": "moderate_k15_torque_first",
+  "best_survival_s": 0.68,
+  "best_saturation_rate": 0.6267340541417512,
+  "step5_18c_baseline_survival_s": 0.86,
+  "improvement_vs_baseline_pct": -20.93023255813953,
+  "candidates_tested": 3
+}

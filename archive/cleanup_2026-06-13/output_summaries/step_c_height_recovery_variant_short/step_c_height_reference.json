@@ -1,0 +1,13 @@
+{
+  "source_path": "outputs\\hierarchical_controller_sim\\telemetry_1780289121.csv",
+  "height_column": "com_z_m",
+  "target_com_z_m": 0.40774276852607727,
+  "first_com_z_m": 0.4041118323802948,
+  "final_com_z_m": 0.408227801322937,
+  "min_com_z_m": 0.4038352966308594,
+  "max_com_z_m": 0.4085472226142883,
+  "median_com_z_m": 0.4077901840209961,
+  "tail_rows_requested": 500,
+  "tail_rows_used": 500,
+  "row_count": 5000
+}

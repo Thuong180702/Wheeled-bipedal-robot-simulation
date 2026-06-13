@@ -1,0 +1,105 @@
+Failed to import warp: No module named 'warp'
+Failed to import mujoco_warp: No module named 'warp'
+================================================================================
+Phase B.9 Step 5.20: Low-Stiffness Dynamic Balance Evaluation
+================================================================================
+
+Hypothesis: Current controller is over-stiff and fighting natural dynamics
+
+Baseline (Step 5.18c):
+  h=0.60: survival=0.86s, fall_rate=0.80, roll_rms=15.9deg
+  PID saturation: 93.75%
+  RMS torque: ~30 Nm
+
+Testing 4 candidates at h=0.6m:
+  - baseline: stiffness=1.0, deadband=0.0deg
+  - conservative: stiffness=0.7, deadband=1.0deg
+  - moderate: stiffness=0.5, deadband=2.0deg
+  - aggressive: stiffness=0.3, deadband=3.0deg
+
+================================================================================
+Evaluating: baseline
+================================================================================
+
+Results:
+  Survival: 0.24s
+  Fall rate: 1.00
+  Pitch RMS: 5.59deg
+  Roll RMS: 21.83deg
+  Mean torque: 5.39 Nm
+  RMS torque: 7.16 Nm
+  [-] DEGRADATION: -72.1% vs baseline
+
+================================================================================
+Evaluating: conservative
+================================================================================
+
+Results:
+  Survival: 0.24s
+  Fall rate: 1.00
+  Pitch RMS: 5.64deg
+  Roll RMS: 21.90deg
+  Mean torque: 5.14 Nm
+  RMS torque: 6.85 Nm
+  [-] DEGRADATION: -71.6% vs baseline
+
+================================================================================
+Evaluating: moderate
+================================================================================
+
+Results:
+  Survival: 0.25s
+  Fall rate: 1.00
+  Pitch RMS: 5.61deg
+  Roll RMS: 21.95deg
+  Mean torque: 4.85 Nm
+  RMS torque: 6.56 Nm
+  [-] DEGRADATION: -70.7% vs baseline
+
+================================================================================
+Evaluating: aggressive
+================================================================================
+
+Results:
+  Survival: 0.28s
+  Fall rate: 1.00
+  Pitch RMS: 5.47deg
+  Roll RMS: 23.10deg
+  Mean torque: 4.48 Nm
+  RMS torque: 6.29 Nm
+  [-] DEGRADATION: -67.4% vs baseline
+
+================================================================================
+Summary
+================================================================================
+
+Best candidate: aggressive
+  Stiffness reduction: 0.3
+  Deadband: 3.0deg
+  Survival: 0.28s
+  Fall rate: 1.00
+  Roll RMS: 23.10deg
+  RMS torque: 6.29 Nm
+
+Torque Efficiency Analysis:
+  baseline: 7.2 Nm (+76.1%)
+  conservative: 6.8 Nm (+77.2%)
+  moderate: 6.6 Nm (+78.1%)
+  aggressive: 6.3 Nm (+79.0%)
+
+================================================================================
+Decision
+================================================================================
+
+SOFT_MODE_DEGRADES_PERFORMANCE
+Soft mode does not improve stability at h=0.60.
+
+Conclusion: Current stiffness is necessary, not excessive.
+Classical control architecture may be fundamentally limited.
+
+Recommendation: Consider alternative approaches:
+  - Pure RL (no classical control)
+  - Different hybrid architecture
+  - Architectural redesign
+
+Results saved to outputs\phase_b9_step5_20_low_stiffness_dynamic_balance\candidate_results.json

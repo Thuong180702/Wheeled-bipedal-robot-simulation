@@ -1,0 +1,29 @@
+{
+  "mechanism": "joint_axis_sign_requires_negation",
+  "confidence": "HIGH",
+  "evidence": [
+    "Hip-yaw torque sign correctness is 0.22-14.88% (effectively inverted)",
+    "Left hip-yaw: positive error (+0.2275) with positive torque drives position MORE negative",
+    "Right hip-yaw: negative error (-0.2303) with negative torque drives position MORE positive",
+    "Pattern is consistent across all three heights (low, nominal, high)",
+    "Reference is stable at 0.0 (not drifting)",
+    "Error definition (ref - pos) is standard convention",
+    "Divergence is antisymmetric (left/right opposite directions)"
+  ],
+  "ruled_out": [
+    "error_definition_sign_wrong: Error formula (ref - pos) is standard",
+    "torque_formula_sign_wrong: PD formula itself is standard",
+    "damping_sign_wrong: Damping term correct, issue is proportional term",
+    "left_right_joint_index_swapped: Divergence is antisymmetric, not swapped",
+    "telemetry_sign_diagnostic_wrong: Pattern too consistent to be telemetry bug"
+  ],
+  "diagnosis": "The hip-yaw joint axes in the MJCF model have opposite convention from what the controller assumes. Positive torque DECREASES position, negative torque INCREASES position. This requires negating the entire PD control output for hip-yaw joints.",
+  "recommended_fix": "Negate the hip-yaw PD torque in shape_posture_controller.py line 248:\n  Current: tau_pd = self.kp_hip_yaw * posture_error[idx] - self.kd_hip_yaw * joint_vel[idx]\n  Fixed:   tau_pd = -(self.kp_hip_yaw * posture_error[idx] - self.kd_hip_yaw * joint_vel[idx])",
+  "validation_criteria": [
+    "Hip-yaw torque sign correctness > 95%",
+    "Hip-yaw abs max < 0.05 rad at nominal",
+    "Hip-yaw abs max < 0.15 rad at low_0p300 and high_0p480",
+    "Divergence RMS approaches 0 (antisymmetric instability eliminated)",
+    "No regression in survival, contact, height tracking"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "original_path": "outputs/joint_low_height_sagittal_yaw_fix",
+  "original_size": "16.4K",
+  "original_size_bytes": 16764,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 3,
+  "copied_files": [
+    {
+      "file": "harness_debug/low_0p300_harness_debug_report.md",
+      "size_bytes": 3203
+    },
+    {
+      "file": "schedule_height_reference_integration_bug.md",
+      "size_bytes": 4544
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

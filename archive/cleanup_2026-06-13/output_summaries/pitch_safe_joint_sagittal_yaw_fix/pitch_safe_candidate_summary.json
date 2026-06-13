@@ -1,0 +1,104 @@
+{
+  "evaluation_date": "2026-06-05",
+  "selected_candidate": null,
+  "all_results": [
+    {
+      "candidate": "J2a",
+      "profile": "J2a",
+      "description": "Conservative position cap (k_pos=60, max_tau=4.5, k_vel=22)",
+      "rationale": "50% authority increase vs baseline, safest pitch profile",
+      "phases_completed": {
+        "phase_1_low_0p300_step_e_1000": {
+          "passed": false,
+          "metrics": {
+            "support_position_error_max_abs": 0.1201061564161912,
+            "hip_yaw_abs_max": 0.1362667381763458,
+            "pitch_x_max_abs": 0.1191909164190292,
+            "roll_y_max_abs": 0.015155448578298,
+            "final_height_error": 0.0068801510101028,
+            "contact_valid_percent": 99.9,
+            "wbc_applied_max": 15.092129707336426,
+            "hidden_torque_max": 0.0,
+            "ownership_violations_max": 0
+          },
+          "telemetry": "outputs\\pitch_safe_joint_sagittal_yaw_fix\\J2a_low_0p300_step_e_1000\\telemetry.csv"
+        }
+      },
+      "final_decision": "FAILED_PHASE_1_LOW_0P300_STEP_E_1000"
+    },
+    {
+      "candidate": "J2b",
+      "profile": "J2b",
+      "description": "Balanced authority (k_pos=65, max_tau=5.0, k_vel=25)",
+      "rationale": "63-67% authority increase, balanced approach",
+      "phases_completed": {
+        "phase_1_low_0p300_step_e_1000": {
+          "passed": false,
+          "metrics": {
+            "support_position_error_max_abs": 0.1077589031279732,
+            "hip_yaw_abs_max": 0.1364172399044037,
+            "pitch_x_max_abs": 0.1263139396905899,
+            "roll_y_max_abs": 0.0145655516535043,
+            "final_height_error": 0.0093114840751358,
+            "contact_valid_percent": 99.9,
+            "wbc_applied_max": 15.918492317199709,
+            "hidden_torque_max": 0.0,
+            "ownership_violations_max": 0
+          },
+          "telemetry": "outputs\\pitch_safe_joint_sagittal_yaw_fix\\J2b_low_0p300_step_e_1000\\telemetry.csv"
+        }
+      },
+      "final_decision": "FAILED_PHASE_1_LOW_0P300_STEP_E_1000"
+    },
+    {
+      "candidate": "J2c",
+      "profile": "J2c",
+      "description": "Velocity damping priority (k_pos=60, max_tau=4.5, k_vel=28)",
+      "rationale": "Conservative position + aggressive velocity damping",
+      "phases_completed": {
+        "phase_1_low_0p300_step_e_1000": {
+          "passed": false,
+          "metrics": {
+            "support_position_error_max_abs": 0.1021741139739415,
+            "hip_yaw_abs_max": 0.1183184459805488,
+            "pitch_x_max_abs": 0.1218953132629394,
+            "roll_y_max_abs": 0.0145774651318788,
+            "final_height_error": 0.0074095594649978,
+            "contact_valid_percent": 99.9,
+            "wbc_applied_max": 13.718622207641602,
+            "hidden_torque_max": 0.0,
+            "ownership_violations_max": 0
+          },
+          "telemetry": "outputs\\pitch_safe_joint_sagittal_yaw_fix\\J2c_low_0p300_step_e_1000\\telemetry.csv"
+        }
+      },
+      "final_decision": "FAILED_PHASE_1_LOW_0P300_STEP_E_1000"
+    },
+    {
+      "candidate": "J2d",
+      "profile": "J2d",
+      "description": "Torque cap priority (k_pos=70, max_tau=4.5, k_vel=25)",
+      "rationale": "Higher stiffness + capped peak torque",
+      "phases_completed": {
+        "phase_1_low_0p300_step_e_1000": {
+          "passed": false,
+          "metrics": {
+            "support_position_error_max_abs": 0.1047535857947631,
+            "hip_yaw_abs_max": 0.130059465765953,
+            "pitch_x_max_abs": 0.1197687909007072,
+            "roll_y_max_abs": 0.0147109227254986,
+            "final_height_error": 0.0081586110358902,
+            "contact_valid_percent": 99.9,
+            "wbc_applied_max": 15.941119194030762,
+            "hidden_torque_max": 0.0,
+            "ownership_violations_max": 0
+          },
+          "telemetry": "outputs\\pitch_safe_joint_sagittal_yaw_fix\\J2d_low_0p300_step_e_1000\\telemetry.csv"
+        }
+      },
+      "final_decision": "FAILED_PHASE_1_LOW_0P300_STEP_E_1000"
+    }
+  ],
+  "audit_classification": "position_authority_induces_pitch_overshoot",
+  "design_strategy": "reduce position authority while maintaining velocity damping"
+}

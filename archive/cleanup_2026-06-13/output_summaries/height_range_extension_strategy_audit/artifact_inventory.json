@@ -1,0 +1,240 @@
+{
+  "audit_date": "2026-06-06",
+  "audit_type": "height_range_extension_strategy",
+  "worktree_status": {
+    "modified_files": 6,
+    "untracked_files": 61,
+    "baseline_artifacts_affected": false
+  },
+  "artifacts": [
+    {
+      "id": "baseline_step_e_report",
+      "path": "docs/validation/five_variant_step_e_step_c_baseline_verification_report.md",
+      "exists": true,
+      "timestamp": "2026-06-06",
+      "height_range": {
+        "low": 0.394,
+        "high": 0.414,
+        "variants": ["low_small", "low_tiny", "nominal", "high_tiny", "high_small"]
+      },
+      "controller": {
+        "profile": "candidate_D2_wheel_velocity_damping_light",
+        "hy2_div": "disabled",
+        "wbc": false
+      },
+      "classification": "baseline",
+      "status": "valid",
+      "evidence": "Step E 5/5 PASS, Step C 5/5 PASS"
+    },
+    {
+      "id": "baseline_config",
+      "path": "docs/validation/old_known_good_step_e_step_c_config.md",
+      "exists": true,
+      "timestamp": "2026-06-02",
+      "height_range": {
+        "low": 0.394,
+        "high": 0.414
+      },
+      "controller": {
+        "profile": "candidate_D2_wheel_velocity_damping_light"
+      },
+      "classification": "baseline",
+      "status": "valid",
+      "evidence": "Contains exact command and profile definition"
+    },
+    {
+      "id": "step_e_done",
+      "path": "docs/validation/step_e_height_variant_robustness_done.md",
+      "exists": true,
+      "timestamp": "2026-06-02",
+      "classification": "baseline",
+      "status": "valid",
+      "evidence": "D2 profile selected as final, operational envelope defined"
+    },
+    {
+      "id": "step_c_done",
+      "path": "docs/validation/step_c_height_recovery_done.md",
+      "exists": true,
+      "timestamp": "2026-06-02",
+      "classification": "baseline",
+      "status": "valid",
+      "evidence": "Step C unblocked after Step E fix"
+    },
+    {
+      "id": "operational_envelope",
+      "path": "docs/validation/operational_height_extreme_validation.md",
+      "exists": true,
+      "timestamp": "2026-06-02",
+      "height_range": {
+        "min_operational": 0.3932865805,
+        "max_operational": 0.4128130092,
+        "physical_min": 0.2919188370,
+        "physical_max": 0.4908117407
+      },
+      "classification": "physical_envelope_evidence",
+      "status": "valid",
+      "evidence": "Fresh Step E telemetry at extrema PASS"
+    },
+    {
+      "id": "physical_envelope_validation",
+      "path": "docs/validation/physical_standing_height_envelope_validation.md",
+      "exists": true,
+      "timestamp": "2026-06-03",
+      "classification": "physical_envelope_evidence",
+      "status": "valid",
+      "evidence": "Physical envelope 0.292-0.491m, 61 valid candidates"
+    },
+    {
+      "id": "physical_envelope_definition",
+      "path": "docs/validation/physical_standing_height_envelope_definition.md",
+      "exists": true,
+      "timestamp": "2026-06-03",
+      "classification": "physical_envelope_evidence",
+      "status": "valid",
+      "evidence": "Static feasibility definition, controller constraints excluded"
+    },
+    {
+      "id": "hy2_div_gate_fix",
+      "path": "docs/validation/hy2_div_gate_pass_through_fix_report.md",
+      "exists": true,
+      "timestamp": "2026-06-06",
+      "classification": "hy2_div",
+      "status": "valid",
+      "evidence": "Gate pass-through fixed, A0-B3 candidates evaluated at 5000 steps"
+    },
+    {
+      "id": "hy2_div_authority_fix",
+      "path": "docs/validation/hip_yaw_divergence_authority_fix_report.md",
+      "exists": true,
+      "timestamp": "2026-06-06",
+      "classification": "hy2_div",
+      "status": "valid",
+      "evidence": "HY2_DIV_AUTHORITY_FIX_PARTIAL - gate fixed but no candidate passed 5000-step"
+    },
+    {
+      "id": "posture_a0_5000",
+      "path": "docs/validation/posture_standing_validation_a0_5000_report.md",
+      "exists": true,
+      "timestamp": "2026-06-06",
+      "height_range": {
+        "tested": [0.404, 0.300, 0.480]
+      },
+      "classification": "hy2_div",
+      "status": "valid",
+      "evidence": "A0 survived all heights but hip-yaw divergence exceeded targets"
+    },
+    {
+      "id": "posture_gate_definition",
+      "path": "docs/validation/posture_standing_validation_gate_definition.md",
+      "exists": true,
+      "timestamp": "2026-06-06",
+      "classification": "hy2_div",
+      "status": "valid",
+      "evidence": "Priority order: survival > contact > height > posture > pitch/support deferred"
+    },
+    {
+      "id": "hip_yaw_sign_fix",
+      "path": "docs/validation/hip_yaw_sign_convention_fix_report.md",
+      "exists": true,
+      "timestamp": "2026-06-05",
+      "classification": "hy2_div",
+      "status": "valid",
+      "evidence": "Sign corrected from 0% to >93%, divergence increased"
+    },
+    {
+      "id": "hip_yaw_divergence_after_sign",
+      "path": "docs/validation/hip_yaw_divergence_after_sign_fix_audit.md",
+      "exists": true,
+      "timestamp": "2026-06-05",
+      "classification": "hy2_div",
+      "status": "valid",
+      "evidence": "Root cause: per-joint PD accelerates divergence 97-99%"
+    },
+    {
+      "id": "low_0p300_setup",
+      "path": "outputs/physical_target_height_setups/low_0p300_setup.json",
+      "exists": true,
+      "height_range": {
+        "target": 0.300,
+        "achieved": 0.2954845595
+      },
+      "classification": "extreme_height_setup",
+      "status": "valid"
+    },
+    {
+      "id": "high_0p480_setup",
+      "path": "outputs/physical_target_height_setups/high_0p480_setup.json",
+      "exists": true,
+      "height_range": {
+        "target": 0.480,
+        "achieved": 0.4810352309
+      },
+      "classification": "extreme_height_setup",
+      "status": "valid"
+    },
+    {
+      "id": "low_0p330_setup",
+      "path": "outputs/physical_target_height_setups/low_0p330_setup.json",
+      "exists": true,
+      "height_range": {
+        "target": 0.330,
+        "achieved": 0.3350124752
+      },
+      "classification": "intermediate_height_setup",
+      "status": "valid"
+    },
+    {
+      "id": "low_0p360_setup",
+      "path": "outputs/physical_target_height_setups/low_0p360_setup.json",
+      "exists": true,
+      "height_range": {
+        "target": 0.360,
+        "achieved": 0.3632610826
+      },
+      "classification": "intermediate_height_setup",
+      "status": "valid"
+    },
+    {
+      "id": "high_0p450_setup",
+      "path": "outputs/physical_target_height_setups/high_0p450_setup.json",
+      "exists": true,
+      "height_range": {
+        "target": 0.450,
+        "achieved": 0.4511770655
+      },
+      "classification": "intermediate_height_setup",
+      "status": "valid"
+    },
+    {
+      "id": "physical_summary",
+      "path": "outputs/physical_standing_height_envelope_search/physical_height_envelope_summary.json",
+      "exists": true,
+      "height_range": {
+        "physical_min": 0.2919188370,
+        "physical_max": 0.4908117407
+      },
+      "classification": "physical_envelope_evidence",
+      "status": "valid"
+    }
+  ],
+  "height_range_summary": {
+    "validated_dynamic_envelope": {
+      "low": 0.3932865805,
+      "high": 0.4128130092,
+      "span_cm": 1.95
+    },
+    "physical_envelope": {
+      "low": 0.2919188370,
+      "high": 0.4908117407,
+      "span_cm": 19.89
+    },
+    "target_extreme": {
+      "low": 0.300,
+      "high": 0.480
+    },
+    "gap_analysis": {
+      "low_gap_cm": 9.93,
+      "high_gap_cm": 6.72
+    }
+  }
+}

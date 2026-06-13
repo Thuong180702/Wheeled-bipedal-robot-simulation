@@ -1,0 +1,194 @@
+{
+  "validation_method": "progressive_passive_simulation",
+  "support_feedforward_config": {
+    "vector": [
+      0.0,
+      0.0,
+      4.1,
+      -15.5,
+      0.0,
+      0.0,
+      0.0,
+      3.2,
+      -15.8,
+      0.0
+    ],
+    "scale": 0.5,
+    "joint_group": "hip_pitch_knee",
+    "indices": [
+      2,
+      3,
+      7,
+      8
+    ]
+  },
+  "variants_tested": [
+    "low_small",
+    "low_tiny",
+    "high_small",
+    "high_tiny",
+    "nominal"
+  ],
+  "total_validation_runs": 5,
+  "max_confirmed_steps_per_variant": {
+    "low_small": 522,
+    "low_tiny": 367,
+    "high_small": 363,
+    "high_tiny": 462,
+    "nominal": 403
+  },
+  "support_feedforward_consistency": {
+    "total_checks": 5,
+    "consistent_count": 0,
+    "consistent_rate": 0.0
+  },
+  "failures": [
+    {
+      "variant_name": "nominal",
+      "failure_step": 403,
+      "primary_root_cause": "pitch_divergence",
+      "secondary_causes": [
+        "support_feedforward_mismatch",
+        "yaw_drift_issue",
+        "height_drift"
+      ],
+      "responsible_component": "SagittalWheelBalanceController or SupportFeedforwardController",
+      "recommended_fix_scope": "sagittal_balance_or_support_feedforward"
+    },
+    {
+      "variant_name": "high_tiny",
+      "failure_step": 462,
+      "primary_root_cause": "height_collapse",
+      "secondary_causes": [
+        "support_feedforward_mismatch",
+        "height_drift"
+      ],
+      "responsible_component": "ShapePostureController or SupportFeedforwardController",
+      "recommended_fix_scope": "posture_reference_or_support_feedforward"
+    },
+    {
+      "variant_name": "high_small",
+      "failure_step": 363,
+      "primary_root_cause": "pitch_divergence",
+      "secondary_causes": [
+        "support_feedforward_mismatch",
+        "yaw_drift_issue",
+        "height_drift"
+      ],
+      "responsible_component": "SagittalWheelBalanceController or SupportFeedforwardController",
+      "recommended_fix_scope": "sagittal_balance_or_support_feedforward"
+    },
+    {
+      "variant_name": "low_tiny",
+      "failure_step": 367,
+      "primary_root_cause": "pitch_divergence",
+      "secondary_causes": [
+        "support_feedforward_mismatch",
+        "yaw_drift_issue",
+        "height_drift"
+      ],
+      "responsible_component": "SagittalWheelBalanceController or SupportFeedforwardController",
+      "recommended_fix_scope": "sagittal_balance_or_support_feedforward"
+    },
+    {
+      "variant_name": "low_small",
+      "failure_step": 522,
+      "primary_root_cause": "height_collapse",
+      "secondary_causes": [
+        "support_feedforward_mismatch"
+      ],
+      "responsible_component": "ShapePostureController or SupportFeedforwardController",
+      "recommended_fix_scope": "posture_reference_or_support_feedforward"
+    }
+  ],
+  "validation_results": [
+    {
+      "variant_name": "nominal",
+      "target_steps": 1000,
+      "survived_steps": 403,
+      "termination_reason": "orientation_fail_pitch_x_0.16_roll_y_-0.79",
+      "primary_failure_mode": "roll_divergence",
+      "pitch_x_range": [
+        -9.29530452026374e-07,
+        0.15865343333654325
+      ],
+      "roll_y_range": [
+        -0.7858741954878401,
+        0.00021356972237841372
+      ],
+      "com_z_drift": 0.07670739329540227,
+      "yaw_drift": 0.25399977425646925
+    },
+    {
+      "variant_name": "high_tiny",
+      "target_steps": 1000,
+      "survived_steps": 462,
+      "termination_reason": "height_too_low",
+      "primary_failure_mode": "height_collapse",
+      "pitch_x_range": [
+        -1.090271786630922e-06,
+        0.5221972582445492
+      ],
+      "roll_y_range": [
+        -0.7278003083731945,
+        0.00022462296085238643
+      ],
+      "com_z_drift": -0.061407197685369286,
+      "yaw_drift": 0.048514521174693404
+    },
+    {
+      "variant_name": "high_small",
+      "target_steps": 1000,
+      "survived_steps": 363,
+      "termination_reason": "orientation_fail_pitch_x_0.10_roll_y_-0.79",
+      "primary_failure_mode": "roll_divergence",
+      "pitch_x_range": [
+        -9.431629365045477e-07,
+        0.1013158059553473
+      ],
+      "roll_y_range": [
+        -0.7876139671244218,
+        8.688766508168085e-05
+      ],
+      "com_z_drift": 0.08503447284294152,
+      "yaw_drift": 0.20005932225561193
+    },
+    {
+      "variant_name": "low_tiny",
+      "target_steps": 1000,
+      "survived_steps": 367,
+      "termination_reason": "orientation_fail_pitch_x_0.03_roll_y_-0.79",
+      "primary_failure_mode": "roll_divergence",
+      "pitch_x_range": [
+        -6.819199613085351e-07,
+        0.02920296966484208
+      ],
+      "roll_y_range": [
+        -0.7874138185513603,
+        0.0001281209010912019
+      ],
+      "com_z_drift": 0.07712128806560647,
+      "yaw_drift": 0.24941069080139158
+    },
+    {
+      "variant_name": "low_small",
+      "target_steps": 1000,
+      "survived_steps": 522,
+      "termination_reason": "height_too_low",
+      "primary_failure_mode": "height_collapse",
+      "pitch_x_range": [
+        -6.411600774630929e-07,
+        0.7196489451069567
+      ],
+      "roll_y_range": [
+        -0.7189722547314747,
+        0.0001627855477445171
+      ],
+      "com_z_drift": -0.04663901738273524,
+      "yaw_drift": 0.08860037041937227
+    }
+  ],
+  "wbc_status": "off",
+  "ownership_violations": 0,
+  "four_source_stack_unchanged": true
+}

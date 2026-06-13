@@ -1,0 +1,31 @@
+{
+  "classification": "T6F_SIGN_FIX_BUGFIX_TESTS_PASS",
+  "date": "2026-06-12",
+  "phase": "Phase 4",
+  "task": "Integration tests after fixes",
+  "test_results": {
+    "total_tests": 377,
+    "passed": 377,
+    "failed": 0,
+    "duration_seconds": 6.73,
+    "result": "PASS"
+  },
+  "test_suites": {
+    "test_t6f_torque_sign_convention": {"tests": 16, "result": "PASS"},
+    "test_t6_high_height_variants": {"tests": 36, "result": "PASS"},
+    "test_apcr1nd_tuned_variants": {"tests": 31, "result": "PASS"},
+    "test_sagittal_velocity_damped_balance_controller": {"tests": 285, "result": "PASS"},
+    "test_simulation_telemetry_csv_writer": {"tests": 9, "result": "PASS"}
+  },
+  "fixes_verified": {
+    "phase_1_profile_identity_telemetry": "VERIFIED",
+    "phase_2_pitch_suppression_placement": "VERIFIED",
+    "phase_3_band_state_audit_script": "VERIFIED"
+  },
+  "compilation_status": {
+    "simulate_hierarchical_controller": "PASS",
+    "sagittal_velocity_damped_balance_controller": "PASS",
+    "test_simulation_telemetry_csv_writer": "PASS"
+  },
+  "next_phase": "Phase 5: Rerun 500-step diagnostic"
+}

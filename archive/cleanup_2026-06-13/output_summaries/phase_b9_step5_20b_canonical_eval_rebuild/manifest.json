@@ -1,0 +1,24 @@
+{
+  "original_path": "outputs/phase_b9_step5_20b_canonical_eval_rebuild",
+  "original_size": "16.5K",
+  "original_size_bytes": 16854,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "baseline_reproduction_validation.json",
+      "size_bytes": 2694
+    },
+    {
+      "file": "evaluation_output.txt",
+      "size_bytes": 2167
+    },
+    {
+      "file": "final_evaluation_failure_report.md",
+      "size_bytes": 11160
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

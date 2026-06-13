@@ -1,0 +1,32 @@
+{
+  "baseline_reference": {
+    "mean_survival_s": 3.8926666666666665,
+    "mean_fall_rate": 0.8333333333333334,
+    "mean_roll_rms_deg": 21.168228816065504,
+    "mean_pitch_rms_deg": 1.0109260130054514,
+    "mean_action_sat_rate": 0.0
+  },
+  "current_best_controller": "outputs/phase_b9_lqr_gain_strengthening/best_lqr_config.yaml",
+  "variants_tested": [
+    "A_preload_hip_roll_target_at_t0",
+    "B_roll_rate_damping_from_first_step",
+    "C_bypass_filter_rate_limiter_first_0p2s",
+    "D_startup_emergency_roll_mode",
+    "E_predictive_roll_correction"
+  ],
+  "kept_variants": [],
+  "full_validation_executed": false,
+  "best_variant": "none",
+  "best_metrics": {},
+  "beats_step5_baseline_full_validation": false,
+  "final_decision": "KEEP_STEP5_BASELINE_AND_BLOCK_STEP6",
+  "step6_status": "BLOCKED",
+  "artifacts": {
+    "latency_diagnostics_csv": "outputs/phase_b9_step5_10_early_transient_fix/latency_diagnostics.csv",
+    "latency_summary_json": "outputs/phase_b9_step5_10_early_transient_fix/latency_summary.json",
+    "candidate_results_csv": "outputs/phase_b9_step5_10_early_transient_fix/candidate_results.csv",
+    "candidate_summary_json": "outputs/phase_b9_step5_10_early_transient_fix/candidate_summary.json",
+    "full_validation_csv": "outputs/phase_b9_step5_10_early_transient_fix/full_validation.csv",
+    "full_validation_summary_json": "outputs/phase_b9_step5_10_early_transient_fix/full_validation_summary.json"
+  }
+}

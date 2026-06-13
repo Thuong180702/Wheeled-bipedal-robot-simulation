@@ -1,0 +1,42 @@
+{
+  "final_classification": "ACTIVE_PITCH_CROSSING_RECOVERY_PASS_PROCEED_TO_2000",
+  "timestamp": "2026-06-08T20:50:00",
+  "summary": {
+    "why_apc1_did_not_activate": "Old pitch safety gate blocked activation when pitch > 5.73 deg, but low_0p300 pitch oscillates between -15.9 and +15.0 deg",
+    "what_apcr_changes": "Separates hard safety (pitch > 17.2 deg) from recovery activation (pitch > 1.7 deg when drift present)",
+    "tests_run": "122 tests passed, 500-step simulation survived",
+    "d2_apc1_apcr1_comparison": {
+      "d2_signed_error_mean": 0.0824,
+      "apc1_signed_error_mean": 1.6,
+      "apcr1_signed_error_mean": 0.0674,
+      "d2_outside_band_percent": 19.2,
+      "apcr1_outside_band_percent": 13.8,
+      "d2_positive_bias_percent": 93.2,
+      "apcr1_positive_bias_percent": 79.4
+    },
+    "apcr_activated": true,
+    "apcr_created_pitch_rate_reversal": true,
+    "signed_support_drift_moved_closer_to_zero": true,
+    "drift_stayed_inside_0p15_better": true,
+    "wheel_velocity_monitor": "similar to D2",
+    "hip_yaw_monitor": "not significantly affected",
+    "contact_height_roll_structural_gates": "all valid",
+    "apcr1_should_proceed_to_2000": true
+  },
+  "improvements_vs_d2": {
+    "signed_error_mean_improvement_percent": 18.2,
+    "outside_band_reduction_percent": 28.1,
+    "positive_bias_reduction_percent": 14.8
+  },
+  "tradeoffs": {
+    "pitch_rms_increase_percent": 11.1,
+    "reason": "APCR applies torque during moderate pitch to create recovery"
+  },
+  "key_files": [
+    "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
+    "scripts/simulate_hierarchical_controller.py",
+    "tests/test_sagittal_velocity_damped_balance_controller.py",
+    "docs/validation/active_pitch_crossing_recovery_final_report.md"
+  ],
+  "telemetry_file": "outputs/hierarchical_controller_sim/telemetry_1780926507.csv"
+}

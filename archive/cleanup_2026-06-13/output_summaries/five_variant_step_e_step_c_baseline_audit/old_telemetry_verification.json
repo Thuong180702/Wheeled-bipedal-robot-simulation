@@ -1,0 +1,222 @@
+[
+  {
+    "variant": "nominal",
+    "telemetry": {
+      "row_count": 5000,
+      "survived_5000_steps": true,
+      "support_position_error_m": {
+        "max": 2.0682898927557924,
+        "final": -0.502652630054492,
+        "rms": 1.2153658642526357
+      },
+      "hip_yaw_abs_max": {
+        "max": 5.0,
+        "final": 4.8726541249389825,
+        "rms": 4.87274969526321
+      },
+      "pitch": {
+        "max": 0.0,
+        "final": 0.0
+      },
+      "roll": {
+        "max": 0.9261,
+        "final": 0.9261
+      },
+      "wheel_vel": {
+        "max": 1.0,
+        "final": 1.0
+      },
+      "contact_valid_pct": 99.98,
+      "com_z": {
+        "min": 0.40376773476600647,
+        "max": 0.408547043800354,
+        "final": 0.40819376707077026
+      },
+      "wbc_applied": false,
+      "hidden_torque_norm": 30.0,
+      "ownership_violation_count": 30
+    },
+    "reported": {
+      "support_max": 0.106,
+      "hip_yaw_max": 0.056,
+      "pitch_max": 0.071,
+      "wheel_max": 3.87
+    }
+  },
+  {
+    "variant": "low_tiny",
+    "telemetry": {
+      "row_count": 5000,
+      "survived_5000_steps": true,
+      "support_position_error_m": {
+        "max": 2.1284589409884553,
+        "final": -1.136563345524761,
+        "rms": 1.3317607394767332
+      },
+      "hip_yaw_abs_max": {
+        "max": 5.0,
+        "final": 4.735361889269855,
+        "rms": 4.8602292120608315
+      },
+      "pitch": {
+        "max": 0.0,
+        "final": 0.0
+      },
+      "roll": {
+        "max": 0.9261,
+        "final": 0.9261
+      },
+      "wheel_vel": {
+        "max": 1.0,
+        "final": 0.0
+      },
+      "contact_valid_pct": 99.98,
+      "com_z": {
+        "min": 0.3983054757118225,
+        "max": 0.40266603231430054,
+        "final": 0.4004603922367096
+      },
+      "wbc_applied": false,
+      "hidden_torque_norm": 30.0,
+      "ownership_violation_count": 30
+    },
+    "reported": {
+      "support_max": 0.11,
+      "hip_yaw_max": 0.042,
+      "pitch_max": 0.073,
+      "wheel_max": 4.04
+    }
+  },
+  {
+    "variant": "high_tiny",
+    "telemetry": {
+      "row_count": 5000,
+      "survived_5000_steps": true,
+      "support_position_error_m": {
+        "max": 2.175989738786641,
+        "final": 1.8003196388751919,
+        "rms": 1.37425393010036
+      },
+      "hip_yaw_abs_max": {
+        "max": 5.0,
+        "final": 4.863489660593802,
+        "rms": 4.852322772297211
+      },
+      "pitch": {
+        "max": 0.0,
+        "final": 0.0
+      },
+      "roll": {
+        "max": 0.9261,
+        "final": 0.9261
+      },
+      "wheel_vel": {
+        "max": 1.0,
+        "final": 1.0
+      },
+      "contact_valid_pct": 99.98,
+      "com_z": {
+        "min": 0.4091888666152954,
+        "max": 0.4143904745578766,
+        "final": 0.4141989052295685
+      },
+      "wbc_applied": false,
+      "hidden_torque_norm": 30.0,
+      "ownership_violation_count": 30
+    },
+    "reported": {
+      "support_max": 0.124,
+      "hip_yaw_max": 0.038,
+      "pitch_max": 0.092,
+      "wheel_max": 4.12
+    }
+  },
+  {
+    "variant": "low_small",
+    "telemetry": {
+      "row_count": 5000,
+      "survived_5000_steps": true,
+      "support_position_error_m": {
+        "max": 2.1450141975834303,
+        "final": 0.438959542513941,
+        "rms": 1.2242143106231818
+      },
+      "hip_yaw_abs_max": {
+        "max": 5.0,
+        "final": 4.858133223055746,
+        "rms": 4.87109349140279
+      },
+      "pitch": {
+        "max": 0.0,
+        "final": 0.0
+      },
+      "roll": {
+        "max": 0.9261,
+        "final": 0.9261
+      },
+      "wheel_vel": {
+        "max": 1.0,
+        "final": 1.0
+      },
+      "contact_valid_pct": 99.98,
+      "com_z": {
+        "min": 0.39489927887916565,
+        "max": 0.39906972646713257,
+        "final": 0.39889466762542725
+      },
+      "wbc_applied": false,
+      "hidden_torque_norm": 30.0,
+      "ownership_violation_count": 30
+    },
+    "reported": {
+      "support_max": 0.106,
+      "hip_yaw_max": 0.057,
+      "pitch_max": 0.071,
+      "wheel_max": 3.99
+    }
+  },
+  {
+    "variant": "high_small",
+    "telemetry": {
+      "row_count": 5000,
+      "survived_5000_steps": true,
+      "support_position_error_m": {
+        "max": 2.49231760361789,
+        "final": -0.9877301572932229,
+        "rms": 1.5697439094819974
+      },
+      "hip_yaw_abs_max": {
+        "max": 5.0,
+        "final": 4.813671362317942,
+        "rms": 4.833417226315468
+      },
+      "pitch": {
+        "max": 0.0,
+        "final": 0.0
+      },
+      "roll": {
+        "max": 0.9261,
+        "final": 0.9261
+      },
+      "wheel_vel": {
+        "max": 1.0,
+        "final": 1.0
+      },
+      "contact_valid_pct": 99.98,
+      "com_z": {
+        "min": 0.4125632047653198,
+        "max": 0.41793933510780334,
+        "final": 0.41752955317497253
+      },
+      "wbc_applied": false,
+      "hidden_torque_norm": 30.0,
+      "ownership_violation_count": 30
+    },
+    "reported": {
+      "support_max": 0.135,
+      "hip_yaw_max": 0.03,
+      "pitch_max": 0.096,
+      "wheel_max": 4.77
+    }
+  }
+]

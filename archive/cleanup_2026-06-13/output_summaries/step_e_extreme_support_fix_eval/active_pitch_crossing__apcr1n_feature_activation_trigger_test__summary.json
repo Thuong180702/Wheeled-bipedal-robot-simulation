@@ -1,0 +1,20 @@
+{
+  "test_type": "apcr1n_activation_trigger",
+  "startup_guard_bypassed": true,
+  "warm_up_steps": 150,
+  "drift_error_m": 0.0006524538095993571,
+  "abs_error_m": 0.0006524538095993571,
+  "moving_away": true,
+  "pitch_deg": 2.864788975654116,
+  "roll_deg": 0.0,
+  "com_z_m": 0.4168400270413427,
+  "eligibility": {
+    "abs_e_gt_0p08": false,
+    "moving_away": true,
+    "pitch_safe": true,
+    "roll_safe": true,
+    "height_safe": true,
+    "overall_eligible": false
+  },
+  "classification": "APCR1N_FEATURE_TRIGGER_FAIL"
+}

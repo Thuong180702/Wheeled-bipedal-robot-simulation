@@ -1,0 +1,72 @@
+{
+  "original_path": "outputs/operational_height_envelope_search",
+  "original_size": "385.9K",
+  "original_size_bytes": 395183,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "controller_ready_extrema/controller_ready_extrema_summary.json",
+      "size_bytes": 405
+    },
+    {
+      "file": "controller_ready_extrema/max_operational_height_setup.json",
+      "size_bytes": 2191
+    },
+    {
+      "file": "controller_ready_extrema/min_operational_height_setup.json",
+      "size_bytes": 8139
+    },
+    {
+      "file": "dynamic_probe_setups/search_high_0p414m.json",
+      "size_bytes": 8139
+    },
+    {
+      "file": "dynamic_probe_setups/search_high_0p419m.json",
+      "size_bytes": 8138
+    },
+    {
+      "file": "dynamic_probe_setups/search_high_0p424m.json",
+      "size_bytes": 8133
+    },
+    {
+      "file": "dynamic_probe_setups/search_low_0p384m.json",
+      "size_bytes": 8124
+    },
+    {
+      "file": "dynamic_probe_setups/search_low_0p389m.json",
+      "size_bytes": 8096
+    },
+    {
+      "file": "dynamic_probe_setups/search_low_0p394m.json",
+      "size_bytes": 8134
+    },
+    {
+      "file": "max_operational_height_setup.json",
+      "size_bytes": 8100
+    },
+    {
+      "file": "min_operational_height_setup.json",
+      "size_bytes": 8103
+    },
+    {
+      "file": "operational_height_envelope_report.md",
+      "size_bytes": 16812
+    },
+    {
+      "file": "operational_height_envelope_summary.json",
+      "size_bytes": 18012
+    },
+    {
+      "file": "operational_height_valid_candidates.json",
+      "size_bytes": 89674
+    },
+    {
+      "file": "static_extreme_validation.json",
+      "size_bytes": 17469
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

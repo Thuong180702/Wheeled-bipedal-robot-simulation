@@ -1,0 +1,16 @@
+{
+  "original_path": "outputs/b9_diagnostic_obsfix",
+  "original_size": "8.2K",
+  "original_size_bytes": 8427,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "diagnostic_summary_h0.60_seed42.json",
+      "size_bytes": 384
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}
