@@ -48,5 +48,29 @@ Step C was previously blocked because Step E height‑variant position hold was 
 - The selected sagittal authority profile should be used as the default for all balance‑core height‑variant experiments.
 - Step D (residual training) can now proceed with confidence that both Step E and Step C are validated across all height variants.
 
+## Extreme-height follow-up validation
+
+A later extreme-height campaign reused the same D2 profile and evaluated Step C only after Step E passed on a narrower controller-ready envelope. The broader static-only search range was **not** accepted as dynamic-ready; instead, the final extreme Step C pass was reported on the conservative dynamic envelope established by fresh Step E telemetry.
+
+Final conservative **controller-ready** extreme heights:
+
+- `min_operational_height = 0.3932865805 m` CoM
+- `max_operational_height = 0.4128130092 m` CoM
+
+Controller-ready Step C extreme results:
+
+| Case | Verdict | Recovery time (s) | Support max (m) | HipYaw max (rad) | Pitch max (rad) | Roll max (rad) | Wheel max (rad/s) | Final height error (m) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| min_operational_height | PASS | 0.0 | 0.133 | 0.056 | 0.096 | 0.014 | 4.72 | 0.0035 |
+| max_operational_height | PASS | 0.0 | 0.135 | 0.030 | 0.096 | 0.009 | 4.77 | 0.0047 |
+
+Interpretation:
+
+- Both cases started already within the accepted height band, so `recovery_time_s = 0.0` is valid as a hold/recovery sanity result.
+- Local transition recovery around the extrema was **NOT RUN** in this pass.
+- WBC remained off, hidden torque remained zero, and ownership violations remained zero.
+
+See `docs/validation/operational_height_extreme_validation.md` for the full static search, failed broader static extrema, boundary probes, and final controller-ready envelope.
+
 ---
 *Validated with the same candidate_D2_wheel_velocity_damping_light profile used for Step E‑HV final validation.*

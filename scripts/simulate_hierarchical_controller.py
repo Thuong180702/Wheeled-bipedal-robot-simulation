@@ -67,6 +67,28 @@ from wheeled_biped.controllers.sagittal_wheel_balance_controller import Sagittal
 from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import (
     SagittalAuthoritySchedule,
     SagittalVelocityDampedBalanceController,
+    JOINT_FIX_J1_SUPPORT_CAP,
+    JOINT_FIX_J2_SUPPORT_CAP_MODERATE_DAMPING,
+    JOINT_FIX_J3_SUPPORT_CAP_STRONG_DAMPING,
+    PITCH_SAFE_J2A_CONSERVATIVE,
+    PITCH_SAFE_J2B_BALANCED,
+    PITCH_SAFE_J2C_VELOCITY_PRIORITY,
+    PITCH_SAFE_J2D_TAU_CAP_PRIORITY,
+    APCR1ND_T1_EARLY_ENTRY,
+    APCR1ND_T2_HOLD_OUTSIDE_BAND,
+    APCR1ND_T3_EARLY_ENTRY_PLUS_HOLD,
+    APCR1ND_T4_STRONGER_AUTHORITY,
+    APCR1ND_T5_BAND_LIMITED_BALANCED,
+    T6A_HIGH_EARLY_HARD_BAND,
+    T6B_HIGH_STRONGER_EMERGENCY,
+    T6C_HIGH_EARLY_PLUS_STRONGER,
+    T6D_HIGH_TRANSIENT_BOOST,
+    T6E_HIGH_PITCH_AWARE_BOOST,
+    T6F_BUDGET_CAP_RAISE,
+    T6F_SIGN_CORRECTED,
+    T6H_SOFT_BLEND_ARCH_FIX,
+    T6I_PHASE_AWARE_RELEASE,
+    T6J_CENTERING_BIAS_TRIM,
 )
 from wheeled_biped.controllers.pitch_rate_consistency_estimator import PitchRateConsistencyEstimator
 from wheeled_biped.controllers.sagittal_balance_state import (
@@ -79,6 +101,7 @@ from wheeled_biped.controllers.shape_posture_controller import (
     ShapePostureController,
 )
 from wheeled_biped.controllers.support_feedforward_controller import SupportFeedforwardController
+from wheeled_biped.controllers.yaw_controller import YawController
 from wheeled_biped.controllers.balance_core_types import make_balance_core_telemetry_columns
 from wheeled_biped.validation.telemetry_adapter import (
     add_validation_telemetry_fields,
@@ -92,6 +115,9 @@ STAGE2B_DEFAULT_EMPIRICAL_FEEDFORWARD = np.array([
 ], dtype=np.float64)
 
 HIGH_HEIGHT_VARIANTS = ("high_tiny", "high_small")
+EXTREME_HEIGHT_VARIANTS = ("min_operational_height", "max_operational_height")
+BOUNDARY_HEIGHT_VARIANTS = ("low_0p300", "high_0p480")
+D2_HEIGHT_VARIANTS = HIGH_HEIGHT_VARIANTS + EXTREME_HEIGHT_VARIANTS + BOUNDARY_HEIGHT_VARIANTS
 SAGITTAL_AUTHORITY_PROFILES = {
     "baseline": SagittalAuthoritySchedule(),
     "candidate_A_position_cap": SagittalAuthoritySchedule(
@@ -132,19 +158,1357 @@ SAGITTAL_AUTHORITY_PROFILES = {
     ),
     "candidate_D2_wheel_velocity_damping_light": SagittalAuthoritySchedule(
         profile_name="candidate_D2_wheel_velocity_damping_light",
-        applies_to_variants=HIGH_HEIGHT_VARIANTS,
+        applies_to_variants=D2_HEIGHT_VARIANTS,
         position_tau_cap_by_variant=(
             ("high_tiny", 4.0),
             ("high_small", 4.0),
+            ("min_operational_height", 4.0),
+            ("max_operational_height", 4.0),
+            ("low_0p300", 4.0),
+            ("high_0p480", 4.0),
         ),
         pitch_tau_scale=1.0,
         velocity_damping_scale=1.10,
     ),
+    "candidate_E1_k60_continuous": SagittalAuthoritySchedule(
+        profile_name="candidate_E1_k60_continuous",
+        applies_to_variants=(),  # Not variant-specific - formula-based
+        continuous_k_position=True,
+        k_position_nominal=40.0,
+        k_position_low_max=60.0,
+        k_position_z_low=0.300,
+        k_position_z_high=0.393,
+    ),
+    "candidate_E2_k80_continuous": SagittalAuthoritySchedule(
+        profile_name="candidate_E2_k80_continuous",
+        applies_to_variants=(),  # Not variant-specific - formula-based
+        continuous_k_position=True,
+        k_position_nominal=40.0,
+        k_position_low_max=80.0,
+        k_position_z_low=0.300,
+        k_position_z_high=0.393,
+    ),
+    "candidate_E3_k100_continuous": SagittalAuthoritySchedule(
+        profile_name="candidate_E3_k100_continuous",
+        applies_to_variants=(),  # Not variant-specific - formula-based
+        continuous_k_position=True,
+        k_position_nominal=40.0,
+        k_position_low_max=100.0,
+        k_position_z_low=0.300,
+        k_position_z_high=0.393,
+    ),
+    # Phase 6 Joint Low-Height Sagittal-Yaw Fix Profiles
+    "J1": JOINT_FIX_J1_SUPPORT_CAP,
+    "J2": JOINT_FIX_J2_SUPPORT_CAP_MODERATE_DAMPING,
+    "J3": JOINT_FIX_J3_SUPPORT_CAP_STRONG_DAMPING,
+    # Pitch-Safe Candidates (J2a-J2d family)
+    "J2a": PITCH_SAFE_J2A_CONSERVATIVE,
+    "J2b": PITCH_SAFE_J2B_BALANCED,
+    "J2c": PITCH_SAFE_J2C_VELOCITY_PRIORITY,
+    "J2d": PITCH_SAFE_J2D_TAU_CAP_PRIORITY,
+    # Step E Extreme Height Support Fix Candidates
+    # Priority: 1. support_position_error, 2. wheel_velocity transient, 3. hip_yaw (after support/wheel)
+    # These profiles are opt-in only - do NOT modify candidate_D2_wheel_velocity_damping_light
+    "E1_support_integral": SagittalAuthoritySchedule(
+        profile_name="E1_support_integral",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480 only
+        # Enable position integral for steady-state error correction
+        # FIX: Raise pitch_error threshold from 0.03 to 0.12 rad to allow integral
+        # to activate during normal low_0p300 pitch oscillations (max 0.11 rad).
+        # At 0.03 rad, the integral was blocked for 349/500 steps (69.8%).
+        # At 0.12 rad, the integral can activate during normal operation while
+        # still blocking during extreme pitch events that indicate fall risk.
+        enable_position_integral=True,
+        ki_position_integral=2.0,
+        integral_max_abs=1.0,
+        integral_pitch_error_threshold_rad=0.12,  # Was 0.03 - raised to allow low_0p300 normal pitch
+        integral_support_velocity_threshold_m_s=0.03,
+        integral_wheel_velocity_threshold_rad_s=1.0,
+        integral_min_com_z_m=0.28,
+        integral_max_com_z_m=0.50,
+        # Keep position cap at 4.0 Nm (same as D2)
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        # Keep velocity damping at D2 level (1.10 scale via variant)
+        velocity_damping_scale=1.10,
+    ),
+    "E2_support_integral_higher_cap": SagittalAuthoritySchedule(
+        profile_name="E2_support_integral_higher_cap",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,
+        # Enable position integral (same as E1)
+        enable_position_integral=True,
+        ki_position_integral=2.0,
+        integral_max_abs=1.0,
+        integral_pitch_error_threshold_rad=0.03,
+        integral_support_velocity_threshold_m_s=0.03,
+        integral_wheel_velocity_threshold_rad_s=1.0,
+        integral_min_com_z_m=0.28,
+        integral_max_com_z_m=0.50,
+        # Increase position cap to 5.0 Nm (25% increase)
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=5.0,
+        # Keep velocity damping at D2 level
+        velocity_damping_scale=1.10,
+    ),
+    # E2b: Same as E2 but with integral gate aligned to E1 (0.12 rad vs 0.03 rad).
+    # Hypothesis: E2's 0.03 rad threshold was too restrictive, causing tau_position
+    # to accumulate aggressively which drove hip_yaw divergence. By widening to 0.12 rad
+    # (E1's value), the integral accumulates more naturally without windup-driven
+    # torque spikes that couple to hip_yaw through kinematic coupling.
+    "E2b_support_integral_higher_cap_aligned_gate": SagittalAuthoritySchedule(
+        profile_name="E2b_support_integral_higher_cap_aligned_gate",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,
+        # Enable position integral (same as E1/E2)
+        enable_position_integral=True,
+        ki_position_integral=2.0,
+        integral_max_abs=1.0,
+        integral_pitch_error_threshold_rad=0.12,  # KEY CHANGE: align to E1 value
+        integral_support_velocity_threshold_m_s=0.03,
+        integral_wheel_velocity_threshold_rad_s=1.0,
+        integral_min_com_z_m=0.28,
+        integral_max_com_z_m=0.50,
+        # Keep position cap at E2 level (5.0 Nm)
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=5.0,
+        # Keep velocity damping at D2 level
+        velocity_damping_scale=1.10,
+    ),
+    "E3_support_integral_cap_wheel_damping": SagittalAuthoritySchedule(
+        profile_name="E3_support_integral_cap_wheel_damping",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,
+        # Enable position integral (same as E1/E2)
+        enable_position_integral=True,
+        ki_position_integral=2.0,
+        integral_max_abs=1.0,
+        integral_pitch_error_threshold_rad=0.03,
+        integral_support_velocity_threshold_m_s=0.03,
+        integral_wheel_velocity_threshold_rad_s=1.0,
+        integral_min_com_z_m=0.28,
+        integral_max_com_z_m=0.50,
+        # Increase position cap (same as E2)
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=5.0,
+        # Add high-height wheel damping for high_0p480 transient
+        continuous_k_wheel_velocity=True,
+        k_wheel_velocity_nominal=0.5,
+        k_wheel_velocity_high_max=0.75,  # 50% increase at high heights
+        k_wheel_velocity_z_low=0.45,
+        k_wheel_velocity_z_high=0.52,
+    ),
+    # F1_phase_aware_recenter_wider_yaw_gate
+    # F1 with wider hip_yaw gate (0.15 rad vs 0.10 rad)
+    # Fixes circular dependency: F1 hip_yaw gate 0.10 blocked recentering when D2 already reaches ~0.1018 rad
+    # This allows recentering to activate more often and reduce signed support bias
+    "F1_phase_aware_recenter_wider_yaw_gate": SagittalAuthoritySchedule(
+        profile_name="F1_phase_aware_recenter_wider_yaw_gate",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Phase-aware recenter - decoupled from tau_position
+        enable_phase_aware_recenter=True,
+        k_recenter=10.0,  # Nm/m
+        max_recenter_tau=1.0,  # Nm - bounded, separate from balance
+        recenter_deadband_m=0.01,  # m
+        recenter_pitch_safe_threshold_rad=0.05,  # rad
+        recenter_pitch_danger_threshold_rad=0.10,  # rad
+        recenter_hip_yaw_safe_threshold_rad=0.15,  # rad - WIDER (D2 reaches ~0.1018, was blocking recenter)
+        recenter_smooth_alpha=0.10,
+        recenter_max_rate_per_step=0.5,  # Nm/step
+        recenter_min_com_z_m=0.28,  # m
+        recenter_max_com_z_m=0.50,  # m
+    ),
+    # F1_phase_aware_recenter_wider_yaw_gate_low_tau (F1c)
+    # Conservative variant with lower max_recenter_tau (0.5 Nm vs 1.0 Nm)
+    # Fallback if F1b reduces drift but causes hip-yaw or wheel velocity instability
+    "F1_phase_aware_recenter_wider_yaw_gate_low_tau": SagittalAuthoritySchedule(
+        profile_name="F1_phase_aware_recenter_wider_yaw_gate_low_tau",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Phase-aware recenter - decoupled from tau_position
+        enable_phase_aware_recenter=True,
+        k_recenter=10.0,  # Nm/m
+        max_recenter_tau=0.5,  # Nm - CONSERVATIVE (half of F1b)
+        recenter_deadband_m=0.01,  # m
+        recenter_pitch_safe_threshold_rad=0.05,  # rad
+        recenter_pitch_danger_threshold_rad=0.10,  # rad
+        recenter_hip_yaw_safe_threshold_rad=0.15,  # rad - same as F1b
+        recenter_smooth_alpha=0.10,
+        recenter_max_rate_per_step=0.25,  # Nm/step - slower than F1b
+        recenter_min_com_z_m=0.28,  # m
+        recenter_max_com_z_m=0.50,  # m
+    ),
+    # F2a_hysteresis_recenter_moderate
+    # Hysteresis recenter with moderate torque (1.5 Nm max)
+    # Holds recenter direction until signed_error returns to exit target
+    # This fixes the one-sided ratcheting that F1b does not fully solve
+    "F2a_hysteresis_recenter_moderate": SagittalAuthoritySchedule(
+        profile_name="F2a_hysteresis_recenter_moderate",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Hysteresis recenter (F2_strategy) - stateful recenter
+        enable_hysteresis_recenter=True,
+        hysteresis_outer_enter_m=0.10,  # m - enter when error exceeds this
+        hysteresis_exit_target_m=0.00,  # m - exit when error reaches this
+        hysteresis_opposite_overshoot_m=0.01,  # m - slight overshoot into opposite direction
+        hysteresis_k_recenter=10.0,  # Nm/m - gain
+        hysteresis_max_recenter_tau=1.5,  # Nm - moderate torque
+        hysteresis_smooth_alpha=0.10,
+        hysteresis_max_rate_per_step=0.5,  # Nm/step
+        hysteresis_deadband_m=0.01,  # m - ignore small errors in NEUTRAL
+        hysteresis_pitch_safe_threshold_rad=0.05,  # rad
+        hysteresis_pitch_danger_threshold_rad=0.10,  # rad
+        hysteresis_hip_yaw_safe_threshold_rad=0.15,  # rad - wider gate
+        hysteresis_min_com_z_m=0.28,  # m
+        hysteresis_max_com_z_m=0.50,  # m
+    ),
+    # F2b_hysteresis_recenter_strong
+    # Stronger hysteresis recenter with higher torque (2.0 Nm max)
+    # Only run if F2a improves but not enough
+    "F2b_hysteresis_recenter_strong": SagittalAuthoritySchedule(
+        profile_name="F2b_hysteresis_recenter_strong",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Hysteresis recenter (F2_strategy) - stronger variant
+        enable_hysteresis_recenter=True,
+        hysteresis_outer_enter_m=0.10,  # m - enter when error exceeds this
+        hysteresis_exit_target_m=0.00,  # m - exit when error reaches this
+        hysteresis_opposite_overshoot_m=0.02,  # m - larger overshoot into opposite direction
+        hysteresis_k_recenter=12.0,  # Nm/m - higher gain
+        hysteresis_max_recenter_tau=2.0,  # Nm - stronger torque
+        hysteresis_smooth_alpha=0.10,
+        hysteresis_max_rate_per_step=0.5,  # Nm/step
+        hysteresis_deadband_m=0.01,  # m - ignore small errors in NEUTRAL
+        hysteresis_pitch_safe_threshold_rad=0.05,  # rad
+        hysteresis_pitch_danger_threshold_rad=0.10,  # rad
+        hysteresis_hip_yaw_safe_threshold_rad=0.15,  # rad - wider gate
+        hysteresis_min_com_z_m=0.28,  # m
+        hysteresis_max_com_z_m=0.50,  # m
+    ),
+    # G1a_bias_cancel_moderate
+    # Persistent bias cancellation for one-sided positive drift
+    # Estimates persistent signed error bias and applies bounded opposite torque
+    # Unlike F2 which waits for natural negative drift, G1 estimates bias and cancels proactively
+    # Key difference from F2: does NOT gate on pitch (pitch reversal doesn't produce negative drift)
+    "G1a_bias_cancel_moderate": SagittalAuthoritySchedule(
+        profile_name="G1a_bias_cancel_moderate",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Bias cancellation (G1_strategy) - persistent bias cancellation
+        enable_bias_cancel=True,
+        bias_cancel_k=12.0,  # Nm/m - moderate gain
+        bias_cancel_max_tau=1.5,  # Nm - bounded torque
+        bias_cancel_filter_alpha=0.02,  # slow filter for smooth bias estimation
+        bias_cancel_deadband_m=0.02,  # m - ignore small persistent errors
+        bias_cancel_contact_gate=True,  # require valid contact
+        bias_cancel_height_gate=True,  # require valid height
+        bias_cancel_roll_gate=True,  # require valid roll
+        bias_cancel_pitch_gate=False,  # NOT gated on pitch (key difference from F2)
+        bias_cancel_min_com_z_m=0.28,  # m
+        bias_cancel_max_com_z_m=0.50,  # m
+        bias_cancel_roll_threshold_rad=0.15,  # rad
+    ),
+    # G1b_bias_cancel_strong
+    # Stronger bias cancellation with higher torque (2.0 Nm max)
+    # Only run if G1a improves but not enough
+    "G1b_bias_cancel_strong": SagittalAuthoritySchedule(
+        profile_name="G1b_bias_cancel_strong",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Bias cancellation (G1_strategy) - stronger variant
+        enable_bias_cancel=True,
+        bias_cancel_k=15.0,  # Nm/m - higher gain
+        bias_cancel_max_tau=2.0,  # Nm - stronger torque
+        bias_cancel_filter_alpha=0.03,  # faster filter
+        bias_cancel_deadband_m=0.02,  # m - ignore small persistent errors
+        bias_cancel_contact_gate=True,
+        bias_cancel_height_gate=True,
+        bias_cancel_roll_gate=True,
+        bias_cancel_pitch_gate=False,  # NOT gated on pitch
+        bias_cancel_min_com_z_m=0.28,  # m
+        bias_cancel_max_com_z_m=0.50,  # m
+        bias_cancel_roll_threshold_rad=0.15,  # rad
+    ),
+    # APC1_active_pitch_crossing_moderate
+    # Active Pitch Crossing controller with moderate torque (1.5 Nm max)
+    # Explicitly drives wheel torque to create controlled pitch-rate reversal
+    # When robot has positive pitch AND positive signed drift, APC applies wheel torque
+    # to reverse pitch_rate, allowing support to return toward 0.
+    "APC1_active_pitch_crossing_moderate": SagittalAuthoritySchedule(
+        profile_name="APC1_active_pitch_crossing_moderate",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Active Pitch Crossing (APC_strategy) - explicit pitch-rate crossing
+        enable_active_pitch_crossing=True,
+        apc_outer_enter_m=0.10,  # m - enter crossing when |signed_error| > this
+        apc_inner_exit_m=0.05,  # m - exit crossing when |signed_error| <= this
+        apc_opposite_overshoot_m=0.01,  # m - allow slight overshoot
+        apc_pitch_enter_rad=0.03,  # rad - pitch must exceed this to enter
+        apc_pitch_safe_limit_rad=0.08,  # rad - reduce torque if pitch exceeds this
+        apc_max_cross_tau=1.5,  # Nm - max crossing torque
+        apc_smooth_alpha=0.10,
+        apc_max_rate_per_step=0.5,  # Nm/step
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.28,  # m
+        apc_max_com_z_m=0.50,  # m
+        apc_pitch_safe_threshold_rad=0.05,  # rad
+        apc_pitch_danger_threshold_rad=0.10,  # rad
+        apc_roll_threshold_rad=0.15,  # rad
+    ),
+    # APC2_active_pitch_crossing_stronger
+    # Stronger Active Pitch Crossing with higher torque (2.0 Nm max)
+    # Only run if APC1 improves but not enough
+    "APC2_active_pitch_crossing_stronger": SagittalAuthoritySchedule(
+        profile_name="APC2_active_pitch_crossing_stronger",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Active Pitch Crossing (APC_strategy) - stronger variant
+        enable_active_pitch_crossing=True,
+        apc_outer_enter_m=0.10,  # m
+        apc_inner_exit_m=0.05,  # m
+        apc_opposite_overshoot_m=0.01,  # m
+        apc_pitch_enter_rad=0.03,  # rad
+        apc_pitch_safe_limit_rad=0.10,  # rad - higher limit for stronger variant
+        apc_max_cross_tau=2.0,  # Nm - stronger torque
+        apc_smooth_alpha=0.10,
+        apc_max_rate_per_step=0.5,  # Nm/step
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.28,  # m
+        apc_max_com_z_m=0.50,  # m
+        apc_pitch_safe_threshold_rad=0.05,  # rad
+        apc_pitch_danger_threshold_rad=0.10,  # rad
+        apc_roll_threshold_rad=0.15,  # rad
+    ),
+
+    # APCR1_active_pitch_crossing_recovery_moderate
+    # NEW: Active Pitch Recovery with recovery gate mode
+    # Uses separate hard safety gate from recovery activation gate
+    # Hard safety only blocks at pitch > 0.30 rad (vs old 0.10 rad)
+    # APCR can activate during moderate pitch error when drift is present
+    "APCR1_active_pitch_crossing_recovery_moderate": SagittalAuthoritySchedule(
+        profile_name="APCR1_active_pitch_crossing_recovery_moderate",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Active Pitch Recovery (APCR_strategy) - with recovery gate mode
+        enable_active_pitch_crossing=True,
+        active_pitch_crossing_recovery_gate_mode=True,  # NEW: separate hard safety from recovery
+        apc_outer_enter_m=0.10,  # m - enter when |signed_error| > this
+        apc_inner_exit_m=0.05,  # m - exit when |signed_error| <= this
+        apc_opposite_overshoot_m=0.01,  # m - allow slight overshoot
+        apc_pitch_enter_rad=0.03,  # rad - pitch must exceed this to enter
+        apc_pitch_safe_limit_rad=0.08,  # rad - reduce torque if pitch exceeds this
+        apc_max_cross_tau=1.0,  # Nm - moderate recovery torque
+        apc_smooth_alpha=0.10,
+        apc_max_rate_per_step=0.4,  # Nm/step - slightly slower rate
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.28,  # m
+        apc_max_com_z_m=0.50,  # m
+        apc_pitch_safe_threshold_rad=0.05,  # rad - used for OLD gate mode only
+        apc_pitch_danger_threshold_rad=0.10,  # rad - used for OLD gate mode only
+        apc_roll_threshold_rad=0.15,  # rad
+        # APCR recovery gate parameters
+        apcr_pitch_hard_stop_rad=0.30,  # rad - hard stop, blocks APCR (17.2 deg)
+        apcr_roll_hard_stop_rad=0.15,  # rad - lateral stability
+        apcr_min_com_z_m=0.27,  # m - minimum safe height
+        apcr_max_com_z_m=0.50,  # m - maximum operating height
+    ),
+
+    # APCR1b_active_pitch_crossing_early_release
+    # Same as APCR1 but with earlier release to reduce oscillation amplitude
+    # inner_exit_m: 0.05 -> 0.07 (exit earlier)
+    # opposite_overshoot_m: 0.01 -> 0.00 (no overshoot allowance)
+    # Rationale: APCR1 releases too late, causing excessive band violations
+    "APCR1b_active_pitch_crossing_early_release": SagittalAuthoritySchedule(
+        profile_name="APCR1b_active_pitch_crossing_early_release",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Active Pitch Recovery (APCR_strategy) - with recovery gate mode
+        enable_active_pitch_crossing=True,
+        active_pitch_crossing_recovery_gate_mode=True,  # same as APCR1
+        apc_outer_enter_m=0.10,  # m - same as APCR1
+        apc_inner_exit_m=0.07,  # m - CHANGED from 0.05: exit earlier
+        apc_opposite_overshoot_m=0.00,  # m - CHANGED from 0.01: no overshoot
+        apc_pitch_enter_rad=0.03,  # rad - same as APCR1
+        apc_pitch_safe_limit_rad=0.08,  # rad - same as APCR1
+        apc_max_cross_tau=1.0,  # Nm - same as APCR1
+        apc_smooth_alpha=0.10,
+        apc_max_rate_per_step=0.4,  # Nm/step - same as APCR1
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.28,  # m - same as APCR1
+        apc_max_com_z_m=0.50,  # m - same as APCR1
+        apc_pitch_safe_threshold_rad=0.05,  # rad - same as APCR1
+        apc_pitch_danger_threshold_rad=0.10,  # rad - same as APCR1
+        apc_roll_threshold_rad=0.15,  # rad - same as APCR1
+        # APCR recovery gate parameters - same as APCR1
+        apcr_pitch_hard_stop_rad=0.30,  # rad - hard stop, blocks APCR
+        apcr_roll_hard_stop_rad=0.15,  # rad - lateral stability
+        apcr_min_com_z_m=0.27,  # m - minimum safe height
+        apcr_max_com_z_m=0.50,  # m - maximum operating height
+    ),
+
+    # APCR1c_active_pitch_crossing_early_activation
+    # Same as APCR1b but with earlier entry to reduce band violations
+    # outer_enter_m: 0.10 -> 0.08 (enter when |signed_error| > 0.08 instead of 0.10)
+    # Rationale: APCR1b still allows drift to approach the +0.15 band before recovery starts
+    "APCR1c_active_pitch_crossing_early_activation": SagittalAuthoritySchedule(
+        profile_name="APCR1c_active_pitch_crossing_early_activation",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Active Pitch Recovery (APCR_strategy) - with recovery gate mode
+        enable_active_pitch_crossing=True,
+        active_pitch_crossing_recovery_gate_mode=True,  # same as APCR1/APCR1b
+        apc_outer_enter_m=0.08,  # m - CHANGED from 0.10: enter earlier
+        apc_inner_exit_m=0.07,  # m - same as APCR1b
+        apc_opposite_overshoot_m=0.00,  # m - same as APCR1b
+        apc_pitch_enter_rad=0.03,  # rad - same as APCR1b
+        apc_pitch_safe_limit_rad=0.08,  # rad - same as APCR1b
+        apc_max_cross_tau=1.0,  # Nm - same as APCR1b
+        apc_smooth_alpha=0.10,
+        apc_max_rate_per_step=0.4,  # Nm/step - same as APCR1b
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.28,  # m - same as APCR1b
+        apc_max_com_z_m=0.50,  # m - same as APCR1b
+        apc_pitch_safe_threshold_rad=0.05,  # rad - same as APCR1b
+        apc_pitch_danger_threshold_rad=0.10,  # rad - same as APCR1b
+        apc_roll_threshold_rad=0.15,  # rad - same as APCR1b
+        # APCR recovery gate parameters - same as APCR1b
+        apcr_pitch_hard_stop_rad=0.30,  # rad - hard stop, blocks APCR
+        apcr_roll_hard_stop_rad=0.15,  # rad - lateral stability
+        apcr_min_com_z_m=0.27,  # m - minimum safe height
+        apcr_max_com_z_m=0.50,  # m - maximum operating height
+    ),
+
+    # APCR1d_symmetric_soft_band_control
+    # Symmetric proportional torque shaping instead of bang-bang control
+    # Design goals:
+    # 1. Intervene earlier (soft_enter = 0.05 m instead of 0.08 m)
+    # 2. Use softer proportional torque instead of constant torque
+    # 3. Reduce positive max drift vs APCR1c
+    # 4. Avoid excessive negative overshoot
+    # 5. Keep amplitude smaller than APCR1c (P2P < 0.20 m)
+    # 6. Preserve stability
+    #
+    # Key differences from APCR1c:
+    # - Torque mode: proportional_soft_band instead of state-machine bang-bang
+    # - Entry threshold: 0.05 m (APCR1c: 0.08 m)
+    # - Exit deadband: 0.02 m (APCR1c: 0.07 m)
+    # - Full torque at: 0.08 m (APCR1c: constant 1.0 Nm)
+    # - Max torque: 0.75 Nm (APCR1c: 1.0 Nm)
+    # - Velocity decay: enabled with 0.5 factor
+    # - Symmetry: inherently symmetric via abs(error)
+    "APCR1d_symmetric_soft_band_control": SagittalAuthoritySchedule(
+        profile_name="APCR1d_symmetric_soft_band_control",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Active Pitch Recovery (APCR_strategy) - with proportional soft band mode
+        enable_active_pitch_crossing=True,
+        active_pitch_crossing_recovery_gate_mode=True,  # same as APCR1/APCR1b/APCR1c
+        # Proportional soft band mode parameters
+        apc_proportional_soft_band_mode=True,  # KEY: enable proportional mode
+        apc_soft_enter_m=0.05,  # m - enter soft recenter when |error| > this
+        apc_inner_exit_m=0.02,  # m - exit when |error| <= this
+        apc_opposite_overshoot_m=0.00,  # m - no overshoot allowance
+        apc_pitch_enter_rad=0.03,  # rad - pitch threshold to enter
+        apc_pitch_safe_limit_rad=0.08,  # rad - reduce torque if pitch exceeds this
+        apc_max_cross_tau=0.75,  # Nm - max torque (lower than APCR1c's 1.0)
+        apc_smooth_alpha=0.10,
+        apc_max_rate_per_step=0.30,  # Nm/step - rate limit
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.28,  # m
+        apc_max_com_z_m=0.50,  # m
+        apc_pitch_safe_threshold_rad=0.05,  # rad
+        apc_pitch_danger_threshold_rad=0.10,  # rad
+        apc_roll_threshold_rad=0.15,  # rad
+        # Velocity decay parameters
+        apc_velocity_decay_enabled=True,  # KEY: enable velocity decay
+        apc_velocity_decay_factor=0.5,  # reduce torque by 50% when moving toward zero
+        # APCR recovery gate parameters
+        apcr_pitch_hard_stop_rad=0.30,  # rad - hard stop, blocks APCR
+        apcr_roll_hard_stop_rad=0.15,  # rad - lateral stability
+        apcr_min_com_z_m=0.27,  # m - minimum safe height
+        apcr_max_com_z_m=0.50,  # m - maximum operating height
+    ),
+
+    # APCR1e_adaptive_symmetric_soft_band
+    # Adaptive authority profile that automatically increases torque when error is not improving
+    # Based on APCR1d but with adaptive max_tau that can increase from base_tau to max_tau
+    "APCR1e_adaptive_symmetric_soft_band": SagittalAuthoritySchedule(
+        profile_name="APCR1e_adaptive_symmetric_soft_band",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Active Pitch Recovery (APCR_strategy) - with adaptive authority mode
+        enable_active_pitch_crossing=True,
+        active_pitch_crossing_recovery_gate_mode=True,  # same as APCR1 family
+        # Proportional soft band mode parameters
+        apc_proportional_soft_band_mode=True,  # KEY: enable proportional mode
+        apc_soft_enter_m=0.045,  # m - enter soft recenter when |error| > this
+        apc_inner_exit_m=0.02,  # m - exit when |error| <= this
+        apc_opposite_overshoot_m=0.00,  # m - no overshoot allowance
+        apc_pitch_enter_rad=0.03,  # rad - pitch threshold to enter
+        apc_pitch_safe_limit_rad=0.08,  # rad - reduce torque if pitch exceeds this
+        apc_smooth_alpha=0.10,
+        apc_max_rate_per_step=0.30,  # Nm/step - rate limit
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.28,  # m
+        apc_max_com_z_m=0.50,  # m
+        apc_pitch_safe_threshold_rad=0.05,  # rad
+        apc_pitch_danger_threshold_rad=0.10,  # rad
+        apc_roll_threshold_rad=0.15,  # rad
+        # Velocity decay parameters
+        apc_velocity_decay_enabled=True,  # KEY: enable velocity decay
+        apc_velocity_decay_factor=0.5,  # reduce torque by 50% when moving toward zero
+        # APCR1e adaptive authority parameters
+        apc_adaptive_authority_enabled=True,  # KEY: enable adaptive authority
+        apc_adaptive_base_tau=0.55,  # Nm - base starting torque
+        apc_adaptive_max_tau=1.20,  # Nm - maximum adaptive torque
+        apc_adaptive_boost_tau_max=0.65,  # Nm - maximum boost above base
+        apc_adaptive_boost_start_error_m=0.06,  # m - error threshold for boost
+        apc_adaptive_full_boost_error_m=0.12,  # m - error for full boost
+        apc_adaptive_no_improvement_window_steps=8,  # steps without improvement
+        apc_adaptive_startup_boost_steps=50,  # startup phase duration
+        apc_adaptive_startup_boost_max_tau=1.0,  # Nm - max startup torque
+        apc_adaptive_disable_vd_when_abs_e_gt=0.10,  # m - disable VD above this
+        apc_adaptive_disable_vd_during_startup=True,  # disable VD in startup
+        # APCR recovery gate parameters
+        apcr_pitch_hard_stop_rad=0.30,  # rad - hard stop, blocks APCR
+        apcr_roll_hard_stop_rad=0.15,  # rad - lateral stability
+        apcr_min_com_z_m=0.27,  # m - minimum safe height
+        apcr_max_com_z_m=0.50,  # m - maximum operating height
+    ),
+
+    # APCR1f_adaptive_fast_response_phase_brake
+    # Adaptive fast response with phase-aware braking
+    # Key differences from APCR1e:
+    # - Earlier intervention at 0.035m vs 0.05m
+    # - Faster rate limit 0.55 Nm/step vs 0.35 Nm/step
+    # - Higher max_tau 1.40 Nm vs 1.20 Nm
+    # - Phase brake when error returning toward zero
+    # - Boost when error growing 3+ consecutive steps
+    "APCR1f_adaptive_fast_response_phase_brake": SagittalAuthoritySchedule(
+        profile_name="APCR1f_adaptive_fast_response_phase_brake",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Active Pitch Recovery (APCR_strategy) - with fast response + phase brake
+        enable_active_pitch_crossing=True,
+        active_pitch_crossing_recovery_gate_mode=True,  # same as APCR1 family
+        # Proportional soft band mode parameters
+        apc_proportional_soft_band_mode=True,  # KEY: enable proportional mode
+        apc_soft_enter_m=0.035,  # m - CHANGED: earlier entry than APCR1e's 0.045
+        apc_inner_exit_m=0.015,  # m - earlier exit
+        apc_opposite_overshoot_m=0.00,  # m - no overshoot allowance
+        apc_pitch_enter_rad=0.03,  # rad - pitch threshold to enter
+        apc_pitch_safe_limit_rad=0.08,  # rad - reduce torque if pitch exceeds this
+        apc_smooth_alpha=0.18,  # CHANGED: more responsive smoothing
+        apc_max_rate_per_step=0.55,  # CHANGED: faster response
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.28,  # m
+        apc_max_com_z_m=0.50,  # m
+        apc_pitch_safe_threshold_rad=0.05,  # rad
+        apc_pitch_danger_threshold_rad=0.10,  # rad
+        apc_roll_threshold_rad=0.15,  # rad
+        # Velocity decay parameters
+        apc_velocity_decay_enabled=True,  # KEY: enable velocity decay
+        apc_velocity_decay_factor=0.5,  # reduce torque by 50% when moving toward zero
+        # APCR1e adaptive authority parameters (base settings)
+        apc_adaptive_authority_enabled=True,  # KEY: enable adaptive authority
+        apc_adaptive_base_tau=0.45,  # Nm - CHANGED: slightly lower base
+        apc_adaptive_max_tau=1.40,  # Nm - CHANGED: higher ceiling
+        apc_adaptive_boost_tau_max=0.95,  # Nm - CHANGED: larger boost capability
+        apc_adaptive_boost_start_error_m=0.06,  # m - error threshold for boost
+        apc_adaptive_full_boost_error_m=0.10,  # m - CHANGED: full boost at smaller error
+        apc_adaptive_no_improvement_window_steps=5,  # CHANGED: faster boost (5 vs 8)
+        apc_adaptive_startup_boost_steps=50,  # startup phase duration
+        apc_adaptive_startup_boost_max_tau=1.20,  # Nm - CHANGED: higher startup authority
+        apc_adaptive_disable_vd_when_abs_e_gt=0.10,  # m - disable VD above this
+        apc_adaptive_disable_vd_during_startup=True,  # disable VD in startup
+        apc_adaptive_max_rate_per_step=0.55,  # CHANGED: faster rate
+        # APCR1f fast response with phase brake parameters
+        apc_fast_response_enabled=True,  # KEY: enable fast response
+        apc_phase_brake_enabled=True,  # KEY: enable phase brake
+        apc_phase_brake_threshold_m=0.08,  # m - apply brake below this
+        apc_phase_brake_damping_factor=0.6,  # reduce scale by this when braking
+        apc_boost_rate_per_step=0.25,  # Nm/step - rate for adaptive boost
+        apc_decay_rate_per_step=0.45,  # Nm/step - faster decay when returning
+        apc_increasing_error_threshold_steps=3,  # boost when error grows 3+ steps
+        apc_increasing_error_boost_factor=0.3,  # boost factor for growing error
+        apc_fast_response_inner_deadband_m=0.015,  # m - earlier deadband
+        apc_fast_response_soft_enter_m=0.035,  # m - earlier soft enter
+        apc_fast_response_desired_band_m=0.08,  # m - wider comfortable band
+        apc_fast_response_full_torque_m=0.10,  # m - full torque at this error
+        apc_fast_response_emergency_m=0.12,  # m - emergency mode trigger
+        apc_fast_response_base_tau=0.45,  # Nm - slightly lower base
+        apc_fast_response_max_tau=1.40,  # Nm - higher ceiling
+        apc_fast_response_boost_tau_max=0.95,  # Nm - larger boost capability
+        apc_fast_response_startup_boost_max_tau=1.20,  # Nm - higher startup authority
+        apc_fast_response_max_rate_per_step=0.55,  # Nm/step - faster response
+        apc_fast_response_smooth_alpha=0.18,  # more responsive smoothing
+        apc_fast_response_no_improvement_window=5,  # faster boost (5 vs 8 steps)
+        # APCR recovery gate parameters
+        apcr_pitch_hard_stop_rad=0.30,  # rad - hard stop, blocks APCR
+        apcr_roll_hard_stop_rad=0.15,  # rad - lateral stability
+        apcr_min_com_z_m=0.27,  # m - minimum safe height
+        apcr_max_com_z_m=0.50,  # m - maximum operating height
+    ),
+
+    # APCR1g_predictive_fast_response_phase_brake
+    # Predictive fast response with phase-aware braking
+    # Key differences from APCR1f:
+    # - Predictive error: e_pred = e + lead_time_s * e_dot
+    # - Earlier activation when predicted error exceeds threshold
+    # - Predictive boost when predicted error indicates future overshoot
+    # - Stronger phase brake with two thresholds
+    # - Higher max_tau (1.55 vs 1.40), faster rate (0.70 vs 0.55)
+    "APCR1g_predictive_fast_response_phase_brake": SagittalAuthoritySchedule(
+        profile_name="APCR1g_predictive_fast_response_phase_brake",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Active Pitch Recovery (APCR_strategy) - with predictive fast response
+        enable_active_pitch_crossing=True,
+        active_pitch_crossing_recovery_gate_mode=True,
+        # Proportional soft band mode parameters
+        apc_proportional_soft_band_mode=True,  # KEY: enable proportional mode
+        apc_soft_enter_m=0.030,  # m - CHANGED: earlier entry than APCR1f's 0.035
+        apc_inner_exit_m=0.012,  # m - earlier exit
+        apc_opposite_overshoot_m=0.00,  # m - no overshoot allowance
+        apc_pitch_enter_rad=0.03,  # rad - pitch threshold to enter
+        apc_pitch_safe_limit_rad=0.08,  # rad - reduce torque if pitch exceeds this
+        apc_smooth_alpha=0.22,  # CHANGED: more responsive smoothing
+        apc_max_rate_per_step=0.70,  # CHANGED: faster response
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.28,  # m
+        apc_max_com_z_m=0.50,  # m
+        apc_pitch_safe_threshold_rad=0.05,  # rad
+        apc_pitch_danger_threshold_rad=0.10,  # rad
+        apc_roll_threshold_rad=0.15,  # rad
+        # Velocity decay parameters
+        apc_velocity_decay_enabled=True,  # KEY: enable velocity decay
+        apc_velocity_decay_factor=0.5,  # reduce torque by 50% when moving toward zero
+        # APCR1e adaptive authority parameters (base settings)
+        apc_adaptive_authority_enabled=True,  # KEY: enable adaptive authority
+        apc_adaptive_base_tau=0.45,  # Nm - slightly lower base
+        apc_adaptive_max_tau=1.55,  # Nm - CHANGED: higher ceiling
+        apc_adaptive_boost_tau_max=1.10,  # Nm - CHANGED: larger boost capability
+        apc_adaptive_boost_start_error_m=0.06,  # m - error threshold for boost
+        apc_adaptive_full_boost_error_m=0.095,  # m - full boost at smaller error
+        apc_adaptive_no_improvement_window_steps=4,  # CHANGED: faster boost (4 vs 5)
+        apc_adaptive_startup_boost_steps=50,  # startup phase duration
+        apc_adaptive_startup_boost_max_tau=1.25,  # Nm - CHANGED: higher startup authority
+        apc_adaptive_disable_vd_when_abs_e_gt=0.10,  # m - disable VD above this
+        apc_adaptive_disable_vd_during_startup=True,  # disable VD in startup
+        apc_adaptive_max_rate_per_step=0.70,  # CHANGED: faster rate
+        # APCR1f fast response with phase brake parameters
+        apc_fast_response_enabled=True,  # KEY: enable fast response
+        apc_phase_brake_enabled=True,  # KEY: enable phase brake
+        apc_phase_brake_threshold_m=0.075,  # m - CHANGED: tighter threshold
+        apc_phase_brake_damping_factor=0.55,  # CHANGED: stronger damping
+        apc_boost_rate_per_step=0.35,  # Nm/step - CHANGED: faster boost rate
+        apc_decay_rate_per_step=0.55,  # Nm/step - faster decay when returning
+        apc_increasing_error_threshold_steps=2,  # CHANGED: faster boost (2 vs 3)
+        apc_increasing_error_boost_factor=0.35,  # CHANGED: higher factor
+        apc_fast_response_inner_deadband_m=0.012,  # m - earlier deadband
+        apc_fast_response_soft_enter_m=0.030,  # m - earlier soft enter
+        apc_fast_response_desired_band_m=0.075,  # m - tighter band
+        apc_fast_response_full_torque_m=0.095,  # m - full torque at smaller error
+        apc_fast_response_emergency_m=0.115,  # m - emergency mode trigger
+        apc_fast_response_base_tau=0.45,  # Nm - slightly lower base
+        apc_fast_response_max_tau=1.55,  # Nm - higher ceiling
+        apc_fast_response_boost_tau_max=1.10,  # Nm - larger boost capability
+        apc_fast_response_startup_boost_max_tau=1.25,  # Nm - higher startup authority
+        apc_fast_response_max_rate_per_step=0.70,  # Nm/step - faster response
+        apc_fast_response_smooth_alpha=0.22,  # more responsive smoothing
+        apc_fast_response_no_improvement_window=4,  # faster boost (4 vs 5 steps)
+        # APCR1g predictive fast response parameters
+        apc_predictive_enabled=True,  # KEY: enable predictive error logic
+        apc_lead_time_s=0.10,  # seconds to predict ahead
+        apc_predicted_enter_m=0.07,  # activate when abs_pred > this AND moving_away
+        apc_predicted_full_response_m=0.10,  # boost authority when abs_pred > this
+        apc_predicted_emergency_m=0.12,  # emergency mode when abs_pred > this
+        apc_predictive_inner_deadband_m=0.012,
+        apc_predictive_soft_enter_m=0.030,
+        apc_predictive_desired_band_m=0.075,
+        apc_predictive_full_torque_m=0.095,
+        apc_predictive_emergency_error_m=0.115,
+        apc_predictive_base_tau=0.45,
+        apc_predictive_max_tau=1.55,  # Higher than APCR1f's 1.40
+        apc_predictive_boost_tau_max=1.10,  # Higher than APCR1f's 0.95
+        apc_predictive_startup_boost_max_tau=1.25,  # Higher than APCR1f's 1.20
+        apc_predictive_max_rate_per_step=0.70,  # Faster than APCR1f's 0.55
+        apc_predictive_boost_rate_per_step=0.35,
+        apc_predictive_decay_rate_per_step=0.55,
+        apc_predictive_smooth_alpha=0.22,  # More responsive than APCR1f's 0.18
+        apc_predictive_no_improvement_window=4,  # Faster than APCR1f's 5
+        apc_predictive_increasing_error_threshold_steps=2,  # Faster than APCR1f's 3
+        apc_predictive_increasing_error_boost_factor=0.35,  # Higher than APCR1f's 0.30
+        apc_predictive_phase_brake_enabled=True,
+        apc_predictive_phase_brake_threshold_m=0.075,
+        apc_predictive_phase_brake_strong_threshold_m=0.050,  # New: strong brake threshold
+        apc_predictive_phase_brake_factor=0.55,  # Stronger than APCR1f's 0.60
+        apc_predictive_phase_brake_strong_factor=0.35,  # New: strong brake factor
+        apc_predictive_disable_vd_when_abs_e_gt=0.10,
+        apc_predictive_disable_vd_during_startup=True,
+        # APCR recovery gate parameters
+        apcr_pitch_hard_stop_rad=0.30,  # rad - hard stop, blocks APCR
+        apcr_roll_hard_stop_rad=0.15,  # rad - lateral stability
+        apcr_min_com_z_m=0.27,  # m - minimum safe height
+        apcr_max_com_z_m=0.50,  # m - maximum operating height
+    ),
+
+    # APCR1h_support_drift_priority_fast_recenter
+    # Based on APCR1f (correct torque sign), NOT APCR1g (wrong torque sign)
+    # Key changes:
+    # - Correct torque sign for support recovery (negative tau when drift > 0)
+    # - Drift priority override: higher torque + disabled phase brake when drift runaway
+    # - Emergency clamp: when drift > 0.12m
+    # - Monitor wheel velocity but do NOT penalize for drift reduction
+    "APCR1h_support_drift_priority_fast_recenter": SagittalAuthoritySchedule(
+        profile_name="APCR1h_support_drift_priority_fast_recenter",
+        applies_to_variants=BOUNDARY_HEIGHT_VARIANTS,  # low_0p300, high_0p480
+        # D2 baseline: position cap 4.0 Nm, velocity damping 1.10x
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        max_position_tau_low_max=4.0,
+        velocity_damping_scale=1.10,
+        # Active Pitch Recovery (APCR_strategy) - with drift priority
+        enable_active_pitch_crossing=True,
+        active_pitch_crossing_recovery_gate_mode=True,
+        # Proportional soft band mode parameters
+        apc_proportional_soft_band_mode=True,
+        apc_soft_enter_m=0.030,  # m - soft enter threshold
+        apc_inner_exit_m=0.015,  # m - inner exit threshold
+        apc_opposite_overshoot_m=0.00,  # m - no overshoot allowance
+        apc_pitch_enter_rad=0.03,  # rad - pitch threshold to enter
+        apc_pitch_safe_limit_rad=0.08,  # rad - reduce torque if pitch exceeds this
+        apc_smooth_alpha=0.18,  # responsive smoothing
+        apc_max_rate_per_step=0.55,  # normal APCR response rate
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.28,  # m
+        apc_max_com_z_m=0.50,  # m
+        apc_pitch_safe_threshold_rad=0.05,  # rad
+        apc_pitch_danger_threshold_rad=0.10,  # rad
+        apc_roll_threshold_rad=0.15,  # rad
+        # Velocity decay parameters
+        apc_velocity_decay_enabled=True,
+        apc_velocity_decay_factor=0.5,  # reduce torque by 50% when moving toward zero
+        # APCR1f adaptive authority parameters (base settings - CORRECT torque sign)
+        apc_adaptive_authority_enabled=True,
+        apc_adaptive_base_tau=0.45,  # Nm
+        apc_adaptive_max_tau=1.25,  # Nm - normal APCR ceiling
+        apc_adaptive_boost_tau_max=0.95,  # Nm
+        apc_adaptive_boost_start_error_m=0.06,  # m
+        apc_adaptive_full_boost_error_m=0.095,  # m
+        apc_adaptive_no_improvement_window_steps=5,
+        apc_adaptive_startup_boost_steps=500,  # startup phase duration
+        apc_adaptive_startup_boost_max_tau=1.60,  # Nm - higher startup authority
+        apc_adaptive_disable_vd_when_abs_e_gt=0.10,  # m
+        apc_adaptive_disable_vd_during_startup=True,
+        apc_adaptive_max_rate_per_step=0.55,  # normal rate
+        # APCR1f fast response with phase brake parameters
+        apc_fast_response_enabled=True,
+        apc_phase_brake_enabled=True,
+        apc_phase_brake_threshold_m=0.06,  # m - phase brake when within this
+        apc_phase_brake_damping_factor=0.60,  # phase brake damping
+        apc_boost_rate_per_step=0.35,  # Nm/step
+        apc_decay_rate_per_step=0.55,  # Nm/step
+        apc_increasing_error_threshold_steps=3,
+        apc_increasing_error_boost_factor=0.30,
+        apc_fast_response_inner_deadband_m=0.015,
+        apc_fast_response_soft_enter_m=0.030,
+        apc_fast_response_desired_band_m=0.08,
+        apc_fast_response_full_torque_m=0.10,
+        apc_fast_response_emergency_m=0.12,
+        apc_fast_response_base_tau=0.45,  # Nm
+        apc_fast_response_max_tau=1.25,  # Nm - normal APCR ceiling
+        apc_fast_response_boost_tau_max=0.95,  # Nm
+        apc_fast_response_startup_boost_max_tau=1.60,  # Nm - higher startup
+        apc_fast_response_max_rate_per_step=0.55,  # Nm/step
+        apc_fast_response_smooth_alpha=0.18,
+        apc_fast_response_no_improvement_window=5,
+        # APCR1h DRIFT PRIORITY parameters (NEW)
+        # These override normal APCR when drift exceeds threshold
+        apc_drift_priority_enabled=True,  # KEY: enable drift priority
+        apc_drift_priority_enter_m=0.08,  # m - drift priority activates
+        apc_drift_priority_normal_max_tau=1.25,  # Nm - normal max (higher than APCR1f)
+        apc_drift_priority_drift_priority_max_tau=1.65,  # Nm - drift priority max
+        apc_drift_priority_emergency_max_tau=1.85,  # Nm - emergency clamp max
+        apc_drift_priority_startup_max_tau=1.60,  # Nm - startup boost max
+        apc_drift_priority_normal_rate=0.55,  # Nm/step - normal rate
+        apc_drift_priority_drift_priority_rate=0.85,  # Nm/step - drift priority rate
+        apc_drift_priority_emergency_rate=1.00,  # Nm/step - emergency rate
+        apc_drift_priority_decay_rate=0.55,  # Nm/step - decay rate
+        apc_drift_priority_phase_brake_disable_threshold_m=0.10,  # disable phase brake above this
+        apc_drift_priority_base_tau=0.45,  # Nm - base torque
+        apc_drift_priority_emergency_m=0.12,  # m - emergency clamp threshold
+        apc_drift_priority_hard_m=0.15,  # m - hard safety threshold
+        # APCR recovery gate parameters
+        apcr_pitch_hard_stop_rad=0.30,  # rad - hard stop, blocks APCR
+        apcr_roll_hard_stop_rad=0.15,  # rad - lateral stability
+        apcr_min_com_z_m=0.27,  # m - minimum safe height
+        apcr_max_com_z_m=0.50,  # m - maximum operating height
+    ),
+
+    # APCR1i_support_hysteresis_recenter
+    # Symmetric hysteresis state machine for support drift recenter
+    # Key principle: hold recenter until error crosses near zero, then symmetric release
+    "APCR1i_support_hysteresis_recenter": SagittalAuthoritySchedule(
+        profile_name="APCR1i_support_hysteresis_recenter",
+        applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height"),
+        # Enable APCR for this profile
+        enable_active_pitch_crossing=True,
+        # WIDER pitch safe threshold to allow entry during moderate pitch error
+        # APCR1i prioritizes drift recovery over pitch - pitch danger still blocks
+        apc_pitch_safe_threshold_rad=0.15,  # 8.6 deg - wider than APCR1h (0.05 rad)
+        apc_pitch_danger_threshold_rad=0.30,  # hard block at this threshold
+        # Use APCR1i-specific thresholds for proportional soft band (not used but needed for telemetry)
+        apc_outer_enter_m=0.08,  # Enter crossing when |e| > this (matches hysteresis outer_enter)
+        apc_inner_exit_m=0.03,  # Exit crossing when |e| <= this (matches hysteresis inner_exit)
+        # Hysteresis recenter parameters
+        apc_hysteresis_enabled=True,
+        apc_hysteresis_outer_enter_m=0.08,  # Enter recenter when |e| > this
+        apc_hysteresis_inner_exit_m=0.03,  # Exit recenter when |e| <= this
+        apc_hysteresis_opposite_release_m=0.03,  # Allow small overshoot into opposite
+        apc_hysteresis_near_zero_m=0.01,  # Error considered near zero
+        apc_hysteresis_emergency_m=0.12,  # Emergency clamp activates
+        apc_hysteresis_hard_m=0.15,  # Hard safety activates
+        apc_hysteresis_base_tau=0.45,  # Nm - base starting torque
+        apc_hysteresis_recenter_max_tau=1.75,  # Nm - max during recenter
+        apc_hysteresis_emergency_max_tau=2.00,  # Nm - max during emergency
+        apc_hysteresis_hold_max_tau=1.50,  # Nm - max during hold-through-zero
+        apc_hysteresis_normal_rate=0.30,  # Nm/step - normal rate
+        apc_hysteresis_recenter_rate=0.90,  # Nm/step - recenter rate
+        apc_hysteresis_emergency_rate=1.00,  # Nm/step - emergency rate
+        apc_hysteresis_decay_rate=0.50,  # Nm/step - decay rate
+        apc_hysteresis_phase_brake_threshold_m=0.05,  # Enable phase brake below this
+        apc_hysteresis_phase_brake_disable_in_recenter=True,  # Disable in recenter state
+        # Safety gates
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.27,
+        apc_max_com_z_m=0.50,
+        apc_roll_threshold_rad=0.15,
+    ),
+
+    # APCR1j_support_hysteresis_higher_authority
+    # Based on APCR1i but with higher torque authority to overcome the 1.5 Nm universal cap
+    # Root cause: APCR1i observed final APCR tau max = 1.5 Nm despite configured recenter_max_tau = 1.75 Nm
+    # Fix: explicitly set apc_max_cross_tau = 2.0 so hysteresis can reach 2.0 Nm
+    "APCR1j_support_hysteresis_higher_authority": SagittalAuthoritySchedule(
+        profile_name="APCR1j_support_hysteresis_higher_authority",
+        applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height"),
+        # Enable APCR for this profile
+        enable_active_pitch_crossing=True,
+        # CRITICAL FIX: set apc_max_cross_tau = 2.0 to override the 1.5 Nm universal cap
+        apc_max_cross_tau=2.0,  # Nm - universal crossing torque cap (was 1.5 in APCR1i)
+        # WIDER pitch safe threshold to allow entry during moderate pitch error
+        apc_pitch_safe_threshold_rad=0.15,  # 8.6 deg - wider than default (0.05 rad)
+        apc_pitch_danger_threshold_rad=0.30,  # hard block at this threshold
+        # Use APCR1j-specific thresholds for proportional soft band (not used but needed for telemetry)
+        apc_outer_enter_m=0.08,  # Enter crossing when |e| > this (matches hysteresis outer_enter)
+        apc_inner_exit_m=0.03,  # Exit crossing when |e| <= this (matches hysteresis inner_exit)
+        # Hysteresis recenter parameters - HIGHER AUTHORITY than APCR1i
+        apc_hysteresis_enabled=True,
+        apc_hysteresis_outer_enter_m=0.08,  # Enter recenter when |e| > this
+        apc_hysteresis_inner_exit_m=0.03,  # Exit recenter when |e| <= this
+        apc_hysteresis_opposite_release_m=0.03,  # Allow small overshoot into opposite
+        apc_hysteresis_near_zero_m=0.01,  # Error considered near zero
+        apc_hysteresis_emergency_m=0.12,  # Emergency clamp activates
+        apc_hysteresis_hard_m=0.15,  # Hard safety activates
+        apc_hysteresis_base_tau=0.45,  # Nm - base starting torque
+        # HIGHER than APCR1i: 2.0 vs 1.75 Nm
+        apc_hysteresis_recenter_max_tau=2.0,  # Nm - max during recenter (was 1.75 in APCR1i)
+        # HIGHER than APCR1i: 2.2 vs 2.0 Nm
+        apc_hysteresis_emergency_max_tau=2.2,  # Nm - max during emergency (was 2.00 in APCR1i)
+        apc_hysteresis_hold_max_tau=1.75,  # Nm - max during hold-through-zero (was 1.50 in APCR1i)
+        # FASTER than APCR1i: 1.1 vs 0.9 Nm/step
+        apc_hysteresis_normal_rate=0.40,  # Nm/step - normal rate (was 0.30 in APCR1i)
+        apc_hysteresis_recenter_rate=1.1,  # Nm/step - recenter rate (was 0.90 in APCR1i)
+        # FASTER than APCR1i: 1.3 vs 1.0 Nm/step
+        apc_hysteresis_emergency_rate=1.3,  # Nm/step - emergency rate (was 1.00 in APCR1i)
+        apc_hysteresis_decay_rate=0.50,  # Nm/step - decay rate
+        apc_hysteresis_phase_brake_threshold_m=0.05,  # Enable phase brake below this
+        apc_hysteresis_phase_brake_disable_in_recenter=True,  # Disable in recenter state
+        # Safety gates
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.27,
+        apc_max_com_z_m=0.50,
+        apc_roll_threshold_rad=0.15,
+    ),
+
+    # APCR1k_support_hysteresis_early_entry
+    # Based on APCR1j but with LOWER outer entry threshold to catch drift earlier
+    # Root cause: APCR1j analysis showed RECENTER starts at step 58 (e=0.0817m) allowing momentum buildup
+    # Fix: lower outer_enter_m from 0.08 to 0.05 to start RECENTER at step 46 (e=0.0521m)
+    # Keep same torque authority as APCR1j (2.0 Nm max)
+    "APCR1k_support_hysteresis_early_entry": SagittalAuthoritySchedule(
+        profile_name="APCR1k_support_hysteresis_early_entry",
+        applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height"),
+        # Enable APCR for this profile
+        enable_active_pitch_crossing=True,
+        # Keep same torque authority as APCR1j: 2.0 Nm
+        apc_max_cross_tau=2.0,  # Nm - universal crossing torque cap (same as APCR1j)
+        # WIDER pitch safe threshold to allow entry during moderate pitch error
+        apc_pitch_safe_threshold_rad=0.15,  # 8.6 deg - same as APCR1j
+        apc_pitch_danger_threshold_rad=0.30,  # hard block at this threshold - same as APCR1j
+        # KEY CHANGE: lower outer enter threshold from 0.08 to 0.05
+        # This catches drift earlier before momentum accumulates
+        apc_outer_enter_m=0.05,  # Enter crossing when |e| > this (was 0.08 in APCR1j)
+        apc_inner_exit_m=0.03,  # Exit crossing when |e| <= this (same as APCR1j)
+        # Hysteresis recenter parameters - LOWER ENTRY THRESHOLD than APCR1j
+        apc_hysteresis_enabled=True,
+        apc_hysteresis_outer_enter_m=0.05,  # Enter recenter when |e| > this (was 0.08 in APCR1j)
+        apc_hysteresis_inner_exit_m=0.03,  # Exit recenter when |e| <= this (same as APCR1j)
+        apc_hysteresis_opposite_release_m=0.03,  # Allow small overshoot into opposite (same as APCR1j)
+        apc_hysteresis_near_zero_m=0.01,  # Error considered near zero (same as APCR1j)
+        apc_hysteresis_emergency_m=0.12,  # Emergency clamp activates (same as APCR1j)
+        apc_hysteresis_hard_m=0.15,  # Hard safety activates (same as APCR1j)
+        apc_hysteresis_base_tau=0.45,  # Nm - base starting torque (same as APCR1j)
+        # Keep same torque limits as APCR1j: 2.0 Nm recenter, 2.2 Nm emergency
+        apc_hysteresis_recenter_max_tau=2.0,  # Nm - max during recenter (same as APCR1j)
+        apc_hysteresis_emergency_max_tau=2.2,  # Nm - max during emergency (same as APCR1j)
+        apc_hysteresis_hold_max_tau=1.75,  # Nm - max during hold-through-zero (same as APCR1j)
+        # Keep same rate limits as APCR1j: 1.1 Nm/step recenter, 1.3 Nm/step emergency
+        apc_hysteresis_normal_rate=0.40,  # Nm/step - normal rate (same as APCR1j)
+        apc_hysteresis_recenter_rate=1.1,  # Nm/step - recenter rate (same as APCR1j)
+        apc_hysteresis_emergency_rate=1.3,  # Nm/step - emergency rate (same as APCR1j)
+        apc_hysteresis_decay_rate=0.50,  # Nm/step - decay rate (same as APCR1j)
+        apc_hysteresis_phase_brake_threshold_m=0.05,  # Enable phase brake below this (same as APCR1j)
+        apc_hysteresis_phase_brake_disable_in_recenter=True,  # Disable in recenter state (same as APCR1j)
+        # Safety gates - same as APCR1j
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.27,
+        apc_max_com_z_m=0.50,
+        apc_roll_threshold_rad=0.15,
+    ),
+    # APCR1m_conditional_pitch_blend_recenter
+    # Conditional pitch blending instead of hard suppression
+    # Blend tau_pitch based on error magnitude, with startup guard and safety gates
+    "APCR1m_conditional_pitch_blend_recenter": SagittalAuthoritySchedule(
+        profile_name="APCR1m_conditional_pitch_blend_recenter",
+        applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height"),
+        enable_active_pitch_crossing=True,
+        apc_max_cross_tau=2.0,  # Nm - same as APCR1k
+        apc_pitch_safe_threshold_rad=0.15,  # 8.6 deg - same as APCR1k
+        apc_pitch_danger_threshold_rad=0.30,  # hard block - same as APCR1k
+        apc_outer_enter_m=0.05,  # Enter crossing - same as APCR1k
+        apc_inner_exit_m=0.03,  # Exit crossing - same as APCR1k
+        apc_hysteresis_enabled=True,
+        apc_hysteresis_outer_enter_m=0.05,  # Enter recenter - same as APCR1k
+        apc_hysteresis_inner_exit_m=0.03,  # Exit recenter - same as APCR1k
+        apc_hysteresis_opposite_release_m=0.03,
+        apc_hysteresis_near_zero_m=0.01,
+        apc_hysteresis_emergency_m=0.12,
+        apc_hysteresis_hard_m=0.15,
+        apc_hysteresis_base_tau=0.45,
+        apc_hysteresis_recenter_max_tau=2.0,
+        apc_hysteresis_emergency_max_tau=2.2,
+        apc_hysteresis_hold_max_tau=1.75,
+        apc_hysteresis_normal_rate=0.40,
+        apc_hysteresis_recenter_rate=1.1,
+        apc_hysteresis_emergency_rate=1.3,
+        apc_hysteresis_decay_rate=0.50,
+        apc_hysteresis_phase_brake_threshold_m=0.05,
+        apc_hysteresis_phase_brake_disable_in_recenter=True,
+        # KEY: conditional pitch blend parameters
+        apc_pitch_blend_enabled=True,
+        apc_pitch_blend_startup_guard_steps=100,
+        apc_pitch_blend_safe_pitch_rad=0.15,
+        apc_pitch_blend_safe_pitch_rate_rad_s=0.5,
+        apc_pitch_blend_min_com_z=0.27,
+        apc_pitch_blend_max_roll_rad=0.15,
+        apc_pitch_blend_deep_error_m=0.12,
+        apc_pitch_blend_mid_error_m=0.08,
+        apc_pitch_blend_soft_error_m=0.05,
+        apc_pitch_blend_scale_deep=0.0,
+        apc_pitch_blend_scale_mid=0.25,
+        apc_pitch_blend_scale_soft=0.5,
+        apc_pitch_blend_scale_near=1.0,
+        # Safety gates
+        apc_contact_gate=True,
+        apc_height_gate=True,
+        apc_roll_gate=True,
+        apc_min_com_z_m=0.27,
+        apc_max_com_z_m=0.50,
+        apc_roll_threshold_rad=0.15,
+    ),
+    # APCR1n_recenter_priority_torque_boost
+    # Based on APCR1h with wheel damping override and position cap boost during RECENTER
+    "APCR1n_recenter_priority_torque_boost": SagittalAuthoritySchedule(
+        profile_name="APCR1n_recenter_priority_torque_boost",
+        applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height"),
+        # APCR1h base configuration
+        continuous_max_position_tau=True,  # Added: must match APCR1h
+        max_position_tau_nominal=4.0,  # Added: must match APCR1h (was 3.0 in initial design)
+        velocity_damping_scale=1.10,  # Added: must match APCR1h
+        apc_proportional_soft_band_mode=True,
+        apc_soft_enter_m=0.030,
+        apc_inner_exit_m=0.015,
+        apc_outer_enter_m=0.095,
+        apc_velocity_decay_enabled=True,
+        apc_velocity_decay_factor=0.5,
+        apc_fast_response_enabled=True,
+        apc_phase_brake_enabled=True,
+        apc_phase_brake_threshold_m=0.08,
+        apc_phase_brake_damping_factor=0.6,
+        apc_boost_rate_per_step=0.25,
+        apc_decay_rate_per_step=0.45,
+        apc_increasing_error_threshold_steps=3,
+        apc_increasing_error_boost_factor=0.3,
+        apc_fast_response_inner_deadband_m=0.015,
+        apc_fast_response_soft_enter_m=0.030,
+        apc_fast_response_desired_band_m=0.08,
+        apc_fast_response_full_torque_m=0.095,
+        apc_fast_response_emergency_m=0.12,
+        apc_fast_response_base_tau=0.45,
+        apc_fast_response_max_tau=1.65,
+        apc_fast_response_boost_tau_max=1.20,
+        apc_fast_response_startup_boost_max_tau=1.60,
+        apc_fast_response_max_rate_per_step=0.85,
+        apc_fast_response_smooth_alpha=0.18,
+        apc_fast_response_no_improvement_window=5,
+        active_pitch_crossing_recovery_gate_mode=True,
+        apc_drift_priority_enabled=True,
+        apc_drift_priority_enter_m=0.08,
+        apc_drift_priority_emergency_m=0.12,
+        apc_drift_priority_hard_m=0.15,
+        apc_drift_priority_base_tau=0.45,
+        apc_drift_priority_normal_max_tau=1.40,
+        apc_drift_priority_drift_priority_max_tau=1.65,
+        apc_drift_priority_emergency_max_tau=1.85,
+        apc_drift_priority_startup_max_tau=1.60,
+        apc_drift_priority_normal_rate=0.55,
+        apc_drift_priority_drift_priority_rate=0.85,
+        apc_drift_priority_emergency_rate=1.00,
+        apc_drift_priority_decay_rate=0.55,
+        apc_drift_priority_phase_brake_disable_threshold_m=0.10,
+        # APCR1n new fields: Recentering Priority
+        recenter_priority_enabled=True,
+        recenter_priority_startup_guard_steps=100,
+        vd_wheel_damping_recenter_override_enabled=True,
+        vd_wheel_damping_recenter_scale=0.30,
+        vd_wheel_damping_recenter_min_abs_nm=0.50,
+        vd_wheel_damping_preserve_if_opposes_drift=True,
+        position_cap_recenter_boost_enabled=True,
+        position_cap_normal_nm=4.0,  # FIXED: Was 3.0, should match APCR1h's 4.0
+        position_cap_recenter_nm=5.0,
+        position_cap_emergency_nm=6.0,
+        position_cap_ramp_steps=50,
+        recenter_priority_safe_min_com_z=0.27,
+        recenter_priority_safe_roll_rad=0.15,
+        recenter_priority_safe_pitch_rad=0.15,
+    ),
+    # APCR1nD_direct_support_recenter_features
+    # Based on APCR1n but with DIRECT support drift trigger instead of APC dependency
+    # KEY DIFFERENCE: Does NOT require enable_active_pitch_crossing=True
+    # This fixes the issue where APCR1n features never activated because APC was disabled
+    "APCR1nD_direct_support_recenter_features": SagittalAuthoritySchedule(
+        profile_name="APCR1nD_direct_support_recenter_features",
+        applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height"),
+        # APCR1h base configuration (same as APCR1n)
+        continuous_max_position_tau=True,
+        max_position_tau_nominal=4.0,
+        velocity_damping_scale=1.10,
+        # APCR1n recenter priority features (same as APCR1n)
+        recenter_priority_enabled=True,
+        recenter_priority_startup_guard_steps=100,
+        vd_wheel_damping_recenter_override_enabled=True,
+        vd_wheel_damping_recenter_scale=0.30,
+        vd_wheel_damping_recenter_min_abs_nm=0.50,
+        vd_wheel_damping_preserve_if_opposes_drift=True,
+        position_cap_recenter_boost_enabled=True,
+        position_cap_normal_nm=4.0,
+        position_cap_recenter_nm=5.0,
+        position_cap_emergency_nm=6.0,
+        position_cap_ramp_steps=50,
+        recenter_priority_safe_min_com_z=0.27,
+        recenter_priority_safe_roll_rad=0.15,
+        recenter_priority_safe_pitch_rad=0.15,
+        # APCR1nD: Direct support drift trigger (KEY NEW FEATURE)
+        recenter_priority_direct_enabled=True,
+        recenter_priority_direct_enter_m=0.08,
+        recenter_priority_direct_emergency_m=0.12,
+        recenter_priority_direct_hard_m=0.15,
+        recenter_priority_direct_exit_m=0.02,
+    ),
+    # APCR1nD Tuned Variants (Phase 3-4)
+    "APCR1nD_T1_early_entry": APCR1ND_T1_EARLY_ENTRY,
+    "APCR1nD_T2_hold_outside_band": APCR1ND_T2_HOLD_OUTSIDE_BAND,
+    "APCR1nD_T3_early_entry_plus_hold": APCR1ND_T3_EARLY_ENTRY_PLUS_HOLD,
+    "APCR1nD_T4_stronger_authority": APCR1ND_T4_STRONGER_AUTHORITY,
+    "APCR1nD_T5_band_limited_balanced": APCR1ND_T5_BAND_LIMITED_BALANCED,
+    # T6 High-Height Transient Suppression Variants (Phase 5)
+    "T6A_high_early_hard_band": T6A_HIGH_EARLY_HARD_BAND,
+    "T6B_high_stronger_emergency": T6B_HIGH_STRONGER_EMERGENCY,
+    "T6C_high_early_plus_stronger": T6C_HIGH_EARLY_PLUS_STRONGER,
+    "T6D_high_transient_boost": T6D_HIGH_TRANSIENT_BOOST,
+    "T6E_high_pitch_aware_boost": T6E_HIGH_PITCH_AWARE_BOOST,
+    "T6F_budget_cap_raise": T6F_BUDGET_CAP_RAISE,
+    "T6F_sign_corrected": T6F_SIGN_CORRECTED,
+    "T6H_soft_blend_arch_fix": T6H_SOFT_BLEND_ARCH_FIX,
+    "T6I_phase_aware_release": T6I_PHASE_AWARE_RELEASE,
+    "T6J_centering_bias_trim": T6J_CENTERING_BIAS_TRIM,
 }
 
 
 def resolve_sagittal_authority_schedule(profile_name: str) -> SagittalAuthoritySchedule:
     return SAGITTAL_AUTHORITY_PROFILES[profile_name]
+
+
+# =============================================================================
+# Boundary Yaw-Position Coupling Fix Profiles (Phase 2)
+# =============================================================================
+# Profiles for fixing yaw-position coupling at boundary heights (0.300m, 0.480m).
+# Only activates for boundary variants (low_0p300, high_0p480).
+# All profiles preserve nominal/standard variant behavior.
+
+class BoundaryYawPositionFixState:
+    """Runtime state for boundary yaw-position fix profiles (per-simulation, not per-step)."""
+
+    def __init__(
+        self,
+        profile: str,
+        boundary_kp: float,
+        boundary_kd: float,
+        integral_gain: float,
+        integral_max: float,
+    ):
+        self.profile = profile
+        self.boundary_kp = boundary_kp
+        self.boundary_kd = boundary_kd
+        self.integral_gain = integral_gain
+        self.integral_max = integral_max
+        # Integral state per joint (left, right hip_yaw)
+        self.integral_error_left = 0.0
+        self.integral_error_right = 0.0
+        # Bias torque applied per joint (for integral profile)
+        self.bias_tau_left = 0.0
+        self.bias_tau_right = 0.0
+
+    def reset(self):
+        """Reset integral state at start of simulation."""
+        self.integral_error_left = 0.0
+        self.integral_error_right = 0.0
+        self.bias_tau_left = 0.0
+        self.bias_tau_right = 0.0
+
+    def is_boundary_variant(self, variant_name: str | None) -> bool:
+        return variant_name in BOUNDARY_HEIGHT_VARIANTS
+
+    def is_active(self, variant_name: str | None) -> bool:
+        """Profile is active only for boundary variants AND non-baseline profiles."""
+        return self.is_boundary_variant(variant_name) and self.profile != "baseline"
+
+    def uses_yaw_aware_compensation(self) -> bool:
+        return self.profile in (
+            "yaw_aware_position_only",
+            "yaw_aware_plus_boundary_hip_yaw",
+            "yaw_aware_plus_integral_light",
+        )
+
+    def uses_boundary_hip_yaw(self) -> bool:
+        return self.profile in (
+            "boundary_hip_yaw_profile",
+            "yaw_aware_plus_boundary_hip_yaw",
+        )
+
+    def uses_integral(self) -> bool:
+        return self.profile in (
+            "boundary_hip_yaw_integral_light",
+            "yaw_aware_plus_integral_light",
+        )
+
+    def get_effective_hip_yaw_kp(self, default_kp: float, variant_name: str | None) -> float:
+        """Return effective kp: higher for boundary variants if boundary profile active."""
+        if self.is_active(variant_name) and self.uses_boundary_hip_yaw():
+            return self.boundary_kp
+        return default_kp
+
+    def get_effective_hip_yaw_kd(self, default_kd: float, variant_name: str | None) -> float:
+        """Return effective kd: higher for boundary variants if boundary profile active."""
+        if self.is_active(variant_name) and self.uses_boundary_hip_yaw():
+            return self.boundary_kd
+        return default_kd
+
+    def update_integral(
+        self,
+        l_hip_yaw_error: float,
+        r_hip_yaw_error: float,
+        dt: float,
+    ) -> tuple[float, float, bool, bool]:
+        """Update integral state and return bias torques. Returns (bias_left, bias_right, integral_active, clamp_active)."""
+        if not self.uses_integral():
+            return 0.0, 0.0, False, False
+
+        # Integrate error for boundary variants
+        self.integral_error_left += l_hip_yaw_error * dt
+        self.integral_error_right += r_hip_yaw_error * dt
+
+        # Anti-windup clamp
+        clamp_active = False
+        if abs(self.integral_error_left) > self.integral_max:
+            self.integral_error_left = float(np.sign(self.integral_error_left) * self.integral_max)
+            clamp_active = True
+        if abs(self.integral_error_right) > self.integral_max:
+            self.integral_error_right = float(np.sign(self.integral_error_right) * self.integral_max)
+            clamp_active = True
+
+        # Compute bias torques
+        self.bias_tau_left = -self.integral_gain * self.integral_error_left
+        self.bias_tau_right = -self.integral_gain * self.integral_error_right
+
+        # Clamp bias torques
+        self.bias_tau_left = float(np.clip(self.bias_tau_left, -self.integral_max, self.integral_max))
+        self.bias_tau_right = float(np.clip(self.bias_tau_right, -self.integral_max, self.integral_max))
+
+        return self.bias_tau_left, self.bias_tau_right, True, clamp_active
+
+    def apply_yaw_aware_position_compensation(
+        self,
+        raw_sagittal_error: float,
+        raw_lateral_error: float,
+        yaw_error: float,
+        yaw_compensation_gain: float = 1.0,
+        max_compensation: float = 0.05,
+    ) -> tuple[float, float]:
+        """Compensate support position error for yaw-induced apparent drift.
+
+        When the robot rotates by yaw angle theta, the support center appears to
+        shift by approximately d*sin(theta) in the lateral direction and
+        d*(1-cos(theta)) in the sagittal direction (where d is the axle offset).
+
+        This method subtracts the yaw-induced apparent drift from the measured
+        position error so that the position controller only responds to true drift.
+
+        Args:
+            raw_sagittal_error: Measured sagittal position error (m)
+            raw_lateral_error: Measured lateral position error (m)
+            yaw_error: Current yaw error from equilibrium (rad)
+            yaw_compensation_gain: Scale factor for compensation (0.0 to 1.0)
+            max_compensation: Maximum compensation magnitude (m)
+
+        Returns:
+            (compensated_sagittal_error, compensated_lateral_error)
+        """
+        if not self.uses_yaw_aware_compensation():
+            return raw_sagittal_error, raw_lateral_error
+
+        # Estimate yaw-induced apparent displacement
+        # Using a conservative approximation: the apparent lateral shift
+        # from yaw rotation is approximately yaw_error * (effective lever arm)
+        # For a wheeled biped, the relevant lever arm is roughly the axle offset
+        # Assume ~0.1m axle offset for this estimation
+        axle_offset_m = 0.10
+        yaw_apparent_lateral = axle_offset_m * np.sin(yaw_error)
+        yaw_apparent_sagittal = axle_offset_m * (1.0 - np.cos(yaw_error))
+
+        # Compensate by subtracting the yaw-induced component
+        compensation_lateral = yaw_compensation_gain * yaw_apparent_lateral
+        compensation_sagittal = yaw_compensation_gain * yaw_apparent_sagittal
+
+        # Clamp compensation magnitude
+        compensation_lateral = float(np.clip(compensation_lateral, -max_compensation, max_compensation))
+        compensation_sagittal = float(np.clip(compensation_sagittal, -max_compensation, max_compensation))
+
+        compensated_sagittal = raw_sagittal_error - compensation_sagittal
+        compensated_lateral = raw_lateral_error - compensation_lateral
+
+        return compensated_sagittal, compensated_lateral
+
+
+def resolve_boundary_yaw_position_fix_state(args) -> BoundaryYawPositionFixState:
+    """Create a BoundaryYawPositionFixState from parsed command-line arguments."""
+    return BoundaryYawPositionFixState(
+        profile=args.boundary_yaw_position_profile,
+        boundary_kp=args.boundary_hip_yaw_kp,
+        boundary_kd=args.boundary_hip_yaw_kd,
+        integral_gain=args.boundary_hip_yaw_integral_gain,
+        integral_max=args.boundary_hip_yaw_integral_max,
+    )
 
 
 def get_stage2b_default_empirical_feedforward() -> np.ndarray:
@@ -157,13 +1521,20 @@ def resolve_stage2b_empirical_feedforward(telemetry_path: str | None) -> np.ndar
     return load_empirical_feedforward_from_telemetry(telemetry_path)
 
 
-def check_termination(qpos, com_height, robot_pitch_x, robot_roll_y):
+def check_termination(qpos, com_height, robot_pitch_x, robot_roll_y,
+                      height_floor_m: float = 0.35):
     """Check if robot should terminate (fall detection).
 
     Uses robot-frame orientation (pitch_x, roll_y) for termination, not Euler angles.
+
+    Args:
+        height_floor_m: Minimum allowed CoM height. Defaults to 0.35 m.
+            When a height-variant setup is active, this is set to
+            achieved_com_z - 0.05 m so low-height variants are not
+            spuriously terminated.
     """
     # Height check
-    if com_height < 0.35:
+    if com_height < height_floor_m:
         return True, "height_too_low"
 
     # Orientation check using robot-frame orientation (45 degrees threshold)
@@ -658,11 +2029,12 @@ def append_balance_core_telemetry(
 
     # Append torque fields from result.telemetry
     # Per-joint arrays are tuples and need comma-separated string conversion for CSV
+    # Use setdefault to handle dynamic diagnostics fields (e.g. tuned telemetry)
     for name, value in result.telemetry.items():
         if isinstance(value, tuple):
-            telemetry[name].append(",".join(str(v) for v in value))
+            telemetry.setdefault(name, []).append(",".join(str(v) for v in value))
         else:
-            telemetry[name].append(value)
+            telemetry.setdefault(name, []).append(value)
 
 
 def zero_legacy_torque_sources_for_balance_core():
@@ -705,6 +2077,18 @@ def build_balance_core_controllers(
     vd_integral_min_com_z_m: float = 0.38,
     vd_integral_max_com_z_m: float = 0.43,
     sagittal_authority_schedule: SagittalAuthoritySchedule | None = None,
+    shape_kp_hip_yaw: float | None = None,
+    shape_kd_hip_yaw: float | None = None,
+    enable_hip_yaw_support_feedforward: bool = False,
+    hip_yaw_support_k: float = 0.0,
+    hip_yaw_support_tau_max: float = 1.0,
+    hip_yaw_support_sign: float = 1.0,
+    enable_hip_yaw_divergence_damping: bool = False,
+    hip_yaw_divergence_k: float = 0.0,
+    hip_yaw_divergence_kd: float = 0.0,
+    hip_yaw_divergence_tau_max: float = 0.5,
+    hip_yaw_divergence_z_low: float = 0.300,
+    hip_yaw_divergence_z_high: float = 0.393,
 ):
     """Build all balance-core controller components.
 
@@ -729,13 +2113,35 @@ def build_balance_core_controllers(
     contact_supervisor = ContactSupervisor(control_dt=control_dt)
 
     # Instantiate shape-posture controller
+    # Use overrides if provided, otherwise use balance-core defaults
+    effective_kp_hip_yaw = (
+        shape_kp_hip_yaw
+        if shape_kp_hip_yaw is not None
+        else BALANCE_CORE_HIP_YAW_AUTHORITY.kp_hip_yaw
+    )
+    effective_kd_hip_yaw = (
+        shape_kd_hip_yaw
+        if shape_kd_hip_yaw is not None
+        else BALANCE_CORE_HIP_YAW_AUTHORITY.kd_hip_yaw
+    )
+
     shape_posture = ShapePostureController(
-        kp_hip_yaw=BALANCE_CORE_HIP_YAW_AUTHORITY.kp_hip_yaw,
-        kd_hip_yaw=BALANCE_CORE_HIP_YAW_AUTHORITY.kd_hip_yaw,
+        kp_hip_yaw=effective_kp_hip_yaw,
+        kd_hip_yaw=effective_kd_hip_yaw,
         kp_hip_pitch=30.0,
         kd_hip_pitch=4.0,
         kp_knee=40.0,
         kd_knee=5.0,
+        enable_hip_yaw_support_feedforward=enable_hip_yaw_support_feedforward,
+        k_support_hip_yaw=hip_yaw_support_k,
+        tau_max_support_comp=hip_yaw_support_tau_max,
+        support_comp_sign=hip_yaw_support_sign,
+        enable_hip_yaw_divergence_damping=enable_hip_yaw_divergence_damping,
+        k_divergence=hip_yaw_divergence_k,
+        k_divergence_rate=hip_yaw_divergence_kd,
+        tau_max_divergence=hip_yaw_divergence_tau_max,
+        divergence_gate_z_low=hip_yaw_divergence_z_low,
+        divergence_gate_z_high=hip_yaw_divergence_z_high,
     )
 
     # Instantiate support feedforward controller
@@ -808,6 +2214,13 @@ def build_balance_core_controllers(
         hip_roll_torque_sign=1.0,
     )
 
+    # Instantiate yaw controller
+    yaw_controller = YawController(
+        kp_yaw=8.0,
+        kd_yaw=2.0,
+        max_yaw_torque=5.0,
+    )
+
     # Instantiate torque composer
     composer = BalanceCoreTorqueComposer(
         torque_limit=jnp.array(torque_limit),
@@ -821,6 +2234,7 @@ def build_balance_core_controllers(
         "support_feedforward": support_feedforward,
         "sagittal_wheel_balance": sagittal_wheel_balance,
         "lateral_roll_balance": lateral_roll_balance,
+        "yaw_controller": yaw_controller,
         "composer": composer,
         "sagittal_controller_name": sagittal_controller_name,
     }
@@ -1164,8 +2578,172 @@ def main():
             "candidate_C_stronger_position",
             "candidate_D1_support_velocity_light",
             "candidate_D2_wheel_velocity_damping_light",
+            "candidate_E1_k60_continuous",
+            "candidate_E2_k80_continuous",
+            "candidate_E3_k100_continuous",
+            "E1_support_integral",
+            "E2_support_integral_higher_cap",
+            "E2b_support_integral_higher_cap_aligned_gate",
+            "E3_support_integral_cap_wheel_damping",
+            "J1",
+            "J2",
+            "J3",
+            "J2a",
+            "J2b",
+            "J2c",
+            "J2d",
+            "F1_phase_aware_recenter_velocity_shaping",
+            "F1_phase_aware_recenter_wider_yaw_gate",
+            "F1_phase_aware_recenter_wider_yaw_gate_low_tau",
+            "F2a_hysteresis_recenter_moderate",
+            "F2b_hysteresis_recenter_strong",
+            "G1a_bias_cancel_moderate",
+            "G1b_bias_cancel_strong",
+            "APC1_active_pitch_crossing_moderate",
+            "APC2_active_pitch_crossing_stronger",
+            "APCR1_active_pitch_crossing_recovery_moderate",
+            "APCR1b_active_pitch_crossing_early_release",
+            "APCR1c_active_pitch_crossing_early_activation",
+            "APCR1d_symmetric_soft_band_control",
+            "APCR1e_adaptive_symmetric_soft_band",
+            "APCR1f_adaptive_fast_response_phase_brake",
+            "APCR1g_predictive_fast_response_phase_brake",
+            "APCR1h_support_drift_priority_fast_recenter",
+            "APCR1i_support_hysteresis_recenter",
+            "APCR1j_support_hysteresis_higher_authority",
+            "APCR1k_support_hysteresis_early_entry",
+            "APCR1l_pitch_suppress_recenter",
+            "APCR1m_conditional_pitch_blend_recenter",
+            "APCR1n_recenter_priority_torque_boost",
+            "APCR1nD_direct_support_recenter_features",
+            "APCR1nD_T1_early_entry",
+            "APCR1nD_T2_hold_outside_band",
+            "APCR1nD_T3_early_entry_plus_hold",
+            "APCR1nD_T4_stronger_authority",
+            "APCR1nD_T5_band_limited_balanced",
+            "T6A_high_early_hard_band",
+            "T6B_high_stronger_emergency",
+            "T6C_high_early_plus_stronger",
+            "T6D_high_transient_boost",
+            "T6E_high_pitch_aware_boost",
+            "T6F_budget_cap_raise",
+            "T6F_sign_corrected",
+            "T6H_soft_blend_arch_fix",
+            "T6I_phase_aware_release",
+            "T6J_centering_bias_trim",
         ],
         help="Height-variant-aware sagittal authority schedule. Default: baseline",
+    )
+    # Shape posture controller overrides (for isolation experiments)
+    parser.add_argument(
+        "--shape-kp-hip-yaw",
+        type=float,
+        default=None,
+        help="Override shape posture controller kp_hip_yaw (default: 15.0 for balance-core). For isolation experiments only.",
+    )
+    parser.add_argument(
+        "--shape-kd-hip-yaw",
+        type=float,
+        default=None,
+        help="Override shape posture controller kd_hip_yaw (default: 3.0 for balance-core). For isolation experiments only.",
+    )
+    # HY-FF: Hip-yaw support-error feedforward compensation (candidate fix)
+    parser.add_argument(
+        "--enable-hip-yaw-support-feedforward",
+        action="store_true",
+        help="Enable hip-yaw support-error feedforward compensation (HY-FF candidate fix).",
+    )
+    parser.add_argument(
+        "--hip-yaw-support-k",
+        type=float,
+        default=0.0,
+        help="Support-error feedforward gain for hip-yaw (HY-FF). Default: 0.0 (disabled).",
+    )
+    parser.add_argument(
+        "--hip-yaw-support-tau-max",
+        type=float,
+        default=1.0,
+        help="Maximum compensation torque for hip-yaw support feedforward (Nm). Default: 1.0.",
+    )
+    parser.add_argument(
+        "--hip-yaw-support-sign",
+        type=float,
+        default=1.0,
+        help="Sign of support-error feedforward compensation (+1.0 or -1.0). Default: +1.0.",
+    )
+    # HY2-DIV: Hip-yaw divergence damping (Phase 3 candidate)
+    parser.add_argument(
+        "--enable-hip-yaw-divergence-damping",
+        action="store_true",
+        help="Enable hip-yaw divergence damping (HY2-DIV candidate fix).",
+    )
+    parser.add_argument(
+        "--hip-yaw-divergence-k",
+        type=float,
+        default=0.0,
+        help="Divergence proportional gain for hip-yaw (HY2-DIV). Default: 0.0 (disabled).",
+    )
+    parser.add_argument(
+        "--hip-yaw-divergence-kd",
+        type=float,
+        default=0.0,
+        help="Divergence derivative gain for hip-yaw (HY2-DIV). Default: 0.0 (disabled).",
+    )
+    parser.add_argument(
+        "--hip-yaw-divergence-tau-max",
+        type=float,
+        default=0.5,
+        help="Maximum divergence damping torque for hip-yaw (Nm). Default: 0.5.",
+    )
+    parser.add_argument(
+        "--hip-yaw-divergence-z-low",
+        type=float,
+        default=0.300,
+        help="Lower height threshold for HY2-DIV gate (m). Default: 0.300.",
+    )
+    parser.add_argument(
+        "--hip-yaw-divergence-z-high",
+        type=float,
+        default=0.393,
+        help="Upper height threshold for HY2-DIV gate (m). Default: 0.393.",
+    )
+    parser.add_argument(
+        "--boundary-yaw-position-profile",
+        type=str,
+        default="baseline",
+        choices=[
+            "baseline",
+            "yaw_aware_position_only",
+            "boundary_hip_yaw_profile",
+            "yaw_aware_plus_boundary_hip_yaw",
+            "boundary_hip_yaw_integral_light",
+            "yaw_aware_plus_integral_light",
+        ],
+        help="Boundary-height yaw-position coupling fix profile. Default: baseline (no changes)",
+    )
+    parser.add_argument(
+        "--boundary-hip-yaw-kp",
+        type=float,
+        default=22.0,
+        help="Boundary-only hip-yaw kp when boundary_hip_yaw_profile is active (default: 22.0)",
+    )
+    parser.add_argument(
+        "--boundary-hip-yaw-kd",
+        type=float,
+        default=4.5,
+        help="Boundary-only hip-yaw kd when boundary_hip_yaw_profile is active (default: 4.5)",
+    )
+    parser.add_argument(
+        "--boundary-hip-yaw-integral-gain",
+        type=float,
+        default=2.0,
+        help="Weak hip-yaw integral gain for boundary variants (default: 2.0)",
+    )
+    parser.add_argument(
+        "--boundary-hip-yaw-integral-max",
+        type=float,
+        default=1.0,
+        help="Hip-yaw integral anti-windup clamp in Nm (default: 1.0)",
     )
     args = parser.parse_args()
 
@@ -1896,6 +3474,13 @@ def main():
         "effective_pitch_tau_cap": [],
         "effective_velocity_damping_scale": [],
         "effective_support_velocity_scale": [],
+        "low_height_sagittal_schedule_active": [],
+        "effective_k_position": [],
+        "effective_k_velocity": [],
+        "sagittal_schedule_height_reference_m": [],
+        "sagittal_schedule_height_source": [],
+        "sagittal_schedule_u": [],
+        "sagittal_schedule_smoothstep": [],
         "tau_pitch_rate": [],
         "tau_sagittal_velocity": [],
         "tau_wheel_velocity_left": [],
@@ -1957,6 +3542,46 @@ def main():
         "pitch_rate_boost_factor": [],
         "pitch_rate_for_control_boosted": [],
         "transient_capture_mode": [],
+        # Pitch-aware position scaling telemetry
+        "pitch_aware_position_scaling_enabled": [],
+        "pitch_aware_position_scale": [],
+        "pitch_aware_active": [],
+        "pitch_soft_start": [],
+        "pitch_hard_limit": [],
+        "min_pitch_scale": [],
+        "tau_position_before_pitch_scale": [],
+        "tau_position_after_pitch_scale": [],
+        # Phase-aware recenter telemetry (F1_strategy)
+        "phase_recenter_enabled": [],
+        "phase_recenter_active": [],
+        "phase_recenter_gate_safe": [],
+        "phase_recenter_signed_error_m": [],
+        "phase_recenter_raw_tau": [],
+        "phase_recenter_tau": [],
+        "phase_recenter_tau_clipped": [],
+        "phase_recenter_smooth_alpha": [],
+        "phase_recenter_gate_reason": [],
+        "phase_recenter_pitch_safe": [],
+        "phase_recenter_pitch_danger": [],
+        "phase_recenter_contact_safe": [],
+        "phase_recenter_height_safe": [],
+        "phase_recenter_deadband_active": [],
+        # Hysteresis recenter fields (F2_strategy)
+        "hysteresis_recenter_enabled": [],
+        "hysteresis_recenter_state": [],
+        "hysteresis_recenter_state_id": [],
+        "hysteresis_recenter_outer_enter_m": [],
+        "hysteresis_recenter_exit_target_m": [],
+        "hysteresis_recenter_signed_error_m": [],
+        "hysteresis_recenter_target_error_m": [],
+        "hysteresis_recenter_raw_tau": [],
+        "hysteresis_recenter_tau": [],
+        "hysteresis_recenter_tau_clipped": [],
+        "hysteresis_recenter_active": [],
+        "hysteresis_recenter_state_entry_count": [],
+        "hysteresis_recenter_state_exit_count": [],
+        "hysteresis_recenter_safety_override": [],
+        "hysteresis_recenter_gate_reason": [],
         "sagittal_axis_x_initial": [],
         "sagittal_axis_y_initial": [],
         "raw_com_vx": [],
@@ -1984,6 +3609,44 @@ def main():
         "r_hip_yaw_tau_shape_raw": [],
         "l_hip_yaw_tau_shape_final": [],
         "r_hip_yaw_tau_shape_final": [],
+        # HY-FF: Hip-yaw support-error feedforward compensation telemetry
+        "hip_yaw_comp_active": [],
+        "hip_yaw_comp_height_gate": [],
+        "hip_yaw_comp_support_error_m": [],
+        "hip_yaw_comp_tau_left": [],
+        "hip_yaw_comp_tau_right": [],
+        "hip_yaw_comp_tau_left_clipped": [],
+        "hip_yaw_comp_tau_right_clipped": [],
+        "hip_yaw_comp_sign": [],
+        "hip_yaw_comp_k_support": [],
+        "hip_yaw_comp_tau_max": [],
+        # HY2-DIV: Hip-yaw divergence damping telemetry
+        # Note: hip_yaw_div_active is deprecated; use hip_yaw_div_enabled and hip_yaw_div_gate_active
+        "hip_yaw_div_enabled": [],
+        "hip_yaw_div_gate_active": [],
+        "hip_yaw_div_active": [],  # Deprecated alias for backward compatibility
+        "hip_yaw_div_height_gate": [],
+        "hip_yaw_div_effective_k": [],
+        "hip_yaw_div_effective_kd": [],
+        "hip_yaw_div_effective_tau_max": [],
+        "hip_yaw_div_left": [],
+        "hip_yaw_div_right": [],
+        "hip_yaw_div_left_clipped": [],
+        "hip_yaw_div_right_clipped": [],
+        "hip_yaw_div_k_divergence": [],
+        "hip_yaw_div_k_divergence_rate": [],
+        "hip_yaw_div_tau_max": [],
+        "hip_yaw_div_z_low": [],
+        "hip_yaw_div_z_high": [],
+        # HY-FF debug telemetry
+        "hy_ff_height_passed_to_shape": [],
+        "hy_ff_support_error_passed_to_shape": [],
+        "hy_ff_support_error_from_sagittal": [],
+        "hy_ff_prev_support_error": [],
+        "hy_ff_setup_target_com_z_m": [],
+        "hy_ff_setup_achieved_com_z_m": [],
+        "hy_ff_root_z_m": [],
+        "hy_ff_current_com_z_m": [],
         "hip_yaw_torque_sign_correct_left": [],
         "hip_yaw_torque_sign_correct_right": [],
         "hip_yaw_torque_saturation_flag_left": [],
@@ -2008,6 +3671,118 @@ def main():
         "support_center_y": [],
         "support_position_reference_source": [],
         "support_reference_captured_after_variant": [],
+        # Yaw-position coupling diagnostic telemetry
+        "root_yaw_z_rad": [],
+        "yaw_z_rad": [],
+        "yaw_error_from_equilibrium_rad": [],
+        "hip_yaw_asymmetry": [],
+        "hip_yaw_divergence": [],
+        "yaw_induced_position_error_x_m": [],
+        "yaw_induced_position_error_y_m": [],
+        "yaw_induced_position_error_norm_m": [],
+        "yaw_aware_position_compensation_active": [],
+        "yaw_aware_sagittal_error_compensated_m": [],
+        "yaw_aware_lateral_error_compensated_m": [],
+        "effective_kp_hip_yaw": [],
+        "effective_kd_hip_yaw": [],
+        "hip_yaw_integral_active": [],
+        "hip_yaw_integral_clamp": [],
+        "hip_yaw_integral_error_left": [],
+        "hip_yaw_integral_error_right": [],
+        "hip_yaw_bias_tau_left": [],
+        "hip_yaw_bias_tau_right": [],
+        "hip_yaw_bias_active": [],
+        "tau_position_yaw_compensated_raw": [],
+        "tau_position_yaw_compensated_clipped": [],
+        "boundary_yaw_position_profile": [],
+        "boundary_profile_active": [],
+        "hip_yaw_abs_max_tracking": [],
+        "hip_yaw_abs_max_threshold": [],
+        # APCR (Active Pitch Crossing Recovery) telemetry fields
+        # These are generated by SagittalVelocityDampedBalanceController.compute() but
+        # were not being captured in telemetry. Added 2026-06-08 to fix APCR validation.
+        "active_pitch_crossing_enabled": [],
+        "active_pitch_crossing_recovery_gate_mode": [],
+        "active_pitch_crossing_state": [],
+        "active_pitch_crossing_state_id": [],
+        "active_pitch_crossing_active": [],
+        "active_pitch_crossing_signed_error_m": [],
+        "active_pitch_crossing_pitch_x": [],
+        "active_pitch_crossing_pitch_rate": [],
+        "active_pitch_crossing_raw_tau": [],
+        "active_pitch_crossing_tau": [],
+        "active_pitch_crossing_tau_clipped": [],
+        "active_pitch_crossing_target_direction": [],
+        "active_pitch_crossing_outer_enter_m": [],
+        "active_pitch_crossing_inner_exit_m": [],
+        "active_pitch_crossing_pitch_hard_stop_rad": [],
+        "active_pitch_crossing_hard_safety_gate": [],
+        "active_pitch_crossing_recovery_gate": [],
+        "active_pitch_crossing_gate_reason": [],
+        "active_pitch_crossing_state_entry_count": [],
+        "active_pitch_crossing_state_exit_count": [],
+        "active_pitch_crossing_safety_override": [],
+        "active_pitch_crossing_contact_safe": [],
+        "active_pitch_crossing_height_safe": [],
+        "active_pitch_crossing_roll_safe": [],
+        "active_pitch_crossing_pitch_safe": [],
+        "active_pitch_crossing_pitch_danger": [],
+        "active_pitch_crossing_max_tau": [],
+        "active_pitch_crossing_smooth_alpha": [],
+        # APCR1i hysteresis recenter telemetry
+        "active_pitch_crossing_hysteresis_enabled": [],
+        "active_pitch_crossing_hysteresis_state": [],
+        "active_pitch_crossing_hysteresis_state_id": [],
+        "active_pitch_crossing_hysteresis_entry_e": [],
+        "active_pitch_crossing_hysteresis_exit_e": [],
+        "active_pitch_crossing_hysteresis_entry_count": [],
+        "active_pitch_crossing_hysteresis_exit_count": [],
+        "active_pitch_crossing_hysteresis_inner_exit_m": [],
+        "active_pitch_crossing_hysteresis_opposite_release_m": [],
+        "active_pitch_crossing_hysteresis_emergency_active": [],
+        "final_wheel_tau_with_apc": [],
+        "final_wheel_tau_without_apc": [],
+        # APCR1l pitch suppression telemetry
+        "apcr1l_pitch_suppress_active": [],
+        "apcr1l_recenter_state": [],
+        "apcr1l_tau_pitch_before_suppress": [],
+        # APCR1m conditional pitch blend telemetry
+        "apcr1m_pitch_blend_active": [],
+        "apcr1m_pitch_blend_scale": [],
+        "apcr1m_pitch_blend_block_reason": [],
+        "apcr1m_tau_pitch_before_blend": [],
+        "apcr1m_tau_pitch_after_blend": [],
+        "apcr1m_startup_guard_active": [],
+        "apcr1m_recenter_active": [],
+        "apcr1m_pitch_safe": [],
+        "apcr1m_height_safe": [],
+        "apcr1m_contact_safe": [],
+        "apcr1m_roll_safe": [],
+        "apcr1m_pitch_rate_safe": [],
+        # APCR1n recenter priority telemetry columns
+        "apcr1n_recenter_priority_active": [],
+        "apcr1n_startup_guard_active": [],
+        "apcr1n_wheel_damping_override_active": [],
+        "apcr1n_wheel_damping_scale": [],
+        "apcr1n_wheel_damping_before": [],
+        "apcr1n_wheel_damping_after": [],
+        "apcr1n_wheel_damping_fights_drift": [],
+        "apcr1n_position_cap_boost_active": [],
+        "apcr1n_position_cap_current": [],
+        "apcr1n_tau_position_raw": [],
+        "apcr1n_tau_position_after_cap": [],
+        "apcr1n_position_saturated": [],
+        "apcr1n_safety_gate_pass": [],
+        "apcr1n_final_torque_direction_correct": [],
+        "apcr1n_final_torque_fights_drift": [],
+        "apcr1n_physical_drift_column_used": [],
+        # APCR1nD direct support recenter telemetry
+        "apcr1nd_direct_recenter_priority_active": [],
+        "apcr1nd_direct_recenter_eligible": [],
+        "apcr1nd_direct_recenter_block_reason": [],
+        "apcr1nd_moving_away": [],
+        "apcr1nd_abs_error": [],
+        "apcr1nd_error_rate": [],
     }
     telemetry.update(build_step1_telemetry_template())
 
@@ -2016,6 +3791,12 @@ def main():
         for key, values in make_balance_core_telemetry_columns().items():
             telemetry.setdefault(key, values)
 
+    # Add profile identity telemetry fields (Phase 1 fix for T6F sign correctness investigation)
+    telemetry.setdefault("controller_mode", [])
+    telemetry.setdefault("sagittal_controller", [])
+    telemetry.setdefault("vd_sagittal_authority_profile", [])
+    telemetry.setdefault("height_variant_setup_name", [])
+
     # Simulation parameters
     max_steps = args.steps
     control_dt = 0.01  # 100 Hz
@@ -2023,6 +3804,7 @@ def main():
     n_substeps = int(control_dt / physics_dt)
     prev_control_com_pos = None
     tau_prev = jnp.array(mj_data.ctrl)  # Initialize previous torque from current control
+    prev_support_error = 0.0  # Previous-step support position error for HY-FF (m)
 
     # Actuator limits (used by both balance-core and legacy modes for telemetry)
     torque_limit = np.array(mj_model.actuator_ctrlrange[:, 1])
@@ -2033,6 +3815,33 @@ def main():
     if is_balance_core_mode(args):
         support_feedforward_vector = resolve_support_feedforward_vector()
         sagittal_choice = getattr(args, "sagittal_controller", "baseline")
+        sagittal_authority_schedule = resolve_sagittal_authority_schedule(args.vd_sagittal_authority_profile)
+
+        # Extract integral parameters from profile for E1/E2/E3 extreme height profiles
+        # These profiles have enable_position_integral=True in their schedule
+        profile = sagittal_authority_schedule
+        if profile.enable_position_integral:
+            # Use profile's integral settings instead of CLI defaults
+            vd_enable_position_integral = True
+            vd_ki_position_integral = profile.ki_position_integral
+            vd_integral_max_abs = profile.integral_max_abs
+            vd_integral_pitch_error_threshold_rad = profile.integral_pitch_error_threshold_rad
+            vd_integral_support_velocity_threshold_m_s = profile.integral_support_velocity_threshold_m_s
+            vd_integral_wheel_velocity_threshold_rad_s = profile.integral_wheel_velocity_threshold_rad_s
+            vd_integral_min_com_z_m = profile.integral_min_com_z_m
+            vd_integral_max_com_z_m = profile.integral_max_com_z_m
+            print(f"[EXTREME HEIGHT PROFILE] {profile.profile_name}: integral enabled (ki={vd_ki_position_integral})")
+        else:
+            # Use CLI values for non-extreme profiles
+            vd_enable_position_integral = args.vd_enable_position_integral
+            vd_ki_position_integral = args.vd_ki_position_integral
+            vd_integral_max_abs = args.vd_integral_max_abs
+            vd_integral_pitch_error_threshold_rad = args.vd_integral_pitch_error_threshold_rad
+            vd_integral_support_velocity_threshold_m_s = args.vd_integral_support_velocity_threshold_m_s
+            vd_integral_wheel_velocity_threshold_rad_s = args.vd_integral_wheel_velocity_threshold_rad_s
+            vd_integral_min_com_z_m = args.vd_integral_min_com_z_m
+            vd_integral_max_com_z_m = args.vd_integral_max_com_z_m
+
         balance_core_controllers = build_balance_core_controllers(
             control_dt=control_dt,
             support_feedforward_vector=support_feedforward_vector,
@@ -2050,21 +3859,41 @@ def main():
             vd_capture_gate_use_cp=args.vd_capture_gate_use_cp,
             vd_enable_torque_budget_aware_position=args.vd_enable_torque_budget_aware_position,
             vd_position_tau_budget_cap=args.vd_position_tau_budget_cap,
-            vd_enable_position_integral=args.vd_enable_position_integral,
-            vd_ki_position_integral=args.vd_ki_position_integral,
-            vd_integral_max_abs=args.vd_integral_max_abs,
-            vd_integral_pitch_error_threshold_rad=args.vd_integral_pitch_error_threshold_rad,
+            vd_enable_position_integral=vd_enable_position_integral,
+            vd_ki_position_integral=vd_ki_position_integral,
+            vd_integral_max_abs=vd_integral_max_abs,
+            vd_integral_pitch_error_threshold_rad=vd_integral_pitch_error_threshold_rad,
             vd_integral_roll_error_threshold_rad=args.vd_integral_roll_error_threshold_rad,
             vd_integral_pitch_rate_threshold_rad_s=args.vd_integral_pitch_rate_threshold_rad_s,
-            vd_integral_support_velocity_threshold_m_s=args.vd_integral_support_velocity_threshold_m_s,
-            vd_integral_wheel_velocity_threshold_rad_s=args.vd_integral_wheel_velocity_threshold_rad_s,
-            vd_integral_min_com_z_m=args.vd_integral_min_com_z_m,
-            vd_integral_max_com_z_m=args.vd_integral_max_com_z_m,
-            sagittal_authority_schedule=resolve_sagittal_authority_schedule(args.vd_sagittal_authority_profile),
+            vd_integral_support_velocity_threshold_m_s=vd_integral_support_velocity_threshold_m_s,
+            vd_integral_wheel_velocity_threshold_rad_s=vd_integral_wheel_velocity_threshold_rad_s,
+            vd_integral_min_com_z_m=vd_integral_min_com_z_m,
+            vd_integral_max_com_z_m=vd_integral_max_com_z_m,
+            sagittal_authority_schedule=sagittal_authority_schedule,
+            shape_kp_hip_yaw=args.shape_kp_hip_yaw,
+            shape_kd_hip_yaw=args.shape_kd_hip_yaw,
+            enable_hip_yaw_support_feedforward=args.enable_hip_yaw_support_feedforward,
+            hip_yaw_support_k=args.hip_yaw_support_k,
+            hip_yaw_support_tau_max=args.hip_yaw_support_tau_max,
+            hip_yaw_support_sign=args.hip_yaw_support_sign,
+            enable_hip_yaw_divergence_damping=args.enable_hip_yaw_divergence_damping,
+            hip_yaw_divergence_k=args.hip_yaw_divergence_k,
+            hip_yaw_divergence_kd=args.hip_yaw_divergence_kd,
+            hip_yaw_divergence_tau_max=args.hip_yaw_divergence_tau_max,
+            hip_yaw_divergence_z_low=args.hip_yaw_divergence_z_low,
+            hip_yaw_divergence_z_high=args.hip_yaw_divergence_z_high,
         )
         sagittal_name = balance_core_controllers["sagittal_controller_name"]
         print(f"[BALANCE-CORE] Functional four-source controller stack enabled")
         print(f"[BALANCE-CORE] Sagittal controller: {sagittal_name}")
+
+    # Boundary yaw-position coupling fix state
+    boundary_fix = resolve_boundary_yaw_position_fix_state(args)
+    boundary_fix.reset()
+    if boundary_fix.profile != "baseline":
+        print(f"[BOUNDARY FIX] Profile: {boundary_fix.profile}")
+        print(f"[BOUNDARY FIX] Boundary kp_hip_yaw={boundary_fix.boundary_kp}, kd_hip_yaw={boundary_fix.boundary_kd}")
+        print(f"[BOUNDARY FIX] Integral gain={boundary_fix.integral_gain}, max={boundary_fix.integral_max}")
 
     # For finite-difference rate computation
     prev_log_pitch_x = None
@@ -2266,7 +4095,13 @@ def main():
         return (source_step_index % telemetry_decimation) == 0
 
     def snapshot_last_telemetry_row() -> dict:
-        return {key: values[-1] for key, values in telemetry.items()}
+        result = {}
+        for key, values in telemetry.items():
+            if values:
+                result[key] = values[-1]
+            else:
+                result[key] = None
+        return result
 
     def drop_last_telemetry_row() -> None:
         for values in telemetry.values():
@@ -2288,8 +4123,17 @@ def main():
     height_cmd = 0.40  # Match equilibrium CoM height from compute_equilibrium_keyframe.py
     initial_yaw_z = float(centroidal_state_eq.body_yaw_z)
 
+    # Dynamic termination height floor for low-height variants
+    if height_variant_setup is not None:
+        achieved_com_z = float(height_variant_setup.get("achieved_com_z_m", 0.40))
+        termination_height_floor_m = achieved_com_z - 0.05
+        print(f"[HEIGHT VARIANT] Termination height floor: {termination_height_floor_m:.3f} m "
+              f"(achieved_com_z - 0.05)")
+    else:
+        termination_height_floor_m = 0.35
+
     def simulation_step():
-        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary
+        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary, prev_support_error
 
         if terminated or step >= max_steps:
             return False
@@ -2509,7 +4353,14 @@ def main():
         else:
             tau_inverse_dynamics = jnp.zeros(10)
 
-        target_joint_pos = posture_regularizer.compute_target_posture_from_height(height_cmd)
+        # FIX: Use setup equilibrium for target_joint_pos when height-variant setup is provided.
+        # This prevents initial joint errors that cause tau_pitch bias and forward lean.
+        # Before: target_joint_pos from posture_regularizer.height_targets (h=0.40 -> hip_pitch=0.9261)
+        # After: target_joint_pos from setup.equilibrium_joint_pos (hip_pitch=1.3761 for low_0p300)
+        if height_variant_setup is not None and "equilibrium_joint_pos" in height_variant_setup:
+            target_joint_pos = jnp.array(height_variant_setup["equilibrium_joint_pos"])
+        else:
+            target_joint_pos = posture_regularizer.compute_target_posture_from_height(height_cmd)
         joint_pos_error = target_joint_pos - joint_pos
         tau_hip_roll_centering_raw = compute_step4_hip_roll_centering(joint_pos, joint_vel)
         # XML convention: X=lateral, Y=sagittal/front-back, front=-Y.
@@ -2674,13 +4525,54 @@ def main():
                 right_normal_force_n=float(centroidal_state_control.right_wheel_force),
             )
 
+            # HY-FF debug: Capture values being passed to shape_posture.compute()
+            hy_ff_height_input = float(height_variant_setup.get("target_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd)
+            hy_ff_support_error_input = prev_support_error
+            hy_ff_setup_target = float(height_variant_setup.get("target_com_z_m", 0.0)) if height_variant_setup else 0.0
+            hy_ff_setup_achieved = float(height_variant_setup.get("achieved_com_z_m", 0.0)) if height_variant_setup else 0.0
+            hy_ff_root_z = float(mj_data.qpos[2]) if len(mj_data.qpos) > 2 else 0.0
+            hy_ff_current_com_z = float(centroidal_state_control.com_pos[2])
+
             tau_shape_posture, shape_diag = balance_core_controllers["shape_posture"].compute(
                 q_ref=equilibrium_joint_pos,
                 joint_pos=joint_pos,
                 joint_vel=joint_vel,
                 posture_weight=1.0,
                 contact_degraded_scale=1.0,
+                support_position_error=hy_ff_support_error_input,  # Use previous-step support error (sagittal computes after shape)
+                target_com_height=hy_ff_height_input,
             )
+
+            # Phase 2/3: Boundary yaw-position fix — modify tau_shape_posture
+            # for boundary variants if a non-baseline profile is active.
+            variant_name_for_fix = height_variant_setup.get("variant_name") if height_variant_setup else None
+            if boundary_fix.is_active(variant_name_for_fix):
+                # Get hip-yaw errors
+                l_yaw_err = float(equilibrium_joint_pos[1]) - float(joint_pos[1])
+                r_yaw_err = float(equilibrium_joint_pos[6]) - float(joint_pos[6])
+
+                # Candidate 2/3: Boundary-only hip-yaw profile (override kp/kd)
+                if boundary_fix.uses_boundary_hip_yaw():
+                    effective_kp = boundary_fix.boundary_kp
+                    effective_kd = boundary_fix.boundary_kd
+                    # Recompute hip-yaw torques with boundary gains
+                    l_yaw_vel = float(joint_vel[1])
+                    r_yaw_vel = float(joint_vel[6])
+                    l_yaw_tau_raw = effective_kp * l_yaw_err - effective_kd * l_yaw_vel
+                    r_yaw_tau_raw = effective_kp * r_yaw_err - effective_kd * r_yaw_vel
+                    tau_shape_posture = tau_shape_posture.at[1].set(l_yaw_tau_raw)
+                    tau_shape_posture = tau_shape_posture.at[6].set(r_yaw_tau_raw)
+
+                # Candidate 4/5: Weak hip-yaw integral/bias
+                if boundary_fix.uses_integral():
+                    bias_l, bias_r, integral_active, clamp_active = boundary_fix.update_integral(
+                        l_hip_yaw_error=l_yaw_err,
+                        r_hip_yaw_error=r_yaw_err,
+                        dt=control_dt,
+                    )
+                    # Add bias to tau_shape_posture on hip-yaw joints
+                    tau_shape_posture = tau_shape_posture.at[1].set(float(tau_shape_posture[1]) + bias_l)
+                    tau_shape_posture = tau_shape_posture.at[6].set(float(tau_shape_posture[6]) + bias_r)
             tau_support_feedforward, support_diag = balance_core_controllers["support_feedforward"].compute()
 
             wheel_vel_left = float(joint_vel[4])
@@ -2710,11 +4602,28 @@ def main():
                 l_wheel_xpos_ctrl = tuple(float(mj_data.xpos[l_wheel_body_id][i]) for i in range(3))
                 r_wheel_xpos_ctrl = tuple(float(mj_data.xpos[r_wheel_body_id][i]) for i in range(3))
                 support_center_ctrl_xy = compute_support_center_xy(l_wheel_xpos_ctrl, r_wheel_xpos_ctrl)
-                sag_pos_error = project_sagittal_displacement(
+
+                # C1/C3: Yaw-aware position compensation for boundary variants
+                # When hip-yaw has drifted, the raw sagittal/lateral position errors contain
+                # apparent components from yaw rotation. Subtract them to isolate true drift.
+                current_yaw_z = float(centroidal_state_control.body_yaw_z) if hasattr(centroidal_state_control, 'body_yaw_z') else 0.0
+                yaw_error_from_eq = current_yaw_z - initial_yaw_z
+                mean_hip_yaw_error = 0.5 * (float(equilibrium_joint_pos[1]) - float(joint_pos[1]) + float(equilibrium_joint_pos[6]) - float(joint_pos[6]))
+                raw_lateral_error = support_center_ctrl_xy[0] - support_center_eq_xy[0]
+                raw_sagittal_error = project_sagittal_displacement(
                     origin_xy=support_center_eq_xy,
                     sagittal_axis_xy=sagittal_axis_xy_initial,
                     current_xy=support_center_ctrl_xy,
                 )
+                compensated_sagittal_error, compensated_lateral_error = boundary_fix.apply_yaw_aware_position_compensation(
+                    raw_sagittal_error=raw_sagittal_error,
+                    raw_lateral_error=raw_lateral_error,
+                    yaw_error=mean_hip_yaw_error,
+                    yaw_compensation_gain=1.0,
+                    max_compensation=0.05,
+                )
+                # Use compensated error for sagittal position tracking
+                sag_pos_error = compensated_sagittal_error
                 # COM position error (diagnostic only — not used for position hold)
                 com_pos_error_sagittal = project_sagittal_displacement(
                     origin_xy=(float(com_pos_eq[0]), float(com_pos_eq[1])),
@@ -2832,6 +4741,7 @@ def main():
                     roll_y_rad=float(centroidal_state_control.body_roll_y),
                     contact_valid=bool(contact_output.left_wheel_contact and contact_output.right_wheel_contact and contact_output.contact_force_valid),
                     height_variant_name=height_variant_setup.get("variant_name") if height_variant_setup else None,
+                    commanded_height_ref_m=height_variant_setup.get("target_com_z_m") if height_variant_setup else None,
                 )
                 sagittal_diag["support_position_error_m"] = float(sag_pos_error)
                 sagittal_diag["support_position_error_scaled_m"] = float(sag_pos_error_scaled)
@@ -2876,8 +4786,28 @@ def main():
                 hip_roll_ref=(float(equilibrium_joint_pos[0]), float(equilibrium_joint_pos[5])),
             )
 
+            # Compute yaw stabilization torque (antisymmetric hip-yaw)
+            # Compute yaw directly from quaternion since centroidal_state yaw is NaN during control phase
+            quat = np.array(mj_data.qpos[3:7])
+            _, _, current_yaw = compute_orientation_from_quaternion(quat)
+            yaw_rate = float(mj_data.qvel[5])  # Body-frame yaw rate (z-axis angular velocity)
+            yaw_error = 0.0 - current_yaw  # Reference yaw is zero
+            tau_yaw, yaw_diag = balance_core_controllers["yaw_controller"].compute(
+                yaw_error=yaw_error,
+                yaw_rate=yaw_rate,
+            )
+
+            # Compose yaw torque with shape posture at hip-yaw joints [1, 6]
+            # Shape posture provides symmetric PD control, yaw provides antisymmetric stabilization
+            tau_shape_posture_with_yaw = tau_shape_posture.at[1].add(tau_yaw[1])
+            tau_shape_posture_with_yaw = tau_shape_posture_with_yaw.at[6].add(tau_yaw[6])
+
+            # Update previous-step support error for next iteration's HY-FF
+            # (shape_posture runs before sagittal, so HY-FF uses previous-step support error)
+            prev_support_error = sagittal_diag.get("support_position_error_m", 0.0)
+
             balance_core_result = balance_core_controllers["composer"].compose(
-                tau_shape_posture=tau_shape_posture,
+                tau_shape_posture=tau_shape_posture_with_yaw,
                 tau_support_feedforward=tau_support_feedforward,
                 tau_sagittal_wheel_balance=tau_sagittal_wheel_balance,
                 tau_lateral_roll_balance=tau_lateral_roll_balance,
@@ -3150,7 +5080,10 @@ def main():
 
         # Check termination using robot-frame orientation
         com_height = float(centroidal_state_log.com_pos[2])
-        terminated, termination_reason = check_termination(mj_data.qpos, com_height, robot_pitch_x, robot_roll_y)
+        terminated, termination_reason = check_termination(
+            mj_data.qpos, com_height, robot_pitch_x, robot_roll_y,
+            height_floor_m=termination_height_floor_m,
+        )
 
         # Wrench diagnostics with explicit separation:
         # - full_wrench: baseline + correction
@@ -3168,6 +5101,27 @@ def main():
 
         telemetry["source_step_index"].append(step)
         telemetry["time"].append(step * control_dt)
+
+        # Profile identity telemetry (Phase 1 fix for T6F sign correctness investigation)
+        if is_balance_core_mode(args):
+            telemetry["controller_mode"].append("balance-core")
+            telemetry["sagittal_controller"].append(getattr(args, "sagittal_controller", "baseline"))
+            telemetry["vd_sagittal_authority_profile"].append(getattr(args, "vd_sagittal_authority_profile", "baseline"))
+            height_setup_name = getattr(args, "height_variant_setup", None)
+            if height_setup_name and isinstance(height_setup_name, str) and not height_setup_name.endswith(".json"):
+                telemetry["height_variant_setup_name"].append(height_setup_name)
+            elif height_setup_name:
+                # Extract name from path
+                setup_name = Path(height_setup_name).stem if height_setup_name else ""
+                telemetry["height_variant_setup_name"].append(setup_name)
+            else:
+                telemetry["height_variant_setup_name"].append("")
+        else:
+            telemetry["controller_mode"].append("legacy")
+            telemetry["sagittal_controller"].append("")
+            telemetry["vd_sagittal_authority_profile"].append("")
+            telemetry["height_variant_setup_name"].append("")
+
         telemetry["mass_kg"].append(robot_mass)
         telemetry["weight_N"].append(robot_mass * gravity)
         telemetry["com_x"].append(float(centroidal_state_log.com_pos[0]))
@@ -3332,6 +5286,14 @@ def main():
         telemetry["effective_pitch_tau_cap"].append(sagittal_diag.get("effective_pitch_tau_cap", "none"))
         telemetry["effective_velocity_damping_scale"].append(sagittal_diag.get("effective_velocity_damping_scale", 1.0))
         telemetry["effective_support_velocity_scale"].append(sagittal_diag.get("effective_support_velocity_scale", 1.0))
+        # Phase 6 continuous schedule telemetry
+        telemetry["low_height_sagittal_schedule_active"].append(sagittal_diag.get("low_height_sagittal_schedule_active", False))
+        telemetry["effective_k_position"].append(sagittal_diag.get("effective_k_position", sagittal_diag.get("k_position", 40.0)))
+        telemetry["effective_k_velocity"].append(sagittal_diag.get("effective_k_velocity", 15.0))
+        telemetry["sagittal_schedule_height_reference_m"].append(sagittal_diag.get("schedule_height_reference_m", 0.4))
+        telemetry["sagittal_schedule_height_source"].append(sagittal_diag.get("schedule_height_source", "unknown"))
+        telemetry["sagittal_schedule_u"].append(sagittal_diag.get("k_position_schedule_u", 0.0))
+        telemetry["sagittal_schedule_smoothstep"].append(sagittal_diag.get("k_position_schedule_smoothstep", 0.0))
         telemetry["tau_pitch_rate"].append(sagittal_diag.get("tau_pitch_rate", 0.0))
         telemetry["tau_sagittal_velocity"].append(sagittal_diag.get("tau_sagittal_velocity", 0.0))
         telemetry["tau_wheel_velocity_left"].append(sagittal_diag.get("tau_wheel_velocity_left", 0.0))
@@ -3376,40 +5338,152 @@ def main():
         telemetry["capture_gate_cp_relative_to_support_m"].append(sagittal_diag.get("capture_gate_cp_relative_to_support_m", 0.0))
         telemetry["capture_gate_com_support_error_m"].append(sagittal_diag.get("capture_gate_com_support_error_m", 0.0))
 
-        # Pitch rate consistency estimator telemetry (velocity-damped controller only)
-        if is_balance_core_mode(args) and balance_core_controllers.get("sagittal_controller_name") == "velocity-damped":
-            telemetry["pitch_rate_measured_x_rad_s"].append(pitch_rate_estimate.pitch_rate_measured)
-            telemetry["pitch_rate_fd_x_rad_s"].append(pitch_rate_estimate.pitch_rate_fd)
-            telemetry["pitch_rate_corrected_x_rad_s"].append(pitch_rate_estimate.pitch_rate_corrected)
-            telemetry["pitch_rate_consistency_error_rad_s"].append(pitch_rate_estimate.consistency_error)
-            telemetry["pitch_rate_sign_mismatch"].append(pitch_rate_estimate.sign_mismatch)
-            telemetry["pitch_rate_source_used"].append(pitch_rate_estimate.source_used)
-            # Transient capture diagnostic telemetry
-            telemetry["transient_detected"].append(sagittal_diag.get("transient_detected", False))
-            telemetry["transient_by_pitch"].append(sagittal_diag.get("transient_by_pitch", False))
-            telemetry["transient_by_pitch_rate"].append(sagittal_diag.get("transient_by_pitch_rate", False))
-            telemetry["transient_by_height"].append(sagittal_diag.get("transient_by_height", False))
-            telemetry["pitch_rate_boost_factor"].append(sagittal_diag.get("pitch_rate_boost_factor", 1.0))
-            telemetry["pitch_rate_for_control_boosted"].append(sagittal_diag.get("pitch_rate_for_control_boosted", 0.0))
-            telemetry["transient_capture_mode"].append(sagittal_diag.get("transient_capture_mode", "none"))
-        else:
-            # Baseline controller or non-balance-core mode: log zeros
-            telemetry["pitch_rate_measured_x_rad_s"].append(0.0)
-            telemetry["pitch_rate_fd_x_rad_s"].append(0.0)
-            telemetry["pitch_rate_corrected_x_rad_s"].append(0.0)
-            telemetry["pitch_rate_consistency_error_rad_s"].append(0.0)
-            telemetry["pitch_rate_sign_mismatch"].append(False)
-            telemetry["pitch_rate_source_used"].append("N/A")
-            # Transient capture diagnostic telemetry (defaults)
-            telemetry["transient_detected"].append(False)
-            telemetry["transient_by_pitch"].append(False)
-            telemetry["transient_by_pitch_rate"].append(False)
-            telemetry["transient_by_height"].append(False)
-            telemetry["pitch_rate_boost_factor"].append(1.0)
-            telemetry["pitch_rate_for_control_boosted"].append(0.0)
-            telemetry["transient_capture_mode"].append("none")
+        # Pitch-aware position scaling telemetry (if enabled)
+        telemetry["pitch_aware_position_scaling_enabled"].append(sagittal_diag.get("pitch_aware_position_scaling_enabled", False))
+        telemetry["pitch_aware_position_scale"].append(sagittal_diag.get("pitch_aware_position_scale", 1.0))
+        telemetry["pitch_aware_active"].append(sagittal_diag.get("pitch_aware_active", False))
+        telemetry["pitch_soft_start"].append(sagittal_diag.get("pitch_soft_start", 0.06))
+        telemetry["pitch_hard_limit"].append(sagittal_diag.get("pitch_hard_limit", 0.10))
+        telemetry["min_pitch_scale"].append(sagittal_diag.get("min_pitch_scale", 0.7))
+        telemetry["tau_position_before_pitch_scale"].append(sagittal_diag.get("tau_position_before_pitch_scale", 0.0))
+        telemetry["tau_position_after_pitch_scale"].append(sagittal_diag.get("tau_position_after_pitch_scale", 0.0))
 
-        telemetry["sagittal_axis_x_initial"].append(float(sagittal_diag.get("sagittal_axis_x_initial", sagittal_axis_xy_initial[0])))
+        # Phase-aware recenter telemetry (F1_strategy - if enabled)
+        telemetry["phase_recenter_enabled"].append(sagittal_diag.get("phase_recenter_enabled", False))
+        telemetry["phase_recenter_active"].append(sagittal_diag.get("phase_recenter_active", False))
+        telemetry["phase_recenter_gate_safe"].append(sagittal_diag.get("phase_recenter_gate_safe", False))
+        telemetry["phase_recenter_signed_error_m"].append(sagittal_diag.get("phase_recenter_signed_error_m", 0.0))
+        telemetry["phase_recenter_raw_tau"].append(sagittal_diag.get("phase_recenter_raw_tau", 0.0))
+        telemetry["phase_recenter_tau"].append(sagittal_diag.get("phase_recenter_tau", 0.0))
+        telemetry["phase_recenter_tau_clipped"].append(sagittal_diag.get("phase_recenter_tau_clipped", 0.0))
+        telemetry["phase_recenter_smooth_alpha"].append(sagittal_diag.get("phase_recenter_smooth_alpha", 0.0))
+        telemetry["phase_recenter_gate_reason"].append(str(sagittal_diag.get("phase_recenter_gate_reason", "unknown")))
+        telemetry["phase_recenter_pitch_safe"].append(sagittal_diag.get("phase_recenter_pitch_safe", False))
+        telemetry["phase_recenter_pitch_danger"].append(sagittal_diag.get("phase_recenter_pitch_danger", False))
+        telemetry["phase_recenter_contact_safe"].append(sagittal_diag.get("phase_recenter_contact_safe", True))
+        telemetry["phase_recenter_height_safe"].append(sagittal_diag.get("phase_recenter_height_safe", True))
+        telemetry["phase_recenter_deadband_active"].append(sagittal_diag.get("phase_recenter_deadband_active", False))
+
+        # Hysteresis recenter telemetry (F2_strategy - if enabled)
+        telemetry["hysteresis_recenter_enabled"].append(sagittal_diag.get("hysteresis_recenter_enabled", False))
+        telemetry["hysteresis_recenter_state"].append(str(sagittal_diag.get("hysteresis_recenter_state", "NEUTRAL")))
+        telemetry["hysteresis_recenter_state_id"].append(sagittal_diag.get("hysteresis_recenter_state_id", 0))
+        telemetry["hysteresis_recenter_outer_enter_m"].append(sagittal_diag.get("hysteresis_recenter_outer_enter_m", 0.10))
+        telemetry["hysteresis_recenter_exit_target_m"].append(sagittal_diag.get("hysteresis_recenter_exit_target_m", 0.00))
+        telemetry["hysteresis_recenter_signed_error_m"].append(sagittal_diag.get("hysteresis_recenter_signed_error_m", 0.0))
+        telemetry["hysteresis_recenter_target_error_m"].append(sagittal_diag.get("hysteresis_recenter_target_error_m", 0.0))
+        telemetry["hysteresis_recenter_raw_tau"].append(sagittal_diag.get("hysteresis_recenter_raw_tau", 0.0))
+        telemetry["hysteresis_recenter_tau"].append(sagittal_diag.get("hysteresis_recenter_tau", 0.0))
+        telemetry["hysteresis_recenter_tau_clipped"].append(sagittal_diag.get("hysteresis_recenter_tau_clipped", 0.0))
+        telemetry["hysteresis_recenter_active"].append(sagittal_diag.get("hysteresis_recenter_active", False))
+        telemetry["hysteresis_recenter_state_entry_count"].append(sagittal_diag.get("hysteresis_recenter_state_entry_count", 0))
+        telemetry["hysteresis_recenter_state_exit_count"].append(sagittal_diag.get("hysteresis_recenter_state_exit_count", 0))
+        telemetry["hysteresis_recenter_safety_override"].append(sagittal_diag.get("hysteresis_recenter_safety_override", False))
+        telemetry["hysteresis_recenter_gate_reason"].append(str(sagittal_diag.get("hysteresis_recenter_gate_reason", "unknown")))
+
+        # APCR (Active Pitch Crossing Recovery) telemetry
+        # Captured from sagittal_diag generated by SagittalVelocityDampedBalanceController.compute()
+        # Added 2026-06-08 to fix APCR telemetry validation gap
+        telemetry["active_pitch_crossing_enabled"].append(sagittal_diag.get("active_pitch_crossing_enabled", False))
+        telemetry["active_pitch_crossing_recovery_gate_mode"].append(sagittal_diag.get("active_pitch_crossing_recovery_gate_mode", False))
+        telemetry["active_pitch_crossing_state"].append(str(sagittal_diag.get("active_pitch_crossing_state", "DISABLED")))
+        telemetry["active_pitch_crossing_state_id"].append(int(sagittal_diag.get("active_pitch_crossing_state_id", 0)))
+        telemetry["active_pitch_crossing_active"].append(sagittal_diag.get("active_pitch_crossing_active", False))
+        telemetry["active_pitch_crossing_signed_error_m"].append(float(sagittal_diag.get("active_pitch_crossing_signed_error_m", 0.0)))
+        telemetry["active_pitch_crossing_pitch_x"].append(float(sagittal_diag.get("active_pitch_crossing_pitch_x", 0.0)))
+        telemetry["active_pitch_crossing_pitch_rate"].append(float(sagittal_diag.get("active_pitch_crossing_pitch_rate", 0.0)))
+        telemetry["active_pitch_crossing_raw_tau"].append(float(sagittal_diag.get("active_pitch_crossing_raw_tau", 0.0)))
+        telemetry["active_pitch_crossing_tau"].append(float(sagittal_diag.get("active_pitch_crossing_tau", 0.0)))
+        telemetry["active_pitch_crossing_tau_clipped"].append(float(sagittal_diag.get("active_pitch_crossing_tau_clipped", 0.0)))
+        telemetry["active_pitch_crossing_target_direction"].append(str(sagittal_diag.get("active_pitch_crossing_target_direction", "none")))
+        telemetry["active_pitch_crossing_outer_enter_m"].append(float(sagittal_diag.get("active_pitch_crossing_outer_enter_m", 0.0)))
+        telemetry["active_pitch_crossing_inner_exit_m"].append(float(sagittal_diag.get("active_pitch_crossing_inner_exit_m", 0.0)))
+        telemetry["active_pitch_crossing_pitch_hard_stop_rad"].append(float(sagittal_diag.get("active_pitch_crossing_pitch_hard_stop_rad", 0.0)))
+        telemetry["active_pitch_crossing_hard_safety_gate"].append(sagittal_diag.get("active_pitch_crossing_hard_safety_gate", False))
+        telemetry["active_pitch_crossing_recovery_gate"].append(sagittal_diag.get("active_pitch_crossing_recovery_gate", False))
+        telemetry["active_pitch_crossing_gate_reason"].append(str(sagittal_diag.get("active_pitch_crossing_gate_reason", "unknown")))
+        telemetry["active_pitch_crossing_state_entry_count"].append(int(sagittal_diag.get("active_pitch_crossing_state_entry_count", 0)))
+        telemetry["active_pitch_crossing_state_exit_count"].append(int(sagittal_diag.get("active_pitch_crossing_state_exit_count", 0)))
+        telemetry["active_pitch_crossing_safety_override"].append(sagittal_diag.get("active_pitch_crossing_safety_override", False))
+        telemetry["active_pitch_crossing_contact_safe"].append(sagittal_diag.get("active_pitch_crossing_contact_safe", True))
+        telemetry["active_pitch_crossing_height_safe"].append(sagittal_diag.get("active_pitch_crossing_height_safe", True))
+        telemetry["active_pitch_crossing_roll_safe"].append(sagittal_diag.get("active_pitch_crossing_roll_safe", True))
+        telemetry["active_pitch_crossing_pitch_safe"].append(sagittal_diag.get("active_pitch_crossing_pitch_safe", True))
+        telemetry["active_pitch_crossing_pitch_danger"].append(sagittal_diag.get("active_pitch_crossing_pitch_danger", False))
+        telemetry["active_pitch_crossing_max_tau"].append(float(sagittal_diag.get("active_pitch_crossing_max_tau", 0.0)))
+        telemetry["active_pitch_crossing_smooth_alpha"].append(float(sagittal_diag.get("active_pitch_crossing_smooth_alpha", 0.0)))
+        # APCR1i hysteresis recenter telemetry
+        telemetry["active_pitch_crossing_hysteresis_enabled"].append(sagittal_diag.get("active_pitch_crossing_hysteresis_enabled", False))
+        telemetry["active_pitch_crossing_hysteresis_state"].append(str(sagittal_diag.get("active_pitch_crossing_hysteresis_state", "NEUTRAL")))
+        telemetry["active_pitch_crossing_hysteresis_state_id"].append(int(sagittal_diag.get("active_pitch_crossing_hysteresis_state_id", 0)))
+        telemetry["active_pitch_crossing_hysteresis_entry_e"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_entry_e", 0.0)))
+        telemetry["active_pitch_crossing_hysteresis_exit_e"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_exit_e", 0.0)))
+        telemetry["active_pitch_crossing_hysteresis_entry_count"].append(int(sagittal_diag.get("active_pitch_crossing_hysteresis_entry_count", 0)))
+        telemetry["active_pitch_crossing_hysteresis_exit_count"].append(int(sagittal_diag.get("active_pitch_crossing_hysteresis_exit_count", 0)))
+        telemetry["active_pitch_crossing_hysteresis_inner_exit_m"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_inner_exit_m", 0.0)))
+        telemetry["active_pitch_crossing_hysteresis_opposite_release_m"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_opposite_release_m", 0.0)))
+        telemetry["active_pitch_crossing_hysteresis_emergency_active"].append(sagittal_diag.get("active_pitch_crossing_hysteresis_emergency_active", False))
+        telemetry["final_wheel_tau_with_apc"].append(float(sagittal_diag.get("final_wheel_tau_with_apc", 0.0)))
+        telemetry["final_wheel_tau_without_apc"].append(float(sagittal_diag.get("final_wheel_tau_without_apc", 0.0)))
+
+        # APCR1l pitch suppression telemetry
+        telemetry["apcr1l_pitch_suppress_active"].append(sagittal_diag.get("apcr1l_pitch_suppress_active", False))
+        telemetry["apcr1l_recenter_state"].append(str(sagittal_diag.get("apcr1l_recenter_state", "NEUTRAL")))
+        telemetry["apcr1l_tau_pitch_before_suppress"].append(float(sagittal_diag.get("apcr1l_tau_pitch_before_suppress", 0.0)))
+
+        # APCR1m conditional pitch blend telemetry
+        telemetry["apcr1m_pitch_blend_active"].append(sagittal_diag.get("apcr1m_pitch_blend_active", False))
+        telemetry["apcr1m_pitch_blend_scale"].append(float(sagittal_diag.get("apcr1m_pitch_blend_scale", 1.0)))
+        telemetry["apcr1m_pitch_blend_block_reason"].append(str(sagittal_diag.get("apcr1m_pitch_blend_block_reason", "none")))
+        telemetry["apcr1m_tau_pitch_before_blend"].append(float(sagittal_diag.get("apcr1m_tau_pitch_before_blend", 0.0)))
+        telemetry["apcr1m_tau_pitch_after_blend"].append(float(sagittal_diag.get("apcr1m_tau_pitch_after_blend", 0.0)))
+        telemetry["apcr1m_startup_guard_active"].append(sagittal_diag.get("apcr1m_startup_guard_active", False))
+        telemetry["apcr1m_recenter_active"].append(sagittal_diag.get("apcr1m_recenter_active", False))
+        telemetry["apcr1m_pitch_safe"].append(sagittal_diag.get("apcr1m_pitch_safe", True))
+        telemetry["apcr1m_height_safe"].append(sagittal_diag.get("apcr1m_height_safe", True))
+        telemetry["apcr1m_contact_safe"].append(sagittal_diag.get("apcr1m_contact_safe", True))
+        telemetry["apcr1m_roll_safe"].append(sagittal_diag.get("apcr1m_roll_safe", True))
+        telemetry["apcr1m_pitch_rate_safe"].append(sagittal_diag.get("apcr1m_pitch_rate_safe", True))
+
+        # APCR1n recenter priority telemetry
+        telemetry["apcr1n_recenter_priority_active"].append(sagittal_diag.get("apcr1n_recenter_priority_active", False))
+        telemetry["apcr1n_startup_guard_active"].append(sagittal_diag.get("apcr1n_startup_guard_active", True))
+        telemetry["apcr1n_wheel_damping_override_active"].append(sagittal_diag.get("apcr1n_wheel_damping_override_active", False))
+        telemetry["apcr1n_wheel_damping_scale"].append(float(sagittal_diag.get("apcr1n_wheel_damping_scale", 1.0)))
+        telemetry["apcr1n_wheel_damping_before"].append(float(sagittal_diag.get("apcr1n_wheel_damping_before", 0.0)))
+        telemetry["apcr1n_wheel_damping_after"].append(float(sagittal_diag.get("apcr1n_wheel_damping_after", 0.0)))
+        telemetry["apcr1n_wheel_damping_fights_drift"].append(sagittal_diag.get("apcr1n_wheel_damping_fights_drift", False))
+        telemetry["apcr1n_position_cap_boost_active"].append(sagittal_diag.get("apcr1n_position_cap_boost_active", False))
+        telemetry["apcr1n_position_cap_current"].append(float(sagittal_diag.get("apcr1n_position_cap_current", 3.0)))
+        telemetry["apcr1n_tau_position_raw"].append(float(sagittal_diag.get("apcr1n_tau_position_raw", 0.0)))
+        telemetry["apcr1n_tau_position_after_cap"].append(float(sagittal_diag.get("apcr1n_tau_position_after_cap", 0.0)))
+        telemetry["apcr1n_position_saturated"].append(sagittal_diag.get("apcr1n_position_saturated", False))
+        telemetry["apcr1n_safety_gate_pass"].append(sagittal_diag.get("apcr1n_safety_gate_pass", True))
+        telemetry["apcr1n_final_torque_direction_correct"].append(sagittal_diag.get("apcr1n_final_torque_direction_correct", True))
+        telemetry["apcr1n_final_torque_fights_drift"].append(sagittal_diag.get("apcr1n_final_torque_fights_drift", False))
+        telemetry["apcr1n_physical_drift_column_used"].append(str(sagittal_diag.get("apcr1n_physical_drift_column_used", "unknown")))
+
+        # APCR1nD direct support recenter telemetry
+        telemetry["apcr1nd_direct_recenter_priority_active"].append(bool(sagittal_diag.get("apcr1nd_direct_recenter_priority_active", False)))
+        telemetry["apcr1nd_direct_recenter_eligible"].append(bool(sagittal_diag.get("apcr1nd_direct_recenter_eligible", False)))
+        telemetry["apcr1nd_direct_recenter_block_reason"].append(str(sagittal_diag.get("apcr1nd_direct_recenter_block_reason", "")))
+        telemetry["apcr1nd_moving_away"].append(bool(sagittal_diag.get("apcr1nd_moving_away", False)))
+        telemetry["apcr1nd_abs_error"].append(float(sagittal_diag.get("apcr1nd_abs_error", 0.0)))
+        telemetry["apcr1nd_error_rate"].append(float(sagittal_diag.get("apcr1nd_error_rate", 0.0)))
+
+        # Append all remaining sagittal diagnostics fields (including tuned telemetry)
+        # Use setdefault to dynamically create columns for new fields
+        if is_balance_core_mode(args):
+            for key, value in sagittal_diag.items():
+                # Skip fields already explicitly handled above
+                if key not in telemetry or len(telemetry[key]) < step:
+                    if isinstance(value, (int, float, bool, str)):
+                        telemetry.setdefault(key, []).append(value)
+                    else:
+                        # Convert other types to string for CSV compatibility
+                        telemetry.setdefault(key, []).append(str(value))
+
+        # Pitch rate consistency estimator telemetry (velocity-damped controller only)
         telemetry["sagittal_axis_y_initial"].append(float(sagittal_diag.get("sagittal_axis_y_initial", sagittal_axis_xy_initial[1])))
         telemetry["raw_com_vx"].append(float(sagittal_diag.get("raw_com_vx", centroidal_state_control.com_vel[0])))
         telemetry["raw_com_vy"].append(float(sagittal_diag.get("raw_com_vy", centroidal_state_control.com_vel[1])))
@@ -3453,6 +5527,115 @@ def main():
         telemetry["hip_yaw_torque_saturation_flag_right"].append(bool(sat_flags_vec[6]))
         telemetry["hip_yaw_torque_margin_left"].append(float(torque_limit[1] - abs(float(tau_total_raw[1]))))
         telemetry["hip_yaw_torque_margin_right"].append(float(torque_limit[6] - abs(float(tau_total_raw[6]))))
+
+        # HY-FF: Hip-yaw support-error feedforward compensation telemetry
+        telemetry["hip_yaw_comp_active"].append(shape_diag.get("hip_yaw_comp_active", False) if is_balance_core_mode(args) else False)
+        telemetry["hip_yaw_comp_height_gate"].append(shape_diag.get("hip_yaw_comp_height_gate", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_comp_support_error_m"].append(shape_diag.get("hip_yaw_comp_support_error_m", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_comp_tau_left"].append(shape_diag.get("hip_yaw_comp_tau_left", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_comp_tau_right"].append(shape_diag.get("hip_yaw_comp_tau_right", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_comp_tau_left_clipped"].append(shape_diag.get("hip_yaw_comp_tau_left_clipped", False) if is_balance_core_mode(args) else False)
+        telemetry["hip_yaw_comp_tau_right_clipped"].append(shape_diag.get("hip_yaw_comp_tau_right_clipped", False) if is_balance_core_mode(args) else False)
+        telemetry["hip_yaw_comp_sign"].append(shape_diag.get("hip_yaw_comp_sign", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_comp_k_support"].append(shape_diag.get("hip_yaw_comp_k_support", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_comp_tau_max"].append(shape_diag.get("hip_yaw_comp_tau_max", 0.0) if is_balance_core_mode(args) else 0.0)
+
+        # HY2-DIV: Hip-yaw divergence damping telemetry
+        telemetry["hip_yaw_div_enabled"].append(shape_diag.get("hip_yaw_div_enabled", False) if is_balance_core_mode(args) else False)
+        telemetry["hip_yaw_div_gate_active"].append(shape_diag.get("hip_yaw_div_gate_active", False) if is_balance_core_mode(args) else False)
+        telemetry["hip_yaw_div_active"].append(shape_diag.get("hip_yaw_div_active", False) if is_balance_core_mode(args) else False)
+        telemetry["hip_yaw_div_height_gate"].append(shape_diag.get("hip_yaw_div_height_gate", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_div_effective_k"].append(shape_diag.get("hip_yaw_div_effective_k", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_div_effective_kd"].append(shape_diag.get("hip_yaw_div_effective_kd", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_div_effective_tau_max"].append(shape_diag.get("hip_yaw_div_effective_tau_max", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_div_left"].append(shape_diag.get("hip_yaw_div_left", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_div_right"].append(shape_diag.get("hip_yaw_div_right", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_div_left_clipped"].append(shape_diag.get("hip_yaw_div_left_clipped", False) if is_balance_core_mode(args) else False)
+        telemetry["hip_yaw_div_right_clipped"].append(shape_diag.get("hip_yaw_div_right_clipped", False) if is_balance_core_mode(args) else False)
+        telemetry["hip_yaw_div_k_divergence"].append(shape_diag.get("hip_yaw_div_k_divergence", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_div_k_divergence_rate"].append(shape_diag.get("hip_yaw_div_k_divergence_rate", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_div_tau_max"].append(shape_diag.get("hip_yaw_div_tau_max", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_div_z_low"].append(shape_diag.get("hip_yaw_div_z_low", 0.0) if is_balance_core_mode(args) else 0.0)
+        telemetry["hip_yaw_div_z_high"].append(shape_diag.get("hip_yaw_div_z_high", 0.0) if is_balance_core_mode(args) else 0.0)
+
+        # HY-FF debug telemetry
+        if is_balance_core_mode(args):
+            telemetry["hy_ff_height_passed_to_shape"].append(hy_ff_height_input)
+            telemetry["hy_ff_support_error_passed_to_shape"].append(hy_ff_support_error_input)
+            telemetry["hy_ff_support_error_from_sagittal"].append(sagittal_diag.get("support_position_error_m", 0.0))
+            telemetry["hy_ff_prev_support_error"].append(prev_support_error)
+            telemetry["hy_ff_setup_target_com_z_m"].append(hy_ff_setup_target)
+            telemetry["hy_ff_setup_achieved_com_z_m"].append(hy_ff_setup_achieved)
+            telemetry["hy_ff_root_z_m"].append(hy_ff_root_z)
+            telemetry["hy_ff_current_com_z_m"].append(hy_ff_current_com_z)
+        else:
+            telemetry["hy_ff_height_passed_to_shape"].append(0.0)
+            telemetry["hy_ff_support_error_passed_to_shape"].append(0.0)
+            telemetry["hy_ff_support_error_from_sagittal"].append(0.0)
+            telemetry["hy_ff_prev_support_error"].append(0.0)
+            telemetry["hy_ff_setup_target_com_z_m"].append(0.0)
+            telemetry["hy_ff_setup_achieved_com_z_m"].append(0.0)
+            telemetry["hy_ff_root_z_m"].append(0.0)
+            telemetry["hy_ff_current_com_z_m"].append(0.0)
+
+        # Yaw-position coupling diagnostic telemetry
+        root_yaw_z = float(mj_data.qpos[6]) if len(mj_data.qpos) > 6 else 0.0  # qpos[6] = torso yaw (approximate)
+        yaw_z = float(centroidal_state_control.body_yaw_z) if hasattr(centroidal_state_control, 'body_yaw_z') else 0.0
+        yaw_error_eq = yaw_z - initial_yaw_z
+        l_hip_yaw_err_val = l_hip_yaw_error
+        r_hip_yaw_err_val = r_hip_yaw_error
+        hip_yaw_asym = abs(l_hip_yaw_err_val + r_hip_yaw_err_val)
+        hip_yaw_div = abs(l_hip_yaw_err_val - r_hip_yaw_err_val)
+        telemetry["root_yaw_z_rad"].append(root_yaw_z)
+        telemetry["yaw_z_rad"].append(yaw_z)
+        telemetry["yaw_error_from_equilibrium_rad"].append(yaw_error_eq)
+        telemetry["hip_yaw_asymmetry"].append(hip_yaw_asym)
+        telemetry["hip_yaw_divergence"].append(hip_yaw_div)
+
+        # Yaw-induced position error estimation
+        # When hip yaw drifts by angle theta, the support center appears to shift
+        # by approximately d * sin(theta) where d is half the axle-to-axle distance
+        # in the sagittal direction. Use wheel separation as approximate d.
+        l_wheel_pos = np.array([float(mj_data.xpos[l_wheel_body_id][i]) for i in range(3)])
+        r_wheel_pos = np.array([float(mj_data.xpos[r_wheel_body_id][i]) for i in range(3)])
+        wheel_sep_y = abs(l_wheel_pos[1] - r_wheel_pos[1])
+        mean_yaw_error = 0.5 * (l_hip_yaw_err_val + r_hip_yaw_err_val)
+        yaw_induced_x = wheel_sep_y * np.sin(mean_yaw_error)
+        yaw_induced_y = wheel_sep_y * (1.0 - np.cos(mean_yaw_error))
+        yaw_induced_norm = np.sqrt(yaw_induced_x**2 + yaw_induced_y**2)
+        telemetry["yaw_induced_position_error_x_m"].append(float(yaw_induced_x))
+        telemetry["yaw_induced_position_error_y_m"].append(float(yaw_induced_y))
+        telemetry["yaw_induced_position_error_norm_m"].append(float(yaw_induced_norm))
+
+        # Yaw-aware compensation telemetry — populated by profile system
+        variant_name_for_telem = height_variant_setup.get("variant_name") if height_variant_setup else None
+        fix_active = boundary_fix.is_active(variant_name_for_telem)
+        yaw_aware_active = boundary_fix.uses_yaw_aware_compensation() and fix_active
+        boundary_profile_name = boundary_fix.profile
+        effective_kp_val = boundary_fix.get_effective_hip_yaw_kp(
+            balance_core_controllers["shape_posture"].kp_hip_yaw, variant_name_for_telem
+        ) if is_balance_core_mode(args) else 0.0
+        effective_kd_val = boundary_fix.get_effective_hip_yaw_kd(
+            balance_core_controllers["shape_posture"].kd_hip_yaw, variant_name_for_telem
+        ) if is_balance_core_mode(args) else 0.0
+        telemetry["yaw_aware_position_compensation_active"].append(yaw_aware_active)
+        telemetry["yaw_aware_sagittal_error_compensated_m"].append(float(sagittal_diag.get("support_position_error_scaled_m", sagittal_diag.get("sagittal_position_error_m", 0.0))))
+        telemetry["yaw_aware_lateral_error_compensated_m"].append(compensated_lateral_error if yaw_aware_active else 0.0)
+        telemetry["effective_kp_hip_yaw"].append(float(effective_kp_val))
+        telemetry["effective_kd_hip_yaw"].append(float(effective_kd_val))
+        telemetry["hip_yaw_integral_active"].append(boundary_fix.uses_integral() and fix_active)
+        telemetry["hip_yaw_integral_clamp"].append(1.0 if (boundary_fix.uses_integral() and boundary_fix.integral_error_left >= boundary_fix.integral_max) else 0.0)
+        telemetry["hip_yaw_integral_error_left"].append(float(boundary_fix.integral_error_left))
+        telemetry["hip_yaw_integral_error_right"].append(float(boundary_fix.integral_error_right))
+        telemetry["hip_yaw_bias_tau_left"].append(float(boundary_fix.bias_tau_left))
+        telemetry["hip_yaw_bias_tau_right"].append(float(boundary_fix.bias_tau_right))
+        telemetry["hip_yaw_bias_active"].append(boundary_fix.uses_integral() and fix_active)
+        telemetry["tau_position_yaw_compensated_raw"].append(float(sagittal_diag.get("tau_position_raw", 0.0)))
+        telemetry["tau_position_yaw_compensated_clipped"].append(float(sagittal_diag.get("tau_position", 0.0)))
+        telemetry["boundary_yaw_position_profile"].append(boundary_profile_name)
+        telemetry["boundary_profile_active"].append(fix_active)
+        telemetry["hip_yaw_abs_max_tracking"].append(float(max(abs(l_hip_yaw_pos), abs(r_hip_yaw_pos))))
+        telemetry["hip_yaw_abs_max_threshold"].append(0.07)
         telemetry["variant_name"].append(height_variant_setup.get("variant_name", "nominal_keyframe") if height_variant_setup else "nominal_keyframe")
         telemetry["height_variant_target_com_z_m"].append(float(height_variant_setup.get("target_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
         telemetry["height_variant_achieved_com_z_m"].append(float(height_variant_setup.get("achieved_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
@@ -3646,14 +5829,21 @@ def main():
             perturbation_metadata["perturbation_applied_after_equilibrium_capture"]
         )
 
-        current_row = snapshot_last_telemetry_row()
-        last_full_rate_row = dict(current_row)
-        last_full_rate_step = step
-        if failure_window_steps > 0:
-            failure_window_buffer.append(dict(current_row))
+        # Save the current telemetry row for failure window and decimation
+        # Guard against empty telemetry (should not happen, but be defensive)
+        if telemetry["source_step_index"]:
+            current_row = snapshot_last_telemetry_row()
+            last_full_rate_row = dict(current_row)
+            last_full_rate_step = step
+            if failure_window_steps > 0:
+                failure_window_buffer.append(dict(current_row))
 
-        if not should_keep_main_telemetry_row(step, terminated):
-            drop_last_telemetry_row()
+            if not should_keep_main_telemetry_row(step, terminated):
+                drop_last_telemetry_row()
+        else:
+            # Fallback: telemetry not initialized yet, skip decimation logic
+            last_full_rate_row = None
+            last_full_rate_step = step
 
         if step < 20 and static_feedforward_controller is not None:
             idx = [2, 3, 7, 8]
@@ -3811,11 +6001,30 @@ def main():
     if is_balance_core_mode(args):
         normalize_balance_core_owner_names(telemetry)
 
+    # Check telemetry state before writing CSV
+    # Calculate n_rows from non-empty columns only (empty columns have 0 entries)
+    non_empty_cols = [v for v in telemetry.values() if len(v) > 0]
+    n_rows = min(len(v) for v in non_empty_cols) if non_empty_cols else 0
+    populated_cols = {k: len(v) for k, v in telemetry.items() if len(v) > 0}
+    empty_cols = [k for k, v in telemetry.items() if len(v) == 0]
+
+    print(f"[TELEMETRY] Columns: total={len(telemetry)}, populated={len(populated_cols)}, empty={len(empty_cols)}")
+    print(f"[TELEMETRY] Data rows (n_rows): {n_rows}")
+    if empty_cols:
+        print(f"[TELEMETRY] First 10 empty columns: {empty_cols[:10]}")
+
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(telemetry.keys())
-        for i in range(len(telemetry["time"])):
-            writer.writerow([telemetry[k][i] for k in telemetry.keys()])
+        # Write rows safely - only include columns that have data for each row
+        for i in range(n_rows):
+            row = []
+            for k in telemetry.keys():
+                if len(telemetry[k]) > i:
+                    row.append(telemetry[k][i])
+                else:
+                    row.append(None)  # Missing data for this row
+            writer.writerow(row)
 
     if terminated and failure_window_steps > 0 and len(failure_window_buffer) > 0:
         failure_window_path = output_dir / f"failure_window_{simulated_steps}.csv"
@@ -3848,7 +6057,10 @@ def main():
             "final_sim_time_s": float(simulated_steps * control_dt),
             "telemetry_decimation": telemetry_decimation,
             "failure_window_steps": failure_window_steps,
-            "written_telemetry_rows": len(telemetry["time"]),
+            "written_telemetry_rows": n_rows,  # Use n_rows to match actual CSV rows
+            "telemetry_columns_total": len(telemetry),
+            "telemetry_columns_populated": len(populated_cols),
+            "telemetry_columns_empty": len(empty_cols),
             **finalized_summary_metrics,
         }
         with open(sidecar_path, "w", encoding="utf-8") as f:

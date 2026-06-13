@@ -69,5 +69,32 @@ Modified files:
 - The selected profile should be used as the default sagittal authority schedule for all future balance‑core runs that require height‑variant robustness.
 - The fix is ready for merge into main.
 
+## Extreme-height follow-up validation
+
+A later extreme-height campaign searched beyond the original five Step B variants and found that the broader **static-valid** envelope was larger than the **dynamic-valid** envelope under the current controller. Static-only low/high candidates failed Step E dynamic gates, so the final reported extrema were narrowed using fresh 5000-step telemetry rather than joint limits or static posture validity alone.
+
+Final conservative **controller-ready** extreme heights:
+
+- `min_operational_height = 0.3932865805 m` CoM
+- `max_operational_height = 0.4128130092 m` CoM
+
+These are conservative validated extrema, **not** absolute mechanical extrema.
+
+Controller-ready Step E extreme results with `candidate_D2_wheel_velocity_damping_light`:
+
+| Case | Verdict | Support max (m) | HipYaw max (rad) | Pitch max (rad) | Roll max (rad) | Wheel max (rad/s) | Final height error (m) |
+|---|---|---:|---:|---:|---:|---:|---:|
+| min_operational_height | PASS | 0.133 | 0.056 | 0.096 | 0.014 | 4.72 | 0.0035 |
+| max_operational_height | PASS | 0.135 | 0.030 | 0.096 | 0.009 | 4.77 | 0.0047 |
+
+Structural invariants remained clean:
+
+- WBC applied = `false`
+- Hidden torque norm max = `0.0`
+- Ownership violation count = `0`
+- Controller behavior changed = `false`
+
+See `docs/validation/operational_height_extreme_validation.md` for the full search path, failed broader static extrema, boundary probes, and final controller-ready envelope.
+
 ---
 *Validated by systematic debugging + TDD + candidate evaluation protocol. No blind tuning or invasive architectural changes.*
