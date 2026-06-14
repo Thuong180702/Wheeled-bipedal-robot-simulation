@@ -89,6 +89,11 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     T6H_SOFT_BLEND_ARCH_FIX,
     T6I_PHASE_AWARE_RELEASE,
     T6J_CENTERING_BIAS_TRIM,
+    # Semantic aliases (point to same objects as the legacy names above)
+    EMERGENCY_BUDGET_CAP_RAISE,
+    PHASE_AWARE_AUTHORITY_RELEASE,
+    SUPPORT_CENTERING_BIAS_TRIM,
+    BAND_LIMITED_SUPPORT_RECENTER,
 )
 from wheeled_biped.controllers.pitch_rate_consistency_estimator import PitchRateConsistencyEstimator
 from wheeled_biped.controllers.sagittal_balance_state import (
@@ -1320,18 +1325,22 @@ SAGITTAL_AUTHORITY_PROFILES = {
     "APCR1nD_T2_hold_outside_band": APCR1ND_T2_HOLD_OUTSIDE_BAND,
     "APCR1nD_T3_early_entry_plus_hold": APCR1ND_T3_EARLY_ENTRY_PLUS_HOLD,
     "APCR1nD_T4_stronger_authority": APCR1ND_T4_STRONGER_AUTHORITY,
-    "APCR1nD_T5_band_limited_balanced": APCR1ND_T5_BAND_LIMITED_BALANCED,
+    "APCR1nD_T5_band_limited_balanced": BAND_LIMITED_SUPPORT_RECENTER,  # legacy alias
+    "band_limited_support_recenter": BAND_LIMITED_SUPPORT_RECENTER,     # semantic
     # T6 High-Height Transient Suppression Variants (Phase 5)
     "T6A_high_early_hard_band": T6A_HIGH_EARLY_HARD_BAND,
     "T6B_high_stronger_emergency": T6B_HIGH_STRONGER_EMERGENCY,
     "T6C_high_early_plus_stronger": T6C_HIGH_EARLY_PLUS_STRONGER,
     "T6D_high_transient_boost": T6D_HIGH_TRANSIENT_BOOST,
     "T6E_high_pitch_aware_boost": T6E_HIGH_PITCH_AWARE_BOOST,
-    "T6F_budget_cap_raise": T6F_BUDGET_CAP_RAISE,
+    "T6F_budget_cap_raise": EMERGENCY_BUDGET_CAP_RAISE,            # legacy alias
+    "emergency_budget_cap_raise": EMERGENCY_BUDGET_CAP_RAISE,      # semantic
     "T6F_sign_corrected": T6F_SIGN_CORRECTED,
     "T6H_soft_blend_arch_fix": T6H_SOFT_BLEND_ARCH_FIX,
-    "T6I_phase_aware_release": T6I_PHASE_AWARE_RELEASE,
-    "T6J_centering_bias_trim": T6J_CENTERING_BIAS_TRIM,
+    "T6I_phase_aware_release": PHASE_AWARE_AUTHORITY_RELEASE,      # legacy alias
+    "phase_aware_authority_release": PHASE_AWARE_AUTHORITY_RELEASE,  # semantic
+    "T6J_centering_bias_trim": SUPPORT_CENTERING_BIAS_TRIM,          # legacy alias
+    "support_centering_bias_trim": SUPPORT_CENTERING_BIAS_TRIM,    # semantic
 }
 
 
@@ -2627,10 +2636,14 @@ def main():
             "T6D_high_transient_boost",
             "T6E_high_pitch_aware_boost",
             "T6F_budget_cap_raise",
+            "emergency_budget_cap_raise",
             "T6F_sign_corrected",
             "T6H_soft_blend_arch_fix",
             "T6I_phase_aware_release",
+            "phase_aware_authority_release",
             "T6J_centering_bias_trim",
+            "support_centering_bias_trim",
+            "band_limited_support_recenter",
         ],
         help="Height-variant-aware sagittal authority schedule. Default: baseline",
     )

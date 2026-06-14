@@ -4,6 +4,8 @@
 **Branch:** `repo-cleanup-t6j`
 **Scope:** Deep clean of the remaining `outputs/` bulk (~8.2 G) with mandatory summary extraction before deletion. No tracked files, training code, configs, checkpoints, or T6J setup assets were touched.
 
+> **Naming note:** `T6J`/`T6I`/`T6F` are development identifiers. The canonical profile names are now `support_centering_bias_trim`, `phase_aware_authority_release`, and `emergency_budget_cap_raise` respectively. Legacy names are preserved as aliases.
+
 ---
 
 ## 1–3. Disk impact (updated after balance_core cleanup)

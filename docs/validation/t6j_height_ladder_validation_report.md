@@ -1,7 +1,7 @@
-# T6J Height Ladder 2000-step Validation Report
+# support_centering_bias_trim Height Ladder 2000-step Validation Report
 
 **Date:** 2026-06-13
-**Profile:** `T6J_centering_bias_trim`
+**Profile:** `support_centering_bias_trim` (development alias: `T6J_centering_bias_trim`)
 **Steps per setup:** 2000
 **Comparison baseline:** T6I_phase_aware_release (same 10 setups)
 

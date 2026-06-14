@@ -1255,8 +1255,8 @@ APCR1ND_T4_STRONGER_AUTHORITY = SagittalAuthoritySchedule(
     apcr1nd_damping_scale_hard=0.10,
 )
 
-APCR1ND_T5_BAND_LIMITED_BALANCED = SagittalAuthoritySchedule(
-    profile_name="APCR1nD_T5_band_limited_balanced",
+BAND_LIMITED_SUPPORT_RECENTER = SagittalAuthoritySchedule(
+    profile_name="band_limited_support_recenter",
     applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height"),
     continuous_max_position_tau=True,
     max_position_tau_nominal=4.0,
@@ -1274,7 +1274,8 @@ APCR1ND_T5_BAND_LIMITED_BALANCED = SagittalAuthoritySchedule(
     recenter_priority_direct_exit_m=0.03,
     # Tuned variant config
     apcr1nd_tuned_enabled=True,
-    apcr1nd_tuned_variant_name="T5",
+    # Band-Limited Support Recenter: Band-structure baseline for authority cap management
+    apcr1nd_tuned_variant_name="band_limited",
     apcr1nd_soft_enter_m=0.05,
     apcr1nd_direct_enter_m=0.06,
     apcr1nd_desired_band_m=0.08,
@@ -1381,8 +1382,8 @@ T6B_HIGH_STRONGER_EMERGENCY = SagittalAuthoritySchedule(
     apcr1nd_preserve_damping_if_helps=True,
 )
 
-T6F_BUDGET_CAP_RAISE = SagittalAuthoritySchedule(
-    profile_name="T6F_budget_cap_raise",
+EMERGENCY_BUDGET_CAP_RAISE = SagittalAuthoritySchedule(
+    profile_name="emergency_budget_cap_raise",
     applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height"),
     continuous_max_position_tau=True,
     max_position_tau_nominal=4.0,  # Keep conservative nominal (inherited from T5)
@@ -1398,9 +1399,9 @@ T6F_BUDGET_CAP_RAISE = SagittalAuthoritySchedule(
     recenter_priority_direct_enabled=True,
     recenter_priority_direct_enter_m=0.06,
     recenter_priority_direct_exit_m=0.03,
-    # T6F: Based on T5 band structure with architecture fix enabled
+    # Emergency budget cap raise: based on band structure with architecture fix enabled
     apcr1nd_tuned_enabled=True,
-    apcr1nd_tuned_variant_name="T6F",
+    apcr1nd_tuned_variant_name="emergency_budget_cap_raise",
     apcr1nd_soft_enter_m=0.05,
     apcr1nd_direct_enter_m=0.06,
     apcr1nd_desired_band_m=0.08,
@@ -1535,8 +1536,8 @@ T6H_SOFT_BLEND_ARCH_FIX = SagittalAuthoritySchedule(
     t6h_wheel_velocity_safety_threshold_rad_s=7.0,
 )
 
-T6I_PHASE_AWARE_RELEASE = SagittalAuthoritySchedule(
-    profile_name="T6I_phase_aware_release",
+PHASE_AWARE_AUTHORITY_RELEASE = SagittalAuthoritySchedule(
+    profile_name="phase_aware_authority_release",
     applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height"),
     continuous_max_position_tau=True,
     max_position_tau_nominal=4.0,
@@ -1552,9 +1553,9 @@ T6I_PHASE_AWARE_RELEASE = SagittalAuthoritySchedule(
     recenter_priority_direct_enabled=True,
     recenter_priority_direct_enter_m=0.06,
     recenter_priority_direct_exit_m=0.03,
-    # T6I: Based on T6F with phase-aware release
+    # Phase-aware authority release: based on emergency budget cap with phase-aware decay
     apcr1nd_tuned_enabled=True,
-    apcr1nd_tuned_variant_name="T6I",
+    apcr1nd_tuned_variant_name="phase_aware_authority_release",
     apcr1nd_soft_enter_m=0.05,
     apcr1nd_direct_enter_m=0.06,
     apcr1nd_desired_band_m=0.08,
@@ -1590,8 +1591,8 @@ T6I_PHASE_AWARE_RELEASE = SagittalAuthoritySchedule(
     t6i_max_cap_delta_per_step_nm=0.30,
 )
 
-T6J_CENTERING_BIAS_TRIM = SagittalAuthoritySchedule(
-    profile_name="T6J_centering_bias_trim",
+SUPPORT_CENTERING_BIAS_TRIM = SagittalAuthoritySchedule(
+    profile_name="support_centering_bias_trim",
     applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height", "high_0p430", "high_0p450", "high_0p465", "high_0p480"),
     continuous_max_position_tau=True,
     max_position_tau_nominal=4.0,
@@ -1608,7 +1609,7 @@ T6J_CENTERING_BIAS_TRIM = SagittalAuthoritySchedule(
     recenter_priority_direct_enter_m=0.06,
     recenter_priority_direct_exit_m=0.03,
     apcr1nd_tuned_enabled=True,
-    apcr1nd_tuned_variant_name="T6J",
+    apcr1nd_tuned_variant_name="support_centering_bias_trim",
     apcr1nd_soft_enter_m=0.05,
     apcr1nd_direct_enter_m=0.06,
     apcr1nd_desired_band_m=0.08,
@@ -1726,19 +1727,33 @@ JOINT_FIX_PROFILES = {
     "APCR1nD_T2_hold_outside_band": APCR1ND_T2_HOLD_OUTSIDE_BAND,
     "APCR1nD_T3_early_entry_plus_hold": APCR1ND_T3_EARLY_ENTRY_PLUS_HOLD,
     "APCR1nD_T4_stronger_authority": APCR1ND_T4_STRONGER_AUTHORITY,
-    "APCR1nD_T5_band_limited_balanced": APCR1ND_T5_BAND_LIMITED_BALANCED,
+    "APCR1nD_T5_band_limited_balanced": BAND_LIMITED_SUPPORT_RECENTER,  # legacy alias
+    # Semantic: Band-Limited Support Recenter
+    "band_limited_support_recenter": BAND_LIMITED_SUPPORT_RECENTER,
     # T6 High-Height Transient Suppression Variants
     "T6A_high_early_hard_band": T6A_HIGH_EARLY_HARD_BAND,
     "T6B_high_stronger_emergency": T6B_HIGH_STRONGER_EMERGENCY,
     "T6C_high_early_plus_stronger": T6C_HIGH_EARLY_PLUS_STRONGER,
     "T6D_high_transient_boost": T6D_HIGH_TRANSIENT_BOOST,
     "T6E_high_pitch_aware_boost": T6E_HIGH_PITCH_AWARE_BOOST,
-    "T6F_budget_cap_raise": T6F_BUDGET_CAP_RAISE,
+    "T6F_budget_cap_raise": EMERGENCY_BUDGET_CAP_RAISE,         # legacy alias
+    "emergency_budget_cap_raise": EMERGENCY_BUDGET_CAP_RAISE,   # semantic
     "T6F_sign_corrected": T6F_SIGN_CORRECTED,
     "T6H_soft_blend_arch_fix": T6H_SOFT_BLEND_ARCH_FIX,
-    "T6I_phase_aware_release": T6I_PHASE_AWARE_RELEASE,
-    "T6J_centering_bias_trim": T6J_CENTERING_BIAS_TRIM,
+    "T6I_phase_aware_release": PHASE_AWARE_AUTHORITY_RELEASE,   # legacy alias
+    "phase_aware_authority_release": PHASE_AWARE_AUTHORITY_RELEASE,  # semantic
+    "T6J_centering_bias_trim": SUPPORT_CENTERING_BIAS_TRIM,      # legacy alias
+    "support_centering_bias_trim": SUPPORT_CENTERING_BIAS_TRIM, # semantic
 }
+
+# Backward-compatible aliases — development identifiers → semantic constants.
+# These allow existing imports and scripts to keep working. The primary names
+# (BAND_LIMITED_SUPPORT_RECENTER, EMERGENCY_BUDGET_CAP_RAISE, etc.) should be
+# used in new code.
+APCR1ND_T5_BAND_LIMITED_BALANCED = BAND_LIMITED_SUPPORT_RECENTER  # legacy
+T6F_BUDGET_CAP_RAISE = EMERGENCY_BUDGET_CAP_RAISE                  # legacy
+T6I_PHASE_AWARE_RELEASE = PHASE_AWARE_AUTHORITY_RELEASE            # legacy
+T6J_CENTERING_BIAS_TRIM = SUPPORT_CENTERING_BIAS_TRIM             # legacy
 
 
 class SagittalVelocityDampedBalanceController:

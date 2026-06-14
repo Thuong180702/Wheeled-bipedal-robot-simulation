@@ -1,8 +1,8 @@
-# T6J_centering_bias_trim Final Validation Report
+# support_centering_bias_trim Final Validation Report
 
 **Date:** 2026-06-13
-**Profile:** `T6J_centering_bias_trim`
-**Root purpose:** Address T6I's persistent positive drift bias at high heights by adding a small, slow, bounded support-centering trim torque.
+**Profile:** `support_centering_bias_trim` (development alias: `T6J_centering_bias_trim`)
+**Root purpose:** Address phase-aware authority release's persistent positive drift bias at high heights by adding a small, slow, bounded support-centering trim torque.
 
 ---
 
