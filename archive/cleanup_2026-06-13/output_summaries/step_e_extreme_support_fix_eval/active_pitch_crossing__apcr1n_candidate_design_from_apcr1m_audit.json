@@ -1,0 +1,43 @@
+{
+  "classification": "APCR1N_DESIGN_RECOMMENDED",
+  "decision_date": "2026-06-11",
+  "root_causes": [
+    {
+      "cause": "wheel_velocity_damping_dominance",
+      "severity": "PRIMARY",
+      "evidence": "APCR1m wheel damping = 5.0 Nm vs APCR1h = 1.4 Nm (3.5x larger)",
+      "impact": "Final torque fights drift 62.8% of RECENTER steps"
+    },
+    {
+      "cause": "position_torque_cap_saturation",
+      "severity": "SECONDARY",
+      "evidence": "tau_position capped at ±3 Nm, saturated 77.3% of time",
+      "impact": "Raw tau_position would be ±15 Nm, limited by cap"
+    },
+    {
+      "cause": "tau_pitch_fighting_drift",
+      "severity": "TERTIARY",
+      "evidence": "tau_pitch has correct sign only 1.5% during RECENTER",
+      "impact": "tau_pitch fights drift 98.5% of RECENTER steps despite blend"
+    }
+  ],
+  "recommended_design": "APCR1n_wheel_damping_override_and_position_cap_boost",
+  "design_principles": [
+    "Base on APCR1h (lowest drift profile)",
+    "Preserve APCR1m startup guard (100 steps)",
+    "Reduce wheel damping during RECENTER (3.5x reduction to ~1.5 Nm)",
+    "Boost position cap during safe RECENTER (±5 Nm)"
+  ],
+  "target_metrics": {
+    "max_abs_error_m": "< 0.200",
+    "wheel_damping_abs_mean_nm": "1.5-2.0",
+    "position_cap_during_recenter_nm": 5.0,
+    "p2p_m": "< 0.300"
+  },
+  "do_not_do": [
+    "Do not implement APCR1n without Phase 1-3 testing",
+    "Do not increase wheel damping beyond APCR1h levels",
+    "Do not disable startup guard",
+    "Do not claim Step E pass until 2000-step validation"
+  ]
+}

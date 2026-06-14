@@ -1,0 +1,37 @@
+{
+  "classifications": {
+    "baseline": [
+      "position_torque_cap_saturation",
+      "insufficient_velocity_damping",
+      "support_velocity_underdamped",
+      "extreme_flexion_wheel_effectiveness_loss",
+      "contact_coupling_limits_authority"
+    ],
+    "E1_k60": [
+      "position_torque_cap_saturation",
+      "insufficient_velocity_damping",
+      "support_velocity_underdamped",
+      "extreme_flexion_wheel_effectiveness_loss",
+      "contact_coupling_limits_authority"
+    ],
+    "E2_k80": [
+      "position_torque_cap_saturation",
+      "insufficient_velocity_damping",
+      "support_velocity_underdamped",
+      "contact_coupling_limits_authority"
+    ],
+    "E3_k100": [
+      "position_torque_cap_saturation",
+      "insufficient_velocity_damping",
+      "support_velocity_underdamped",
+      "contact_coupling_limits_authority"
+    ]
+  },
+  "dominant_failure_modes": {
+    "support_velocity_underdamped": 4,
+    "extreme_flexion_wheel_effectiveness_loss": 2,
+    "insufficient_velocity_damping": 4,
+    "position_torque_cap_saturation": 4,
+    "contact_coupling_limits_authority": 4
+  }
+}

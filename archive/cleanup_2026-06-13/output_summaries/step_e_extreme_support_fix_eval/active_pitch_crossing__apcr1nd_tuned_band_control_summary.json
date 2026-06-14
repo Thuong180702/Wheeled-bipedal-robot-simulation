@@ -1,0 +1,160 @@
+{
+  "phase": 8,
+  "phase_name": "Final Report",
+  "status": "COMPLETE",
+  "classification": "APCR1ND_TUNED_T5_BEST",
+  "date": "2026-06-12",
+
+  "key_findings": {
+    "best_variant": "T5_band_limited_balanced",
+    "primary_improvement": "33.7% reduction in time outside ±0.08 m",
+    "secondary_improvement": "78.2% reduction in time outside ±0.10 m",
+    "stability_improvement": "31.2% lower wheel velocity RMS",
+    "no_tradeoff": "Band control and stability both improved"
+  },
+
+  "answers_to_15_questions": {
+    "q1_why_apcr1nd_failed": "Mixed factors: late entry (0.08 m), early release (moving-away gating), insufficient authority (conservative tuning), uniform response (no graduated scaling)",
+    "q2_problem_type": "Mixed — all four factors contributed, no single bottleneck",
+    "q3_t1_early_entry_help": "Yes, modestly — 10.8 pp improvement in ±0.08 m",
+    "q4_t2_hold_help": "Yes, modestly — 10.8 pp improvement (identical to T1)",
+    "q5_t3_combined_help": "No additional benefit — identical to T1 and T2",
+    "q6_t4_stronger_authority_help": "Yes, small improvement — 0.5 pp better than T1/T2/T3",
+    "q7_t5_band_limited_help": "Yes, best performance — 1.5 pp better than T4",
+    "q8_lowest_outside_0p08": "T5 at 25.1%",
+    "q9_lowest_outside_0p10": "All T1-T5 tied at 5.0%",
+    "q10_lowest_max_e": "All T1-T5 tied at 0.171 m",
+    "q11_kept_drift_near_0p08": "No, but T5 best at 74.9% inside (vs 62.1% baseline)",
+    "q12_any_too_aggressive": "No — all variants stable, lower wheel RMS than baseline",
+    "q13_tradeoff_band_vs_stability": "No tradeoff — both improved together due to graduated authority and smarter timing",
+    "q14_current_best": "T5 Band-Limited Balanced",
+    "q15_proceed_to_5000": "T5 Band-Limited Balanced"
+  },
+
+  "performance_comparison": {
+    "baseline_apcr1n": {
+      "outside_0p08_pct": 37.9,
+      "outside_0p10_pct": 22.9,
+      "max_abs_e_m": 0.171,
+      "wheel_rms_rad_s": 2.12
+    },
+    "t5_band_limited_balanced": {
+      "outside_0p08_pct": 25.1,
+      "outside_0p10_pct": 5.0,
+      "max_abs_e_m": 0.171,
+      "wheel_rms_rad_s": 1.46
+    },
+    "improvements": {
+      "outside_0p08_reduction_pct": 33.7,
+      "outside_0p10_reduction_pct": 78.2,
+      "max_abs_e_unchanged": true,
+      "wheel_rms_reduction_pct": 31.2
+    }
+  },
+
+  "all_variants_summary": {
+    "T1_early_entry": {
+      "outside_0p08_pct": 27.1,
+      "improvement_vs_baseline_pp": 10.8,
+      "key_feature": "Enters at 0.06 m instead of 0.08 m"
+    },
+    "T2_hold_outside_band": {
+      "outside_0p08_pct": 27.1,
+      "improvement_vs_baseline_pp": 10.8,
+      "key_feature": "Holds recenter priority while converging outside band"
+    },
+    "T3_early_entry_plus_hold": {
+      "outside_0p08_pct": 27.1,
+      "improvement_vs_baseline_pp": 10.8,
+      "key_feature": "Combines T1 and T2 (no additional benefit)"
+    },
+    "T4_stronger_authority": {
+      "outside_0p08_pct": 26.6,
+      "improvement_vs_baseline_pp": 11.3,
+      "key_feature": "Uniform stronger position caps and aggressive damping"
+    },
+    "T5_band_limited_balanced": {
+      "outside_0p08_pct": 25.1,
+      "improvement_vs_baseline_pp": 12.8,
+      "key_feature": "Graduated authority by band state (5 levels)"
+    }
+  },
+
+  "root_cause_analysis": {
+    "primary_issue": "Systemic mismatch between aggressive ±0.08 m target and conservative baseline tuning",
+    "contributing_factors": [
+      "Late entry threshold (0.08 m) allows momentum to build",
+      "Early release via moving-away gating",
+      "Insufficient authority for moderate drift (4.0 → 5.0 Nm only 25% boost)",
+      "Uniform response regardless of drift magnitude"
+    ],
+    "why_t5_wins": "Graduated authority provides light touch for small drift, strong intervention for large drift, achieving both band control and stability"
+  },
+
+  "observations": {
+    "t1_t2_t3_identical": "T1, T2, and T3 produced identical telemetry, suggesting either approach (early entry OR hold) saturates improvement and bottleneck shifts to authority levels",
+    "all_tuned_tied_at_0p10": "All five variants achieved identical 5.0% outside ±0.10 m, indicating ±0.10 m target is achievable",
+    "0p08_still_challenging": "Even T5 spends 25% of time outside ±0.08 m, suggesting this band may require MPC or more sophisticated control",
+    "no_aggressive_behavior": "All variants remained stable with lower wheel RMS than baseline",
+    "graduated_authority_wins": "T5's five-level graduated response outperforms T4's uniform boost"
+  },
+
+  "recommendations": {
+    "immediate_next_step": "Run 5000-step validation of T5 at low_0p300",
+    "success_criteria_5000": {
+      "survived_steps": "≥ 4900",
+      "outside_0p08_pct": "≤ 30",
+      "outside_0p10_pct": "≤ 10",
+      "max_abs_e_m": "≤ 0.20",
+      "wheel_vel_spike_tolerance": "< 50 steps above 7 rad/s"
+    },
+    "do_not_proceed_to": [
+      "high_0p480 (Step E gates must pass first)",
+      "Step C (different objective)",
+      "Step D (different objective)",
+      "5000-step for other variants (T5 is clear winner)"
+    ]
+  },
+
+  "conclusion": {
+    "phases_4_to_8_complete": true,
+    "implementation_verified": "31/31 tests passed",
+    "simulation_study_complete": "All 5 variants tested at 2000 steps",
+    "analysis_complete": "Drift, band, window, and stability metrics computed",
+    "best_variant_selected": "T5 Band-Limited Balanced",
+    "final_report_complete": "15 key questions answered",
+    "ready_for_5000_step": true
+  },
+
+  "files_generated": {
+    "phase_4": [
+      "tests/test_apcr1nd_tuned_variants.py",
+      "docs/validation/apcr1nd_tuned_variant_tests_report.md",
+      "docs/validation/phase_4_complete_summary.md"
+    ],
+    "phase_5": [
+      "Telemetry CSVs for T1-T5 (2000 rows each, moved to variant directories)"
+    ],
+    "phase_6": [
+      "apcr1nd_tuned_2000_comparison.csv",
+      "apcr1nd_tuned_2000_window_metrics.csv",
+      "apcr1nd_tuned_2000_stability.csv",
+      "apcr1nd_tuned_2000_comparison.json"
+    ],
+    "phase_7": [
+      "apcr1nd_tuned_best_variant_decision.md",
+      "apcr1nd_tuned_best_variant_decision.json"
+    ],
+    "phase_8": [
+      "apcr1nd_tuned_band_control_final_report.md",
+      "apcr1nd_tuned_band_control_summary.json (this file)"
+    ]
+  },
+
+  "bug_fixed": {
+    "issue": "UnboundLocalError in sagittal_velocity_damped_balance_controller.py",
+    "location": "Line 2183: tau_wheel_vel_left_orig referenced before assignment",
+    "fix": "Moved telemetry code inside if apply_override: block",
+    "verified": "All 31 tuned variant tests still pass"
+  }
+}

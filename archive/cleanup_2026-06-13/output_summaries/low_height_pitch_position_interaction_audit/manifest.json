@@ -1,0 +1,36 @@
+{
+  "original_path": "outputs/low_height_pitch_position_interaction_audit",
+  "original_size": "2.4M",
+  "original_size_bytes": 2519749,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 3,
+  "copied_files": [
+    {
+      "file": "pitch_failure_classification.json",
+      "size_bytes": 660
+    },
+    {
+      "file": "pitch_peak_windows.csv",
+      "size_bytes": 1258818
+    },
+    {
+      "file": "pitch_position_interaction_report.md",
+      "size_bytes": 1819
+    },
+    {
+      "file": "pitch_position_interaction_summary.json",
+      "size_bytes": 6412
+    },
+    {
+      "file": "support_peak_windows.csv",
+      "size_bytes": 1251508
+    },
+    {
+      "file": "torque_interaction_comparison.csv",
+      "size_bytes": 532
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,80 @@
+{
+  "original_path": "outputs/controller_system_root_cause_audit",
+  "original_size": "160.0K",
+  "original_size_bytes": 163859,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 5,
+  "copied_files": [
+    {
+      "file": "controller_configuration/controller_configuration_report.md",
+      "size_bytes": 3426
+    },
+    {
+      "file": "controller_configuration/controller_configuration_summary.json",
+      "size_bytes": 4041
+    },
+    {
+      "file": "controller_system_root_cause_summary.json",
+      "size_bytes": 7171
+    },
+    {
+      "file": "current_diff_stat.txt",
+      "size_bytes": 452
+    },
+    {
+      "file": "event_order/event_order_report.md",
+      "size_bytes": 2171
+    },
+    {
+      "file": "event_order/event_order_summary.json",
+      "size_bytes": 3124
+    },
+    {
+      "file": "recent_commits.txt",
+      "size_bytes": 1530
+    },
+    {
+      "file": "root_cause_map.json",
+      "size_bytes": 6801
+    },
+    {
+      "file": "root_cause_map.md",
+      "size_bytes": 5411
+    },
+    {
+      "file": "structural_invariants/structural_invariant_report.md",
+      "size_bytes": 3205
+    },
+    {
+      "file": "structural_invariants/structural_invariant_summary.json",
+      "size_bytes": 6807
+    },
+    {
+      "file": "subsystems/subsystem_audit_report.md",
+      "size_bytes": 2423
+    },
+    {
+      "file": "subsystems/subsystem_audit_summary.json",
+      "size_bytes": 13031
+    },
+    {
+      "file": "telemetry_completeness_report.md",
+      "size_bytes": 5472
+    },
+    {
+      "file": "telemetry_freshness_report.md",
+      "size_bytes": 4467
+    },
+    {
+      "file": "telemetry_freshness_summary.json",
+      "size_bytes": 1973
+    },
+    {
+      "file": "worktree_status.txt",
+      "size_bytes": 4914
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

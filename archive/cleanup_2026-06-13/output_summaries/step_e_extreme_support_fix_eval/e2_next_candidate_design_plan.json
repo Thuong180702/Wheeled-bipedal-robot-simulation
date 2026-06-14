@@ -1,0 +1,137 @@
+{
+  "audit_date": "2026-06-07",
+  "task": "E2 Hip-Yaw Regression Root Cause Audit",
+  "classification": "E2_HIP_YAW_REGRESSION_FROM_RESTRICTIVE_INTEGRAL_GATE",
+
+  "evidence": {
+    "event_order": {
+      "e2_hip_yaw_gt_0.10_step": 447,
+      "e2_support_gt_0.15_step": 89,
+      "d2_hip_yaw_gt_0.10_step": 328,
+      "d2_support_gt_0.15_step": 91,
+      "conclusion": "E2 hip_yaw regression appears AFTER support improved, suggesting correction coupling"
+    },
+    "torque_coupling": {
+      "e2_tau_position_raw_max_Nm": 1.28,
+      "d2_tau_position_raw_max_Nm": 0.14,
+      "e2_tau_position_raw_vs_hip_yaw_corr": 0.73,
+      "d2_tau_position_raw_vs_hip_yaw_corr": 0.63,
+      "e2_divergence_vs_tau_position_corr": 0.73,
+      "conclusion": "Strong correlation between position torque and hip_yaw in E2"
+    },
+    "hip_yaw_torque_amplification": {
+      "e2_l_hip_yaw_tau_max_Nm": 1.81,
+      "d2_l_hip_yaw_tau_max_Nm": 1.34,
+      "e2_r_hip_yaw_tau_max_Nm": 2.07,
+      "d2_r_hip_yaw_tau_max_Nm": 1.59,
+      "e2_divergence_error_max_rad": 0.122,
+      "d2_divergence_error_max_rad": 0.093,
+      "conclusion": "E2 hip_yaw torques are 30-35% higher than D2"
+    },
+    "integral_gate_comparison": {
+      "e2_pitch_threshold_rad": 0.03,
+      "e1_after_pitch_threshold_rad": 0.12,
+      "e2_position_cap_Nm": 5.0,
+      "e1_after_position_cap_Nm": 4.0,
+      "e2_integral_active_count": 31,
+      "e1_after_integral_active_count": 39,
+      "conclusion": "E2 restrictive 0.03 threshold reduces integral activation, higher cap allows larger corrections"
+    }
+  },
+
+  "root_cause": {
+    "primary": "RESTRICTIVE_INTEGRAL_GATE",
+    "primary_evidence": "E2 uses 0.03 rad pitch threshold (4× more restrictive than E1_after's 0.12), which delays integral activation and causes larger corrections that couple into hip_yaw",
+    "secondary": "HIGHER_POSITION_CAP",
+    "secondary_evidence": "E2 5.0 Nm cap (25% higher than D2/E1_after 4.0 Nm) allows more aggressive corrections when integral finally activates"
+  },
+
+  "candidates": {
+    "E2b": {
+      "description": "Gate alignment with cap increase",
+      "max_position_tau_low_max_Nm": 5.0,
+      "integral_pitch_error_threshold_rad": 0.12,
+      "purpose": "Isolate cap effect while using permissive E1 gate",
+      "expected_benefit": "Support improvement + no hip_yaw regression",
+      "risk": "If 5.0Nm cap alone causes regression, E2b will still fail",
+      "telemetry_required": {
+        "hip_yaw_abs_max_rad": "< 0.10",
+        "support_crossings": "< 62",
+        "tau_position_vs_hip_yaw_corr": "< 0.5",
+        "integral_active_count": "> 35"
+      },
+      "pass_criteria": {
+        "hip_yaw_abs_max_rad": "< 0.10",
+        "support_crossings": "<= 70"
+      },
+      "stop_condition": "hip_yaw_abs_max > 0.10 rad at 500 steps",
+      "rollback_rule": "Revert to D2 baseline"
+    },
+    "E2c": {
+      "description": "Intermediate cap with permissive gate",
+      "max_position_tau_low_max_Nm": 4.5,
+      "integral_pitch_error_threshold_rad": 0.12,
+      "purpose": "Reduce hip_yaw regression while keeping some support improvement",
+      "expected_benefit": "Moderate support improvement + no hip_yaw regression",
+      "risk": "Support improvement may be less than E2",
+      "telemetry_required": {
+        "hip_yaw_abs_max_rad": "< 0.10",
+        "support_crossings": "< 80",
+        "tau_position_raw_max_Nm": "< 1.0"
+      },
+      "pass_criteria": {
+        "hip_yaw_abs_max_rad": "< 0.10",
+        "support_crossings": "<= 80"
+      },
+      "stop_condition": "hip_yaw_abs_max > 0.10 rad at 500 steps",
+      "rollback_rule": "Revert to D2 baseline"
+    },
+    "E2d": {
+      "description": "Ramped position authority",
+      "max_position_tau_low_max_Nm": 5.0,
+      "integral_pitch_error_threshold_rad": 0.12,
+      "ramp_in": "smooth ramp over first 100 steps or until support_error < 0.10m",
+      "purpose": "Avoid abrupt position correction transient",
+      "expected_benefit": "Support improvement + no hip_yaw regression",
+      "risk": "Implementation complexity, ramp timing may need tuning",
+      "telemetry_required": {
+        "hip_yaw_abs_max_rad": "< 0.10",
+        "support_crossings": "< 65",
+        "tau_position_raw_ramp_visible": true
+      },
+      "pass_criteria": {
+        "hip_yaw_abs_max_rad": "< 0.10",
+        "support_crossings": "<= 65"
+      },
+      "stop_condition": "hip_yaw_abs_max > 0.10 rad after ramp-in",
+      "rollback_rule": "Reject E2 family entirely"
+    }
+  },
+
+  "decision_tree": [
+    {"step": 1, "action": "Try E2b (5.0Nm cap + 0.12 gate)", "if": "hip_yaw < 0.10", "then": "PROCEED to 2000-step"},
+    {"step": 2, "action": "If E2b fails, try E2c (4.5Nm cap + 0.12 gate)", "if": "hip_yaw < 0.10", "then": "PROCEED to 2000-step"},
+    {"step": 3, "action": "If E2c fails, try E2d (5.0Nm + ramp + 0.12 gate)", "if": "hip_yaw < 0.10", "then": "PROCEED to 2000-step"},
+    {"step": 4, "action": "If E2d fails, REJECT E2 family", "then": "Position cap increases cause hip_yaw regression; consider D2 baseline only"}
+  ],
+
+  "restrictions": {
+    "do_not": [
+      "Modify D2 baseline",
+      "Change default controller behavior",
+      "Enable HY2-DIV",
+      "Add WBC",
+      "Enable legacy WBC",
+      "Relax Step E gates",
+      "Run 2000-step validation",
+      "Run 5000-step validation",
+      "Run Step C",
+      "Run Step D",
+      "Commit"
+    ],
+    "allowed": [
+      "Implement E2b/E2c/E2d only after explicit approval",
+      "Run 500-step smoke test per candidate"
+    ]
+  }
+}

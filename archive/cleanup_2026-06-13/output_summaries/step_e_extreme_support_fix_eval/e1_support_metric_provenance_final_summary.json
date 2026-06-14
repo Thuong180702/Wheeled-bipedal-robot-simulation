@@ -1,0 +1,73 @@
+{
+  "audit_task": "Support Metric Provenance Audit",
+  "classification": "E1_ANALYZER_USED_WRONG_SUPPORT_METRIC",
+  "final_decision": "SUPPORT_METRIC_AUDIT_FIXED_ANALYSIS_E1_NO_EFFECT",
+  "phases_completed": [
+    "Phase 1: Locate support metric definitions - COMPLETE",
+    "Phase 2: Inspect telemetry columns - COMPLETE",
+    "Phase 3: Reconcile official vs E1 support metric - COMPLETE",
+    "Phase 4: Fix E1 analyzer to use support_position_error_m - COMPLETE",
+    "Phase 5: Corrected 500-step comparison - COMPLETE",
+    "Phase 6: Final report - COMPLETE"
+  ],
+  "contradiction_resolved": {
+    "official_claim": "support_position_error max = 0.176 m",
+    "e1_analyzer_claim": "support_position_error max = 0.004710 m",
+    "resolution": "E1 analyzer used abs(cp_x) instead of support_position_error_m column",
+    "difference": "37x discrepancy"
+  },
+  "root_cause": {
+    "file": "scripts/analyze_e1_500_before_fix.py",
+    "line": 33,
+    "issue": "Used abs(cp_x) as support position error",
+    "fix": "Changed to use support_position_error_m column"
+  },
+  "corrected_results": {
+    "d2_500": {
+      "support_position_error_max": 0.175687,
+      "support_position_error_mean": 0.082715,
+      "first_crossing_0p15": 91,
+      "crossings_0p15_count": 96
+    },
+    "e1_before_500": {
+      "support_position_error_max": 0.175687,
+      "support_position_error_mean": 0.082716,
+      "first_crossing_0p15": 91,
+      "crossings_0p15_count": 96,
+      "integral_active_count": 22,
+      "integral_active_percent": 4.4,
+      "tau_position_integral_max": 0.001001
+    },
+    "e1_after_500": {
+      "support_position_error_max": 0.175687,
+      "support_position_error_mean": 0.082714,
+      "first_crossing_0p15": 91,
+      "crossings_0p15_count": 96,
+      "integral_active_count": 39,
+      "integral_active_percent": 7.8,
+      "tau_position_integral_max": 0.030342
+    }
+  },
+  "key_findings": [
+    "E1 and D2 have IDENTICAL support_position_error profiles when using correct metric",
+    "E1 integral fix increases integral activity (+77%) but has no effect on support drift",
+    "D2 baseline itself violates 0.15m support gate at step 91",
+    "tau_position_integral max (0.030 Nm) is too small relative to tau_position_raw (~7 Nm)"
+  ],
+  "next_steps": [
+    "Stop E1 tuning - integral has no measurable effect on official support metric",
+    "Consider addressing D2 baseline support drift issue directly",
+    "Consider increasing integral gain significantly (ki=10.0 or higher)",
+    "Do NOT run 2000-step validation yet"
+  ],
+  "files_created": [
+    "outputs/step_e_extreme_support_fix_eval/support_metric_provenance_audit.json",
+    "docs/validation/support_metric_provenance_audit.md",
+    "scripts/corrected_e1_500_comparison.py",
+    "docs/validation/e1_support_integral_500_step_corrected_metric_comparison.md",
+    "outputs/step_e_extreme_support_fix_eval/e1_500_corrected_metric_comparison.json"
+  ],
+  "files_modified": [
+    "scripts/analyze_e1_500_before_fix.py (line 33 - fixed support metric)"
+  ]
+}

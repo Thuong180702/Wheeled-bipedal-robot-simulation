@@ -1,0 +1,378 @@
+{
+  "model_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\assets\\robot\\wheeled_biped_real.xml",
+  "nq": 17,
+  "nv": 16,
+  "nu": 10,
+  "timestep": 0.002,
+  "joint_audit": [
+    {
+      "name": "l_hip_roll",
+      "axis_local": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "range": [
+        -0.7,
+        0.7
+      ],
+      "damping": 1.5,
+      "armature": 0.02
+    },
+    {
+      "name": "l_hip_yaw",
+      "axis_local": [
+        0.0,
+        0.9999975486805301,
+        -0.0022141890006909444
+      ],
+      "range": [
+        -0.4,
+        0.4
+      ],
+      "damping": 1.2,
+      "armature": 0.02
+    },
+    {
+      "name": "l_hip_pitch",
+      "axis_local": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "range": [
+        -0.5,
+        1.8
+      ],
+      "damping": 1.5,
+      "armature": 0.02
+    },
+    {
+      "name": "l_knee",
+      "axis_local": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "range": [
+        -0.5,
+        2.7
+      ],
+      "damping": 1.5,
+      "armature": 0.02
+    },
+    {
+      "name": "l_wheel",
+      "axis_local": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "range": [
+        0.0,
+        0.0
+      ],
+      "damping": 0.02,
+      "armature": 0.008
+    },
+    {
+      "name": "r_hip_roll",
+      "axis_local": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "range": [
+        -0.7,
+        0.7
+      ],
+      "damping": 1.5,
+      "armature": 0.02
+    },
+    {
+      "name": "r_hip_yaw",
+      "axis_local": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "range": [
+        -0.4,
+        0.4
+      ],
+      "damping": 1.2,
+      "armature": 0.02
+    },
+    {
+      "name": "r_hip_pitch",
+      "axis_local": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "range": [
+        -0.5,
+        1.8
+      ],
+      "damping": 1.5,
+      "armature": 0.02
+    },
+    {
+      "name": "r_knee",
+      "axis_local": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "range": [
+        -0.5,
+        2.7
+      ],
+      "damping": 1.5,
+      "armature": 0.02
+    },
+    {
+      "name": "r_wheel",
+      "axis_local": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "range": [
+        0.0,
+        0.0
+      ],
+      "damping": 0.02,
+      "armature": 0.008
+    }
+  ],
+  "actuator_audit": [
+    {
+      "id": 0,
+      "name": "l_hip_roll_motor",
+      "joint": "l_hip_roll",
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ],
+      "gear0": 1.0
+    },
+    {
+      "id": 1,
+      "name": "l_hip_yaw_motor",
+      "joint": "l_hip_yaw",
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ],
+      "gear0": 1.0
+    },
+    {
+      "id": 2,
+      "name": "l_hip_pitch_motor",
+      "joint": "l_hip_pitch",
+      "ctrlrange": [
+        -30.0,
+        30.0
+      ],
+      "forcerange": [
+        -44.0,
+        44.0
+      ],
+      "gear0": 1.0
+    },
+    {
+      "id": 3,
+      "name": "l_knee_motor",
+      "joint": "l_knee",
+      "ctrlrange": [
+        -30.0,
+        30.0
+      ],
+      "forcerange": [
+        -44.0,
+        44.0
+      ],
+      "gear0": 1.0
+    },
+    {
+      "id": 4,
+      "name": "l_wheel_motor",
+      "joint": "l_wheel",
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ],
+      "gear0": 1.0
+    },
+    {
+      "id": 5,
+      "name": "r_hip_roll_motor",
+      "joint": "r_hip_roll",
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ],
+      "gear0": 1.0
+    },
+    {
+      "id": 6,
+      "name": "r_hip_yaw_motor",
+      "joint": "r_hip_yaw",
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ],
+      "gear0": 1.0
+    },
+    {
+      "id": 7,
+      "name": "r_hip_pitch_motor",
+      "joint": "r_hip_pitch",
+      "ctrlrange": [
+        -30.0,
+        30.0
+      ],
+      "forcerange": [
+        -44.0,
+        44.0
+      ],
+      "gear0": 1.0
+    },
+    {
+      "id": 8,
+      "name": "r_knee_motor",
+      "joint": "r_knee",
+      "ctrlrange": [
+        -30.0,
+        30.0
+      ],
+      "forcerange": [
+        -44.0,
+        44.0
+      ],
+      "gear0": 1.0
+    },
+    {
+      "id": 9,
+      "name": "r_wheel_motor",
+      "joint": "r_wheel",
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ],
+      "gear0": 1.0
+    }
+  ],
+  "contact_geom_audit": [
+    {
+      "name": "floor",
+      "type": 0,
+      "condim": 6,
+      "friction": [
+        0.8,
+        0.005,
+        0.0001
+      ],
+      "solref": [
+        0.002,
+        1.0
+      ],
+      "solimp": [
+        0.95,
+        0.99,
+        0.001,
+        0.5,
+        2.0
+      ]
+    },
+    {
+      "name": "l_wheel_collision",
+      "type": 5,
+      "condim": 6,
+      "friction": [
+        1.2,
+        0.005,
+        0.0003
+      ],
+      "solref": [
+        0.005,
+        0.7
+      ],
+      "solimp": [
+        0.9,
+        0.95,
+        0.001,
+        0.5,
+        2.0
+      ]
+    },
+    {
+      "name": "r_wheel_collision",
+      "type": 5,
+      "condim": 6,
+      "friction": [
+        1.2,
+        0.005,
+        0.0003
+      ],
+      "solref": [
+        0.005,
+        0.7
+      ],
+      "solimp": [
+        0.9,
+        0.95,
+        0.001,
+        0.5,
+        2.0
+      ]
+    },
+    {
+      "name": "torso_collision",
+      "type": 6,
+      "condim": 3,
+      "friction": [
+        0.5,
+        0.02,
+        0.01
+      ],
+      "solref": [
+        0.002,
+        1.0
+      ],
+      "solimp": [
+        0.95,
+        0.99,
+        0.001,
+        0.5,
+        2.0
+      ]
+    }
+  ],
+  "code_observation": "Left/right pitch, knee, and wheel axes are mirrored in MJCF; controller sends identical normalized targets to mirrored joints, so PID torque signs are handled by joint axes."
+}

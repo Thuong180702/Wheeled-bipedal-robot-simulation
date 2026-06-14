@@ -1,0 +1,155 @@
+{
+  "report_type": "pitch_rate_consistency_fix",
+  "date": "2026-05-31",
+  "status": "FIX_IMPLEMENTED_BUT_INEFFECTIVE_ROOT_CAUSE_AUDIT_INCORRECT",
+  "recommendation": "REVERT_FIX_ACCEPT_FALLBACK_GATE_FROM_STEP_E_CALIBRATION",
+  "implementation": {
+    "estimator_file": "wheeled_biped/controllers/pitch_rate_consistency_estimator.py",
+    "simulation_script_file": "scripts/simulate_hierarchical_controller.py",
+    "test_file": "tests/test_pitch_rate_consistency_estimator.py",
+    "tests_passing": 12,
+    "parameters": {
+      "dt": 0.01,
+      "min_rate_for_sign_check": 0.01,
+      "filter_alpha": 0.3
+    }
+  },
+  "results_5000_step_nominal": {
+    "before_fix": {
+      "max_support_position_error_m": 0.595,
+      "final_support_position_error_m": 0.053,
+      "steady_state_last1000_mean_m": 0.0527,
+      "transient_peak_step": 1360,
+      "pitch_rate_artifact_step": 1236,
+      "sign_mismatches": 1,
+      "wheel_acc_spike_step_1237_rad_s2": -106.14,
+      "completed_5000_steps": true
+    },
+    "after_fix": {
+      "max_support_position_error_m": 0.5951,
+      "final_support_position_error_m": 0.0527,
+      "steady_state_last1000_mean_m": 0.0527,
+      "transient_peak_step": 1360,
+      "pitch_rate_artifact_step": 1235,
+      "sign_mismatches": 2,
+      "wheel_acc_spike_step_1237_rad_s2": -109.56,
+      "completed_5000_steps": true
+    },
+    "change": {
+      "max_support_position_error_m": 0.0001,
+      "final_support_position_error_m": -0.0003,
+      "steady_state_last1000_mean_m": 0.0,
+      "transient_peak_step": 0,
+      "wheel_acc_spike_step_1237_rad_s2": -3.42,
+      "conclusion": "Transient peak essentially unchanged. Pitch rate fix did not eliminate or reduce the transient."
+    }
+  },
+  "estimator_behavior_step_1235": {
+    "pitch_x_deg": 5.578,
+    "pitch_rate_measured_rad_s": -0.0164,
+    "pitch_rate_fd_rad_s": 0.0575,
+    "sign_mismatch": true,
+    "source_used": "finite_difference",
+    "pitch_rate_corrected_rad_s": 0.0571,
+    "conclusion": "Estimator correctly detected artifact and used FD rate"
+  },
+  "estimator_behavior_step_1236": {
+    "pitch_x_deg": 5.545,
+    "pitch_rate_measured_rad_s": -0.1056,
+    "pitch_rate_fd_rad_s": -0.0574,
+    "sign_mismatch": false,
+    "source_used": "measured",
+    "pitch_rate_corrected_rad_s": -0.0568
+  },
+  "estimator_behavior_step_1237": {
+    "wheel_acc_left_rad_s2": -109.56,
+    "conclusion": "Wheel acceleration spike still occurred after correction"
+  },
+  "why_fix_was_ineffective": {
+    "reason_1": "Transient builds gradually from step 1000 to 1360, not suddenly at artifact step 1236",
+    "reason_2": "Transient peak occurs 125 steps after the pitch rate artifact",
+    "reason_3": "Wheel acceleration spike occurs after the correction",
+    "reason_4": "Fundamental TWIP limitation: wheels must move forward during pitch excursions, position-return term fights this motion",
+    "conclusion": "Pitch rate artifact was a symptom, not the cause"
+  },
+  "height_variant_regression": {
+    "before_fix": {
+      "high_5cm": {
+        "steps": 500,
+        "max_error_m": 0.224,
+        "final_error_m": 0.220,
+        "gate_015m": "FAIL",
+        "survived": true
+      },
+      "low_5cm": {
+        "steps": 500,
+        "max_error_m": 0.083,
+        "final_error_m": 0.041,
+        "gate_015m": "PASS",
+        "survived": true
+      }
+    },
+    "after_fix": {
+      "high_5cm": {
+        "steps": 500,
+        "termination": "orientation_fail_roll_y_-0.80",
+        "survived": false
+      },
+      "low_5cm": {
+        "steps": 500,
+        "termination": "orientation_fail_pitch_x_-0.81",
+        "survived": false
+      }
+    },
+    "regression": "Both height variants fell with pitch rate fix enabled",
+    "root_cause": "Low-pass filter (alpha=0.3) always active, introduces lag even during normal operation, degrades damping performance during height perturbations"
+  },
+  "root_cause_audit_incorrect": {
+    "audit_file": "outputs/sagittal_position_hold_return/step_e_transient_root_cause_report.md",
+    "audit_conclusion": "Primary Classification: B — Pitch Damping Insufficient. Specific sub-cause: Pitch rate measurement artifact causing damping sign flip",
+    "audit_status": "INCORRECT",
+    "evidence_against": [
+      "Transient builds gradually over 360 steps, not suddenly at artifact step",
+      "Transient peak occurs 125 steps after artifact",
+      "Correcting artifact does not reduce transient peak",
+      "Wheel acceleration spike occurs after correction"
+    ],
+    "actual_root_cause": "Fundamental TWIP limitation during large pitch excursions"
+  },
+  "verification": {
+    "estimator_detects_sign_mismatches": true,
+    "estimator_substitutes_fd_rate": true,
+    "estimator_applies_low_pass_filter": true,
+    "transient_peak_reduced": false,
+    "wheel_acc_spike_prevented": false,
+    "height_variants_stable": false,
+    "no_wbc_changes": true,
+    "no_e0b_e0c_e0d_reintroduced": true,
+    "torque_ownership_unchanged": true,
+    "ownership_violation_count_zero": true,
+    "hidden_torque_norm_zero": true
+  },
+  "recommendation_detail": {
+    "action": "REVERT_PITCH_RATE_FIX",
+    "steps": [
+      "Remove PitchRateConsistencyEstimator",
+      "Restore direct use of measured pitch_rate in velocity-damped controller",
+      "Accept fallback final-drift gate (<=0.10 m) from Step E gain calibration",
+      "Document transient peak (0.595 m) as known limitation",
+      "Proceed to Step C with Step E calibration configuration"
+    ],
+    "step_c_configuration": {
+      "k_position": 20.0,
+      "k_velocity": 15.0,
+      "max_position_tau": 3.0,
+      "pitch_rate_correction": false
+    },
+    "rationale": [
+      "Pitch rate fix does not reduce transient",
+      "Filter introduces lag causing height variant regressions",
+      "Previous Step E calibration achieved same steady-state (0.053 m) without regressions",
+      "Transient peak caused by fundamental TWIP limitation, not pitch rate artifact"
+    ]
+  },
+  "step_c_recommendation": "DO_NOT_PROCEED_WITH_PITCH_RATE_FIX_PROCEED_WITH_STEP_E_CALIBRATION_CONFIG"
+}

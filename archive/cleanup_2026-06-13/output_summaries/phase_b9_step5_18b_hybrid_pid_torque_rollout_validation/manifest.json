@@ -1,0 +1,32 @@
+{
+  "original_path": "outputs/phase_b9_step5_18b_hybrid_pid_torque_rollout_validation",
+  "original_size": "4.9K",
+  "original_size_bytes": 5007,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "candidate_summary.json",
+      "size_bytes": 705
+    },
+    {
+      "file": "full_validation_summary.json",
+      "size_bytes": 97
+    },
+    {
+      "file": "response_validation_summary.json",
+      "size_bytes": 130
+    },
+    {
+      "file": "step5_18b_summary.json",
+      "size_bytes": 431
+    },
+    {
+      "file": "torque_path_activation_summary.json",
+      "size_bytes": 266
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

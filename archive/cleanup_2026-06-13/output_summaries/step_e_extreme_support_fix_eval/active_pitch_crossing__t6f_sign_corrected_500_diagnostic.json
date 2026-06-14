@@ -1,0 +1,189 @@
+{
+  "t5": {
+    "profile_name": "T5 (APCR1nD_T5_band_limited_balanced)",
+    "total_steps": 499,
+    "drift_column_used": "active_pitch_crossing_signed_error_m",
+    "sign_correctness": {
+      "tau_position_pct": 100.0,
+      "tau_position_after_clip_pct": 100.0,
+      "apcr1n_tau_position_after_cap_pct": 100.0,
+      "tau_velocity_damping_pct": 5.61122244488978,
+      "tau_pitch_pct": 9.819639278557114,
+      "final_torque_pct": 37.27454909819639,
+      "final_torque_high_authority_pct": null,
+      "final_torque_arch_fix_active_pct": null,
+      "final_torque_hard_band_pct": null,
+      "final_torque_emergency_band_pct": null
+    },
+    "activation": {
+      "arch_fix_active_count": 0,
+      "arch_fix_active_pct": 0.0,
+      "high_authority_count": 0,
+      "high_authority_pct": 0.0,
+      "hard_band_count": 0,
+      "hard_band_pct": 0.0,
+      "emergency_band_count": 0,
+      "emergency_band_pct": 0.0
+    },
+    "sign_fix": {
+      "sign_fix_enabled": false,
+      "sign_fix_active_count": 0,
+      "sign_fix_active_pct": 0.0,
+      "sign_fix_damping_disabled_count": 0,
+      "sign_fix_damping_disabled_pct": 0.0,
+      "sign_fix_damping_helped_count": 0,
+      "sign_fix_damping_helped_pct": 0.0,
+      "sign_fix_damping_fought_count": 0,
+      "sign_fix_damping_fought_pct": 0.0,
+      "sign_fix_pitch_suppressed_count": 0,
+      "sign_fix_pitch_suppressed_pct": 0.0
+    },
+    "authority": {
+      "max_transmitted_torque_nm": 1.1531949639320374,
+      "mean_transmitted_torque_nm": 0.10076476304436321,
+      "transmitted_above_4nm_count": 0,
+      "transmitted_above_4nm_pct": 0.0
+    },
+    "drift": {
+      "min_m": -0.0159685291503634,
+      "max_m": 0.1871186159069289,
+      "max_abs_m": 0.1871186159069289,
+      "p2p_m": 0.2030871450572923,
+      "mean_m": 0.093523058106805,
+      "mean_abs_m": 0.09541338138450775,
+      "final_m": 0.0601766520251233,
+      "outside_0p08_count": 301,
+      "outside_0p08_pct": 60.320641282565134,
+      "outside_0p10_count": 226,
+      "outside_0p10_pct": 45.29058116232465,
+      "outside_0p15_count": 89,
+      "outside_0p15_pct": 17.835671342685373
+    }
+  },
+  "t6f": {
+    "profile_name": "T6F (T6F_budget_cap_raise)",
+    "total_steps": 499,
+    "drift_column_used": "active_pitch_crossing_signed_error_m",
+    "sign_correctness": {
+      "tau_position_pct": 100.0,
+      "tau_position_after_clip_pct": 100.0,
+      "apcr1n_tau_position_after_cap_pct": 100.0,
+      "tau_velocity_damping_pct": 20.240480961923847,
+      "tau_pitch_pct": 17.43486973947896,
+      "final_torque_pct": 50.70140280561122,
+      "final_torque_high_authority_pct": null,
+      "final_torque_arch_fix_active_pct": 18.367346938775512,
+      "final_torque_hard_band_pct": null,
+      "final_torque_emergency_band_pct": null
+    },
+    "activation": {
+      "arch_fix_active_count": 196,
+      "arch_fix_active_pct": 39.278557114228455,
+      "high_authority_count": 0,
+      "high_authority_pct": 0.0,
+      "hard_band_count": 0,
+      "hard_band_pct": 0.0,
+      "emergency_band_count": 0,
+      "emergency_band_pct": 0.0
+    },
+    "sign_fix": {
+      "sign_fix_enabled": false,
+      "sign_fix_active_count": 0,
+      "sign_fix_active_pct": 0.0,
+      "sign_fix_damping_disabled_count": 0,
+      "sign_fix_damping_disabled_pct": 0.0,
+      "sign_fix_damping_helped_count": 0,
+      "sign_fix_damping_helped_pct": 0.0,
+      "sign_fix_damping_fought_count": 0,
+      "sign_fix_damping_fought_pct": 0.0,
+      "sign_fix_pitch_suppressed_count": 0,
+      "sign_fix_pitch_suppressed_pct": 0.0
+    },
+    "authority": {
+      "max_transmitted_torque_nm": 1.355145812034607,
+      "mean_transmitted_torque_nm": 0.22633719145240336,
+      "transmitted_above_4nm_count": 0,
+      "transmitted_above_4nm_pct": 0.0
+    },
+    "drift": {
+      "min_m": -0.0159685291503634,
+      "max_m": 0.2034146827413985,
+      "max_abs_m": 0.2034146827413985,
+      "p2p_m": 0.2193832118917619,
+      "mean_m": 0.0793217797292582,
+      "mean_abs_m": 0.08194034510565346,
+      "final_m": 0.1411320229337231,
+      "outside_0p08_count": 225,
+      "outside_0p08_pct": 45.09018036072144,
+      "outside_0p10_count": 195,
+      "outside_0p10_pct": 39.078156312625254,
+      "outside_0p15_count": 121,
+      "outside_0p15_pct": 24.248496993987974
+    }
+  },
+  "t6f_sign_corrected": {
+    "profile_name": "T6F_sign_corrected",
+    "total_steps": 499,
+    "drift_column_used": "active_pitch_crossing_signed_error_m",
+    "sign_correctness": {
+      "tau_position_pct": 100.0,
+      "tau_position_after_clip_pct": 100.0,
+      "apcr1n_tau_position_after_cap_pct": 100.0,
+      "tau_velocity_damping_pct": 21.24248496993988,
+      "tau_pitch_pct": 15.430861723446892,
+      "final_torque_pct": 49.298597194388776,
+      "final_torque_high_authority_pct": 0.0,
+      "final_torque_arch_fix_active_pct": 24.85207100591716,
+      "final_torque_hard_band_pct": null,
+      "final_torque_emergency_band_pct": null
+    },
+    "activation": {
+      "arch_fix_active_count": 169,
+      "arch_fix_active_pct": 33.86773547094188,
+      "high_authority_count": 8,
+      "high_authority_pct": 1.6032064128256511,
+      "hard_band_count": 0,
+      "hard_band_pct": 0.0,
+      "emergency_band_count": 0,
+      "emergency_band_pct": 0.0
+    },
+    "sign_fix": {
+      "sign_fix_enabled": true,
+      "sign_fix_active_count": 156,
+      "sign_fix_active_pct": 31.262525050100198,
+      "sign_fix_damping_disabled_count": 73,
+      "sign_fix_damping_disabled_pct": 14.629258517034069,
+      "sign_fix_damping_helped_count": 83,
+      "sign_fix_damping_helped_pct": 16.63326653306613,
+      "sign_fix_damping_fought_count": 73,
+      "sign_fix_damping_fought_pct": 14.629258517034069,
+      "sign_fix_pitch_suppressed_count": 0,
+      "sign_fix_pitch_suppressed_pct": 0.0
+    },
+    "authority": {
+      "max_transmitted_torque_nm": 6.115983486175537,
+      "mean_transmitted_torque_nm": 0.4684682680117895,
+      "transmitted_above_4nm_count": 8,
+      "transmitted_above_4nm_pct": 1.6032064128256511
+    },
+    "drift": {
+      "min_m": -0.0159685291503634,
+      "max_m": 0.1915598852117023,
+      "max_abs_m": 0.1915598852117023,
+      "p2p_m": 0.2075284143620657,
+      "mean_m": 0.07815576107142054,
+      "mean_abs_m": 0.08092345831287441,
+      "final_m": 0.1859991173981354,
+      "outside_0p08_count": 225,
+      "outside_0p08_pct": 45.09018036072144,
+      "outside_0p10_count": 194,
+      "outside_0p10_pct": 38.877755511022045,
+      "outside_0p15_count": 127,
+      "outside_0p15_pct": 25.450901803607213
+    }
+  },
+  "comparison": {
+    "sign_correctness_improvement_pp": -1.4028056112224405,
+    "drift_0p15_improvement_pp": -1.2024048096192388
+  }
+}

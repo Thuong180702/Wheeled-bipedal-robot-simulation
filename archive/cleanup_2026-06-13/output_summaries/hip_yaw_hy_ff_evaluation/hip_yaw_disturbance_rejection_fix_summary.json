@@ -1,0 +1,217 @@
+{
+  "investigation": "hip_yaw_disturbance_rejection_at_boundary_heights",
+  "date": "2026-06-04",
+  "fix_approach": "HY-FF (Hip-Yaw Support-Error Feedforward)",
+  "status": "IMPLEMENTATION_BUG_DETECTED",
+
+  "problem_statement": {
+    "description": "Hip-yaw error at low_0p300 exceeds 0.070 rad threshold",
+    "baseline_hip_yaw_abs_max_rad": 0.2137,
+    "threshold_rad": 0.070,
+    "percent_over_threshold": 205.3,
+    "trigger": "support_position_drift",
+    "requirement": "hip_yaw_must_reject_disturbance_despite_support_drift"
+  },
+
+  "root_cause": {
+    "mechanism": "hip_yaw_disturbance_rejection_insufficient_authority_alone",
+    "description": "Support position drift at extreme flexion creates disturbance torque exceeding hip-yaw PD controller rejection capability",
+    "phase_2_finding": "PD gains alone insufficient (kp=25, kd=9 still 131% over threshold)",
+    "phase_3_classification": "kp dominates, kd minimal, requires feedforward compensation"
+  },
+
+  "fix_implementation": {
+    "approach": "support_error_feedforward_with_continuous_height_gating",
+    "height_gate": {
+      "type": "smoothstep",
+      "z_low_m": 0.300,
+      "z_high_m": 0.393,
+      "activation_at_low": 1.0,
+      "activation_at_high": 0.0
+    },
+    "compensation_formula": "tau_comp = sign * k_support * support_error * height_gate",
+    "left_right": "antisymmetric",
+    "parameters_tunable": ["k_support", "tau_max", "sign"],
+    "implementation_status": "UNIT_TESTS_PASS_INTEGRATION_BUG",
+    "files_modified": [
+      "wheeled_biped/controllers/shape_posture_controller.py",
+      "scripts/simulate_hierarchical_controller.py"
+    ],
+    "files_created": [
+      "tests/test_hip_yaw_support_feedforward.py",
+      "scripts/evaluate_hip_yaw_hy_ff_candidates.py",
+      "scripts/simple_hy_ff_eval.py",
+      "scripts/comprehensive_hy_ff_eval.py"
+    ]
+  },
+
+  "evaluation_summary": {
+    "total_experiments": 15,
+    "status": "INCONCLUSIVE_DUE_TO_BUG",
+    "bug_description": "Height gate never activates at low_0p300, compensation = 0 for all candidates",
+    "sign_determination": {
+      "sign_plus_1_hip_yaw_rad": "NOT_EVALUATED",
+      "sign_minus_1_hip_yaw_rad": "NOT_EVALUATED",
+      "best_sign": "CANNOT_DETERMINE",
+      "reason": "All candidates produced identical results to baseline"
+    },
+    "candidates_tested": [
+      {"id": "A_baseline", "k": 0.0, "tau_max": 1.0},
+      {"id": "B_k2", "k": 2.0, "tau_max": 1.0},
+      {"id": "D_k4", "k": 4.0, "tau_max": 1.0},
+      {"id": "E_k6", "k": 6.0, "tau_max": 2.0},
+      {"id": "F_k8", "k": 8.0, "tau_max": 2.0}
+    ],
+    "best_candidate": "NONE",
+    "passing_candidates_count": 0,
+    "identical_results": true
+  },
+
+  "results_by_variant": {
+    "low_0p300": {
+      "baseline": {
+        "hip_yaw_abs_max_rad": 0.2137,
+        "support_error_max_m": 0.2430,
+        "pitch_x_max_rad": 0.0951,
+        "roll_y_max_rad": 0.0150,
+        "contact_valid_pct": 99.9,
+        "wbc_applied": false,
+        "hip_yaw_over_010_pct": 55.2
+      },
+      "all_hy_ff_candidates": {
+        "status": "IDENTICAL_TO_BASELINE",
+        "hip_yaw_abs_max_rad": 0.2137,
+        "support_error_max_m": 0.2430,
+        "reason": "compensation_never_activated"
+      }
+    },
+    "high_0p480": {
+      "baseline": {
+        "hip_yaw_abs_max_rad": 0.0462,
+        "status": "PASS",
+        "note": "No hip-yaw problem at this height"
+      }
+    },
+    "nominal": {
+      "baseline": {
+        "hip_yaw_abs_max_rad": 0.0392,
+        "status": "PASS",
+        "note": "No hip-yaw problem at this height"
+      }
+    }
+  },
+
+  "bug_diagnosis": {
+    "symptoms": [
+      "All HY-FF candidates produced identical results to baseline at low_0p300",
+      "hip_yaw_comp_height_gate = 0.000 (should be ~1.0 at z=0.30)",
+      "hip_yaw_comp_support_error_m = 0.000 (should be ~0.24)",
+      "hip_yaw_comp_tau_left/right = 0.000 (consequence of above)"
+    ],
+    "possible_causes": [
+      "Wrong height value being passed to gate function",
+      "Support position error not available when shape controller runs",
+      "Controller execution ordering issue (shape before sagittal)"
+    ],
+    "verified_correct": [
+      "Height gate function logic (unit tests pass)",
+      "Compensation computation (unit tests pass)",
+      "CLI parameter passing (telemetry shows correct k values)",
+      "Enable flag propagation (hip_yaw_comp_active = True)"
+    ],
+    "recommended_debug_steps": [
+      "Add telemetry for actual height value received by gate function",
+      "Verify sagittal_diag contains support_position_error_m key",
+      "Check controller call ordering in main simulation loop",
+      "Consider using previous-step support error if timing issue"
+    ]
+  },
+
+  "acceptance_criteria_evaluation": {
+    "hip_yaw_abs_max_le_0p07": "UNTESTED",
+    "hip_yaw_over_0p10_pct_eq_0": "UNTESTED",
+    "support_not_worsened_gt_10pct": "UNTESTED",
+    "pitch_x_max_le_0p10": "PASS",
+    "roll_y_max_le_0p05": "PASS",
+    "contact_valid_ge_99p9": "PASS",
+    "wbc_applied_false": "PASS",
+    "ownership_violations_eq_0": "ASSUMED_PASS",
+    "overall_pass": false,
+    "reason": "Primary hip-yaw gates untested due to bug"
+  },
+
+  "test_results": {
+    "hy_ff_unit_tests": {
+      "passed": 9,
+      "total": 9,
+      "status": "PASS"
+    },
+    "sagittal_controller_tests": {
+      "passed": 40,
+      "total": 40,
+      "status": "PASS"
+    },
+    "step_c_tests": {
+      "passed": 51,
+      "total": 52,
+      "status": "PASS",
+      "note": "1 expected diff failure due to controller file modification"
+    },
+    "step_e_tests": {
+      "passed": 30,
+      "total": 30,
+      "status": "PASS"
+    },
+    "height_variant_tests": {
+      "passed": 26,
+      "total": 26,
+      "status": "PASS"
+    },
+    "total_tests": {
+      "passed": 156,
+      "total": 157,
+      "pass_rate_pct": 99.4
+    },
+    "note": "Unit tests verify isolated component behavior but do not catch integration bugs"
+  },
+
+  "restrictions_compliance": {
+    "no_wbc_added": true,
+    "no_legacy_wbc_enabled": true,
+    "no_hip_roll_modified": true,
+    "no_global_hip_yaw_gain_change": true,
+    "no_variant_name_patches": true,
+    "no_discontinuous_schedules": true,
+    "no_threshold_relaxation": true,
+    "no_step_d_proceeded": true,
+    "no_boundary_range_pass_claimed": true,
+    "all_restrictions_satisfied": true
+  },
+
+  "final_decision": {
+    "code": "HIP_YAW_ROOT_CAUSE_UNCLEAR",
+    "primary_reason": "IMPLEMENTATION_BUG_PREVENTS_EVALUATION",
+    "rationale": "HY-FF implementation is architecturally sound (unit tests pass) but integration bug prevents height gate activation. Cannot determine if approach would work because compensation never ran.",
+    "hy_ff_should_remain_enabled": false,
+    "recommendation": "Debug integration bug, re-run Phase 5 evaluation. If HY-FF still fails after fix, consider fixing sagittal support drift first or implementing coupled sagittal-yaw controller.",
+    "hip_yaw_problem_status": "UNRESOLVED",
+    "alternative_approaches": [
+      "Fix sagittal support drift first (continuous low-height forward authority)",
+      "Coupled sagittal-yaw controller",
+      "More aggressive hip-yaw integral term",
+      "Dynamic hip-yaw reference adjustment based on support error"
+    ]
+  },
+
+  "output_artifacts": {
+    "phase_0_verification": "health check passed",
+    "phase_1_requirement_doc": "docs/validation/hip_yaw_disturbance_rejection_requirement.md",
+    "phase_2_isolation_results": "outputs/hip_yaw_disturbance_rejection_audit/isolation/",
+    "phase_3_mechanism_classification": "docs/validation/hip_yaw_phase3_mechanism_classification.md",
+    "phase_4_implementation_status": "docs/validation/hip_yaw_phase4_implementation_complete.md",
+    "phase_5_results_json": "outputs/hip_yaw_hy_ff_evaluation/comprehensive_eval_results.json",
+    "phase_6_test_results": "pytest output (156/157 passed)",
+    "phase_7_final_report": "docs/validation/hip_yaw_disturbance_rejection_fix_report.md",
+    "phase_7_summary_json": "outputs/hip_yaw_hy_ff_evaluation/hip_yaw_disturbance_rejection_fix_summary.json"
+  }
+}

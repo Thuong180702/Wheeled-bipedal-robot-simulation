@@ -1,0 +1,12 @@
+[
+  {
+    "case_name": "min_operational_height",
+    "variant_setup_path": "outputs\\operational_height_envelope_search\\controller_ready_extrema\\min_operational_height_setup.json",
+    "target_com_z_m": 0.3932865804918236
+  },
+  {
+    "case_name": "max_operational_height",
+    "variant_setup_path": "outputs\\operational_height_envelope_search\\controller_ready_extrema\\max_operational_height_setup.json",
+    "target_com_z_m": 0.4128130092062859
+  }
+]

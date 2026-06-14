@@ -1,0 +1,11 @@
+{
+  "variant_name": "high_5cm",
+  "target_com_z_m": 0.4539993119017284,
+  "hip_pitch_ref": 0.751052,
+  "knee_ref": 1.4275306666666667,
+  "hip_roll_left": 0.0,
+  "hip_roll_right": 0.0,
+  "hip_yaw_left": 0.0,
+  "hip_yaw_right": 0.0,
+  "calibrated_root_z_m": 0.5974609375
+}

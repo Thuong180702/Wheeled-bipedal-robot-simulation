@@ -1,0 +1,91 @@
+{
+  "classification": "F1_500_RECENTER_TOO_WEAK",
+  "survived_steps": 500,
+  "requested_steps": 500,
+  "terminated": false,
+
+  "support_error": {
+    "mean": 0.0764,
+    "max": 0.1695,
+    "final": -0.0351,
+    "crossings_above_0.15": 81,
+    "hip_yaw_comp_support_error_m_mean": 0.0764,
+    "hip_yaw_comp_support_error_m_max": 0.1695,
+    "positive_percent": 82.8
+  },
+
+  "hip_yaw": {
+    "abs_max_max": 0.1376,
+    "abs_max_final": 0.1376,
+    "crossings_above_0.10": 20
+  },
+
+  "wheel_velocity": {
+    "mean": 0.1318,
+    "max": 5.0049
+  },
+
+  "pitch": {
+    "min": -0.0338,
+    "max": 0.1103
+  },
+
+  "roll": {
+    "max": 0.0131
+  },
+
+  "structural_gates": {
+    "ownership_violation_count_max": 0,
+    "hidden_torque_norm_max": 0.0,
+    "contact_state": "double_contact"
+  },
+
+  "comparison_vs_d2": {
+    "support_crossings_change": -15,
+    "support_crossings_percent_change": -15.6,
+    "hip_yaw_max_change": 0.0358,
+    "hip_yaw_max_percent_change": 35.2,
+    "hip_yaw_crossings_change": -6,
+    "hip_yaw_crossings_percent_change": -23.1,
+    "wheel_vel_max_change": 2.4534,
+    "wheel_vel_max_percent_change": 96.1
+  },
+
+  "comparison_vs_e2": {
+    "support_crossings_change": 19,
+    "support_crossings_percent_change": 30.6,
+    "hip_yaw_max_change": 0.0072,
+    "hip_yaw_max_percent_change": 5.5,
+    "hip_yaw_crossings_change": -33,
+    "hip_yaw_crossings_percent_change": -62.3,
+    "wheel_vel_max_change": 1.7377,
+    "wheel_vel_max_percent_change": 53.2
+  },
+
+  "recenter_analysis": {
+    "recenter_columns_in_telemetry": false,
+    "recenter_active_count": "unknown (CSV bug)",
+    "root_cause": "hip_yaw_safe_threshold (0.10 rad) too restrictive for low_0p300",
+    "d2_baseline_hip_yaw_max": 0.1018,
+    "f1_threshold": 0.10,
+    "circular_dependency": true
+  },
+
+  "recommendation": {
+    "next_action": "Raise recenter_hip_yaw_safe_threshold_rad to 0.15",
+    "alternative": "Reduce max_recenter_tau to 0.5 if hip_yaw worsens",
+    "proceed_to_2000_criteria": {
+      "support_crossings_target": "<50",
+      "hip_yaw_max_target": "<=0.12",
+      "wheel_vel_max_target": "<=4.0"
+    }
+  },
+
+  "files": {
+    "telemetry_csv": "outputs/hierarchical_controller_sim/telemetry_1780888710.csv",
+    "summary_json": "outputs/hierarchical_controller_sim/telemetry_500.summary.json",
+    "report": "docs/validation/f1_phase_aware_recenter_500_step_report.md"
+  },
+
+  "command": "python scripts/simulate_hierarchical_controller.py --controller-mode balance-core --sagittal-controller velocity-damped --vd-sagittal-authority-profile F1_phase_aware_recenter_velocity_shaping --height-variant-setup outputs/physical_target_height_setups/low_0p300_setup.json --steps 500 --telemetry-decimation 1 --failure-window-steps 500 --write-run-summary-sidecar"
+}

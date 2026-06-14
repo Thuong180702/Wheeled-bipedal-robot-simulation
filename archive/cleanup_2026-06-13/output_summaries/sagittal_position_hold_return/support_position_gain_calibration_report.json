@@ -1,0 +1,227 @@
+{
+  "report_type": "support_position_gain_calibration",
+  "date": "2026-05-30",
+  "status": "FALLBACK_FINAL_GATE_PASS_TRANSIENT_PEAK_EXCEEDS_LIMITS",
+  "do_not_proceed_to_step_c": true,
+  "changes_made": {
+    "controller_change": "Added max_position_tau parameter and term-level clipping to SagittalVelocityDampedBalanceController",
+    "file": "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
+    "new_parameter": "max_position_tau",
+    "clipping_formula": "tau_position = clip(tau_position_raw, -max_position_tau, +max_position_tau)",
+    "rationale": "Position hold is secondary to pitch balance. Clipping tau_position before summing prevents it from saturating wheel torque on its own.",
+    "new_telemetry_fields": [
+      "tau_position_raw",
+      "tau_position_clipped",
+      "max_position_tau",
+      "tau_position_saturation_flag"
+    ],
+    "new_cli_arg": "--vd-max-position-tau"
+  },
+  "candidates_tested": [
+    {
+      "name": "Candidate A",
+      "k_position": 10.0,
+      "max_position_tau": 2.0,
+      "steps_run": 1000,
+      "survived": true,
+      "support_position_error_max_m": 0.234,
+      "support_position_error_final_m": 0.234,
+      "steady_state_m": 0.234,
+      "tau_position_raw_range_Nm": [-2.34, 0.067],
+      "tau_position_clipped_range_Nm": [-2.0, 0.067],
+      "saturation_steps": 132,
+      "saturation_pct": 13.2,
+      "pitch_error_range_deg": [0.0, 2.93],
+      "com_z_range_m": [0.4038, 0.4086],
+      "gate_010m": "FAIL",
+      "gate_015m": "FAIL",
+      "gate_final_005m": "FAIL",
+      "gate_final_010m": "FAIL",
+      "failure_classification": "position_gain_too_low",
+      "failure_reason": "Steady-state formula: (50/10) * 0.051 = 0.255 m. Position-return authority too weak to overcome pitch-driven drift."
+    },
+    {
+      "name": "Candidate B",
+      "k_position": 15.0,
+      "max_position_tau": 2.5,
+      "steps_run": 1000,
+      "survived": true,
+      "support_position_error_max_m": 0.165,
+      "support_position_error_final_m": 0.165,
+      "steady_state_m": 0.165,
+      "tau_position_raw_range_Nm": [-2.473, 0.103],
+      "tau_position_clipped_range_Nm": [-2.473, 0.103],
+      "saturation_steps": 0,
+      "saturation_pct": 0.0,
+      "pitch_error_range_deg": [0.0, 3.26],
+      "com_z_range_m": [0.4038, 0.4086],
+      "gate_010m": "FAIL",
+      "gate_015m": "FAIL",
+      "gate_final_005m": "FAIL",
+      "gate_final_010m": "FAIL",
+      "failure_classification": "position_gain_too_low",
+      "failure_reason": "Steady-state formula: (50/15) * 0.057 = 0.190 m. Position-return authority still too weak."
+    },
+    {
+      "name": "Candidate C (1000 steps)",
+      "k_position": 20.0,
+      "max_position_tau": 3.0,
+      "steps_run": 1000,
+      "survived": true,
+      "support_position_error_max_m": 0.133,
+      "support_position_error_final_m": 0.128,
+      "tau_position_raw_range_Nm": [-2.656, 0.139],
+      "tau_position_clipped_range_Nm": [-2.656, 0.139],
+      "saturation_steps": 0,
+      "saturation_pct": 0.0,
+      "pitch_error_range_deg": [0.0, 3.57],
+      "com_z_range_m": [0.4038, 0.4086],
+      "gate_010m": "FAIL",
+      "gate_015m": "PASS",
+      "gate_final_005m": "FAIL",
+      "gate_final_010m": "FAIL",
+      "note": "Final error equals max — still drifting at step 1000, not yet at steady-state"
+    },
+    {
+      "name": "Candidate C (5000 steps)",
+      "k_position": 20.0,
+      "max_position_tau": 3.0,
+      "steps_run": 5000,
+      "survived": true,
+      "support_position_error_max_m": 0.595,
+      "support_position_error_final_m": 0.053,
+      "support_position_error_last1000_mean_m": 0.0527,
+      "support_position_error_last1000_std_m": 0.0,
+      "steady_state_formula_prediction_m": 0.0525,
+      "steady_state_formula_match": true,
+      "transient_peak_step": 1360,
+      "transient_peak_pitch_error_deg": 5.64,
+      "transient_peak_com_z_m": 0.365,
+      "tau_position_raw_range_Nm": [-11.9, 0.139],
+      "tau_position_raw_rms_Nm": 2.805,
+      "tau_position_clipped_range_Nm": [-3.0, 0.139],
+      "tau_position_clipped_rms_Nm": 1.596,
+      "saturation_steps": 564,
+      "saturation_pct": 11.3,
+      "pitch_error_range_deg": [0.0, 7.19],
+      "pitch_error_mean_last1000_deg": 1.207,
+      "roll_range_deg": [-2.6, 0.33],
+      "yaw_range_deg": [-11.99, 4.31],
+      "com_z_range_m": [0.3623, 0.4086],
+      "position_error_by_window": {
+        "steps_0_1000": {"max": 0.133, "final": 0.128},
+        "steps_1000_2000": {"max": 0.595, "final": 0.039},
+        "steps_2000_3000": {"max": 0.053, "final": 0.053},
+        "steps_3000_4000": {"max": 0.053, "final": 0.053},
+        "steps_4000_5000": {"max": 0.053, "final": 0.053}
+      },
+      "gate_010m": "FAIL",
+      "gate_015m": "FAIL",
+      "gate_final_005m": "FAIL",
+      "gate_final_010m": "PASS",
+      "completed_5000_steps": "PASS",
+      "failure_classification": "transient_peak_exceeds_limits_during_pitch_disturbance",
+      "failure_reason": "Large pitch disturbance at step 1360 (5.64 deg, height 0.365 m) caused support position error to peak at 0.595 m. Term-level clipping prevented wheel torque saturation but could not prevent position drift during pitch recovery."
+    }
+  ],
+  "height_variant_regression": {
+    "high_5cm": {
+      "k_position": 20.0,
+      "max_position_tau": 3.0,
+      "steps_run": 500,
+      "survived": true,
+      "support_position_error_max_m": 0.224,
+      "support_position_error_final_m": 0.220,
+      "pitch_error_range_deg": [0.0, 5.20],
+      "com_z_range_m": [0.4539, 0.4623],
+      "tau_position_raw_range_Nm": [-4.482, 0.178],
+      "tau_position_clipped_range_Nm": [-3.0, 0.178],
+      "saturation_steps": 392,
+      "saturation_pct": 78.4,
+      "gate_015m": "FAIL",
+      "status": "SURVIVED_BUT_EXCEEDS_GATE"
+    },
+    "low_5cm": {
+      "k_position": 20.0,
+      "max_position_tau": 3.0,
+      "steps_run": 500,
+      "survived": true,
+      "support_position_error_max_m": 0.083,
+      "support_position_error_final_m": 0.041,
+      "pitch_error_range_deg": [0.0, 2.25],
+      "com_z_range_m": [0.3518, 0.3538],
+      "tau_position_raw_range_Nm": [-1.665, 0.083],
+      "tau_position_clipped_range_Nm": [-1.665, 0.083],
+      "saturation_steps": 0,
+      "saturation_pct": 0.0,
+      "gate_015m": "PASS",
+      "status": "PASS"
+    }
+  },
+  "best_candidate": {
+    "name": "Candidate C",
+    "k_position": 20.0,
+    "max_position_tau": 3.0,
+    "steady_state_m": 0.0527,
+    "steady_state_formula_holds": true,
+    "transient_peak_m": 0.595,
+    "transient_peak_cause": "large pitch disturbance at step 1360"
+  },
+  "acceptance_gates": {
+    "preferred_max_error_010m": {"threshold_m": 0.10, "result_m": 0.595, "status": "FAIL"},
+    "fallback_max_error_015m": {"threshold_m": 0.15, "result_m": 0.595, "status": "FAIL"},
+    "preferred_final_005m": {"threshold_m": 0.05, "result_m": 0.053, "status": "FAIL"},
+    "fallback_final_010m": {"threshold_m": 0.10, "result_m": 0.053, "status": "PASS"},
+    "completed_5000_steps": "PASS"
+  },
+  "state_separation_verification": {
+    "support_center_used_for_position_hold": true,
+    "com_error_logged_separately": true,
+    "pitch_reference_enabled": true,
+    "pitch_x_error_relative_to_ref": true
+  },
+  "verification": {
+    "no_wbc_changes": true,
+    "no_e0b_e0c_e0d_reintroduced": true,
+    "torque_ownership_unchanged": true,
+    "sagittal_controllers_mutually_exclusive": true,
+    "balance_core_mode": true,
+    "velocity_damped_controller": true,
+    "kp_cp_zero": true,
+    "term_level_position_authority_limiting": true
+  },
+  "fundamental_limitation": {
+    "description": "Position-return approach cannot simultaneously achieve tight position hold during large pitch transients AND preserve pitch balance authority.",
+    "root_cause": "During large pitch excursions, wheels must move forward to balance the robot. Position-return term fights this motion. Term-level clipping prevents wheel torque saturation but cannot prevent large position errors during pitch disturbances.",
+    "why_further_tuning_wont_help": [
+      "Increasing k_position reduces steady-state drift but worsens transient peaks",
+      "Increasing max_position_tau risks saturating wheel torque and preventing pitch balance",
+      "Decreasing k_position worsens steady-state drift (Candidates A and B)"
+    ]
+  },
+  "options_for_user": [
+    {
+      "option": 1,
+      "name": "Accept Fallback Gate",
+      "description": "Accept Candidate C as passing the fallback final-drift gate (<=0.10 m). Document transient peak as known limitation.",
+      "recommended": true,
+      "rationale": "Steady-state performance is good. Robot recovers from disturbances without falling. Transient peak occurs during extreme pitch event, not nominal operation."
+    },
+    {
+      "option": 2,
+      "name": "Pitch-Dependent Position Authority",
+      "description": "Reduce max_position_tau during large pitch excursions to preserve pitch balance authority.",
+      "recommended": false,
+      "rationale": "Would reduce transient peaks but requires additional logic and testing."
+    },
+    {
+      "option": 3,
+      "name": "Redesign Position-Hold Strategy",
+      "description": "Replace position-return term with velocity-based hold, pitch-reference adjustment, or separate position-hold mode.",
+      "recommended": false,
+      "rationale": "Significant redesign required. Not recommended until base residual balance env works."
+    }
+  ],
+  "step_c_recommendation": "DO_NOT_PROCEED",
+  "step_c_reason": "Transient peak (0.595 m) exceeds both max-error gates. User must review and decide whether to accept fallback gate or pursue further improvements."
+}

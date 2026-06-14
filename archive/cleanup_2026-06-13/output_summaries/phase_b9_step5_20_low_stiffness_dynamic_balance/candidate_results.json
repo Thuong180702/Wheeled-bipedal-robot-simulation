@@ -1,0 +1,242 @@
+[
+  {
+    "candidate": "baseline",
+    "stiffness_reduction": 1.0,
+    "deadband_deg": 0.0,
+    "height": 0.6,
+    "num_episodes": 5,
+    "mean_survival_time": 0.24,
+    "fall_rate": 1.0,
+    "mean_pitch_rms_deg": 5.594744931447997,
+    "mean_roll_rms_deg": 21.83363981715484,
+    "mean_torque": 5.389425277709961,
+    "rms_torque": 7.157338333129883,
+    "episodes": [
+      {
+        "episode": 0,
+        "survival_time": 0.24,
+        "fell": true,
+        "pitch_rms_deg": 0.6209326063261235,
+        "roll_rms_deg": 22.05546012209429,
+        "mean_torque": 5.4132561683654785,
+        "rms_torque": 7.191568851470947
+      },
+      {
+        "episode": 1,
+        "survival_time": 0.24,
+        "fell": true,
+        "pitch_rms_deg": 17.635221456437066,
+        "roll_rms_deg": 19.679763746290096,
+        "mean_torque": 5.537411689758301,
+        "rms_torque": 7.477034091949463
+      },
+      {
+        "episode": 2,
+        "survival_time": 0.26,
+        "fell": true,
+        "pitch_rms_deg": 5.23225258773824,
+        "roll_rms_deg": 22.14492801671389,
+        "mean_torque": 4.948606491088867,
+        "rms_torque": 6.716586112976074
+      },
+      {
+        "episode": 3,
+        "survival_time": 0.24,
+        "fell": true,
+        "pitch_rms_deg": 2.8701564815333973,
+        "roll_rms_deg": 23.829599962231622,
+        "mean_torque": 5.566459655761719,
+        "rms_torque": 7.240756988525391
+      },
+      {
+        "episode": 4,
+        "survival_time": 0.22,
+        "fell": true,
+        "pitch_rms_deg": 1.6151615252051597,
+        "roll_rms_deg": 21.458447238444297,
+        "mean_torque": 5.4813923835754395,
+        "rms_torque": 7.160745620727539
+      }
+    ]
+  },
+  {
+    "candidate": "conservative",
+    "stiffness_reduction": 0.7,
+    "deadband_deg": 1.0,
+    "height": 0.6,
+    "num_episodes": 5,
+    "mean_survival_time": 0.244,
+    "fall_rate": 1.0,
+    "mean_pitch_rms_deg": 5.637860697094852,
+    "mean_roll_rms_deg": 21.904623234378153,
+    "mean_torque": 5.138365745544434,
+    "rms_torque": 6.846863079071045,
+    "episodes": [
+      {
+        "episode": 0,
+        "survival_time": 0.24,
+        "fell": true,
+        "pitch_rms_deg": 0.643336236649896,
+        "roll_rms_deg": 21.585294605361828,
+        "mean_torque": 5.124555587768555,
+        "rms_torque": 6.845555305480957
+      },
+      {
+        "episode": 1,
+        "survival_time": 0.24,
+        "fell": true,
+        "pitch_rms_deg": 17.418753078695033,
+        "roll_rms_deg": 19.643494377017518,
+        "mean_torque": 5.279939651489258,
+        "rms_torque": 7.071506500244141
+      },
+      {
+        "episode": 2,
+        "survival_time": 0.26,
+        "fell": true,
+        "pitch_rms_deg": 5.200252607618198,
+        "roll_rms_deg": 22.164515983099985,
+        "mean_torque": 4.806704521179199,
+        "rms_torque": 6.553173542022705
+      },
+      {
+        "episode": 3,
+        "survival_time": 0.24,
+        "fell": true,
+        "pitch_rms_deg": 3.314850954382379,
+        "roll_rms_deg": 22.737648788387276,
+        "mean_torque": 5.283977031707764,
+        "rms_torque": 6.932501792907715
+      },
+      {
+        "episode": 4,
+        "survival_time": 0.24,
+        "fell": true,
+        "pitch_rms_deg": 1.6121106081287493,
+        "roll_rms_deg": 23.39216241802415,
+        "mean_torque": 5.196651935577393,
+        "rms_torque": 6.831578254699707
+      }
+    ]
+  },
+  {
+    "candidate": "moderate",
+    "stiffness_reduction": 0.5,
+    "deadband_deg": 2.0,
+    "height": 0.6,
+    "num_episodes": 5,
+    "mean_survival_time": 0.252,
+    "fall_rate": 1.0,
+    "mean_pitch_rms_deg": 5.610240706246532,
+    "mean_roll_rms_deg": 21.947518270111527,
+    "mean_torque": 4.8501708030700685,
+    "rms_torque": 6.562598133087159,
+    "episodes": [
+      {
+        "episode": 0,
+        "survival_time": 0.26,
+        "fell": true,
+        "pitch_rms_deg": 0.6336334139372549,
+        "roll_rms_deg": 22.878529259402473,
+        "mean_torque": 4.78126859664917,
+        "rms_torque": 6.5043559074401855
+      },
+      {
+        "episode": 1,
+        "survival_time": 0.24,
+        "fell": true,
+        "pitch_rms_deg": 17.2709027032073,
+        "roll_rms_deg": 19.3509995065236,
+        "mean_torque": 4.992178916931152,
+        "rms_torque": 6.737570285797119
+      },
+      {
+        "episode": 2,
+        "survival_time": 0.28,
+        "fell": true,
+        "pitch_rms_deg": 4.729729077645377,
+        "roll_rms_deg": 23.959029973379774,
+        "mean_torque": 4.662843704223633,
+        "rms_torque": 6.424167633056641
+      },
+      {
+        "episode": 3,
+        "survival_time": 0.24,
+        "fell": true,
+        "pitch_rms_deg": 3.700190878159059,
+        "roll_rms_deg": 21.667971525666033,
+        "mean_torque": 4.94401216506958,
+        "rms_torque": 6.608829498291016
+      },
+      {
+        "episode": 4,
+        "survival_time": 0.24,
+        "fell": true,
+        "pitch_rms_deg": 1.7167474582836666,
+        "roll_rms_deg": 21.881061085585756,
+        "mean_torque": 4.870550632476807,
+        "rms_torque": 6.53806734085083
+      }
+    ]
+  },
+  {
+    "candidate": "aggressive",
+    "stiffness_reduction": 0.3,
+    "deadband_deg": 3.0,
+    "height": 0.6,
+    "num_episodes": 5,
+    "mean_survival_time": 0.28,
+    "fall_rate": 1.0,
+    "mean_pitch_rms_deg": 5.472331878445582,
+    "mean_roll_rms_deg": 23.104118405898536,
+    "mean_torque": 4.479419708251953,
+    "rms_torque": 6.291306495666504,
+    "episodes": [
+      {
+        "episode": 0,
+        "survival_time": 0.3,
+        "fell": true,
+        "pitch_rms_deg": 0.6208999852897866,
+        "roll_rms_deg": 24.386773868465024,
+        "mean_torque": 4.396592617034912,
+        "rms_torque": 6.246534824371338
+      },
+      {
+        "episode": 1,
+        "survival_time": 0.26,
+        "fell": true,
+        "pitch_rms_deg": 17.047640117198178,
+        "roll_rms_deg": 21.265142742244194,
+        "mean_torque": 4.650660514831543,
+        "rms_torque": 6.409063339233398
+      },
+      {
+        "episode": 2,
+        "survival_time": 0.28,
+        "fell": true,
+        "pitch_rms_deg": 4.208261113348835,
+        "roll_rms_deg": 22.708265580505717,
+        "mean_torque": 4.398993968963623,
+        "rms_torque": 6.246812343597412
+      },
+      {
+        "episode": 3,
+        "survival_time": 0.28,
+        "fell": true,
+        "pitch_rms_deg": 3.7769115347704005,
+        "roll_rms_deg": 23.717695018802022,
+        "mean_torque": 4.492724418640137,
+        "rms_torque": 6.286645412445068
+      },
+      {
+        "episode": 4,
+        "survival_time": 0.28,
+        "fell": true,
+        "pitch_rms_deg": 1.7079466416207123,
+        "roll_rms_deg": 23.44271481947573,
+        "mean_torque": 4.458127021789551,
+        "rms_torque": 6.267476558685303
+      }
+    ]
+  }
+]

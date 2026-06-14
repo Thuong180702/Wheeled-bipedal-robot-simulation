@@ -1,0 +1,24 @@
+{
+  "date": "2026-06-13",
+  "profile": "T6J_centering_bias_trim",
+  "dedicated_tests": {
+    "file": "tests/test_t6j_centering_bias_trim.py",
+    "passed": 26,
+    "failed": 0
+  },
+  "regression_suite": {
+    "passed": 428,
+    "failed": 0,
+    "files": [
+      "tests/test_t6h_t6i_variants.py",
+      "tests/test_t6_high_height_variants.py",
+      "tests/test_t6f_torque_sign_convention.py",
+      "tests/test_apcr1nd_tuned_variants.py",
+      "tests/test_sagittal_velocity_damped_balance_controller.py",
+      "tests/test_simulation_telemetry_csv_writer.py",
+      "tests/test_low_height_setup_initialization.py",
+      "tests/test_step_e_wbc_gate_validator.py"
+    ]
+  },
+  "classification": "T6J_IMPLEMENTED_TESTS_PASS"
+}

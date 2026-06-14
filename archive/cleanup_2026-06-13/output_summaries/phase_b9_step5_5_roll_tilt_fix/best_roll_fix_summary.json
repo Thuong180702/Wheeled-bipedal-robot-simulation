@@ -1,0 +1,40 @@
+{
+  "roll_fix_type": "D_contact_force_balance",
+  "roll_fix_params": {
+    "roll_kp": 0.4,
+    "roll_kd": 0.12,
+    "roll_max_correction": 0.2,
+    "wheel_cmd_limit_mult": 2.5
+  },
+  "small_eval_metrics": {
+    "mean_survival_s": 7.1066666666666665,
+    "mean_fall_rate": 0.6666666666666666,
+    "mean_roll_rms_deg": 24.05995511906047,
+    "mean_action_sat_rate": 0.0
+  },
+  "full_eval_metrics": {
+    "mean_survival_s": 3.6839999999999997,
+    "mean_fall_rate": 0.8666666666666667,
+    "mean_pitch_rms_deg": 0.9200867444794679,
+    "mean_roll_rms_deg": 21.388765534717848,
+    "mean_wheel_speed_rms": 18.481847763061523,
+    "mean_action_sat_rate": 0.0,
+    "dominant_fall_reason": "tilt",
+    "fall_reason_counts_json": "{\"tilt\": 26, \"none\": 4}"
+  },
+  "first_divergence": {
+    "first_divergence_variable": "roll",
+    "first_divergence_time_s": 0.144,
+    "divergence_counts": {
+      "roll": 5,
+      "com_lateral": 1
+    }
+  },
+  "gating_decision": {
+    "step6_ready": false,
+    "criteria": {
+      "max_fall_rate": 0.5,
+      "max_roll_rms_deg": 15.0
+    }
+  }
+}

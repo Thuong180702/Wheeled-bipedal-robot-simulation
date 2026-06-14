@@ -1,0 +1,53 @@
+{
+  "bug_type": "integration_pass_through",
+  "verdict": "FIXED",
+  "files_changed": [
+    "scripts/simulate_hierarchical_controller.py",
+    "wheeled_biped/controllers/shape_posture_controller.py",
+    "scripts/evaluate_hy2_div_authority_candidates.py",
+    "tests/test_hip_yaw_divergence_control.py",
+    "scripts/debug_gate_pass_through.py"
+  ],
+  "cli_args_added": [
+    "--hip-yaw-divergence-z-low (default: 0.300)",
+    "--hip-yaw-divergence-z-high (default: 0.393)"
+  ],
+  "build_balance_core_controllers_changes": [
+    "Added hip_yaw_divergence_z_low parameter",
+    "Added hip_yaw_divergence_z_high parameter",
+    "Passes both to ShapePostureController"
+  ],
+  "telemetry_fields_added": [
+    "hip_yaw_div_z_low",
+    "hip_yaw_div_z_high"
+  ],
+  "tests_run": {
+    "unit_tests": {
+      "test_hip_yaw_divergence_control.py": "32 passed",
+      "test_shape_posture_hip_yaw_sign.py": "9 passed",
+      "test_step_e_hip_yaw_authority_fix.py": "5 passed"
+    },
+    "gate_verification": {
+      "A0_nominal": "gate=0.000 (PASS - expected ~0.0)",
+      "A0_low_0p300": "gate=1.000 (PASS - expected ~1.0)",
+      "A0_high_0p480": "gate=0.000 (PASS - expected ~0.0)",
+      "B1_nominal": "gate=0.500 (PASS - expected >0.0)",
+      "B1_low_0p300": "gate=1.000 (PASS - expected ~1.0)",
+      "B1_high_0p480": "gate=0.028 (PASS - expected >0.0)"
+    }
+  },
+  "candidate_evaluation_500step": {
+    "A0": {"nominal": "PASS", "low_0p300": "PASS", "high_0p480": "PASS"},
+    "A1": {"nominal": "PASS", "low_0p300": "PASS", "high_0p480": "PASS"},
+    "A2": {"nominal": "PASS", "low_0p300": "PASS", "high_0p480": "PASS"},
+    "B1": {"nominal": "PASS", "low_0p300": "PASS", "high_0p480": "PASS"},
+    "B2": {"nominal": "PASS", "low_0p300": "PASS", "high_0p480": "PASS"}
+  },
+  "key_findings": [
+    "Gate pass-through is FIXED - candidates produce different gate values",
+    "A0 remains baseline - clipping at low_0p300 does not improve divergence",
+    "HY2-DIV authority fundamentally insufficient at low heights",
+    "Extended gate (B1/B2) provides nominal coverage but doesn't improve performance"
+  ],
+  "final_action": "RESUME_HY2_DIV_AUTHORITY_EVALUATION"
+}

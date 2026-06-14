@@ -1,0 +1,11 @@
+{
+  "full_validation_run": false,
+  "reason": "No deployable candidate passed the small survival gate; diagnostic qfrc authority implies low-level control redesign is required before full validation.",
+  "baseline_all_height": {
+    "mean_survival_s": 3.8167,
+    "fall_rate": 0.8333,
+    "pitch_rms_deg": 1.1938,
+    "roll_rms_deg": 21.163,
+    "action_saturation": 0.0
+  }
+}

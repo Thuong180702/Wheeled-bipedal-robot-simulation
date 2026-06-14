@@ -1,0 +1,152 @@
+{
+  "audit_date": "2026-06-05",
+  "fix_type": "hip_yaw_sign_convention",
+  "final_decision": "HIP_YAW_SIGN_FIX_PARTIAL_DIVERGENCE_REMAINS",
+  "worktree_status": {
+    "before": "dirty",
+    "after": "dirty",
+    "modified_files": [
+      "wheeled_biped/controllers/shape_posture_controller.py",
+      "tests/test_shape_posture_hip_yaw_sign.py"
+    ]
+  },
+  "classification": {
+    "classification": "torque_formula_sign_wrong",
+    "confidence": "HIGH",
+    "reasoning": [
+      "Telemetry showed 0% sign correctness across all heights",
+      "Error definition (ref - pos) is standard and correct",
+      "Torque formula had incorrect negation: tau = -(kp*error - kd*vel)",
+      "The 'inverted axis' comment was incorrect",
+      "Removal of negation makes tau = +kp*error for positive error",
+      "Sign correctness improved to >93% at all heights"
+    ]
+  },
+  "code_change": {
+    "file": "wheeled_biped/controllers/shape_posture_controller.py",
+    "line": 250,
+    "before": "tau_pd = -(self.kp_hip_yaw * posture_error[idx] - self.kd_hip_yaw * joint_vel[idx])",
+    "after": "tau_pd = self.kp_hip_yaw * posture_error[idx] - self.kd_hip_yaw * joint_vel[idx]"
+  },
+  "before_after": {
+    "sign_correct_left_nominal": {"before": "0%", "after": "93.9%", "change": "+93.9%"},
+    "sign_correct_right_nominal": {"before": "0%", "after": "99.7%", "change": "+99.7%"},
+    "sign_correct_left_low": {"before": "0%", "after": "97.1%", "change": "+97.1%"},
+    "sign_correct_right_low": {"before": "0%", "after": "98.9%", "change": "+98.9%"},
+    "sign_correct_left_high": {"before": "0%", "after": "99.3%", "change": "+99.3%"},
+    "sign_correct_right_high": {"before": "0%", "after": "99.5%", "change": "+99.5%"},
+    "divergence_rms_nominal": {"before": "0.0447 rad", "after": "0.2446 rad", "change": "INCREASED"},
+    "divergence_rms_low": {"before": "0.3575 rad", "after": "0.3690 rad", "change": "~SAME"},
+    "divergence_rms_high": {"before": "0.2825 rad", "after": "0.3399 rad", "change": "INCREASED"}
+  },
+  "evaluation_results": {
+    "nominal": {
+      "survived": true,
+      "steps": 5000,
+      "sign_correct_left_pct": 93.9,
+      "sign_correct_right_pct": 99.7,
+      "hip_yaw_abs_max_rad": 0.2538,
+      "hip_yaw_abs_rms_rad": null,
+      "divergence_rms_rad": 0.2446,
+      "common_mode_rms_rad": 0.0065,
+      "wbc_applied": false,
+      "hidden_torque_max_Nm": 0.0,
+      "ownership_violations": 0
+    },
+    "low_0p300": {
+      "survived": true,
+      "steps": 5000,
+      "sign_correct_left_pct": 97.1,
+      "sign_correct_right_pct": 98.9,
+      "hip_yaw_abs_max_rad": 0.2950,
+      "hip_yaw_abs_rms_rad": null,
+      "divergence_rms_rad": 0.3690,
+      "common_mode_rms_rad": 0.0033,
+      "wbc_applied": false,
+      "hidden_torque_max_Nm": 0.0,
+      "ownership_violations": 0
+    },
+    "high_0p480": {
+      "survived": true,
+      "steps": 5000,
+      "sign_correct_left_pct": 99.3,
+      "sign_correct_right_pct": 99.5,
+      "hip_yaw_abs_max_rad": 0.3451,
+      "hip_yaw_abs_rms_rad": null,
+      "divergence_rms_rad": 0.3399,
+      "common_mode_rms_rad": 0.0005,
+      "wbc_applied": false,
+      "hidden_torque_max_Nm": 0.0,
+      "ownership_violations": 0
+    }
+  },
+  "validation_gates": {
+    "gate_1_sign_correct_left": {"threshold": "> 95%", "result": "93.9-99.3%", "status": "MARGINAL"},
+    "gate_2_sign_correct_right": {"threshold": "> 95%", "result": "98.9-99.7%", "status": "PASS"},
+    "gate_3_hip_yaw_max_nominal": {"threshold": "< 0.07 rad", "result": "0.254 rad", "status": "FAIL"},
+    "gate_4_hip_yaw_max_boundary": {"threshold": "< 0.15 rad", "result": "0.295-0.345 rad", "status": "FAIL"},
+    "gate_5_wbc_applied": {"threshold": "= 0 Nm", "result": "0 Nm", "status": "PASS"},
+    "gate_6_ownership_violations": {"threshold": "= 0", "result": "0", "status": "PASS"}
+  },
+  "tests": {
+    "added_updated": [
+      "tests/test_shape_posture_hip_yaw_sign.py"
+    ],
+    "sign_convention_tests": {
+      "test_shape_posture_hip_yaw_sign.py": "9/9 PASS",
+      "test_step_e_hip_yaw_authority_fix.py": "5/5 PASS"
+    },
+    "regression_tests": {
+      "test_hip_yaw_support_feedforward.py": "10/10 PASS",
+      "test_sagittal_velocity_damped_balance_controller.py": "39/39 PASS"
+    }
+  },
+  "remaining_issues": [
+    {
+      "issue": "Divergence increased after sign fix",
+      "severity": "MEDIUM",
+      "classification": "needs_investigation",
+      "hypothesis": "Divergence may have been artificially suppressed by sign bug, not caused by it"
+    },
+    {
+      "issue": "Hip-Yaw Max exceeds thresholds",
+      "severity": "MEDIUM",
+      "classification": "likely_related_to_divergence"
+    }
+  ],
+  "recommendation": "Sign fix is correct. Investigate divergence increase before implementing HY2-DIV.",
+  "constraints_followed": {
+    "did_not_add_wbc": true,
+    "did_not_enable_legacy_wbc": true,
+    "did_not_modify_hip_roll": true,
+    "did_not_modify_lateral_roll": true,
+    "did_not_modify_sagittal": true,
+    "did_not_modify_support_position": true,
+    "did_not_tune_gains": true,
+    "did_not_implement_differential_wheel_yaw": true,
+    "did_not_implement_mode_based_hip_yaw": true,
+    "did_not_implement_hy2_div": true,
+    "did_not_relax_thresholds": true,
+    "did_not_commit": true
+  },
+  "artifacts": {
+    "audit": [
+      "scripts/audit_hip_yaw_pd_sign_convention.py",
+      "outputs/hip_yaw_sign_convention_fix/hip_yaw_pd_sign_convention_audit.json",
+      "outputs/hip_yaw_sign_convention_fix/hip_yaw_sign_convention_audit_report.md"
+    ],
+    "tests": [
+      "tests/test_shape_posture_hip_yaw_sign.py"
+    ],
+    "evaluation": [
+      "scripts/run_hip_yaw_sign_smoke_tests.py",
+      "scripts/run_hip_yaw_sign_5000_eval.py",
+      "scripts/analyze_hip_yaw_sign_fix_5000.py",
+      "outputs/hip_yaw_sign_convention_fix/smoke_100/smoke_test_results.json",
+      "outputs/hip_yaw_sign_convention_fix/step_e_5000/hip_yaw_sign_fix_5000_metrics.json"
+    ],
+    "report": [
+      "docs/validation/hip_yaw_sign_convention_fix_report.md"
+    ]
+  }
+}

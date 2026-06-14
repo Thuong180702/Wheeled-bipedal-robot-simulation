@@ -1,0 +1,44 @@
+{
+  "original_path": "outputs/boundary_step_e_step_c_log_verification",
+  "original_size": "74.5M",
+  "original_size_bytes": 78084590,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "analysis/boundary_step_e_step_c_log_summary.json",
+      "size_bytes": 21755
+    },
+    {
+      "file": "analysis/boundary_step_e_step_c_metric_comparison.csv",
+      "size_bytes": 2211
+    },
+    {
+      "file": "analysis/high_0p480_step_c_event_order.json",
+      "size_bytes": 434
+    },
+    {
+      "file": "analysis/high_0p480_step_e_event_order.json",
+      "size_bytes": 434
+    },
+    {
+      "file": "analysis/low_0p300_step_c_event_order.json",
+      "size_bytes": 449
+    },
+    {
+      "file": "analysis/low_0p300_step_c_failure_windows.csv",
+      "size_bytes": 119731
+    },
+    {
+      "file": "analysis/low_0p300_step_e_event_order.json",
+      "size_bytes": 449
+    },
+    {
+      "file": "analysis/low_0p300_step_e_failure_windows.csv",
+      "size_bytes": 119720
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,100 @@
+{
+  "phase": "Phase 2: Telemetry Inventory",
+  "date": "2026-06-06",
+  "audit_output_dir": "outputs/d2_height_tracking_and_hiproll_audit",
+  "telemetry_sources": {
+    "experiment_0_summary": {
+      "path": "outputs/height_range_extension_experiment_0/experiment_0_baseline_ladder_summary.json",
+      "type": "summary_json",
+      "content": "Aggregated results from smoke/validation/screening phases",
+      "coverage": {
+        "0.300m": "5000-step extreme validation",
+        "0.320m": "2000-step screening",
+        "0.340m": "2000-step screening",
+        "0.360m": "2000-step screening",
+        "0.380m": "2000-step screening",
+        "0.430m": "2000-step screening",
+        "0.450m": "2000-step screening",
+        "0.465m": "100-step smoke",
+        "0.480m": "5000-step extreme validation"
+      }
+    },
+    "hip_yaw_sign_convention_fix_smoke_100": {
+      "path": "outputs/hip_yaw_sign_convention_fix/smoke_100/",
+      "type": "telemetry_csv",
+      "files": {
+        "nominal": "nominal_telemetry.csv",
+        "low_0p300": "low_0p300_telemetry.csv",
+        "high_0p480": "high_0p480_telemetry.csv"
+      },
+      "steps": 100,
+      "note": "HY2-DIV disabled smoke tests with D2 profile"
+    },
+    "hip_yaw_sign_convention_fix_5000": {
+      "path": "outputs/hip_yaw_sign_convention_fix/step_e_5000/",
+      "type": "telemetry_csv",
+      "files": {
+        "nominal": "nominal_5000_telemetry.csv",
+        "low_0p300": "low_0p300_5000_telemetry.csv",
+        "high_0p480": "high_0p480_5000_telemetry.csv"
+      },
+      "steps": 5000,
+      "note": "HY2-DIV disabled 5000-step tests with D2 profile"
+    }
+  },
+  "missing_telemetry": {
+    "0.300m_detailed_5000": {
+      "status": "MISSING",
+      "note": "Experiment 0 summary exists but no detailed CSV with joint-by-joint analysis",
+      "needed_for": ["Phase 3: 0.300m height drop audit"]
+    },
+    "0.380m_detailed_2000": {
+      "status": "MISSING",
+      "note": "Experiment 0 summary exists but no detailed CSV with joint-by-joint analysis",
+      "needed_for": ["Phase 4: 0.380m hip-roll torque growth audit"]
+    },
+    "0.480m_detailed_5000": {
+      "status": "MISSING",
+      "note": "Experiment 0 summary exists but no detailed CSV with joint-by-joint analysis",
+      "needed_for": ["Phase 4: reference comparison"]
+    }
+  },
+  "setup_files": {
+    "low_0p300": {
+      "path": "outputs/physical_target_height_setups/low_0p300_setup.json",
+      "target_com_z_m": 0.300,
+      "achieved_com_z_m": 0.2955,
+      "hip_pitch_ref": 1.376,
+      "knee_ref": 2.348,
+      "setup_valid": true,
+      "static_feasible": true,
+      "candidate_is_root_z_only": false,
+      "wheel_contacts": "both_wheels",
+      "non_wheel_contacts": 0
+    },
+    "low_0p380": {
+      "path": "outputs/physical_target_height_setups/low_0p380_setup.json",
+      "target_com_z_m": 0.380,
+      "achieved_com_z_m": 0.3794,
+      "hip_pitch_ref": 1.076,
+      "knee_ref": 1.898,
+      "setup_valid": true,
+      "static_feasible": true,
+      "candidate_is_root_z_only": false,
+      "wheel_contacts": "both_wheels",
+      "non_wheel_contacts": 0
+    },
+    "high_0p480": {
+      "path": "outputs/physical_target_height_setups/high_0p480_setup.json",
+      "target_com_z_m": 0.480,
+      "note": "Use experiment 0 generated setup",
+      "generated_by": "scripts/generate_ladder_height_setups.py"
+    }
+  },
+  "verification": {
+    "hy2_div_disabled_in_all_sources": true,
+    "d2_profile_used": true,
+    "wbc_balance_core_four_source": true,
+    "controller_mode": "balance-core"
+  }
+}

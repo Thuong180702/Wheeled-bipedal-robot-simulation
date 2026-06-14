@@ -1,0 +1,149 @@
+{
+  "evaluation_status": "INVALID",
+  "baseline_reproduction": "FAILED",
+  "soft_mode_results": "UNTRUSTWORTHY",
+
+  "required_answers": {
+    "was_previous_evaluation_invalid": {
+      "answer": "YES - ALL THREE EVALUATION ATTEMPTS INVALID",
+      "evidence": [
+        "Attempt 1: Baseline 0.24s vs expected 0.86s (72% degradation)",
+        "Attempt 2: Baseline 0.38s vs expected 0.86s (56% degradation)",
+        "Attempt 3: Baseline 0.38s vs expected 0.86s (56% degradation)",
+        "All candidates produce identical results in Attempt 3, proving soft mode config has zero effect"
+      ]
+    },
+
+    "what_control_path_mismatch": {
+      "answer": "MULTIPLE FUNDAMENTAL MISMATCHES",
+      "details": [
+        "Attempt 1: Controller outputs passed directly to env.step() without hybrid_pid_plus_torque integration",
+        "Attempt 2: hybrid_pid_plus_torque enabled but max_ctrl_fraction=0.0 disabled WBC torque residuals",
+        "Attempt 3: Correct WBC config (strong_k20) but soft mode parameters not applied during execution",
+        "Root issue: Evaluation script attempts to integrate DualRateBalanceController with BalanceEnv in a way that differs from Step 5.18c's proven pattern"
+      ]
+    },
+
+    "does_repaired_baseline_match_step5_18c": {
+      "answer": "NO - BASELINE REPRODUCTION FAILED",
+      "expected_vs_actual": {
+        "survival_time": {
+          "expected": "0.86s",
+          "actual": "0.38s",
+          "degradation": "56%"
+        },
+        "fall_rate": {
+          "expected": "0.80",
+          "actual": "1.00",
+          "degradation": "25%"
+        },
+        "roll_rms": {
+          "expected": "15.9 deg",
+          "actual": "24.94 deg",
+          "degradation": "57%"
+        },
+        "saturation_rate": {
+          "expected": "93.75%",
+          "actual": "94.74%",
+          "degradation": "1%"
+        }
+      },
+      "conclusion": "Baseline does not reproduce Step 5.18c, proving control pipeline integration is wrong"
+    },
+
+    "are_soft_mode_results_trustworthy": {
+      "answer": "NO - RESULTS ARE COMPLETELY UNTRUSTWORTHY",
+      "evidence": [
+        "All 4 candidates produce IDENTICAL results (0.38s survival, 94.74% saturation)",
+        "Baseline (stiffness=1.0) identical to Aggressive (stiffness=0.3)",
+        "Conservative (stiffness=0.7) identical to Moderate (stiffness=0.5)",
+        "This proves soft mode parameters are NOT being applied during controller execution"
+      ],
+      "expected_behavior": "If stiffness reduction was working, different candidates would show DIFFERENT survival times and saturation rates",
+      "actual_behavior": "All candidates show IDENTICAL behavior, proving soft mode config has zero effect"
+    }
+  },
+
+  "evaluation_attempts_summary": {
+    "attempt_1": {
+      "script": "phase_b9_step5_20_evaluation.py",
+      "approach": "Direct controller-to-env integration",
+      "baseline_survival": "0.24s",
+      "failure_mode": "Bypassed hybrid_pid_plus_torque control pipeline"
+    },
+    "attempt_2": {
+      "script": "phase_b9_step5_20_evaluation_corrected.py (v1)",
+      "approach": "hybrid_pid_plus_torque enabled but zero torque",
+      "baseline_survival": "0.38s",
+      "failure_mode": "max_ctrl_fraction=0.0 disabled WBC torque residuals"
+    },
+    "attempt_3": {
+      "script": "phase_b9_step5_20_evaluation_corrected.py (v2)",
+      "approach": "hybrid_pid_plus_torque with strong_k20 WBC config",
+      "baseline_survival": "0.38s",
+      "failure_mode": "Soft mode config loaded but not applied during execution"
+    }
+  },
+
+  "critical_finding": {
+    "observation": "All candidates produce identical results in Attempt 3",
+    "implication": "Soft mode stiffness reduction parameters have ZERO effect on controller behavior",
+    "proof": {
+      "baseline": {"stiffness": 1.0, "survival": "0.38s", "saturation": "94.74%"},
+      "conservative": {"stiffness": 0.7, "survival": "0.38s", "saturation": "94.74%"},
+      "moderate": {"stiffness": 0.5, "survival": "0.38s", "saturation": "94.74%"},
+      "aggressive": {"stiffness": 0.3, "survival": "0.38s", "saturation": "94.74%"}
+    }
+  },
+
+  "root_cause_hypotheses": {
+    "hypothesis_1": {
+      "description": "controller.reset() clears soft mode config after initialization",
+      "likelihood": "MEDIUM",
+      "investigation_needed": "Add debug logging to verify soft mode config persists after reset()"
+    },
+    "hypothesis_2": {
+      "description": "DualRateBalanceController.compute_action() does not use soft mode config fields",
+      "likelihood": "HIGH",
+      "investigation_needed": "Verify soft mode config is actually applied to LQR gains during compute_action()"
+    },
+    "hypothesis_3": {
+      "description": "Control pipeline integration bypasses controller's internal logic",
+      "likelihood": "HIGH",
+      "investigation_needed": "Compare evaluation integration pattern with Step 5.18c's proven pattern"
+    }
+  },
+
+  "recommendation": {
+    "action": "REBUILD_EVALUATION_FROM_STEP_5_18C",
+    "rationale": [
+      "Step 5.18c's evaluation infrastructure is proven to work (0.86s survival)",
+      "Copying it exactly minimizes risk of introducing new bugs",
+      "Clear validation gate (baseline must match Step 5.18c) prevents wasted effort",
+      "If baseline still fails, we know the problem is deeper than evaluation setup"
+    ],
+    "implementation_plan": [
+      "Copy phase_b9_step5_18c_torque_gain_saturation_calibration.py to phase_b9_step5_20_evaluation_v2.py",
+      "Keep run_h060_survival_evaluation() function exactly as-is",
+      "Replace TorqueGainCandidate with SoftModeCandidate (includes WBC gains + soft mode params)",
+      "Modify make_controller() to merge soft mode config into controller config",
+      "Run baseline candidate FIRST and verify 0.86s survival",
+      "If baseline fails, STOP and debug until it matches Step 5.18c",
+      "If baseline succeeds, test stiffness reduction variants"
+    ],
+    "success_criteria": [
+      "Baseline reproduces Step 5.18c: ~0.86s survival, ~94% saturation",
+      "Stiffness reduction variants show DIFFERENT behavior from baseline",
+      "Results are trustworthy and can inform architectural decisions"
+    ]
+  },
+
+  "step_6_status": {
+    "status": "BLOCKED",
+    "gate_requirement": "Controller must beat reset-fixed baseline (3.8167s survival)",
+    "current_best": "Step 5.18c strong_k20 (0.86s at h=0.60)",
+    "gap": "2.96s survival improvement needed"
+  },
+
+  "conclusion": "The Step 5.20 evaluation infrastructure is fundamentally broken and cannot produce valid results. The evaluation must be rebuilt from scratch by copying Step 5.18c's exact evaluation pattern, not adapting it. Until baseline reproduction is verified, no conclusions can be drawn about the stiffness reduction hypothesis."
+}

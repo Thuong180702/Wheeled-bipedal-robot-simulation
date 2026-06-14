@@ -1,0 +1,52 @@
+{
+  "phase": "FIVE_VARIANT_STANDING_BASELINE_AUDIT",
+  "date": "2026-06-06",
+  "final_decision": "FIVE_VARIANT_BASELINE_STILL_PASSES",
+  "step_e": {
+    "old_baseline_passed": true,
+    "all_5_variants_passed": true,
+    "profile": "candidate_D2_wheel_velocity_damping_light",
+    "source": "step_e_hv_sagittal_schedule_fix_summary.json"
+  },
+  "step_c": {
+    "old_baseline_passed": true,
+    "all_5_cases_passed": true,
+    "source": "step_c_height_recovery_after_step_e_hv_fix/step_c_pass_fail_summary.json"
+  },
+  "hy2_div_status": {
+    "enabled_in_old_baseline": false,
+    "enabled_in_current_worktree": false,
+    "default_disabled": true
+  },
+  "wbc_status": {
+    "applied_in_old_baseline": false,
+    "applied_in_current_worktree": false
+  },
+  "height_targets": {
+    "old_baseline": {
+      "low_small": "0.394-0.395m",
+      "low_tiny": "0.399m",
+      "nominal": "0.404m",
+      "high_tiny": "0.409m",
+      "high_small": "0.413-0.414m"
+    },
+    "current_posture_validation": {
+      "low_0p300": "0.300m",
+      "nominal": "0.404m",
+      "high_0p480": "0.480m"
+    }
+  },
+  "root_cause_of_posture_failures": "Current validation tested EXTREME heights (0.30m, 0.48m) outside validated envelope (0.394-0.414m)",
+  "recommendation": "Test HY2-DIV at validated heights first before changing default controller",
+  "regression": false,
+  "files_created": [
+    "docs/validation/five_variant_step_e_step_c_baseline_verification_report.md",
+    "outputs/five_variant_step_e_step_c_baseline_audit/worktree_status.txt",
+    "outputs/five_variant_step_e_step_c_baseline_audit/current_diff_stat.txt",
+    "outputs/five_variant_step_e_step_c_baseline_audit/recent_commits.txt",
+    "outputs/five_variant_step_e_step_c_baseline_audit/old_success_artifact_inventory.md",
+    "outputs/five_variant_step_e_step_c_baseline_audit/old_known_good_config.json",
+    "docs/validation/old_known_good_step_e_step_c_config.md",
+    "outputs/five_variant_step_e_step_c_baseline_audit/old_baseline_verified.json"
+  ]
+}

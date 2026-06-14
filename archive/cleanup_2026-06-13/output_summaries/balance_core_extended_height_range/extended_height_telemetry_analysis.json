@@ -1,0 +1,228 @@
+{
+  "validation_method": "full_balance_core_4_source_controller",
+  "target_steps": 500,
+  "results": [
+    {
+      "variant_name": "low_5cm",
+      "telemetry_file": "telemetry_1780021357.csv",
+      "survived_steps": 500,
+      "pitch_x_range_rad": [
+        -7.86033779149875e-05,
+        0.0183572638779878
+      ],
+      "pitch_x_range_deg": [
+        -0.004503973554528784,
+        1.0518712202087008
+      ],
+      "roll_y_range_rad": [
+        0.0,
+        0.0034145477693527
+      ],
+      "roll_y_range_deg": [
+        0.0,
+        0.1956535871839097
+      ],
+      "yaw_z_range_rad": [
+        0.0,
+        0.0154627244846458
+      ],
+      "yaw_z_drift_rad": 0.0154627244846458,
+      "com_z_initial_m": 0.3529088199138641,
+      "com_z_final_m": 0.35385462641716,
+      "com_z_range_m": [
+        0.3521446585655212,
+        0.35385462641716
+      ],
+      "com_z_drift_m": 0.0009458065032958984,
+      "xy_drift_m": 1.4095559072749129,
+      "wheel_vel_left_rms": 5.311446440341055,
+      "wheel_vel_right_rms": 5.3226510738544786,
+      "tau_wbc_norm": 61.924991607666016
+    },
+    {
+      "variant_name": "low_5cm",
+      "telemetry_file": "telemetry_1780021342.csv",
+      "survived_steps": 500,
+      "pitch_x_range_rad": [
+        -7.86033779149875e-05,
+        0.0183572638779878
+      ],
+      "pitch_x_range_deg": [
+        -0.004503973554528784,
+        1.0518712202087008
+      ],
+      "roll_y_range_rad": [
+        0.0,
+        0.0034145477693527
+      ],
+      "roll_y_range_deg": [
+        0.0,
+        0.1956535871839097
+      ],
+      "yaw_z_range_rad": [
+        0.0,
+        0.0154627244846458
+      ],
+      "yaw_z_drift_rad": 0.0154627244846458,
+      "com_z_initial_m": 0.3529088199138641,
+      "com_z_final_m": 0.35385462641716,
+      "com_z_range_m": [
+        0.3521446585655212,
+        0.35385462641716
+      ],
+      "com_z_drift_m": 0.0009458065032958984,
+      "xy_drift_m": 1.4095559072749129,
+      "wheel_vel_left_rms": 5.311446440341055,
+      "wheel_vel_right_rms": 5.3226510738544786,
+      "tau_wbc_norm": 61.924991607666016
+    },
+    {
+      "variant_name": "high_5cm",
+      "telemetry_file": "telemetry_1780021197.csv",
+      "survived_steps": 500,
+      "pitch_x_range_rad": [
+        -0.0,
+        0.0553355664014816
+      ],
+      "pitch_x_range_deg": [
+        -0.0,
+        3.1707279548048954
+      ],
+      "roll_y_range_rad": [
+        0.0,
+        0.0034683509729802
+      ],
+      "roll_y_range_deg": [
+        0.0,
+        0.19873651075176546
+      ],
+      "yaw_z_range_rad": [
+        0.0,
+        0.0195358332458699
+      ],
+      "yaw_z_drift_rad": 0.0195358332458699,
+      "com_z_initial_m": 0.4540134966373443,
+      "com_z_final_m": 0.461786150932312,
+      "com_z_range_m": [
+        0.4539341926574707,
+        0.462179034948349
+      ],
+      "com_z_drift_m": 0.007772654294967707,
+      "xy_drift_m": 3.272379383046489,
+      "wheel_vel_left_rms": 12.091442645590465,
+      "wheel_vel_right_rms": 12.109759673081188,
+      "tau_wbc_norm": 92.29592895507812
+    },
+    {
+      "variant_name": "high_5cm",
+      "telemetry_file": "telemetry_1780021160.csv",
+      "survived_steps": 500,
+      "pitch_x_range_rad": [
+        -0.0,
+        0.0553355664014816
+      ],
+      "pitch_x_range_deg": [
+        -0.0,
+        3.1707279548048954
+      ],
+      "roll_y_range_rad": [
+        0.0,
+        0.0034683509729802
+      ],
+      "roll_y_range_deg": [
+        0.0,
+        0.19873651075176546
+      ],
+      "yaw_z_range_rad": [
+        0.0,
+        0.0195358332458699
+      ],
+      "yaw_z_drift_rad": 0.0195358332458699,
+      "com_z_initial_m": 0.4540134966373443,
+      "com_z_final_m": 0.461786150932312,
+      "com_z_range_m": [
+        0.4539341926574707,
+        0.462179034948349
+      ],
+      "com_z_drift_m": 0.007772654294967707,
+      "xy_drift_m": 3.272379383046489,
+      "wheel_vel_left_rms": 12.091442645590465,
+      "wheel_vel_right_rms": 12.109759673081188,
+      "tau_wbc_norm": 92.29592895507812
+    },
+    {
+      "variant_name": "low_2cm",
+      "telemetry_file": "telemetry_1780021106.csv",
+      "survived_steps": 500,
+      "pitch_x_range_rad": [
+        -0.0,
+        0.0225392784923315
+      ],
+      "pitch_x_range_deg": [
+        -0.0,
+        1.291500657610595
+      ],
+      "roll_y_range_rad": [
+        0.0,
+        0.002870007418096
+      ],
+      "roll_y_range_deg": [
+        0.0,
+        0.1644514250569008
+      ],
+      "yaw_z_range_rad": [
+        0.0,
+        0.0185026048187158
+      ],
+      "yaw_z_drift_rad": 0.0185026048187158,
+      "com_z_initial_m": 0.3838100433349609,
+      "com_z_final_m": 0.3868292272090912,
+      "com_z_range_m": [
+        0.3833694458007812,
+        0.3868298530578613
+      ],
+      "com_z_drift_m": 0.0030191838741303045,
+      "xy_drift_m": 1.5571150372474953,
+      "wheel_vel_left_rms": 5.863100050030615,
+      "wheel_vel_right_rms": 5.875502070008511,
+      "tau_wbc_norm": 77.26587677001953
+    },
+    {
+      "variant_name": "low_2cm",
+      "telemetry_file": "telemetry_1780020958.csv",
+      "survived_steps": 500,
+      "pitch_x_range_rad": [
+        -0.0,
+        0.0225392784923315
+      ],
+      "pitch_x_range_deg": [
+        -0.0,
+        1.291500657610595
+      ],
+      "roll_y_range_rad": [
+        0.0,
+        0.002870007418096
+      ],
+      "roll_y_range_deg": [
+        0.0,
+        0.1644514250569008
+      ],
+      "yaw_z_range_rad": [
+        0.0,
+        0.0185026048187158
+      ],
+      "yaw_z_drift_rad": 0.0185026048187158,
+      "com_z_initial_m": 0.3838100433349609,
+      "com_z_final_m": 0.3868292272090912,
+      "com_z_range_m": [
+        0.3833694458007812,
+        0.3868298530578613
+      ],
+      "com_z_drift_m": 0.0030191838741303045,
+      "xy_drift_m": 1.5571150372474953,
+      "wheel_vel_left_rms": 5.863100050030615,
+      "wheel_vel_right_rms": 5.875502070008511,
+      "tau_wbc_norm": 77.26587677001953
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "variant_name": "high_small",
+  "command": [
+    "python",
+    "scripts/simulate_hierarchical_controller.py",
+    "--controller-mode",
+    "balance-core",
+    "--sagittal-controller",
+    "velocity-damped",
+    "--height-variant-setup",
+    "outputs/balance_core_true_height_variants/variant_high_small/variant_setup.json",
+    "--steps",
+    "5000",
+    "--telemetry-decimation",
+    "1",
+    "--failure-window-steps",
+    "500",
+    "--write-run-summary-sidecar",
+    "--vd-sagittal-authority-profile",
+    "baseline"
+  ],
+  "simulation_returncode": null,
+  "simulation_error": null,
+  "telemetry_path": "outputs\\step_e_height_variant_position_hold_audit_v2\\high_small_telemetry.csv",
+  "verdict": "FAIL",
+  "primary_failure": null,
+  "failure_classifications": [
+    "step_e_position_regression_at_height_variant",
+    "step_e_posture_regression_at_height_variant",
+    "step_e_posture_regression_at_height_variant",
+    "step_e_wheel_velocity_runaway_at_height_variant"
+  ],
+  "failure_lead": "position-led",
+  "required_fails": [
+    "support_max_abs=0.154629 > 0.15",
+    "hip_yaw_max=0.124348 > 0.07",
+    "hip_yaw_gt_0.10_percent=4.16% > 0%",
+    "wheel_vel_max=6.041556 > 5.0"
+  ],
+  "preferred_fails": []
+}

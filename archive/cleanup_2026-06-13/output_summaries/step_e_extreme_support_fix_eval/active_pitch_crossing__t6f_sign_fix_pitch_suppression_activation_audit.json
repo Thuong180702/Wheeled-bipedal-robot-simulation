@@ -1,0 +1,21 @@
+{
+  "classification": "PITCH_SUPPRESSION_BUG_CONDITION_TRUE_BUT_NOT_ACTIVE",
+  "recommendation": "FIX_PITCH_SUPPRESSION_IMPLEMENTATION",
+  "explanation": "Condition was true 166 times (arch_fix active AND error > 0.10m) but pitch suppression was never activated. This indicates a bug in the pitch suppression implementation - likely wrong variable, placement before arch_fix_active is computed, or overwritten later.",
+  "error_column_used": "active_pitch_crossing_signed_error_m",
+  "condition_counts": {
+    "arch_fix_active": 169,
+    "error_gt_010": 194,
+    "both_conditions_true": 166,
+    "pitch_suppressed": 0,
+    "discrepancy": 166
+  },
+  "error_stats_during_arch_fix": {
+    "min": 0.0975800218517731,
+    "max": 0.1915598852117023,
+    "mean": 0.15517496267440606,
+    "median": 0.1613686992899781,
+    "p95": 0.18865605172676855,
+    "p99": 0.19081864932032
+  }
+}

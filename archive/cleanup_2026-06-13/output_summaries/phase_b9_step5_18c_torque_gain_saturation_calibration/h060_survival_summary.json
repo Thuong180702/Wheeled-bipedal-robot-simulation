@@ -1,0 +1,26 @@
+{
+  "phase": "h060_survival_evaluation",
+  "baseline_h060_survival_s": 0.52,
+  "candidates_tested": 5,
+  "episodes_per_candidate": 5,
+  "max_steps": 60,
+  "kept_candidates": [
+    "conservative_k10",
+    "moderate_k15",
+    "strong_k20",
+    "aggressive_k30",
+    "very_strong_k40"
+  ],
+  "best_candidate": {
+    "candidate": "strong_k20",
+    "k_roll": 20.0,
+    "k_pitch": 5.0,
+    "max_ctrl_fraction": 0.5,
+    "mean_survival_s": 0.86,
+    "fall_rate": 0.8,
+    "pitch_rms_deg": 7.520421538886349,
+    "roll_rms_deg": 15.895392520918964,
+    "action_saturation_rate": 0.9737477826157072,
+    "mean_torque_residual_abs": 0.5435727834701538
+  }
+}

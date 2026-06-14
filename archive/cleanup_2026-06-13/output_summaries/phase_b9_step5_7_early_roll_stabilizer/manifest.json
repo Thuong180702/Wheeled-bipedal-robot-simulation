@@ -1,0 +1,16 @@
+{
+  "original_path": "outputs/phase_b9_step5_7_early_roll_stabilizer",
+  "original_size": "4.8K",
+  "original_size_bytes": 4876,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "best_early_roll_summary.json",
+      "size_bytes": 830
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

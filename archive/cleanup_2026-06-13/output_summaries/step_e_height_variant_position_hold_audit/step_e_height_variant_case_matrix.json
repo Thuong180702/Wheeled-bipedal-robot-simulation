@@ -1,0 +1,87 @@
+[
+  {
+    "variant_name": "nominal",
+    "target_com_z_m": 0.4039993119017284,
+    "achieved_initial_com_z_m": 0.4039993119017284,
+    "calibrated_root_z_m": 0.5357421875000001,
+    "hip_pitch_ref": 0.926052,
+    "knee_ref": 1.748364,
+    "setup_valid": true,
+    "initial_wheel_contacts": {
+      "left": true,
+      "right": true
+    },
+    "initial_non_wheel_contacts": 0,
+    "initial_support_error_m": 0.00013185080431043475,
+    "official_steps_requested": 5000,
+    "fresh_500_step_gate_attempted": true
+  },
+  {
+    "variant_name": "low_tiny",
+    "target_com_z_m": 0.3989993119017284,
+    "achieved_initial_com_z_m": 0.3986319235445995,
+    "calibrated_root_z_m": 0.529296875,
+    "hip_pitch_ref": 0.9365783157894737,
+    "knee_ref": 1.7799429473684212,
+    "setup_valid": true,
+    "initial_wheel_contacts": {
+      "left": true,
+      "right": true
+    },
+    "initial_non_wheel_contacts": 0,
+    "initial_support_error_m": 0.0023785304673077344,
+    "official_steps_requested": 5000,
+    "fresh_500_step_gate_attempted": true
+  },
+  {
+    "variant_name": "high_tiny",
+    "target_com_z_m": 0.4089993119017284,
+    "achieved_initial_com_z_m": 0.4093813621361716,
+    "calibrated_root_z_m": 0.5421875,
+    "hip_pitch_ref": 0.9155256842105263,
+    "knee_ref": 1.7167850526315789,
+    "setup_valid": true,
+    "initial_wheel_contacts": {
+      "left": true,
+      "right": true
+    },
+    "initial_non_wheel_contacts": 0,
+    "initial_support_error_m": 0.0021772141982504285,
+    "official_steps_requested": 5000,
+    "fresh_500_step_gate_attempted": true
+  },
+  {
+    "variant_name": "low_small",
+    "target_com_z_m": 0.3939993119017284,
+    "achieved_initial_com_z_m": 0.3952343994492738,
+    "calibrated_root_z_m": 0.5248046875000001,
+    "hip_pitch_ref": 0.957630947368421,
+    "knee_ref": 1.8009955789473684,
+    "setup_valid": true,
+    "initial_wheel_contacts": {
+      "left": true,
+      "right": true
+    },
+    "initial_non_wheel_contacts": 0,
+    "initial_support_error_m": 3.064547378778746e-05,
+    "official_steps_requested": 5000,
+    "fresh_500_step_gate_attempted": true
+  },
+  {
+    "variant_name": "high_small",
+    "target_com_z_m": 0.4139993119017284,
+    "achieved_initial_com_z_m": 0.4128130092062859,
+    "calibrated_root_z_m": 0.5466796875,
+    "hip_pitch_ref": 0.894473052631579,
+    "knee_ref": 1.6957324210526317,
+    "setup_valid": true,
+    "initial_wheel_contacts": {
+      "left": true,
+      "right": true
+    },
+    "initial_non_wheel_contacts": 0,
+    "initial_support_error_m": 0.0003707630357800032,
+    "official_steps_requested": 5000,
+    "fresh_500_step_gate_attempted": true
+  }
+]

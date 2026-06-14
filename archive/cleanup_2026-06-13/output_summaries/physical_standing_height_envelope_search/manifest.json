@@ -1,0 +1,40 @@
+{
+  "original_path": "outputs/physical_standing_height_envelope_search",
+  "original_size": "113.4K",
+  "original_size_bytes": 116113,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 3,
+  "copied_files": [
+    {
+      "file": "physical_height_envelope_report.md",
+      "size_bytes": 1020
+    },
+    {
+      "file": "physical_height_envelope_summary.json",
+      "size_bytes": 3053
+    },
+    {
+      "file": "physical_height_invalid_candidates.json",
+      "size_bytes": 2
+    },
+    {
+      "file": "physical_height_valid_candidates.json",
+      "size_bytes": 70641
+    },
+    {
+      "file": "physical_max_height_setup.json",
+      "size_bytes": 1065
+    },
+    {
+      "file": "physical_min_height_setup.json",
+      "size_bytes": 1073
+    },
+    {
+      "file": "static_physical_extrema_validation.json",
+      "size_bytes": 539
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,11 @@
+{
+  "variant_name": "low_2cm",
+  "target_com_z_m": 0.38399931190172837,
+  "hip_pitch_ref": 0.9918414736842105,
+  "knee_ref": 1.866785052631579,
+  "hip_roll_left": 0.0,
+  "hip_roll_right": 0.0,
+  "hip_yaw_left": 0.0,
+  "hip_yaw_right": 0.0,
+  "calibrated_root_z_m": 0.5107421875
+}

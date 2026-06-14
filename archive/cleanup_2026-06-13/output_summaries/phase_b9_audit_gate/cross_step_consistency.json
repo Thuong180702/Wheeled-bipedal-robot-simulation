@@ -1,0 +1,83 @@
+{
+  "expected_heights": [
+    0.65,
+    0.6,
+    0.55,
+    0.5,
+    0.45,
+    0.4
+  ],
+  "init_table_heights": [
+    0.65,
+    0.6,
+    0.55,
+    0.5,
+    0.45,
+    0.4
+  ],
+  "step2_heights": [
+    0.65,
+    0.6,
+    0.55,
+    0.5,
+    0.45,
+    0.4
+  ],
+  "step3_heights": [
+    0.65,
+    0.6,
+    0.55,
+    0.5,
+    0.45,
+    0.4
+  ],
+  "step4_heights": [
+    0.65,
+    0.6,
+    0.55,
+    0.5,
+    0.45,
+    0.4
+  ],
+  "height_set_consistent": true,
+  "same_init_table_used_required": true,
+  "step3_uses_balanced_root_init_table": true,
+  "step4_uses_balanced_root_init_table": true,
+  "step5_uses_balanced_root_init_table": true,
+  "pid_path_consistency": {
+    "step3_pid_enabled": true,
+    "step3_pid_bias_disabled": true,
+    "step4_pid_enabled": true,
+    "step4_pid_bias_disabled": true,
+    "step5_pid_enabled": true,
+    "step5_pid_bias_disabled": true,
+    "consistent": true
+  },
+  "semantic_consistency": {
+    "step3_fast_only": true,
+    "step4_gated_slow_loop": true,
+    "step4_best_variant_equals_step3_semantics": true,
+    "step5_starts_from_step4_baseline_semantics": true,
+    "consistent": true
+  },
+  "units_consistency": {
+    "survival_time_s": true,
+    "roll_pitch_deg": true,
+    "wheel_speed_rad_s": true,
+    "force_N": true,
+    "clearance_m": true,
+    "consistent": true
+  },
+  "stale_output_risk": {
+    "step4_multiple_output_dirs_detected": true,
+    "selected_dir": "outputs/phase_b9_slow_loop_gating_full_sweep",
+    "reason": "newest and complete full variant sweep",
+    "risk_level": "medium",
+    "mitigated": true
+  },
+  "geometry_asymmetry_ignore_rule": {
+    "threshold_mm": 0.05,
+    "applied": true,
+    "status": "all below threshold"
+  }
+}

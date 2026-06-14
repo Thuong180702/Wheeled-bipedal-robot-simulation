@@ -1,0 +1,15 @@
+{
+  "variant": "baseline",
+  "height": 0.6,
+  "episodes": 5,
+  "torque_available_any": true,
+  "mean_first_roll_divergence_time_s": 0.11199999999999999,
+  "mean_first_nonzero_corrective_hip_roll_action_time_s": NaN,
+  "mean_first_nonzero_differential_wheel_correction_time_s": NaN,
+  "mean_first_pid_torque_response_time_s": 0.0,
+  "mean_first_actual_hip_roll_joint_motion_time_s": 0.0,
+  "mean_first_contact_force_shift_time_s": 0.124,
+  "mean_first_correction_time_s": 0.0,
+  "mean_correction_delay_s": -0.11199999999999999,
+  "correction_before_divergence_rate": 1.0
+}

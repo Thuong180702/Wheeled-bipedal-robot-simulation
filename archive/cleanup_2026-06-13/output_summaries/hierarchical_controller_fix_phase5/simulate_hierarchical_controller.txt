@@ -1,0 +1,1478 @@
+================================================================================
+Hierarchical Controller Simulation with Telemetry
+Mode: HEADLESS
+================================================================================
+
+Loading model: assets/robot/wheeled_biped_real.xml
+[OK] Robot initialized using keyframe 0
+
+=== INITIALIZATION DIAGNOSTICS ===
+[POINT 1: After keyframe load] Contacts: 0, Left: 0.00 N, Right: 0.00 N, Total: 0.00 N, Asymmetry: 0.00 N
+[POINT 2: After first mj_forward] Contacts: 4, Left: 39.73 N, Right: 39.73 N, Total: 79.47 N, Asymmetry: 0.00 N
+[POINT 3: After velocity zeroing] Contacts: 4, Left: 39.73 N, Right: 39.73 N, Total: 79.47 N, Asymmetry: 0.00 N
+[POINT 4: After second mj_forward] Contacts: 4, Left: 39.73 N, Right: 39.73 N, Total: 79.47 N, Asymmetry: 0.00 N
+[OK] Initial velocities explicitly zeroed to ensure equilibrium
+
+Initializing hierarchical controller...
+[OK] Controllers initialized (wheeled biped architecture)
+
+JIT-compiling controller functions...
+[OK] JIT compilation complete - controllers ready for real-time operation
+
+Running simulation for 200 steps (2.0 seconds)
+================================================================================
+[PID STATE] roll=0.00°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=0.8798 N, active_wheels=2, expected_wheel_torque=0.0264 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=0.88, Fz=79.45, Mx=-0.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Warmup step 0/5, scale=1.0 (no correction)
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0264 Nm, R=-0.0264 Nm, max_all=8.2604 Nm
+[WBC PIPELINE] After authority clipping: [-0.009016    0.8143113   0.07387384 -8.260351   -0.02639406  0.00901903
+ -0.81434965  0.0740388  -8.260437   -0.02639406]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0264 Nm, R=-0.0264 Nm
+[WBC PIPELINE] Max final torque: 8.2604 Nm
+
+[WBC DIAGNOSTIC - Step 0]
+Computed orientation from gravity:
+  Roll: -0.00 deg
+  Pitch: 0.00 deg
+  Gravity vector: [0.000, 0.000, -9.810]
+
+Desired wrench: Fx=0.00, Fy=0.88, Fz=79.45, Mx=-0.00, My=0.00, Mz=0.00
+QP solution:
+  f_left:  [0.00, 0.44, 39.73] N
+  f_right: [0.00, 0.44, 39.73] N
+  tau_hip_roll: [0.00, -0.00] Nm
+WBC torques: [-0.009016    0.8143113   0.07387384 -8.260351   -0.02639406  0.00901903
+ -0.81434965  0.0740388  -8.260437   -0.02639406]
+Max WBC torque: 8.26 Nm
+QP solve time: 90.51 ms
+Wrench error: 0.313644 N/Nm
+
+Actual contact forces from MuJoCo:
+  Contact 0: floor - l_wheel_collision, world_fz: 198.67 N
+  Contact 1: floor - l_wheel_collision, world_fz: 226.78 N
+  Contact 2: floor - r_wheel_collision, world_fz: 196.67 N
+  Contact 3: floor - r_wheel_collision, world_fz: 223.93 N
+  Total contact force z: 846.06 N (weight: 79.46 N)
+  Desired Fz: 79.45 N
+
+Force feedback control:
+  Actual Fz: 846.06 N
+  Desired Fz: 79.45 N
+  Force scale: 1.000x
+  Feedback gain: 0.2
+
+Jacobian diagnostics:
+  J_left vertical (z) row: [-5.3610282e-08 -2.0498361e-02  2.6451701e-03  2.0516132e-01
+  0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  0.0000000e+00]
+  J_right vertical (z) row: [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00 -5.3618241e-08  2.0499483e-02  2.6410208e-03
+  2.0516349e-01  0.0000000e+00]
+  Expected torque from 73.71 N vertical force:
+    Left leg: [-3.9516140e-06 -1.5109342e+00  1.9497548e-01  1.5122440e+01
+  0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00  0.0000000e+00]
+    Right leg: [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+  0.0000000e+00 -3.9522006e-06  1.5110168e+00  1.9466963e-01
+  1.5122601e+01  0.0000000e+00]
+Note: Using unified QP force distribution with hip roll torques
+
+[POINT 5: After first mj_step] Contacts: 4, Left: 43.30 N, Right: 43.30 N, Total: 86.60 N, Asymmetry: 0.00 N
+=== END INITIALIZATION DIAGNOSTICS ===
+
+Step 1: h=0.400m, pitch=-0.0deg (sensed=0.0deg), roll=-0.4deg (sensed=-0.0deg), gravity=[0.000, 0.000, -9.810]
+[PID STATE] roll=-0.44°, roll_integral=-0.0000, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.4132 N, active_wheels=0, expected_wheel_torque=0.0424 Nm (Jacobian will produce this)
+[FORCE FEEDBACK] Warmup step 1/5, scale=1.0 (no correction)
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0424 Nm, R=-0.0424 Nm, max_all=8.3841 Nm
+[WBC PIPELINE] After authority clipping: [ 4.4569883   0.8156739   0.19496912 -8.384146   -0.04239686 -4.457043
+ -0.8137555   0.19486064 -8.383295   -0.04239641]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0424 Nm, R=-0.0424 Nm
+[WBC PIPELINE] Max final torque: 8.3841 Nm
+Step 2: h=0.402m, pitch=-0.0deg (sensed=-0.0deg), roll=-0.8deg (sensed=-0.4deg), gravity=[-0.000, 0.062, -9.810]
+[PID STATE] roll=-0.77°, roll_integral=-0.0000, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.5600 N, active_wheels=0, expected_wheel_torque=0.0468 Nm (Jacobian will produce this)
+[FORCE FEEDBACK] Warmup step 2/5, scale=1.0 (no correction)
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0468 Nm, R=-0.0468 Nm, max_all=8.3641 Nm
+[WBC PIPELINE] After authority clipping: [ 3.2828126   0.8006668   0.15949343 -8.36411    -0.04679895 -3.2828991
+ -0.7978753   0.15912361 -8.362421   -0.04679943]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0468 Nm, R=-0.0468 Nm
+[WBC PIPELINE] Max final torque: 8.3641 Nm
+Step 3: h=0.403m, pitch=-0.0deg (sensed=-0.0deg), roll=-1.0deg (sensed=-0.7deg), gravity=[-0.001, 0.123, -9.809]
+[PID STATE] roll=-1.03°, roll_integral=-0.0001, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.3640 N, active_wheels=2, expected_wheel_torque=0.0409 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.36, Fz=79.31, Mx=6.87, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Warmup step 3/5, scale=1.0 (no correction)
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0409 Nm, R=-0.0409 Nm, max_all=8.2572 Nm
+[WBC PIPELINE] After authority clipping: [ 3.4342206   0.7737722   0.03122415 -8.257192   -0.04091595 -3.4342744
+ -0.77347666  0.03104492 -8.256065   -0.04091575]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0409 Nm, R=-0.0409 Nm
+[WBC PIPELINE] Max final torque: 8.2572 Nm
+Step 4: h=0.403m, pitch=-0.0deg (sensed=-0.0deg), roll=-1.3deg (sensed=-1.0deg), gravity=[-0.001, 0.167, -9.809]
+[PID STATE] roll=-1.30°, roll_integral=-0.0001, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.1445 N, active_wheels=2, expected_wheel_torque=0.0343 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.14, Fz=79.27, Mx=6.90, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Warmup step 4/5, scale=1.0 (no correction)
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0343 Nm, R=-0.0343 Nm, max_all=8.2087 Nm
+[WBC PIPELINE] After authority clipping: [ 3.4570618   0.7683173  -0.02624048 -8.208741   -0.03432801 -3.4570837
+ -0.7698833  -0.02636403 -8.208199   -0.03432135]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0343 Nm, R=-0.0343 Nm
+[WBC PIPELINE] Max final torque: 8.2087 Nm
+Step 5: h=0.404m, pitch=-0.0deg (sensed=-0.0deg), roll=-1.6deg (sensed=-1.2deg), gravity=[-0.001, 0.213, -9.808]
+[PID STATE] roll=-1.57°, roll_integral=-0.0002, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.1525 N, active_wheels=2, expected_wheel_torque=0.0346 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.15, Fz=79.24, Mx=7.59, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=83.7N, desired=79.2N, scale=0.989
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0342 Nm, R=-0.0342 Nm, max_all=8.0878 Nm
+[WBC PIPELINE] After authority clipping: [ 3.7624452   0.7558396  -0.04544503 -8.0877905  -0.03415866 -3.762501
+ -0.75588924 -0.04554339 -8.0872755  -0.03415644]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0342 Nm, R=-0.0342 Nm
+[WBC PIPELINE] Max final torque: 8.0878 Nm
+[PID STATE] roll=-1.87°, roll_integral=-0.0002, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.1742 N, active_wheels=2, expected_wheel_torque=0.0352 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.17, Fz=79.20, Mx=8.31, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.5N, desired=79.2N, scale=0.992
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0349 Nm, R=-0.0349 Nm, max_all=8.0819 Nm
+[WBC PIPELINE] After authority clipping: [ 4.132922    0.75253206 -0.06691773 -8.081867   -0.03488006 -4.132984
+ -0.7525721  -0.06701638 -8.081354   -0.03487721]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0349 Nm, R=-0.0349 Nm
+[WBC PIPELINE] Max final torque: 8.0819 Nm
+[PID STATE] roll=-2.18°, roll_integral=-0.0003, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.1987 N, active_wheels=2, expected_wheel_torque=0.0360 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.20, Fz=79.17, Mx=9.06, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.3N, desired=79.2N, scale=0.992
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0356 Nm, R=-0.0356 Nm, max_all=8.0499 Nm
+[WBC PIPELINE] After authority clipping: [ 4.5112305   0.7457821  -0.09236363 -8.049879   -0.0355666  -4.511297
+ -0.7458625  -0.09246068 -8.049372   -0.03556268]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0356 Nm, R=-0.0356 Nm
+[WBC PIPELINE] Max final torque: 8.0499 Nm
+[PID STATE] roll=-2.52°, roll_integral=-0.0004, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.2256 N, active_wheels=2, expected_wheel_torque=0.0368 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.23, Fz=79.12, Mx=9.86, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.0N, desired=79.1N, scale=0.993
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0363 Nm, R=-0.0363 Nm, max_all=8.0185 Nm
+[WBC PIPELINE] After authority clipping: [ 4.915624    0.7379082  -0.12219384 -8.018468   -0.03632003 -4.915696
+ -0.73802626 -0.12228638 -8.017965   -0.03631488]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0363 Nm, R=-0.0363 Nm
+[WBC PIPELINE] Max final torque: 8.0185 Nm
+[PID STATE] roll=-2.88°, roll_integral=-0.0005, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.2551 N, active_wheels=2, expected_wheel_torque=0.0377 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.26, Fz=79.08, Mx=10.72, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=81.8N, desired=79.1N, scale=0.993
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0371 Nm, R=-0.0371 Nm, max_all=7.9824 Nm
+[WBC PIPELINE] After authority clipping: [ 5.3502326   0.7281928  -0.15648304 -7.982379   -0.03711344 -5.3503118
+ -0.7283483  -0.15656869 -7.9818807  -0.03710687]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0371 Nm, R=-0.0371 Nm
+[WBC PIPELINE] Max final torque: 7.9824 Nm
+Step 10: h=0.408m, pitch=-0.0deg (sensed=-0.0deg), roll=-3.2deg (sensed=-2.8deg), gravity=[-0.001, 0.480, -9.798]
+[PID STATE] roll=-3.20°, roll_integral=-0.0006, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.2745 N, active_wheels=2, expected_wheel_torque=0.0382 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.27, Fz=79.04, Mx=9.58, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=80.8N, desired=79.0N, scale=0.996
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0376 Nm, R=-0.0376 Nm, max_all=7.9553 Nm
+[WBC PIPELINE] After authority clipping: [ 4.8007083   0.7172412  -0.20194891 -7.955346   -0.03764067 -4.800795
+ -0.717429   -0.20202917 -7.95485    -0.03763254]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0376 Nm, R=-0.0376 Nm
+[WBC PIPELINE] Max final torque: 7.9553 Nm
+[PID STATE] roll=-3.46°, roll_integral=-0.0007, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.2704 N, active_wheels=2, expected_wheel_torque=0.0381 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.27, Fz=79.00, Mx=8.66, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.7N, desired=79.0N, scale=0.998
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0374 Nm, R=-0.0374 Nm, max_all=7.9207 Nm
+[WBC PIPELINE] After authority clipping: [ 4.3596187   0.70312154 -0.26191705 -7.9206753  -0.0374351  -4.359716
+ -0.7033309  -0.26199642 -7.92018    -0.03742548]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0374 Nm, R=-0.0374 Nm
+[WBC PIPELINE] Max final torque: 7.9207 Nm
+[PID STATE] roll=-3.68°, roll_integral=-0.0009, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.2575 N, active_wheels=2, expected_wheel_torque=0.0377 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.26, Fz=78.95, Mx=7.96, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.5N, desired=79.0N, scale=0.999
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0369 Nm, R=-0.0369 Nm, max_all=7.8687 Nm
+[WBC PIPELINE] After authority clipping: [ 4.016022    0.6858402  -0.32609615 -7.868689   -0.03687394 -4.0161295
+ -0.6860676  -0.3261773  -7.868194   -0.03686295]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0369 Nm, R=-0.0369 Nm
+[WBC PIPELINE] Max final torque: 7.8687 Nm
+[PID STATE] roll=-3.85°, roll_integral=-0.0010, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.2459 N, active_wheels=2, expected_wheel_torque=0.0374 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.25, Fz=78.91, Mx=7.44, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.2N, desired=78.9N, scale=0.999
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0363 Nm, R=-0.0363 Nm, max_all=7.8170 Nm
+[WBC PIPELINE] After authority clipping: [ 3.759175    0.6677414  -0.38959694 -7.8169603  -0.03633875 -3.7592926
+ -0.6679852  -0.38968128 -7.816465   -0.0363265 ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0363 Nm, R=-0.0363 Nm
+[WBC PIPELINE] Max final torque: 7.8170 Nm
+[PID STATE] roll=-4.00°, roll_integral=-0.0011, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.2387 N, active_wheels=2, expected_wheel_torque=0.0372 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.24, Fz=78.87, Mx=7.05, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.0N, desired=78.9N, scale=1.000
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0359 Nm, R=-0.0359 Nm, max_all=7.7651 Nm
+[WBC PIPELINE] After authority clipping: [ 3.5711672   0.6494317  -0.44996494 -7.765065   -0.03591512 -3.5712943
+ -0.64969087 -0.45005268 -7.7645693  -0.0359017 ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0359 Nm, R=-0.0359 Nm
+[WBC PIPELINE] Max final torque: 7.7651 Nm
+[PID STATE] roll=-4.12°, roll_integral=-0.0013, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.2372 N, active_wheels=2, expected_wheel_torque=0.0371 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.24, Fz=78.82, Mx=6.78, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.9N, desired=78.8N, scale=1.000
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0356 Nm, R=-0.0356 Nm, max_all=7.7147 Nm
+[WBC PIPELINE] After authority clipping: [ 3.437951    0.6315703  -0.50617415 -7.7146864  -0.03564878 -3.4380875
+ -0.6318439  -0.5062647  -7.7141895  -0.0356343 ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0356 Nm, R=-0.0356 Nm
+[WBC PIPELINE] Max final torque: 7.7147 Nm
+[PID STATE] roll=-4.23°, roll_integral=-0.0014, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.2415 N, active_wheels=2, expected_wheel_torque=0.0372 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.24, Fz=78.78, Mx=6.59, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.9N, desired=78.8N, scale=1.000
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0355 Nm, R=-0.0355 Nm, max_all=7.6663 Nm
+[WBC PIPELINE] After authority clipping: [ 3.3478403   0.61455005 -0.5579811  -7.6662617  -0.03554941 -3.3479848
+ -0.61483765 -0.5580732  -7.6657643  -0.03553396]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0355 Nm, R=-0.0355 Nm
+[WBC PIPELINE] Max final torque: 7.6663 Nm
+[PID STATE] roll=-4.33°, roll_integral=-0.0016, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.2571 N, active_wheels=2, expected_wheel_torque=0.0377 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.26, Fz=78.74, Mx=6.40, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=66.9N, desired=78.7N, scale=1.030
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0369 Nm, R=-0.0368 Nm, max_all=7.8533 Nm
+[WBC PIPELINE] After authority clipping: [ 3.351752    0.61692274 -0.622884   -7.8533177  -0.03685516 -3.3519087
+ -0.61720634 -0.62297106 -7.8528132  -0.03683944]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0369 Nm, R=-0.0368 Nm
+[WBC PIPELINE] Max final torque: 7.8533 Nm
+[PID STATE] roll=-4.41°, roll_integral=-0.0017, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.2830 N, active_wheels=2, expected_wheel_torque=0.0385 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.28, Fz=78.71, Mx=6.47, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=69.1N, desired=78.7N, scale=1.024
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0372 Nm, R=-0.0372 Nm, max_all=7.7700 Nm
+[WBC PIPELINE] After authority clipping: [ 3.3737037   0.59881866 -0.66220605 -7.770038   -0.03716742 -3.3738673
+ -0.59904236 -0.6622668  -7.769559   -0.03715425]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0372 Nm, R=-0.0372 Nm
+[WBC PIPELINE] Max final torque: 7.7700 Nm
+[PID STATE] roll=-4.51°, roll_integral=-0.0019, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.3163 N, active_wheels=2, expected_wheel_torque=0.0395 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.32, Fz=78.69, Mx=6.72, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=69.0N, desired=78.7N, scale=1.025
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0379 Nm, R=-0.0379 Nm, max_all=7.7394 Nm
+[WBC PIPELINE] After authority clipping: [ 3.5042646   0.5858812  -0.7010028  -7.739399   -0.03790541 -3.5044367
+ -0.5860434  -0.70103    -7.738949   -0.03789516]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0379 Nm, R=-0.0379 Nm
+[WBC PIPELINE] Max final torque: 7.7394 Nm
+Step 20: h=0.416m, pitch=-0.0deg (sensed=-0.0deg), roll=-4.6deg (sensed=-4.5deg), gravity=[-0.001, 0.768, -9.780]
+[PID STATE] roll=-4.61°, roll_integral=-0.0021, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.3560 N, active_wheels=2, expected_wheel_torque=0.0407 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.36, Fz=78.67, Mx=7.14, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=69.5N, desired=78.7N, scale=1.023
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0388 Nm, R=-0.0387 Nm, max_all=7.7019 Nm
+[WBC PIPELINE] After authority clipping: [ 3.712703    0.5733558  -0.7349551  -7.701851   -0.03875604 -3.7128835
+ -0.57345635 -0.7349406  -7.701439   -0.03874901]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0388 Nm, R=-0.0387 Nm
+[WBC PIPELINE] Max final torque: 7.7019 Nm
+[PID STATE] roll=-4.73°, roll_integral=-0.0022, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.4017 N, active_wheels=2, expected_wheel_torque=0.0421 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.00, Fy=1.40, Fz=78.66, Mx=7.69, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=70.1N, desired=78.7N, scale=1.022
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0397 Nm, R=-0.0397 Nm, max_all=7.6683 Nm
+[WBC PIPELINE] After authority clipping: [ 3.994072    0.5618274  -0.7658711  -7.6682816  -0.03974713 -3.9942605
+ -0.56186754 -0.76580554 -7.6679144  -0.03974352]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0397 Nm, R=-0.0397 Nm
+[WBC PIPELINE] Max final torque: 7.6683 Nm
+[PID STATE] roll=-4.88°, roll_integral=-0.0024, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.4525 N, active_wheels=2, expected_wheel_torque=0.0436 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=1.45, Fz=78.65, Mx=8.38, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=70.7N, desired=78.7N, scale=1.020
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0408 Nm, R=-0.0408 Nm, max_all=7.6365 Nm
+[WBC PIPELINE] After authority clipping: [ 4.340611    0.55078197 -0.7945874  -7.636546   -0.04083929 -4.3408074
+ -0.5507649  -0.7944606  -7.6362314  -0.04083923]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0408 Nm, R=-0.0408 Nm
+[WBC PIPELINE] Max final torque: 7.6365 Nm
+[PID STATE] roll=-5.05°, roll_integral=-0.0026, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.5076 N, active_wheels=2, expected_wheel_torque=0.0452 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=1.51, Fz=78.65, Mx=9.19, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=71.5N, desired=78.7N, scale=1.018
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0420 Nm, R=-0.0420 Nm, max_all=7.6064 Nm
+[WBC PIPELINE] After authority clipping: [ 4.747425    0.5397895  -0.8221849  -7.6064315  -0.04200032 -4.7476287
+ -0.5397195  -0.8219862  -7.6061773  -0.04200388]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0420 Nm, R=-0.0420 Nm
+[WBC PIPELINE] Max final torque: 7.6064 Nm
+[PID STATE] roll=-5.26°, roll_integral=-0.0028, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.5665 N, active_wheels=2, expected_wheel_torque=0.0470 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=1.57, Fz=78.66, Mx=10.11, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=72.3N, desired=78.7N, scale=1.016
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0432 Nm, R=-0.0432 Nm, max_all=7.5775 Nm
+[WBC PIPELINE] After authority clipping: [ 5.210809    0.5283682  -0.8497125  -7.5774703  -0.04319549 -5.21102
+ -0.5282511  -0.8494307  -7.577283   -0.04320274]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0432 Nm, R=-0.0432 Nm
+[WBC PIPELINE] Max final torque: 7.5775 Nm
+[PID STATE] roll=-5.50°, roll_integral=-0.0029, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.6282 N, active_wheels=2, expected_wheel_torque=0.0488 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=1.63, Fz=78.66, Mx=11.14, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=73.2N, desired=78.7N, scale=1.014
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0444 Nm, R=-0.0444 Nm, max_all=7.5491 Nm
+[WBC PIPELINE] After authority clipping: [ 5.7287064   0.5160064  -0.8781639  -7.5490675  -0.04438698 -5.7289233
+ -0.5158496  -0.87778705 -7.548956   -0.04439795]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0444 Nm, R=-0.0444 Nm
+[WBC PIPELINE] Max final torque: 7.5491 Nm
+[PID STATE] roll=-5.78°, roll_integral=-0.0031, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.6920 N, active_wheels=2, expected_wheel_torque=0.0508 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=1.69, Fz=78.68, Mx=12.29, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=74.2N, desired=78.7N, scale=1.011
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0455 Nm, R=-0.0455 Nm, max_all=7.5206 Nm
+[WBC PIPELINE] After authority clipping: [ 6.300578    0.5021801  -0.90846175 -7.5206313  -0.04553469 -6.300799
+ -0.50199246 -0.90797806 -7.5206027  -0.04554941]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0455 Nm, R=-0.0455 Nm
+[WBC PIPELINE] Max final torque: 7.5206 Nm
+[PID STATE] roll=-6.11°, roll_integral=-0.0034, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.7570 N, active_wheels=2, expected_wheel_torque=0.0527 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=1.76, Fz=78.69, Mx=13.55, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=75.1N, desired=78.7N, scale=1.009
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0466 Nm, R=-0.0466 Nm, max_all=7.4916 Nm
+[WBC PIPELINE] After authority clipping: [ 6.927407    0.4863416  -0.9414488  -7.491519   -0.04659404 -6.9276314
+ -0.48613364 -0.9408459  -7.4915805  -0.04661257]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0466 Nm, R=-0.0466 Nm
+[WBC PIPELINE] Max final torque: 7.4916 Nm
+[PID STATE] roll=-6.48°, roll_integral=-0.0036, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.8224 N, active_wheels=2, expected_wheel_torque=0.0547 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=1.82, Fz=78.71, Mx=14.92, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=76.1N, desired=78.7N, scale=1.007
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0475 Nm, R=-0.0475 Nm, max_all=7.6120 Nm
+[WBC PIPELINE] After authority clipping: [ 7.611795    0.46791673 -0.9778741  -7.4610496  -0.04751636 -7.6120214
+ -0.4677006  -0.9771398  -7.46121    -0.04753876]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0475 Nm, R=-0.0475 Nm
+[WBC PIPELINE] Max final torque: 7.6120 Nm
+[PID STATE] roll=-6.90°, roll_integral=-0.0038, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.8868 N, active_wheels=2, expected_wheel_torque=0.0566 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=1.89, Fz=78.73, Mx=16.39, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=77.2N, desired=78.7N, scale=1.004
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0482 Nm, R=-0.0483 Nm, max_all=8.3420 Nm
+[WBC PIPELINE] After authority clipping: [ 8.34177     0.44616565 -1.0183657  -7.4275465  -0.04823054 -8.341996
+ -0.4459538  -1.0174872  -7.427813   -0.048257  ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0482 Nm, R=-0.0483 Nm
+[WBC PIPELINE] Max final torque: 8.3420 Nm
+Step 30: h=0.415m, pitch=-0.0deg (sensed=-0.0deg), roll=-7.4deg (sensed=-6.8deg), gravity=[-0.001, 1.163, -9.741]
+[PID STATE] roll=-7.37°, roll_integral=-0.0041, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=1.9490 N, active_wheels=2, expected_wheel_torque=0.0585 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=1.95, Fz=78.75, Mx=18.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.2N, desired=78.7N, scale=1.001
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0487 Nm, R=-0.0487 Nm, max_all=9.1393 Nm
+[WBC PIPELINE] After authority clipping: [ 9.139087    0.42053849 -1.0637412  -7.3922205  -0.04868826 -9.13931
+ -0.420344   -1.0627055  -7.392601   -0.04871909]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0487 Nm, R=-0.0487 Nm
+[WBC PIPELINE] Max final torque: 9.1393 Nm
+[PID STATE] roll=-7.90°, roll_integral=-0.0044, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=2.6928 N, active_wheels=2, expected_wheel_torque=0.0808 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.02, Fy=2.69, Fz=78.77, Mx=19.81, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=84.9N, desired=78.8N, scale=0.984
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0642 Nm, R=-0.0649 Nm, max_all=9.8801 Nm
+[WBC PIPELINE] After authority clipping: [ 9.880089    0.47736734 -0.9875973  -7.3214664  -0.06417268 -9.880086
+ -0.46908078 -0.9811783  -7.3260875  -0.06494605]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0642 Nm, R=-0.0649 Nm
+[WBC PIPELINE] Max final torque: 9.8801 Nm
+[PID STATE] roll=-8.48°, roll_integral=-0.0047, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=2.6846 N, active_wheels=2, expected_wheel_torque=0.0805 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.06, Fy=2.68, Fz=78.78, Mx=21.42, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=89.8N, desired=78.8N, scale=0.972
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0607 Nm, R=-0.0628 Nm, max_all=10.5553 Nm
+[WBC PIPELINE] After authority clipping: [ 10.555313     0.44051313  -1.0510119   -7.190412    -0.06066051
+ -10.554923    -0.41948113  -1.0344542   -7.2028766   -0.06278642]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0607 Nm, R=-0.0628 Nm
+[WBC PIPELINE] Max final torque: 10.5553 Nm
+[PID STATE] roll=-9.10°, roll_integral=-0.0050, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=2.6808 N, active_wheels=2, expected_wheel_torque=0.0804 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.06, Fy=2.68, Fz=78.79, Mx=22.57, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=65.2N, desired=78.8N, scale=1.035
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0621 Nm, R=-0.0646 Nm, max_all=11.8502 Nm
+[WBC PIPELINE] After authority clipping: [ 11.850236     0.4241371   -1.200106    -7.6091166   -0.06211914
+ -11.849859    -0.40138304  -1.1790795   -7.6257358   -0.06460534]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0621 Nm, R=-0.0646 Nm
+[WBC PIPELINE] Max final torque: 11.8502 Nm
+[PID STATE] roll=-9.67°, roll_integral=-0.0053, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=2.7408 N, active_wheels=2, expected_wheel_torque=0.0822 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.06, Fy=2.74, Fz=78.80, Mx=21.31, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=74.6N, desired=78.8N, scale=1.011
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0607 Nm, R=-0.0632 Nm, max_all=10.9605 Nm
+[WBC PIPELINE] After authority clipping: [ 10.960507     0.41345936  -1.2055233   -7.4170594   -0.060658
+ -10.959843    -0.39074135  -1.1814015   -7.4364405   -0.06323908]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0607 Nm, R=-0.0632 Nm
+[WBC PIPELINE] Max final torque: 10.9605 Nm
+[PID STATE] roll=-10.15°, roll_integral=-0.0057, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=2.8285 N, active_wheels=2, expected_wheel_torque=0.0849 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.07, Fy=2.83, Fz=78.82, Mx=19.91, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.2N, desired=78.8N, scale=0.999
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0615 Nm, R=-0.0642 Nm, max_all=10.1476 Nm
+[WBC PIPELINE] After authority clipping: [ 10.147599     0.43833414  -1.1823859   -7.339062    -0.06151887
+ -10.146399    -0.41488928  -1.1548033   -7.3612194   -0.06418199]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0615 Nm, R=-0.0642 Nm
+[WBC PIPELINE] Max final torque: 10.1476 Nm
+[PID STATE] roll=-10.54°, roll_integral=-0.0060, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=2.9008 N, active_wheels=2, expected_wheel_torque=0.0870 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.07, Fy=2.90, Fz=78.83, Mx=18.48, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=81.0N, desired=78.8N, scale=0.995
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0629 Nm, R=-0.0656 Nm, max_all=9.4078 Nm
+[WBC PIPELINE] After authority clipping: [ 9.4077835   0.47320485 -1.1576165  -7.3207836  -0.06290849 -9.405949
+ -0.4488509  -1.1263428  -7.345724   -0.06563318]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0629 Nm, R=-0.0656 Nm
+[WBC PIPELINE] Max final torque: 9.4078 Nm
+[PID STATE] roll=-10.84°, roll_integral=-0.0064, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=2.9677 N, active_wheels=2, expected_wheel_torque=0.0890 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.07, Fy=2.97, Fz=78.85, Mx=17.15, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.0N, desired=78.8N, scale=0.992
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0645 Nm, R=-0.0672 Nm, max_all=8.7321 Nm
+[WBC PIPELINE] After authority clipping: [ 8.732146    0.5102346  -1.1349742  -7.3169327  -0.06445867 -8.729652
+ -0.4850027  -1.0998634  -7.344657   -0.06722867]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0645 Nm, R=-0.0672 Nm
+[WBC PIPELINE] Max final torque: 8.7321 Nm
+[PID STATE] roll=-11.08°, roll_integral=-0.0068, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.0392 N, active_wheels=2, expected_wheel_torque=0.0912 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.07, Fy=3.04, Fz=78.86, Mx=15.95, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.4N, desired=78.9N, scale=0.991
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0662 Nm, R=-0.0690 Nm, max_all=8.1353 Nm
+[WBC PIPELINE] After authority clipping: [ 8.135319    0.54753643 -1.1167642  -7.3209915  -0.06622259 -8.132175
+ -0.5214857  -1.077668   -7.3515463  -0.06903314]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0662 Nm, R=-0.0690 Nm
+[WBC PIPELINE] Max final torque: 8.1353 Nm
+[PID STATE] roll=-11.25°, roll_integral=-0.0072, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.1194 N, active_wheels=2, expected_wheel_torque=0.0936 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.07, Fy=3.12, Fz=78.87, Mx=14.90, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.6N, desired=78.9N, scale=0.991
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0682 Nm, R=-0.0711 Nm, max_all=7.6171 Nm
+[WBC PIPELINE] After authority clipping: [ 7.617069    0.5845022  -1.1030352  -7.3276167  -0.06819975 -7.6133084
+ -0.5577087  -1.059845   -7.361054   -0.07105053]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0682 Nm, R=-0.0711 Nm
+[WBC PIPELINE] Max final torque: 7.6171 Nm
+Step 40: h=0.412m, pitch=-0.1deg (sensed=-0.1deg), roll=-11.4deg (sensed=-11.2deg), gravity=[-0.015, 1.908, -9.623]
+[PID STATE] roll=-11.36°, roll_integral=-0.0076, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.2090 N, active_wheels=2, expected_wheel_torque=0.0963 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.07, Fy=3.21, Fz=78.88, Mx=14.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.7N, desired=78.9N, scale=0.990
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0704 Nm, R=-0.0733 Nm, max_all=7.3707 Nm
+[WBC PIPELINE] After authority clipping: [ 7.173369    0.6211259  -1.0932547  -7.33435    -0.07037529 -7.169039
+ -0.59366804 -1.0459054  -7.370718   -0.07326782]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0704 Nm, R=-0.0733 Nm
+[WBC PIPELINE] Max final torque: 7.3707 Nm
+[PID STATE] roll=-11.44°, roll_integral=-0.0080, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.3079 N, active_wheels=2, expected_wheel_torque=0.0992 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.07, Fy=3.31, Fz=78.89, Mx=13.23, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.7N, desired=78.9N, scale=0.990
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0727 Nm, R=-0.0757 Nm, max_all=7.3795 Nm
+[WBC PIPELINE] After authority clipping: [ 6.797582    0.65762275 -1.0866805  -7.340157   -0.07272984 -6.7927346
+ -0.6295747  -1.0351472  -7.3794947  -0.07566604]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0727 Nm, R=-0.0757 Nm
+[WBC PIPELINE] Max final torque: 7.3795 Nm
+[PID STATE] roll=-11.48°, roll_integral=-0.0084, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.4149 N, active_wheels=2, expected_wheel_torque=0.1024 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.07, Fy=3.41, Fz=78.89, Mx=12.58, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.6N, desired=78.9N, scale=0.991
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0752 Nm, R=-0.0782 Nm, max_all=7.3870 Nm
+[WBC PIPELINE] After authority clipping: [ 6.481396    0.69425017 -1.0825626  -7.3447013  -0.07524241 -6.476085
+ -0.66567874 -1.026853   -7.387034   -0.07822397]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0752 Nm, R=-0.0782 Nm
+[WBC PIPELINE] Max final torque: 7.3870 Nm
+[PID STATE] roll=-11.49°, roll_integral=-0.0088, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.5290 N, active_wheels=2, expected_wheel_torque=0.1059 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.08, Fy=3.53, Fz=78.90, Mx=12.04, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.6N, desired=78.9N, scale=0.991
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0779 Nm, R=-0.0809 Nm, max_all=7.3933 Nm
+[WBC PIPELINE] After authority clipping: [ 6.2156634   0.7312392  -1.0802206  -7.347951   -0.07789265 -6.2099433
+ -0.7022038  -1.0203669  -7.393296   -0.08092076]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0779 Nm, R=-0.0809 Nm
+[WBC PIPELINE] Max final torque: 7.3933 Nm
+[PID STATE] roll=-11.48°, roll_integral=-0.0092, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.6491 N, active_wheels=2, expected_wheel_torque=0.1095 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.08, Fy=3.65, Fz=78.90, Mx=11.58, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.5N, desired=78.9N, scale=0.991
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0807 Nm, R=-0.0837 Nm, max_all=7.3984 Nm
+[WBC PIPELINE] After authority clipping: [ 5.9910717   0.7687703  -1.0790755  -7.349997   -0.08066124 -5.984992
+ -0.73932314 -1.0151259  -7.398363   -0.08373649]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0807 Nm, R=-0.0837 Nm
+[WBC PIPELINE] Max final torque: 7.3984 Nm
+[PID STATE] roll=-11.45°, roll_integral=-0.0096, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.7743 N, active_wheels=2, expected_wheel_torque=0.1132 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.08, Fy=3.77, Fz=78.90, Mx=11.19, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.4N, desired=78.9N, scale=0.991
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0835 Nm, R=-0.0867 Nm, max_all=7.4024 Nm
+[WBC PIPELINE] After authority clipping: [ 5.7986293   0.8069752  -1.0786474  -7.3509693  -0.08353075 -5.7922335
+ -0.7771625  -1.0106593  -7.40236    -0.08665321]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0835 Nm, R=-0.0867 Nm
+[WBC PIPELINE] Max final torque: 7.4024 Nm
+[PID STATE] roll=-11.40°, roll_integral=-0.0100, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.9037 N, active_wheels=2, expected_wheel_torque=0.1171 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.08, Fy=3.90, Fz=78.90, Mx=10.85, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.4N, desired=78.9N, scale=0.991
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0865 Nm, R=-0.0897 Nm, max_all=7.4054 Nm
+[WBC PIPELINE] After authority clipping: [ 5.6299815   0.8459444  -1.0785428  -7.3509955  -0.08648601 -5.6233087
+ -0.8158077  -1.006577   -7.4054084  -0.08965523]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0865 Nm, R=-0.0897 Nm
+[WBC PIPELINE] Max final torque: 7.4054 Nm
+[PID STATE] roll=-11.34°, roll_integral=-0.0104, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.0367 N, active_wheels=2, expected_wheel_torque=0.1211 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.08, Fy=4.04, Fz=78.89, Mx=10.54, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.3N, desired=78.9N, scale=0.991
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0895 Nm, R=-0.0927 Nm, max_all=7.4076 Nm
+[WBC PIPELINE] After authority clipping: [ 5.4775987   0.8857352  -1.0784414  -7.3501873  -0.08951389 -5.470682
+ -0.8553128  -1.0025574  -7.407618   -0.09272896]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0895 Nm, R=-0.0927 Nm
+[WBC PIPELINE] Max final torque: 7.4076 Nm
+[PID STATE] roll=-11.27°, roll_integral=-0.0108, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.1726 N, active_wheels=2, expected_wheel_torque=0.1252 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.08, Fy=4.17, Fz=78.89, Mx=10.25, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=82.2N, desired=78.9N, scale=0.992
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0926 Nm, R=-0.0959 Nm, max_all=7.4091 Nm
+[WBC PIPELINE] After authority clipping: [ 5.33486     0.92638636 -1.078077   -7.3486505  -0.09260415 -5.3277264
+ -0.89571387 -0.9983298  -7.4090934  -0.09586381]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0926 Nm, R=-0.0959 Nm
+[WBC PIPELINE] Max final torque: 7.4091 Nm
+[PID STATE] roll=-11.19°, roll_integral=-0.0112, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.6388 N, active_wheels=2, expected_wheel_torque=0.1092 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.06, Fy=3.64, Fz=78.88, Mx=9.90, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=76.5N, desired=78.9N, scale=1.006
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0822 Nm, R=-0.0846 Nm, max_all=7.4429 Nm
+[WBC PIPELINE] After authority clipping: [ 5.2483087   0.8780037  -1.1955904  -7.3835807  -0.08220749 -5.242297
+ -0.855924   -1.1174759  -7.4429016  -0.08459304]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0822 Nm, R=-0.0846 Nm
+[WBC PIPELINE] Max final torque: 7.4429 Nm
+Step 50: h=0.412m, pitch=-0.1deg (sensed=-0.1deg), roll=-11.1deg (sensed=-11.2deg), gravity=[-0.023, 1.906, -9.623]
+[PID STATE] roll=-11.11°, roll_integral=-0.0116, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.1522 N, active_wheels=2, expected_wheel_torque=0.0946 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.01, Fy=3.15, Fz=78.88, Mx=9.95, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=77.3N, desired=78.9N, scale=1.004
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0722 Nm, R=-0.0720 Nm, max_all=7.3542 Nm
+[WBC PIPELINE] After authority clipping: [ 5.272416    0.81422067 -1.2807755  -7.306295   -0.07218447 -5.269143
+ -0.8163058  -1.217474   -7.3542247  -0.07203121]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0722 Nm, R=-0.0720 Nm
+[WBC PIPELINE] Max final torque: 7.3542 Nm
+[PID STATE] roll=-11.04°, roll_integral=-0.0119, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=2.7015 N, active_wheels=2, expected_wheel_torque=0.0810 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.08, Fy=2.70, Fz=78.87, Mx=10.25, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=77.0N, desired=78.9N, scale=1.005
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0633 Nm, R=-0.0604 Nm, max_all=7.2910 Nm
+[WBC PIPELINE] After authority clipping: [ 5.440145    0.757914   -1.361333   -7.2574115  -0.06329418 -5.439357
+ -0.78661174 -1.315538   -7.2910085  -0.06042493]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0633 Nm, R=-0.0604 Nm
+[WBC PIPELINE] Max final torque: 7.2910 Nm
+[PID STATE] roll=-10.99°, roll_integral=-0.0123, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=2.9544 N, active_wheels=2, expected_wheel_torque=0.0886 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.13, Fy=2.95, Fz=78.87, Mx=10.66, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=71.2N, desired=78.9N, scale=1.020
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0710 Nm, R=-0.0663 Nm, max_all=7.4081 Nm
+[WBC PIPELINE] After authority clipping: [ 5.721954    0.82131785 -1.3496149  -7.386282   -0.07103042 -5.7226653
+ -0.86957496 -1.3170253  -7.408057   -0.06626965]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0710 Nm, R=-0.0663 Nm
+[WBC PIPELINE] Max final torque: 7.4081 Nm
+[PID STATE] roll=-10.96°, roll_integral=-0.0127, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.1831 N, active_wheels=2, expected_wheel_torque=0.0955 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.13, Fy=3.18, Fz=78.88, Mx=10.98, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=72.9N, desired=78.9N, scale=1.015
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0761 Nm, R=-0.0711 Nm, max_all=7.3896 Nm
+[WBC PIPELINE] After authority clipping: [ 5.8615546   0.87424356 -1.3186555  -7.373716   -0.07614346 -5.862543
+ -0.927309   -1.2914758  -7.389593   -0.07113516]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0761 Nm, R=-0.0711 Nm
+[WBC PIPELINE] Max final torque: 7.3896 Nm
+[PID STATE] roll=-10.94°, roll_integral=-0.0131, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.3916 N, active_wheels=2, expected_wheel_torque=0.1017 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.14, Fy=3.39, Fz=78.89, Mx=11.21, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=73.4N, desired=78.9N, scale=1.014
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0809 Nm, R=-0.0758 Nm, max_all=7.3953 Nm
+[WBC PIPELINE] After authority clipping: [ 5.968918    0.9282954  -1.293054   -7.385318   -0.08094578 -5.9705143
+ -0.9850522  -1.2723389  -7.395307   -0.07578003]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0809 Nm, R=-0.0758 Nm
+[WBC PIPELINE] Max final torque: 7.3953 Nm
+[PID STATE] roll=-10.93°, roll_integral=-0.0135, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.5795 N, active_wheels=2, expected_wheel_torque=0.1074 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.14, Fy=3.58, Fz=78.90, Mx=11.37, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=74.1N, desired=78.9N, scale=1.012
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0852 Nm, R=-0.0799 Nm, max_all=7.3963 Nm
+[WBC PIPELINE] After authority clipping: [ 6.035915    0.9798156  -1.2677444  -7.392467   -0.08517928 -6.038363
+ -1.0394866  -1.2546929  -7.3963246  -0.07989853]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0852 Nm, R=-0.0799 Nm
+[WBC PIPELINE] Max final torque: 7.3963 Nm
+[PID STATE] roll=-10.93°, roll_integral=-0.0139, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.7465 N, active_wheels=2, expected_wheel_torque=0.1124 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.14, Fy=3.75, Fz=78.91, Mx=11.47, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=74.8N, desired=78.9N, scale=1.010
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0889 Nm, R=-0.0835 Nm, max_all=7.4002 Nm
+[WBC PIPELINE] After authority clipping: [ 6.074       1.0293472  -1.2438174  -7.400205   -0.08890419 -6.0774384
+ -1.0912913  -1.2393011  -7.397746   -0.08353536]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0889 Nm, R=-0.0835 Nm
+[WBC PIPELINE] Max final torque: 7.4002 Nm
+[PID STATE] roll=-10.94°, roll_integral=-0.0142, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.8939 N, active_wheels=2, expected_wheel_torque=0.1168 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.15, Fy=3.89, Fz=78.93, Mx=11.52, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=75.5N, desired=78.9N, scale=1.009
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0921 Nm, R=-0.0867 Nm, max_all=7.4078 Nm
+[WBC PIPELINE] After authority clipping: [ 6.0884595   1.0769322  -1.2210798  -7.407839   -0.09214684 -6.092951
+ -1.1405923  -1.2256792  -7.398945   -0.08670916]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0921 Nm, R=-0.0867 Nm
+[WBC PIPELINE] Max final torque: 7.4078 Nm
+[PID STATE] roll=-10.94°, roll_integral=-0.0146, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.0087 N, active_wheels=2, expected_wheel_torque=0.1203 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.15, Fy=4.01, Fz=78.95, Mx=11.67, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=87.2N, desired=79.0N, scale=0.979
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0920 Nm, R=-0.0867 Nm, max_all=7.2085 Nm
+[WBC PIPELINE] After authority clipping: [ 5.984985    1.0901276  -1.1685516  -7.2085495  -0.0920302  -5.9904084
+ -1.153453   -1.1823441  -7.193478   -0.08666748]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0920 Nm, R=-0.0867 Nm
+[WBC PIPELINE] Max final torque: 7.2085 Nm
+[PID STATE] roll=-10.95°, roll_integral=-0.0150, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.1090 N, active_wheels=2, expected_wheel_torque=0.1233 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.15, Fy=4.11, Fz=78.97, Mx=11.58, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=84.6N, desired=79.0N, scale=0.986
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0949 Nm, R=-0.0894 Nm, max_all=7.2721 Nm
+[WBC PIPELINE] After authority clipping: [ 5.9825807   1.1416374  -1.1599568  -7.2720504  -0.09493767 -5.9891453
+ -1.2069414  -1.1836486  -7.2501583  -0.08942345]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0949 Nm, R=-0.0894 Nm
+[WBC PIPELINE] Max final torque: 7.2721 Nm
+Step 60: h=0.410m, pitch=0.1deg (sensed=0.0deg), roll=-11.0deg (sensed=-11.0deg), gravity=[0.008, 1.863, -9.631]
+[PID STATE] roll=-10.95°, roll_integral=-0.0154, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.1933 N, active_wheels=2, expected_wheel_torque=0.1258 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.15, Fy=4.19, Fz=78.98, Mx=11.36, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=84.6N, desired=79.0N, scale=0.986
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0969 Nm, R=-0.0912 Nm, max_all=7.2840 Nm
+[WBC PIPELINE] After authority clipping: [ 5.873157    1.184497   -1.1446625  -7.2840466  -0.09686492 -5.880798
+ -1.2511855  -1.178239   -7.255371   -0.09123009]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0969 Nm, R=-0.0912 Nm
+[WBC PIPELINE] Max final torque: 7.2840 Nm
+[PID STATE] roll=-10.94°, roll_integral=-0.0158, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.2658 N, active_wheels=2, expected_wheel_torque=0.1280 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.15, Fy=4.27, Fz=78.98, Mx=11.02, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=84.2N, desired=79.0N, scale=0.987
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0986 Nm, R=-0.0929 Nm, max_all=7.3014 Nm
+[WBC PIPELINE] After authority clipping: [ 5.7125154   1.2279028  -1.1313252  -7.301392   -0.09863177 -5.7211885
+ -1.2958752  -1.1747485  -7.2659     -0.09287019]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0986 Nm, R=-0.0929 Nm
+[WBC PIPELINE] Max final torque: 7.3014 Nm
+[PID STATE] roll=-10.90°, roll_integral=-0.0161, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.3296 N, active_wheels=2, expected_wheel_torque=0.1299 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.15, Fy=4.33, Fz=78.99, Mx=10.59, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=83.9N, desired=79.0N, scale=0.987
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1002 Nm, R=-0.0943 Nm, max_all=7.3146 Nm
+[WBC PIPELINE] After authority clipping: [ 5.5048485   1.2706345  -1.1180353  -7.3146014  -0.10017703 -5.514486
+ -1.3397264  -1.1711292  -7.272337   -0.09429134]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1002 Nm, R=-0.0943 Nm
+[WBC PIPELINE] Max final torque: 7.3146 Nm
+[PID STATE] roll=-10.85°, roll_integral=-0.0165, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.3875 N, active_wheels=2, expected_wheel_torque=0.1316 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.16, Fy=4.39, Fz=78.99, Mx=10.09, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=83.7N, desired=79.0N, scale=0.988
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1016 Nm, R=-0.0956 Nm, max_all=7.3259 Nm
+[WBC PIPELINE] After authority clipping: [ 5.260455    1.3133484  -1.1047082  -7.3258977  -0.1015878  -5.270982
+ -1.3834299  -1.1672319  -7.276932   -0.09558094]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1016 Nm, R=-0.0956 Nm
+[WBC PIPELINE] Max final torque: 7.3259 Nm
+[PID STATE] roll=-10.77°, roll_integral=-0.0169, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.0999 N, active_wheels=2, expected_wheel_torque=0.1530 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.13, Fy=5.10, Fz=78.99, Mx=9.45, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=77.8N, desired=79.0N, scale=1.003
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1189 Nm, R=-0.1137 Nm, max_all=7.5086 Nm
+[WBC PIPELINE] After authority clipping: [ 5.003707    1.4770985  -1.006631   -7.508625   -0.11890458 -5.014013
+ -1.539821   -1.0722739  -7.4578967  -0.1136816 ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1189 Nm, R=-0.1137 Nm
+[WBC PIPELINE] Max final torque: 7.5086 Nm
+[PID STATE] roll=-10.66°, roll_integral=-0.0173, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.6359 N, active_wheels=2, expected_wheel_torque=0.1691 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.06, Fy=5.64, Fz=78.99, Mx=8.61, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=80.7N, desired=79.0N, scale=0.996
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1288 Nm, R=-0.1263 Nm, max_all=7.5035 Nm
+[WBC PIPELINE] After authority clipping: [ 4.535876    1.5926243  -0.91863436 -7.5034533  -0.12882765 -4.5430837
+ -1.6292423  -0.9726546  -7.462722   -0.12631468]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1288 Nm, R=-0.1263 Nm
+[WBC PIPELINE] Max final torque: 7.5035 Nm
+[PID STATE] roll=-10.52°, roll_integral=-0.0176, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.6412 N, active_wheels=2, expected_wheel_torque=0.1692 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.02, Fy=5.64, Fz=78.99, Mx=7.64, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=75.8N, desired=79.0N, scale=1.008
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1289 Nm, R=-0.1296 Nm, max_all=7.5906 Nm
+[WBC PIPELINE] After authority clipping: [ 4.099669    1.6639084  -0.93504655 -7.5905747  -0.1289345  -4.1027412
+ -1.6674665  -0.9727756  -7.56347    -0.12964307]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1289 Nm, R=-0.1296 Nm
+[WBC PIPELINE] Max final torque: 7.5906 Nm
+[PID STATE] roll=-10.34°, roll_integral=-0.0180, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.5934 N, active_wheels=2, expected_wheel_torque=0.1678 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.03, Fy=5.59, Fz=78.99, Mx=6.85, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=76.8N, desired=79.0N, scale=1.006
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1274 Nm, R=-0.1284 Nm, max_all=7.5681 Nm
+[WBC PIPELINE] After authority clipping: [ 3.692729    1.6881284  -0.9372642  -7.5681148  -0.12742084 -3.6952755
+ -1.6848247  -0.976793   -7.5413523  -0.12835816]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1274 Nm, R=-0.1284 Nm
+[WBC PIPELINE] Max final torque: 7.5681 Nm
+[PID STATE] roll=-10.14°, roll_integral=-0.0184, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.5508 N, active_wheels=2, expected_wheel_torque=0.1665 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.04, Fy=5.55, Fz=79.00, Mx=6.32, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=77.3N, desired=79.0N, scale=1.004
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1263 Nm, R=-0.1273 Nm, max_all=7.5568 Nm
+[WBC PIPELINE] After authority clipping: [ 3.4162626   1.7131764  -0.9396042  -7.5568404  -0.12625735 -3.4183867
+ -1.7045033  -0.98056763 -7.5301085  -0.12728725]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1263 Nm, R=-0.1273 Nm
+[WBC PIPELINE] Max final torque: 7.5568 Nm
+[PID STATE] roll=-9.93°, roll_integral=-0.0187, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=6.1942 N, active_wheels=2, expected_wheel_torque=0.1858 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.06, Fy=6.19, Fz=79.00, Mx=6.04, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=83.4N, desired=79.0N, scale=0.989
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1385 Nm, R=-0.1402 Nm, max_all=7.5088 Nm
+[WBC PIPELINE] After authority clipping: [ 3.2032695   1.815044   -0.82377964 -7.5088487  -0.13845998 -3.2038097
+ -1.7958125  -0.8600606  -7.4868584  -0.14018454]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1385 Nm, R=-0.1402 Nm
+[WBC PIPELINE] Max final torque: 7.5088 Nm
+Step 70: h=0.409m, pitch=-0.0deg (sensed=-0.0deg), roll=-9.7deg (sensed=-10.0deg), gravity=[-0.003, 1.699, -9.662]
+[PID STATE] roll=-9.72°, roll_integral=-0.0190, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=6.1003 N, active_wheels=2, expected_wheel_torque=0.1830 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.09, Fy=6.10, Fz=79.00, Mx=5.59, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=88.3N, desired=79.0N, scale=0.976
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1341 Nm, R=-0.1370 Nm, max_all=7.4037 Nm
+[WBC PIPELINE] After authority clipping: [ 2.9357383   1.8151959  -0.8277195  -7.4036903  -0.13405521 -2.9343321
+ -1.7811168  -0.85449517 -7.38979    -0.13699688]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1341 Nm, R=-0.1370 Nm
+[WBC PIPELINE] Max final torque: 7.4037 Nm
+[PID STATE] roll=-9.52°, roll_integral=-0.0194, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.2633 N, active_wheels=2, expected_wheel_torque=0.1579 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.10, Fy=5.26, Fz=79.00, Mx=5.95, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=87.8N, desired=79.0N, scale=0.978
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1155 Nm, R=-0.1187 Nm, max_all=7.3264 Nm
+[WBC PIPELINE] After authority clipping: [ 3.1332667   1.7294078  -0.9541749  -7.326409   -0.11549132 -3.131351
+ -1.6893708  -0.9737014  -7.317203   -0.11874397]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1155 Nm, R=-0.1187 Nm
+[WBC PIPELINE] Max final torque: 7.3264 Nm
+[PID STATE] roll=-9.36°, roll_integral=-0.0197, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.4675 N, active_wheels=2, expected_wheel_torque=0.1640 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.10, Fy=5.47, Fz=78.99, Mx=7.09, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=76.3N, desired=79.0N, scale=1.007
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1236 Nm, R=-0.1271 Nm, max_all=7.5659 Nm
+[WBC PIPELINE] After authority clipping: [ 3.7901807   1.8427877  -0.9434768  -7.5658636  -0.12355906 -3.787224
+ -1.7978827  -0.95317024 -7.5621214  -0.12705679]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1236 Nm, R=-0.1271 Nm
+[WBC PIPELINE] Max final torque: 7.5659 Nm
+[PID STATE] roll=-9.26°, roll_integral=-0.0200, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.6588 N, active_wheels=2, expected_wheel_torque=0.1698 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.10, Fy=5.66, Fz=78.98, Mx=7.72, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.1N, desired=79.0N, scale=1.002
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1273 Nm, R=-0.1309 Nm, max_all=7.5549 Nm
+[WBC PIPELINE] After authority clipping: [ 4.0827227   1.8941029  -0.8956077  -7.5536833  -0.12731695 -4.0790644
+ -1.8465519  -0.89688945 -7.5549226  -0.13086279]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1273 Nm, R=-0.1309 Nm
+[WBC PIPELINE] Max final torque: 7.5549 Nm
+[PID STATE] roll=-9.17°, roll_integral=-0.0203, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.8239 N, active_wheels=2, expected_wheel_torque=0.1747 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.10, Fy=5.82, Fz=78.98, Mx=7.99, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=77.7N, desired=79.0N, scale=1.003
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1312 Nm, R=-0.1348 Nm, max_all=7.5913 Nm
+[WBC PIPELINE] After authority clipping: [ 4.211495    1.9525921  -0.8525645  -7.5852137  -0.13117005 -4.207185
+ -1.9021068  -0.84632295 -7.5912714  -0.1348042 ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1312 Nm, R=-0.1348 Nm
+[WBC PIPELINE] Max final torque: 7.5913 Nm
+[PID STATE] roll=-9.10°, roll_integral=-0.0207, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.9717 N, active_wheels=2, expected_wheel_torque=0.1792 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.11, Fy=5.97, Fz=78.97, Mx=7.98, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=77.8N, desired=79.0N, scale=1.003
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1344 Nm, R=-0.1382 Nm, max_all=7.6179 Nm
+[WBC PIPELINE] After authority clipping: [ 4.20021     2.0059042  -0.80715466 -7.607178   -0.13444348 -4.195287
+ -1.9525933  -0.7940564  -7.617897   -0.13817067]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1344 Nm, R=-0.1382 Nm
+[WBC PIPELINE] Max final torque: 7.6179 Nm
+[PID STATE] roll=-9.00°, roll_integral=-0.0210, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.2653 N, active_wheels=2, expected_wheel_torque=0.1580 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.11, Fy=5.27, Fz=78.97, Mx=6.93, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=76.8N, desired=79.0N, scale=1.006
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1185 Nm, R=-0.1224 Nm, max_all=7.5787 Nm
+[WBC PIPELINE] After authority clipping: [ 3.7021954   1.938438   -0.89945894 -7.561718   -0.11847591 -3.6963854
+ -1.8819311  -0.87547654 -7.5787015  -0.1224425 ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1185 Nm, R=-0.1224 Nm
+[WBC PIPELINE] Max final torque: 7.5787 Nm
+[PID STATE] roll=-8.84°, roll_integral=-0.0213, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.5247 N, active_wheels=2, expected_wheel_torque=0.1657 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.11, Fy=5.52, Fz=78.97, Mx=5.48, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=75.8N, desired=79.0N, scale=1.008
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1246 Nm, R=-0.1287 Nm, max_all=7.6415 Nm
+[WBC PIPELINE] After authority clipping: [ 2.9668214   2.010891   -0.84033734 -7.6172953  -0.12462546 -2.960483
+ -1.9527858  -0.802734   -7.6414557  -0.12874906]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1246 Nm, R=-0.1287 Nm
+[WBC PIPELINE] Max final torque: 7.6415 Nm
+[PID STATE] roll=-8.65°, roll_integral=-0.0216, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=6.6083 N, active_wheels=2, expected_wheel_torque=0.1982 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.11, Fy=6.61, Fz=78.97, Mx=5.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.0N, desired=79.0N, scale=1.002
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1487 Nm, R=-0.1528 Nm, max_all=7.7297 Nm
+[WBC PIPELINE] After authority clipping: [ 2.672212    2.186883   -0.6406235  -7.701085   -0.14867975 -2.6662068
+ -2.128286   -0.5966129  -7.729666   -0.15275262]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1487 Nm, R=-0.1528 Nm
+[WBC PIPELINE] Max final torque: 7.7297 Nm
+[PID STATE] roll=-8.43°, roll_integral=-0.0219, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.5135 N, active_wheels=2, expected_wheel_torque=0.2254 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.11, Fy=7.51, Fz=78.97, Mx=4.03, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.7N, desired=79.0N, scale=1.001
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1691 Nm, R=-0.1731 Nm, max_all=7.8268 Nm
+[WBC PIPELINE] After authority clipping: [ 2.145026    2.3433282  -0.46617976 -7.796879   -0.16909225 -2.1386573
+ -2.28278    -0.42494988 -7.826826   -0.1730779 ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1691 Nm, R=-0.1731 Nm
+[WBC PIPELINE] Max final torque: 7.8268 Nm
+Step 80: h=0.410m, pitch=-0.1deg (sensed=-0.0deg), roll=-8.2deg (sensed=-8.5deg), gravity=[-0.003, 1.447, -9.703]
+[PID STATE] roll=-8.20°, roll_integral=-0.0222, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.4499 N, active_wheels=2, expected_wheel_torque=0.2235 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.12, Fy=7.45, Fz=78.97, Mx=3.53, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=80.4N, desired=79.0N, scale=0.996
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1670 Nm, R=-0.1710 Nm, max_all=7.8057 Nm
+[WBC PIPELINE] After authority clipping: [ 1.877437    2.3519802  -0.43961403 -7.7751603  -0.16699235 -1.8698602
+ -2.2880676  -0.40363738 -7.805684   -0.17098576]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1670 Nm, R=-0.1710 Nm
+[WBC PIPELINE] Max final torque: 7.8057 Nm
+[PID STATE] roll=-7.95°, roll_integral=-0.0224, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.4319 N, active_wheels=2, expected_wheel_torque=0.2230 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.12, Fy=7.43, Fz=78.98, Mx=2.89, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.9N, desired=79.0N, scale=0.998
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1670 Nm, R=-0.1710 Nm, max_all=7.8357 Nm
+[WBC PIPELINE] After authority clipping: [ 1.555205    2.3805954  -0.4037807  -7.8039136  -0.16695662 -1.5465685
+ -2.312888   -0.3705921  -7.83567    -0.17100738]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1670 Nm, R=-0.1710 Nm
+[WBC PIPELINE] Max final torque: 7.8357 Nm
+[PID STATE] roll=-7.67°, roll_integral=-0.0227, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.4462 N, active_wheels=2, expected_wheel_torque=0.2234 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.12, Fy=7.45, Fz=78.98, Mx=2.12, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.9N, desired=79.0N, scale=0.998
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1677 Nm, R=-0.1717 Nm, max_all=7.8637 Nm
+[WBC PIPELINE] After authority clipping: [ 1.1556568   2.4113736  -0.3565577  -7.8308473  -0.16765651 -1.1461825
+ -2.3405113  -0.3252686  -7.8637023  -0.17170162]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1677 Nm, R=-0.1717 Nm
+[WBC PIPELINE] Max final torque: 7.8637 Nm
+[PID STATE] roll=-7.37°, roll_integral=-0.0230, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.4835 N, active_wheels=2, expected_wheel_torque=0.2245 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.12, Fy=7.48, Fz=78.98, Mx=1.19, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.8N, desired=79.0N, scale=0.998
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1691 Nm, R=-0.1731 Nm, max_all=7.8994 Nm
+[WBC PIPELINE] After authority clipping: [ 0.6786562   2.4460418  -0.29898584 -7.8655705  -0.16914779 -0.6685104
+ -2.3724868  -0.26905987 -7.899369   -0.17313993]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1691 Nm, R=-0.1731 Nm
+[WBC PIPELINE] Max final torque: 7.8994 Nm
+[PID STATE] roll=-7.04°, roll_integral=-0.0232, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.5378 N, active_wheels=2, expected_wheel_torque=0.2261 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.12, Fy=7.54, Fz=78.98, Mx=0.10, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.6N, desired=79.0N, scale=0.998
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1713 Nm, R=-0.1752 Nm, max_all=7.9407 Nm
+[WBC PIPELINE] After authority clipping: [ 0.12204457  2.483062   -0.23082936 -7.9061627  -0.1713107  -0.11137073
+ -2.4072156  -0.2020316  -7.9406934  -0.1752093 ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1713 Nm, R=-0.1752 Nm
+[WBC PIPELINE] Max final torque: 7.9407 Nm
+[PID STATE] roll=-6.67°, roll_integral=-0.0234, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=6.9269 N, active_wheels=2, expected_wheel_torque=0.2078 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.10, Fy=6.93, Fz=78.98, Mx=-1.09, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=85.1N, desired=79.0N, scale=0.985
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1565 Nm, R=-0.1596 Nm, max_all=7.8035 Nm
+[WBC PIPELINE] After authority clipping: [-0.46278605  2.3881176  -0.2548366  -7.7727675  -0.15649441  0.47220102
+ -2.317706   -0.2315654  -7.8035364  -0.15958929]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1565 Nm, R=-0.1596 Nm
+[WBC PIPELINE] Max final torque: 7.8035 Nm
+[PID STATE] roll=-6.26°, roll_integral=-0.0237, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.0546 N, active_wheels=2, expected_wheel_torque=0.2116 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.07, Fy=7.05, Fz=78.98, Mx=-2.23, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=77.3N, desired=79.0N, scale=1.004
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1647 Nm, R=-0.1665 Nm, max_all=8.0102 Nm
+[WBC PIPELINE] After authority clipping: [-1.064733    2.477142   -0.1563235  -7.9859347  -0.16467041  1.0726876
+ -2.4157863  -0.14243451 -8.010178   -0.16645415]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1647 Nm, R=-0.1665 Nm
+[WBC PIPELINE] Max final torque: 8.0102 Nm
+[PID STATE] roll=-5.82°, roll_integral=-0.0239, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.1682 N, active_wheels=2, expected_wheel_torque=0.2150 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.06, Fy=7.17, Fz=78.97, Mx=-3.61, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.7N, desired=79.0N, scale=1.001
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1687 Nm, R=-0.1702 Nm, max_all=8.0405 Nm
+[WBC PIPELINE] After authority clipping: [-1.7733581   2.5117717  -0.04699576 -8.018673   -0.16869101  1.7807443
+ -2.4515088  -0.03626923 -8.040511   -0.17017546]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1687 Nm, R=-0.1702 Nm
+[WBC PIPELINE] Max final torque: 8.0405 Nm
+[PID STATE] roll=-5.32°, roll_integral=-0.0241, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.2697 N, active_wheels=2, expected_wheel_torque=0.2181 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.06, Fy=7.27, Fz=78.97, Mx=-5.16, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.4N, desired=79.0N, scale=1.001
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1736 Nm, R=-0.1748 Nm, max_all=8.1107 Nm
+[WBC PIPELINE] After authority clipping: [-2.571857    2.5538647   0.07199728 -8.091114   -0.17356305  2.5787714
+ -2.4942052   0.07942192 -8.110705   -0.17480956]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1736 Nm, R=-0.1748 Nm
+[WBC PIPELINE] Max final torque: 8.1107 Nm
+[PID STATE] roll=-4.78°, roll_integral=-0.0242, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.3645 N, active_wheels=2, expected_wheel_torque=0.2209 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.05, Fy=7.36, Fz=78.97, Mx=-6.86, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.3N, desired=79.0N, scale=1.002
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1786 Nm, R=-0.1797 Nm, max_all=8.1819 Nm
+[WBC PIPELINE] After authority clipping: [-3.4510756   2.590551    0.20334947 -8.164689   -0.17863506  3.4575346
+ -2.5316672   0.20710525 -8.181923   -0.17965919]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1786 Nm, R=-0.1797 Nm
+[WBC PIPELINE] Max final torque: 8.1819 Nm
+Step 90: h=0.410m, pitch=-0.1deg (sensed=-0.1deg), roll=-4.2deg (sensed=-4.9deg), gravity=[-0.022, 0.836, -9.774]
+[PID STATE] roll=-4.17°, roll_integral=-0.0244, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.4539 N, active_wheels=2, expected_wheel_torque=0.2236 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.05, Fy=7.45, Fz=78.97, Mx=-8.72, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.3N, desired=79.0N, scale=1.002
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1841 Nm, R=-0.1849 Nm, max_all=8.2604 Nm
+[WBC PIPELINE] After authority clipping: [-4.40667     2.622357    0.34855583 -8.245653   -0.18407728  4.4126863
+ -2.5644348   0.3483293  -8.260433   -0.18489307]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1841 Nm, R=-0.1849 Nm
+[WBC PIPELINE] Max final torque: 8.2604 Nm
+[PID STATE] roll=-3.51°, roll_integral=-0.0245, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.5375 N, active_wheels=2, expected_wheel_torque=0.2261 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.05, Fy=7.54, Fz=78.98, Mx=-10.72, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.2N, desired=79.0N, scale=1.002
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1899 Nm, R=-0.1905 Nm, max_all=8.3461 Nm
+[WBC PIPELINE] After authority clipping: [-5.434655    2.6472902   0.5088684  -8.333867   -0.18987411  5.440235
+ -2.5905662   0.5043914  -8.346098   -0.190496  ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1899 Nm, R=-0.1905 Nm
+[WBC PIPELINE] Max final torque: 8.3461 Nm
+[PID STATE] roll=-2.78°, roll_integral=-0.0246, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.6144 N, active_wheels=2, expected_wheel_torque=0.2284 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.04, Fy=7.61, Fz=78.98, Mx=-12.85, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.2N, desired=79.0N, scale=1.002
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1960 Nm, R=-0.1964 Nm, max_all=8.4394 Nm
+[WBC PIPELINE] After authority clipping: [-6.532427    2.6630616   0.68529934 -8.4297695  -0.1959789   6.537573
+ -2.6078231   0.67634374 -8.439369   -0.19642268]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1960 Nm, R=-0.1964 Nm
+[WBC PIPELINE] Max final torque: 8.4394 Nm
+[PID STATE] roll=-1.99°, roll_integral=-0.0247, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.6829 N, active_wheels=2, expected_wheel_torque=0.2305 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.04, Fy=7.68, Fz=78.98, Mx=-15.12, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.2N, desired=79.0N, scale=1.002
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2023 Nm, R=-0.2026 Nm, max_all=8.5403 Nm
+[WBC PIPELINE] After authority clipping: [-7.6983423   2.6667826   0.8784928  -8.53344    -0.2022878   7.7030525
+ -2.6133761   0.86486936 -8.54034    -0.20257132]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2023 Nm, R=-0.2026 Nm
+[WBC PIPELINE] Max final torque: 8.5403 Nm
+[PID STATE] roll=-1.12°, roll_integral=-0.0247, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.7404 N, active_wheels=2, expected_wheel_torque=0.2322 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.04, Fy=7.74, Fz=78.99, Mx=-17.53, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.2N, desired=79.0N, scale=1.002
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2086 Nm, R=-0.2088 Nm, max_all=8.9363 Nm
+[WBC PIPELINE] After authority clipping: [-8.932049    2.6550286   1.088604   -8.644747   -0.20863621  8.936317
+ -2.603867    1.0701691  -8.648901   -0.20878017]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2086 Nm, R=-0.2088 Nm
+[WBC PIPELINE] Max final torque: 8.9363 Nm
+[PID STATE] roll=-0.18°, roll_integral=-0.0247, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.7842 N, active_wheels=2, expected_wheel_torque=0.2335 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.03, Fy=7.78, Fz=78.99, Mx=-20.07, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.3N, desired=79.0N, scale=1.002
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2148 Nm, R=-0.2148 Nm, max_all=10.2387 Nm
+[WBC PIPELINE] After authority clipping: [-10.234915     2.623876     1.3152016   -8.763292    -0.21479778
+  10.238728    -2.5754452    1.2918674   -8.764681    -0.21482638]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2148 Nm, R=-0.2148 Nm
+[WBC PIPELINE] Max final torque: 10.2387 Nm
+[PID STATE] roll=0.83°, roll_integral=-0.0247, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.8110 N, active_wheels=2, expected_wheel_torque=0.2343 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.03, Fy=7.81, Fz=79.00, Mx=-22.75, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.3N, desired=79.0N, scale=1.002
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2205 Nm, R=-0.2204 Nm, max_all=11.6140 Nm
+[WBC PIPELINE] After authority clipping: [-11.610687    2.5689538   1.5570982  -8.888352   -0.2204776  11.614026
+  -2.5238132   1.5288475  -8.886994   -0.2204192]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2205 Nm, R=-0.2204 Nm
+[WBC PIPELINE] Max final torque: 11.6140 Nm
+[PID STATE] roll=1.93°, roll_integral=-0.0246, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.8174 N, active_wheels=2, expected_wheel_torque=0.2345 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.03, Fy=7.82, Fz=79.00, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.3N, desired=79.0N, scale=1.002
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2253 Nm, R=-0.2252 Nm, max_all=12.7756 Nm
+[WBC PIPELINE] After authority clipping: [-12.772724     2.485555     1.8122169   -9.018867    -0.22531536
+  12.775558    -2.44434      1.7791225   -9.014829    -0.22520334]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2253 Nm, R=-0.2252 Nm
+[WBC PIPELINE] Max final torque: 12.7756 Nm
+[PID STATE] roll=3.11°, roll_integral=-0.0245, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.8004 N, active_wheels=2, expected_wheel_torque=0.2340 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.02, Fy=7.80, Fz=79.01, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.5N, desired=79.0N, scale=1.001
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2288 Nm, R=-0.2286 Nm, max_all=12.8065 Nm
+[WBC PIPELINE] After authority clipping: [-12.804167     2.367948     2.0757627   -9.148148    -0.22877352
+  12.806451    -2.3313794    2.03804     -9.141564    -0.22864662]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2288 Nm, R=-0.2286 Nm
+[WBC PIPELINE] Max final torque: 12.8065 Nm
+[PID STATE] roll=4.37°, roll_integral=-0.0243, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.7626 N, active_wheels=2, expected_wheel_torque=0.2329 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.02, Fy=7.76, Fz=79.02, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.3N, desired=79.0N, scale=0.999
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2302 Nm, R=-0.2301 Nm, max_all=12.8168 Nm
+[WBC PIPELINE] After authority clipping: [-12.815093     2.2116237    2.3368526   -9.258996    -0.23017164
+  12.816778    -2.1804788    2.294973    -9.250112    -0.23007286]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2302 Nm, R=-0.2301 Nm
+[WBC PIPELINE] Max final torque: 12.8168 Nm
+Step 100: h=0.409m, pitch=-0.1deg (sensed=-0.1deg), roll=5.7deg (sensed=4.1deg), gravity=[-0.015, -0.703, -9.785]
+[PID STATE] roll=5.71°, roll_integral=-0.0241, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.7143 N, active_wheels=2, expected_wheel_torque=0.2314 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.02, Fy=7.71, Fz=79.03, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=80.1N, desired=79.0N, scale=0.997
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2299 Nm, R=-0.2299 Nm, max_all=12.8344 Nm
+[WBC PIPELINE] After authority clipping: [-12.833322     2.0251222    2.590827    -9.36602     -0.22994922
+  12.834361    -1.9999927    2.545412    -9.355175    -0.22992297]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2299 Nm, R=-0.2299 Nm
+[WBC PIPELINE] Max final torque: 12.8344 Nm
+[PID STATE] roll=7.13°, roll_integral=-0.0239, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.6649 N, active_wheels=2, expected_wheel_torque=0.2299 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.01, Fy=7.66, Fz=79.03, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=80.1N, desired=79.0N, scale=0.997
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2286 Nm, R=-0.2287 Nm, max_all=12.8800 Nm
+[WBC PIPELINE] After authority clipping: [-12.879637     1.8149308    2.8367429   -9.481131    -0.22858979
+  12.8799925   -1.7961984    2.7884886   -9.468724    -0.22868025]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2286 Nm, R=-0.2287 Nm
+[WBC PIPELINE] Max final torque: 12.8800 Nm
+[PID STATE] roll=8.63°, roll_integral=-0.0236, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.6175 N, active_wheels=2, expected_wheel_torque=0.2285 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.01, Fy=7.62, Fz=79.04, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.8N, desired=79.0N, scale=0.998
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2258 Nm, R=-0.2261 Nm, max_all=12.9375 Nm
+[WBC PIPELINE] After authority clipping: [-12.937467     1.5796125    3.0684605   -9.590133    -0.22583199
+  12.937094    -1.5675435    3.0181897   -9.576598    -0.22608061]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2258 Nm, R=-0.2261 Nm
+[WBC PIPELINE] Max final torque: 12.9375 Nm
+[PID STATE] roll=10.22°, roll_integral=-0.0232, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.5754 N, active_wheels=2, expected_wheel_torque=0.2273 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.01, Fy=7.58, Fz=79.05, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.3N, desired=79.0N, scale=0.999
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2218 Nm, R=-0.2223 Nm, max_all=13.0113 Nm
+[WBC PIPELINE] After authority clipping: [-13.011344     1.321151     3.2843559   -9.694404    -0.22181311
+  13.010197    -1.3158714    3.2329109   -9.680177    -0.22225606]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2218 Nm, R=-0.2223 Nm
+[WBC PIPELINE] Max final torque: 13.0113 Nm
+[PID STATE] roll=11.90°, roll_integral=-0.0228, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.5460 N, active_wheels=2, expected_wheel_torque=0.2264 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.01, Fy=7.55, Fz=79.05, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=79.0N, desired=79.1N, scale=1.000
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2165 Nm, R=-0.2172 Nm, max_all=13.0863 Nm
+[WBC PIPELINE] After authority clipping: [-13.086252     1.041212     3.4782097   -9.781088    -0.2165167
+  13.084293    -1.0426937    3.4265025   -9.766608    -0.21718127]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2165 Nm, R=-0.2172 Nm
+[WBC PIPELINE] Max final torque: 13.0863 Nm
+[PID STATE] roll=13.67°, roll_integral=-0.0223, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.5362 N, active_wheels=2, expected_wheel_torque=0.2261 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=7.54, Fz=79.06, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=78.0N, desired=79.1N, scale=1.003
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2107 Nm, R=-0.2116 Nm, max_all=13.1905 Nm
+[WBC PIPELINE] After authority clipping: [-13.190471     0.7463212    3.6555994   -9.870122    -0.21068567
+  13.18767     -0.7543382    3.6043892   -9.8557625   -0.21158709]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2107 Nm, R=-0.2116 Nm
+[WBC PIPELINE] Max final torque: 13.1905 Nm
+[PID STATE] roll=15.54°, roll_integral=-0.0218, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.5455 N, active_wheels=2, expected_wheel_torque=0.2264 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.00, Fy=7.55, Fz=79.07, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=76.7N, desired=79.1N, scale=1.006
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2042 Nm, R=-0.2053 Nm, max_all=13.3125 Nm
+[WBC PIPELINE] After authority clipping: [-13.312534     0.43747428   3.8121555   -9.952045    -0.2041509
+  13.308884    -0.45177525   3.7622128   -9.938163    -0.20529889]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2042 Nm, R=-0.2053 Nm
+[WBC PIPELINE] Max final torque: 13.3125 Nm
+[PID STATE] roll=17.47°, roll_integral=-0.0212, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.7062 N, active_wheels=2, expected_wheel_torque=0.2312 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.01, Fy=7.71, Fz=79.08, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=75.8N, desired=79.1N, scale=1.008
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1998 Nm, R=-0.2017 Nm, max_all=13.4311 Nm
+[WBC PIPELINE] After authority clipping: [-13.431069     0.09849256   3.962172   -10.02045     -0.1998267
+  13.429039    -0.12379166   3.921075   -10.010359    -0.20166077]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1998 Nm, R=-0.2017 Nm
+[WBC PIPELINE] Max final torque: 13.4311 Nm
+[PID STATE] roll=19.38°, roll_integral=-0.0205, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.3546 N, active_wheels=0, expected_wheel_torque=0.1306 Nm (Jacobian will produce this)
+[FORCE FEEDBACK] Active: actual=0.0N, desired=79.1N, scale=1.200
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1289 Nm, R=-0.1312 Nm, max_all=16.0202 Nm
+[WBC PIPELINE] After authority clipping: [-16.020208     0.39782873   4.1983957  -11.608637    -0.128897
+  16.018206    -0.41048625   4.177278   -11.602951    -0.13122453]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1289 Nm, R=-0.1312 Nm
+[WBC PIPELINE] Max final torque: 16.0202 Nm
+[PID STATE] roll=21.10°, roll_integral=-0.0198, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.3354 N, active_wheels=2, expected_wheel_torque=0.1301 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.24, Fy=4.34, Fz=79.04, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=94.1N, desired=79.0N, scale=0.962
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1002 Nm, R=-0.1076 Nm, max_all=13.0236 Nm
+[WBC PIPELINE] After authority clipping: [-13.023593     0.46887863   3.6180508   -9.347825    -0.10016479
+  13.02238     -0.45222336   3.6835613   -9.374267    -0.10762485]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1002 Nm, R=-0.1076 Nm
+[WBC PIPELINE] Max final torque: 13.0236 Nm
+Step 110: h=0.408m, pitch=0.2deg (sensed=0.1deg), roll=22.8deg (sensed=20.8deg), gravity=[0.021, -3.478, -9.173]
+[PID STATE] roll=22.80°, roll_integral=-0.0190, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.2413 N, active_wheels=2, expected_wheel_torque=0.1272 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.03, Fy=4.24, Fz=79.00, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=46.9N, desired=79.0N, scale=1.081
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1137 Nm, R=-0.1114 Nm, max_all=14.7852 Nm
+[WBC PIPELINE] After authority clipping: [-14.785167     0.5010205    4.3045936  -10.553988    -0.11374635
+  14.739517    -0.31815803   4.3410516  -10.549752    -0.11138267]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1137 Nm, R=-0.1114 Nm
+[WBC PIPELINE] Max final torque: 14.7852 Nm
+[PID STATE] roll=24.62°, roll_integral=-0.0181, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.4313 N, active_wheels=2, expected_wheel_torque=0.1329 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.10, Fy=4.43, Fz=78.97, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=66.9N, desired=79.0N, scale=1.031
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1118 Nm, R=-0.1063 Nm, max_all=14.2415 Nm
+[WBC PIPELINE] After authority clipping: [-14.241499     0.29334417   4.360976   -10.121209    -0.11179967
+  14.179962    -0.04823004   4.404269   -10.110684    -0.10631049]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1118 Nm, R=-0.1063 Nm
+[WBC PIPELINE] Max final torque: 14.2415 Nm
+[PID STATE] roll=26.55°, roll_integral=-0.0172, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=3.5374 N, active_wheels=2, expected_wheel_torque=0.1061 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.60, Fy=3.54, Fz=78.95, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=172.2N, desired=79.0N, scale=0.764
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0717 Nm, R=-0.0531 Nm, max_all=10.6843 Nm
+[WBC PIPELINE] After authority clipping: [-10.684267     0.2419333    3.3530674   -7.50803     -0.07169276
+  10.592103     0.06426239   3.3192756   -7.4583077   -0.05311656]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0717 Nm, R=-0.0531 Nm
+[WBC PIPELINE] Max final torque: 10.6843 Nm
+[PID STATE] roll=28.51°, roll_integral=-0.0162, integral_contribution=-0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.8732 N, active_wheels=2, expected_wheel_torque=0.1462 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.39, Fy=4.87, Fz=78.94, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=31.7N, desired=78.9N, scale=1.120
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1332 Nm, R=-0.1137 Nm, max_all=15.9105 Nm
+[WBC PIPELINE] After authority clipping: [-15.910461    -0.06378888   5.438416   -11.172524    -0.13323784
+  15.798127     0.4372589    5.452305   -11.117149    -0.11374627]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1332 Nm, R=-0.1137 Nm
+[WBC PIPELINE] Max final torque: 15.9105 Nm
+[PID STATE] roll=30.61°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=5.1775 N, active_wheels=2, expected_wheel_torque=0.1553 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.20, Fy=5.18, Fz=78.94, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=67.1N, desired=78.9N, scale=1.030
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1233 Nm, R=-0.1126 Nm, max_all=14.8452 Nm
+[WBC PIPELINE] After authority clipping: [-14.845218    -0.30654204   5.3078814  -10.345185    -0.12331758
+  14.764218     0.5985867    5.373378   -10.314721    -0.11261406]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1233 Nm, R=-0.1126 Nm
+[WBC PIPELINE] Max final torque: 14.8452 Nm
+[PID STATE] roll=32.91°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=4.8466 N, active_wheels=1, expected_wheel_torque=0.2908 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=False, right_contact=True, active_count=1
+[FORCE_DIST] desired_wrench: Fx=0.14, Fy=4.85, Fz=78.95, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE FEEDBACK] Active: actual=53.3N, desired=129.0N, scale=1.117
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0000 Nm, R=-0.2244 Nm, max_all=22.4485 Nm
+[WBC PIPELINE] After authority clipping: [-19.476946     0.454821     6.519804   -13.765123    -0.
+  21.333935     1.5884748   12.178251   -22.448467    -0.22443695]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0000 Nm, R=-0.2244 Nm
+[WBC PIPELINE] Max final torque: 22.4485 Nm
+[PID STATE] roll=35.50°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=6.6617 N, active_wheels=2, expected_wheel_torque=0.1998 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=-0.04, Fy=6.66, Fz=78.98, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=74.0N, desired=79.0N, scale=1.013
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1416 Nm, R=-0.1418 Nm, max_all=15.1254 Nm
+[WBC PIPELINE] After authority clipping: [-15.125367    -0.96634984   5.901051   -10.334291    -0.14162728
+  15.065668     1.1848391    6.087999   -10.355441    -0.14176673]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1416 Nm, R=-0.1418 Nm
+[WBC PIPELINE] Max final torque: 15.1254 Nm
+[PID STATE] roll=37.82°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=15.7941 N, active_wheels=1, expected_wheel_torque=0.9476 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=False, right_contact=True, active_count=1
+[FORCE_DIST] desired_wrench: Fx=-0.12, Fy=15.79, Fz=79.01, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE FEEDBACK] Active: actual=36.5N, desired=129.0N, scale=1.143
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0000 Nm, R=-0.7499 Nm, max_all=24.7313 Nm
+[WBC PIPELINE] After authority clipping: [-20.579992    -0.05314805   7.37375    -14.233943    -0.
+  24.016178     6.5273705   17.264894   -24.73129     -0.7498945 ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0000 Nm, R=-0.7499 Nm
+[WBC PIPELINE] Max final torque: 24.7313 Nm
+[PID STATE] roll=39.31°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=14.9095 N, active_wheels=0, expected_wheel_torque=0.4473 Nm (Jacobian will produce this)
+[FORCE FEEDBACK] Active: actual=0.0N, desired=79.1N, scale=1.200
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.3658 Nm, R=-0.3697 Nm, max_all=18.7904 Nm
+[WBC PIPELINE] After authority clipping: [-18.656696    -3.4254057    8.873778   -12.901698    -0.36583415
+  18.790442     3.420318     9.161851   -12.954416    -0.3696557 ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.3658 Nm, R=-0.3697 Nm
+[WBC PIPELINE] Max final torque: 18.7904 Nm
+[PID STATE] roll=40.29°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=14.5426 N, active_wheels=0, expected_wheel_torque=0.4363 Nm (Jacobian will produce this)
+[FORCE FEEDBACK] Active: actual=0.0N, desired=79.1N, scale=1.200
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.3604 Nm, R=-0.3582 Nm, max_all=18.8738 Nm
+[WBC PIPELINE] After authority clipping: [-18.720985    -3.5999548    9.062667   -12.922427    -0.36036134
+  18.873796     3.5643842    9.314559   -12.9602585   -0.3581726 ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.3604 Nm, R=-0.3582 Nm
+[WBC PIPELINE] Max final torque: 18.8738 Nm
+Step 120: h=0.407m, pitch=-0.0deg (sensed=-0.1deg), roll=41.1deg (sensed=40.1deg), gravity=[-0.016, -6.319, -7.504]
+[PID STATE] roll=41.09°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=12.6683 N, active_wheels=0, expected_wheel_torque=0.3800 Nm (Jacobian will produce this)
+[FORCE FEEDBACK] Active: actual=0.0N, desired=79.2N, scale=1.200
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.3135 Nm, R=-0.3147 Nm, max_all=18.8534 Nm
+[WBC PIPELINE] After authority clipping: [-18.677912    -3.4674895    8.954487   -12.838996    -0.31350622
+  18.853392     3.3808854    9.225788   -12.885262    -0.31466925]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.3135 Nm, R=-0.3147 Nm
+[WBC PIPELINE] Max final torque: 18.8534 Nm
+[PID STATE] roll=41.83°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=11.7445 N, active_wheels=1, expected_wheel_torque=0.7047 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=False, right_contact=True, active_count=1
+[FORCE_DIST] desired_wrench: Fx=-0.04, Fy=11.74, Fz=79.29, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE FEEDBACK] Active: actual=71.7N, desired=129.3N, scale=1.089
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0000 Nm, R=-0.5342 Nm, max_all=23.3745 Nm
+[WBC PIPELINE] After authority clipping: [-19.953655    -1.2586399    8.104839   -13.867566    -0.
+  23.34428      6.1641464   16.845753   -23.374527    -0.53418416]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0000 Nm, R=-0.5342 Nm
+[WBC PIPELINE] Max final torque: 23.3745 Nm
+[PID STATE] roll=42.52°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=10.4639 N, active_wheels=2, expected_wheel_torque=0.3139 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.08, Fy=10.46, Fz=79.40, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=71.0N, desired=79.4N, scale=1.021
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.2227 Nm, R=-0.2219 Nm, max_all=16.0295 Nm
+[WBC PIPELINE] After authority clipping: [-15.911649    -2.9425197    7.676252   -10.904461    -0.22266577
+  16.029472     2.8383684    7.8673797  -10.928493    -0.22192895]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.2227 Nm, R=-0.2219 Nm
+[WBC PIPELINE] Max final torque: 16.0295 Nm
+[PID STATE] roll=43.19°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=9.9271 N, active_wheels=1, expected_wheel_torque=0.5956 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=False, active_count=1
+[FORCE_DIST] desired_wrench: Fx=0.33, Fy=9.93, Fz=79.51, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE FEEDBACK] Active: actual=49.7N, desired=129.5N, scale=1.123
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.4759 Nm, R=-0.0000 Nm, max_all=24.0725 Nm
+[WBC PIPELINE] After authority clipping: [-23.915329    -6.639275    17.194967   -24.072548    -0.47593912
+  20.879877     1.5744859    9.114889   -14.482185    -0.        ]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.4759 Nm, R=-0.0000 Nm
+[WBC PIPELINE] Max final torque: 24.0725 Nm
+[PID STATE] roll=43.85°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=7.9568 N, active_wheels=1, expected_wheel_torque=0.4774 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=False, right_contact=True, active_count=1
+[FORCE_DIST] desired_wrench: Fx=0.21, Fy=7.96, Fz=79.65, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE FEEDBACK] Active: actual=28.7N, desired=129.6N, scale=1.156
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.0000 Nm, R=-0.3796 Nm, max_all=24.7168 Nm
+[WBC PIPELINE] After authority clipping: [-21.418764    -2.1816666    9.393974   -14.9742      -0.
+  24.716776     6.006455    17.758238   -24.670816    -0.37961334]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.0000 Nm, R=-0.3796 Nm
+[WBC PIPELINE] Max final torque: 24.7168 Nm
+[PID STATE] roll=44.49°, roll_integral=0.0000, integral_contribution=0.00 Nm
+[WHEEL TORQUE DIAGNOSTIC] Fy_total=8.0826 N, active_wheels=2, expected_wheel_torque=0.2425 Nm (Jacobian will produce this)
+[FORCE_DIST] left_contact=True, right_contact=True, active_count=2
+[FORCE_DIST] desired_wrench: Fx=0.16, Fy=8.08, Fz=79.78, Mx=-25.00, My=0.00, Mz=0.00
+[FORCE_DIST] CONTACT-AWARE BRANCH: Both wheels in contact
+[FORCE FEEDBACK] Active: actual=77.7N, desired=79.8N, scale=1.005
+[WBC PIPELINE] Before clipping - wheel torques: L=-0.1703 Nm, R=-0.1696 Nm, max_all=15.8489 Nm
+[WBC PIPELINE] After authority clipping: [-15.782803    -3.0449133    7.7604294  -10.776887    -0.17029673
+  15.848932     2.731989     7.9212627  -10.790859    -0.16959238]
+[WBC PIPELINE] After clipping - wheel torques: L=-0.1703 Nm, R=-0.1696 Nm
+[WBC PIPELINE] Max final torque: 15.8489 Nm
+
+[TERMINATED] at step 126: orientation_fail_pitch_0.02_roll_0.79
+
+================================================================================
+Simulation Summary
+================================================================================
+Total steps: 126
+Simulation time: 1.2 seconds
+Wall clock time: 6.5 seconds
+Terminated: True
+Termination reason: orientation_fail_pitch_0.02_roll_0.79
+
+CoM height range: 0.394 - 0.416 m
+Pitch range: -0.2 - 1.3 deg
+Roll range: -11.5 - 45.1 deg
+
+Max torques (wheeled biped architecture):
+  Hip roll: 24.73 Nm
+  Wheels: 0.75 Nm
+  Legs: 5.66 Nm
+  Total: 22.59 Nm
+
+Telemetry saved to: outputs\hierarchical_controller_sim\telemetry_1779295918.csv
+================================================================================

@@ -1,0 +1,17 @@
+{
+  "mechanisms": [
+    "position_authority_induces_pitch_overshoot",
+    "max_position_tau_too_high",
+    "k_velocity_helps_damp_pitch"
+  ],
+  "evidence": {
+    "position_authority_induces_pitch_overshoot": "J1 pitch 0.1632 > J0 pitch 0.0951 with k_position 80.0 vs 40.0",
+    "max_position_tau_too_high": "J1 max_position_tau 6.0 > J0 3.0, tau_position 6.00 vs 3.00",
+    "k_velocity_helps_damp_pitch": "J3 k_velocity 30.0 > J2 25.0, J3 pitch 0.1395 < J2 pitch 0.1444"
+  },
+  "confidence": {
+    "position_authority_induces_pitch_overshoot": "high",
+    "max_position_tau_too_high": "medium",
+    "k_velocity_helps_damp_pitch": "medium"
+  }
+}

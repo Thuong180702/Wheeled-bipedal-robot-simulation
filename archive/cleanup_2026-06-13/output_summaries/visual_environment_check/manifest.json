@@ -1,0 +1,20 @@
+{
+  "original_path": "outputs/visual_environment_check",
+  "original_size": "2.8K",
+  "original_size_bytes": 2910,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "visual_environment_check.json",
+      "size_bytes": 1169
+    },
+    {
+      "file": "visual_environment_check_report.md",
+      "size_bytes": 1741
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

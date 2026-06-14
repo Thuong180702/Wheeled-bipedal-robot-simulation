@@ -1,0 +1,36 @@
+{
+  "original_path": "outputs/phase_b9_task4_telemetry",
+  "original_size": "198.6K",
+  "original_size_bytes": 203343,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "telemetry_h0.45.json",
+      "size_bytes": 33906
+    },
+    {
+      "file": "telemetry_h0.50.json",
+      "size_bytes": 33857
+    },
+    {
+      "file": "telemetry_h0.55.json",
+      "size_bytes": 33894
+    },
+    {
+      "file": "telemetry_h0.60.json",
+      "size_bytes": 33914
+    },
+    {
+      "file": "telemetry_h0.65.json",
+      "size_bytes": 33894
+    },
+    {
+      "file": "telemetry_h0.70.json",
+      "size_bytes": 33878
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

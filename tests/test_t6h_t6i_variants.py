@@ -22,10 +22,11 @@ class TestT6HT6IProfilesExist:
         assert profile.profile_name == "T6H_soft_blend_arch_fix"
 
     def test_t6i_profile_exists(self):
-        """T6I_phase_aware_release must exist in registry."""
+        """T6I_phase_aware_release must exist in registry (maps to semantic profile)."""
         assert "T6I_phase_aware_release" in JOINT_FIX_PROFILES
         profile = JOINT_FIX_PROFILES["T6I_phase_aware_release"]
-        assert profile.profile_name == "T6I_phase_aware_release"
+        # Maps to the canonical semantic name
+        assert profile.profile_name == "phase_aware_authority_release"
 
     def test_t6h_t6i_are_opt_in(self):
         """T6H and T6I must apply to boundary variants (opt-in)."""

@@ -1,0 +1,136 @@
+{
+  "d2": {
+    "support_position_error": {
+      "max": 0.17568666695787621,
+      "mean": 0.0824491231258863,
+      "final": 0.05798601120375273,
+      "crossings_gt_0.15": 96
+    },
+    "tau_position_raw": {
+      "max": 0.14110543307739976,
+      "mean": -3.2979649250354517,
+      "rms": 4.0280460601046535
+    },
+    "tau_position_integral": {
+      "max": 0.0,
+      "mean": 0.0,
+      "integral_active_count": 0,
+      "integral_active_percent": 0.0
+    },
+    "tau_position_saturated": {
+      "count": 177,
+      "percent": 35.4
+    },
+    "effective_max_position_tau": {
+      "value": 4.0
+    },
+    "hip_yaw_abs_max": {
+      "max": 0.10179480165243149,
+      "mean": 0.04457825027103536
+    },
+    "pitch_x": {
+      "max_abs": 0.11105598509311676,
+      "rms": 0.0628899552448915
+    },
+    "wheel_vel_mean": {
+      "max_abs": 4.3887152671813965,
+      "mean_abs": 1.7072540473230182
+    },
+    "correlations": {
+      "tau_position_raw_vs_hip_yaw": 0.6321025312843263,
+      "support_error_vs_hip_yaw": -0.6321025312843264,
+      "pitch_x_vs_hip_yaw": -0.5704705553469476,
+      "wheel_vel_vs_hip_yaw": 0.26162315023972943,
+      "divergence_vs_tau_position": 0.6449163736283365
+    },
+    "hip_yaw_telemetry": {
+      "l_hip_yaw_error_max": 0.08490891009569168,
+      "r_hip_yaw_error_max": 0.10179480165243149,
+      "l_hip_yaw_tau_final_max": 1.339766502380371,
+      "r_hip_yaw_tau_final_max": 1.594437599182129,
+      "divergence_error_max": 0.09331485256552696,
+      "common_error_max": 0.009765328839421272
+    }
+  },
+  "e2": {
+    "support_position_error": {
+      "max": 0.17027708858656376,
+      "mean": 0.06282364744111579,
+      "final": -0.027604100780648705,
+      "crossings_gt_0.15": 62
+    },
+    "tau_position_raw": {
+      "max": 1.2835799186107253,
+      "mean": -2.5128500515496968,
+      "rms": 3.4413012856807255
+    },
+    "tau_position_integral": {
+      "max": 0.007604100010634842,
+      "mean": 0.00010236097191347935,
+      "integral_active_count": 31,
+      "integral_active_percent": 6.2
+    },
+    "tau_position_saturated": {
+      "count": 95,
+      "percent": 19.0
+    },
+    "effective_max_position_tau": {
+      "value": 5.0
+    },
+    "hip_yaw_abs_max": {
+      "max": 0.13044270873069763,
+      "mean": 0.04125406229810324
+    },
+    "pitch_x": {
+      "max_abs": 0.1244356781244278,
+      "rms": 0.06319821117744195
+    },
+    "wheel_vel_mean": {
+      "max_abs": 4.388719081878662,
+      "mean_abs": 2.005237390862778
+    },
+    "correlations": {
+      "tau_position_raw_vs_hip_yaw": 0.7266124155954018,
+      "support_error_vs_hip_yaw": -0.7265588419308555,
+      "pitch_x_vs_hip_yaw": -0.5774335651244114,
+      "wheel_vel_vs_hip_yaw": 0.3498278548202908,
+      "divergence_vs_tau_position": 0.7321583787616882
+    },
+    "hip_yaw_telemetry": {
+      "l_hip_yaw_error_max": 0.11309678852558136,
+      "r_hip_yaw_error_max": 0.13044270873069763,
+      "l_hip_yaw_tau_final_max": 1.8055412769317627,
+      "r_hip_yaw_tau_final_max": 2.06564998626709,
+      "divergence_error_max": 0.12170044705271721,
+      "common_error_max": 0.0115885641425848
+    }
+  },
+  "comparison": {
+    "support_improvement": {
+      "d2_max": 0.17568666695787621,
+      "e2_max": 0.17027708858656376,
+      "improvement_percent": 3.079105810920465
+    },
+    "hip_yaw_regression": {
+      "d2_max": 0.10179480165243149,
+      "e2_max": 0.13044270873069763,
+      "regression_percent": 28.142799645193723
+    },
+    "tau_position_changes": {
+      "d2_effective_cap": 4.0,
+      "e2_effective_cap": 5.0,
+      "d2_tau_pos_raw_max": 0.14110543307739976,
+      "e2_tau_pos_raw_max": 1.2835799186107253,
+      "d2_tau_pos_saturated_count": 177,
+      "e2_tau_pos_saturated_count": 95
+    },
+    "hip_yaw_torque_analysis": {
+      "d2_l_tau_max": 1.339766502380371,
+      "d2_r_tau_max": 1.594437599182129,
+      "e2_l_tau_max": 1.8055412769317627,
+      "e2_r_tau_max": 2.06564998626709,
+      "d2_divergence_max": 0.09331485256552696,
+      "e2_divergence_max": 0.12170044705271721
+    }
+  }
+}

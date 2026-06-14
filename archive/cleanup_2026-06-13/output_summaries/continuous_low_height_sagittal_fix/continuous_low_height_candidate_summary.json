@@ -1,0 +1,395 @@
+[
+  {
+    "candidate": "baseline",
+    "runs": [
+      {
+        "label": "stepE_low0p300_1000",
+        "candidate": "baseline",
+        "variant": "low_0p300",
+        "steps": 1000,
+        "sim_success": true,
+        "dry_run": false,
+        "metrics": {
+          "support_position_error_max_abs": 0.2429683981107743,
+          "hip_yaw_abs_max": 0.21364092826843262,
+          "pitch_x_max_abs": 0.09506645798683167,
+          "roll_y_max_abs": 0.014999648556113243,
+          "height_error_final_abs": 0.012683765864915486,
+          "non_wheel_floor_contacts": 0,
+          "contact_valid_rate": 0.9900990099009901,
+          "wbc_applied": false,
+          "hidden_torque_max": 0.0,
+          "ownership_violations": 0,
+          "steps": 101,
+          "terminated": false,
+          "termination_reason": "completed",
+          "actual_steps": 1000
+        },
+        "verdict": "FAIL",
+        "failures": [
+          "support_position_error max_abs <= 0.15 m",
+          "hip_yaw_abs_max <= 0.07 rad",
+          "contact valid >= 99.9%"
+        ],
+        "gate_details": {
+          "support_position_error_max_abs": {
+            "value": 0.2429683981107743,
+            "threshold": 0.15,
+            "passed": false,
+            "status": "0.242968 > 0.15"
+          },
+          "hip_yaw_abs_max": {
+            "value": 0.21364092826843262,
+            "threshold": 0.07,
+            "passed": false,
+            "status": "0.213641 > 0.07"
+          },
+          "pitch_x_max_abs": {
+            "value": 0.09506645798683167,
+            "threshold": 0.1,
+            "passed": true,
+            "status": "ok"
+          },
+          "roll_y_max_abs": {
+            "value": 0.014999648556113243,
+            "threshold": 0.05,
+            "passed": true,
+            "status": "ok"
+          },
+          "height_error_final_abs": {
+            "value": 0.012683765864915486,
+            "threshold": 0.02,
+            "passed": true,
+            "status": "ok"
+          },
+          "non_wheel_floor_contacts": {
+            "value": 0,
+            "threshold": 0,
+            "passed": true,
+            "status": "ok"
+          },
+          "contact_valid_rate": {
+            "value": 0.9900990099009901,
+            "threshold": 0.999,
+            "passed": false,
+            "status": "0.9900990099009901 < 0.999"
+          },
+          "wbc_applied": {
+            "value": false,
+            "threshold": false,
+            "passed": true,
+            "status": "ok"
+          },
+          "hidden_torque_max": {
+            "value": 0.0,
+            "threshold": 0.0,
+            "passed": true,
+            "status": "ok"
+          },
+          "ownership_violations": {
+            "value": 0,
+            "threshold": 0,
+            "passed": true,
+            "status": "ok"
+          }
+        }
+      }
+    ],
+    "overall_pass": false
+  },
+  {
+    "candidate": "candidate_E1_k60_continuous",
+    "runs": [
+      {
+        "label": "stepE_low0p300_1000",
+        "candidate": "candidate_E1_k60_continuous",
+        "variant": "low_0p300",
+        "steps": 1000,
+        "sim_success": true,
+        "dry_run": false,
+        "metrics": {
+          "support_position_error_max_abs": 0.22162936706584757,
+          "hip_yaw_abs_max": 0.2113260179758072,
+          "pitch_x_max_abs": 0.094044990837574,
+          "roll_y_max_abs": 0.01498311385512352,
+          "height_error_final_abs": 0.013648318028993245,
+          "non_wheel_floor_contacts": 0,
+          "contact_valid_rate": 0.9900990099009901,
+          "wbc_applied": false,
+          "hidden_torque_max": 0.0,
+          "ownership_violations": 0,
+          "steps": 101,
+          "terminated": false,
+          "termination_reason": "completed",
+          "actual_steps": 1000
+        },
+        "verdict": "FAIL",
+        "failures": [
+          "support_position_error max_abs <= 0.15 m",
+          "hip_yaw_abs_max <= 0.07 rad",
+          "contact valid >= 99.9%"
+        ],
+        "gate_details": {
+          "support_position_error_max_abs": {
+            "value": 0.22162936706584757,
+            "threshold": 0.15,
+            "passed": false,
+            "status": "0.221629 > 0.15"
+          },
+          "hip_yaw_abs_max": {
+            "value": 0.2113260179758072,
+            "threshold": 0.07,
+            "passed": false,
+            "status": "0.211326 > 0.07"
+          },
+          "pitch_x_max_abs": {
+            "value": 0.094044990837574,
+            "threshold": 0.1,
+            "passed": true,
+            "status": "ok"
+          },
+          "roll_y_max_abs": {
+            "value": 0.01498311385512352,
+            "threshold": 0.05,
+            "passed": true,
+            "status": "ok"
+          },
+          "height_error_final_abs": {
+            "value": 0.013648318028993245,
+            "threshold": 0.02,
+            "passed": true,
+            "status": "ok"
+          },
+          "non_wheel_floor_contacts": {
+            "value": 0,
+            "threshold": 0,
+            "passed": true,
+            "status": "ok"
+          },
+          "contact_valid_rate": {
+            "value": 0.9900990099009901,
+            "threshold": 0.999,
+            "passed": false,
+            "status": "0.9900990099009901 < 0.999"
+          },
+          "wbc_applied": {
+            "value": false,
+            "threshold": false,
+            "passed": true,
+            "status": "ok"
+          },
+          "hidden_torque_max": {
+            "value": 0.0,
+            "threshold": 0.0,
+            "passed": true,
+            "status": "ok"
+          },
+          "ownership_violations": {
+            "value": 0,
+            "threshold": 0,
+            "passed": true,
+            "status": "ok"
+          }
+        }
+      }
+    ],
+    "overall_pass": false
+  },
+  {
+    "candidate": "candidate_E2_k80_continuous",
+    "runs": [
+      {
+        "label": "stepE_low0p300_1000",
+        "candidate": "candidate_E2_k80_continuous",
+        "variant": "low_0p300",
+        "steps": 1000,
+        "sim_success": true,
+        "dry_run": false,
+        "metrics": {
+          "support_position_error_max_abs": 0.20941209502778613,
+          "hip_yaw_abs_max": 0.20809075236320496,
+          "pitch_x_max_abs": 0.09829452633857727,
+          "roll_y_max_abs": 0.014968634583055973,
+          "height_error_final_abs": 0.012731240964479085,
+          "non_wheel_floor_contacts": 0,
+          "contact_valid_rate": 0.9900990099009901,
+          "wbc_applied": false,
+          "hidden_torque_max": 0.0,
+          "ownership_violations": 0,
+          "steps": 101,
+          "terminated": false,
+          "termination_reason": "completed",
+          "actual_steps": 1000
+        },
+        "verdict": "FAIL",
+        "failures": [
+          "support_position_error max_abs <= 0.15 m",
+          "hip_yaw_abs_max <= 0.07 rad",
+          "contact valid >= 99.9%"
+        ],
+        "gate_details": {
+          "support_position_error_max_abs": {
+            "value": 0.20941209502778613,
+            "threshold": 0.15,
+            "passed": false,
+            "status": "0.209412 > 0.15"
+          },
+          "hip_yaw_abs_max": {
+            "value": 0.20809075236320496,
+            "threshold": 0.07,
+            "passed": false,
+            "status": "0.208091 > 0.07"
+          },
+          "pitch_x_max_abs": {
+            "value": 0.09829452633857727,
+            "threshold": 0.1,
+            "passed": true,
+            "status": "ok"
+          },
+          "roll_y_max_abs": {
+            "value": 0.014968634583055973,
+            "threshold": 0.05,
+            "passed": true,
+            "status": "ok"
+          },
+          "height_error_final_abs": {
+            "value": 0.012731240964479085,
+            "threshold": 0.02,
+            "passed": true,
+            "status": "ok"
+          },
+          "non_wheel_floor_contacts": {
+            "value": 0,
+            "threshold": 0,
+            "passed": true,
+            "status": "ok"
+          },
+          "contact_valid_rate": {
+            "value": 0.9900990099009901,
+            "threshold": 0.999,
+            "passed": false,
+            "status": "0.9900990099009901 < 0.999"
+          },
+          "wbc_applied": {
+            "value": false,
+            "threshold": false,
+            "passed": true,
+            "status": "ok"
+          },
+          "hidden_torque_max": {
+            "value": 0.0,
+            "threshold": 0.0,
+            "passed": true,
+            "status": "ok"
+          },
+          "ownership_violations": {
+            "value": 0,
+            "threshold": 0,
+            "passed": true,
+            "status": "ok"
+          }
+        }
+      }
+    ],
+    "overall_pass": false
+  },
+  {
+    "candidate": "candidate_E3_k100_continuous",
+    "runs": [
+      {
+        "label": "stepE_low0p300_1000",
+        "candidate": "candidate_E3_k100_continuous",
+        "variant": "low_0p300",
+        "steps": 1000,
+        "sim_success": true,
+        "dry_run": false,
+        "metrics": {
+          "support_position_error_max_abs": 0.2030525858445449,
+          "hip_yaw_abs_max": 0.2054290771484375,
+          "pitch_x_max_abs": 0.10005150735378265,
+          "roll_y_max_abs": 0.014969931915402412,
+          "height_error_final_abs": 0.012399958348817464,
+          "non_wheel_floor_contacts": 0,
+          "contact_valid_rate": 0.9900990099009901,
+          "wbc_applied": false,
+          "hidden_torque_max": 0.0,
+          "ownership_violations": 0,
+          "steps": 101,
+          "terminated": false,
+          "termination_reason": "completed",
+          "actual_steps": 1000
+        },
+        "verdict": "FAIL",
+        "failures": [
+          "support_position_error max_abs <= 0.15 m",
+          "hip_yaw_abs_max <= 0.07 rad",
+          "pitch_x max_abs <= 0.10 rad",
+          "contact valid >= 99.9%"
+        ],
+        "gate_details": {
+          "support_position_error_max_abs": {
+            "value": 0.2030525858445449,
+            "threshold": 0.15,
+            "passed": false,
+            "status": "0.203053 > 0.15"
+          },
+          "hip_yaw_abs_max": {
+            "value": 0.2054290771484375,
+            "threshold": 0.07,
+            "passed": false,
+            "status": "0.205429 > 0.07"
+          },
+          "pitch_x_max_abs": {
+            "value": 0.10005150735378265,
+            "threshold": 0.1,
+            "passed": false,
+            "status": "0.100052 > 0.1"
+          },
+          "roll_y_max_abs": {
+            "value": 0.014969931915402412,
+            "threshold": 0.05,
+            "passed": true,
+            "status": "ok"
+          },
+          "height_error_final_abs": {
+            "value": 0.012399958348817464,
+            "threshold": 0.02,
+            "passed": true,
+            "status": "ok"
+          },
+          "non_wheel_floor_contacts": {
+            "value": 0,
+            "threshold": 0,
+            "passed": true,
+            "status": "ok"
+          },
+          "contact_valid_rate": {
+            "value": 0.9900990099009901,
+            "threshold": 0.999,
+            "passed": false,
+            "status": "0.9900990099009901 < 0.999"
+          },
+          "wbc_applied": {
+            "value": false,
+            "threshold": false,
+            "passed": true,
+            "status": "ok"
+          },
+          "hidden_torque_max": {
+            "value": 0.0,
+            "threshold": 0.0,
+            "passed": true,
+            "status": "ok"
+          },
+          "ownership_violations": {
+            "value": 0,
+            "threshold": 0,
+            "passed": true,
+            "status": "ok"
+          }
+        }
+      }
+    ],
+    "overall_pass": false
+  }
+]

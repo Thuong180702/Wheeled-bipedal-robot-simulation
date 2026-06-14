@@ -1,0 +1,27 @@
+{
+  "overall_step_c_verdict": "INCONCLUSIVE",
+  "final_decision": "STEP_C_INCONCLUSIVE",
+  "controller_behavior_changed": false,
+  "wbc_applied": false,
+  "step_e_invariants_preserved": false,
+  "case_count": 5,
+  "passed_cases": [],
+  "failed_cases": [],
+  "inconclusive_cases": [
+    "nominal",
+    "low_tiny",
+    "high_tiny",
+    "low_small",
+    "high_small"
+  ],
+  "failure_classifications": [
+    "simulation_failed",
+    "unclear_requires_more_telemetry"
+  ],
+  "artifact_paths": {
+    "height_reference": "outputs\\step_e_height_variant_position_hold_audit\\gate_500\\step_c_height_reference.json",
+    "case_matrix": "outputs\\step_e_height_variant_position_hold_audit\\gate_500\\step_c_height_case_matrix.json",
+    "metrics": "outputs\\step_e_height_variant_position_hold_audit\\gate_500\\step_c_height_recovery_metrics.json",
+    "failure_classification": "outputs\\step_e_height_variant_position_hold_audit\\gate_500\\step_c_failure_classification.json"
+  }
+}

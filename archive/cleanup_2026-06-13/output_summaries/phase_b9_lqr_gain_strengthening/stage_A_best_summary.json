@@ -1,0 +1,16 @@
+{
+  "stage": "A",
+  "best_config_id": 60,
+  "best_metrics": {
+    "mean_survival_s": 0.8799999999999999,
+    "mean_fall_rate": 1.0,
+    "mean_pitch_rms_deg": 0.7176255663972295,
+    "mean_roll_rms_deg": 17.096004717339188,
+    "mean_action_sat_rate": 0.0
+  },
+  "best_params": {
+    "lqr_gain_scale": 5.0,
+    "pitch_gain_mult": 5.0,
+    "wheel_cmd_limit_mult": 1.0
+  }
+}

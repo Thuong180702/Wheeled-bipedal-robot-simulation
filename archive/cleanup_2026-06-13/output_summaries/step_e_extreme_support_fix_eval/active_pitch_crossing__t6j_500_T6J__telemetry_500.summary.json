@@ -1,0 +1,36 @@
+{
+  "requested_steps": 500,
+  "actual_steps": 499,
+  "survived_steps": 499,
+  "terminated": false,
+  "termination_reason": "completed",
+  "final_sim_time_s": 4.98,
+  "profile": "T6J_centering_bias_trim",
+  "height_variant": "high_0p480",
+  "pitch_x": {
+    "min": -0.0019224173156544566,
+    "max": 0.143003910779953,
+    "rms": 0.07557397777093348
+  },
+  "roll_y": {
+    "min": -0.0031492915004491806,
+    "max": 0.0023208525963127613,
+    "rms": 0.0015515551497973748
+  },
+  "com_z": {
+    "min": 0.4811374247074127,
+    "max": 0.4914775490760803,
+    "drift": 0.009163707494735718
+  },
+  "wheel_vel_mean": {
+    "min": -5.256767988204956,
+    "max": 6.324836730957031,
+    "rms": 3.5973276954975035
+  },
+  "contact_state_summary": {
+    "counts": {
+      "double_contact": 499
+    },
+    "most_common_state": "double_contact"
+  }
+}

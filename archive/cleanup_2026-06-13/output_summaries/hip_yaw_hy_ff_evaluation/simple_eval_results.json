@@ -1,0 +1,26 @@
+[
+  {
+    "variant": "low_0p300",
+    "enable_ff": false,
+    "k": 0.0,
+    "sign": 1.0,
+    "hip_yaw": 0.2136730700731277,
+    "support": 0.2429736536996408
+  },
+  {
+    "variant": "low_0p300",
+    "enable_ff": true,
+    "k": 2.0,
+    "sign": 1.0,
+    "hip_yaw": 0.2136730700731277,
+    "support": 0.2429736536996408
+  },
+  {
+    "variant": "low_0p300",
+    "enable_ff": true,
+    "k": 2.0,
+    "sign": -1.0,
+    "hip_yaw": 0.2136730700731277,
+    "support": 0.2429736536996408
+  }
+]

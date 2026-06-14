@@ -1,0 +1,108 @@
+=== Balance-Core Extended Height Range Validation ===
+
+--- Generating Nominal Baseline ---
+Nominal CoM Z: 0.403999 m
+Nominal hip_pitch: 0.9261 rad, knee: 1.7484 rad
+Nominal CoM support error: (0.000001, -0.000132) m
+
+--- nominal (target=0.403999m, offset=+0.000m) ---
+  [VALID]
+  Achieved: 0.403999 m, error: 0.000000 m
+  Hip pitch: 0.9261 rad, knee: 1.7484 rad
+  CoM support error: (0.000001, -0.000132) m
+  Method: nominal_keyframe_baseline
+
+--- high_2cm (target=0.423999m, offset=+0.020m) ---
+  [VALID]
+  Achieved: 0.423444 m, error: 0.000555 m
+  Hip pitch: 0.8603 rad, knee: 1.6299 rad
+  CoM support error: (0.000001, 0.000827) m
+  Method: extended_multiobjective_search
+  Candidates: 400 evaluated, 12 passed all gates
+
+--- low_2cm (target=0.383999m, offset=-0.020m) ---
+  [VALID]
+  Achieved: 0.383810 m, error: 0.000190 m
+  Hip pitch: 0.9918 rad, knee: 1.8668 rad
+  CoM support error: (0.000001, -0.001270) m
+  Method: extended_multiobjective_search
+  Candidates: 400 evaluated, 13 passed all gates
+
+--- high_5cm (target=0.453999m, offset=+0.050m) ---
+  [VALID]
+  Achieved: 0.453971 m, error: 0.000028 m
+  Hip pitch: 0.7511 rad, knee: 1.4275 rad
+  CoM support error: (0.000001, 0.003164) m
+  Method: extended_multiobjective_search
+  Candidates: 625 evaluated, 12 passed all gates
+
+--- low_5cm (target=0.353999m, offset=-0.050m) ---
+  [VALID]
+  Achieved: 0.352929 m, error: 0.001070 m
+  Hip pitch: 1.1011 rad, knee: 2.0400 rad
+  CoM support error: (0.000001, -0.000247) m
+  Method: extended_multiobjective_search
+  Candidates: 625 evaluated, 16 passed all gates
+
+--- high_10cm (target=0.503999m, offset=+0.100m) ---
+  [INVALID]: no_valid_posture_found_within_search_range
+  Achieved: 0.000000 m, error: 999.000000 m
+  Hip pitch: 0.0000 rad, knee: 0.0000 rad
+  CoM support error: (0.000000, 0.000000) m
+  Method: extended_search_failed
+
+--- low_10cm (target=0.303999m, offset=-0.100m) ---
+  [VALID]
+  Achieved: 0.313232 m, error: 0.009232 m
+  Hip pitch: 1.2192 rad, knee: 2.2484 rad
+  CoM support error: (0.000000, -0.003274) m
+  Method: extended_multiobjective_search
+  Candidates: 900 evaluated, 3 passed all gates
+
+--- high_15cm (target=0.553999m, offset=+0.150m) ---
+  [INVALID]: no_valid_posture_found_within_search_range
+  Achieved: 0.000000 m, error: 999.000000 m
+  Hip pitch: 0.0000 rad, knee: 0.0000 rad
+  CoM support error: (0.000000, 0.000000) m
+  Method: extended_search_failed
+
+--- low_15cm (target=0.253999m, offset=-0.150m) ---
+  [INVALID]: no_valid_posture_found_within_search_range
+  Achieved: 0.000000 m, error: 999.000000 m
+  Hip pitch: 0.0000 rad, knee: 0.0000 rad
+  CoM support error: (0.000000, 0.000000) m
+  Method: extended_search_failed
+
+Setup report: outputs\balance_core_extended_height_range\extended_height_setup_report.json
+Valid: 6/9
+
+=== Dynamic Validation ===
+
+--- nominal ---
+  Testing 500 steps...
+    FAILED: unknown
+
+--- high_2cm ---
+  Testing 500 steps...
+    FAILED: unknown
+
+--- low_2cm ---
+  Testing 500 steps...
+    FAILED: unknown
+
+--- high_5cm ---
+  Testing 500 steps...
+    FAILED: unknown
+
+--- low_5cm ---
+  Testing 500 steps...
+    FAILED: unknown
+
+--- low_10cm ---
+  Testing 500 steps...
+    FAILED: unknown
+
+Dynamic summary: outputs\balance_core_extended_height_range\extended_height_dynamic_summary.json
+Extended height range validation complete.
+Valid variants: nominal, high_2cm, low_2cm, high_5cm, low_5cm, low_10cm
+Invalid variants: high_10cm, high_15cm, low_15cm

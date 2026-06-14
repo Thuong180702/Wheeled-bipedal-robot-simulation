@@ -1,0 +1,199 @@
+{
+  "audit_metadata": {
+    "date": "2026-05-31",
+    "phase": "Phase 1: Runtime Configuration Audit",
+    "task": "Verify active runtime configuration for visual posture regression investigation",
+    "analyst": "Claude Opus 4.7"
+  },
+  "root_cause": {
+    "classification": "B - legacy_mode_or_wrong_command",
+    "severity": "CRITICAL",
+    "summary": "Visual simulation ran in LEGACY/upright mode, NOT balance-core mode with velocity-damped sagittal controller",
+    "impact": "All visual observations of posture regression are from legacy controller stack, not from Step E fixes. Step E has NOT been tested visually yet."
+  },
+  "telemetry_analysis": {
+    "v3_run": {
+      "file": "outputs/hierarchical_controller_sim/telemetry_1780203372.csv",
+      "timestamp": "2026-05-31 11:56",
+      "steps": 5000,
+      "file_size_mb": 35.5,
+      "controller_mode": "upright (legacy)",
+      "controller_mode_column_value": 0.0,
+      "control_mode_column_value": "upright",
+      "ablation_mode": "LEGACY",
+      "capture_gate_enabled": false,
+      "wbc_active": true,
+      "balance_core_active": false,
+      "velocity_damped_active": false
+    },
+    "most_recent_run": {
+      "file": "outputs/hierarchical_controller_sim/telemetry_1780206278.csv",
+      "timestamp": "2026-05-31 12:44",
+      "steps": 1928,
+      "file_size_mb": 13.6,
+      "controller_mode": "upright (legacy)",
+      "controller_mode_column_value": 0.0,
+      "control_mode_column_value": "upright",
+      "ablation_mode": "LEGACY",
+      "capture_gate_enabled": false,
+      "wbc_active": true,
+      "balance_core_active": false,
+      "velocity_damped_active": false,
+      "termination": "early (expected 5000 steps)"
+    }
+  },
+  "git_status": {
+    "modified_files": [
+      "scripts/simulate_hierarchical_controller.py",
+      "tests/test_sagittal_balance_state.py",
+      "tests/test_sagittal_velocity_damped_balance_controller.py",
+      "wheeled_biped/controllers/sagittal_balance_state.py",
+      "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py"
+    ],
+    "untracked_files": [
+      "scripts/analyze_capture_gate_telemetry.py",
+      "scripts/analyze_step_e_validation.py",
+      "scripts/verify_capture_signs.py",
+      "tests/test_pitch_rate_consistency_estimator.py",
+      "tests/test_position_hold_capture_gate.py",
+      "wheeled_biped/controllers/pitch_rate_consistency_estimator.py",
+      "wheeled_biped/controllers/position_hold_capture_gate.py"
+    ],
+    "unchanged_critical_files": [
+      "wheeled_biped/controllers/shape_posture_controller.py",
+      "wheeled_biped/controllers/support_feedforward_controller.py",
+      "wheeled_biped/controllers/lateral_roll_balance_controller.py"
+    ]
+  },
+  "configuration_comparison": {
+    "controller_mode": {
+      "expected": "balance-core",
+      "actual": "upright (legacy)",
+      "status": "WRONG"
+    },
+    "sagittal_controller": {
+      "expected": "velocity-damped",
+      "actual": "legacy baseline",
+      "status": "WRONG"
+    },
+    "capture_gate_enabled": {
+      "expected": true,
+      "actual": false,
+      "status": "WRONG"
+    },
+    "k_position": {
+      "expected": 20.0,
+      "actual": "N/A (legacy mode)",
+      "status": "WRONG"
+    },
+    "k_velocity": {
+      "expected": 15.0,
+      "actual": "N/A (legacy mode)",
+      "status": "WRONG"
+    },
+    "max_position_tau": {
+      "expected": 3.0,
+      "actual": "N/A (legacy mode)",
+      "status": "WRONG"
+    },
+    "kp_cp": {
+      "expected": 0.0,
+      "actual": "N/A (legacy mode)",
+      "status": "WRONG"
+    },
+    "wbc_active": {
+      "expected": false,
+      "actual": true,
+      "status": "WRONG"
+    },
+    "e0b_e0c_e0d_active": {
+      "expected": false,
+      "actual": false,
+      "status": "CORRECT"
+    },
+    "ownership_violations": {
+      "expected": 0,
+      "actual": 0,
+      "status": "CORRECT"
+    },
+    "shape_support_lateral_code": {
+      "expected": "unchanged",
+      "actual": "unchanged",
+      "status": "CORRECT"
+    }
+  },
+  "diagnostic_modes_audit": {
+    "pitch_rate_correction_active": false,
+    "transient_detected": false,
+    "transient_by_pitch": false,
+    "transient_by_pitch_rate": false,
+    "transient_by_height": false,
+    "transient_capture_mode": "none",
+    "pitch_rate_boost_factor": 1.0,
+    "pitch_rate_source_used": "measured",
+    "conclusion": "No stale diagnostic modes active. All diagnostic features correctly disabled by default."
+  },
+  "wbc_and_e0_audit": {
+    "wbc_status": {
+      "active": true,
+      "tau_wbc_max_step0": 8.15,
+      "tau_wbc_norm_step0": 11.99,
+      "qp_solve_time_ms_step0": 109.7,
+      "qp_converged": true,
+      "note": "WBC active in legacy mode is expected behavior"
+    },
+    "e0b_e0c_e0d_status": {
+      "active": false,
+      "kp_cp_in_balance_core": 0.0,
+      "note": "E0b/E0c/E0d remain removed/disabled as required"
+    }
+  },
+  "torque_ownership_audit": {
+    "step_0_ownership": {
+      "l_hip_roll": "none",
+      "l_hip_yaw": "none",
+      "l_hip_pitch": "support_feedforward",
+      "l_knee": "support_feedforward",
+      "l_wheel": "none",
+      "r_hip_roll": "none",
+      "r_hip_yaw": "none",
+      "r_hip_pitch": "support_feedforward",
+      "r_knee": "support_feedforward",
+      "r_wheel": "none"
+    },
+    "ownership_violations": 0,
+    "conclusion": "Torque ownership correct for legacy mode. No violations detected."
+  },
+  "missing_command_argument": {
+    "required_command": "python scripts/simulate_hierarchical_controller.py --steps 5000 --controller-mode balance-core --sagittal-controller velocity-damped --vd-k-position 20.0 --vd-k-velocity 15.0 --vd-max-position-tau 3.0 --vd-enable-capture-gate --vd-capture-gate-use-cp",
+    "inferred_actual_command": "python scripts/simulate_hierarchical_controller.py --steps 5000",
+    "missing_argument": "--controller-mode balance-core",
+    "default_behavior": "Script defaults to legacy mode when --controller-mode omitted"
+  },
+  "evidence_summary": [
+    "Telemetry shows controller_mode: upright (legacy)",
+    "Telemetry shows capture_gate_enabled: False",
+    "Telemetry shows WBC active (legacy behavior)",
+    "Missing --controller-mode balance-core CLI argument",
+    "Script defaults to legacy mode when argument omitted"
+  ],
+  "recommendations": {
+    "immediate_action": "Re-run visual simulation with correct command including --controller-mode balance-core",
+    "verification_steps": [
+      "Check controller_mode column shows 'balance-core' or non-zero encoding",
+      "Check capture_gate_enabled column shows True (1.0)",
+      "Check WBC inactive (tau_wbc_norm near zero)"
+    ],
+    "do_not": [
+      "Tune controller gains based on legacy-mode visual observations",
+      "Implement posture fixes for legacy-mode behavior",
+      "Claim Step E failed based on wrong-mode telemetry",
+      "Proceed to Phase 2-9 until correct mode confirmed"
+    ]
+  },
+  "phase_status": {
+    "phase_1_complete": true,
+    "next_phase": "Awaiting correct-mode visual run before Phase 2",
+    "blocking_issue": "Must run simulation in balance-core mode before proceeding"
+  }
+}

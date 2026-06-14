@@ -1,0 +1,192 @@
+[
+  {
+    "variant": "nominal",
+    "old": {
+      "row_count": 5000,
+      "survived_5000_steps": true,
+      "support_position_error_m": {
+        "max": 0.0,
+        "final": 0.0,
+        "rms": 0.0
+      },
+      "hip_yaw_abs": {
+        "max": 0.0,
+        "final": 0.0,
+        "rms": 0.0
+      },
+      "pitch": {
+        "max": 0.0,
+        "final": 0.0
+      },
+      "roll": {
+        "max": 0.9261,
+        "final": 0.9261
+      },
+      "wheel_vel_mean": {
+        "max": 0.5,
+        "final": 0.0
+      },
+      "contact_valid_pct": 99.98,
+      "com_z": {
+        "min": 0.40376773476600647,
+        "max": 0.408547043800354,
+        "final": 0.40819376707077026
+      },
+      "wbc_applied": false,
+      "hidden_torque_norm": 30.0,
+      "ownership_violation_count": 30
+    }
+  },
+  {
+    "variant": "low_tiny",
+    "old": {
+      "row_count": 5000,
+      "survived_5000_steps": true,
+      "support_position_error_m": {
+        "max": 0.0,
+        "final": 0.0,
+        "rms": 0.0
+      },
+      "hip_yaw_abs": {
+        "max": 0.0,
+        "final": 0.0,
+        "rms": 0.0
+      },
+      "pitch": {
+        "max": 0.0,
+        "final": 0.0
+      },
+      "roll": {
+        "max": 0.9261,
+        "final": 0.9261
+      },
+      "wheel_vel_mean": {
+        "max": 0.5,
+        "final": 0.0
+      },
+      "contact_valid_pct": 99.98,
+      "com_z": {
+        "min": 0.3983054757118225,
+        "max": 0.40266603231430054,
+        "final": 0.4004603922367096
+      },
+      "wbc_applied": false,
+      "hidden_torque_norm": 30.0,
+      "ownership_violation_count": 30
+    }
+  },
+  {
+    "variant": "high_tiny",
+    "old": {
+      "row_count": 5000,
+      "survived_5000_steps": true,
+      "support_position_error_m": {
+        "max": 0.0,
+        "final": 0.0,
+        "rms": 0.0
+      },
+      "hip_yaw_abs": {
+        "max": 0.0,
+        "final": 0.0,
+        "rms": 0.0
+      },
+      "pitch": {
+        "max": 0.0,
+        "final": 0.0
+      },
+      "roll": {
+        "max": 0.9261,
+        "final": 0.9261
+      },
+      "wheel_vel_mean": {
+        "max": 0.5,
+        "final": 0.0
+      },
+      "contact_valid_pct": 99.98,
+      "com_z": {
+        "min": 0.4091888666152954,
+        "max": 0.4143904745578766,
+        "final": 0.4141989052295685
+      },
+      "wbc_applied": false,
+      "hidden_torque_norm": 30.0,
+      "ownership_violation_count": 30
+    }
+  },
+  {
+    "variant": "low_small",
+    "old": {
+      "row_count": 5000,
+      "survived_5000_steps": true,
+      "support_position_error_m": {
+        "max": 0.0,
+        "final": 0.0,
+        "rms": 0.0
+      },
+      "hip_yaw_abs": {
+        "max": 0.0,
+        "final": 0.0,
+        "rms": 0.0
+      },
+      "pitch": {
+        "max": 0.0,
+        "final": 0.0
+      },
+      "roll": {
+        "max": 0.9261,
+        "final": 0.9261
+      },
+      "wheel_vel_mean": {
+        "max": 0.5,
+        "final": 0.0
+      },
+      "contact_valid_pct": 99.98,
+      "com_z": {
+        "min": 0.39489927887916565,
+        "max": 0.39906972646713257,
+        "final": 0.39889466762542725
+      },
+      "wbc_applied": false,
+      "hidden_torque_norm": 30.0,
+      "ownership_violation_count": 30
+    }
+  },
+  {
+    "variant": "high_small",
+    "old": {
+      "row_count": 5000,
+      "survived_5000_steps": true,
+      "support_position_error_m": {
+        "max": 0.0,
+        "final": 0.0,
+        "rms": 0.0
+      },
+      "hip_yaw_abs": {
+        "max": 0.0,
+        "final": 0.0,
+        "rms": 0.0
+      },
+      "pitch": {
+        "max": 0.0,
+        "final": 0.0
+      },
+      "roll": {
+        "max": 0.9261,
+        "final": 0.9261
+      },
+      "wheel_vel_mean": {
+        "max": 0.5,
+        "final": 0.0
+      },
+      "contact_valid_pct": 99.98,
+      "com_z": {
+        "min": 0.4125632047653198,
+        "max": 0.41793933510780334,
+        "final": 0.41752955317497253
+      },
+      "wbc_applied": false,
+      "hidden_torque_norm": 30.0,
+      "ownership_violation_count": 30
+    }
+  }
+]

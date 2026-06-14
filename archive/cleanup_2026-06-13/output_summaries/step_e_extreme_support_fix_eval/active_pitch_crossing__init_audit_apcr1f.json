@@ -1,0 +1,26 @@
+{
+  "profile": "APCR1f",
+  "setup_variant_name": "low_0p300",
+  "target_com_z_m": 0.3,
+  "achieved_com_z_m": 0.2954845595126816,
+  "calibrated_root_z_m": 0.39708760597982296,
+  "hip_pitch_ref": 1.376052,
+  "knee_ref": 2.348364,
+  "actual_com_z_at_step0": 0.29519125148830844,
+  "actual_hip_pitch_l": 1.3765807773133787,
+  "actual_hip_pitch_r": 1.376504857872984,
+  "actual_knee_l": 2.3529269523504257,
+  "actual_knee_r": 2.352753851542639,
+  "pitch_at_step0": 2.0737880061212203e-05,
+  "roll_at_step0": -3.1415601117807137,
+  "com_z_after_5_steps": [
+    0.29519125148830844,
+    0.29519125148830844,
+    0.29519125148830844,
+    0.29519125148830844,
+    0.29519125148830844
+  ],
+  "contact_valid": true,
+  "setup_applied": true,
+  "equilibrium_joint_pos_match": true
+}

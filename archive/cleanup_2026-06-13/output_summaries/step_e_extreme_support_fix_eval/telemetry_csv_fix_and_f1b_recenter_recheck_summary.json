@@ -1,0 +1,75 @@
+{
+  "decision": "CSV_FIX_PASS_F1B_RECENTER_IMPROVES_BUT_NOT_ENOUGH",
+  "csv_fix_applied": true,
+  "csv_fix_description": "Changed n_rows calculation to use only non-empty columns, avoiding 0 rows when optional columns are empty",
+  "files_changed": [
+    "scripts/simulate_hierarchical_controller.py"
+  ],
+  "tests_added": [
+    "tests/test_simulation_telemetry_csv_writer.py"
+  ],
+  "d2_survived_steps": 500,
+  "f1b_survived_steps": 500,
+  "d2_csv_rows": 501,
+  "f1b_csv_rows": 501,
+  "signed_support_comparison": {
+    "source": "hip_yaw_comp_support_error_m",
+    "d2_mean": 0.082333,
+    "f1b_mean": 0.076410,
+    "d2_positive_pct": 93.0,
+    "f1b_positive_pct": 82.8,
+    "d2_outside_0.15_total": 96,
+    "f1b_outside_0.15_total": 81,
+    "d2_zero_crossings": 4,
+    "f1b_zero_crossings": 5,
+    "d2_longest_positive_interval": 316,
+    "f1b_longest_positive_interval": 256
+  },
+  "recenter_behavior": {
+    "f1b_recenter_active_pct": 65.8,
+    "f1b_recenter_tau_max": 0.9999,
+    "f1b_recenter_tau_mean": 0.4181,
+    "f1b_recenter_signed_error_mean": 0.076340
+  },
+  "wheel_velocity_monitor": {
+    "d2_abs_max": 4.3887,
+    "f1b_abs_max": 5.0049,
+    "d2_abs_mean": 1.7073,
+    "f1b_abs_mean": 2.4779
+  },
+  "hip_yaw_monitor": {
+    "d2_abs_max": 0.1018,
+    "f1b_abs_max": 0.1376
+  },
+  "stability": {
+    "d2_pitch_max_deg": 6.36,
+    "f1b_pitch_max_deg": 6.32,
+    "d2_pitch_rms_deg": 3.60,
+    "f1b_pitch_rms_deg": 4.04
+  },
+  "controller_integrity": {
+    "d2_hidden_torque_max": 0.0,
+    "f1b_hidden_torque_max": 0.0,
+    "d2_ownership_violations_max": 0,
+    "f1b_ownership_violations_max": 0
+  },
+  "f1b_improvements": [
+    "Positive percentage decreased from 93.0% to 82.8% (10.2 pp)",
+    "Total time outside ±0.15 decreased from 96 to 81 steps",
+    "Longest negative interval increased from 28 to 66 steps",
+    "Recenter activates 65.8% of the time with correct tau direction"
+  ],
+  "f1b_remaining_issues": [
+    "82.8% positive is still far from 50% (too one-sided)",
+    "Wheel velocity increased significantly (5.0 vs 4.4 max)",
+    "Hip yaw increased (0.138 vs 0.102 max)",
+    "Pitch RMS slightly increased (4.04 vs 3.60 deg)"
+  ],
+  "recommendation": "F1b should NOT proceed to 2000-step validation. The recenter logic works correctly but is insufficient to center the drift. Task prohibits tuning recenter gains.",
+  "do_not_run": [
+    "2000-step F1b validation",
+    "5000-step F1b validation",
+    "Step C",
+    "Step D"
+  ]
+}

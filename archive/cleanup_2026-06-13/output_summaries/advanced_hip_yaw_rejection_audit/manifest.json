@@ -1,0 +1,24 @@
+{
+  "original_path": "outputs/advanced_hip_yaw_rejection_audit",
+  "original_size": "546.2K",
+  "original_size_bytes": 559341,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "advanced_hip_yaw_mechanism_classification.json",
+      "size_bytes": 1073
+    },
+    {
+      "file": "advanced_hip_yaw_rejection_report.md",
+      "size_bytes": 3072
+    },
+    {
+      "file": "advanced_hip_yaw_rejection_summary.json",
+      "size_bytes": 4018
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

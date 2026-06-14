@@ -1,0 +1,24 @@
+{
+  "original_path": "outputs/visual_inspection_low_0p300",
+  "original_size": "52.1M",
+  "original_size_bytes": 54614095,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 3,
+  "copied_files": [
+    {
+      "file": "VISUAL_INSPECTION_INSTRUCTIONS.md",
+      "size_bytes": 8073
+    },
+    {
+      "file": "visual_inspection_low_0p300_metrics.json",
+      "size_bytes": 2011
+    },
+    {
+      "file": "visual_inspection_low_0p300_summary.md",
+      "size_bytes": 7278
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,38 @@
+{
+  "task": "G1b_bias_cancel_strong at low_0p300 for 500 steps",
+  "classification": "G1B_IMPROVES_BUT_NOT_ENOUGH",
+  "date": "2026-06-08",
+  "profile": "G1b_bias_cancel_strong",
+  "height_variant": "low_0p300",
+  "steps": 500,
+  "survived": true,
+  "telemetry_path": "outputs/step_e_extreme_support_fix_eval/g1b_low_0p300_500/g1b_low_0p300_500_telemetry.csv",
+  "command": "python scripts/simulate_hierarchical_controller.py --controller-mode balance-core --sagittal-controller velocity-damped --vd-sagittal-authority-profile G1b_bias_cancel_strong --height-variant-setup outputs/physical_target_height_setups/low_0p300_setup.json --steps 500 --telemetry-decimation 1 --failure-window-steps 500 --write-run-summary-sidecar",
+  "key_metrics": {
+    "positive_pct": 80.4,
+    "g1a_positive_pct": 81.8,
+    "f1b_positive_pct": 82.8,
+    "d2_positive_pct": 93.0,
+    "outside_band_pct": 26.8,
+    "g1a_outside_band_pct": 13.4,
+    "f1b_outside_band_pct": 16.2,
+    "d2_outside_band_pct": 19.2,
+    "below_neg_0.05": 46,
+    "g1a_below_neg_0.05": 19,
+    "min_signed_error": -0.0727,
+    "g1a_min_signed_error": -0.0530,
+    "tau_pitch_mean": 3.0774,
+    "bias_cancel_max_tau": 2.0
+  },
+  "verdict": {
+    "positive_bias_reduced": true,
+    "overcorrection": true,
+    "outside_band_increased": true,
+    "root_cause_addressed": false
+  },
+  "recommendation": "Do NOT proceed to 2000-step validation. Do NOT increase bias cancellation parameters. Recommend direct tau_pitch bias source audit.",
+  "reports": [
+    "docs/validation/g1b_bias_cancel_500_step_final_report.md",
+    "outputs/step_e_extreme_support_fix_eval/g1b_low_0p300_500_comparison.json"
+  ]
+}

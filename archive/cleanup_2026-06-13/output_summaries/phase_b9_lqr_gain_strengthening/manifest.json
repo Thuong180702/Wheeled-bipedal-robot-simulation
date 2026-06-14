@@ -1,0 +1,28 @@
+{
+  "original_path": "outputs/phase_b9_lqr_gain_strengthening",
+  "original_size": "44.9K",
+  "original_size_bytes": 45964,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 5,
+  "copied_files": [
+    {
+      "file": "best_lqr_summary.json",
+      "size_bytes": 627
+    },
+    {
+      "file": "stage_A_best_summary.json",
+      "size_bytes": 386
+    },
+    {
+      "file": "stage_B_best_summary.json",
+      "size_bytes": 381
+    },
+    {
+      "file": "stage_C_best_summary.json",
+      "size_bytes": 376
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

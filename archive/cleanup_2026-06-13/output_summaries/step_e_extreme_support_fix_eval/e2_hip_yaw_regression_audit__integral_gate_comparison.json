@@ -1,0 +1,33 @@
+{
+  "e1_after": {
+    "integral_active_count": 39,
+    "integral_active_percent": 7.8,
+    "tau_position_integral_max": 0.030342,
+    "tau_position_integral_mean": 0.00054,
+    "pitch_threshold": 0.12,
+    "position_cap": 4.0
+  },
+  "e2": {
+    "integral_active_count": 31,
+    "integral_active_percent": 6.2,
+    "tau_position_integral_max": 0.007604100010634842,
+    "tau_position_integral_mean": 0.00010236097191347935,
+    "pitch_threshold": 0.03,
+    "position_cap": 5.0
+  },
+  "d2": {
+    "integral_active_count": 0,
+    "integral_active_percent": 0.0,
+    "tau_position_integral_max": 0.0,
+    "tau_position_integral_mean": 0.0,
+    "pitch_threshold": "N/A (integral disabled)",
+    "position_cap": 4.0
+  },
+  "analysis": {
+    "e2_vs_e1_integral_active_delta": -8,
+    "e2_vs_e1_position_cap_delta": 1.0,
+    "e2_vs_e1_pitch_threshold_delta": -0.09,
+    "key_difference": "E2 has RESTRICTIVE pitch threshold (0.03) compared to E1_after (0.12), but HIGHER position cap (5.0 vs 4.0)",
+    "integral_active_hypothesis": "Lower pitch threshold (0.03) means integral activates LESS often (only in steady state), but higher cap (5.0 Nm) means position corrections are more aggressive when they do occur."
+  }
+}

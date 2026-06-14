@@ -1,0 +1,30 @@
+3ecbbc9 Add evaluation scripts for Step C and Step E sagittal schedule candidates
+64367b0 fix: Step E height-variant position hold robustness
+092dff6 Add Step C height recovery validation module
+e8f15ef Add Step C Height Recovery Specification document
+3a1c1eb Add tests for Step E diagnostics and validation helpers
+9971615 feat: add position integral control to sagittal velocity-damped balance controller and update related tests
+e48fcb7 Add new controllers and tests for torque budget aware position and pitch rate consistency
+c45d903 feat: add telemetry for sagittal position and velocity errors, and implement tests for position error handling
+d40abe2 feat: implement sagittal velocity-damped balance controller
+0e8f2ee feat: add sagittal dynamics identification — model_identification_failed
+7fc52e7 feat: add closed-loop sagittal sysid collection scaffold
+b038245 feat: add sagittal balance state helpers
+c0050a8 docs: add position-aware balance spec and implementation plan
+d5af49d feat: add sagittal position-aware balance controller implementation and specification
+60e3c1d Add comprehensive tests for height variant balance core validation
+95edb99 Clean up failed position containment experiments
+bf4cc90 feat: add validation script for balance-core height variants
+8200ea2 Add telemetry enhancements and validation improvements for hierarchical controller
+bc24e28 Add Balance-Core Extended Nominal Longevity Validation Specification
+6444409 Add StudyAggregator and related functionality for balance-core validation
+0046100 feat: enhance balance-core validation with custom duration support and simulation arguments
+f7c1a7f Complete balance-core nominal standing validation
+92582ee fix: parse CSV format instead of Python list literals in structural invariant checker
+a70fcee fix: validate balance-core mode by checking for balance-core specific fields
+1d5d804 fix: correct schema field name from controller_mode to control_mode
+481a93f fix: replace Unicode symbols with ASCII for Windows console compatibility
+5570a4d fix: make validator compatible with simulate_hierarchical_controller.py output behavior
+57c2377 Add balance-core performance validation and stabilization specification
+a2afa0a feat: add command-line interface for balance-core validation workflow
+982d6cd test: add comprehensive edge case tests for balance-core validation

@@ -1,0 +1,45 @@
+{
+  "profile_name": "APCR1b_active_pitch_crossing_early_release",
+  "base_profile": "APCR1_active_pitch_crossing_recovery_moderate",
+  "design_rationale": "APCR1 releases too late, causing excessive band violations. APCR1b exits earlier to reduce oscillation amplitude.",
+  "parameter_changes": {
+    "apc_inner_exit_m": {
+      "APCR1": 0.05,
+      "APCR1b": 0.07,
+      "reason": "Exit earlier, before support goes too far negative"
+    },
+    "apc_opposite_overshoot_m": {
+      "APCR1": 0.01,
+      "APCR1b": 0.00,
+      "reason": "No overshoot allowance into opposite direction"
+    }
+  },
+  "parameters_unchanged": [
+    "apc_outer_enter_m",
+    "apc_max_cross_tau",
+    "apc_max_rate_per_step",
+    "apcr_pitch_hard_stop_rad",
+    "apc_smooth_alpha",
+    "apc_pitch_enter_rad",
+    "apc_pitch_safe_limit_rad",
+    "apc_contact_gate",
+    "apc_height_gate",
+    "apc_roll_gate",
+    "apc_min_com_z_m",
+    "apc_max_com_z_m"
+  ],
+  "expected_outcome": {
+    "positive_percent_target": "<75%",
+    "outside_band_target": "<8%",
+    "zero_crossings_target": "8-12"
+  },
+  "validation_plan": {
+    "phase_1": "500-step smoke test",
+    "phase_2": "2000-step full test (only if 500-step passes)"
+  },
+  "do_not_run": [
+    "5000-step",
+    "Step C",
+    "Step D"
+  ]
+}

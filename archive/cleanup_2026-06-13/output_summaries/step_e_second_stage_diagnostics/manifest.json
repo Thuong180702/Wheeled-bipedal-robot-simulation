@@ -1,0 +1,36 @@
+{
+  "original_path": "outputs/step_e_second_stage_diagnostics",
+  "original_size": "146.7K",
+  "original_size_bytes": 150217,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "hip_yaw_posture_root_cause.json",
+      "size_bytes": 703
+    },
+    {
+      "file": "hip_yaw_sign_audit.json",
+      "size_bytes": 2458
+    },
+    {
+      "file": "step_e_second_stage_report.md",
+      "size_bytes": 3276
+    },
+    {
+      "file": "step_e_second_stage_summary.json",
+      "size_bytes": 6293
+    },
+    {
+      "file": "transient_drift_peak_window.csv",
+      "size_bytes": 134669
+    },
+    {
+      "file": "transient_drift_root_cause.json",
+      "size_bytes": 2065
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

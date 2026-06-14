@@ -1,0 +1,202 @@
+{
+  "validation_method": "full_balance_core_4_source_controller",
+  "variants_tested": [
+    "high_tiny",
+    "high_small",
+    "nominal",
+    "low_small",
+    "low_tiny"
+  ],
+  "total_validation_runs": 10,
+  "results": [
+    {
+      "variant_name": "nominal",
+      "target_steps": 1000,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780015923.csv",
+      "survived_steps": 1000,
+      "pitch_x_range": [
+        -0.0,
+        0.0355423316359519
+      ],
+      "roll_y_range": [
+        0.0,
+        0.002965326886624
+      ],
+      "com_z_initial": 0.4040306508541107,
+      "com_z_final": 0.4085109233856201,
+      "com_z_range": [
+        0.4037655591964721,
+        0.4086331129074096
+      ],
+      "com_z_drift": 0.004480272531509399,
+      "yaw_drift": -0.0085827487308713,
+      "wheel_vel_range": [
+        0.0,
+        0.0
+      ],
+      "torque_sources_active": {},
+      "tau_wbc_norm": 94.09445190429688,
+      "ownership_violations": 0
+    },
+    {
+      "variant_name": "nominal",
+      "target_steps": 5000,
+      "success": false,
+      "error": "Simulation timeout after 300s"
+    },
+    {
+      "variant_name": "high_tiny",
+      "target_steps": 1000,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780016311.csv",
+      "survived_steps": 1000,
+      "pitch_x_range": [
+        -1.7036101098710787e-06,
+        0.0441338568925857
+      ],
+      "roll_y_range": [
+        0.0,
+        0.0031840251758694
+      ],
+      "com_z_initial": 0.409420907497406,
+      "com_z_final": 0.4143382310867309,
+      "com_z_range": [
+        0.4091865718364715,
+        0.4144582152366638
+      ],
+      "com_z_drift": 0.004917323589324896,
+      "yaw_drift": -0.0094130750068432,
+      "wheel_vel_range": [
+        0.0,
+        0.0
+      ],
+      "torque_sources_active": {},
+      "tau_wbc_norm": 94.35944366455078,
+      "ownership_violations": 0
+    },
+    {
+      "variant_name": "high_tiny",
+      "target_steps": 5000,
+      "success": false,
+      "error": "Simulation timeout after 300s"
+    },
+    {
+      "variant_name": "high_small",
+      "target_steps": 1000,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780016696.csv",
+      "survived_steps": 1000,
+      "pitch_x_range": [
+        -0.0,
+        0.0371545255184173
+      ],
+      "roll_y_range": [
+        0.0,
+        0.0029811232816427
+      ],
+      "com_z_initial": 0.4127998054027557,
+      "com_z_final": 0.4177314043045044,
+      "com_z_range": [
+        0.4125612080097198,
+        0.4178798198699951
+      ],
+      "com_z_drift": 0.004931598901748713,
+      "yaw_drift": -0.0086371392161855,
+      "wheel_vel_range": [
+        0.0,
+        0.0
+      ],
+      "torque_sources_active": {},
+      "tau_wbc_norm": 93.95443725585938,
+      "ownership_violations": 0
+    },
+    {
+      "variant_name": "high_small",
+      "target_steps": 5000,
+      "success": false,
+      "error": "Simulation timeout after 300s"
+    },
+    {
+      "variant_name": "low_tiny",
+      "target_steps": 1000,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780017080.csv",
+      "survived_steps": 1000,
+      "pitch_x_range": [
+        -0.0,
+        0.0268595926463603
+      ],
+      "roll_y_range": [
+        0.0,
+        0.0027606736402958
+      ],
+      "com_z_initial": 0.3986265063285827,
+      "com_z_final": 0.4025977551937103,
+      "com_z_range": [
+        0.3983006477355957,
+        0.4026286005973816
+      ],
+      "com_z_drift": 0.003971248865127619,
+      "yaw_drift": -0.0077532263697795,
+      "wheel_vel_range": [
+        0.0,
+        0.0
+      ],
+      "torque_sources_active": {},
+      "tau_wbc_norm": 93.61531066894533,
+      "ownership_violations": 0
+    },
+    {
+      "variant_name": "low_tiny",
+      "target_steps": 5000,
+      "success": false,
+      "error": "Simulation timeout after 300s"
+    },
+    {
+      "variant_name": "low_small",
+      "target_steps": 1000,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780017464.csv",
+      "survived_steps": 1000,
+      "pitch_x_range": [
+        -0.0,
+        0.0337656773626804
+      ],
+      "roll_y_range": [
+        0.0,
+        0.0029563810676336
+      ],
+      "com_z_initial": 0.3952411413192749,
+      "com_z_final": 0.3990765810012817,
+      "com_z_range": [
+        0.3948948979377746,
+        0.3991053104400635
+      ],
+      "com_z_drift": 0.0038354396820067804,
+      "yaw_drift": -0.0093220390789883,
+      "wheel_vel_range": [
+        0.0,
+        0.0
+      ],
+      "torque_sources_active": {},
+      "tau_wbc_norm": 94.27312469482422,
+      "ownership_violations": 0
+    },
+    {
+      "variant_name": "low_small",
+      "target_steps": 5000,
+      "success": false,
+      "error": "Simulation timeout after 300s"
+    }
+  ],
+  "wbc_status": "off",
+  "four_source_stack": "unchanged",
+  "max_confirmed_steps_per_variant": {
+    "high_tiny": 1000,
+    "high_small": 1000,
+    "nominal": 1000,
+    "low_small": 1000,
+    "low_tiny": 1000
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "profile": "T6J_centering_bias_trim",
+  "validation_date": "2026-06-13",
+  "final_decision": "T6J_FULL_VALIDATION_PASS_BETTER_THAN_T6I",
+
+  "phase_5_500_step": {
+    "classification": "T6J_500_PASS_WITH_MONITORING",
+    "t6i_max_abs": 0.1891,
+    "t6j_max_abs": 0.1891,
+    "t6i_final": 0.0932,
+    "t6j_final": 0.0933,
+    "t6i_mae": 0.0777,
+    "t6j_mae": 0.0764,
+    "t6i_out_015": 19.2,
+    "t6j_out_015": 18.4,
+    "t6i_out_010": 49.2,
+    "t6j_out_010": 47.2,
+    "t6j_bias_active_pct": 8.2,
+    "t6j_safety_pct": 100.0,
+    "t6j_dir_correct_pct": 100.0
+  },
+
+  "phase_6_1200_step": {
+    "classification": "T6J_1200_PASS_PROCEED_2000",
+    "t6i_max_abs": 0.1979,
+    "t6j_max_abs": 0.1978,
+    "t6i_final": 0.1024,
+    "t6j_final": 0.1016,
+    "t6i_mae": 0.0930,
+    "t6j_mae": 0.0902,
+    "t6i_out_015": 21.6,
+    "t6j_out_015": 20.4,
+    "t6i_out_010": 44.4,
+    "t6j_out_010": 40.4,
+    "t6j_bias_active_pct": 64.7,
+    "t6j_safety_pct": 100.0,
+    "t6j_dir_correct_pct": 100.0
+  },
+
+  "phase_7_2000_step": {
+    "classification": "T6J_2000_PASS_PROCEED_5000",
+    "t6i_max_abs": 0.2015,
+    "t6j_max_abs": 0.2020,
+    "t6i_final": 0.1210,
+    "t6j_final": 0.1157,
+    "t6i_mae": 0.0962,
+    "t6j_mae": 0.0904,
+    "t6i_out_015": 22.5,
+    "t6j_out_015": 18.4,
+    "t6i_out_010": 44.1,
+    "t6j_out_010": 38.4,
+    "t6j_bias_active_pct": 95.0,
+    "t6j_safety_pct": 98.9,
+    "t6j_dir_correct_pct": 100.0
+  },
+
+  "phase_8_5000_step": {
+    "classification": "T6J_5000_PASS_PROCEED_HEIGHT_LADDER",
+    "t6i_max_abs": 0.2122,
+    "t6j_max_abs": 0.1828,
+    "t6i_final": 0.1309,
+    "t6j_final": 0.1178,
+    "t6i_mean": 0.0953,
+    "t6j_mean": 0.0787,
+    "t6i_mae": 0.0962,
+    "t6j_mae": 0.0797,
+    "t6i_p2p": 0.2241,
+    "t6j_p2p": 0.2078,
+    "t6i_positive_pct": 95.6,
+    "t6j_positive_pct": 89.4,
+    "t6i_zero_crossings": 1,
+    "t6j_zero_crossings": 4,
+    "t6i_out_008": 92.4,
+    "t6j_out_008": 87.4,
+    "t6i_out_010": 81.6,
+    "t6j_out_010": 71.3,
+    "t6i_out_015": 29.2,
+    "t6j_out_015": 14.1,
+    "t6j_bias_active_pct": 96.3,
+    "t6j_safety_pct": 97.4,
+    "t6j_dir_correct_pct": 100.0,
+    "t6j_tau_min": -0.35,
+    "t6j_tau_max": 0.0,
+    "wbc_violation": false,
+    "hidden_torque_violation": false,
+    "ownership_violation": false,
+    "fall": false
+  },
+
+  "phase_9_height_ladder_summary": {
+    "total_setups": 10,
+    "pass": 9,
+    "pass_with_monitoring": 1,
+    "fail": 0,
+    "not_better_than_t6i": 0
+  },
+
+  "phase_9e_low_0p300_5000_regression": {
+    "classification": "T6J_LOW_0P300_5000_REGRESSION_PASS",
+    "t6i_max_abs": 0.1715,
+    "t6j_max_abs": 0.1712,
+    "t6i_final": 0.0393,
+    "t6j_final": 0.0079,
+    "t6i_mae": 0.0562,
+    "t6j_mae": 0.0487,
+    "t6i_p2p": 0.1778,
+    "t6j_p2p": 0.1991,
+    "t6i_out_015": 1.0,
+    "t6j_out_015": 1.0,
+    "t6j_bias_active_pct": 93.6,
+    "t6j_safety_pct": 100.0,
+    "t6j_dir_correct_pct": 100.0,
+    "regression": false
+  },
+
+  "key_improvements_over_t6i": {
+    "5000_step_max_abs_reduction_m": -0.0294,
+    "5000_step_final_error_reduction_m": -0.0131,
+    "5000_step_mean_error_reduction_m": -0.0166,
+    "5000_step_mae_reduction_m": -0.0165,
+    "5000_step_out_015_reduction_pp": -15.1,
+    "5000_step_out_010_reduction_pp": -10.3,
+    "5000_step_out_008_reduction_pp": -5.0,
+    "5000_step_p2p_reduction_m": -0.0163,
+    "5000_step_positive_pct_reduction_pp": -6.2,
+    "5000_step_zero_crossing_increase": 3
+  },
+
+  "key_findings": [
+    "T6J bias trim reduces positive drift bias across all tested scenarios",
+    "Direction correctness: 100% across all 16 scenarios",
+    "Safety gate pass rate: 91.3%-100% across all setups",
+    "No fall events across all scenarios",
+    "No WBC/hidden/ownership violations",
+    "Pitch, roll, contact, height all preserved",
+    "Improvement consistent across high and low heights",
+    "Residual positive bias remains at high heights (89.4% at 5000 steps) — further upstream fixes may be needed",
+    "T6J bias trim operates as designed: slow, bounded, safety-gated, correct direction"
+  ]
+}

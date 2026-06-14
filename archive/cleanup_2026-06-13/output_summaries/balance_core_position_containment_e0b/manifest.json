@@ -1,0 +1,20 @@
+{
+  "original_path": "outputs/balance_core_position_containment_e0b",
+  "original_size": "39.3M",
+  "original_size_bytes": 41216400,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "extended_longevity_summary.json",
+      "size_bytes": 1896
+    },
+    {
+      "file": "extended_longevity_summary.md",
+      "size_bytes": 957
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

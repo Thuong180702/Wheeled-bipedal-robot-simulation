@@ -1,0 +1,155 @@
+{
+  "classification": "T6F_2000_NOT_BETTER_THAN_T5",
+  "reason": "Drift degraded: 0.10 band=-115, 0.15 band=-512",
+  "date": "2026-06-12",
+  "phase": "8_of_11",
+  "t5_file": "outputs\\step_e_extreme_support_fix_eval\\active_pitch_crossing\\t5_high_0p480_5000\\telemetry_t5_high_0p480_5000.csv",
+  "t6f_file": "outputs\\hierarchical_controller_sim\\telemetry_1781258876.csv",
+  "t5_steps": 2001,
+  "t6f_steps": 1999,
+  "drift_column": "active_pitch_crossing_signed_error_m",
+  "t5_metrics": {
+    "drift": {
+      "min_e": -0.0159685291503634,
+      "max_e": 0.1871186159069289,
+      "max_abs_e": 0.1871186159069289,
+      "p2p": 0.2030871450572923,
+      "mean_e": 0.0874190938073202,
+      "mean_abs_e": 0.08789049376512814,
+      "final_e": 0.073491085913608,
+      "positive_pct": 97.5512243878061,
+      "negative_pct": 2.39880059970015,
+      "zero_crossings": 2
+    },
+    "band": {
+      "outside_0p03": {
+        "count": 1938,
+        "pct": 96.85157421289355
+      },
+      "above_0p03": 1938,
+      "below_0p03": 0,
+      "outside_0p05": {
+        "count": 1771,
+        "pct": 88.50574712643679
+      },
+      "above_0p05": 1771,
+      "below_0p05": 0,
+      "outside_0p08": {
+        "count": 1136,
+        "pct": 56.77161419290355
+      },
+      "above_0p08": 1136,
+      "below_0p08": 0,
+      "outside_0p10": {
+        "count": 798,
+        "pct": 39.88005997001499
+      },
+      "above_0p10": 798,
+      "below_0p10": 0,
+      "outside_0p12": {
+        "count": 243,
+        "pct": 12.14392803598201
+      },
+      "above_0p12": 243,
+      "below_0p12": 0,
+      "outside_0p15": {
+        "count": 89,
+        "pct": 4.4477761119440276
+      },
+      "above_0p15": 89,
+      "below_0p15": 0
+    }
+  },
+  "t6f_metrics": {
+    "drift": {
+      "min_e": -0.0287398597836224,
+      "max_e": 0.2121713618078902,
+      "max_abs_e": 0.2121713618078902,
+      "p2p": 0.2409112215915126,
+      "mean_e": 0.09214911582285605,
+      "mean_abs_e": 0.09405028508016465,
+      "final_e": 0.0293838634137704,
+      "positive_pct": 91.74587293646823,
+      "negative_pct": 8.204102051025513,
+      "zero_crossings": 8
+    },
+    "band": {
+      "outside_0p03": {
+        "count": 1431,
+        "pct": 71.58579289644823
+      },
+      "above_0p03": 1431,
+      "below_0p03": 0,
+      "outside_0p05": {
+        "count": 1252,
+        "pct": 62.631315657828914
+      },
+      "above_0p05": 1252,
+      "below_0p05": 0,
+      "outside_0p08": {
+        "count": 1037,
+        "pct": 51.875937968984495
+      },
+      "above_0p08": 1037,
+      "below_0p08": 0,
+      "outside_0p10": {
+        "count": 913,
+        "pct": 45.6728364182091
+      },
+      "above_0p10": 913,
+      "below_0p10": 0,
+      "outside_0p12": {
+        "count": 795,
+        "pct": 39.769884942471236
+      },
+      "above_0p12": 795,
+      "below_0p12": 0,
+      "outside_0p15": {
+        "count": 601,
+        "pct": 30.06503251625813
+      },
+      "above_0p15": 601,
+      "below_0p15": 0
+    }
+  },
+  "arch_fix": {
+    "active_count": 913,
+    "active_pct": 45.6728364182091,
+    "reasons": {
+      "emergency_band": 795,
+      "hard_band": 118
+    }
+  },
+  "torque": {
+    "cap_distribution": {
+      "4.0": 1086,
+      "6.5": 118,
+      "7.0": 795
+    },
+    "max_cap": 7.0,
+    "steps_above_4nm": 913,
+    "tau_position_max_abs": 7.0,
+    "tau_position_above_4nm": 913,
+    "final_wheel_tau_max_abs": 1.486652417488302
+  },
+  "stability": {
+    "survived_steps": 1999,
+    "terminated": false,
+    "contact_pct": 100.0,
+    "double_contact_pct": 67.18359179589795,
+    "com_z_min": 0.4811374247074127,
+    "com_z_mean": 0.4898497316913643,
+    "com_z_max": 0.4915444552898407,
+    "pitch_min_deg": -1.3861073843832763,
+    "pitch_max_deg": 8.578037993713595,
+    "pitch_rms_deg": 4.757216144853688,
+    "roll_min_deg": -0.23984428049996384,
+    "roll_max_deg": 0.2799216160742015,
+    "roll_rms_deg": 0.1453780140042196,
+    "wheel_vel_max": 7.12587308883667,
+    "wheel_vel_rms": 3.93428634416492,
+    "wheel_vel_above_5": 494,
+    "wheel_vel_above_6": 161,
+    "wheel_vel_above_7": 10
+  }
+}

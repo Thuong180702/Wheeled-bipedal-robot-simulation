@@ -1,0 +1,132 @@
+{
+  "old_metrics": {
+    "name": "old_d2",
+    "initial_state": {
+      "hip_pitch_error_max": 0.4500000476837158,
+      "hip_pitch_error_left": -0.45,
+      "hip_pitch_error_right": -0.45,
+      "knee_error_max": 0.6000001430511475,
+      "pitch_x": 0.0,
+      "com_z": 0.2954845726490021
+    },
+    "tau_pitch": {
+      "mean": 2.5991776611271966,
+      "max": 5.552657257693578,
+      "min": -0.4145640094073408,
+      "std": 1.7721796350530392,
+      "positive_pct": 89.2
+    },
+    "tau_position": {
+      "mean": -2.614576800623472,
+      "max": 0.1411054283380508,
+      "min": -4.0,
+      "saturation_pct": 35.4
+    },
+    "support": {
+      "position_error_max": 0.1756866669578762,
+      "position_error_mean": 0.08244912312588618,
+      "position_error_final": 0.0579860112037527
+    },
+    "stability": {
+      "survived_500": true,
+      "contact_valid_pct": 99.8,
+      "height_error_max": 0.0064178573852249,
+      "height_error_final": -0.0049641299014755,
+      "pitch_x_max": 0.1110531451538715,
+      "pitch_x_final": 0.0472659464616831,
+      "roll_y_max": 0.0133430639888936
+    },
+    "survival": {
+      "total_steps": 500,
+      "terminated": false,
+      "termination_reason": "nan"
+    }
+  },
+  "new_metrics": {
+    "name": "new_d2",
+    "initial_state": {
+      "hip_pitch_error_max": 0.0,
+      "hip_pitch_error_left": 0.0,
+      "hip_pitch_error_right": 0.0,
+      "knee_error_max": 0.0,
+      "pitch_x": 0.0,
+      "com_z": 0.2954845726490021
+    },
+    "tau_pitch": {
+      "mean": 2.5991776611271966,
+      "max": 5.552657257693578,
+      "min": -0.4145640094073408,
+      "std": 1.7721796350530392,
+      "positive_pct": 89.2
+    },
+    "tau_position": {
+      "mean": -2.614576800623472,
+      "max": 0.1411054283380508,
+      "min": -4.0,
+      "saturation_pct": 35.4
+    },
+    "support": {
+      "position_error_max": 0.1756866669578762,
+      "position_error_mean": 0.08244912312588618,
+      "position_error_final": 0.0579860112037527
+    },
+    "stability": {
+      "survived_500": true,
+      "contact_valid_pct": 99.8,
+      "height_error_max": 0.0064178573852249,
+      "height_error_final": -0.0049641299014755,
+      "pitch_x_max": 0.1110531451538715,
+      "pitch_x_final": 0.0472659464616831,
+      "roll_y_max": 0.0133430639888936
+    },
+    "survival": {
+      "total_steps": 500,
+      "terminated": false,
+      "termination_reason": "nan"
+    }
+  },
+  "comparison": {
+    "initial_state": {
+      "hip_pitch_error_max": {
+        "old": 0.4500000476837158,
+        "new": 0.0,
+        "improvement": 0.4500000476837158
+      },
+      "hip_pitch_error_left": {
+        "old": -0.45,
+        "new": 0.0,
+        "improvement": -0.45
+      }
+    },
+    "tau_pitch": {
+      "mean": {
+        "old": 2.5991776611271966,
+        "new": 2.5991776611271966,
+        "improvement": 0.0
+      },
+      "positive_pct": {
+        "old": 89.2,
+        "new": 89.2,
+        "improvement": 0.0
+      }
+    },
+    "tau_position": {
+      "saturation_pct": {
+        "old": 35.4,
+        "new": 35.4,
+        "improvement": 0.0
+      }
+    },
+    "stability": {
+      "survived_500": {
+        "old": true,
+        "new": true
+      },
+      "pitch_x_max": {
+        "old": 0.1110531451538715,
+        "new": 0.1110531451538715,
+        "improvement": 0.0
+      }
+    }
+  }
+}

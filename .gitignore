@@ -81,3 +81,8 @@ Thumbs.db
 *.log
 *.bak
 *.tmp
+
+# ─── Repo cleanup 2026-06-13: explicit exclusions ────────────────────────────
+# (already matched by *.log above, listed explicitly for clarity)
+assets/robot-urdf/export.log
+*_run.log

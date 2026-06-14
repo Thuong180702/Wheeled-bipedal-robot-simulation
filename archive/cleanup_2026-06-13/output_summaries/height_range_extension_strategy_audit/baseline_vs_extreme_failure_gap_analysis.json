@@ -1,0 +1,104 @@
+{
+  "phase": "Phase 4: Baseline vs Extreme Failure Gap Analysis",
+  "audit_date": "2026-06-06",
+
+  "baseline_telemetry": {
+    "heights_m": [0.394, 0.399, 0.404, 0.409, 0.414],
+    "support_max_range_m": [0.106, 0.135],
+    "hip_yaw_max_range_rad": [0.030, 0.057],
+    "divergence_estimate_rad": [0.03, 0.05],
+    "pitch_max_range_rad": [0.071, 0.096],
+    "roll_max_range_rad": [0.009, 0.014],
+    "wheel_max_range_rad_s": [3.87, 4.77],
+    "hy2_div": "disabled",
+    "profile": "candidate_D2_wheel_velocity_damping_light"
+  },
+
+  "extreme_telemetry_a0_5000": {
+    "nominal_0p404m": {
+      "support_max_m": 0.159,
+      "hip_yaw_max_rad": 0.254,
+      "divergence_rms": 0.245,
+      "pitch_max_rad": 0.089,
+      "roll_max_rad": 0.014,
+      "hy2_gate_pct": 0,
+      "hy2_clip_pct": 0
+    },
+    "low_0p300m": {
+      "support_max_m": 0.110,
+      "hip_yaw_max_rad": 0.393,
+      "divergence_rms": 0.493,
+      "pitch_max_rad": 0.154,
+      "roll_max_rad": 0.012,
+      "hy2_gate_pct": 100,
+      "hy2_clip_pct": 88.74
+    },
+    "high_0p480m": {
+      "support_max_m": 0.378,
+      "hip_yaw_max_rad": 0.345,
+      "divergence_rms": 0.340,
+      "pitch_max_rad": 0.092,
+      "roll_max_rad": 0.002,
+      "hy2_gate_pct": 0,
+      "hy2_clip_pct": 0
+    }
+  },
+
+  "comparison": {
+    "hip_yaw_max": {
+      "baseline_range": [0.030, 0.057],
+      "extreme_nominal": 0.254,
+      "extreme_low": 0.393,
+      "extreme_high": 0.345,
+      "ratio_vs_baseline": {"nominal": 4.5, "low": 7.0, "high": 6.1}
+    },
+    "divergence": {
+      "baseline_estimate": [0.03, 0.05],
+      "extreme_nominal": 0.245,
+      "extreme_low": 0.493,
+      "extreme_high": 0.340,
+      "ratio_vs_baseline": {"nominal": 4.9, "low": 9.9, "high": 6.8}
+    }
+  },
+
+  "failure_mechanism_classification": {
+    "low_0p300": {
+      "primary": "HY2_DIV_CLIPPING_PRIMARY",
+      "evidence": ["88.74% HY2-DIV clipping", "hip_pitch=1.376 rad", "divergence grows despite HY2"],
+      "secondary": "LOW_HEIGHT_GEOMETRY",
+      "geometry": {"hip_pitch_rad": 1.376, "knee_rad": 2.348, "support_width_m": 0.347}
+    },
+    "high_0p480": {
+      "primary": "SUPPORT_DRIFT_COUPLING_PRIMARY",
+      "evidence": ["support_drift=0.378m (3x baseline)", "r=-0.517 (support_error)", "r=-0.465 (roll)", "HY2 gate=0"],
+      "secondary": "HY2_NOT_ACTIVE",
+      "geometry": {"hip_pitch_rad": 0.626, "knee_rad": 1.223, "support_width_m": 0.297}
+    },
+    "nominal_posture_test": {
+      "primary": "UNKNOWN_REGRESSION_OR_TEST_MISMATCH",
+      "evidence": ["5x worse vs baseline same height", "HY2 gate=0", "no clipping"],
+      "secondary": "REQUIRES_INVESTIGATION",
+      "mismatch": "hip_yaw 0.254 vs baseline 0.056 at same 0.404m"
+    }
+  },
+
+  "baseline_success_factors": [
+    "Height in validated range (0.394-0.414m)",
+    "Moderate joint angles (hip_pitch ~0.90, knee ~1.40)",
+    "Adequate support width (~0.297m)",
+    "Low support drift (0.106-0.135m)",
+    "Per-joint PD sufficient (divergence ~0.03-0.05 rad bounded)"
+  ],
+
+  "extreme_failure_factors": [
+    "Low: Crouched geometry -> higher torque demand -> HY2 clips",
+    "High: Narrower support + no HY2 -> support drift -> divergence",
+    "Posture test nominal: Unknown regression or test mismatch"
+  ],
+
+  "investigation_needed": [
+    "Nominal regression: Why posture test shows 5x worse vs baseline?",
+    "Support drift: What causes 0.378m drift at high_0p480?",
+    "Coupling mechanism: How does support drift drive divergence?"
+  ]
+}

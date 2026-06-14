@@ -1,0 +1,241 @@
+{
+  "classification": "T6_ARCH_FIX_DESIGN_T6F_SELECTED",
+  "date": "2026-06-12",
+  "phase": "5_of_11",
+  "summary": {
+    "candidates_designed": 4,
+    "selected_candidate": "T6F_budget_cap_raise",
+    "selection_rationale": "Safest, most testable, preserves Phase 6 intent, conservative first step",
+    "alternative_candidate": "T6G_emergency_bypass_budget",
+    "archived_candidates": ["T6H_pitch_reserve_blend", "T6I_height_scheduled_position_authority"]
+  },
+  "candidates": {
+    "T6F_budget_cap_raise": {
+      "philosophy": "Conditionally raise upstream cap during safe high-height emergency",
+      "activation_conditions": [
+        "height_cmd >= 0.45 m",
+        "apcr1n_recenter_priority_active",
+        "tuned_band_state in {hard, emergency}",
+        "apcr1n_safety_gate_pass"
+      ],
+      "authority_modification": {
+        "normal_soft_desired": "4.0 Nm (unchanged)",
+        "hard_band": "6.5 Nm (raised)",
+        "emergency_band": "7.0 Nm (raised)"
+      },
+      "advantages": [
+        "Safest approach - still bounded cap",
+        "Preserves nominal safety (4.0 Nm normal operation)",
+        "Testable - discrete states",
+        "Graduated - hard < emergency",
+        "Conservative - 7.0 Nm matches T5 tuned cap",
+        "Reversible - config-driven",
+        "Low implementation risk"
+      ],
+      "disadvantages": [
+        "Requires careful gate logic",
+        "Adds conditional branching",
+        "May still be insufficient if 8.0 Nm needed"
+      ],
+      "risk_assessment": "Low",
+      "implementation_complexity": "Low to Medium",
+      "estimated_loc_change": {
+        "code": 150,
+        "tests": 200
+      }
+    },
+    "T6G_emergency_bypass_budget": {
+      "philosophy": "Fully bypass upstream cap in emergency band only",
+      "activation_conditions": [
+        "height_cmd >= 0.45 m",
+        "abs(e) >= emergency_band_m",
+        "apcr1n_recenter_priority_active",
+        "apcr1n_safety_gate_hard_pass (stricter)"
+      ],
+      "authority_modification": {
+        "emergency_band": "No upstream clip - tuned cap only (7.0 or 8.0 Nm)"
+      },
+      "advantages": [
+        "Cleaner conceptually - binary bypass",
+        "Full authority - tuned cap can use full range",
+        "Simpler config"
+      ],
+      "disadvantages": [
+        "Higher risk - full bypass is aggressive",
+        "Binary - no graduated authority for hard band",
+        "Harder to debug"
+      ],
+      "risk_assessment": "Medium",
+      "implementation_complexity": "Low to Medium",
+      "estimated_loc_change": {
+        "code": 120,
+        "tests": 180
+      }
+    },
+    "T6H_pitch_reserve_blend": {
+      "philosophy": "Gradually reduce pitch reserve during high drift, restore when resolved",
+      "blending_logic": "smoothstep blend from 4.0 (conservative) to 7.5 (aggressive) based on abs(e)",
+      "advantages": [
+        "Philosophically aligned with pitch safety",
+        "Smooth transitions",
+        "Self-regulating"
+      ],
+      "disadvantages": [
+        "Unclear rationale - pitch not identified as specific issue",
+        "More complex blending logic",
+        "Harder to test continuous blend",
+        "Phase 4 didn't identify pitch as the issue"
+      ],
+      "risk_assessment": "Medium",
+      "implementation_complexity": "Medium",
+      "estimated_loc_change": {
+        "code": 180,
+        "tests": 220
+      }
+    },
+    "T6I_height_scheduled_position_authority": {
+      "philosophy": "Invert height scheduling during emergency - high heights need MORE authority",
+      "behavior": {
+        "normal_operation": "LOW heights MORE authority, HIGH heights LESS (unchanged)",
+        "emergency_operation": "HIGH heights MORE authority, LOW heights conservative (inverted)"
+      },
+      "advantages": [
+        "Architecturally elegant - reuses scheduling",
+        "Height-aware",
+        "Intermediate heights interpolate"
+      ],
+      "disadvantages": [
+        "Inverts Phase 6 design philosophy",
+        "May be wrong if Phase 6 was correct",
+        "Affects all high heights uniformly"
+      ],
+      "risk_assessment": "Medium to High",
+      "implementation_complexity": "Medium",
+      "estimated_loc_change": {
+        "code": 160,
+        "tests": 200
+      }
+    }
+  },
+  "comparison_matrix": {
+    "safety": {
+      "T6F": "Highest",
+      "T6G": "Medium-High",
+      "T6H": "Medium",
+      "T6I": "Medium-Low"
+    },
+    "testability": {
+      "T6F": "High",
+      "T6G": "Medium-High",
+      "T6H": "Medium",
+      "T6I": "Medium"
+    },
+    "implementation_risk": {
+      "T6F": "Low",
+      "T6G": "Low-Medium",
+      "T6H": "Medium",
+      "T6I": "Medium"
+    },
+    "preserves_phase6_intent": {
+      "T6F": true,
+      "T6G": true,
+      "T6H": "partial",
+      "T6I": false
+    },
+    "graduated_authority": {
+      "T6F": "Yes (hard/emergency)",
+      "T6G": "No (emergency only)",
+      "T6H": "Yes (continuous)",
+      "T6I": "Yes (by height)"
+    },
+    "conservative_first_step": {
+      "T6F": true,
+      "T6G": "partial",
+      "T6H": false,
+      "T6I": false
+    }
+  },
+  "selection_decision": {
+    "recommended_for_phase6": "T6F_budget_cap_raise",
+    "reasons": [
+      "Preserves all existing safety",
+      "Conservative emergency authority (7.0 Nm matches T5 tuned layer)",
+      "Testable and debuggable (discrete states)",
+      "Low implementation risk",
+      "Falsifiable - can determine if sufficient or not"
+    ],
+    "alternative_for_future": "T6G_emergency_bypass_budget",
+    "when_to_consider_alternative": [
+      "If T6F shows 7.0 Nm insufficient",
+      "If Phase 7 proves 8.0 Nm tuned cap needed",
+      "As second iteration after T6F data analyzed"
+    ],
+    "archived_for_future": [
+      "T6H_pitch_reserve_blend - if smooth blending proves necessary",
+      "T6I_height_scheduled_position_authority - if Phase 6 philosophy proven flawed"
+    ]
+  },
+  "telemetry_requirements": {
+    "activation_state": [
+      "arch_fix_enabled",
+      "arch_fix_type",
+      "arch_fix_active",
+      "arch_fix_reason"
+    ],
+    "gate_state": [
+      "arch_fix_height_gate_pass",
+      "arch_fix_band_gate_pass",
+      "arch_fix_safety_gate_pass",
+      "arch_fix_recenter_gate_pass"
+    ],
+    "authority_state": [
+      "effective_max_position_tau_before_arch_fix",
+      "effective_max_position_tau_after_arch_fix",
+      "arch_fix_requested_cap"
+    ],
+    "transmission_verification": [
+      "arch_fix_upstream_clip_active",
+      "arch_fix_tau_position_before_clip",
+      "arch_fix_tau_position_after_upstream_clip",
+      "arch_fix_torque_transmitted_above_4nm"
+    ],
+    "total_fields": 16
+  },
+  "test_requirements": {
+    "total_tests": 15,
+    "categories": {
+      "opt_in_verification": 1,
+      "baseline_preservation": 1,
+      "band_state_tests": 5,
+      "safety_gate_tests": 4,
+      "telemetry_tests": 2,
+      "motor_cap_test": 1
+    }
+  },
+  "implementation_plan": {
+    "phase6_scope": [
+      "New T6F_budget_cap_raise profile",
+      "Conditional logic before line 2009",
+      "16 telemetry fields",
+      "15 targeted tests",
+      "No changes to existing profiles"
+    ],
+    "safety_validation": [
+      "T6F remains opt-in",
+      "All existing profiles unchanged",
+      "Normal/soft/desired identical to T5",
+      "Hard/emergency differ only with gates passing",
+      "Final motor torque cap respected"
+    ]
+  },
+  "next_phase": {
+    "phase": 6,
+    "task": "Implement T6F_budget_cap_raise",
+    "expected_artifacts": [
+      "Modified sagittal_velocity_damped_balance_controller.py",
+      "15 new/updated tests",
+      "Implementation report",
+      "Implementation summary JSON"
+    ]
+  }
+}

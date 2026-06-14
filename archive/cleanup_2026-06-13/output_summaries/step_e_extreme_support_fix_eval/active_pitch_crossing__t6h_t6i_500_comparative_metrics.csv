@@ -1,0 +1,5 @@
+profile,profile_name,classification,terminated,survived_steps,transition_steps,recovery_steps,min_error_m,max_error_m,max_abs_error_m,final_error_m,p2p_drift_m,mean_abs_error_m,outside_010m_pct,outside_015m_pct,max_pitch_deg,rms_pitch_deg,contact_pct,wbc_flag,decision
+T5,APCR1nD_T5_band_limited_balanced,BASELINE,False,499,0,0,-0.016,0.187,0.187,0.06,0.203,0.095,45.3,17.8,0.0,0.0,100.0,0,BASELINE
+T6F,T6F_budget_cap_raise,BASELINE,False,499,0,0,-0.016,0.203,0.203,0.141,0.219,0.082,39.1,24.2,0.0,0.0,100.0,0,BASELINE
+T6H,T6H_soft_blend_arch_fix,T6H_500_REJECT_STABILITY,False,499,0,0,-0.113,0.329,0.329,0.011,0.442,0.123,48.3,35.7,0.0,0.0,100.0,0,ABANDON
+T6I,T6I_phase_aware_release,T6I_500_PASS_PROCEED_1200,False,499,0,0,-0.016,0.203,0.203,0.141,0.219,0.082,39.1,24.2,0.0,0.0,100.0,0,PROCEED_1200

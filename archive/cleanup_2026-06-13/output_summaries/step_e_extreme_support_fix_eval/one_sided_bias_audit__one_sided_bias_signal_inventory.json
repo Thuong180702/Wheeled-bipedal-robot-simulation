@@ -1,0 +1,380 @@
+{
+  "files": {
+    "D2": "d2_low_0p300_500_after_csv_fix/d2_low_0p300_500_telemetry.csv",
+    "F1b": "f1b_low_0p300_500_after_csv_fix/f1b_low_0p300_500_telemetry.csv",
+    "F2a": "f2a_low_0p300_500/telemetry.csv",
+    "F2b": "f2b_low_0p300_500/telemetry.csv"
+  },
+  "key_signals": {
+    "pitch": [
+      "pitch_x",
+      "pitch_rate_x"
+    ],
+    "signed_support": [
+      "hip_yaw_comp_support_error_m"
+    ],
+    "magnitude_support": [
+      "support_position_error_m"
+    ],
+    "wheel": [
+      "wheel_vel_mean_rad_s",
+      "wheel_vel_left_rad_s",
+      "wheel_vel_right_rad_s"
+    ],
+    "tau": [
+      "tau_position",
+      "tau_pitch",
+      "tau_pitch_rate"
+    ],
+    "hip_yaw": [
+      "hip_yaw_abs_max",
+      "hip_yaw_asymmetry",
+      "hip_yaw_comp_tau_left",
+      "hip_yaw_comp_tau_right"
+    ],
+    "contact": [
+      "left_wheel_contact",
+      "right_wheel_contact",
+      "left_fz_actual",
+      "right_fz_actual"
+    ],
+    "yaw": [
+      "yaw_z",
+      "yaw_rate_z"
+    ]
+  },
+  "analysis_results": {
+    "D2": {
+      "name": "D2",
+      "rows": 500,
+      "pitch": {
+        "mean": 0.051964653053939366,
+        "final": 0.0474885813891887,
+        "min": -0.0082932719960808,
+        "max": 0.1110559850931167,
+        "std": 0.03542345696975617,
+        "rms": 0.06288995524489151,
+        "percent_positive": 89.0,
+        "percent_negative": 10.8,
+        "zero_crossings": 5,
+        "pitch_rate_zero_crossings": 8,
+        "recovery_windows": 289,
+        "recovery_percent": 57.8,
+        "longest_positive_interval_steps": 303,
+        "longest_negative_interval_steps": 48
+      },
+      "signed_support": {
+        "mean": 0.08233315110347866,
+        "median": 0.08225909694327495,
+        "final": 0.0592818533092424,
+        "min": -0.0035276358269349,
+        "max": 0.1756866669578762,
+        "std": 0.05792451457141435,
+        "rms": 0.10066775630241415,
+        "mae": 0.08259903991957908,
+        "percent_positive": 93.0,
+        "percent_negative": 6.6000000000000005,
+        "zero_crossings": 5,
+        "outside_pos_0p15": 96,
+        "outside_neg_0p15": 0,
+        "outside_band": 96,
+        "longest_positive_interval_steps": 316,
+        "longest_negative_interval_steps": 28
+      },
+      "support_magnitude": {
+        "mean": 0.08244912312588618,
+        "max": 0.1756866669578762,
+        "final": 0.0579860112037527,
+        "crossings_0p15": 96
+      },
+      "wheel_velocity": {
+        "mean": -0.19860603291913867,
+        "final": 2.29912269115448,
+        "min": -4.3887152671813965,
+        "max": 2.5514637231826782,
+        "std": 1.9818936334298127,
+        "rms": 1.9918199543486612,
+        "percent_positive": 51.800000000000004,
+        "percent_negative": 48.0,
+        "zero_crossings": 7
+      },
+      "wheel_velocity_during_recovery": {
+        "mean": 1.0870155731544775,
+        "std": 1.1192371636896274
+      },
+      "tau": {
+        "tau_position_mean": -2.614576800623472,
+        "tau_position_final": -2.3194403648376465,
+        "tau_position_min": -4.0,
+        "tau_position_max": 0.1411054283380508,
+        "tau_pitch_mean": 2.5991776611271966,
+        "tau_pitch_final": 2.363297323084158,
+        "tau_pitch_min": -0.4145640094073408,
+        "tau_pitch_max": 5.552657257693578
+      },
+      "hip_yaw": {
+        "abs_max_mean": 0.04457825027103532,
+        "abs_max_max": 0.1017948016524314,
+        "abs_max_final": 0.0847120210528373,
+        "asymmetry_mean": 0.010667948909031062
+      },
+      "coupling": {
+        "signed_error_at_pitch_zc_mean": 0.0027726171801570167,
+        "signed_error_at_pitch_zc_min": 0.0,
+        "signed_error_at_pitch_zc_max": 0.009269401193301,
+        "signed_error_at_pitch_zc_stays_positive": 80.0
+      },
+      "pitch_classification": "PITCH_REVERSES_BUT_SUPPORT_REMAINS_POSITIVE",
+      "wheel_support_classification": "NORMAL"
+    },
+    "F1b": {
+      "name": "F1b",
+      "rows": 500,
+      "pitch": {
+        "mean": 0.05396288231775541,
+        "final": -0.0243940390646457,
+        "min": -0.0338479727506637,
+        "max": 0.1103187948465347,
+        "std": 0.04524248868832182,
+        "rms": 0.07041928323089384,
+        "percent_positive": 82.6,
+        "percent_negative": 17.2,
+        "zero_crossings": 6,
+        "pitch_rate_zero_crossings": 8,
+        "recovery_windows": 300,
+        "recovery_percent": 60.0,
+        "longest_positive_interval_steps": 256,
+        "longest_negative_interval_steps": 69
+      },
+      "signed_support": {
+        "mean": 0.07641035903184745,
+        "median": 0.08542942663099451,
+        "final": -0.0327057399621433,
+        "min": -0.0338593564367903,
+        "max": 0.1694888688016431,
+        "std": 0.06514641802952945,
+        "rms": 0.10041214443210558,
+        "mae": 0.08315603568214622,
+        "percent_positive": 82.8,
+        "percent_negative": 16.8,
+        "zero_crossings": 6,
+        "outside_pos_0p15": 81,
+        "outside_neg_0p15": 0,
+        "outside_band": 81,
+        "longest_positive_interval_steps": 256,
+        "longest_negative_interval_steps": 66
+      },
+      "support_magnitude": {
+        "mean": 0.07634018334293867,
+        "max": 0.1694888688016431,
+        "final": -0.0350878444543883,
+        "crossings_0p15": 81
+      },
+      "wheel_velocity": {
+        "mean": 0.13182432795560453,
+        "final": 4.198258876800537,
+        "min": -4.544600486755371,
+        "max": 5.004864931106567,
+        "std": 2.8698152233392036,
+        "rms": 2.8728412886113963,
+        "percent_positive": 51.6,
+        "percent_negative": 48.199999999999996,
+        "zero_crossings": 7
+      },
+      "wheel_velocity_during_recovery": {
+        "mean": 1.4592587341319692,
+        "std": 2.19570089518625
+      },
+      "tau": {
+        "tau_position_mean": -2.3618085135561704,
+        "tau_position_final": 1.403513789176941,
+        "tau_position_min": -4.0,
+        "tau_position_max": 1.403513789176941,
+        "tau_pitch_mean": 2.6976371092715974,
+        "tau_pitch_final": -1.242797208950167,
+        "tau_pitch_min": -1.6926028073837671,
+        "tau_pitch_max": 5.515829476705511
+      },
+      "hip_yaw": {
+        "abs_max_mean": 0.03991672930470663,
+        "abs_max_max": 0.1376047134399414,
+        "abs_max_final": 0.1376047134399414,
+        "asymmetry_mean": 0.011332845451237469
+      },
+      "coupling": {
+        "signed_error_at_pitch_zc_mean": 0.00048220056477258033,
+        "signed_error_at_pitch_zc_min": -0.0040962345068047,
+        "signed_error_at_pitch_zc_max": 0.0073682724092095,
+        "signed_error_at_pitch_zc_stays_positive": 50.0
+      },
+      "pitch_classification": "PITCH_REVERSES_BUT_SUPPORT_REMAINS_POSITIVE",
+      "wheel_support_classification": "NORMAL"
+    },
+    "F2a": {
+      "name": "F2a",
+      "rows": 500,
+      "pitch": {
+        "mean": 0.055958195732593564,
+        "final": -0.0058012260124087,
+        "min": -0.0421382337808609,
+        "max": 0.1110559850931167,
+        "std": 0.04752491518635844,
+        "rms": 0.07341619190013751,
+        "percent_positive": 83.39999999999999,
+        "percent_negative": 16.400000000000002,
+        "zero_crossings": 6,
+        "pitch_rate_zero_crossings": 16,
+        "recovery_windows": 301,
+        "recovery_percent": 60.199999999999996,
+        "longest_positive_interval_steps": 252,
+        "longest_negative_interval_steps": 73
+      },
+      "signed_support": {
+        "mean": 0.08033275803882577,
+        "median": 0.09277083544184445,
+        "final": -0.014876259180293,
+        "min": -0.0474476829987557,
+        "max": 0.1761055275332059,
+        "std": 0.0704469279550262,
+        "rms": 0.10684625249593539,
+        "mae": 0.08967103489948523,
+        "percent_positive": 82.8,
+        "percent_negative": 16.8,
+        "zero_crossings": 6,
+        "outside_pos_0p15": 92,
+        "outside_neg_0p15": 0,
+        "outside_band": 92,
+        "longest_positive_interval_steps": 251,
+        "longest_negative_interval_steps": 74
+      },
+      "support_magnitude": {
+        "mean": 0.08029704436340056,
+        "max": 0.1761055275332059,
+        "final": -0.0178568377126097,
+        "crossings_0p15": 92
+      },
+      "wheel_velocity": {
+        "mean": 0.07216964654251933,
+        "final": 5.277382850646973,
+        "min": -4.862898349761963,
+        "max": 5.521620988845825,
+        "std": 3.0798857246691784,
+        "rms": 3.08073116887908,
+        "percent_positive": 50.6,
+        "percent_negative": 49.2,
+        "zero_crossings": 9
+      },
+      "wheel_velocity_during_recovery": {
+        "mean": 1.5282780474076585,
+        "std": 2.472447883519574
+      },
+      "tau": {
+        "tau_position_mean": -2.3674179476038844,
+        "tau_position_final": 0.7142735123634338,
+        "tau_position_min": -4.0,
+        "tau_position_max": 1.897907376289368,
+        "tau_pitch_mean": 2.797770068249912,
+        "tau_pitch_final": -0.317102290722424,
+        "tau_pitch_min": -2.106753572747548,
+        "tau_pitch_max": 5.552657257693578
+      },
+      "hip_yaw": {
+        "abs_max_mean": 0.0396517039656173,
+        "abs_max_max": 0.129284381866455,
+        "abs_max_final": 0.129284381866455,
+        "asymmetry_mean": 0.011000942885802894
+      },
+      "coupling": {
+        "signed_error_at_pitch_zc_mean": -0.0012608994264156864,
+        "signed_error_at_pitch_zc_min": -0.0057936737208357,
+        "signed_error_at_pitch_zc_max": 0.0018121134508927,
+        "signed_error_at_pitch_zc_stays_positive": 50.0
+      },
+      "pitch_classification": "PITCH_REVERSES_BUT_SUPPORT_REMAINS_POSITIVE",
+      "wheel_support_classification": "NORMAL"
+    },
+    "F2b": {
+      "name": "F2b",
+      "rows": 500,
+      "pitch": {
+        "mean": 0.05771704243124257,
+        "final": 0.0130700087174773,
+        "min": -0.0544693693518638,
+        "max": 0.1115992292761802,
+        "std": 0.051191142401146056,
+        "rms": 0.07714784538368046,
+        "percent_positive": 83.2,
+        "percent_negative": 16.6,
+        "zero_crossings": 5,
+        "pitch_rate_zero_crossings": 26,
+        "recovery_windows": 298,
+        "recovery_percent": 59.599999999999994,
+        "longest_positive_interval_steps": 247,
+        "longest_negative_interval_steps": 77
+      },
+      "signed_support": {
+        "mean": 0.08305337590788854,
+        "median": 0.10025938190425304,
+        "final": 0.0024593636496264,
+        "min": -0.0637908826725012,
+        "max": 0.1763569838954413,
+        "std": 0.07605964957270038,
+        "rms": 0.11261853108089727,
+        "mae": 0.09632732825865466,
+        "percent_positive": 82.6,
+        "percent_negative": 17.0,
+        "zero_crossings": 5,
+        "outside_pos_0p15": 142,
+        "outside_neg_0p15": 0,
+        "outside_band": 142,
+        "longest_positive_interval_steps": 244,
+        "longest_negative_interval_steps": 80
+      },
+      "support_magnitude": {
+        "mean": 0.08305147202215699,
+        "max": 0.1763569838954413,
+        "final": -0.0009519428657711,
+        "crossings_0p15": 142
+      },
+      "wheel_velocity": {
+        "mean": 0.012434585603885353,
+        "final": 6.048660039901733,
+        "min": -5.718992471694946,
+        "max": 6.065079689025879,
+        "std": 3.3195563077010646,
+        "rms": 3.3195795967135755,
+        "percent_positive": 50.0,
+        "percent_negative": 49.8,
+        "zero_crossings": 9
+      },
+      "wheel_velocity_during_recovery": {
+        "mean": 1.5155524566563334,
+        "std": 2.7783433856522297
+      },
+      "tau": {
+        "tau_position_mean": -2.3423820832610653,
+        "tau_position_final": 0.0380777157843112,
+        "tau_position_min": -4.0,
+        "tau_position_max": 2.551635265350342,
+        "tau_pitch_mean": 2.8860870941216517,
+        "tau_pitch_final": 0.6240578916072074,
+        "tau_pitch_min": -2.72362316856968,
+        "tau_pitch_max": 5.580133361505699
+      },
+      "hip_yaw": {
+        "abs_max_mean": 0.037690330524695996,
+        "abs_max_max": 0.1157179996371269,
+        "abs_max_final": 0.1157179996371269,
+        "asymmetry_mean": 0.010563768628480326
+      },
+      "coupling": {
+        "signed_error_at_pitch_zc_mean": -0.0015931214166015738,
+        "signed_error_at_pitch_zc_min": -0.0080121730923434,
+        "signed_error_at_pitch_zc_max": 2.5898876801003223e-05,
+        "signed_error_at_pitch_zc_stays_positive": 60.0
+      },
+      "pitch_classification": "PITCH_REVERSES_BUT_SUPPORT_REMAINS_POSITIVE",
+      "wheel_support_classification": "NORMAL"
+    }
+  }
+}

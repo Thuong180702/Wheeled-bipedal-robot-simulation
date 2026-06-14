@@ -1,0 +1,40 @@
+{
+  "original_path": "outputs/continuous_low_height_sagittal_fix",
+  "original_size": "3.4M",
+  "original_size_bytes": 3591136,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "baseline/stepE_low0p300_1000.summary.json",
+      "size_bytes": 1300
+    },
+    {
+      "file": "candidate_E1_k60_continuous/stepE_low0p300_1000.summary.json",
+      "size_bytes": 1300
+    },
+    {
+      "file": "candidate_E2_k80_continuous/stepE_low0p300_1000.summary.json",
+      "size_bytes": 1300
+    },
+    {
+      "file": "candidate_E3_k100_continuous/stepE_low0p300_1000.summary.json",
+      "size_bytes": 1297
+    },
+    {
+      "file": "continuous_low_height_candidate_summary.json",
+      "size_bytes": 12076
+    },
+    {
+      "file": "continuous_low_height_sagittal_fix_report.md",
+      "size_bytes": 2159
+    },
+    {
+      "file": "continuous_low_height_sagittal_fix_summary.json",
+      "size_bytes": 3446
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

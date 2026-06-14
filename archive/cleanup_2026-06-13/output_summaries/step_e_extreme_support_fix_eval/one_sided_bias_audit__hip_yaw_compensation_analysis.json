@@ -1,0 +1,242 @@
+{
+  "D2": {
+    "name": "D2",
+    "rows": 500,
+    "hip_yaw_state": {
+      "left_mean": -0.034008401667932,
+      "right_mean": 0.044480149965107525,
+      "left_positive_pct": 0.0,
+      "right_positive_pct": 99.8,
+      "asymmetry_mean": 0.010667948909031062,
+      "asymmetry_std": 0.006401319839327823,
+      "asymmetry_positive_pct": 99.8,
+      "signed_error_mean": 0.08233315110347866,
+      "signed_error_positive_pct": 93.0
+    },
+    "hip_yaw_compensation": {
+      "active_mean": 0.0,
+      "active_pct": 0.0,
+      "tau_left_mean": 0.0,
+      "tau_right_mean": 0.0,
+      "tau_sum_mean": 0.0,
+      "tau_left_positive_pct": 0.0,
+      "tau_right_positive_pct": 0.0,
+      "k_support_mean": 0.0,
+      "signed_error_from_comp_mean": 0.08233315110347866,
+      "sign_mean": 1.0,
+      "sign_positive_pct": 100.0
+    },
+    "hip_yaw_divergence": {
+      "active_pct": 0.0,
+      "left_mean": 0.0,
+      "right_mean": 0.0,
+      "divergence_mean": 0.07848855163303957,
+      "divergence_positive_pct": 99.8
+    },
+    "yaw_aware": {
+      "active_pct": 0.0,
+      "sagittal_comp_mean": 0.08244912312588618,
+      "sagittal_comp_positive_pct": 93.2
+    },
+    "correlations": {
+      "asymmetry_vs_signed_error": -0.3716635163282048,
+      "divergence_vs_signed_error": -0.6392481141519748,
+      "comp_tau_vs_signed_error": 0.0
+    },
+    "time_series_analysis": {
+      "when_signed_pos_mean_asymmetry": 0.010423444385886875,
+      "when_signed_neg_mean_asymmetry": 0.014757950757594847,
+      "when_signed_pos_mean_div": 0.07326409282254787,
+      "when_signed_neg_mean_div": 0.15685701556239187,
+      "when_signed_pos_mean_comp_sign": 1.0,
+      "when_signed_neg_mean_comp_sign": 1.0
+    },
+    "classifications": [
+      "HIP_YAW_COMP_SIGN_BIAS",
+      "HIP_YAW_ASYMMETRY_BIAS",
+      "HIP_YAW_DIVERGENCE_BIAS",
+      "YAW_AWARE_COMP_BIAS"
+    ],
+    "primary_source": "HIP_YAW_COMP_SIGN_BIAS"
+  },
+  "F1b": {
+    "name": "F1b",
+    "rows": 500,
+    "hip_yaw_state": {
+      "left_mean": -0.028681608768878455,
+      "right_mean": 0.039819004389297294,
+      "left_positive_pct": 0.0,
+      "right_positive_pct": 99.8,
+      "asymmetry_mean": 0.011332845451237469,
+      "asymmetry_std": 0.006706791880458652,
+      "asymmetry_positive_pct": 99.8,
+      "signed_error_mean": 0.07641035903184745,
+      "signed_error_positive_pct": 82.8
+    },
+    "hip_yaw_compensation": {
+      "active_mean": 0.0,
+      "active_pct": 0.0,
+      "tau_left_mean": 0.0,
+      "tau_right_mean": 0.0,
+      "tau_sum_mean": 0.0,
+      "tau_left_positive_pct": 0.0,
+      "tau_right_positive_pct": 0.0,
+      "k_support_mean": 0.0,
+      "signed_error_from_comp_mean": 0.07641035903184745,
+      "sign_mean": 1.0,
+      "sign_positive_pct": 100.0
+    },
+    "hip_yaw_divergence": {
+      "active_pct": 0.0,
+      "left_mean": 0.0,
+      "right_mean": 0.0,
+      "divergence_mean": 0.0685006131581758,
+      "divergence_positive_pct": 99.8
+    },
+    "yaw_aware": {
+      "active_pct": 0.0,
+      "sagittal_comp_mean": 0.07634018334293867,
+      "sagittal_comp_positive_pct": 82.8
+    },
+    "correlations": {
+      "asymmetry_vs_signed_error": -0.3518281318025322,
+      "divergence_vs_signed_error": -0.7387152250928669,
+      "comp_tau_vs_signed_error": 0.0
+    },
+    "time_series_analysis": {
+      "when_signed_pos_mean_asymmetry": 0.010426935600517504,
+      "when_signed_neg_mean_asymmetry": 0.016066796987225986,
+      "when_signed_pos_mean_div": 0.04859702289410259,
+      "when_signed_neg_mean_div": 0.16822557095777788,
+      "when_signed_pos_mean_comp_sign": 1.0,
+      "when_signed_neg_mean_comp_sign": 1.0
+    },
+    "classifications": [
+      "HIP_YAW_COMP_SIGN_BIAS",
+      "HIP_YAW_ASYMMETRY_BIAS",
+      "HIP_YAW_DIVERGENCE_BIAS",
+      "YAW_AWARE_COMP_BIAS"
+    ],
+    "primary_source": "HIP_YAW_COMP_SIGN_BIAS"
+  },
+  "F2a": {
+    "name": "F2a",
+    "rows": 500,
+    "hip_yaw_state": {
+      "left_mean": -0.02874886138574215,
+      "right_mean": 0.039553603659689504,
+      "left_positive_pct": 0.0,
+      "right_positive_pct": 99.8,
+      "asymmetry_mean": 0.011000942885802894,
+      "asymmetry_std": 0.006560207206831842,
+      "asymmetry_positive_pct": 99.8,
+      "signed_error_mean": 0.08033275803882577,
+      "signed_error_positive_pct": 82.8
+    },
+    "hip_yaw_compensation": {
+      "active_mean": 0.0,
+      "active_pct": 0.0,
+      "tau_left_mean": 0.0,
+      "tau_right_mean": 0.0,
+      "tau_sum_mean": 0.0,
+      "tau_left_positive_pct": 0.0,
+      "tau_right_positive_pct": 0.0,
+      "k_support_mean": 0.0,
+      "signed_error_from_comp_mean": 0.08033275803882577,
+      "sign_mean": 1.0,
+      "sign_positive_pct": 100.0
+    },
+    "hip_yaw_divergence": {
+      "active_pct": 0.0,
+      "left_mean": 0.0,
+      "right_mean": 0.0,
+      "divergence_mean": 0.0683024650454317,
+      "divergence_positive_pct": 99.8
+    },
+    "yaw_aware": {
+      "active_pct": 0.0,
+      "sagittal_comp_mean": 0.08029704436340056,
+      "sagittal_comp_positive_pct": 82.8
+    },
+    "correlations": {
+      "asymmetry_vs_signed_error": -0.3071029402640832,
+      "divergence_vs_signed_error": -0.7480229428621094,
+      "comp_tau_vs_signed_error": 0.0
+    },
+    "time_series_analysis": {
+      "when_signed_pos_mean_asymmetry": 0.010172833915939563,
+      "when_signed_neg_mean_asymmetry": 0.015343544781249567,
+      "when_signed_pos_mean_div": 0.047880614777836526,
+      "when_signed_neg_mean_div": 0.17057698647875524,
+      "when_signed_pos_mean_comp_sign": 1.0,
+      "when_signed_neg_mean_comp_sign": 1.0
+    },
+    "classifications": [
+      "HIP_YAW_COMP_SIGN_BIAS",
+      "HIP_YAW_ASYMMETRY_BIAS",
+      "HIP_YAW_DIVERGENCE_BIAS",
+      "YAW_AWARE_COMP_BIAS"
+    ],
+    "primary_source": "HIP_YAW_COMP_SIGN_BIAS"
+  },
+  "F2b": {
+    "name": "F2b",
+    "rows": 500,
+    "hip_yaw_state": {
+      "left_mean": -0.027224662202143424,
+      "right_mean": 0.037592230218768195,
+      "left_positive_pct": 5.2,
+      "right_positive_pct": 99.8,
+      "asymmetry_mean": 0.010563768628480326,
+      "asymmetry_std": 0.006175728044966828,
+      "asymmetry_positive_pct": 99.8,
+      "signed_error_mean": 0.08305337590788854,
+      "signed_error_positive_pct": 82.6
+    },
+    "hip_yaw_compensation": {
+      "active_mean": 0.0,
+      "active_pct": 0.0,
+      "tau_left_mean": 0.0,
+      "tau_right_mean": 0.0,
+      "tau_sum_mean": 0.0,
+      "tau_left_positive_pct": 0.0,
+      "tau_right_positive_pct": 0.0,
+      "k_support_mean": 0.0,
+      "signed_error_from_comp_mean": 0.08305337590788854,
+      "sign_mean": 1.0,
+      "sign_positive_pct": 100.0
+    },
+    "hip_yaw_divergence": {
+      "active_pct": 0.0,
+      "left_mean": 0.0,
+      "right_mean": 0.0,
+      "divergence_mean": 0.06481689242091165,
+      "divergence_positive_pct": 99.8
+    },
+    "yaw_aware": {
+      "active_pct": 0.0,
+      "sagittal_comp_mean": 0.08305147202215699,
+      "sagittal_comp_positive_pct": 82.6
+    },
+    "correlations": {
+      "asymmetry_vs_signed_error": -0.27201008600496457,
+      "divergence_vs_signed_error": -0.7778013362398838,
+      "comp_tau_vs_signed_error": 0.0
+    },
+    "time_series_analysis": {
+      "when_signed_pos_mean_asymmetry": 0.009736008312630773,
+      "when_signed_neg_mean_asymmetry": 0.014833558129954707,
+      "when_signed_pos_mean_div": 0.04272884518699843,
+      "when_signed_neg_mean_div": 0.17366167067940458,
+      "when_signed_pos_mean_comp_sign": 1.0,
+      "when_signed_neg_mean_comp_sign": 1.0
+    },
+    "classifications": [
+      "HIP_YAW_COMP_SIGN_BIAS",
+      "HIP_YAW_ASYMMETRY_BIAS",
+      "HIP_YAW_DIVERGENCE_BIAS",
+      "YAW_AWARE_COMP_BIAS"
+    ],
+    "primary_source": "HIP_YAW_COMP_SIGN_BIAS"
+  }
+}

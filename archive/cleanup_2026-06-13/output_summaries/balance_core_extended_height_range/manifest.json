@@ -1,0 +1,56 @@
+{
+  "original_path": "outputs/balance_core_extended_height_range",
+  "original_size": "43.7K",
+  "original_size_bytes": 44789,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "dynamic_high_2cm/variant_setup.json",
+      "size_bytes": 295
+    },
+    {
+      "file": "dynamic_high_5cm/variant_setup.json",
+      "size_bytes": 280
+    },
+    {
+      "file": "dynamic_low_10cm/variant_setup.json",
+      "size_bytes": 287
+    },
+    {
+      "file": "dynamic_low_2cm/variant_setup.json",
+      "size_bytes": 289
+    },
+    {
+      "file": "dynamic_low_5cm/variant_setup.json",
+      "size_bytes": 279
+    },
+    {
+      "file": "dynamic_nominal/variant_setup.json",
+      "size_bytes": 275
+    },
+    {
+      "file": "extended_height_dynamic_summary.json",
+      "size_bytes": 3277
+    },
+    {
+      "file": "extended_height_setup_report.json",
+      "size_bytes": 19074
+    },
+    {
+      "file": "extended_height_telemetry_analysis.json",
+      "size_bytes": 6143
+    },
+    {
+      "file": "STEP_B_EXTENDED_HEIGHT_RANGE_FINAL_REPORT.md",
+      "size_bytes": 11060
+    },
+    {
+      "file": "validation_log.txt",
+      "size_bytes": 3530
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

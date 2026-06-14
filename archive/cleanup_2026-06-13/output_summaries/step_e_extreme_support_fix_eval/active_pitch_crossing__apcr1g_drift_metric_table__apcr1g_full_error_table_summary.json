@@ -1,0 +1,161 @@
+{
+  "classification": "APCR1G_MORE_STABLE_BUT_DRIFT_WORSE",
+  "should_proceed_to_5000": false,
+  "date": "2026-06-09",
+  "height": "low_0p300",
+  "steps": 2000,
+  "drift_column_used": "active_pitch_crossing_signed_error_m",
+  "profiles": {
+    "D2": {
+      "telemetry": "outputs/hierarchical_controller_sim/telemetry_1781015924.csv",
+      "drift": {
+        "min": -0.0035,
+        "max": 0.1757,
+        "p2p": 0.1792,
+        "max_abs": 0.1757,
+        "mean": 0.0649,
+        "outside_pm0p08_pct": 38.6,
+        "outside_pm0p10_pct": 18.2,
+        "outside_pm0p12_pct": 7.4,
+        "outside_pm0p15_pct": 4.8,
+        "values_gt_0p15": 96
+      },
+      "orientation": {
+        "pitch_rms_deg": 3.22,
+        "roll_rms_deg": 0.33
+      },
+      "hip_yaw_max_rad": 0.209,
+      "wheel_vel_max_rad_s": 4.39,
+      "com_z_min_m": 0.282,
+      "apc_active_pct": 0.0,
+      "wbc_torque_max": 10.1
+    },
+    "APCR1f": {
+      "telemetry": "outputs/hierarchical_controller_sim/telemetry_1781015926.csv",
+      "drift": {
+        "min": -0.0494,
+        "max": 0.1572,
+        "p2p": 0.2066,
+        "max_abs": 0.1572,
+        "mean": 0.0564,
+        "outside_pm0p08_pct": 41.4,
+        "outside_pm0p10_pct": 32.6,
+        "outside_pm0p12_pct": 21.3,
+        "outside_pm0p15_pct": 2.2,
+        "values_gt_0p15": 45
+      },
+      "orientation": {
+        "pitch_rms_deg": 4.03,
+        "roll_rms_deg": 0.37
+      },
+      "hip_yaw_max_rad": 0.215,
+      "wheel_vel_max_rad_s": 5.44,
+      "com_z_min_m": 0.280,
+      "apc_active_pct": 61.8,
+      "wbc_torque_max": 11.6
+    },
+    "APCR1g": {
+      "telemetry": "outputs/hierarchical_controller_sim/telemetry_1781015927.csv",
+      "drift": {
+        "min": -0.0005,
+        "max": 0.3722,
+        "p2p": 0.3726,
+        "max_abs": 0.3722,
+        "mean": 0.1503,
+        "outside_pm0p08_pct": 63.5,
+        "outside_pm0p10_pct": 50.9,
+        "outside_pm0p12_pct": 36.5,
+        "outside_pm0p15_pct": 34.7,
+        "values_gt_0p15": 694
+      },
+      "orientation": {
+        "pitch_rms_deg": 2.80,
+        "roll_rms_deg": 0.34
+      },
+      "hip_yaw_max_rad": 0.281,
+      "wheel_vel_max_rad_s": 4.20,
+      "com_z_min_m": 0.276,
+      "apc_active_pct": 92.7,
+      "wbc_torque_max": 9.98
+    }
+  },
+  "delta_summary": {
+    "apcr1g_vs_apcr1f": {
+      "drift_max": {
+        "apcr1f": 0.1572,
+        "apcr1g": 0.3722,
+        "delta": 0.215,
+        "verdict": "WORSE"
+      },
+      "p2p": {
+        "apcr1f": 0.2066,
+        "apcr1g": 0.3726,
+        "delta": 0.166,
+        "verdict": "WORSE"
+      },
+      "outside_pm0p15_pct": {
+        "apcr1f": 2.2,
+        "apcr1g": 34.7,
+        "delta": 32.5,
+        "verdict": "WORSE"
+      },
+      "pitch_rms_deg": {
+        "apcr1f": 4.03,
+        "apcr1g": 2.80,
+        "delta": -1.23,
+        "verdict": "BETTER"
+      },
+      "wheel_vel_max": {
+        "apcr1f": 5.44,
+        "apcr1g": 4.20,
+        "delta": -1.24,
+        "verdict": "BETTER"
+      }
+    }
+  },
+  "early_transient_analysis": {
+    "window_0_500": {
+      "D2_p2p": 0.1792,
+      "APCR1f_p2p": 0.1704,
+      "APCR1g_p2p": 0.3694,
+      "APCR1g_values_gt_0p15": 410,
+      "APCR1g_values_gt_0p15_pct": 82.0
+    },
+    "window_500_1000": {
+      "D2_p2p": 0.1048,
+      "APCR1f_p2p": 0.2002,
+      "APCR1g_p2p": 0.3458,
+      "APCR1g_values_gt_0p15": 284,
+      "APCR1g_values_gt_0p15_pct": 56.8
+    },
+    "window_1000_1500": {
+      "D2_p2p": 0.0890,
+      "APCR1f_p2p": 0.1790,
+      "APCR1g_p2p": 0.0813,
+      "APCR1g_values_gt_0p15": 0,
+      "APCR1g_values_gt_0p15_pct": 0.0
+    },
+    "window_1500_2000": {
+      "D2_p2p": 0.0848,
+      "APCR1f_p2p": 0.1688,
+      "APCR1g_p2p": 0.0816,
+      "APCR1g_values_gt_0p15": 0,
+      "APCR1g_values_gt_0p15_pct": 0.0
+    },
+    "conclusion": "APCR1g has severe early transient (first 1000 steps) with drift up to 0.372m, then stabilizes. The early transient is disqualifying."
+  },
+  "recommendation": {
+    "proceed_to_5000": false,
+    "reason": "APCR1g has disqualifying drift regression: max drift 2.4x worse than APCR1f, P2P 1.8x worse, 34.7% values exceed ±0.15 vs 2.2% for APCR1f",
+    "best_profile": "APCR1f",
+    "best_profile_reason": "Best balance of drift control and stability"
+  },
+  "files_generated": [
+    "outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/apcr1g_drift_metric_table/main_error_table_2000.json",
+    "outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/apcr1g_drift_metric_table/main_error_table_2000.csv",
+    "outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/apcr1g_drift_metric_table/window_error_table_2000.json",
+    "outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/apcr1g_drift_metric_table/window_error_table_2000.csv",
+    "outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/apcr1g_drift_metric_table/classification.json",
+    "docs/validation/apcr1g_full_error_table_final_report.md"
+  ]
+}

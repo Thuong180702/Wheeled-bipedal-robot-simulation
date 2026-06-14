@@ -1,0 +1,92 @@
+{
+  "original_path": "outputs/stage2b_diagnostics",
+  "original_size": "4.7M",
+  "original_size_bytes": 4934861,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "stage2b_a_parity_report_1779597870.json",
+      "size_bytes": 2285
+    },
+    {
+      "file": "stage2b_a_parity_report_1779597911.json",
+      "size_bytes": 2280
+    },
+    {
+      "file": "stage2b_a_parity_report_1779598341.json",
+      "size_bytes": 2280
+    },
+    {
+      "file": "stage2b_a_parity_report_1779598344.json",
+      "size_bytes": 2298
+    },
+    {
+      "file": "stage2b_a_parity_report_1779598992.json",
+      "size_bytes": 2201
+    },
+    {
+      "file": "stage2b_a_parity_report_1779599012.json",
+      "size_bytes": 2201
+    },
+    {
+      "file": "stage2b_a_parity_report_1779599017.json",
+      "size_bytes": 2201
+    },
+    {
+      "file": "stage2b_a_parity_report_1779599023.json",
+      "size_bytes": 2201
+    },
+    {
+      "file": "stage2b_a_parity_report_1779599031.json",
+      "size_bytes": 2201
+    },
+    {
+      "file": "stage2b_feedforward_diagnostics_1779585708.md",
+      "size_bytes": 793
+    },
+    {
+      "file": "stage2b_feedforward_diagnostics_1779585816.md",
+      "size_bytes": 1217
+    },
+    {
+      "file": "stage2b_feedforward_results_1779585816.json",
+      "size_bytes": 4350
+    },
+    {
+      "file": "stage2b_phase_b_diagnostics_1779587174.md",
+      "size_bytes": 1776
+    },
+    {
+      "file": "stage2b_phase_b_diagnostics_1779587330.md",
+      "size_bytes": 3874
+    },
+    {
+      "file": "stage2b_phase_b_results_1779587174.json",
+      "size_bytes": 4523
+    },
+    {
+      "file": "stage2b_phase_b_results_1779587330.json",
+      "size_bytes": 7742
+    },
+    {
+      "file": "stage2b_phase_c_config_sweep_1779591277.md",
+      "size_bytes": 8346
+    },
+    {
+      "file": "stage2b_phase_c_config_sweep_1779591562.md",
+      "size_bytes": 13529
+    },
+    {
+      "file": "stage2b_phase_c_corrected_selection_1779593035.md",
+      "size_bytes": 2407
+    },
+    {
+      "file": "stage2b_phase_c_corrected_selection_1779593063.md",
+      "size_bytes": 2690
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

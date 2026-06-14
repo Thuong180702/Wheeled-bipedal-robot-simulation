@@ -1,0 +1,20 @@
+{
+  "original_path": "outputs/balance_core_extended_longevity",
+  "original_size": "3.3K",
+  "original_size_bytes": 3397,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "extended_longevity_summary.json",
+      "size_bytes": 2460
+    },
+    {
+      "file": "extended_longevity_summary.md",
+      "size_bytes": 937
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

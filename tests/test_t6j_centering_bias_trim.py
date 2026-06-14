@@ -55,9 +55,10 @@ def warm_bias(ctrl, error, steps=220, **kwargs):
 
 
 def test_t6j_profile_exists_and_is_opt_in():
+    # Legacy string key maps to semantic profile
     assert "T6J_centering_bias_trim" in JOINT_FIX_PROFILES
-    assert JOINT_FIX_PROFILES["T6J_centering_bias_trim"].profile_name == "T6J_centering_bias_trim"
-    assert JOINT_FIX_PROFILES["baseline"].profile_name != "T6J_centering_bias_trim"
+    assert JOINT_FIX_PROFILES["T6J_centering_bias_trim"].profile_name == "support_centering_bias_trim"
+    assert JOINT_FIX_PROFILES["baseline"].profile_name != "support_centering_bias_trim"
 
 
 def test_t6j_inherits_t6i_settings():
@@ -90,20 +91,20 @@ def test_t6j_inherits_t6i_settings():
 
 
 def test_t6i_remains_unchanged():
-    assert T6I_PHASE_AWARE_RELEASE.profile_name == "T6I_phase_aware_release"
-    assert T6I_PHASE_AWARE_RELEASE.apcr1nd_tuned_variant_name == "T6I"
+    # Legacy constant alias still works, maps to semantic profile_name
+    assert T6I_PHASE_AWARE_RELEASE.profile_name == "phase_aware_authority_release"
     assert not T6I_PHASE_AWARE_RELEASE.t6j_bias_trim_enabled
 
 
 def test_t6f_remains_unchanged():
-    assert T6F_BUDGET_CAP_RAISE.profile_name == "T6F_budget_cap_raise"
+    assert T6F_BUDGET_CAP_RAISE.profile_name == "emergency_budget_cap_raise"
     assert not T6F_BUDGET_CAP_RAISE.t6i_enabled
     assert not T6F_BUDGET_CAP_RAISE.t6j_bias_trim_enabled
 
 
 def test_t5_remains_unchanged():
     t5 = JOINT_FIX_PROFILES["APCR1nD_T5_band_limited_balanced"]
-    assert t5.apcr1nd_tuned_variant_name == "T5"
+    assert t5.apcr1nd_tuned_variant_name == "band_limited"
     assert not t5.t6j_bias_trim_enabled
 
 

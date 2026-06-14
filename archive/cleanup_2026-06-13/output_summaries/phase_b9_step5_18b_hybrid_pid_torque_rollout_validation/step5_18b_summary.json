@@ -1,0 +1,10 @@
+{
+  "final_decision": "MOTOR_TORQUE_CONTROL_NEEDS_GAIN_TUNING",
+  "output_dir": "outputs\\phase_b9_step5_18b_hybrid_pid_torque_rollout_validation",
+  "uses_qfrc_applied": false,
+  "uses_deployable_actuator_ctrl_only": true,
+  "balance_residual_yaml_touched": false,
+  "current_best_controller": "outputs\\phase_b9_lqr_gain_strengthening\\best_lqr_config.yaml",
+  "step6_status": "BLOCKED",
+  "full_validation_run": false
+}

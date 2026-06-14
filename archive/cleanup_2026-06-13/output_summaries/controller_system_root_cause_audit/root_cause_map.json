@@ -1,0 +1,180 @@
+{
+  "audit_date": "2026-06-05",
+  "phase": "Phase 7: Root-Cause Map",
+  "result": "ROOT_CAUSE_MAP_COMPLETE",
+  "summary": {
+    "confirmed_issues": 2,
+    "likely_issues": 1,
+    "ruled_out_issues": 2,
+    "ambiguous_issues": 1
+  },
+  "confirmed_issues": [
+    {
+      "id": "CONFIRMED_1",
+      "name": "Hip-Yaw Torque Sign Convention Error",
+      "affected_heights": ["low_0p300", "nominal", "high_0p480"],
+      "affected_subsystems": ["hip_yaw"],
+      "evidence": {
+        "sign_correct_left": 0.0,
+        "sign_correct_right": 0.0,
+        "evidence_type": "direct_telemetry"
+      },
+      "first_event_timing": {
+        "low_0p300": "step 273 (hip_yaw > 0.03)",
+        "nominal": "step 464 (hip_yaw > 0.03)",
+        "high_0p480": "step 716 (hip_yaw > 0.03)"
+      },
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "blocks_step_e": true,
+      "blocks_step_c": false,
+      "blocks_step_d": false,
+      "only_diagnostic": false,
+      "description": "Hip-yaw torque sign correctness is 0% across all heights. Torque does not oppose error consistently. This causes divergence accumulation at boundary heights."
+    },
+    {
+      "id": "CONFIRMED_2",
+      "name": "Hip-Yaw Divergence at Boundary Heights",
+      "affected_heights": ["low_0p300", "high_0p480"],
+      "affected_subsystems": ["hip_yaw"],
+      "evidence": {
+        "divergence_rms_low_0p300": 0.3575,
+        "divergence_rms_nominal": 0.0447,
+        "divergence_rms_high_0p480": 0.2825,
+        "evidence_type": "direct_telemetry"
+      },
+      "first_event_timing": {
+        "low_0p300": "step 699 (hip_yaw > 0.10)",
+        "high_0p480": "step 2258 (hip_yaw > 0.10)"
+      },
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "blocks_step_e": true,
+      "blocks_step_c": false,
+      "blocks_step_d": false,
+      "only_diagnostic": false,
+      "description": "Hip-yaw divergence (left-right asymmetry) is 8x higher at boundary heights (0.3575, 0.2825) vs nominal (0.0447). Legs twist inward/outward at low and high heights."
+    }
+  ],
+  "likely_issues": [
+    {
+      "id": "LIKELY_1",
+      "name": "Hip-Roll Saturation at Low Heights",
+      "affected_heights": ["low_0p300", "nominal"],
+      "affected_subsystems": ["roll_lateral"],
+      "evidence": {
+        "hip_roll_abs_max_low_0p300": 0.2167,
+        "hip_roll_abs_max_nominal": 0.1749,
+        "hip_roll_abs_max_high_0p480": 0.0773,
+        "evidence_type": "correlated_telemetry"
+      },
+      "first_event_timing": {
+        "low_0p300": "not recorded separately",
+        "nominal": "not recorded separately"
+      },
+      "severity": "MEDIUM",
+      "confidence": "MEDIUM",
+      "blocks_step_e": false,
+      "blocks_step_c": false,
+      "blocks_step_d": false,
+      "only_diagnostic": true,
+      "description": "Hip-roll abs_max is 3x higher at low_0p300 (0.2167) vs high_0p480 (0.0773). May indicate lateral controller saturation or insufficient authority. Requires correlation with roll_y and controller outputs."
+    }
+  ],
+  "ruled_out_issues": [
+    {
+      "id": "RULED_OUT_1",
+      "name": "WBC Applied to Joints",
+      "affected_heights": ["all"],
+      "evidence": {
+        "tau_wbc_scaled_per_joint": "all zeros",
+        "hidden_torque_norm": 0.0,
+        "evidence_type": "direct_telemetry"
+      },
+      "confidence": "HIGH",
+      "description": "WBC is correctly configured as diagnostic-only. tau_wbc_scaled_per_joint is all zeros. No hidden torque detected."
+    },
+    {
+      "id": "RULED_OUT_2",
+      "name": "Body Yaw Instability",
+      "affected_heights": ["all"],
+      "evidence": {
+        "yaw_drift_max_low_0p300": 0.0149,
+        "yaw_drift_max_nominal": 0.0946,
+        "yaw_drift_max_high_0p480": 0.1036,
+        "evidence_type": "direct_telemetry"
+      },
+      "confidence": "HIGH",
+      "description": "Body yaw is stable across all heights. yaw_drift_max < 0.1 rad at all heights. Classification: stable."
+    }
+  ],
+  "ambiguous_issues": [
+    {
+      "id": "AMBIGUOUS_1",
+      "name": "Support Position Error Reporting",
+      "affected_heights": ["all"],
+      "affected_subsystems": ["support_sagittal"],
+      "evidence": {
+        "support_error_reported": 0.0,
+        "but_other_metrics_show_drift": true,
+        "evidence_type": "telemetry_inconsistency"
+      },
+      "severity": "LOW",
+      "confidence": "LOW",
+      "description": "support_position_error column shows 0.0 m but other metrics (com_x, com_y) show some drift. May be a column naming/calculation issue in telemetry."
+    }
+  ],
+  "non_issues": [
+    {
+      "id": "NON_ISSUE_1",
+      "name": "Pitch Behavior at Low Heights",
+      "affected_heights": ["low_0p300"],
+      "evidence": {
+        "pitch_max_low_0p300": 0.1571,
+        "pitch_max_nominal": 0.0708,
+        "pitch_max_high_0p480": 0.0926,
+        "evidence_type": "direct_telemetry"
+      },
+      "description": "Pitch is larger at low_0p300 but this is expected behavior and will be handled by task-aware pitch control. Not a root cause to fix in this audit."
+    }
+  ],
+  "priority_order": [
+    {
+      "priority": 1,
+      "issue_id": "CONFIRMED_1",
+      "name": "Hip-Yaw Torque Sign Convention Error",
+      "reason": "0% sign correctness means controller cannot correct hip-yaw error. Root cause for divergence accumulation.",
+      "evidence": "sign_correct_left = 0%, sign_correct_right = 0%",
+      "validation_needed": "Verify hip-yaw PD control law sign convention in shape_posture_controller.py"
+    },
+    {
+      "priority": 2,
+      "issue_id": "CONFIRMED_2",
+      "name": "Hip-Yaw Divergence at Boundary Heights",
+      "reason": "Divergence 8x higher at boundary heights. Likely secondary effect of sign convention error, but may also need mode-based control.",
+      "evidence": "divergence_rms: low=0.3575, nominal=0.0447, high=0.2825",
+      "validation_needed": "Verify hip-yaw sign first, then evaluate if divergence damping is needed"
+    },
+    {
+      "priority": 3,
+      "issue_id": "LIKELY_1",
+      "name": "Hip-Roll Saturation at Low Heights",
+      "reason": "Hip-roll saturation may indicate lateral controller authority limits. Not blocking but may improve with fix.",
+      "evidence": "hip_roll_abs_max: low=0.2167, high=0.0773",
+      "validation_needed": "Correlate with roll_y and lateral controller outputs"
+    }
+  ],
+  "fix_plan_constraints": {
+    "do_not_add_wbc": true,
+    "do_not_enable_legacy_wbc": true,
+    "do_not_proceed_to_step_c": true,
+    "do_not_proceed_to_step_d": true,
+    "do_not_implement_differential_wheel_yaw": true,
+    "do_not_implement_mode_based_hip_yaw": true,
+    "do_not_revert_hip_yaw_sign": false,
+    "do_not_modify_hip_roll": true,
+    "do_not_tune_gains": true,
+    "do_not_relax_thresholds": true,
+    "do_not_use_root_z_only_perturbation": true
+  }
+}

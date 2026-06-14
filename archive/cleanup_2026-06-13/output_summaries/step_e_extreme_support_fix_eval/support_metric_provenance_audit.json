@@ -1,0 +1,53 @@
+{
+  "audit_classification": "E1_ANALYZER_USED_WRONG_SUPPORT_METRIC",
+  "contradiction_resolved": true,
+  "root_cause": "E1 analyzer used abs(cp_x) instead of support_position_error_m column",
+  "evidence": {
+    "official_report_claim": {
+      "metric": "support_position_error max = 0.176 m",
+      "column_used": "support_position_error_m (Euclidean distance of support_center error)",
+      "source": "analyze_step_e_extreme_height_d2_official_check.py lines 108-122"
+    },
+    "e1_analyzer_claim": {
+      "metric": "support_position_error max = 0.004710 m",
+      "column_used": "abs(cp_x)",
+      "source": "analyze_e1_500_before_fix.py line 33"
+    },
+    "telemetry_reality": {
+      "support_position_error_m max (first 500): 0.175687 m",
+      "abs(cp_x) max (first 500): 0.004710 m",
+      "ratio": "37x difference"
+    }
+  },
+  "metric_definitions": {
+    "official_step_e": {
+      "column": "support_position_error_m",
+      "calculation": "Euclidean distance: sqrt((support_center_x - support_center_ref_x)^2 + (support_center_y - support_center_ref_y)^2)",
+      "max_first_500": 0.175687,
+      "first_crossing_0p15": "step 91",
+      "crossing_count": 1
+    },
+    "e1_analyzer_used": {
+      "column": "abs(cp_x)",
+      "calculation": "absolute value of capture point x coordinate",
+      "max_first_500": 0.004710,
+      "not_a_support_error_metric": true
+    },
+    "relationship": "cp_x is NOT the same as support_center error. cp_x is the raw capture point x position, while support_position_error_m is the error between support_center and its reference."
+  },
+  "files_affected": {
+    "scripts/analyze_e1_500_before_fix.py": {
+      "issue": "Line 33: support_pos_err = np.abs(df['cp_x'].values)",
+      "should_use": "df['support_position_error_m'].values"
+    }
+  },
+  "fix_required": {
+    "action": "Fix E1 analyzer to use support_position_error_m column",
+    "file": "scripts/analyze_e1_500_before_fix.py",
+    "line": 33,
+    "old_code": "support_pos_err = np.abs(df['cp_x'].values) if 'cp_x' in df.columns else np.abs(df['com_error_x'].values)",
+    "new_code": "support_pos_err = np.abs(df['support_position_error_m'].values) if 'support_position_error_m' in df.columns else np.abs(df['com_error_x'].values)"
+  },
+  "phase_3_decision": "E1_ANALYZER_USED_WRONG_SUPPORT_METRIC",
+  "phase_4_action": "Fix E1 analyzer to use correct support_position_error_m column"
+}

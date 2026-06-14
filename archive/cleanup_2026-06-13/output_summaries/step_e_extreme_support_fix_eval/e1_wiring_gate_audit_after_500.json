@@ -1,0 +1,65 @@
+{
+  "audit_classification": "E1_WIRING_OK_GATE_BLOCKS_EFFECT",
+  "phase_3_decision": "E1_500_NO_EFFECT_FIX_GATE_REQUIRED",
+  "wiring_checks": {
+    "E1_profile_exists": true,
+    "E1_enable_position_integral": true,
+    "E1_ki_position_integral": 2.0,
+    "E1_integral_max_abs": 1.0,
+    "E1_pitch_error_threshold": 0.03,
+    "E1_params_passed_to_controller": true,
+    "tau_position_integral_added_to_raw": true,
+    "tau_position_integral_bounded": true,
+    "telemetry_reports_integral_fields": true
+  },
+  "root_cause": "pitch_error_large gate blocks integral for 349/500 steps (69.8%) at low_0p300. Threshold 0.03 rad too restrictive for normal pitch oscillations of 0.03-0.11 rad.",
+  "500_step_symptoms": {
+    "support_position_error_max_m": 0.00471,
+    "support_position_error_mean_m": 0.00227,
+    "support_crossing_0p15_count": 0,
+    "pitch_max_rad": 0.111,
+    "pitch_max_deg": 6.36,
+    "pitch_above_0p03_count": 349,
+    "pitch_above_0p03_percent": 69.8,
+    "integral_active_count": 22,
+    "integral_active_percent": 4.4,
+    "tau_position_integral_max_nm": 0.001001,
+    "gate_reason_counts": {
+      "pitch_error_large": 349,
+      "pitch_rate_large": 106,
+      "safe_steady_state": 22,
+      "support_velocity_large": 22,
+      "contact_invalid": 1
+    }
+  },
+  "fix_options": {
+    "A_raise_threshold_to_0p12": {
+      "description": "Raise integral_pitch_error_threshold_rad from 0.03 to 0.12 rad",
+      "pros": ["Smallest safe fix", "Still protects against extreme pitch", "Matches pitch_safe threshold in J2a-J2d"],
+      "cons": ["Still blocks integral during moderate pitch oscillations"]
+    },
+    "B_raise_threshold_to_0p15": {
+      "description": "Raise integral_pitch_error_threshold_rad from 0.03 to 0.15 rad",
+      "pros": ["Larger operating range", "Matches the failure threshold 0.15 m logic"],
+      "cons": ["May be too permissive during real transients"]
+    },
+    "C_remove_pitch_gate": {
+      "description": "Remove pitch_error_large gate entirely from E1",
+      "pros": ["Maximum integral availability", "Simple change"],
+      "cons": ["Integral may wind up during large transients", "Requires strong anti-windup"]
+    },
+    "D_contact_height_only": {
+      "description": "Gate only on contact_valid and height bounds, remove all other gates",
+      "pros": ["Integral can work during pitch oscillations", "Preserves safety guards"],
+      "cons": ["More complex gate logic change"]
+    }
+  },
+  "recommended_fix": "A_raise_threshold_to_0p12",
+  "fix_parameters": {
+    "integral_pitch_error_threshold_rad": 0.12,
+    "keep_contact_valid_gate": true,
+    "keep_height_bounds_gate": true,
+    "keep_anti_windup": true,
+    "keep_integral_max_abs": 1.0
+  }
+}

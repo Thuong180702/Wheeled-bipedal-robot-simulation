@@ -1,0 +1,89 @@
+{
+  "validation_method": "full_balance_core_4_source_controller",
+  "dynamic_results": [
+    {
+      "variant_name": "nominal",
+      "target_steps": 500,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780020493.csv",
+      "error": null
+    },
+    {
+      "variant_name": "nominal",
+      "target_steps": 1000,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780020641.csv",
+      "error": null
+    },
+    {
+      "variant_name": "high_2cm",
+      "target_steps": 500,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780020730.csv",
+      "error": null
+    },
+    {
+      "variant_name": "high_2cm",
+      "target_steps": 1000,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780020872.csv",
+      "error": null
+    },
+    {
+      "variant_name": "low_2cm",
+      "target_steps": 500,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780020958.csv",
+      "error": null
+    },
+    {
+      "variant_name": "low_2cm",
+      "target_steps": 1000,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780021094.csv",
+      "error": null
+    },
+    {
+      "variant_name": "high_5cm",
+      "target_steps": 500,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780021160.csv",
+      "error": null
+    },
+    {
+      "variant_name": "high_5cm",
+      "target_steps": 1000,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780021304.csv",
+      "error": null
+    },
+    {
+      "variant_name": "low_5cm",
+      "target_steps": 500,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780021357.csv",
+      "error": null
+    },
+    {
+      "variant_name": "low_5cm",
+      "target_steps": 1000,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780021500.csv",
+      "error": null
+    },
+    {
+      "variant_name": "low_10cm",
+      "target_steps": 500,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780021507.csv",
+      "error": null
+    },
+    {
+      "variant_name": "low_10cm",
+      "target_steps": 1000,
+      "success": true,
+      "telemetry_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\outputs\\hierarchical_controller_sim\\telemetry_1780021514.csv",
+      "error": null
+    }
+  ]
+}

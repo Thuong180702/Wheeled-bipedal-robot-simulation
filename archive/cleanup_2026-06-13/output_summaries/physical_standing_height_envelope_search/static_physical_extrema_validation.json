@@ -1,0 +1,17 @@
+{
+  "verdict": "PHYSICAL_ENVELOPE_PASS",
+  "revalidation_results": [
+    {
+      "setup_path": "outputs\\physical_standing_height_envelope_search\\physical_min_height_setup.json",
+      "static_feasible": true,
+      "rejection_reasons": [],
+      "achieved_com_z_m": 0.2919188370290301
+    },
+    {
+      "setup_path": "outputs\\physical_standing_height_envelope_search\\physical_max_height_setup.json",
+      "static_feasible": true,
+      "rejection_reasons": [],
+      "achieved_com_z_m": 0.4908117406630464
+    }
+  ]
+}

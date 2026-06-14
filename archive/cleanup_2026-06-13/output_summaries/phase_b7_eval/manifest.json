@@ -1,0 +1,20 @@
+{
+  "original_path": "outputs/phase_b7_eval",
+  "original_size": "8.1K",
+  "original_size_bytes": 8322,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "per_height_comparison.csv",
+      "size_bytes": 348
+    },
+    {
+      "file": "phase_b7_comparison.json",
+      "size_bytes": 7921
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,98 @@
+{
+  "phase": "phase_2_reference_command_audit",
+  "date": "2026-06-04",
+  "cases": [
+    {
+      "variant": "low_0p300",
+      "reference": {
+        "l_hip_yaw_ref_mean": 0.0,
+        "r_hip_yaw_ref_mean": 0.0,
+        "l_hip_yaw_ref_std": 0.0,
+        "r_hip_yaw_ref_std": 0.0,
+        "l_hip_yaw_initial_pos": 0.0,
+        "r_hip_yaw_initial_pos": 0.0,
+        "l_hip_yaw_initial_error": 0.0,
+        "r_hip_yaw_initial_error": 0.0,
+        "shape_posture_reference_source": "height_variant_equilibrium_joint_pos",
+        "support_reference_captured_after_variant": true
+      },
+      "command": {
+        "l_hip_yaw_tau_shape_raw_mean": 1.5900993272144848,
+        "r_hip_yaw_tau_shape_raw_mean": -1.7055315746110864,
+        "l_hip_yaw_tau_shape_final_mean": 1.5900993265025318,
+        "r_hip_yaw_tau_shape_final_mean": -1.7055315742979291,
+        "l_hip_yaw_tau_shape_raw_max_abs": 3.1952697560191154,
+        "r_hip_yaw_tau_shape_raw_max_abs": 3.299835607409477,
+        "sign_correct_rate_left": 1.0,
+        "sign_correct_rate_right": 1.0
+      },
+      "classification": "reference_correct",
+      "reference_correct": true,
+      "sign_error": false,
+      "torque_missing": false,
+      "reference_issues": []
+    },
+    {
+      "variant": "high_0p480",
+      "reference": {
+        "l_hip_yaw_ref_mean": 0.0,
+        "r_hip_yaw_ref_mean": 0.0,
+        "l_hip_yaw_ref_std": 0.0,
+        "r_hip_yaw_ref_std": 0.0,
+        "l_hip_yaw_initial_pos": 0.0,
+        "r_hip_yaw_initial_pos": 0.0,
+        "l_hip_yaw_initial_error": 0.0,
+        "r_hip_yaw_initial_error": 0.0,
+        "shape_posture_reference_source": "height_variant_equilibrium_joint_pos",
+        "support_reference_captured_after_variant": true
+      },
+      "command": {
+        "l_hip_yaw_tau_shape_raw_mean": 0.17940727743606966,
+        "r_hip_yaw_tau_shape_raw_mean": -0.2979293221240432,
+        "l_hip_yaw_tau_shape_final_mean": 0.17940727737144335,
+        "r_hip_yaw_tau_shape_final_mean": -0.2979293219842948,
+        "l_hip_yaw_tau_shape_raw_max_abs": 0.4027812397107482,
+        "r_hip_yaw_tau_shape_raw_max_abs": 0.7082362091168761,
+        "sign_correct_rate_left": 0.964,
+        "sign_correct_rate_right": 0.978
+      },
+      "classification": "reference_correct",
+      "reference_correct": true,
+      "sign_error": false,
+      "torque_missing": false,
+      "reference_issues": []
+    },
+    {
+      "variant": "nominal",
+      "reference": {
+        "l_hip_yaw_ref_mean": 0.0,
+        "r_hip_yaw_ref_mean": 0.0,
+        "l_hip_yaw_ref_std": 0.0,
+        "r_hip_yaw_ref_std": 0.0,
+        "l_hip_yaw_initial_pos": 0.0,
+        "r_hip_yaw_initial_pos": 0.0,
+        "l_hip_yaw_initial_error": 0.0,
+        "r_hip_yaw_initial_error": 0.0,
+        "shape_posture_reference_source": "nominal_equilibrium_joint_pos",
+        "support_reference_captured_after_variant": false
+      },
+      "command": {
+        "l_hip_yaw_tau_shape_raw_mean": 0.12082646033403842,
+        "r_hip_yaw_tau_shape_raw_mean": -0.26867923263828564,
+        "l_hip_yaw_tau_shape_final_mean": 0.1208264599852264,
+        "r_hip_yaw_tau_shape_final_mean": -0.2686792331479955,
+        "l_hip_yaw_tau_shape_raw_max_abs": 0.3639211803674698,
+        "r_hip_yaw_tau_shape_raw_max_abs": 0.6212510727345943,
+        "sign_correct_rate_left": 0.885,
+        "sign_correct_rate_right": 0.989
+      },
+      "classification": "sign_error",
+      "reference_correct": true,
+      "sign_error": true,
+      "torque_missing": false,
+      "reference_issues": [
+        "sign_error"
+      ]
+    }
+  ]
+}

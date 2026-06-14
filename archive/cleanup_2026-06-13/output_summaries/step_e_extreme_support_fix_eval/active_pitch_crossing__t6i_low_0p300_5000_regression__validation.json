@@ -1,0 +1,11 @@
+{
+  "classification": "T6I_LOW_0P300_5000_REGRESSION_PASS",
+  "survived_steps": 4999,
+  "max_abs_error": 0.1714862686352642,
+  "final_error": 0.039278258747718,
+  "mean_abs_error": 0.05615182693526405,
+  "accumulation_ratio": 0.8649027209453584,
+  "outside_0p08_pct": 20.164032806561313,
+  "outside_0p10_pct": 2.000400080016003,
+  "outside_0p15_pct": 1.0202040408081616
+}

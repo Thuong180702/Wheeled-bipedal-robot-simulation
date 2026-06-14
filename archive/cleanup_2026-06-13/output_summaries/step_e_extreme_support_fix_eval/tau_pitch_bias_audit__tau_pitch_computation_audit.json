@@ -1,0 +1,34 @@
+{
+  "classification": "TAU_PITCH_FORMULA_OK",
+  "evidence": {
+    "tau_pitch_formula": "tau_pitch = kp_pitch * pitch_x_error, kp_pitch = 50.0",
+    "pitch_reference": "pitch_x_ref = 0.0 throughout run",
+    "pitch_reference_source": "equilibrium initialization from gravity vector",
+    "pitch_reference_setup": "low_0p300_setup.json has equilibrium_pitch_x = 0.0",
+    "sign_convention": "positive pitch -> positive torque (forward restoring)",
+    "saturation": "no clipping, tau_pitch_raw = tau_pitch",
+    "damping_term": "tau_pitch_rate mean = +0.0946 Nm, evenly distributed"
+  },
+  "correlations": {
+    "corr_pitch_x_tau_pitch": 1.0,
+    "corr_pitch_x_sagittal_position_error": 0.9353,
+    "corr_tau_pitch_sagittal_position_error": 0.9345,
+    "corr_pitch_rate_tau_pitch": -0.0882
+  },
+  "telemetry_evidence": {
+    "pitch_x_mean_deg": 2.98,
+    "pitch_x_positive_pct": 89.0,
+    "pitch_x_ref_rad": 0.0,
+    "tau_pitch_mean_nm": 2.5992,
+    "tau_pitch_positive_pct": 89.2
+  },
+  "classification_details": {
+    "TAU_PITCH_FORMULA_OK": "confirmed - formula is correct",
+    "TAU_PITCH_SIGN_SUSPECT": "false - sign convention matches physics",
+    "TAU_PITCH_REFERENCE_SUSPECT": "false - reference is correctly 0",
+    "TAU_PITCH_RATE_TERM_SUSPECT": "false - rate term is healthy",
+    "TAU_PITCH_SATURATION_SUSPECT": "false - no clipping observed",
+    "TAU_PITCH_COMPUTATION_INCONCLUSIVE": "false - computation is straightforward"
+  },
+  "conclusion": "tau_pitch computation is NOT the source of positive bias. Persistent positive pitch_x is a correct response to forward lean/drifting tendency. Root cause lies elsewhere in the control loop or robot dynamics."
+}

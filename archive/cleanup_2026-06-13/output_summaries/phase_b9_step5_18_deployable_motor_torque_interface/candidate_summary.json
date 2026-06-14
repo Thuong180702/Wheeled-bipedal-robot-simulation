@@ -1,0 +1,68 @@
+{
+  "baseline_h060": {
+    "survival_s": 0.52,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 0.8745,
+    "roll_rms_deg": 16.493,
+    "action_saturation": 0.0
+  },
+  "candidates": [
+    {
+      "name": "motor_torque_roll_only",
+      "mode": "roll_only",
+      "low_level_mode": "motor_torque",
+      "max_ctrl_fraction": 0.2,
+      "allow_wheel_torque": false,
+      "allow_hip_yaw_torque": false,
+      "expected_authority": "direct_roll_motor_ctrl"
+    },
+    {
+      "name": "motor_torque_lateral_com_only",
+      "mode": "lateral_com_only",
+      "low_level_mode": "motor_torque",
+      "max_ctrl_fraction": 0.2,
+      "allow_wheel_torque": true,
+      "allow_hip_yaw_torque": false,
+      "expected_authority": "direct_lateral_motor_ctrl"
+    },
+    {
+      "name": "motor_torque_roll_plus_lateral",
+      "mode": "roll_plus_lateral",
+      "low_level_mode": "motor_torque",
+      "max_ctrl_fraction": 0.25,
+      "allow_wheel_torque": true,
+      "allow_hip_yaw_torque": false,
+      "expected_authority": "direct_motor_ctrl"
+    },
+    {
+      "name": "hybrid_pid_plus_torque_roll",
+      "mode": "roll_only",
+      "low_level_mode": "hybrid_pid_plus_torque",
+      "max_ctrl_fraction": 0.2,
+      "allow_wheel_torque": false,
+      "allow_hip_yaw_torque": false,
+      "expected_authority": "pid_plus_roll_torque"
+    },
+    {
+      "name": "hybrid_pid_plus_torque_wbc",
+      "mode": "wbc",
+      "low_level_mode": "hybrid_pid_plus_torque",
+      "max_ctrl_fraction": 0.25,
+      "allow_wheel_torque": true,
+      "allow_hip_yaw_torque": false,
+      "expected_authority": "pid_plus_wbc_torque"
+    },
+    {
+      "name": "conservative_motor_torque_wbc",
+      "mode": "wbc_conservative",
+      "low_level_mode": "hybrid_pid_plus_torque",
+      "max_ctrl_fraction": 0.1,
+      "allow_wheel_torque": true,
+      "allow_hip_yaw_torque": false,
+      "expected_authority": "conservative_pid_plus_torque"
+    }
+  ],
+  "best_candidate": null,
+  "small_gate_passed": false,
+  "reason": "No survival rollout was run; keep current best controller unchanged."
+}

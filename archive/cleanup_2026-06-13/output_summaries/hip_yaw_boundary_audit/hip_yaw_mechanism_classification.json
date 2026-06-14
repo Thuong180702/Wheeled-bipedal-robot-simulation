@@ -1,0 +1,62 @@
+{
+  "phase": "phase_5_mechanism_classification",
+  "date": "2026-06-04",
+  "primary_classification": "sagittal_support_drift_forces_hip_yaw_drift",
+  "secondary_classification": "actuator_effectiveness_loss_at_extreme_flexion",
+  "root_cause": "sagittal_position_authority_insufficient_at_extreme_flexion",
+  "hip_yaw_role": "symptom_not_root_cause",
+  "temporal_causality": {
+    "low_0p300_support_drift_onset_step": 89,
+    "low_0p300_hip_yaw_drift_onset_step": 418,
+    "delay_steps": 329,
+    "delay_seconds": 3.29,
+    "conclusion": "support_position_led"
+  },
+  "evidence_summary": {
+    "phase_1_event_order": "support_drift_precedes_hip_yaw_drift_by_329_steps",
+    "phase_2_reference_audit": "references_and_signs_correct",
+    "phase_3_torque_authority": "torque_grows_with_error_no_saturation_no_limits"
+  },
+  "ruled_out_mechanisms": [
+    "hip_yaw_reference_mismatch",
+    "hip_yaw_torque_sign_error",
+    "hip_yaw_torque_saturation",
+    "hip_yaw_torque_rate_limited",
+    "hip_yaw_composer_loss",
+    "hip_yaw_damping_insufficient",
+    "hip_yaw_authority_insufficient"
+  ],
+  "key_findings": {
+    "hip_yaw_torque_at_onset": 0.61,
+    "hip_yaw_torque_at_peak": 3.28,
+    "torque_growth_factor": 5.4,
+    "saturation_rate": 0.0,
+    "composer_loss": false,
+    "ownership_violations": 0,
+    "references_correct": true,
+    "signs_correct": true
+  },
+  "fix_strategy_recommendations": {
+    "will_not_work": [
+      "global_hip_yaw_gain_increase",
+      "hip_yaw_reference_adjustment",
+      "hip_yaw_torque_cap_increase",
+      "hip_yaw_composer_changes"
+    ],
+    "might_work": [
+      "fix_sagittal_support_drift_first",
+      "coupled_sagittal_yaw_correction",
+      "height_dependent_hip_yaw_damping"
+    ],
+    "recommended_priority_1": "return_to_sagittal_authority_problem",
+    "recommended_priority_2": "coupled_yaw_aware_position_correction_if_sagittal_infeasible",
+    "recommended_priority_3": "height_dependent_hip_yaw_damping_as_complementary"
+  },
+  "next_steps": [
+    "do_not_pursue_isolated_hip_yaw_gain_increase",
+    "investigate_sagittal_hybrid_k_position_k_velocity_scheduling",
+    "investigate_sagittal_integral_term",
+    "investigate_different_sagittal_control_mode",
+    "test_hypothesis_frozen_support_position_isolation_experiment"
+  ]
+}

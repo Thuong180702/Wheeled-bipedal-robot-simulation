@@ -1,0 +1,68 @@
+{
+  "original_path": "outputs/step_e_extreme_failure_root_cause_audit",
+  "original_size": "76.5K",
+  "original_size_bytes": 78287,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 4,
+  "copied_files": [
+    {
+      "file": "artifact_inventory.json",
+      "size_bytes": 4420
+    },
+    {
+      "file": "artifact_inventory.md",
+      "size_bytes": 3670
+    },
+    {
+      "file": "causal_map.json",
+      "size_bytes": 4471
+    },
+    {
+      "file": "causal_map.md",
+      "size_bytes": 11243
+    },
+    {
+      "file": "event_order/event_order_summary.json",
+      "size_bytes": 730
+    },
+    {
+      "file": "fix_strategy_plan.json",
+      "size_bytes": 2523
+    },
+    {
+      "file": "fix_strategy_plan.md",
+      "size_bytes": 5820
+    },
+    {
+      "file": "hip_yaw/hip_yaw_audit.json",
+      "size_bytes": 9136
+    },
+    {
+      "file": "step_e_extreme_height_root_cause_summary.json",
+      "size_bytes": 6082
+    },
+    {
+      "file": "step_e_extreme_height_root_cause_summary.md",
+      "size_bytes": 7505
+    },
+    {
+      "file": "support_drift/support_drift_audit.json",
+      "size_bytes": 9797
+    },
+    {
+      "file": "wbc_artifact_audit.json",
+      "size_bytes": 3874
+    },
+    {
+      "file": "wbc_artifact_audit.md",
+      "size_bytes": 5146
+    },
+    {
+      "file": "wheel_velocity/wheel_velocity_audit.json",
+      "size_bytes": 1588
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

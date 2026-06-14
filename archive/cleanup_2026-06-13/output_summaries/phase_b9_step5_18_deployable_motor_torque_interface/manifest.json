@@ -1,0 +1,40 @@
+{
+  "original_path": "outputs/phase_b9_step5_18_deployable_motor_torque_interface",
+  "original_size": "13.9K",
+  "original_size_bytes": 14194,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "candidate_summary.json",
+      "size_bytes": 2125
+    },
+    {
+      "file": "full_validation_summary.json",
+      "size_bytes": 247
+    },
+    {
+      "file": "low_level_torque_design.md",
+      "size_bytes": 780
+    },
+    {
+      "file": "motor_interface_audit.json",
+      "size_bytes": 6927
+    },
+    {
+      "file": "motor_interface_audit.md",
+      "size_bytes": 1349
+    },
+    {
+      "file": "response_validation_summary.json",
+      "size_bytes": 321
+    },
+    {
+      "file": "step5_18_summary.json",
+      "size_bytes": 408
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

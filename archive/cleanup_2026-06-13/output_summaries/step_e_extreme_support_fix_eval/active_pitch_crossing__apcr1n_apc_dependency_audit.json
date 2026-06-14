@@ -1,0 +1,33 @@
+{
+  "classification": "APCR1N_FEATURES_BLOCKED_BY_UNNECESSARY_APC_DEPENDENCY",
+  "profile": "APCR1n_recenter_priority_torque_boost",
+  "date": "2026-06-11",
+  "root_cause": {
+    "summary": "APCR1n features depend on _apc_drift_priority_active, which is set only within the proportional soft band branch that requires apc_enabled=True. APCR1n profile does NOT set enable_active_pitch_crossing=True, so the branch is never entered.",
+    "apc_enabled_in_profile": false,
+    "apc_drift_priority_enabled_in_profile": true,
+    "apc_proportional_mode_in_profile": true,
+    "drift_priority_block_entered": false,
+    "apc_gate_reason": "disabled"
+  },
+  "drift_conditions_occurred": {
+    "abs_error_gt_0p08": "716/1900 post-startup steps",
+    "moving_away": "899/1900 post-startup steps",
+    "both_conditions": "337/1900 steps",
+    "features_activated": false
+  },
+  "feature_activation": {
+    "recenters_priority_active": "0/2000",
+    "wheel_damping_override_active": "0/2000",
+    "position_cap_boost_active": "0/2000"
+  },
+  "code_analysis": {
+    "apcr1n_recenter_priority_active_line": 1644,
+    "depends_on": "_apc_drift_priority_active",
+    "drift_priority_block_line": 2278,
+    "drift_priority_requires_apc_enabled": true,
+    "apcr1n_profile_missing": "enable_active_pitch_crossing=True"
+  },
+  "classification_reasoning": "APCR1n features were designed to activate based on drift conditions (abs_error > threshold AND moving_away), but the implementation depends on _apc_drift_priority_active which is only set within a code branch that requires apc_enabled=True. Since APCR1n does not enable APC, the features never activate even though drift conditions occur frequently.",
+  "solution": "Create APCR1nD with direct support-drift trigger that does NOT depend on APC state machine"
+}

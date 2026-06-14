@@ -1,0 +1,24 @@
+{
+  "original_path": "outputs/height_range_extension_experiment_0",
+  "original_size": "12.8K",
+  "original_size_bytes": 13085,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 4,
+  "copied_files": [
+    {
+      "file": "experiment_0_baseline_ladder_summary.json",
+      "size_bytes": 8709
+    },
+    {
+      "file": "setup_inventory.json",
+      "size_bytes": 3038
+    },
+    {
+      "file": "setup_inventory.md",
+      "size_bytes": 1338
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "case_name": "high_tiny",
+    "height_variant_name": "high_tiny",
+    "initialization_method": "step_b_true_height_variant",
+    "variant_setup_path": "outputs\\balance_core_true_height_variants\\variant_high_tiny\\variant_setup.json",
+    "target_com_z_m": 0.4089993119017284,
+    "achieved_initial_com_z_m": 0.4093813621361716,
+    "calibrated_root_z_m": 0.5421875,
+    "hip_pitch_ref": 0.9155256842105263,
+    "knee_ref": 1.7167850526315789,
+    "setup_valid": true,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "non_wheel_floor_contact_count": 0
+  }
+]

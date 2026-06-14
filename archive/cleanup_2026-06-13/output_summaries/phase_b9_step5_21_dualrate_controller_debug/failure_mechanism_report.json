@@ -1,0 +1,27 @@
+{
+  "primary_cause": "PID authority suppression",
+  "root_cause": "Action semantic mismatch",
+  "mechanism": [
+    "DualRateBalanceController outputs position targets (normalized joint angles)",
+    "BalanceEnv.step() interprets these as PID setpoints",
+    "PID controller computes large torques (\u00b130 Nm) from position error",
+    "PID torques saturate at actuator limits",
+    "WBC torque residuals (~1 Nm) are added but get clipped",
+    "Final torque is dominated by saturated PID (97% PID, 3% WBC)",
+    "WBC corrections are effectively suppressed",
+    "Robot cannot balance dynamically without WBC authority"
+  ],
+  "why_step5_18c_works": [
+    "Step 5.18c passes WBC torque residuals directly as action",
+    "No PID position control in the loop",
+    "WBC has 100% authority over actuators",
+    "WBC can make corrective torques without saturation"
+  ],
+  "why_dualrate_fails": [
+    "DualRateBalanceController adds posture control layer",
+    "Posture control uses position targets \u2192 PID \u2192 large torques",
+    "PID saturates and dominates actuator authority",
+    "WBC residuals become ineffective",
+    "Performance degrades from 0.86s to 0.38s (56% loss)"
+  ]
+}

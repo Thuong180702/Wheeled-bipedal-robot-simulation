@@ -1,0 +1,60 @@
+{
+  "original_path": "outputs/hip_yaw_divergence_fix_authority_eval",
+  "original_size": "54.4K",
+  "original_size_bytes": 55751,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 2,
+  "copied_files": [
+    {
+      "file": "authority_eval_100steps.json",
+      "size_bytes": 10524
+    },
+    {
+      "file": "authority_eval_500steps.json",
+      "size_bytes": 7568
+    },
+    {
+      "file": "gate_active_verification.json",
+      "size_bytes": 366
+    },
+    {
+      "file": "gate_pass_through_debug/gate_pass_through_debug.json",
+      "size_bytes": 2676
+    },
+    {
+      "file": "gate_pass_through_debug/gate_pass_through_debug.md",
+      "size_bytes": 649
+    },
+    {
+      "file": "hip_yaw_divergence_authority_fix_summary.json",
+      "size_bytes": 4554
+    },
+    {
+      "file": "hy2_div_active_telemetry_audit.json",
+      "size_bytes": 4644
+    },
+    {
+      "file": "hy2_div_active_telemetry_audit.md",
+      "size_bytes": 2824
+    },
+    {
+      "file": "hy2_div_gate_pass_through_fix_summary.json",
+      "size_bytes": 2160
+    },
+    {
+      "file": "hy2_div_implementation_verification.json",
+      "size_bytes": 1642
+    },
+    {
+      "file": "hy2_div_implementation_verification.md",
+      "size_bytes": 2049
+    },
+    {
+      "file": "screening_2000/screening_2000_results.json",
+      "size_bytes": 16095
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

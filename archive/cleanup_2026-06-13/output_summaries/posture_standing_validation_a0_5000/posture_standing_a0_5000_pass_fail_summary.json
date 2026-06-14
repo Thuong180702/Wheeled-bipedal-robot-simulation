@@ -1,0 +1,48 @@
+{
+  "phase": "POSTURE_STANDING_VALIDATION",
+  "profile": "A0",
+  "steps": 5000,
+  "profile_config": {
+    "k": 5.0,
+    "kd": 1.0,
+    "tau_max": 0.5,
+    "z_low": 0.3,
+    "z_high": 0.393
+  },
+  "height_targets": {
+    "nominal": 0.404,
+    "low_0p300": 0.3,
+    "high_0p480": 0.48
+  },
+  "results": {
+    "nominal": "POSTURE_REQUIRES_STRONGER_HY2_PROFILE",
+    "low_0p300": "POSTURE_REQUIRES_STRONGER_HY2_PROFILE",
+    "high_0p480": "POSTURE_REQUIRES_STRONGER_HY2_PROFILE"
+  },
+  "overall_result": "POSTURE_REQUIRES_STRONGER_HY2_PROFILE",
+  "final_decision": "POSTURE_REQUIRES_STRONGER_HY2_PROFILE",
+  "key_findings": {
+    "all_survived": true,
+    "all_contact_valid": true,
+    "all_no_wbc": true,
+    "all_roll_bounded": true,
+    "all_divergence_exceeds_target": true,
+    "low_height_88p74_clipping": true,
+    "gate_working_correctly": true
+  },
+  "not_this_phase": [
+    "official_step_e_pass",
+    "step_c_implementation",
+    "step_d_implementation",
+    "support_drift_fix"
+  ],
+  "explicit_deferrals": [
+    "SUPPORT_DRIFT_DEFERRED - support drift recorded but not blocking",
+    "TASK_AWARE_PITCH_DEFERRED - pitch recorded but not blocking"
+  ],
+  "next_recommended": [
+    "evaluate_stronger_hy2_profile",
+    "investigate_divergence_root_cause",
+    "consider_mode_based_hip_yaw_controller"
+  ]
+}

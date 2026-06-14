@@ -1,0 +1,77 @@
+{
+  "classification": "BAND_GATE_LOGIC_AUDIT_SCRIPT_BUG_FIXED",
+  "date": "2026-06-12",
+  "phase": "Phase 3",
+  "task": "Debug and fix band state / arch-fix gate logic",
+  "bug_id": 2,
+  "severity": "AUDIT_SCRIPT_BUG",
+  "finding": "Bug 2 was NOT a controller logic bug - it was an audit script bug",
+  "root_cause": {
+    "issue_1": "Audit script used wrong telemetry field name",
+    "wrong_field": "apcr1nd_band_state",
+    "correct_field": "tuned_band_state_id",
+    "issue_2": "Audit script had wrong band state mapping",
+    "wrong_mapping": "[0,1,2,3] → normal/soft/hard/emergency",
+    "correct_mapping": "[0,1,2,3,4] → normal/soft/desired/hard/emergency"
+  },
+  "controller_behavior": {
+    "band_state_computation": "WORKING_CORRECTLY",
+    "evidence": {
+      "normal_steps": 253,
+      "soft_steps": 39,
+      "desired_steps": 25,
+      "hard_steps": 19,
+      "emergency_steps": 163,
+      "total_hard_emergency": 182,
+      "pct_hard_emergency": 36.5
+    },
+    "arch_fix_activation": "WORKING_CORRECTLY",
+    "arch_fix_active_steps": 169,
+    "arch_fix_activation_rate_during_hard_emergency": 92.9,
+    "safety_gate_blocks": 13,
+    "safety_gate_block_reason": "contact/height/roll/pitch unsafe - correct behavior"
+  },
+  "audit_script_fixes": {
+    "file": "audit_t6f_high_authority.py",
+    "fix_1": {
+      "line": 36,
+      "description": "Changed apcr1nd_band_state to tuned_band_state_id"
+    },
+    "fix_2": {
+      "line": "89-93",
+      "description": "Added state 4 (emergency) and corrected state names"
+    },
+    "fix_3": {
+      "line": "193-198",
+      "description": "Added desired and emergency states to JSON output"
+    }
+  },
+  "verification_after_fix": {
+    "band_state_distribution": {
+      "normal": 253,
+      "soft": 39,
+      "desired": 25,
+      "hard": 19,
+      "emergency": 163
+    },
+    "arch_fix_active": 169,
+    "steps_in_hard_or_emergency": 182,
+    "difference": 13,
+    "difference_reason": "safety_gate_failures"
+  },
+  "remaining_question": {
+    "question": "Why do only 8 steps transmit >4.0 Nm when 169 steps have raised caps?",
+    "high_authority_steps": 8,
+    "high_authority_pct": 1.6,
+    "arch_fix_active_steps": 169,
+    "arch_fix_active_pct": 33.9,
+    "investigation": "Will be investigated in Phase 5 (500-step diagnostic rerun)"
+  },
+  "phase_6_report_correction": {
+    "bug_2_classification": "INCORRECT",
+    "original_claim": "Band state logic bug preventing transition from normal",
+    "actual_finding": "Audit script telemetry field name mismatch - controller working correctly",
+    "controller_changes_needed": false
+  },
+  "next_phase": "Phase 4: Integration tests after fixes"
+}

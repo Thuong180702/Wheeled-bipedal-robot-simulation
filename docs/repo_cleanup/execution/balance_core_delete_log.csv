@@ -1,0 +1,13 @@
+directory,action,reason,size_bytes
+outputs/balance_core_validation,DELETED,ok,181322475
+outputs/balance_core_position_containment,DELETED,ok,89815965
+outputs/balance_core_position_containment_e0b,DELETED,ok,41216400
+outputs/balance_core_position_aware_precheck_5000,DELETED,ok,33296041
+outputs/balance_core_e0_cleanup_validation_5000,DELETED,ok,33296001
+outputs/balance_core_e0_cleanup_validation,DELETED,ok,6667099
+outputs/balance_core_position_aware_precheck_1000,DELETED,ok,6667072
+outputs/balance_core_true_height_variants,DELETED,ok,55666
+outputs/balance_core_extended_height_range,DELETED,ok,44789
+outputs/balance_core_longevity_height_sweep,DELETED,ok,13104
+outputs/balance_core_extended_longevity,DELETED,ok,3397
+outputs/balance_core_height_recovery,DELETED,ok,0

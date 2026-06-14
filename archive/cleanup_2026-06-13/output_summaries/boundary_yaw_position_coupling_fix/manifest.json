@@ -1,0 +1,24 @@
+{
+  "original_path": "outputs/boundary_yaw_position_coupling_fix",
+  "original_size": "31.3K",
+  "original_size_bytes": 32017,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 5,
+  "copied_files": [
+    {
+      "file": "boundary_fix_failure_analysis_report.md",
+      "size_bytes": 17739
+    },
+    {
+      "file": "boundary_yaw_position_candidate_summary.json",
+      "size_bytes": 5782
+    },
+    {
+      "file": "evaluation_log.txt",
+      "size_bytes": 8496
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

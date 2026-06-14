@@ -1,0 +1,51 @@
+{
+  "output_directory": "outputs\\balance_core_position_containment",
+  "maximum_confirmed_survival_steps": 5000,
+  "passed_100000_steps": false,
+  "first_failing_duration": null,
+  "primary_failure_mode": null,
+  "per_duration_rows": [
+    {
+      "requested_steps": 5000,
+      "duration_steps": 5000,
+      "actual_steps": 5000,
+      "survived_steps": 5000,
+      "passed": true,
+      "terminated": false,
+      "termination_reason": null,
+      "final_sim_time_s": null,
+      "primary_failure_mode": null,
+      "secondary_failure_modes": [],
+      "structural_invariants_passed": true,
+      "classification_source": "main_telemetry",
+      "ownership_violation_count_max": null,
+      "hidden_torque_norm_max": null,
+      "tau_wbc_norm_max": null,
+      "pitch_x": null,
+      "roll_y": null,
+      "com_z": null,
+      "wheel_vel_mean": null,
+      "wheel_velocity_trend": null,
+      "contact_state_summary": null,
+      "torque_saturation": null,
+      "torque_rate_saturation": null,
+      "telemetry_csv_path": "outputs\\balance_core_position_containment\\telemetry_5000.csv",
+      "failure_window_path": null,
+      "sidecar_summary_path": null,
+      "failure_report_path": null,
+      "metric_integrity": null,
+      "written_telemetry_rows": null
+    }
+  ],
+  "artifact_paths": {
+    "extended_longevity_summary_json": "outputs\\balance_core_position_containment\\extended_longevity_summary.json",
+    "extended_longevity_summary_md": "outputs\\balance_core_position_containment\\extended_longevity_summary.md"
+  },
+  "controller_behavior_changed": false,
+  "gains_tuned": false,
+  "wbc_remained_off": true,
+  "legacy_torque_source_activated": false,
+  "torque_ownership_unchanged": true,
+  "four_source_balance_core_stack_unchanged": true,
+  "conclusion": "long_duration_survival_confirmed_up_to_5000_steps"
+}

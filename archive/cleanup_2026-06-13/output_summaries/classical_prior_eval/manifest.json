@@ -1,0 +1,16 @@
+{
+  "original_path": "outputs/classical_prior_eval",
+  "original_size": "11.8K",
+  "original_size_bytes": 12036,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "classical_prior_comparison.json",
+      "size_bytes": 10546
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

@@ -1,0 +1,20 @@
+{
+  "decision": "BLOCK_STEP6",
+  "step_pass": {
+    "step2": true,
+    "step3": true,
+    "step4": true,
+    "step5": false
+  },
+  "blocking_issues": [
+    "step5_6_step6_ready_false"
+  ],
+  "summary": {
+    "step2_pass": true,
+    "step3_pass": true,
+    "step4_pass": true,
+    "step5_pass": false,
+    "cross_step_consistent": true
+  },
+  "required_next_action": "Fix blocking issues first; do not proceed Step 6."
+}

@@ -1,0 +1,5900 @@
+{
+  "extract_classes": [
+    "SUMMARIZE_THEN_DELETE"
+  ],
+  "max_copy_bytes": 10485760,
+  "patterns": [
+    "*.json",
+    "*summary*.json",
+    "*decision*.json",
+    "*final*.json",
+    "*metrics*.csv",
+    "*comparison*.csv",
+    "*window*.csv",
+    "*.md",
+    "*.txt"
+  ],
+  "dirs_processed": 154,
+  "total_files_copied": 1009,
+  "total_large_files_skipped": 0,
+  "failures": [],
+  "per_directory": [
+    {
+      "original_path": "outputs/step_e_extreme_support_fix_eval",
+      "original_size": "3.3G",
+      "original_size_bytes": 3580760428,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 42,
+      "copied_files": [
+        {
+          "file": "active_pitch_crossing/active_pitch_crossing_recovery_summary.json",
+          "size_bytes": 1871
+        },
+        {
+          "file": "active_pitch_crossing/apc1_after_harness_fix_500_summary.json",
+          "size_bytes": 1077
+        },
+        {
+          "file": "active_pitch_crossing/apc1_inactive_regression_audit.json",
+          "size_bytes": 1061
+        },
+        {
+          "file": "active_pitch_crossing/apc_command_audit.json",
+          "size_bytes": 2826
+        },
+        {
+          "file": "active_pitch_crossing/apcr1_2000_comparison.json",
+          "size_bytes": 3789
+        },
+        {
+          "file": "active_pitch_crossing/apcr1_2000_threshold_diagnosis.json",
+          "size_bytes": 1404
+        },
+        {
+          "file": "active_pitch_crossing/apcr1_2000_validation_summary.json",
+          "size_bytes": 1635
+        },
+        {
+          "file": "active_pitch_crossing/apcr1_2000_window_metrics.csv",
+          "size_bytes": 1133
+        },
+        {
+          "file": "active_pitch_crossing/apcr1_500_comparison.json",
+          "size_bytes": 1954
+        },
+        {
+          "file": "active_pitch_crossing/apcr1_telemetry_readiness_check.json",
+          "size_bytes": 1782
+        },
+        {
+          "file": "active_pitch_crossing/apcr1b_500_after_telemetry_fix_comparison.csv",
+          "size_bytes": 556
+        },
+        {
+          "file": "active_pitch_crossing/apcr1b_500_after_telemetry_fix_comparison.json",
+          "size_bytes": 1098
+        },
+        {
+          "file": "active_pitch_crossing/apcr1b_500_comparison.json",
+          "size_bytes": 1909
+        },
+        {
+          "file": "active_pitch_crossing/apcr1b_profile_design.json",
+          "size_bytes": 1269
+        },
+        {
+          "file": "active_pitch_crossing/apcr1b_telemetry_fix_and_500_recheck_summary.json",
+          "size_bytes": 2405
+        },
+        {
+          "file": "active_pitch_crossing/apcr1b_threshold_candidate_design.json",
+          "size_bytes": 1068
+        },
+        {
+          "file": "active_pitch_crossing/apcr1c_2000_comparison.csv",
+          "size_bytes": 837
+        },
+        {
+          "file": "active_pitch_crossing/apcr1c_2000_comparison.json",
+          "size_bytes": 2957
+        },
+        {
+          "file": "active_pitch_crossing/apcr1c_2000_window_metrics.csv",
+          "size_bytes": 373
+        },
+        {
+          "file": "active_pitch_crossing/apcr1c_500_comparison.csv",
+          "size_bytes": 973
+        },
+        {
+          "file": "active_pitch_crossing/apcr1c_500_comparison.json",
+          "size_bytes": 3129
+        },
+        {
+          "file": "active_pitch_crossing/apcr1c_amplitude_reassessment_summary.json",
+          "size_bytes": 4761
+        },
+        {
+          "file": "active_pitch_crossing/apcr1c_early_activation_summary.json",
+          "size_bytes": 2961
+        },
+        {
+          "file": "active_pitch_crossing/apcr1c_low_0p300_500.summary.json",
+          "size_bytes": 1401
+        },
+        {
+          "file": "active_pitch_crossing/apcr1c_profile_design.json",
+          "size_bytes": 2035
+        },
+        {
+          "file": "active_pitch_crossing/apcr1d_phase8_failure_audit.json",
+          "size_bytes": 1155
+        },
+        {
+          "file": "active_pitch_crossing/apcr1d_symmetric_soft_band_design.json",
+          "size_bytes": 2267
+        },
+        {
+          "file": "active_pitch_crossing/apcr1e_2000_comparison.json",
+          "size_bytes": 2251
+        },
+        {
+          "file": "active_pitch_crossing/apcr1e_500_comparison.json",
+          "size_bytes": 1148
+        },
+        {
+          "file": "active_pitch_crossing/apcr1e_adaptive_authority_summary.json",
+          "size_bytes": 1751
+        },
+        {
+          "file": "active_pitch_crossing/apcr1e_metric_provenance_audit/analyzer_column_source_audit.json",
+          "size_bytes": 1361
+        },
+        {
+          "file": "active_pitch_crossing/apcr1e_metric_provenance_audit/apcr1e_all_candidate_drift_metrics_2000.csv",
+          "size_bytes": 2066
+        },
+        {
+          "file": "active_pitch_crossing/apcr1e_metric_provenance_audit/apcr1e_corrected_comparison.csv",
+          "size_bytes": 917
+        },
+        {
+          "file": "active_pitch_crossing/apcr1e_metric_provenance_audit/metric_contradiction_resolution.json",
+          "size_bytes": 3436
+        },
+        {
+          "file": "active_pitch_crossing/apcr1f_design.json",
+          "size_bytes": 3218
+        },
+        {
+          "file": "active_pitch_crossing/apcr1g_design.json",
+          "size_bytes": 3832
+        },
+        {
+          "file": "active_pitch_crossing/apcr1g_drift_metric_table/apcr1g_full_error_table_summary.json",
+          "size_bytes": 4921
+        },
+        {
+          "file": "active_pitch_crossing/apcr1g_drift_metric_table/artifact_inventory.json",
+          "size_bytes": 5195
+        },
+        {
+          "file": "active_pitch_crossing/apcr1g_drift_metric_table/classification.json",
+          "size_bytes": 398
+        },
+        {
+          "file": "active_pitch_crossing/apcr1g_drift_metric_table/main_error_table_2000.json",
+          "size_bytes": 15940
+        },
+        {
+          "file": "active_pitch_crossing/apcr1g_drift_metric_table/window_error_table_2000.csv",
+          "size_bytes": 3191
+        },
+        {
+          "file": "active_pitch_crossing/apcr1g_drift_metric_table/window_error_table_2000.json",
+          "size_bytes": 8039
+        },
+        {
+          "file": "active_pitch_crossing/apcr1g_early_transient_root_cause_audit.json",
+          "size_bytes": 17052
+        },
+        {
+          "file": "active_pitch_crossing/apcr1i_1000_step_diagnostic_summary.json",
+          "size_bytes": 1804
+        },
+        {
+          "file": "active_pitch_crossing/apcr1i_low_0p300_1000/apcr1i_1000_drift_metrics.csv",
+          "size_bytes": 586
+        },
+        {
+          "file": "active_pitch_crossing/apcr1i_low_0p300_1000/apcr1i_1000_drift_metrics.json",
+          "size_bytes": 757
+        },
+        {
+          "file": "active_pitch_crossing/apcr1i_low_0p300_1000/apcr1i_1000_episode_audit.json",
+          "size_bytes": 5662
+        },
+        {
+          "file": "active_pitch_crossing/apcr1i_low_0p300_1000/apcr1i_1000_principle_verification.json",
+          "size_bytes": 930
+        },
+        {
+          "file": "active_pitch_crossing/apcr1i_low_0p300_1000/apcr1i_1000_torque_authority_audit.json",
+          "size_bytes": 1103
+        },
+        {
+          "file": "active_pitch_crossing/apcr1i_low_0p300_1000/apcr1i_1000_window_metrics.csv",
+          "size_bytes": 571
+        },
+        {
+          "file": "active_pitch_crossing/apcr1j_1000_drift_metrics.csv",
+          "size_bytes": 577
+        },
+        {
+          "file": "active_pitch_crossing/apcr1j_1000_drift_metrics.json",
+          "size_bytes": 741
+        },
+        {
+          "file": "active_pitch_crossing/apcr1j_1000_episode_audit.json",
+          "size_bytes": 1327
+        },
+        {
+          "file": "active_pitch_crossing/apcr1j_1000_stability_audit.json",
+          "size_bytes": 680
+        },
+        {
+          "file": "active_pitch_crossing/apcr1j_1000_torque_authority_audit.json",
+          "size_bytes": 436
+        },
+        {
+          "file": "active_pitch_crossing/apcr1j_design.json",
+          "size_bytes": 1930
+        },
+        {
+          "file": "active_pitch_crossing/apcr1j_low_0p300_1000/telemetry_1000.summary.json",
+          "size_bytes": 1428
+        },
+        {
+          "file": "active_pitch_crossing/apcr1j_remaining_drift_root_cause_audit.json",
+          "size_bytes": 10687
+        },
+        {
+          "file": "active_pitch_crossing/apcr1j_support_hysteresis_higher_authority_summary.json",
+          "size_bytes": 2442
+        },
+        {
+          "file": "active_pitch_crossing/apcr1k_design.json",
+          "size_bytes": 1682
+        },
+        {
+          "file": "active_pitch_crossing/apcr1l_1000_validation/apcr1l_1000_results.json",
+          "size_bytes": 579
+        },
+        {
+          "file": "active_pitch_crossing/apcr1l_1000_validation/apcr1l_comparison_results.json",
+          "size_bytes": 1843
+        },
+        {
+          "file": "active_pitch_crossing/apcr1l_startup_failure_audit.json",
+          "size_bytes": 1777
+        },
+        {
+          "file": "active_pitch_crossing/apcr1m_design.json",
+          "size_bytes": 1989
+        },
+        {
+          "file": "active_pitch_crossing/apcr1m_full_audit_and_comparison_summary.json",
+          "size_bytes": 3088
+        },
+        {
+          "file": "active_pitch_crossing/apcr1m_pitch_blend_behavior_audit.json",
+          "size_bytes": 1713
+        },
+        {
+          "file": "active_pitch_crossing/apcr1m_position_torque_cap_audit.json",
+          "size_bytes": 2603
+        },
+        {
+          "file": "active_pitch_crossing/apcr1m_torque_composition_dominance_audit.json",
+          "size_bytes": 2946
+        },
+        {
+          "file": "active_pitch_crossing/apcr1m_vs_prior_profiles_drift_table.json",
+          "size_bytes": 21526
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_actual_runtime_config_resolution.json",
+          "size_bytes": 3924
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_apc_dependency_audit.json",
+          "size_bytes": 1799
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_apcr1h_baseline_audit.json",
+          "size_bytes": 1942
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_candidate_design_from_apcr1m_audit.json",
+          "size_bytes": 1562
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_corrected_profile_config_verification.json",
+          "size_bytes": 1146
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_design.json",
+          "size_bytes": 3153
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_fair_2000_decision.json",
+          "size_bytes": 1178
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_fair_revalidation_and_5000_summary.json",
+          "size_bytes": 2480
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_feature_activation_and_ablation_summary.json",
+          "size_bytes": 4801
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_feature_activation_trigger_test/summary.json",
+          "size_bytes": 544
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_low_0p300_5000/metrics.json",
+          "size_bytes": 4056
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_low_0p300_5000/window_metrics.csv",
+          "size_bytes": 468
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_low_0p300_5000_final_decision.json",
+          "size_bytes": 909
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_phase1b_feature_code_presence_audit.json",
+          "size_bytes": 4630
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_phase1b_feature_code_verification_summary.json",
+          "size_bytes": 6485
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_phase1b_feature_tests_summary.json",
+          "size_bytes": 4310
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_phase2_2000_decision.json",
+          "size_bytes": 2180
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_phase2_2000_drift_comparison.csv",
+          "size_bytes": 398
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_phase2_2000_drift_comparison.json",
+          "size_bytes": 5784
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_phase2_ablation_summary.json",
+          "size_bytes": 1740
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_phase2_runtime_feature_activation_audit.json",
+          "size_bytes": 1050
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_phase2_torque_stability_comparison.csv",
+          "size_bytes": 785
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_phase2_torque_stability_comparison.json",
+          "size_bytes": 3560
+        },
+        {
+          "file": "active_pitch_crossing/apcr1n_vs_apcr1h_fair_2000_comparison.json",
+          "size_bytes": 117913
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_band_control_failure_audit.json",
+          "size_bytes": 3118
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_direct_support_recenter_design.json",
+          "size_bytes": 2135
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_low_0p300_2000/apcr1nd_2000_decision.json",
+          "size_bytes": 1122
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_low_0p300_2000/apcr1nd_2000_drift_comparison.csv",
+          "size_bytes": 354
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_low_0p300_2000/apcr1nd_2000_drift_comparison.json",
+          "size_bytes": 6537
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_low_0p300_2000/apcr1nd_2000_feature_activation_audit.json",
+          "size_bytes": 2562
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_low_0p300_2000/apcr1nd_2000_runtime_validation_summary.json",
+          "size_bytes": 2168
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_low_0p300_2000/apcr1nd_2000_torque_stability_comparison.csv",
+          "size_bytes": 1354
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_low_0p300_2000/apcr1nd_2000_torque_stability_comparison.json",
+          "size_bytes": 4725
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_t5_low_0p300_5000_analysis.json",
+          "size_bytes": 6384
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_t5_low_0p300_5000_final_summary.json",
+          "size_bytes": 3217
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_t5_low_0p300_5000_window_metrics.csv",
+          "size_bytes": 1181
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_tuned_2000_comparison.csv",
+          "size_bytes": 2162
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_tuned_2000_comparison.json",
+          "size_bytes": 10604
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_tuned_2000_window_metrics.csv",
+          "size_bytes": 3480
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_tuned_band_control_summary.json",
+          "size_bytes": 6593
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_tuned_best_variant_decision.json",
+          "size_bytes": 3178
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_tuned_variant_tests_summary.json",
+          "size_bytes": 2103
+        },
+        {
+          "file": "active_pitch_crossing/apcr1nd_tuned_variants_design.json",
+          "size_bytes": 3535
+        },
+        {
+          "file": "active_pitch_crossing/apcr_amplitude_constrained_candidate_design.json",
+          "size_bytes": 2989
+        },
+        {
+          "file": "active_pitch_crossing/apcr_drift_amplitude_audit.json",
+          "size_bytes": 4498
+        },
+        {
+          "file": "active_pitch_crossing/apcr_metric_discipline_guard.json",
+          "size_bytes": 1299
+        },
+        {
+          "file": "active_pitch_crossing/apcr_recovery_gate_redesign.json",
+          "size_bytes": 980
+        },
+        {
+          "file": "active_pitch_crossing/apcr_support_recovery_sign_phase_verification.json",
+          "size_bytes": 956
+        },
+        {
+          "file": "active_pitch_crossing/apcr_telemetry_plumbing_audit.json",
+          "size_bytes": 1904
+        },
+        {
+          "file": "active_pitch_crossing/current_best_apcr_profile_decision.json",
+          "size_bytes": 1083
+        },
+        {
+          "file": "active_pitch_crossing/fair_2000_apcr1h_low_0p300/metrics.json",
+          "size_bytes": 2216
+        },
+        {
+          "file": "active_pitch_crossing/fair_2000_apcr1n_low_0p300/metrics.json",
+          "size_bytes": 875
+        },
+        {
+          "file": "active_pitch_crossing/init_audit_apcr1f.json",
+          "size_bytes": 794
+        },
+        {
+          "file": "active_pitch_crossing/phase_7c_simulation_configuration.md",
+          "size_bytes": 3802
+        },
+        {
+          "file": "active_pitch_crossing/sign_verification.json",
+          "size_bytes": 1475
+        },
+        {
+          "file": "active_pitch_crossing/t5_high_0p480_5000_analysis.json",
+          "size_bytes": 5002
+        },
+        {
+          "file": "active_pitch_crossing/t5_high_0p480_5000_final_summary.json",
+          "size_bytes": 2502
+        },
+        {
+          "file": "active_pitch_crossing/t5_high_0p480_5000_window_metrics.csv",
+          "size_bytes": 1006
+        },
+        {
+          "file": "active_pitch_crossing/t5_high_0p480_band_failure_audit.json",
+          "size_bytes": 3458
+        },
+        {
+          "file": "active_pitch_crossing/t5_high_0p480_smoke_200_summary.json",
+          "size_bytes": 1361
+        },
+        {
+          "file": "active_pitch_crossing/t5_high_vs_low_5000_comparison.json",
+          "size_bytes": 1393
+        },
+        {
+          "file": "active_pitch_crossing/t5_tuned_telemetry_csv_fix_summary.json",
+          "size_bytes": 1753
+        },
+        {
+          "file": "active_pitch_crossing/t5_vs_t6b_stepwise_torque_path_diff.json",
+          "size_bytes": 5855
+        },
+        {
+          "file": "active_pitch_crossing/t6_architecture_fix_candidates_design.json",
+          "size_bytes": 7646
+        },
+        {
+          "file": "active_pitch_crossing/t6_best_high_0p480_5000/telemetry_5000_T6B.summary.json",
+          "size_bytes": 1430
+        },
+        {
+          "file": "active_pitch_crossing/t6_best_high_0p480_5000.json",
+          "size_bytes": 6212
+        },
+        {
+          "file": "active_pitch_crossing/t6_best_high_0p480_5000_window_metrics.csv",
+          "size_bytes": 324
+        },
+        {
+          "file": "active_pitch_crossing/t6_high_0p480_2000_screening.json",
+          "size_bytes": 17669
+        },
+        {
+          "file": "active_pitch_crossing/t6_high_height_transient_suppression_design.json",
+          "size_bytes": 3965
+        },
+        {
+          "file": "active_pitch_crossing/t6_high_height_transient_suppression_summary.json",
+          "size_bytes": 4174
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_1.summary.json",
+          "size_bytes": 1135
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_100.summary.json",
+          "size_bytes": 1405
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_1000.summary.json",
+          "size_bytes": 1412
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_10000.summary.json",
+          "size_bytes": 1286
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_100000.summary.json",
+          "size_bytes": 1358
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_1101.summary.json",
+          "size_bytes": 1370
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_1158.summary.json",
+          "size_bytes": 1318
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_1254.summary.json",
+          "size_bytes": 1466
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_1261.summary.json",
+          "size_bytes": 1451
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_16.summary.json",
+          "size_bytes": 1280
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_1906.summary.json",
+          "size_bytes": 1372
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_200.summary.json",
+          "size_bytes": 1422
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_2000.summary.json",
+          "size_bytes": 1431
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_20000.summary.json",
+          "size_bytes": 1354
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_295.summary.json",
+          "size_bytes": 0
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_50.summary.json",
+          "size_bytes": 1402
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_500.summary.json",
+          "size_bytes": 1402
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_5000.summary.json",
+          "size_bytes": 1430
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_50000.summary.json",
+          "size_bytes": 1355
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_605.summary.json",
+          "size_bytes": 1406
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6A_high_early_hard_band/telemetry_629.summary.json",
+          "size_bytes": 1403
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6B_high_stronger_emergency/telemetry_2000_T6B.summary.json",
+          "size_bytes": 1428
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6C_high_early_plus_stronger/telemetry_2000_T6C.summary.json",
+          "size_bytes": 1431
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6D_high_transient_boost/telemetry_2000_T6D.summary.json",
+          "size_bytes": 1431
+        },
+        {
+          "file": "active_pitch_crossing/t6_screen_2000_T6E_high_pitch_aware_boost/telemetry_2000_T6E.summary.json",
+          "size_bytes": 1431
+        },
+        {
+          "file": "active_pitch_crossing/t6b_no_effect_root_cause_audit_summary.json",
+          "size_bytes": 4962
+        },
+        {
+          "file": "active_pitch_crossing/t6b_position_cap_saturation_audit.json",
+          "size_bytes": 2526
+        },
+        {
+          "file": "active_pitch_crossing/t6b_runtime_config_identity_audit.json",
+          "size_bytes": 1202
+        },
+        {
+          "file": "active_pitch_crossing/t6f_budget_cap_raise_implementation_summary.json",
+          "size_bytes": 4835
+        },
+        {
+          "file": "active_pitch_crossing/t6f_component_sign_audit.json",
+          "size_bytes": 10984
+        },
+        {
+          "file": "active_pitch_crossing/t6f_degradation_root_cause_summary.json",
+          "size_bytes": 8649
+        },
+        {
+          "file": "active_pitch_crossing/t6f_high_0p480_2000_decision.json",
+          "size_bytes": 172
+        },
+        {
+          "file": "active_pitch_crossing/t6f_high_0p480_2000_screening.json",
+          "size_bytes": 4226
+        },
+        {
+          "file": "active_pitch_crossing/t6f_high_0p480_2000_window_metrics.csv",
+          "size_bytes": 441
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_convention_map.json",
+          "size_bytes": 7341
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_corrected_500_comparison.csv",
+          "size_bytes": 345
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_corrected_500_diagnostic.json",
+          "size_bytes": 6856
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_corrected_500_diagnostic_after_bugfix.json",
+          "size_bytes": 13262
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_corrected_design.json",
+          "size_bytes": 7390
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_corrected_implementation_summary.json",
+          "size_bytes": 4686
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_fix_band_gate_logic_fix.json",
+          "size_bytes": 2666
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_fix_bugfix_summary.json",
+          "size_bytes": 4315
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_fix_bugfix_tests_summary.json",
+          "size_bytes": 1109
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_fix_high_authority_activation_audit.json",
+          "size_bytes": 950
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_fix_phase6_failure_root_cause_summary.json",
+          "size_bytes": 5851
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_fix_phase6_telemetry_integrity_audit.json",
+          "size_bytes": 892
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_fix_pitch_suppression_activation_audit.json",
+          "size_bytes": 896
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_fix_pitch_suppression_placement_fix.json",
+          "size_bytes": 2454
+        },
+        {
+          "file": "active_pitch_crossing/t6f_sign_fix_profile_identity_telemetry_fix.json",
+          "size_bytes": 2128
+        },
+        {
+          "file": "active_pitch_crossing/t6f_synthetic_sign_tests_summary.json",
+          "size_bytes": 4976
+        },
+        {
+          "file": "active_pitch_crossing/t6f_torque_transmission_validation.json",
+          "size_bytes": 941
+        },
+        {
+          "file": "active_pitch_crossing/t6h_t6i_500_comparative_diagnostic.json",
+          "size_bytes": 5587
+        },
+        {
+          "file": "active_pitch_crossing/t6h_t6i_500_comparative_metrics.csv",
+          "size_bytes": 806
+        },
+        {
+          "file": "active_pitch_crossing/t6h_t6i_500_summary.json",
+          "size_bytes": 2585
+        },
+        {
+          "file": "active_pitch_crossing/t6h_t6i_500_T5/run_log.txt",
+          "size_bytes": 359618
+        },
+        {
+          "file": "active_pitch_crossing/t6h_t6i_500_T6F/run_log.txt",
+          "size_bytes": 359190
+        },
+        {
+          "file": "active_pitch_crossing/t6h_t6i_500_T6H/run_log.txt",
+          "size_bytes": 357644
+        },
+        {
+          "file": "active_pitch_crossing/t6h_t6i_500_T6I/run_log.txt",
+          "size_bytes": 359190
+        },
+        {
+          "file": "active_pitch_crossing/t6i_full_staged_validation_metrics.csv",
+          "size_bytes": 4424
+        },
+        {
+          "file": "active_pitch_crossing/t6i_full_staged_validation_summary.json",
+          "size_bytes": 2966
+        },
+        {
+          "file": "active_pitch_crossing/t6i_height_ladder_2000_metrics.csv",
+          "size_bytes": 4135
+        },
+        {
+          "file": "active_pitch_crossing/t6i_height_ladder_2000_summary.json",
+          "size_bytes": 10503
+        },
+        {
+          "file": "active_pitch_crossing/t6i_height_ladder_setup_manifest.json",
+          "size_bytes": 1861
+        },
+        {
+          "file": "active_pitch_crossing/t6i_high_0p480_1200_validation.json",
+          "size_bytes": 1766
+        },
+        {
+          "file": "active_pitch_crossing/t6i_high_0p480_2000_validation.json",
+          "size_bytes": 407
+        },
+        {
+          "file": "active_pitch_crossing/t6i_high_0p480_2000_window_metrics.csv",
+          "size_bytes": 652
+        },
+        {
+          "file": "active_pitch_crossing/t6i_high_0p480_5000_validation.json",
+          "size_bytes": 1277
+        },
+        {
+          "file": "active_pitch_crossing/t6i_high_0p480_5000_window_metrics.csv",
+          "size_bytes": 1402
+        },
+        {
+          "file": "active_pitch_crossing/t6i_low_0p300_5000_regression/validation.json",
+          "size_bytes": 381
+        },
+        {
+          "file": "active_pitch_crossing/t6i_positive_bias_root_cause_audit.json",
+          "size_bytes": 3714
+        },
+        {
+          "file": "active_pitch_crossing/t6i_profile_and_telemetry_verification.json",
+          "size_bytes": 1393
+        },
+        {
+          "file": "active_pitch_crossing/t6j_500_T6I/telemetry_500.summary.json",
+          "size_bytes": 1414
+        },
+        {
+          "file": "active_pitch_crossing/t6j_500_T6J/telemetry_500.summary.json",
+          "size_bytes": 869
+        },
+        {
+          "file": "active_pitch_crossing/t6j_centering_bias_trim_design.json",
+          "size_bytes": 1677
+        },
+        {
+          "file": "active_pitch_crossing/t6j_centering_bias_trim_implementation_tests_summary.json",
+          "size_bytes": 726
+        },
+        {
+          "file": "active_pitch_crossing/t6j_centering_bias_trim_summary.json",
+          "size_bytes": 4033
+        },
+        {
+          "file": "active_pitch_crossing/t6j_height_ladder_2000_comparison.csv",
+          "size_bytes": 4021
+        },
+        {
+          "file": "active_pitch_crossing/t6j_height_ladder_2000_metrics.csv",
+          "size_bytes": 6066
+        },
+        {
+          "file": "active_pitch_crossing/t6j_height_ladder_2000_summary.json",
+          "size_bytes": 23275
+        },
+        {
+          "file": "active_pitch_crossing/t6j_height_ladder_setup_manifest.json",
+          "size_bytes": 5010
+        },
+        {
+          "file": "active_pitch_crossing/t6j_high_0p480_1200_diagnostic.json",
+          "size_bytes": 2460
+        },
+        {
+          "file": "active_pitch_crossing/t6j_high_0p480_2000_diagnostic.json",
+          "size_bytes": 1825
+        },
+        {
+          "file": "active_pitch_crossing/t6j_high_0p480_5000_diagnostic.json",
+          "size_bytes": 1501
+        },
+        {
+          "file": "active_pitch_crossing/t6j_high_0p480_500_diagnostic.json",
+          "size_bytes": 3489
+        },
+        {
+          "file": "active_pitch_crossing/upstream_4nm_cap_intent_audit.json",
+          "size_bytes": 3067
+        },
+        {
+          "file": "active_pitch_crossing/upstream_4nm_clip_code_path_audit.json",
+          "size_bytes": 4571
+        },
+        {
+          "file": "active_pitch_crossing/upstream_clip_diagnostic_telemetry_summary.json",
+          "size_bytes": 3613
+        },
+        {
+          "file": "active_pitch_crossing/upstream_clip_t5_t6b_1200_diagnostic.json",
+          "size_bytes": 3056
+        },
+        {
+          "file": "d2_low_0p300_500_after_csv_fix/d2_low_0p300_500_summary.json",
+          "size_bytes": 1402
+        },
+        {
+          "file": "e1_500_corrected_metric_comparison.json",
+          "size_bytes": 3055
+        },
+        {
+          "file": "e1_low_0p300_500_before_fix_analysis.json",
+          "size_bytes": 5647
+        },
+        {
+          "file": "e1_low_0p300_smoke_analysis.json",
+          "size_bytes": 8542
+        },
+        {
+          "file": "e1_support_integral_500_step_gate_fix_summary.json",
+          "size_bytes": 2907
+        },
+        {
+          "file": "e1_support_metric_provenance_final_summary.json",
+          "size_bytes": 3036
+        },
+        {
+          "file": "e1_wiring_gate_audit_after_500.json",
+          "size_bytes": 2709
+        },
+        {
+          "file": "e2_hip_yaw_regression_audit/event_order_summary.json",
+          "size_bytes": 1186
+        },
+        {
+          "file": "e2_hip_yaw_regression_audit/integral_gate_comparison.json",
+          "size_bytes": 1244
+        },
+        {
+          "file": "e2_hip_yaw_regression_audit/torque_coupling_summary.json",
+          "size_bytes": 4162
+        },
+        {
+          "file": "e2_hip_yaw_regression_audit_summary.json",
+          "size_bytes": 4208
+        },
+        {
+          "file": "e2_low_0p300_500_comparison.csv",
+          "size_bytes": 1052
+        },
+        {
+          "file": "e2_low_0p300_500_comparison.json",
+          "size_bytes": 4673
+        },
+        {
+          "file": "e2_next_candidate_design_plan.json",
+          "size_bytes": 5517
+        },
+        {
+          "file": "e2_profile_verification.json",
+          "size_bytes": 868
+        },
+        {
+          "file": "e2_support_integral_cap_500_step_summary.json",
+          "size_bytes": 3918
+        },
+        {
+          "file": "e2b_low_0p300_500_comparison.csv",
+          "size_bytes": 5133
+        },
+        {
+          "file": "e2b_low_0p300_500_comparison.json",
+          "size_bytes": 12771
+        },
+        {
+          "file": "e2b_support_integral_cap_aligned_gate_500_step_summary.json",
+          "size_bytes": 1547
+        },
+        {
+          "file": "f1_low_0p300_500_comparison.json",
+          "size_bytes": 627581
+        },
+        {
+          "file": "f1_phase_aware_recenter_500_step_summary.json",
+          "size_bytes": 2759
+        },
+        {
+          "file": "f1_signed_support_metric_reframe.json",
+          "size_bytes": 2307
+        },
+        {
+          "file": "f1b_comparison.json",
+          "size_bytes": 2807
+        },
+        {
+          "file": "f1b_low_0p300_500_after_csv_fix_comparison.json",
+          "size_bytes": 4166
+        },
+        {
+          "file": "f1b_signed_recenter_500_step_summary.json",
+          "size_bytes": 1177
+        },
+        {
+          "file": "f2a_low_0p300_500/results.json",
+          "size_bytes": 1256
+        },
+        {
+          "file": "g1b_bias_cancel_500_step_summary.json",
+          "size_bytes": 1655
+        },
+        {
+          "file": "g1b_low_0p300_500_comparison.json",
+          "size_bytes": 6733
+        },
+        {
+          "file": "initial_condition_fix/d2_init_fix_500_comparison.csv",
+          "size_bytes": 322
+        },
+        {
+          "file": "initial_condition_fix/d2_init_fix_500_comparison.json",
+          "size_bytes": 3442
+        },
+        {
+          "file": "initial_condition_fix/d2_low_0p300_initial_condition_fix_500_comparison.md",
+          "size_bytes": 1866
+        },
+        {
+          "file": "initial_condition_fix/low_0p300_initialization_path_audit.json",
+          "size_bytes": 803
+        },
+        {
+          "file": "initial_condition_fix/low_0p300_step0_state_after_fix.json",
+          "size_bytes": 3982
+        },
+        {
+          "file": "initial_condition_fix/low_0p300_step0_state_after_fix.md",
+          "size_bytes": 1536
+        },
+        {
+          "file": "initial_condition_fix/low_0p300_step0_state_before_fix.json",
+          "size_bytes": 4499
+        },
+        {
+          "file": "initial_condition_fix/low_0p300_step0_state_before_fix.md",
+          "size_bytes": 1548
+        },
+        {
+          "file": "one_sided_bias_audit/bias_source_audit.json",
+          "size_bytes": 12353
+        },
+        {
+          "file": "one_sided_bias_audit/hip_yaw_compensation_analysis.json",
+          "size_bytes": 7901
+        },
+        {
+          "file": "one_sided_bias_audit/one_sided_bias_signal_inventory.json",
+          "size_bytes": 12851
+        },
+        {
+          "file": "one_sided_bias_audit/pitch_reversal_audit.json",
+          "size_bytes": 6402
+        },
+        {
+          "file": "one_sided_bias_audit/tau_pitch_deep_analysis.json",
+          "size_bytes": 5781
+        },
+        {
+          "file": "signed_support_drift_audit/phase_aware_strategy_inputs.json",
+          "size_bytes": 1329
+        },
+        {
+          "file": "signed_support_drift_audit/phase_behavior_summary.json",
+          "size_bytes": 2312
+        },
+        {
+          "file": "signed_support_drift_audit/signed_drift_metrics.csv",
+          "size_bytes": 936
+        },
+        {
+          "file": "signed_support_drift_audit/signed_drift_metrics.json",
+          "size_bytes": 7527
+        },
+        {
+          "file": "signed_support_drift_audit/signed_support_drift_and_phase_recenter_summary.json",
+          "size_bytes": 4051
+        },
+        {
+          "file": "signed_support_drift_audit/wheel_reversal_summary.json",
+          "size_bytes": 1776
+        },
+        {
+          "file": "stage_1/20260607_164331/results.json",
+          "size_bytes": 1180
+        },
+        {
+          "file": "stage_2/20260607_164434/results.json",
+          "size_bytes": 1185
+        },
+        {
+          "file": "support_metric_provenance_audit.json",
+          "size_bytes": 2401
+        },
+        {
+          "file": "tau_pitch_bias_audit/tau_pitch_bias_source_audit_summary.json",
+          "size_bytes": 4509
+        },
+        {
+          "file": "tau_pitch_bias_audit/tau_pitch_computation_audit.json",
+          "size_bytes": 1671
+        },
+        {
+          "file": "tau_pitch_bias_audit/tau_pitch_telemetry_decomposition.json",
+          "size_bytes": 3679
+        },
+        {
+          "file": "telemetry_csv_bug_fix/csv_writing_bug_audit.json",
+          "size_bytes": 3712
+        },
+        {
+          "file": "telemetry_csv_fix_and_f1b_recenter_recheck_summary.json",
+          "size_bytes": 2460
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hierarchical_controller_sim",
+      "original_size": "713.3M",
+      "original_size_bytes": 747990101,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 55,
+      "copied_files": [
+        {
+          "file": "failure_window_1.csv",
+          "size_bytes": 14535
+        },
+        {
+          "file": "telemetry_100.summary.json",
+          "size_bytes": 1423
+        },
+        {
+          "file": "telemetry_1200.summary.json",
+          "size_bytes": 1423
+        },
+        {
+          "file": "telemetry_1780218406_analysis.json",
+          "size_bytes": 1097
+        },
+        {
+          "file": "telemetry_1780218626_analysis.json",
+          "size_bytes": 1097
+        },
+        {
+          "file": "telemetry_2000.summary.json",
+          "size_bytes": 1424
+        },
+        {
+          "file": "telemetry_500.summary.json",
+          "size_bytes": 1414
+        },
+        {
+          "file": "telemetry_5000.summary.json",
+          "size_bytes": 1409
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_height_variant_position_hold_audit_v2",
+      "original_size": "464.1M",
+      "original_size_bytes": 486639390,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "gate_500/step_c_failure_classification.json",
+          "size_bytes": 101
+        },
+        {
+          "file": "gate_500/step_c_height_case_matrix.json",
+          "size_bytes": 3008
+        },
+        {
+          "file": "gate_500/step_c_height_recovery_metrics.json",
+          "size_bytes": 16223
+        },
+        {
+          "file": "gate_500/step_c_height_recovery_report.md",
+          "size_bytes": 1108
+        },
+        {
+          "file": "gate_500/step_c_height_reference.json",
+          "size_bytes": 435
+        },
+        {
+          "file": "gate_500/step_c_pass_fail_summary.json",
+          "size_bytes": 925
+        },
+        {
+          "file": "high_small_failure_audit.json",
+          "size_bytes": 1262
+        },
+        {
+          "file": "high_small_metrics.json",
+          "size_bytes": 2654
+        },
+        {
+          "file": "high_small_peak_hip_yaw_window.csv",
+          "size_bytes": 3266281
+        },
+        {
+          "file": "high_small_peak_support_window.csv",
+          "size_bytes": 2781664
+        },
+        {
+          "file": "high_small_peak_wheel_vel_window.csv",
+          "size_bytes": 3236610
+        },
+        {
+          "file": "high_tiny_failure_audit.json",
+          "size_bytes": 1260
+        },
+        {
+          "file": "high_tiny_metrics.json",
+          "size_bytes": 2641
+        },
+        {
+          "file": "high_tiny_peak_hip_yaw_window.csv",
+          "size_bytes": 1990472
+        },
+        {
+          "file": "high_tiny_peak_support_window.csv",
+          "size_bytes": 3273009
+        },
+        {
+          "file": "high_tiny_peak_wheel_vel_window.csv",
+          "size_bytes": 3270158
+        },
+        {
+          "file": "low_small_failure_audit.json",
+          "size_bytes": 874
+        },
+        {
+          "file": "low_small_metrics.json",
+          "size_bytes": 2646
+        },
+        {
+          "file": "low_small_peak_hip_yaw_window.csv",
+          "size_bytes": 3279446
+        },
+        {
+          "file": "low_small_peak_support_window.csv",
+          "size_bytes": 3280800
+        },
+        {
+          "file": "low_small_peak_wheel_vel_window.csv",
+          "size_bytes": 3279933
+        },
+        {
+          "file": "low_tiny_failure_audit.json",
+          "size_bytes": 871
+        },
+        {
+          "file": "low_tiny_metrics.json",
+          "size_bytes": 2643
+        },
+        {
+          "file": "low_tiny_peak_hip_yaw_window.csv",
+          "size_bytes": 3276478
+        },
+        {
+          "file": "low_tiny_peak_support_window.csv",
+          "size_bytes": 3278149
+        },
+        {
+          "file": "low_tiny_peak_wheel_vel_window.csv",
+          "size_bytes": 3276076
+        },
+        {
+          "file": "nominal_failure_audit.json",
+          "size_bytes": 868
+        },
+        {
+          "file": "nominal_metrics.json",
+          "size_bytes": 2626
+        },
+        {
+          "file": "nominal_peak_hip_yaw_window.csv",
+          "size_bytes": 3267785
+        },
+        {
+          "file": "nominal_peak_support_window.csv",
+          "size_bytes": 3269153
+        },
+        {
+          "file": "nominal_peak_wheel_vel_window.csv",
+          "size_bytes": 3267885
+        },
+        {
+          "file": "official_5000/step_c_failure_classification.json",
+          "size_bytes": 279
+        },
+        {
+          "file": "official_5000/step_c_height_case_matrix.json",
+          "size_bytes": 3008
+        },
+        {
+          "file": "official_5000/step_c_height_recovery_metrics.json",
+          "size_bytes": 16495
+        },
+        {
+          "file": "official_5000/step_c_height_recovery_report.md",
+          "size_bytes": 1185
+        },
+        {
+          "file": "official_5000/step_c_height_reference.json",
+          "size_bytes": 435
+        },
+        {
+          "file": "official_5000/step_c_pass_fail_summary.json",
+          "size_bytes": 1046
+        },
+        {
+          "file": "step_e_height_variant_case_matrix.json",
+          "size_bytes": 221
+        },
+        {
+          "file": "step_e_height_variant_metrics.json",
+          "size_bytes": 13938
+        },
+        {
+          "file": "step_e_height_variant_position_hold_report.md",
+          "size_bytes": 2467
+        },
+        {
+          "file": "step_e_height_variant_position_hold_summary.json",
+          "size_bytes": 930
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_height_variant_position_hold_final",
+      "original_size": "416.8M",
+      "original_size_bytes": 437096609,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "step_e_hv_sagittal_schedule_candidate_summary.json",
+          "size_bytes": 29051
+        },
+        {
+          "file": "step_e_hv_sagittal_schedule_fix_report.md",
+          "size_bytes": 1650
+        },
+        {
+          "file": "step_e_hv_sagittal_schedule_fix_summary.json",
+          "size_bytes": 30935
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_sagittal_schedule_fix",
+      "original_size": "272.0M",
+      "original_size_bytes": 285248845,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "sagittal_schedule_candidate_summary.json",
+          "size_bytes": 44464
+        },
+        {
+          "file": "sagittal_schedule_fix_report.md",
+          "size_bytes": 75
+        },
+        {
+          "file": "sagittal_schedule_fix_summary.json",
+          "size_bytes": 47474
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hip_yaw_divergence_after_sign_fix_audit",
+      "original_size": "256.1M",
+      "original_size_bytes": 268511519,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 4,
+      "copied_files": [
+        {
+          "file": "divergence_after_sign_fix_summary.json",
+          "size_bytes": 21651
+        },
+        {
+          "file": "divergence_driver_analysis.json",
+          "size_bytes": 16473
+        },
+        {
+          "file": "divergence_root_cause_map.json",
+          "size_bytes": 5997
+        },
+        {
+          "file": "divergence_sign_convention_sanity_check.json",
+          "size_bytes": 3553
+        },
+        {
+          "file": "divergence_sign_convention_sanity_check.md",
+          "size_bytes": 4259
+        },
+        {
+          "file": "hip_yaw_divergence_after_sign_fix_summary.json",
+          "size_bytes": 6690
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_height_recovery_after_step_e_hv_fix",
+      "original_size": "200.4M",
+      "original_size_bytes": 210107557,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [
+        {
+          "file": "step_c_failure_classification.json",
+          "size_bytes": 101
+        },
+        {
+          "file": "step_c_height_case_matrix.json",
+          "size_bytes": 3008
+        },
+        {
+          "file": "step_c_height_recovery_metrics.json",
+          "size_bytes": 16643
+        },
+        {
+          "file": "step_c_height_recovery_report.md",
+          "size_bytes": 1042
+        },
+        {
+          "file": "step_c_height_reference.json",
+          "size_bytes": 435
+        },
+        {
+          "file": "step_c_pass_fail_summary.json",
+          "size_bytes": 877
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/balance_core_validation",
+      "original_size": "172.9M",
+      "original_size_bytes": 181322475,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "failure_report_1000.md",
+          "size_bytes": 463
+        },
+        {
+          "file": "failure_report_200.md",
+          "size_bytes": 614
+        },
+        {
+          "file": "failure_report_500.md",
+          "size_bytes": 463
+        },
+        {
+          "file": "telemetry_10000.summary.json",
+          "size_bytes": 1352
+        },
+        {
+          "file": "telemetry_100000.summary.json",
+          "size_bytes": 1358
+        },
+        {
+          "file": "telemetry_20000.summary.json",
+          "size_bytes": 1354
+        },
+        {
+          "file": "telemetry_50000.summary.json",
+          "size_bytes": 1355
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/posture_feasibility",
+      "original_size": "171.2M",
+      "original_size_bytes": 179466223,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "no small summaries found; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hip_yaw_disturbance_rejection_audit",
+      "original_size": "168.8M",
+      "original_size_bytes": 176954644,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 5,
+      "copied_files": [
+        {
+          "file": "isolation/baseline_isolation_report.md",
+          "size_bytes": 862
+        },
+        {
+          "file": "isolation/baseline_results.json",
+          "size_bytes": 27733
+        },
+        {
+          "file": "isolation/experiment_log.txt",
+          "size_bytes": 17699
+        },
+        {
+          "file": "isolation/experiment_log_v2.txt",
+          "size_bytes": 7724
+        },
+        {
+          "file": "isolation/isolation_experiment_report.md",
+          "size_bytes": 2456
+        },
+        {
+          "file": "isolation/isolation_experiment_results.json",
+          "size_bytes": 15405
+        },
+        {
+          "file": "quick_test/isolation_implementation_requirements.md",
+          "size_bytes": 4477
+        },
+        {
+          "file": "quick_test/quick_damping_test_plan.json",
+          "size_bytes": 1012
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hip_yaw_hy_ff_evaluation",
+      "original_size": "147.9M",
+      "original_size_bytes": 155045938,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 7,
+      "copied_files": [
+        {
+          "file": "comprehensive_eval_results.json",
+          "size_bytes": 6119
+        },
+        {
+          "file": "eval_log.txt",
+          "size_bytes": 4330
+        },
+        {
+          "file": "hip_yaw_disturbance_rejection_fix_summary.json",
+          "size_bytes": 8078
+        },
+        {
+          "file": "hip_yaw_disturbance_rejection_fix_summary_v2.json",
+          "size_bytes": 10543
+        },
+        {
+          "file": "hy_ff_evaluation_results.json",
+          "size_bytes": 885
+        },
+        {
+          "file": "simple_eval_results.json",
+          "size_bytes": 509
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_best_current_profile_5000_eval",
+      "original_size": "137.6M",
+      "original_size_bytes": 144260707,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 8,
+      "copied_files": [
+        {
+          "file": "step_e_best_current_profile_5000_metrics.json",
+          "size_bytes": 6998
+        },
+        {
+          "file": "step_e_best_current_profile_5000_pass_fail_summary.json",
+          "size_bytes": 1200
+        },
+        {
+          "file": "step_e_best_current_profile_5000_report.md",
+          "size_bytes": 14517
+        },
+        {
+          "file": "step_e_best_current_profile_selection.json",
+          "size_bytes": 1300
+        },
+        {
+          "file": "step_e_best_current_profile_selection.md",
+          "size_bytes": 2516
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hip_yaw_sign_convention_fix",
+      "original_size": "130.7M",
+      "original_size_bytes": 137009567,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 7,
+      "copied_files": [
+        {
+          "file": "hip_yaw_pd_sign_convention_audit.json",
+          "size_bytes": 3851
+        },
+        {
+          "file": "hip_yaw_sign_convention_audit_report.md",
+          "size_bytes": 3140
+        },
+        {
+          "file": "hip_yaw_sign_convention_fix_summary.json",
+          "size_bytes": 6018
+        },
+        {
+          "file": "smoke_100/smoke_test_results.json",
+          "size_bytes": 3389
+        },
+        {
+          "file": "step_e_5000/hip_yaw_sign_fix_5000_metrics.json",
+          "size_bytes": 4958
+        },
+        {
+          "file": "step_e_5000/hip_yaw_sign_fix_5000_pass_fail_summary.json",
+          "size_bytes": 5869
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_height_variant_sagittal_schedule_fix",
+      "original_size": "112.2M",
+      "original_size_bytes": 117655781,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "step_e_hv_sagittal_schedule_candidate_summary.json",
+          "size_bytes": 24914
+        },
+        {
+          "file": "step_e_hv_sagittal_schedule_fix_report.md",
+          "size_bytes": 1461
+        },
+        {
+          "file": "step_e_hv_sagittal_schedule_fix_summary.json",
+          "size_bytes": 26572
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_height_recovery",
+      "original_size": "104.3M",
+      "original_size_bytes": 109403211,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 7,
+      "copied_files": [
+        {
+          "file": "step_c_failure_classification.json",
+          "size_bytes": 149
+        },
+        {
+          "file": "step_c_height_case_matrix.json",
+          "size_bytes": 3008
+        },
+        {
+          "file": "step_c_height_recovery_metrics.json",
+          "size_bytes": 9742
+        },
+        {
+          "file": "step_c_height_recovery_report.md",
+          "size_bytes": 899
+        },
+        {
+          "file": "step_c_height_reference.json",
+          "size_bytes": 435
+        },
+        {
+          "file": "step_c_pass_fail_summary.json",
+          "size_bytes": 861
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_wbc_gate_fix",
+      "original_size": "85.8M",
+      "original_size_bytes": 90015658,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "recheck_extreme_heights/recheck_metrics.json",
+          "size_bytes": 7913
+        },
+        {
+          "file": "recheck_extreme_heights/step_e_wbc_gate_fix_recheck_pass_fail.json",
+          "size_bytes": 586
+        },
+        {
+          "file": "step_e_wbc_gate_false_positive_fix_summary.json",
+          "size_bytes": 3051
+        },
+        {
+          "file": "wbc_gate_logic_inventory.json",
+          "size_bytes": 2971
+        },
+        {
+          "file": "wbc_gate_logic_inventory.md",
+          "size_bytes": 2791
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_extreme_height_d2_official_check",
+      "original_size": "85.8M",
+      "original_size_bytes": 90010024,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 13,
+      "copied_files": [
+        {
+          "file": "step_e_extreme_height_d2_metrics.json",
+          "size_bytes": 8052
+        },
+        {
+          "file": "step_e_extreme_height_d2_official_check_summary.json",
+          "size_bytes": 3052
+        },
+        {
+          "file": "step_e_extreme_height_d2_pass_fail.json",
+          "size_bytes": 680
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/balance_core_position_containment",
+      "original_size": "85.7M",
+      "original_size_bytes": 89815965,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "e0_cleanup_audit.md",
+          "size_bytes": 15571
+        },
+        {
+          "file": "e0b_failure_analysis.md",
+          "size_bytes": 8669
+        },
+        {
+          "file": "e0c_failure_analysis.md",
+          "size_bytes": 11698
+        },
+        {
+          "file": "e0d_phase_aware_report.md",
+          "size_bytes": 15255
+        },
+        {
+          "file": "extended_longevity_summary.json",
+          "size_bytes": 1880
+        },
+        {
+          "file": "extended_longevity_summary.md",
+          "size_bytes": 949
+        },
+        {
+          "file": "position_containment_summary.md",
+          "size_bytes": 11043
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/pitch_safe_joint_sagittal_yaw_fix",
+      "original_size": "85.3M",
+      "original_size_bytes": 89478934,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [
+        {
+          "file": "evaluation_log.txt",
+          "size_bytes": 3066
+        },
+        {
+          "file": "pitch_safe_candidate_summary.json",
+          "size_bytes": 4291
+        },
+        {
+          "file": "wbc_application_audit/pitch_safe_wbc_application_report.md",
+          "size_bytes": 2356
+        },
+        {
+          "file": "wbc_application_audit/pitch_safe_wbc_application_summary.json",
+          "size_bytes": 4708
+        },
+        {
+          "file": "wbc_application_audit/wbc_application_comparison.csv",
+          "size_bytes": 464
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_extreme_height_recovery",
+      "original_size": "80.4M",
+      "original_size_bytes": 84296474,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "step_c_extreme_case_matrix.json",
+          "size_bytes": 1321
+        },
+        {
+          "file": "step_c_extreme_height_recovery_report.md",
+          "size_bytes": 738
+        },
+        {
+          "file": "step_c_extreme_metrics.json",
+          "size_bytes": 6822
+        },
+        {
+          "file": "step_c_extreme_pass_fail_summary.json",
+          "size_bytes": 688
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_extreme_height_position_hold",
+      "original_size": "80.4M",
+      "original_size_bytes": 84295314,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "min_operational_height_telemetry.summary.json",
+          "size_bytes": 1135
+        },
+        {
+          "file": "step_e_extreme_case_matrix.json",
+          "size_bytes": 467
+        },
+        {
+          "file": "step_e_extreme_metrics.json",
+          "size_bytes": 5740
+        },
+        {
+          "file": "step_e_extreme_position_hold_report.md",
+          "size_bytes": 729
+        },
+        {
+          "file": "step_e_extreme_position_hold_summary.json",
+          "size_bytes": 338
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/boundary_step_e_step_c_log_verification",
+      "original_size": "74.5M",
+      "original_size_bytes": 78084590,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "analysis/boundary_step_e_step_c_log_summary.json",
+          "size_bytes": 21755
+        },
+        {
+          "file": "analysis/boundary_step_e_step_c_metric_comparison.csv",
+          "size_bytes": 2211
+        },
+        {
+          "file": "analysis/high_0p480_step_c_event_order.json",
+          "size_bytes": 434
+        },
+        {
+          "file": "analysis/high_0p480_step_e_event_order.json",
+          "size_bytes": 434
+        },
+        {
+          "file": "analysis/low_0p300_step_c_event_order.json",
+          "size_bytes": 449
+        },
+        {
+          "file": "analysis/low_0p300_step_c_failure_windows.csv",
+          "size_bytes": 119731
+        },
+        {
+          "file": "analysis/low_0p300_step_e_event_order.json",
+          "size_bytes": 449
+        },
+        {
+          "file": "analysis/low_0p300_step_e_failure_windows.csv",
+          "size_bytes": 119720
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/sagittal_position_hold_return",
+      "original_size": "72.2M",
+      "original_size_bytes": 75671440,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "bug_fixed_f4c_validation_summary.json",
+          "size_bytes": 4940
+        },
+        {
+          "file": "bug_fixed_f4c_validation_summary.md",
+          "size_bytes": 4438
+        },
+        {
+          "file": "cp_coupling_fix_report.json",
+          "size_bytes": 9922
+        },
+        {
+          "file": "cp_coupling_fix_report.md",
+          "size_bytes": 10329
+        },
+        {
+          "file": "fix_d_implementation_summary.md",
+          "size_bytes": 9613
+        },
+        {
+          "file": "one_sided_error_audit/analysis_summary.json",
+          "size_bytes": 57046
+        },
+        {
+          "file": "one_sided_error_audit/fix_v1_1000_summary.json",
+          "size_bytes": 1624
+        },
+        {
+          "file": "one_sided_error_audit/step_e_one_sided_error_root_cause_report.md",
+          "size_bytes": 4759
+        },
+        {
+          "file": "one_sided_error_audit/telemetry_1780233599.summary.json",
+          "size_bytes": 1319
+        },
+        {
+          "file": "pitch_buildup_milestones.json",
+          "size_bytes": 1022
+        },
+        {
+          "file": "pitch_rate_consistency_fix_report.json",
+          "size_bytes": 6067
+        },
+        {
+          "file": "pitch_rate_consistency_fix_report.md",
+          "size_bytes": 9129
+        },
+        {
+          "file": "pitch_rate_fix_revert_report.json",
+          "size_bytes": 1567
+        },
+        {
+          "file": "pitch_rate_fix_revert_report.md",
+          "size_bytes": 2536
+        },
+        {
+          "file": "pitch_spike_root_cause_report.json",
+          "size_bytes": 9133
+        },
+        {
+          "file": "pitch_spike_root_cause_report.md",
+          "size_bytes": 11596
+        },
+        {
+          "file": "position_error_plumbing_fix_report.json",
+          "size_bytes": 3051
+        },
+        {
+          "file": "position_error_plumbing_fix_report.md",
+          "size_bytes": 5945
+        },
+        {
+          "file": "position_hold_refinement_report.json",
+          "size_bytes": 6510
+        },
+        {
+          "file": "position_hold_refinement_report.md",
+          "size_bytes": 9281
+        },
+        {
+          "file": "position_return_migration_report.json",
+          "size_bytes": 9850
+        },
+        {
+          "file": "position_return_migration_report.md",
+          "size_bytes": 9832
+        },
+        {
+          "file": "position_state_separation_report.json",
+          "size_bytes": 8753
+        },
+        {
+          "file": "position_state_separation_report.md",
+          "size_bytes": 9433
+        },
+        {
+          "file": "posture_regression_audit/correct_mode_visual_validation_report.md",
+          "size_bytes": 7127
+        },
+        {
+          "file": "posture_regression_audit/critical_bug_wbc_not_disabled_in_balance_core.json",
+          "size_bytes": 3698
+        },
+        {
+          "file": "posture_regression_audit/critical_bug_wbc_not_disabled_in_balance_core.md",
+          "size_bytes": 6995
+        },
+        {
+          "file": "posture_regression_audit/phase1_runtime_configuration_audit.json",
+          "size_bytes": 7107
+        },
+        {
+          "file": "posture_regression_audit/phase1_runtime_configuration_audit.md",
+          "size_bytes": 9409
+        },
+        {
+          "file": "sign_convention_verification.txt",
+          "size_bytes": 14044
+        },
+        {
+          "file": "step_e_authority_calibration_report.json",
+          "size_bytes": 7789
+        },
+        {
+          "file": "step_e_authority_calibration_report.md",
+          "size_bytes": 8752
+        },
+        {
+          "file": "step_e_complete_session_report.md",
+          "size_bytes": 11836
+        },
+        {
+          "file": "step_e_equilibrium_and_authority_root_cause_report.json",
+          "size_bytes": 9285
+        },
+        {
+          "file": "step_e_equilibrium_and_authority_root_cause_report.md",
+          "size_bytes": 12998
+        },
+        {
+          "file": "step_e_final_summary.md",
+          "size_bytes": 9740
+        },
+        {
+          "file": "step_e_final_validation_summary.json",
+          "size_bytes": 4949
+        },
+        {
+          "file": "step_e_final_validation_summary.md",
+          "size_bytes": 4583
+        },
+        {
+          "file": "step_e_no_pitch_reserve_revert_report.json",
+          "size_bytes": 5100
+        },
+        {
+          "file": "step_e_no_pitch_reserve_revert_report.md",
+          "size_bytes": 2772
+        },
+        {
+          "file": "step_e_position_regulator_fix_report.md",
+          "size_bytes": 11311
+        },
+        {
+          "file": "step_e_position_regulator_root_cause_report.json",
+          "size_bytes": 7544
+        },
+        {
+          "file": "step_e_position_regulator_root_cause_report.md",
+          "size_bytes": 12093
+        },
+        {
+          "file": "step_e_reanalysis_report.md",
+          "size_bytes": 13356
+        },
+        {
+          "file": "step_e_root_cause_and_fix_report.json",
+          "size_bytes": 5780
+        },
+        {
+          "file": "step_e_root_cause_and_fix_report.md",
+          "size_bytes": 10251
+        },
+        {
+          "file": "step_e_steady_state_integral_report.json",
+          "size_bytes": 5501
+        },
+        {
+          "file": "step_e_steady_state_integral_report.md",
+          "size_bytes": 3566
+        },
+        {
+          "file": "step_e_support_position_validation_summary.json",
+          "size_bytes": 6047
+        },
+        {
+          "file": "step_e_support_position_validation_summary.md",
+          "size_bytes": 5828
+        },
+        {
+          "file": "step_e_torque_budget_authority_report.md",
+          "size_bytes": 11114
+        },
+        {
+          "file": "step_e_torque_budget_comparison.json",
+          "size_bytes": 5014
+        },
+        {
+          "file": "step_e_total_torque_bound_authority_fix_report.json",
+          "size_bytes": 7834
+        },
+        {
+          "file": "step_e_total_torque_bound_authority_fix_report.md",
+          "size_bytes": 6793
+        },
+        {
+          "file": "step_e_transient_disambiguation_report.json",
+          "size_bytes": 6905
+        },
+        {
+          "file": "step_e_transient_disambiguation_report.md",
+          "size_bytes": 7614
+        },
+        {
+          "file": "step_e_transient_root_cause_report.json",
+          "size_bytes": 11289
+        },
+        {
+          "file": "step_e_transient_root_cause_report.md",
+          "size_bytes": 11834
+        },
+        {
+          "file": "step_e_v5_results_and_updated_analysis.md",
+          "size_bytes": 6963
+        },
+        {
+          "file": "step_e_validation_failure_report.json",
+          "size_bytes": 6731
+        },
+        {
+          "file": "step_e_validation_failure_report.md",
+          "size_bytes": 13501
+        },
+        {
+          "file": "step_e_work_summary.md",
+          "size_bytes": 8185
+        },
+        {
+          "file": "support_position_gain_calibration_report.json",
+          "size_bytes": 9647
+        },
+        {
+          "file": "support_position_gain_calibration_report.md",
+          "size_bytes": 7431
+        },
+        {
+          "file": "transient_capture_diagnostic_report.json",
+          "size_bytes": 5403
+        },
+        {
+          "file": "transient_capture_diagnostic_report.md",
+          "size_bytes": 7408
+        },
+        {
+          "file": "v1_telemetry_check_summary.json",
+          "size_bytes": 698
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/sagittal_position_aware_balance",
+      "original_size": "69.9M",
+      "original_size_bytes": 73267533,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "model_identification_report.json",
+          "size_bytes": 2849
+        },
+        {
+          "file": "model_identification_report.md",
+          "size_bytes": 4098
+        },
+        {
+          "file": "sysid/collection_metadata.json",
+          "size_bytes": 131
+        },
+        {
+          "file": "sysid/identified_model.json",
+          "size_bytes": 1626
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/root_z_recheck",
+      "original_size": "61.7M",
+      "original_size_bytes": 64739855,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "m002/failure_report_1000.md",
+          "size_bytes": 509
+        },
+        {
+          "file": "m003/failure_report_1000.md",
+          "size_bytes": 508
+        },
+        {
+          "file": "p001/failure_report_1000.md",
+          "size_bytes": 463
+        },
+        {
+          "file": "p002/failure_report_1000.md",
+          "size_bytes": 463
+        },
+        {
+          "file": "p003/failure_report_1000.md",
+          "size_bytes": 463
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/visual_inspection_low_0p300",
+      "original_size": "52.1M",
+      "original_size_bytes": 54614095,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [
+        {
+          "file": "VISUAL_INSPECTION_INSTRUCTIONS.md",
+          "size_bytes": 8073
+        },
+        {
+          "file": "visual_inspection_low_0p300_metrics.json",
+          "size_bytes": 2011
+        },
+        {
+          "file": "visual_inspection_low_0p300_summary.md",
+          "size_bytes": 7278
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_height_recovery_rich",
+      "original_size": "39.4M",
+      "original_size_bytes": 41292477,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "step_c_failure_classification.json",
+          "size_bytes": 112
+        },
+        {
+          "file": "step_c_height_case_matrix.json",
+          "size_bytes": 605
+        },
+        {
+          "file": "step_c_height_recovery_metrics.json",
+          "size_bytes": 3338
+        },
+        {
+          "file": "step_c_height_recovery_report.md",
+          "size_bytes": 882
+        },
+        {
+          "file": "step_c_height_reference.json",
+          "size_bytes": 435
+        },
+        {
+          "file": "step_c_pass_fail_summary.json",
+          "size_bytes": 845
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/balance_core_position_containment_e0b",
+      "original_size": "39.3M",
+      "original_size_bytes": 41216400,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "extended_longevity_summary.json",
+          "size_bytes": 1896
+        },
+        {
+          "file": "extended_longevity_summary.md",
+          "size_bytes": 957
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_height_variant_position_hold_audit",
+      "original_size": "31.9M",
+      "original_size_bytes": 33424562,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "gate_500/step_c_failure_classification.json",
+          "size_bytes": 446
+        },
+        {
+          "file": "gate_500/step_c_height_case_matrix.json",
+          "size_bytes": 3008
+        },
+        {
+          "file": "gate_500/step_c_height_recovery_metrics.json",
+          "size_bytes": 9274
+        },
+        {
+          "file": "gate_500/step_c_height_recovery_report.md",
+          "size_bytes": 1302
+        },
+        {
+          "file": "gate_500/step_c_height_reference.json",
+          "size_bytes": 435
+        },
+        {
+          "file": "gate_500/step_c_pass_fail_summary.json",
+          "size_bytes": 999
+        },
+        {
+          "file": "high_small_failure_audit.json",
+          "size_bytes": 4658
+        },
+        {
+          "file": "high_tiny_failure_audit.json",
+          "size_bytes": 4649
+        },
+        {
+          "file": "low_small_failure_audit.json",
+          "size_bytes": 4664
+        },
+        {
+          "file": "low_tiny_failure_audit.json",
+          "size_bytes": 4653
+        },
+        {
+          "file": "nominal_failure_audit.json",
+          "size_bytes": 4635
+        },
+        {
+          "file": "step_e_height_variant_case_matrix.json",
+          "size_bytes": 2718
+        },
+        {
+          "file": "step_e_height_variant_metrics.json",
+          "size_bytes": 24377
+        },
+        {
+          "file": "step_e_height_variant_position_hold_report.md",
+          "size_bytes": 2108
+        },
+        {
+          "file": "step_e_height_variant_position_hold_summary.json",
+          "size_bytes": 1357
+        },
+        {
+          "file": "step_e_height_variant_supplemental_1000_step_metrics.json",
+          "size_bytes": 17501
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_hip_yaw_authority_fix",
+      "original_size": "26.2M",
+      "original_size_bytes": 27522087,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "hip_yaw_authority_candidate_summary.json",
+          "size_bytes": 39467
+        },
+        {
+          "file": "hip_yaw_authority_fix_report.md",
+          "size_bytes": 3175
+        },
+        {
+          "file": "hip_yaw_authority_fix_summary.json",
+          "size_bytes": 39541
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hip_yaw_boundary_audit",
+      "original_size": "24.9M",
+      "original_size_bytes": 26064346,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [
+        {
+          "file": "hip_yaw_audit_final_report.md",
+          "size_bytes": 11850
+        },
+        {
+          "file": "hip_yaw_baseline_metrics.json",
+          "size_bytes": 3887
+        },
+        {
+          "file": "hip_yaw_baseline_report.md",
+          "size_bytes": 1937
+        },
+        {
+          "file": "hip_yaw_mechanism_classification.json",
+          "size_bytes": 2285
+        },
+        {
+          "file": "hip_yaw_mechanism_classification_report.md",
+          "size_bytes": 6575
+        },
+        {
+          "file": "reference_command/hip_yaw_reference_consistency.json",
+          "size_bytes": 3657
+        },
+        {
+          "file": "reference_command/hip_yaw_reference_consistency_report.md",
+          "size_bytes": 2891
+        },
+        {
+          "file": "reference_command/phase_2_sign_error_investigation.md",
+          "size_bytes": 1241
+        },
+        {
+          "file": "torque_authority/hip_yaw_torque_authority_report.md",
+          "size_bytes": 2300
+        },
+        {
+          "file": "torque_authority/hip_yaw_torque_authority_summary.json",
+          "size_bytes": 11382
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_root_cause_diagnostics",
+      "original_size": "23.9M",
+      "original_size_bytes": 25012198,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "axis_ablation_summary.json",
+          "size_bytes": 13552
+        },
+        {
+          "file": "hip_roll_posture_audit.json",
+          "size_bytes": 1571093
+        },
+        {
+          "file": "hip_yaw_posture_audit.json",
+          "size_bytes": 624387
+        },
+        {
+          "file": "step_e_root_cause_report.md",
+          "size_bytes": 10613
+        },
+        {
+          "file": "step_e_root_cause_summary.json",
+          "size_bytes": 8672
+        },
+        {
+          "file": "velocity_frame_audit.json",
+          "size_bytes": 485997
+        },
+        {
+          "file": "wheel_torque_sign_audit.json",
+          "size_bytes": 6958
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_height_recovery_variant_short",
+      "original_size": "17.5M",
+      "original_size_bytes": 18304592,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "step_c_failure_classification.json",
+          "size_bytes": 101
+        },
+        {
+          "file": "step_c_height_case_matrix.json",
+          "size_bytes": 3008
+        },
+        {
+          "file": "step_c_height_recovery_metrics.json",
+          "size_bytes": 16133
+        },
+        {
+          "file": "step_c_height_recovery_report.md",
+          "size_bytes": 1006
+        },
+        {
+          "file": "step_c_height_reference.json",
+          "size_bytes": 435
+        },
+        {
+          "file": "step_c_pass_fail_summary.json",
+          "size_bytes": 853
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/joint_profile_smoke_tests",
+      "original_size": "17.0M",
+      "original_size_bytes": 17859864,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "no small summaries found; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_high_tiny_failure_audit",
+      "original_size": "7.1M",
+      "original_size_bytes": 7493011,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "high_tiny_failure_audit.json",
+          "size_bytes": 25524
+        },
+        {
+          "file": "high_tiny_failure_audit_report.md",
+          "size_bytes": 1897
+        },
+        {
+          "file": "high_tiny_hip_yaw_peak_window.csv",
+          "size_bytes": 1736415
+        },
+        {
+          "file": "high_tiny_nominal_low_tiny_comparison.csv",
+          "size_bytes": 7952
+        },
+        {
+          "file": "high_tiny_support_peak_window.csv",
+          "size_bytes": 2861803
+        },
+        {
+          "file": "high_tiny_wheel_velocity_peak_window.csv",
+          "size_bytes": 2859420
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_height_recovery_short_v2",
+      "original_size": "7.0M",
+      "original_size_bytes": 7311124,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "step_c_failure_classification.json",
+          "size_bytes": 97
+        },
+        {
+          "file": "step_c_height_case_matrix.json",
+          "size_bytes": 1098
+        },
+        {
+          "file": "step_c_height_recovery_metrics.json",
+          "size_bytes": 5669
+        },
+        {
+          "file": "step_c_height_recovery_report.md",
+          "size_bytes": 922
+        },
+        {
+          "file": "step_c_height_reference.json",
+          "size_bytes": 435
+        },
+        {
+          "file": "step_c_pass_fail_summary.json",
+          "size_bytes": 846
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/stage2b_diagnostics",
+      "original_size": "4.7M",
+      "original_size_bytes": 4934861,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "stage2b_a_parity_report_1779597870.json",
+          "size_bytes": 2285
+        },
+        {
+          "file": "stage2b_a_parity_report_1779597911.json",
+          "size_bytes": 2280
+        },
+        {
+          "file": "stage2b_a_parity_report_1779598341.json",
+          "size_bytes": 2280
+        },
+        {
+          "file": "stage2b_a_parity_report_1779598344.json",
+          "size_bytes": 2298
+        },
+        {
+          "file": "stage2b_a_parity_report_1779598992.json",
+          "size_bytes": 2201
+        },
+        {
+          "file": "stage2b_a_parity_report_1779599012.json",
+          "size_bytes": 2201
+        },
+        {
+          "file": "stage2b_a_parity_report_1779599017.json",
+          "size_bytes": 2201
+        },
+        {
+          "file": "stage2b_a_parity_report_1779599023.json",
+          "size_bytes": 2201
+        },
+        {
+          "file": "stage2b_a_parity_report_1779599031.json",
+          "size_bytes": 2201
+        },
+        {
+          "file": "stage2b_feedforward_diagnostics_1779585708.md",
+          "size_bytes": 793
+        },
+        {
+          "file": "stage2b_feedforward_diagnostics_1779585816.md",
+          "size_bytes": 1217
+        },
+        {
+          "file": "stage2b_feedforward_results_1779585816.json",
+          "size_bytes": 4350
+        },
+        {
+          "file": "stage2b_phase_b_diagnostics_1779587174.md",
+          "size_bytes": 1776
+        },
+        {
+          "file": "stage2b_phase_b_diagnostics_1779587330.md",
+          "size_bytes": 3874
+        },
+        {
+          "file": "stage2b_phase_b_results_1779587174.json",
+          "size_bytes": 4523
+        },
+        {
+          "file": "stage2b_phase_b_results_1779587330.json",
+          "size_bytes": 7742
+        },
+        {
+          "file": "stage2b_phase_c_config_sweep_1779591277.md",
+          "size_bytes": 8346
+        },
+        {
+          "file": "stage2b_phase_c_config_sweep_1779591562.md",
+          "size_bytes": 13529
+        },
+        {
+          "file": "stage2b_phase_c_corrected_selection_1779593035.md",
+          "size_bytes": 2407
+        },
+        {
+          "file": "stage2b_phase_c_corrected_selection_1779593063.md",
+          "size_bytes": 2690
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hip_yaw_root_cause_audit",
+      "original_size": "4.0M",
+      "original_size_bytes": 4229122,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "high_0p480_hip_yaw_peak_window.csv",
+          "size_bytes": 1129304
+        },
+        {
+          "file": "hip_yaw_event_order_comparison.csv",
+          "size_bytes": 383
+        },
+        {
+          "file": "hip_yaw_root_cause_summary.json",
+          "size_bytes": 10795
+        },
+        {
+          "file": "low_0p300_hip_yaw_peak_window.csv",
+          "size_bytes": 1332913
+        },
+        {
+          "file": "nominal_hip_yaw_peak_window.csv",
+          "size_bytes": 1752424
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_height_recovery_short",
+      "original_size": "3.5M",
+      "original_size_bytes": 3661062,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "step_c_failure_classification.json",
+          "size_bytes": 48
+        },
+        {
+          "file": "step_c_height_case_matrix.json",
+          "size_bytes": 1098
+        },
+        {
+          "file": "step_c_height_recovery_metrics.json",
+          "size_bytes": 2280
+        },
+        {
+          "file": "step_c_height_recovery_report.md",
+          "size_bytes": 881
+        },
+        {
+          "file": "step_c_height_reference.json",
+          "size_bytes": 435
+        },
+        {
+          "file": "step_c_pass_fail_summary.json",
+          "size_bytes": 784
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/continuous_low_height_sagittal_fix",
+      "original_size": "3.4M",
+      "original_size_bytes": 3591136,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "baseline/stepE_low0p300_1000.summary.json",
+          "size_bytes": 1300
+        },
+        {
+          "file": "candidate_E1_k60_continuous/stepE_low0p300_1000.summary.json",
+          "size_bytes": 1300
+        },
+        {
+          "file": "candidate_E2_k80_continuous/stepE_low0p300_1000.summary.json",
+          "size_bytes": 1300
+        },
+        {
+          "file": "candidate_E3_k100_continuous/stepE_low0p300_1000.summary.json",
+          "size_bytes": 1297
+        },
+        {
+          "file": "continuous_low_height_candidate_summary.json",
+          "size_bytes": 12076
+        },
+        {
+          "file": "continuous_low_height_sagittal_fix_report.md",
+          "size_bytes": 2159
+        },
+        {
+          "file": "continuous_low_height_sagittal_fix_summary.json",
+          "size_bytes": 3446
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_official_validation",
+      "original_size": "2.8M",
+      "original_size_bytes": 2979528,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "official_step_e_column_inventory.json",
+          "size_bytes": 42690
+        },
+        {
+          "file": "official_step_e_pass_fail_summary.json",
+          "size_bytes": 1940
+        },
+        {
+          "file": "official_step_e_peak_windows.csv",
+          "size_bytes": 2926649
+        },
+        {
+          "file": "official_step_e_validation_metrics.json",
+          "size_bytes": 5820
+        },
+        {
+          "file": "official_step_e_validation_report.md",
+          "size_bytes": 2429
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/low_height_pitch_position_interaction_audit",
+      "original_size": "2.4M",
+      "original_size_bytes": 2519749,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [
+        {
+          "file": "pitch_failure_classification.json",
+          "size_bytes": 660
+        },
+        {
+          "file": "pitch_peak_windows.csv",
+          "size_bytes": 1258818
+        },
+        {
+          "file": "pitch_position_interaction_report.md",
+          "size_bytes": 1819
+        },
+        {
+          "file": "pitch_position_interaction_summary.json",
+          "size_bytes": 6412
+        },
+        {
+          "file": "support_peak_windows.csv",
+          "size_bytes": 1251508
+        },
+        {
+          "file": "torque_interaction_comparison.csv",
+          "size_bytes": 532
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_high_tiny_rich_audit",
+      "original_size": "2.0M",
+      "original_size_bytes": 2046499,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "high_tiny_hip_yaw_terms_peak_window.csv",
+          "size_bytes": 758067
+        },
+        {
+          "file": "high_tiny_rich_audit.json",
+          "size_bytes": 2787
+        },
+        {
+          "file": "high_tiny_rich_audit_report.md",
+          "size_bytes": 883
+        },
+        {
+          "file": "high_tiny_sagittal_terms_peak_window.csv",
+          "size_bytes": 1277381
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hip_yaw_yaw_architecture_audit",
+      "original_size": "1.9M",
+      "original_size_bytes": 2003629,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 7,
+      "copied_files": [
+        {
+          "file": "decomposition_moderate_gains/hip_yaw_torque_decomposition_report.md",
+          "size_bytes": 1431
+        },
+        {
+          "file": "decomposition_moderate_gains/hip_yaw_torque_decomposition_summary.json",
+          "size_bytes": 2181
+        },
+        {
+          "file": "decomposition_moderate_gains_v2/hip_yaw_torque_decomposition_report.md",
+          "size_bytes": 1431
+        },
+        {
+          "file": "decomposition_moderate_gains_v2/hip_yaw_torque_decomposition_summary.json",
+          "size_bytes": 2181
+        },
+        {
+          "file": "decomposition_moderate_gains_v3/hip_yaw_torque_decomposition_report.md",
+          "size_bytes": 1431
+        },
+        {
+          "file": "decomposition_moderate_gains_v3/hip_yaw_torque_decomposition_summary.json",
+          "size_bytes": 2325
+        },
+        {
+          "file": "isolation/coupling_analysis/kinematic_coupling_report.md",
+          "size_bytes": 2241
+        },
+        {
+          "file": "isolation/coupling_analysis/kinematic_coupling_summary.json",
+          "size_bytes": 2046
+        },
+        {
+          "file": "isolation/hip_yaw_mode_isolation_report.md",
+          "size_bytes": 1140
+        },
+        {
+          "file": "isolation/hip_yaw_mode_isolation_summary.json",
+          "size_bytes": 1591
+        },
+        {
+          "file": "isolation/per_experiment_metrics.csv",
+          "size_bytes": 746
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_geometry_check",
+      "original_size": "1.3M",
+      "original_size_bytes": 1412228,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "joint_axis_inspection.json",
+          "size_bytes": 2244
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/d2_height_tracking_and_hiproll_audit",
+      "original_size": "1.3M",
+      "original_size_bytes": 1396568,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "d2_height_tracking_and_hiproll_summary.json",
+          "size_bytes": 6511
+        },
+        {
+          "file": "fix_decision.json",
+          "size_bytes": 2524
+        },
+        {
+          "file": "low_0p300_height_tracking/low_0p300_height_event_windows.csv",
+          "size_bytes": 353682
+        },
+        {
+          "file": "low_0p300_height_tracking/low_0p300_height_tracking_report.md",
+          "size_bytes": 1363
+        },
+        {
+          "file": "low_0p300_height_tracking/low_0p300_height_tracking_summary.json",
+          "size_bytes": 1835
+        },
+        {
+          "file": "protected_d2_baseline_freeze.json",
+          "size_bytes": 2089
+        },
+        {
+          "file": "telemetry_inventory.json",
+          "size_bytes": 3553
+        },
+        {
+          "file": "telemetry_inventory.md",
+          "size_bytes": 2669
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_posture_fixed",
+      "original_size": "1.2M",
+      "original_size_bytes": 1291689,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "joint_mapping.json",
+          "size_bytes": 2510
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/stage2_diagnostics",
+      "original_size": "1015.6K",
+      "original_size_bytes": 1039975,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "stage2_diagnostics_1779583170.json",
+          "size_bytes": 337439
+        },
+        {
+          "file": "stage2_diagnostics_1779583245.json",
+          "size_bytes": 351268
+        },
+        {
+          "file": "stage2_diagnostics_1779583280.json",
+          "size_bytes": 351268
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_task6_empirical_ik_corrected",
+      "original_size": "753.8K",
+      "original_size_bytes": 771850,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "empirical_ik_targets.json",
+          "size_bytes": 1121
+        },
+        {
+          "file": "raw_configurations.json",
+          "size_bytes": 770729
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_task6_empirical_ik_standing_only",
+      "original_size": "751.4K",
+      "original_size_bytes": 769451,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "empirical_ik_targets.json",
+          "size_bytes": 1088
+        },
+        {
+          "file": "raw_configurations.json",
+          "size_bytes": 768363
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_5_roll_tilt_fix",
+      "original_size": "687.7K",
+      "original_size_bytes": 704238,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "best_roll_fix_summary.json",
+          "size_bytes": 1114
+        },
+        {
+          "file": "full_validation_summary.json",
+          "size_bytes": 954
+        },
+        {
+          "file": "step5_6_summary.json",
+          "size_bytes": 2358
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/advanced_hip_yaw_rejection_audit",
+      "original_size": "546.2K",
+      "original_size_bytes": 559341,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "advanced_hip_yaw_mechanism_classification.json",
+          "size_bytes": 1073
+        },
+        {
+          "file": "advanced_hip_yaw_rejection_report.md",
+          "size_bytes": 3072
+        },
+        {
+          "file": "advanced_hip_yaw_rejection_summary.json",
+          "size_bytes": 4018
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_task6_empirical_ik",
+      "original_size": "519.9K",
+      "original_size_bytes": 532379,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [
+        {
+          "file": "empirical_ik_targets.json",
+          "size_bytes": 899
+        },
+        {
+          "file": "raw_configurations.json",
+          "size_bytes": 527082
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_initialization_method_audit",
+      "original_size": "440.4K",
+      "original_size_bytes": 450947,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "low_1cm_initialization_audit.json",
+          "size_bytes": 12413
+        },
+        {
+          "file": "low_1cm_initialization_audit_report.md",
+          "size_bytes": 3593
+        },
+        {
+          "file": "low_1cm_startup_window.csv",
+          "size_bytes": 359117
+        },
+        {
+          "file": "nominal_vs_low_1cm_startup_comparison.csv",
+          "size_bytes": 75824
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/operational_height_envelope_search",
+      "original_size": "385.9K",
+      "original_size_bytes": 395183,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "controller_ready_extrema/controller_ready_extrema_summary.json",
+          "size_bytes": 405
+        },
+        {
+          "file": "controller_ready_extrema/max_operational_height_setup.json",
+          "size_bytes": 2191
+        },
+        {
+          "file": "controller_ready_extrema/min_operational_height_setup.json",
+          "size_bytes": 8139
+        },
+        {
+          "file": "dynamic_probe_setups/search_high_0p414m.json",
+          "size_bytes": 8139
+        },
+        {
+          "file": "dynamic_probe_setups/search_high_0p419m.json",
+          "size_bytes": 8138
+        },
+        {
+          "file": "dynamic_probe_setups/search_high_0p424m.json",
+          "size_bytes": 8133
+        },
+        {
+          "file": "dynamic_probe_setups/search_low_0p384m.json",
+          "size_bytes": 8124
+        },
+        {
+          "file": "dynamic_probe_setups/search_low_0p389m.json",
+          "size_bytes": 8096
+        },
+        {
+          "file": "dynamic_probe_setups/search_low_0p394m.json",
+          "size_bytes": 8134
+        },
+        {
+          "file": "max_operational_height_setup.json",
+          "size_bytes": 8100
+        },
+        {
+          "file": "min_operational_height_setup.json",
+          "size_bytes": 8103
+        },
+        {
+          "file": "operational_height_envelope_report.md",
+          "size_bytes": 16812
+        },
+        {
+          "file": "operational_height_envelope_summary.json",
+          "size_bytes": 18012
+        },
+        {
+          "file": "operational_height_valid_candidates.json",
+          "size_bytes": 89674
+        },
+        {
+          "file": "static_extreme_validation.json",
+          "size_bytes": 17469
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b8_diagnostics",
+      "original_size": "313.4K",
+      "original_size_bytes": 320893,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "no small summaries found; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/low_0p300_initialization_contact_audit",
+      "original_size": "258.8K",
+      "original_size_bytes": 264998,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "low_0p300_wbc_ownership_audit.json",
+          "size_bytes": 1660
+        },
+        {
+          "file": "low_0p300_wbc_ownership_audit_report.md",
+          "size_bytes": 1698
+        },
+        {
+          "file": "phase1_wbc_invariant_violation_summary.md",
+          "size_bytes": 3057
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_task4_telemetry",
+      "original_size": "198.6K",
+      "original_size_bytes": 203343,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "telemetry_h0.45.json",
+          "size_bytes": 33906
+        },
+        {
+          "file": "telemetry_h0.50.json",
+          "size_bytes": 33857
+        },
+        {
+          "file": "telemetry_h0.55.json",
+          "size_bytes": 33894
+        },
+        {
+          "file": "telemetry_h0.60.json",
+          "size_bytes": 33914
+        },
+        {
+          "file": "telemetry_h0.65.json",
+          "size_bytes": 33894
+        },
+        {
+          "file": "telemetry_h0.70.json",
+          "size_bytes": 33878
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_baseline_comparison",
+      "original_size": "172.9K",
+      "original_size_bytes": 177044,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "comparison_per_episode.csv",
+          "size_bytes": 131328
+        },
+        {
+          "file": "comparison_per_height.csv",
+          "size_bytes": 8041
+        },
+        {
+          "file": "comparison_results.json",
+          "size_bytes": 35402
+        },
+        {
+          "file": "comparison_summary.csv",
+          "size_bytes": 2273
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/controller_system_root_cause_audit",
+      "original_size": "160.0K",
+      "original_size_bytes": 163859,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 5,
+      "copied_files": [
+        {
+          "file": "controller_configuration/controller_configuration_report.md",
+          "size_bytes": 3426
+        },
+        {
+          "file": "controller_configuration/controller_configuration_summary.json",
+          "size_bytes": 4041
+        },
+        {
+          "file": "controller_system_root_cause_summary.json",
+          "size_bytes": 7171
+        },
+        {
+          "file": "current_diff_stat.txt",
+          "size_bytes": 452
+        },
+        {
+          "file": "event_order/event_order_report.md",
+          "size_bytes": 2171
+        },
+        {
+          "file": "event_order/event_order_summary.json",
+          "size_bytes": 3124
+        },
+        {
+          "file": "recent_commits.txt",
+          "size_bytes": 1530
+        },
+        {
+          "file": "root_cause_map.json",
+          "size_bytes": 6801
+        },
+        {
+          "file": "root_cause_map.md",
+          "size_bytes": 5411
+        },
+        {
+          "file": "structural_invariants/structural_invariant_report.md",
+          "size_bytes": 3205
+        },
+        {
+          "file": "structural_invariants/structural_invariant_summary.json",
+          "size_bytes": 6807
+        },
+        {
+          "file": "subsystems/subsystem_audit_report.md",
+          "size_bytes": 2423
+        },
+        {
+          "file": "subsystems/subsystem_audit_summary.json",
+          "size_bytes": 13031
+        },
+        {
+          "file": "telemetry_completeness_report.md",
+          "size_bytes": 5472
+        },
+        {
+          "file": "telemetry_freshness_report.md",
+          "size_bytes": 4467
+        },
+        {
+          "file": "telemetry_freshness_summary.json",
+          "size_bytes": 1973
+        },
+        {
+          "file": "worktree_status.txt",
+          "size_bytes": 4914
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_second_stage_diagnostics",
+      "original_size": "146.7K",
+      "original_size_bytes": 150217,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "hip_yaw_posture_root_cause.json",
+          "size_bytes": 703
+        },
+        {
+          "file": "hip_yaw_sign_audit.json",
+          "size_bytes": 2458
+        },
+        {
+          "file": "step_e_second_stage_report.md",
+          "size_bytes": 3276
+        },
+        {
+          "file": "step_e_second_stage_summary.json",
+          "size_bytes": 6293
+        },
+        {
+          "file": "transient_drift_peak_window.csv",
+          "size_bytes": 134669
+        },
+        {
+          "file": "transient_drift_root_cause.json",
+          "size_bytes": 2065
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hierarchical_controller_fix_phase7",
+      "original_size": "142.5K",
+      "original_size_bytes": 145921,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "check_controller_isolation_modes.txt",
+          "size_bytes": 1430
+        },
+        {
+          "file": "check_hip_roll_sign.txt",
+          "size_bytes": 2126
+        },
+        {
+          "file": "check_wbc_torque_sign.txt",
+          "size_bytes": 1205
+        },
+        {
+          "file": "simulate_hierarchical_controller.txt",
+          "size_bytes": 141160
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hierarchical_controller_fix_phase6",
+      "original_size": "139.2K",
+      "original_size_bytes": 142540,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "check_controller_isolation_modes.txt",
+          "size_bytes": 1430
+        },
+        {
+          "file": "simulate_hierarchical_controller.txt",
+          "size_bytes": 141110
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hierarchical_controller_fix_phase4",
+      "original_size": "114.9K",
+      "original_size_bytes": 117691,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "check_controller_isolation_modes.txt",
+          "size_bytes": 1438
+        },
+        {
+          "file": "check_wbc_variants.txt",
+          "size_bytes": 2825
+        },
+        {
+          "file": "simulate_hierarchical_controller.txt",
+          "size_bytes": 113428
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/physical_standing_height_envelope_search",
+      "original_size": "113.4K",
+      "original_size_bytes": 116113,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [
+        {
+          "file": "physical_height_envelope_report.md",
+          "size_bytes": 1020
+        },
+        {
+          "file": "physical_height_envelope_summary.json",
+          "size_bytes": 3053
+        },
+        {
+          "file": "physical_height_invalid_candidates.json",
+          "size_bytes": 2
+        },
+        {
+          "file": "physical_height_valid_candidates.json",
+          "size_bytes": 70641
+        },
+        {
+          "file": "physical_max_height_setup.json",
+          "size_bytes": 1065
+        },
+        {
+          "file": "physical_min_height_setup.json",
+          "size_bytes": 1073
+        },
+        {
+          "file": "static_physical_extrema_validation.json",
+          "size_bytes": 539
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hierarchical_controller_fix_phase5",
+      "original_size": "112.2K",
+      "original_size_bytes": 114880,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "check_controller_isolation_modes.txt",
+          "size_bytes": 1453
+        },
+        {
+          "file": "simulate_hierarchical_controller.txt",
+          "size_bytes": 113427
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hierarchical_controller_fix_baseline_step_a",
+      "original_size": "105.5K",
+      "original_size_bytes": 108055,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "check_controller_isolation_modes.txt",
+          "size_bytes": 1442
+        },
+        {
+          "file": "check_hip_roll_sign.txt",
+          "size_bytes": 2126
+        },
+        {
+          "file": "check_motor_joint_coupling.txt",
+          "size_bytes": 8785
+        },
+        {
+          "file": "check_wbc_torque_sign.txt",
+          "size_bytes": 1205
+        },
+        {
+          "file": "check_wbc_variants.txt",
+          "size_bytes": 2844
+        },
+        {
+          "file": "simulate_hierarchical_controller.txt",
+          "size_bytes": 91653
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hierarchical_controller_fix_phase3",
+      "original_size": "100.2K",
+      "original_size_bytes": 102606,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "check_controller_isolation_modes.txt",
+          "size_bytes": 1441
+        },
+        {
+          "file": "check_wbc_variants.txt",
+          "size_bytes": 2835
+        },
+        {
+          "file": "simulate_hierarchical_controller.txt",
+          "size_bytes": 98330
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hierarchical_controller_fix_step_b",
+      "original_size": "95.7K",
+      "original_size_bytes": 98013,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "check_controller_isolation_modes.txt",
+          "size_bytes": 1406
+        },
+        {
+          "file": "check_hip_roll_sign.txt",
+          "size_bytes": 2126
+        },
+        {
+          "file": "check_wbc_variants.txt",
+          "size_bytes": 2836
+        },
+        {
+          "file": "simulate_hierarchical_controller.txt",
+          "size_bytes": 91645
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hierarchical_controller_fix_phase2_selected",
+      "original_size": "94.8K",
+      "original_size_bytes": 97091,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "check_controller_isolation_modes.txt",
+          "size_bytes": 1406
+        },
+        {
+          "file": "check_wbc_torque_sign.txt",
+          "size_bytes": 1205
+        },
+        {
+          "file": "check_wbc_variants.txt",
+          "size_bytes": 2836
+        },
+        {
+          "file": "simulate_hierarchical_controller.txt",
+          "size_bytes": 91644
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_task7_gain_tuning",
+      "original_size": "78.9K",
+      "original_size_bytes": 80761,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "tuning_status_report.md",
+          "size_bytes": 3585
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_extreme_failure_root_cause_audit",
+      "original_size": "76.5K",
+      "original_size_bytes": 78287,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 4,
+      "copied_files": [
+        {
+          "file": "artifact_inventory.json",
+          "size_bytes": 4420
+        },
+        {
+          "file": "artifact_inventory.md",
+          "size_bytes": 3670
+        },
+        {
+          "file": "causal_map.json",
+          "size_bytes": 4471
+        },
+        {
+          "file": "causal_map.md",
+          "size_bytes": 11243
+        },
+        {
+          "file": "event_order/event_order_summary.json",
+          "size_bytes": 730
+        },
+        {
+          "file": "fix_strategy_plan.json",
+          "size_bytes": 2523
+        },
+        {
+          "file": "fix_strategy_plan.md",
+          "size_bytes": 5820
+        },
+        {
+          "file": "hip_yaw/hip_yaw_audit.json",
+          "size_bytes": 9136
+        },
+        {
+          "file": "step_e_extreme_height_root_cause_summary.json",
+          "size_bytes": 6082
+        },
+        {
+          "file": "step_e_extreme_height_root_cause_summary.md",
+          "size_bytes": 7505
+        },
+        {
+          "file": "support_drift/support_drift_audit.json",
+          "size_bytes": 9797
+        },
+        {
+          "file": "wbc_artifact_audit.json",
+          "size_bytes": 3874
+        },
+        {
+          "file": "wbc_artifact_audit.md",
+          "size_bytes": 5146
+        },
+        {
+          "file": "wheel_velocity/wheel_velocity_audit.json",
+          "size_bytes": 1588
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hierarchical_controller_fix_phase2",
+      "original_size": "74.8K",
+      "original_size_bytes": 76614,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "check_controller_isolation_modes.txt",
+          "size_bytes": 1440
+        },
+        {
+          "file": "check_wbc_torque_sign.txt",
+          "size_bytes": 1205
+        },
+        {
+          "file": "check_wbc_variants.txt",
+          "size_bytes": 2836
+        },
+        {
+          "file": "simulate_hierarchical_controller.txt",
+          "size_bytes": 71133
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_10_early_transient_fix",
+      "original_size": "70.3K",
+      "original_size_bytes": 72021,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "candidate_summary.json",
+          "size_bytes": 4762
+        },
+        {
+          "file": "full_validation_summary.json",
+          "size_bytes": 93
+        },
+        {
+          "file": "latency_summary.json",
+          "size_bytes": 585
+        },
+        {
+          "file": "step5_10_summary.json",
+          "size_bytes": 1474
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_20_low_stiffness_dynamic_balance",
+      "original_size": "64.6K",
+      "original_size_bytes": 66130,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "baseline_reproduction_check.json",
+          "size_bytes": 6794
+        },
+        {
+          "file": "candidate_results.json",
+          "size_bytes": 7010
+        },
+        {
+          "file": "controller_transition_design.md",
+          "size_bytes": 6872
+        },
+        {
+          "file": "corrected_candidate_results.json",
+          "size_bytes": 8209
+        },
+        {
+          "file": "corrected_evaluation_output.txt",
+          "size_bytes": 3751
+        },
+        {
+          "file": "evaluation_analysis.md",
+          "size_bytes": 6729
+        },
+        {
+          "file": "evaluation_output.txt",
+          "size_bytes": 3365
+        },
+        {
+          "file": "evaluation_pipeline_audit.md",
+          "size_bytes": 12093
+        },
+        {
+          "file": "step5_20_summary.md",
+          "size_bytes": 9559
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/continuous_low_height_sagittal_authority_fix",
+      "original_size": "60.5K",
+      "original_size_bytes": 61960,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "continuous_low_height_sagittal_fix_report.md",
+          "size_bytes": 9508
+        },
+        {
+          "file": "continuous_low_height_sagittal_fix_summary.json",
+          "size_bytes": 4873
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/stage2_gain_sweep",
+      "original_size": "58.5K",
+      "original_size_bytes": 59917,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "gain_sweep_results_1779584377.json",
+          "size_bytes": 59917
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hip_yaw_divergence_fix_authority_eval",
+      "original_size": "54.4K",
+      "original_size_bytes": 55751,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "authority_eval_100steps.json",
+          "size_bytes": 10524
+        },
+        {
+          "file": "authority_eval_500steps.json",
+          "size_bytes": 7568
+        },
+        {
+          "file": "gate_active_verification.json",
+          "size_bytes": 366
+        },
+        {
+          "file": "gate_pass_through_debug/gate_pass_through_debug.json",
+          "size_bytes": 2676
+        },
+        {
+          "file": "gate_pass_through_debug/gate_pass_through_debug.md",
+          "size_bytes": 649
+        },
+        {
+          "file": "hip_yaw_divergence_authority_fix_summary.json",
+          "size_bytes": 4554
+        },
+        {
+          "file": "hy2_div_active_telemetry_audit.json",
+          "size_bytes": 4644
+        },
+        {
+          "file": "hy2_div_active_telemetry_audit.md",
+          "size_bytes": 2824
+        },
+        {
+          "file": "hy2_div_gate_pass_through_fix_summary.json",
+          "size_bytes": 2160
+        },
+        {
+          "file": "hy2_div_implementation_verification.json",
+          "size_bytes": 1642
+        },
+        {
+          "file": "hy2_div_implementation_verification.md",
+          "size_bytes": 2049
+        },
+        {
+          "file": "screening_2000/screening_2000_results.json",
+          "size_bytes": 16095
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/balance_core_true_height_variants",
+      "original_size": "54.4K",
+      "original_size_bytes": 55666,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 19,
+      "copied_files": [
+        {
+          "file": "STEP_B_FINAL_REPORT.md",
+          "size_bytes": 10386
+        },
+        {
+          "file": "true_height_variant_dynamic_summary.json",
+          "size_bytes": 5516
+        },
+        {
+          "file": "true_height_variant_dynamic_summary.md",
+          "size_bytes": 2406
+        },
+        {
+          "file": "true_height_variant_full_validation_summary.json",
+          "size_bytes": 5596
+        },
+        {
+          "file": "true_height_variant_full_validation_summary.md",
+          "size_bytes": 580
+        },
+        {
+          "file": "true_height_variant_setup_report.json",
+          "size_bytes": 12896
+        },
+        {
+          "file": "true_height_variant_setup_report.md",
+          "size_bytes": 7969
+        },
+        {
+          "file": "variant_high_small/variant_setup.json",
+          "size_bytes": 2179
+        },
+        {
+          "file": "variant_high_tiny/variant_setup.json",
+          "size_bytes": 2173
+        },
+        {
+          "file": "variant_low_small/variant_setup.json",
+          "size_bytes": 2182
+        },
+        {
+          "file": "variant_low_tiny/variant_setup.json",
+          "size_bytes": 2175
+        },
+        {
+          "file": "variant_nominal/variant_setup.json",
+          "size_bytes": 1608
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_slow_loop_gating",
+      "original_size": "51.7K",
+      "original_size_bytes": 52983,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "no small summaries found; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/prior_tuning",
+      "original_size": "50.3K",
+      "original_size_bytes": 51539,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "com_feedback_tuning_results.json",
+          "size_bytes": 51164
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/height_range_extension_strategy_audit",
+      "original_size": "46.8K",
+      "original_size_bytes": 47878,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 7,
+      "copied_files": [
+        {
+          "file": "artifact_inventory.json",
+          "size_bytes": 7447
+        },
+        {
+          "file": "artifact_inventory.md",
+          "size_bytes": 4367
+        },
+        {
+          "file": "baseline_vs_extreme_failure_gap_analysis.json",
+          "size_bytes": 3461
+        },
+        {
+          "file": "current_diff_stat.txt",
+          "size_bytes": 454
+        },
+        {
+          "file": "height_range_extension_integrated_summary.json",
+          "size_bytes": 4740
+        },
+        {
+          "file": "height_range_extension_next_experiment_plan.json",
+          "size_bytes": 3229
+        },
+        {
+          "file": "height_range_extension_strategy.json",
+          "size_bytes": 3912
+        },
+        {
+          "file": "height_range_gap_audit.json",
+          "size_bytes": 3749
+        },
+        {
+          "file": "hy2_div_posture_fix_audit.json",
+          "size_bytes": 4390
+        },
+        {
+          "file": "old_baseline_controller_audit.json",
+          "size_bytes": 3081
+        },
+        {
+          "file": "recent_commits.txt",
+          "size_bytes": 2355
+        },
+        {
+          "file": "worktree_status.txt",
+          "size_bytes": 6693
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_lqr_gain_strengthening",
+      "original_size": "44.9K",
+      "original_size_bytes": 45964,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 5,
+      "copied_files": [
+        {
+          "file": "best_lqr_summary.json",
+          "size_bytes": 627
+        },
+        {
+          "file": "stage_A_best_summary.json",
+          "size_bytes": 386
+        },
+        {
+          "file": "stage_B_best_summary.json",
+          "size_bytes": 381
+        },
+        {
+          "file": "stage_C_best_summary.json",
+          "size_bytes": 376
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/sagittal_velocity_damped_balance",
+      "original_size": "44.2K",
+      "original_size_bytes": 45298,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "gate_g_h_final_report.json",
+          "size_bytes": 14117
+        },
+        {
+          "file": "gate_g_h_final_report.md",
+          "size_bytes": 13768
+        },
+        {
+          "file": "validation_summary.json",
+          "size_bytes": 8632
+        },
+        {
+          "file": "validation_summary.md",
+          "size_bytes": 8781
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/balance_core_extended_height_range",
+      "original_size": "43.7K",
+      "original_size_bytes": 44789,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "dynamic_high_2cm/variant_setup.json",
+          "size_bytes": 295
+        },
+        {
+          "file": "dynamic_high_5cm/variant_setup.json",
+          "size_bytes": 280
+        },
+        {
+          "file": "dynamic_low_10cm/variant_setup.json",
+          "size_bytes": 287
+        },
+        {
+          "file": "dynamic_low_2cm/variant_setup.json",
+          "size_bytes": 289
+        },
+        {
+          "file": "dynamic_low_5cm/variant_setup.json",
+          "size_bytes": 279
+        },
+        {
+          "file": "dynamic_nominal/variant_setup.json",
+          "size_bytes": 275
+        },
+        {
+          "file": "extended_height_dynamic_summary.json",
+          "size_bytes": 3277
+        },
+        {
+          "file": "extended_height_setup_report.json",
+          "size_bytes": 19074
+        },
+        {
+          "file": "extended_height_telemetry_analysis.json",
+          "size_bytes": 6143
+        },
+        {
+          "file": "STEP_B_EXTENDED_HEIGHT_RANGE_FINAL_REPORT.md",
+          "size_bytes": 11060
+        },
+        {
+          "file": "validation_log.txt",
+          "size_bytes": 3530
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_25_hierarchical_torque_fusion",
+      "original_size": "43.4K",
+      "original_size_bytes": 44452,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "evaluation_log.txt",
+          "size_bytes": 3185
+        },
+        {
+          "file": "hierarchical_architecture.md",
+          "size_bytes": 11817
+        },
+        {
+          "file": "step5_25_summary.json",
+          "size_bytes": 9065
+        },
+        {
+          "file": "step5_25_summary.md",
+          "size_bytes": 18797
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/five_variant_step_e_step_c_baseline_audit",
+      "original_size": "41.9K",
+      "original_size_bytes": 42887,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "current_diff_stat.txt",
+          "size_bytes": 945
+        },
+        {
+          "file": "current_replay_step_e/step_e_five_variant_current_replay_metrics.json",
+          "size_bytes": 6223
+        },
+        {
+          "file": "current_replay_step_e/step_e_five_variant_current_replay_summary.json",
+          "size_bytes": 7642
+        },
+        {
+          "file": "five_variant_step_e_step_c_baseline_verification_summary.json",
+          "size_bytes": 2010
+        },
+        {
+          "file": "old_baseline_verified.json",
+          "size_bytes": 2147
+        },
+        {
+          "file": "old_known_good_config.json",
+          "size_bytes": 4994
+        },
+        {
+          "file": "old_success_artifact_inventory.md",
+          "size_bytes": 4750
+        },
+        {
+          "file": "old_telemetry_verification.json",
+          "size_bytes": 5246
+        },
+        {
+          "file": "old_vs_current_comparison.json",
+          "size_bytes": 4178
+        },
+        {
+          "file": "recent_commits.txt",
+          "size_bytes": 2401
+        },
+        {
+          "file": "worktree_status.txt",
+          "size_bytes": 1930
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/boundary_yaw_position_coupling_fix",
+      "original_size": "31.3K",
+      "original_size_bytes": 32017,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 5,
+      "copied_files": [
+        {
+          "file": "boundary_fix_failure_analysis_report.md",
+          "size_bytes": 17739
+        },
+        {
+          "file": "boundary_yaw_position_candidate_summary.json",
+          "size_bytes": 5782
+        },
+        {
+          "file": "evaluation_log.txt",
+          "size_bytes": 8496
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_21_dualrate_controller_debug",
+      "original_size": "28.4K",
+      "original_size_bytes": 29053,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "authority_flow_audit.json",
+          "size_bytes": 513
+        },
+        {
+          "file": "control_pipeline_trace.md",
+          "size_bytes": 7512
+        },
+        {
+          "file": "failure_mechanism_report.json",
+          "size_bytes": 1214
+        },
+        {
+          "file": "pure_vs_dualrate_comparison.csv",
+          "size_bytes": 1901
+        },
+        {
+          "file": "runtime_signal_trace.json",
+          "size_bytes": 14490
+        },
+        {
+          "file": "step5_21_summary.json",
+          "size_bytes": 3423
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_23_equivalence_audit",
+      "original_size": "25.6K",
+      "original_size_bytes": 26203,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "canonical_stack_recommendation.md",
+          "size_bytes": 8051
+        },
+        {
+          "file": "full_config_diff.md",
+          "size_bytes": 10578
+        },
+        {
+          "file": "step5_23_summary.json",
+          "size_bytes": 7574
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_c_contact_invalid_audit",
+      "original_size": "23.0K",
+      "original_size_bytes": 23508,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "contact_invalid_audit.json",
+          "size_bytes": 5718
+        },
+        {
+          "file": "contact_invalid_audit_report.md",
+          "size_bytes": 5430
+        },
+        {
+          "file": "contact_invalid_window.csv",
+          "size_bytes": 11259
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_17_torque_level_wbc_prototype",
+      "original_size": "21.5K",
+      "original_size_bytes": 22015,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "actuator_interface_audit.json",
+          "size_bytes": 5907
+        },
+        {
+          "file": "actuator_interface_audit.md",
+          "size_bytes": 706
+        },
+        {
+          "file": "best_torque_wbc_summary.json",
+          "size_bytes": 7452
+        },
+        {
+          "file": "candidate_summary.json",
+          "size_bytes": 3582
+        },
+        {
+          "file": "full_validation_summary.json",
+          "size_bytes": 386
+        },
+        {
+          "file": "response_validation_summary.json",
+          "size_bytes": 500
+        },
+        {
+          "file": "torque_wbc_design.md",
+          "size_bytes": 826
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_independent_standability_audit",
+      "original_size": "18.9K",
+      "original_size_bytes": 19367,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "missing_terms_analysis.md",
+          "size_bytes": 2096
+        },
+        {
+          "file": "model_audit.json",
+          "size_bytes": 6357
+        },
+        {
+          "file": "repository_map.md",
+          "size_bytes": 1036
+        },
+        {
+          "file": "root_cause_summary.md",
+          "size_bytes": 3523
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_24_torque_first_stabilized_wbc",
+      "original_size": "17.4K",
+      "original_size_bytes": 17772,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "candidate_summary.json",
+          "size_bytes": 506
+        },
+        {
+          "file": "step5_24_summary.json",
+          "size_bytes": 4814
+        },
+        {
+          "file": "step5_24_summary.md",
+          "size_bytes": 10863
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/boundary_deep_root_cause_audit",
+      "original_size": "16.9K",
+      "original_size_bytes": 17283,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [
+        {
+          "file": "boundary_root_cause_classification.json",
+          "size_bytes": 369
+        },
+        {
+          "file": "high_0p480_deep_audit.json",
+          "size_bytes": 6870
+        },
+        {
+          "file": "high_0p480_deep_audit_report.md",
+          "size_bytes": 1602
+        },
+        {
+          "file": "low_0p300_deep_audit.json",
+          "size_bytes": 6842
+        },
+        {
+          "file": "low_0p300_deep_audit_report.md",
+          "size_bytes": 1600
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_20b_canonical_eval_rebuild",
+      "original_size": "16.5K",
+      "original_size_bytes": 16854,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "baseline_reproduction_validation.json",
+          "size_bytes": 2694
+        },
+        {
+          "file": "evaluation_output.txt",
+          "size_bytes": 2167
+        },
+        {
+          "file": "final_evaluation_failure_report.md",
+          "size_bytes": 11160
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/joint_low_height_sagittal_yaw_fix",
+      "original_size": "16.4K",
+      "original_size_bytes": 16764,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [
+        {
+          "file": "harness_debug/low_0p300_harness_debug_report.md",
+          "size_bytes": 3203
+        },
+        {
+          "file": "schedule_height_reference_integration_bug.md",
+          "size_bytes": 4544
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_8_roll_redesign",
+      "original_size": "16.1K",
+      "original_size_bytes": 16446,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "best_roll_redesign_summary.json",
+          "size_bytes": 4115
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_18_deployable_motor_torque_interface",
+      "original_size": "13.9K",
+      "original_size_bytes": 14194,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "candidate_summary.json",
+          "size_bytes": 2125
+        },
+        {
+          "file": "full_validation_summary.json",
+          "size_bytes": 247
+        },
+        {
+          "file": "low_level_torque_design.md",
+          "size_bytes": 780
+        },
+        {
+          "file": "motor_interface_audit.json",
+          "size_bytes": 6927
+        },
+        {
+          "file": "motor_interface_audit.md",
+          "size_bytes": 1349
+        },
+        {
+          "file": "response_validation_summary.json",
+          "size_bytes": 321
+        },
+        {
+          "file": "step5_18_summary.json",
+          "size_bytes": 408
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/balance_core_longevity_height_sweep",
+      "original_size": "12.8K",
+      "original_size_bytes": 13104,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "long_duration_summary.json",
+          "size_bytes": 2800
+        },
+        {
+          "file": "long_duration_summary.md",
+          "size_bytes": 602
+        },
+        {
+          "file": "root_z_perturbation_summary.json",
+          "size_bytes": 7859
+        },
+        {
+          "file": "root_z_perturbation_summary.md",
+          "size_bytes": 1397
+        },
+        {
+          "file": "true_height_feasibility_summary.md",
+          "size_bytes": 446
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/height_range_extension_experiment_0",
+      "original_size": "12.8K",
+      "original_size_bytes": 13085,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 4,
+      "copied_files": [
+        {
+          "file": "experiment_0_baseline_ladder_summary.json",
+          "size_bytes": 8709
+        },
+        {
+          "file": "setup_inventory.json",
+          "size_bytes": 3038
+        },
+        {
+          "file": "setup_inventory.md",
+          "size_bytes": 1338
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_official_validation_v2",
+      "original_size": "12.5K",
+      "original_size_bytes": 12806,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "official_step_e_pass_fail_summary_v2.json",
+          "size_bytes": 2023
+        },
+        {
+          "file": "official_step_e_validation_metrics_v2.json",
+          "size_bytes": 7200
+        },
+        {
+          "file": "official_step_e_validation_report_v2.md",
+          "size_bytes": 2680
+        },
+        {
+          "file": "official_step_e_wbc_application_audit.json",
+          "size_bytes": 903
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_22_torque_first_wbc",
+      "original_size": "12.4K",
+      "original_size_bytes": 12712,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "architecture_transition_report.md",
+          "size_bytes": 3071
+        },
+        {
+          "file": "candidate_summary.json",
+          "size_bytes": 382
+        },
+        {
+          "file": "performance_degradation_analysis.md",
+          "size_bytes": 8722
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/posture_standing_validation_a0_5000",
+      "original_size": "12.2K",
+      "original_size_bytes": 12459,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "posture_standing_a0_5000_metrics.json",
+          "size_bytes": 9270
+        },
+        {
+          "file": "posture_standing_a0_5000_pass_fail_summary.json",
+          "size_bytes": 1313
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/classical_prior_eval",
+      "original_size": "11.8K",
+      "original_size_bytes": 12036,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "classical_prior_comparison.json",
+          "size_bytes": 10546
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/classical_prior_comparison",
+      "original_size": "11.5K",
+      "original_size_bytes": 11808,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "comparison_results.csv",
+          "size_bytes": 3269
+        },
+        {
+          "file": "comparison_results.json",
+          "size_bytes": 8539
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_18c_torque_gain_saturation_calibration",
+      "original_size": "11.4K",
+      "original_size_bytes": 11689,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [
+        {
+          "file": "full_validation_summary.json",
+          "size_bytes": 462
+        },
+        {
+          "file": "h060_survival_summary.json",
+          "size_bytes": 672
+        },
+        {
+          "file": "response_validation_summary.json",
+          "size_bytes": 459
+        },
+        {
+          "file": "saturation_audit_summary.json",
+          "size_bytes": 2236
+        },
+        {
+          "file": "step5_18c_summary.json",
+          "size_bytes": 3122
+        },
+        {
+          "file": "torque_scaling_verification.json",
+          "size_bytes": 1644
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_11_corrective_path_audit",
+      "original_size": "10.3K",
+      "original_size_bytes": 10552,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "authority_probe_summary.json",
+          "size_bytes": 115
+        },
+        {
+          "file": "baseline_replay_summary.json",
+          "size_bytes": 214
+        },
+        {
+          "file": "latency_semantics_summary.json",
+          "size_bytes": 164
+        },
+        {
+          "file": "sign_audit_summary.json",
+          "size_bytes": 539
+        },
+        {
+          "file": "state_leakage_audit.json",
+          "size_bytes": 210
+        },
+        {
+          "file": "step5_11_summary.json",
+          "size_bytes": 2533
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/low_height_sagittal_authority_transmission_audit",
+      "original_size": "9.1K",
+      "original_size_bytes": 9324,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "authority_failure_classification.json",
+          "size_bytes": 1145
+        },
+        {
+          "file": "authority_saturation_comparison.csv",
+          "size_bytes": 302
+        },
+        {
+          "file": "authority_transmission_report.md",
+          "size_bytes": 2579
+        },
+        {
+          "file": "authority_transmission_summary.json",
+          "size_bytes": 5218
+        },
+        {
+          "file": "event_order_comparison.csv",
+          "size_bytes": 80
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic_pitch_only",
+      "original_size": "9.0K",
+      "original_size_bytes": 9244,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 383
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic_step2_full",
+      "original_size": "9.0K",
+      "original_size_bytes": 9226,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 384
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_16_jacobian_wbc_vmc",
+      "original_size": "8.8K",
+      "original_size_bytes": 9009,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "candidate_summary.json",
+          "size_bytes": 486
+        },
+        {
+          "file": "final_summary.json",
+          "size_bytes": 296
+        },
+        {
+          "file": "interface_audit.json",
+          "size_bytes": 2515
+        },
+        {
+          "file": "interface_audit.md",
+          "size_bytes": 367
+        },
+        {
+          "file": "jacobian_mapping_summary.json",
+          "size_bytes": 394
+        },
+        {
+          "file": "response_validation_summary.json",
+          "size_bytes": 297
+        },
+        {
+          "file": "wbc_formulation.md",
+          "size_bytes": 819
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b6_tuning_sanity",
+      "original_size": "8.4K",
+      "original_size_bytes": 8608,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "phase_b6_comparison.json",
+          "size_bytes": 5782
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/tune_validation_smoke",
+      "original_size": "8.4K",
+      "original_size_bytes": 8602,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "stage_1_best_summary.json",
+          "size_bytes": 439
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic_obsfix",
+      "original_size": "8.2K",
+      "original_size_bytes": 8427,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 384
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b7_eval",
+      "original_size": "8.1K",
+      "original_size_bytes": 8322,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "per_height_comparison.csv",
+          "size_bytes": 348
+        },
+        {
+          "file": "phase_b7_comparison.json",
+          "size_bytes": 7921
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic",
+      "original_size": "7.7K",
+      "original_size_bytes": 7928,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 399
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic_fixed",
+      "original_size": "7.7K",
+      "original_size_bytes": 7910,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 400
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic_fixed_smoke",
+      "original_size": "7.7K",
+      "original_size_bytes": 7910,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 400
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic_fixed_corrected",
+      "original_size": "7.5K",
+      "original_size_bytes": 7638,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 384
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/boundary_forensic_root_cause",
+      "original_size": "7.1K",
+      "original_size_bytes": 7305,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "actuator_effectiveness_comparison.json",
+          "size_bytes": 169
+        },
+        {
+          "file": "boundary_forensic_root_cause_report.md",
+          "size_bytes": 3002
+        },
+        {
+          "file": "high_0p480_forensic_audit.json",
+          "size_bytes": 1856
+        },
+        {
+          "file": "low_0p300_forensic_audit.json",
+          "size_bytes": 1858
+        },
+        {
+          "file": "passive_drift_classification.json",
+          "size_bytes": 420
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_fast_loop_only",
+      "original_size": "6.9K",
+      "original_size_bytes": 7065,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "no small summaries found; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic_rollfix",
+      "original_size": "5.7K",
+      "original_size_bytes": 5830,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 382
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic_rollfix_flipped",
+      "original_size": "5.7K",
+      "original_size_bytes": 5816,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 384
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic_corrected",
+      "original_size": "5.7K",
+      "original_size_bytes": 5813,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 382
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic_resetfix",
+      "original_size": "5.7K",
+      "original_size_bytes": 5813,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 382
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_diagnostic_rollfix_strong",
+      "original_size": "5.3K",
+      "original_size_bytes": 5427,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "diagnostic_summary_h0.60_seed42.json",
+          "size_bytes": 383
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hip_yaw_divergence_fix_eval",
+      "original_size": "5.1K",
+      "original_size_bytes": 5207,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "hip_yaw_divergence_fix_summary.json",
+          "size_bytes": 2825
+        },
+        {
+          "file": "step_e_5000/hip_yaw_divergence_fix_5000_metrics.json",
+          "size_bytes": 2382
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/hip_yaw_sign_convention_audit",
+      "original_size": "4.9K",
+      "original_size_bytes": 5018,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "hip_yaw_sign_convention_report.md",
+          "size_bytes": 3110
+        },
+        {
+          "file": "hip_yaw_sign_convention_summary.json",
+          "size_bytes": 1908
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_18b_hybrid_pid_torque_rollout_validation",
+      "original_size": "4.9K",
+      "original_size_bytes": 5007,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "candidate_summary.json",
+          "size_bytes": 705
+        },
+        {
+          "file": "full_validation_summary.json",
+          "size_bytes": 97
+        },
+        {
+          "file": "response_validation_summary.json",
+          "size_bytes": 130
+        },
+        {
+          "file": "step5_18b_summary.json",
+          "size_bytes": 431
+        },
+        {
+          "file": "torque_path_activation_summary.json",
+          "size_bytes": 266
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_7_early_roll_stabilizer",
+      "original_size": "4.8K",
+      "original_size_bytes": 4876,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "best_early_roll_summary.json",
+          "size_bytes": 830
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b_baseline_check",
+      "original_size": "4.6K",
+      "original_size_bytes": 4733,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "eval_results.json",
+          "size_bytes": 2101
+        },
+        {
+          "file": "summary_table.txt",
+          "size_bytes": 2140
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b8_ablation",
+      "original_size": "4.6K",
+      "original_size_bytes": 4712,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "no small summaries found; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_balanced_root_solver",
+      "original_size": "4.1K",
+      "original_size_bytes": 4249,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "optimization_debug.json",
+          "size_bytes": 1623
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_9_roll_authority_audit",
+      "original_size": "4.0K",
+      "original_size_bytes": 4092,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "summary.json",
+          "size_bytes": 1006
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_audit_gate",
+      "original_size": "3.9K",
+      "original_size_bytes": 4003,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "audit_gate_decision.json",
+          "size_bytes": 438
+        },
+        {
+          "file": "cross_step_consistency.json",
+          "size_bytes": 1774
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b_ppo_check",
+      "original_size": "3.8K",
+      "original_size_bytes": 3867,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "eval_results.json",
+          "size_bytes": 1187
+        },
+        {
+          "file": "summary_table.txt",
+          "size_bytes": 2146
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/balance_core_extended_longevity",
+      "original_size": "3.3K",
+      "original_size_bytes": 3397,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "extended_longevity_summary.json",
+          "size_bytes": 2460
+        },
+        {
+          "file": "extended_longevity_summary.md",
+          "size_bytes": 937
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_task5_equilibrium",
+      "original_size": "2.8K",
+      "original_size_bytes": 2913,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "equilibrium_postures.json",
+          "size_bytes": 2913
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/visual_environment_check",
+      "original_size": "2.8K",
+      "original_size_bytes": 2910,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 2,
+      "copied_files": [
+        {
+          "file": "visual_environment_check.json",
+          "size_bytes": 1169
+        },
+        {
+          "file": "visual_environment_check_report.md",
+          "size_bytes": 1741
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_task6_corrected_ik_eval",
+      "original_size": "2.5K",
+      "original_size_bytes": 2564,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "eval_results.json",
+          "size_bytes": 1920
+        },
+        {
+          "file": "summary_table.txt",
+          "size_bytes": 0
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_task6_standing_ik_eval",
+      "original_size": "2.4K",
+      "original_size_bytes": 2498,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "eval_results.json",
+          "size_bytes": 1887
+        },
+        {
+          "file": "summary_table.txt",
+          "size_bytes": 0
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b_narrow_height",
+      "original_size": "2.2K",
+      "original_size_bytes": 2253,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "eval_results.json",
+          "size_bytes": 1724
+        },
+        {
+          "file": "summary_table.txt",
+          "size_bytes": 0
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/diagnostics",
+      "original_size": "2.2K",
+      "original_size_bytes": 2252,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "posture_geometry/posture_table_summary.txt",
+          "size_bytes": 1851
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b_no_roll",
+      "original_size": "2.2K",
+      "original_size_bytes": 2223,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "eval_results.json",
+          "size_bytes": 1706
+        },
+        {
+          "file": "summary_table.txt",
+          "size_bytes": 0
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b_tune1",
+      "original_size": "2.2K",
+      "original_size_bytes": 2223,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "eval_results.json",
+          "size_bytes": 1706
+        },
+        {
+          "file": "summary_table.txt",
+          "size_bytes": 0
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b_antisymmetric",
+      "original_size": "2.2K",
+      "original_size_bytes": 2221,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "eval_results.json",
+          "size_bytes": 1705
+        },
+        {
+          "file": "summary_table.txt",
+          "size_bytes": 0
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b_verification",
+      "original_size": "2.1K",
+      "original_size_bytes": 2159,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "eval_results.json",
+          "size_bytes": 1674
+        },
+        {
+          "file": "summary_table.txt",
+          "size_bytes": 0
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/b9_subprocess_smoke",
+      "original_size": "2.0K",
+      "original_size_bytes": 2004,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "stage_1_best_summary.json",
+          "size_bytes": 438
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/step_e_boundary_height_hold_0p300_0p480",
+      "original_size": "1.8K",
+      "original_size_bytes": 1894,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "step_e_boundary_metrics.json",
+          "size_bytes": 1602
+        },
+        {
+          "file": "step_e_boundary_position_hold_summary.json",
+          "size_bytes": 292
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_step5_19_controller_authority_reallocation",
+      "original_size": "1.7K",
+      "original_size_bytes": 1725,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 3,
+      "copied_files": [],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "no small summaries found; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/prior_eval",
+      "original_size": "1.6K",
+      "original_size_bytes": 1641,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "classical_prior_comparison.json",
+          "size_bytes": 895
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/phase_b9_task6_true_manifold",
+      "original_size": "1.4K",
+      "original_size_bytes": 1392,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 1,
+      "copied_files": [
+        {
+          "file": "true_equilibrium_manifold.json",
+          "size_bytes": 1392
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    },
+    {
+      "original_path": "outputs/classical_prior_eval_test",
+      "original_size": "812.0B",
+      "original_size_bytes": 812,
+      "classification": "SUMMARIZE_THEN_DELETE",
+      "references_count": 0,
+      "copied_files": [
+        {
+          "file": "classical_prior_comparison.json",
+          "size_bytes": 440
+        }
+      ],
+      "skipped_large_files": [],
+      "deletion_allowed": true,
+      "reason": "Summaries extracted; raw regenerable output safe to delete."
+    }
+  ]
+}

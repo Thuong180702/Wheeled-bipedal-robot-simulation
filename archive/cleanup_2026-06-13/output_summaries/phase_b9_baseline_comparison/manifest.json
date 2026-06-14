@@ -1,0 +1,28 @@
+{
+  "original_path": "outputs/phase_b9_baseline_comparison",
+  "original_size": "172.9K",
+  "original_size_bytes": 177044,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 1,
+  "copied_files": [
+    {
+      "file": "comparison_per_episode.csv",
+      "size_bytes": 131328
+    },
+    {
+      "file": "comparison_per_height.csv",
+      "size_bytes": 8041
+    },
+    {
+      "file": "comparison_results.json",
+      "size_bytes": 35402
+    },
+    {
+      "file": "comparison_summary.csv",
+      "size_bytes": 2273
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

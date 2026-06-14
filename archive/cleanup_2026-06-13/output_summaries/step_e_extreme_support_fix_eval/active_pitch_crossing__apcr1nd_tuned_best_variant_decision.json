@@ -1,0 +1,127 @@
+{
+  "phase": 7,
+  "phase_name": "Variant Selection",
+  "status": "COMPLETE",
+  "classification": "APCR1ND_TUNED_T5_BEST",
+  "date": "2026-06-12",
+
+  "selected_variant": {
+    "name": "T5_band_limited_balanced",
+    "profile": "APCR1nD_T5_band_limited_balanced",
+    "outside_0p08_pct": 25.1,
+    "outside_0p10_pct": 5.0,
+    "max_abs_e_m": 0.171,
+    "mean_abs_e_m": 0.059,
+    "wheel_rms_rad_s": 1.46,
+    "survived_steps": 2000
+  },
+
+  "ranking": {
+    "outside_0p08_m": {
+      "winner": "T5",
+      "ranks": [
+        {"profile": "T5", "value_pct": 25.1},
+        {"profile": "T4", "value_pct": 26.6},
+        {"profile": "T1", "value_pct": 27.1},
+        {"profile": "T2", "value_pct": 27.1},
+        {"profile": "T3", "value_pct": 27.1}
+      ]
+    },
+    "outside_0p10_m": {
+      "winner": "ALL_TIED",
+      "value_pct": 5.0,
+      "improvement_vs_apcr1n_pp": -17.9
+    },
+    "max_abs_e_m": {
+      "winner": "ALL_TIED",
+      "value_m": 0.171
+    },
+    "wheel_velocity_rms": {
+      "winner": "T5",
+      "value_rad_s": 1.46
+    }
+  },
+
+  "improvements_vs_baseline": {
+    "baseline": "APCR1n",
+    "baseline_outside_0p08_pct": 37.9,
+    "baseline_outside_0p10_pct": 22.9,
+    "baseline_max_abs_e_m": 0.171,
+    "baseline_wheel_rms_rad_s": 2.12,
+
+    "t5_improvements": {
+      "outside_0p08_reduction_pct": 33.7,
+      "outside_0p10_reduction_pct": 78.2,
+      "max_abs_e_unchanged": true,
+      "wheel_rms_reduction_pct": 31.2
+    }
+  },
+
+  "all_variants_tested": {
+    "T1_early_entry": {
+      "outside_0p08_pct": 27.1,
+      "outside_0p10_pct": 5.0,
+      "max_abs_e_m": 0.171,
+      "survived": true
+    },
+    "T2_hold_outside_band": {
+      "outside_0p08_pct": 27.1,
+      "outside_0p10_pct": 5.0,
+      "max_abs_e_m": 0.171,
+      "survived": true
+    },
+    "T3_early_entry_plus_hold": {
+      "outside_0p08_pct": 27.1,
+      "outside_0p10_pct": 5.0,
+      "max_abs_e_m": 0.171,
+      "survived": true
+    },
+    "T4_stronger_authority": {
+      "outside_0p08_pct": 26.6,
+      "outside_0p10_pct": 5.0,
+      "max_abs_e_m": 0.171,
+      "survived": true
+    },
+    "T5_band_limited_balanced": {
+      "outside_0p08_pct": 25.1,
+      "outside_0p10_pct": 5.0,
+      "max_abs_e_m": 0.171,
+      "survived": true
+    }
+  },
+
+  "observations": {
+    "t1_t2_t3_identical": true,
+    "all_variants_improved": true,
+    "all_variants_stable": true,
+    "primary_target_achieved": false,
+    "note": "Target was ±0.08 m containment, T5 achieved 25.1% outside (still 1/4 of time outside target)"
+  },
+
+  "comparison_to_references": {
+    "D2": {
+      "outside_0p08_pct": 38.5,
+      "outside_0p10_pct": 18.2,
+      "t5_better": true
+    },
+    "APCR1h": {
+      "outside_0p08_pct": 44.6,
+      "outside_0p10_pct": 37.3,
+      "t5_better": true
+    },
+    "APCR1n": {
+      "outside_0p08_pct": 37.9,
+      "outside_0p10_pct": 22.9,
+      "t5_better": true
+    }
+  },
+
+  "next_steps": {
+    "phase_8": "Write final report answering 15 key questions",
+    "future_validation": "5000-step T5 at low_0p300",
+    "investigate": "Why T1/T2/T3 produced identical telemetry"
+  },
+
+  "ready_for_5000_step": true,
+  "recommended_profile": "APCR1nD_T5_band_limited_balanced"
+}

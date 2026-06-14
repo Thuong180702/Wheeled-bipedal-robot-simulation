@@ -1,0 +1,11 @@
+{
+  "variant_name": "low_5cm",
+  "target_com_z_m": 0.3539993119017284,
+  "hip_pitch_ref": 1.101052,
+  "knee_ref": 2.0400306666666665,
+  "hip_roll_left": 0.0,
+  "hip_roll_right": 0.0,
+  "hip_yaw_left": 0.0,
+  "hip_yaw_right": 0.0,
+  "calibrated_root_z_m": 0.4720703125
+}

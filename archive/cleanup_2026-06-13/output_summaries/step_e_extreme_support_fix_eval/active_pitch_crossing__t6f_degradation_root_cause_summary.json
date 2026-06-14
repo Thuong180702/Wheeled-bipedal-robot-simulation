@@ -1,0 +1,329 @@
+{
+  "classification": "T6F_DEGRADATION_MIXED_CAUSES",
+  "evidence": [
+    "WRONG_TORQUE_SIGN",
+    "ABRUPT_TORQUE_JUMPS",
+    "WHEEL_VELOCITY_OVERSHOOT",
+    "HIGH_TORQUE_HELD_TOO_LONG"
+  ],
+  "recommendation": "DESIGN_TWO_CANDIDATES",
+  "phase1_stepwise": {
+    "events": [
+      {
+        "event": "T5_first_cross_0.08",
+        "step": 81,
+        "error": 0.0825323901674879
+      },
+      {
+        "event": "T6F_first_cross_0.08",
+        "step": 81,
+        "error": 0.0825323901674879
+      },
+      {
+        "event": "T5_first_cross_0.10",
+        "step": 87,
+        "error": 0.101444127354176
+      },
+      {
+        "event": "T6F_first_cross_0.10",
+        "step": 87,
+        "error": 0.101444127354176
+      },
+      {
+        "event": "T5_first_cross_0.15",
+        "step": 106,
+        "error": 0.1508650391463533
+      },
+      {
+        "event": "T6F_first_cross_0.15",
+        "step": 104,
+        "error": 0.1521190375608739
+      },
+      {
+        "event": "T5_max_abs_error",
+        "step": 146,
+        "error": 0.1871186159069289
+      },
+      {
+        "event": "T6F_max_abs_error",
+        "step": 1930,
+        "error": 0.2121713618078902
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 85,
+        "error": 0.0951267478520546,
+        "active_after": true
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 173,
+        "error": 0.1049903499554599,
+        "active_after": false
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 283,
+        "error": 0.095676836507428,
+        "active_after": true
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 376,
+        "error": 0.1055157479013316,
+        "active_after": false
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 483,
+        "error": 0.0956951641019083,
+        "active_after": true
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 575,
+        "error": 0.1071036737055555,
+        "active_after": false
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 680,
+        "error": 0.0954842562450079,
+        "active_after": true
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 773,
+        "error": 0.1048236665701675,
+        "active_after": false
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 877,
+        "error": 0.0944841366352529,
+        "active_after": true
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 970,
+        "error": 0.1045532314527952,
+        "active_after": false
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 1075,
+        "error": 0.096319770890323,
+        "active_after": true
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 1168,
+        "error": 0.10603780724934,
+        "active_after": false
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 1272,
+        "error": 0.0953784423746017,
+        "active_after": true
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 1365,
+        "error": 0.106096864693119,
+        "active_after": false
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 1474,
+        "error": 0.0962784176159739,
+        "active_after": true
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 1562,
+        "error": 0.1053755093630569,
+        "active_after": false
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 1677,
+        "error": 0.0966025859469938,
+        "active_after": true
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 1764,
+        "error": 0.1048382540244062,
+        "active_after": false
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 1880,
+        "error": 0.0948214433016231,
+        "active_after": true
+      },
+      {
+        "event": "arch_fix_transition",
+        "step": 1973,
+        "error": 0.1069480867286151,
+        "active_after": false
+      },
+      {
+        "event": "T5_e_dot_sign_change",
+        "step": 27,
+        "error": -0.0159685291503634
+      },
+      {
+        "event": "T5_e_dot_sign_change",
+        "step": 146,
+        "error": 0.1871186159069289
+      },
+      {
+        "event": "T5_e_dot_sign_change",
+        "step": 324,
+        "error": 0.0571328493299086
+      },
+      {
+        "event": "T5_e_dot_sign_change",
+        "step": 427,
+        "error": 0.1109787235143393
+      },
+      {
+        "event": "T5_e_dot_sign_change",
+        "step": 527,
+        "error": 0.0484576118193804
+      },
+      {
+        "event": "T5_e_dot_sign_change",
+        "step": 631,
+        "error": 0.1196895139036871
+      },
+      {
+        "event": "T5_e_dot_sign_change",
+        "step": 738,
+        "error": 0.0456748931114372
+      },
+      {
+        "event": "T5_e_dot_sign_change",
+        "step": 841,
+        "error": 0.1169901804217239
+      },
+      {
+        "event": "T5_e_dot_sign_change",
+        "step": 946,
+        "error": 0.0396989932438734
+      },
+      {
+        "event": "T5_e_dot_sign_change",
+        "step": 1051,
+        "error": 0.1212947936301527
+      },
+      {
+        "event": "T6F_e_dot_sign_change",
+        "step": 27,
+        "error": -0.0159685291503634
+      },
+      {
+        "event": "T6F_e_dot_sign_change",
+        "step": 132,
+        "error": 0.1936854734107699
+      },
+      {
+        "event": "T6F_e_dot_sign_change",
+        "step": 230,
+        "error": -0.0092508565135698
+      },
+      {
+        "event": "T6F_e_dot_sign_change",
+        "step": 332,
+        "error": 0.2034014423780615
+      },
+      {
+        "event": "T6F_e_dot_sign_change",
+        "step": 431,
+        "error": 0.0006159059149182
+      },
+      {
+        "event": "T6F_e_dot_sign_change",
+        "step": 533,
+        "error": 0.1976743145560167
+      },
+      {
+        "event": "T6F_e_dot_sign_change",
+        "step": 629,
+        "error": 0.004751387470297
+      },
+      {
+        "event": "T6F_e_dot_sign_change",
+        "step": 730,
+        "error": 0.1965088167904581
+      },
+      {
+        "event": "T6F_e_dot_sign_change",
+        "step": 827,
+        "error": 0.0081732500012744
+      },
+      {
+        "event": "T6F_e_dot_sign_change",
+        "step": 927,
+        "error": 0.1936429249897166
+      }
+    ],
+    "t5_moving_away_pct": 48.57571214392804,
+    "t6f_moving_away_pct": 51.475737868934466
+  },
+  "phase2_torque_phase": {
+    "opposes_drift_pct": 47.52376188094047,
+    "opposes_e_dot_pct": 58.82941470735368,
+    "helps_convergence_pct": 18.55927963981991,
+    "mean_delay_activation_to_reversal": 49.1,
+    "overshoot_count": 0,
+    "max_overshoot_m": 0.0
+  },
+  "phase3_cap_jump": {
+    "cap_4_to_65_count": 10,
+    "cap_65_to_7_count": 10,
+    "cap_7_to_4_count": 0,
+    "max_cap_delta_per_step": 2.5,
+    "max_tau_pos_delta_per_step": 0.16034293174743608,
+    "max_final_tau_delta_per_step": 1.6583353205643263,
+    "tau_jerk_rms": 0.48548359323030754,
+    "mean_e_dot_spike_after_jump": 0.0034010739982967006
+  },
+  "phase4_gain_mismatch": {
+    "t5_mean_implied_gain": 40.09016278225424,
+    "t6f_mean_implied_gain": 40.10829645976148,
+    "t6f_gain_normal_band": 40.18354599788097,
+    "t6f_gain_raised_band": 40.02043664855078,
+    "t6f_response_normal_band": 40.000000023390456,
+    "t6f_response_raised_band": 38.60662910072479,
+    "gain_increases_with_cap": false
+  },
+  "phase5_wheel": {
+    "t5_wheel_vel_max": 5.462944984436035,
+    "t6f_wheel_vel_max": 7.12587308883667,
+    "t5_wheel_vel_rms": 1.5214766128871,
+    "t6f_wheel_vel_rms": 3.93428634416492,
+    "t5_above_5_count": 20,
+    "t6f_above_5_count": 494,
+    "t5_above_6_count": 0,
+    "t6f_above_6_count": 161,
+    "t5_above_7_count": 0,
+    "t6f_above_7_count": 10,
+    "t6f_tau_near_cap_count": 0,
+    "t6f_vel_same_sign_as_drift_pct": 48.72436218109055,
+    "t6f_vel_continues_after_tau_drop_count": 820
+  },
+  "phase6_band_logic": {
+    "band_0_count": 1999,
+    "band_1_count": 0,
+    "band_2_count": 0,
+    "band_3_count": 0,
+    "band_4_count": 0,
+    "outside_010_but_no_escalation_count": 913,
+    "inside_008_but_high_cap_count": 0,
+    "high_torque_while_converging_count": 422,
+    "high_torque_while_converging_pct": 21.11055527763882
+  }
+}

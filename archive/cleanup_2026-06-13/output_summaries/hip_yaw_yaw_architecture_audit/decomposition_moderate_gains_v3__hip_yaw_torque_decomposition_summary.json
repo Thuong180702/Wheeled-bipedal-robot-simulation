@@ -1,0 +1,53 @@
+{
+  "telemetry_path": "outputs/hierarchical_controller_sim/telemetry_1780655374.csv",
+  "total_steps": 212,
+  "common_error": {
+    "max": 0.4454895555973053,
+    "final": 0.4019861966371536,
+    "rms": 0.3399387921071088,
+    "mean": 0.31000424341685706,
+    "std": 0.13981401501849364
+  },
+  "divergence_error": {
+    "max": 0.1187051683664322,
+    "final": -0.0014246851205826083,
+    "rms": 0.04698016963388726,
+    "mean": -0.018748788927830832,
+    "std": 0.043178856592191964
+  },
+  "common_torque": {
+    "max": 23.278745651245117,
+    "final": -6.027746915817261,
+    "rms": 6.089978836356942,
+    "mean": -5.2251470299538685,
+    "std": 3.135611324206351
+  },
+  "divergence_torque": {
+    "max": 8.850729942321777,
+    "final": 0.0175325870513916,
+    "rms": 1.5412026761867526,
+    "mean": 0.2718687084270641,
+    "std": 1.520624927699295
+  },
+  "common_control_correctness": {
+    "opposes_error": true,
+    "correlation": -0.5361631955842716,
+    "sign_correctness_rate": 1.0,
+    "interpretation": "CORRECT: 100.0% of steps have correct sign opposition"
+  },
+  "divergence_control_correctness": {
+    "opposes_error": true,
+    "correlation": -0.4358992625759753,
+    "sign_correctness_rate": 0.7867298578199052,
+    "interpretation": "CORRECT: 78.7% of steps have correct sign opposition"
+  },
+  "per_joint_torque_asymmetry_mean": 1.7786348172384403,
+  "per_joint_error_asymmetry_mean": 0.05175187481702624,
+  "roll_yaw_correlation": null,
+  "hip_yaw_body_yaw_correlation": 0.30411867087958566,
+  "torque_yaw_rate_correlation": 0.30695421321742516,
+  "failure_classification": [
+    "common_torque_dominates_divergence"
+  ],
+  "diagnosis": "## Mode Control Analysis\n\n**Common mode (body yaw):**\n  - Opposes error: True\n  - Sign correctness: 100.0%\n  - Correlation: -0.536\n  - RMS torque: 6.090 Nm\n\n**Divergence mode (leg geometry):**\n  - Opposes error: True\n  - Sign correctness: 78.7%\n  - Correlation: -0.436\n  - RMS torque: 1.541 Nm\n\n## Failure Mechanisms Detected\n\n- common_torque_dominates_divergence\n\n## Interpretation\n\n**WARNING:** Common-mode torque RMS exceeds divergence-mode torque RMS.\nThis is unusual - typically symmetric posture control should dominate divergence.\nMay indicate mode mixing or incorrect decomposition.\n"
+}

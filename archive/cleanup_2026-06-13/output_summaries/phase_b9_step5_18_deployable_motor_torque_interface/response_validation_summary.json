@@ -1,0 +1,12 @@
+{
+  "baseline_h060": {
+    "survival_s": 0.52,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 0.8745,
+    "roll_rms_deg": 16.493,
+    "action_saturation": 0.0
+  },
+  "result": "deployable_motor_torque_interface_available_static_only",
+  "stabilizing_response_validated": false,
+  "full_validation_allowed": false
+}

@@ -1,0 +1,64 @@
+{
+  "profile_name": "APCR1d_symmetric_soft_band_control",
+  "design_document": "docs/validation/apcr1d_symmetric_soft_band_design.md",
+  "created_date": "2026-06-09",
+  "base_on": "APCR1c_active_pitch_crossing_early_activation",
+  "key_change": "proportional_soft_band_torque_mode_instead_of_bang_bang",
+  "rationale": "APCR1c's constant-torque bang-bang control improves centering but creates a wider oscillation envelope. APCR1d uses symmetric proportional torque shaping with velocity-aware decay to reduce amplitude while preserving centering benefit.",
+  "parameters": {
+    "apc_soft_enter_m": 0.05,
+    "apc_inner_deadband_m": 0.02,
+    "apc_full_torque_error_m": 0.08,
+    "apc_desired_band_m": 0.08,
+    "apc_max_cross_tau": 0.75,
+    "apc_smooth_alpha": 0.10,
+    "apc_max_rate_per_step": 0.30,
+    "apc_velocity_decay_enabled": True,
+    "apc_velocity_decay_factor": 0.5,
+    "apc_pitch_enter_rad": 0.03,
+    "apcr_pitch_hard_stop_rad": 0.30,
+    "apcr_roll_hard_stop_rad": 0.15,
+    "apcr_min_com_z_m": 0.27,
+    "apcr_max_com_z_m": 0.50,
+    "apc_contact_gate": True,
+    "apc_height_gate": True,
+    "apc_roll_gate": True,
+    "active_pitch_crossing_recovery_gate_mode": True
+  },
+  "torque_computation": {
+    "mode": "proportional_soft_band",
+    "entry_threshold_m": 0.05,
+    "exit_deadband_m": 0.02,
+    "full_torque_at_m": 0.08,
+    "max_torque_Nm": 0.75,
+    "velocity_decay_factor": 0.5,
+    "velocity_decay_condition": "e * e_dot < 0"
+  },
+  "expected_targets": {
+    "max_positive_drift_m": 0.15,
+    "min_negative_drift_m": -0.08,
+    "peak_to_peak_m": 0.20,
+    "outside_0p15_percentage": 5,
+    "centering": "balanced_positive_and_negative"
+  },
+  "comparison": {
+    "D2": {
+      "max_drift_m": 0.1757,
+      "min_drift_m": 0.0142,
+      "peak_to_peak_m": 0.1615
+    },
+    "APCR1c": {
+      "max_drift_m": 0.1682,
+      "min_drift_m": -0.0716,
+      "peak_to_peak_m": 0.2398
+    }
+  },
+  "key_differences_from_apcr1c": [
+    "Torque shape: proportional instead of constant",
+    "Entry threshold: 0.05 m instead of 0.08 m",
+    "Exit deadband: 0.02 m instead of 0.07 m",
+    "Max torque: 0.75 Nm instead of 1.0 Nm",
+    "Velocity decay: enabled instead of disabled",
+    "Symmetry: abs(error)-based instead of state-machine-based"
+  ]
+}

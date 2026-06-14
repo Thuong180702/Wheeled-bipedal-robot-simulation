@@ -1,0 +1,2366 @@
+[
+  {
+    "variant_name": "min_operational_height",
+    "requested_target_com_z_m": 0.37908476112047823,
+    "achieved_com_z_m": 0.3800659587192326,
+    "calibrated_root_z_m": 0.5057220458984375,
+    "hip_pitch_ref": 1.016052,
+    "knee_ref": 1.8897925714285715,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -6.284533605460663e-07,
+    "support_center_y": -0.01708283817134522,
+    "com_x_m": -2.7550154846071136e-08,
+    "com_y_m": -0.015615948395779136,
+    "com_support_error_x": 6.009032056999951e-07,
+    "com_support_error_y": 0.0014668897755660826,
+    "com_support_error_norm_xy": 0.0014668898986443988,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.0005244480705294194,
+    "total_wheel_floor_fz": 106.49518587973107,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.7839480000000001,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      1.016052,
+      1.8897925714285715,
+      0.0,
+      0.0,
+      0.0,
+      1.016052,
+      1.8897925714285715,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -2.7550154846071136e-08,
+      -0.015615948395779136,
+      0.3800659587192326
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": {
+      "total_evaluated": 1296,
+      "passed_contact": 1295,
+      "passed_height": 76,
+      "passed_com_centering": 101,
+      "passed_orientation": 1296,
+      "passed_joint_margin": 1296,
+      "passed_all": 3,
+      "best_by_height": [
+        0.656052,
+        1.7869354285714287,
+        2.864885966075148e-05,
+        4.2846236568295115
+      ],
+      "best_by_com": [
+        0.9646234285714286,
+        1.8126497142857145,
+        5.607460388642444e-05,
+        1.525842810185999
+      ],
+      "top_rejected": [
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.298364,
+          "achieved_com_z_m": 0.4604769719603538,
+          "support_error_norm_xy": 0.06694428168492601,
+          "reason": "height_error=0.081392m; support_not_centered=0.066944m; above_controller_max_com_z=0.460477m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3240782857142859,
+          "achieved_com_z_m": 0.4557935273712292,
+          "support_error_norm_xy": 0.07118094296555515,
+          "reason": "height_error=0.076709m; support_not_centered=0.071181m; above_controller_max_com_z=0.455794m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3497925714285715,
+          "achieved_com_z_m": 0.4510183463796879,
+          "support_error_norm_xy": 0.07529585126311783,
+          "reason": "height_error=0.071934m; support_not_centered=0.075296m; above_controller_max_com_z=0.451018m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3755068571428573,
+          "achieved_com_z_m": 0.4461204669525613,
+          "support_error_norm_xy": 0.079286285849361,
+          "reason": "height_error=0.067036m; support_not_centered=0.079286m; above_controller_max_com_z=0.446120m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.401221142857143,
+          "achieved_com_z_m": 0.44112995253930926,
+          "support_error_norm_xy": 0.08314960829657085,
+          "reason": "height_error=0.062045m; support_not_centered=0.083150m; above_controller_max_com_z=0.441130m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4269354285714286,
+          "achieved_com_z_m": 0.43604633963790945,
+          "support_error_norm_xy": 0.08688326422206763,
+          "reason": "height_error=0.056962m; support_not_centered=0.086883m; above_controller_max_com_z=0.436046m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4526497142857144,
+          "achieved_com_z_m": 0.43085389689038184,
+          "support_error_norm_xy": 0.09048478497713142,
+          "reason": "height_error=0.051769m; support_not_centered=0.090485m; above_controller_max_com_z=0.430854m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.478364,
+          "achieved_com_z_m": 0.42558266055149596,
+          "support_error_norm_xy": 0.0939517892792424,
+          "reason": "height_error=0.046498m; support_not_centered=0.093952m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5040782857142858,
+          "achieved_com_z_m": 0.42020162328357824,
+          "support_error_norm_xy": 0.09728198478655496,
+          "reason": "height_error=0.041117m; support_not_centered=0.097282m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5297925714285716,
+          "achieved_com_z_m": 0.4147713223709602,
+          "support_error_norm_xy": 0.10047316961356681,
+          "reason": "height_error=0.035687m; support_not_centered=0.100473m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5555068571428572,
+          "achieved_com_z_m": 0.40923021700229045,
+          "support_error_norm_xy": 0.10352323378697857,
+          "reason": "height_error=0.030145m; support_not_centered=0.103523m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.581221142857143,
+          "achieved_com_z_m": 0.40363882922986827,
+          "support_error_norm_xy": 0.10643016064078276,
+          "reason": "height_error=0.024554m; support_not_centered=0.106430m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6069354285714286,
+          "achieved_com_z_m": 0.3979508624729636,
+          "support_error_norm_xy": 0.10919202814965898,
+          "reason": "height_error=0.018866m; support_not_centered=0.109192m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6326497142857144,
+          "achieved_com_z_m": 0.39221156611958874,
+          "support_error_norm_xy": 0.11180701019979387,
+          "reason": "height_error=0.013127m; support_not_centered=0.111807m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6583640000000002,
+          "achieved_com_z_m": 0.3864051479843062,
+          "support_error_norm_xy": 0.11427337779628577,
+          "reason": "height_error=0.007320m; support_not_centered=0.114273m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.684078285714286,
+          "achieved_com_z_m": 0.3805158098171532,
+          "support_error_norm_xy": 0.11658950020633507,
+          "reason": "support_not_centered=0.116590m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7097925714285716,
+          "achieved_com_z_m": 0.3745887828165774,
+          "support_error_norm_xy": 0.11875384603746544,
+          "reason": "support_not_centered=0.118754m; below_controller_min_com_z=0.374589m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7355068571428571,
+          "achieved_com_z_m": 0.3686082576773958,
+          "support_error_norm_xy": 0.12076498425006194,
+          "reason": "height_error=0.010477m; support_not_centered=0.120765m; below_controller_min_com_z=0.368608m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.761221142857143,
+          "achieved_com_z_m": 0.36257367890010156,
+          "support_error_norm_xy": 0.12262158510355764,
+          "reason": "height_error=0.016511m; support_not_centered=0.122622m; below_controller_min_com_z=0.362574m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7869354285714287,
+          "achieved_com_z_m": 0.3564844863690917,
+          "support_error_norm_xy": 0.1243224210356417,
+          "reason": "height_error=0.022600m; support_not_centered=0.124322m; below_controller_min_com_z=0.356484m"
+        }
+      ]
+    },
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.37908476112047823,
+    "height_error_m": 0.0009811975987543686,
+    "joint_limit_valid": true
+  },
+  {
+    "variant_name": "search_low_0.384m",
+    "requested_target_com_z_m": 0.38408476112047824,
+    "achieved_com_z_m": 0.38430758293475414,
+    "calibrated_root_z_m": 0.5113525390625,
+    "hip_pitch_ref": 0.9903377142857144,
+    "knee_ref": 1.864078285714286,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -6.73132698844614e-07,
+    "support_center_y": -0.013488608282796383,
+    "com_x_m": -4.052313961755016e-08,
+    "com_y_m": -0.014730414801669277,
+    "com_support_error_x": 6.326095592270638e-07,
+    "com_support_error_y": -0.0012418065188728941,
+    "com_support_error_norm_xy": 0.0012418066800070251,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.0005311662313181448,
+    "total_wheel_floor_fz": 108.02488704195105,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.8096622857142857,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      0.9903377142857144,
+      1.864078285714286,
+      0.0,
+      0.0,
+      0.0,
+      0.9903377142857144,
+      1.864078285714286,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -4.052313961755016e-08,
+      -0.014730414801669277,
+      0.38430758293475414
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": {
+      "total_evaluated": 1296,
+      "passed_contact": 1295,
+      "passed_height": 78,
+      "passed_com_centering": 101,
+      "passed_orientation": 1296,
+      "passed_joint_margin": 1296,
+      "passed_all": 6,
+      "best_by_height": [
+        1.2731948571428573,
+        1.838364,
+        4.046110012151383e-05,
+        4.391152559211895
+      ],
+      "best_by_com": [
+        0.9646234285714286,
+        1.8126497142857145,
+        5.607460388642444e-05,
+        1.0258428101859987
+      ],
+      "top_rejected": [
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.298364,
+          "achieved_com_z_m": 0.4604769719603538,
+          "support_error_norm_xy": 0.06694428168492601,
+          "reason": "height_error=0.076392m; support_not_centered=0.066944m; above_controller_max_com_z=0.460477m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3240782857142859,
+          "achieved_com_z_m": 0.4557935273712292,
+          "support_error_norm_xy": 0.07118094296555515,
+          "reason": "height_error=0.071709m; support_not_centered=0.071181m; above_controller_max_com_z=0.455794m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3497925714285715,
+          "achieved_com_z_m": 0.4510183463796879,
+          "support_error_norm_xy": 0.07529585126311783,
+          "reason": "height_error=0.066934m; support_not_centered=0.075296m; above_controller_max_com_z=0.451018m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3755068571428573,
+          "achieved_com_z_m": 0.4461204669525613,
+          "support_error_norm_xy": 0.079286285849361,
+          "reason": "height_error=0.062036m; support_not_centered=0.079286m; above_controller_max_com_z=0.446120m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.401221142857143,
+          "achieved_com_z_m": 0.44112995253930926,
+          "support_error_norm_xy": 0.08314960829657085,
+          "reason": "height_error=0.057045m; support_not_centered=0.083150m; above_controller_max_com_z=0.441130m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4269354285714286,
+          "achieved_com_z_m": 0.43604633963790945,
+          "support_error_norm_xy": 0.08688326422206763,
+          "reason": "height_error=0.051962m; support_not_centered=0.086883m; above_controller_max_com_z=0.436046m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4526497142857144,
+          "achieved_com_z_m": 0.43085389689038184,
+          "support_error_norm_xy": 0.09048478497713142,
+          "reason": "height_error=0.046769m; support_not_centered=0.090485m; above_controller_max_com_z=0.430854m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.478364,
+          "achieved_com_z_m": 0.42558266055149596,
+          "support_error_norm_xy": 0.0939517892792424,
+          "reason": "height_error=0.041498m; support_not_centered=0.093952m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5040782857142858,
+          "achieved_com_z_m": 0.42020162328357824,
+          "support_error_norm_xy": 0.09728198478655496,
+          "reason": "height_error=0.036117m; support_not_centered=0.097282m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5297925714285716,
+          "achieved_com_z_m": 0.4147713223709602,
+          "support_error_norm_xy": 0.10047316961356681,
+          "reason": "height_error=0.030687m; support_not_centered=0.100473m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5555068571428572,
+          "achieved_com_z_m": 0.40923021700229045,
+          "support_error_norm_xy": 0.10352323378697857,
+          "reason": "height_error=0.025145m; support_not_centered=0.103523m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.581221142857143,
+          "achieved_com_z_m": 0.40363882922986827,
+          "support_error_norm_xy": 0.10643016064078276,
+          "reason": "height_error=0.019554m; support_not_centered=0.106430m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6069354285714286,
+          "achieved_com_z_m": 0.3979508624729636,
+          "support_error_norm_xy": 0.10919202814965898,
+          "reason": "height_error=0.013866m; support_not_centered=0.109192m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6326497142857144,
+          "achieved_com_z_m": 0.39221156611958874,
+          "support_error_norm_xy": 0.11180701019979387,
+          "reason": "height_error=0.008127m; support_not_centered=0.111807m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6583640000000002,
+          "achieved_com_z_m": 0.3864051479843062,
+          "support_error_norm_xy": 0.11427337779628577,
+          "reason": "support_not_centered=0.114273m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.684078285714286,
+          "achieved_com_z_m": 0.3805158098171532,
+          "support_error_norm_xy": 0.11658950020633507,
+          "reason": "support_not_centered=0.116590m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7097925714285716,
+          "achieved_com_z_m": 0.3745887828165774,
+          "support_error_norm_xy": 0.11875384603746544,
+          "reason": "height_error=0.009496m; support_not_centered=0.118754m; below_controller_min_com_z=0.374589m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7355068571428571,
+          "achieved_com_z_m": 0.3686082576773958,
+          "support_error_norm_xy": 0.12076498425006194,
+          "reason": "height_error=0.015477m; support_not_centered=0.120765m; below_controller_min_com_z=0.368608m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.761221142857143,
+          "achieved_com_z_m": 0.36257367890010156,
+          "support_error_norm_xy": 0.12262158510355764,
+          "reason": "height_error=0.021511m; support_not_centered=0.122622m; below_controller_min_com_z=0.362574m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7869354285714287,
+          "achieved_com_z_m": 0.3564844863690917,
+          "support_error_norm_xy": 0.1243224210356417,
+          "reason": "height_error=0.027600m; support_not_centered=0.124322m; below_controller_min_com_z=0.356484m"
+        }
+      ]
+    },
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.38408476112047824,
+    "height_error_m": 0.00022282181427590864,
+    "joint_limit_valid": true
+  },
+  {
+    "variant_name": "search_low_0.389m",
+    "requested_target_com_z_m": 0.38908476112047824,
+    "achieved_com_z_m": 0.38909802271534233,
+    "calibrated_root_z_m": 0.516815185546875,
+    "hip_pitch_ref": 0.9903377142857144,
+    "knee_ref": 1.838364,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -6.71235564492223e-07,
+    "support_center_y": -0.01818119276673326,
+    "com_x_m": -4.02895571843192e-08,
+    "com_y_m": -0.015308090986794714,
+    "com_support_error_x": 6.309460073079038e-07,
+    "com_support_error_y": 0.0028731017799385455,
+    "com_support_error_norm_xy": 0.002873101849217828,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.000528969374271035,
+    "total_wheel_floor_fz": 109.35371065024108,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.8096622857142857,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      0.9903377142857144,
+      1.838364,
+      0.0,
+      0.0,
+      0.0,
+      0.9903377142857144,
+      1.838364,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -4.02895571843192e-08,
+      -0.015308090986794714,
+      0.38909802271534233
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": {
+      "total_evaluated": 1296,
+      "passed_contact": 1295,
+      "passed_height": 86,
+      "passed_com_centering": 101,
+      "passed_orientation": 1296,
+      "passed_joint_margin": 1296,
+      "passed_all": 8,
+      "best_by_height": [
+        0.9903377142857144,
+        1.838364,
+        1.3261594864089066e-05,
+        0.29926696623301474
+      ],
+      "best_by_com": [
+        0.9646234285714286,
+        1.8126497142857145,
+        5.607460388642444e-05,
+        0.5258428101859982
+      ],
+      "top_rejected": [
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.298364,
+          "achieved_com_z_m": 0.4604769719603538,
+          "support_error_norm_xy": 0.06694428168492601,
+          "reason": "height_error=0.071392m; support_not_centered=0.066944m; above_controller_max_com_z=0.460477m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3240782857142859,
+          "achieved_com_z_m": 0.4557935273712292,
+          "support_error_norm_xy": 0.07118094296555515,
+          "reason": "height_error=0.066709m; support_not_centered=0.071181m; above_controller_max_com_z=0.455794m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3497925714285715,
+          "achieved_com_z_m": 0.4510183463796879,
+          "support_error_norm_xy": 0.07529585126311783,
+          "reason": "height_error=0.061934m; support_not_centered=0.075296m; above_controller_max_com_z=0.451018m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3755068571428573,
+          "achieved_com_z_m": 0.4461204669525613,
+          "support_error_norm_xy": 0.079286285849361,
+          "reason": "height_error=0.057036m; support_not_centered=0.079286m; above_controller_max_com_z=0.446120m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.401221142857143,
+          "achieved_com_z_m": 0.44112995253930926,
+          "support_error_norm_xy": 0.08314960829657085,
+          "reason": "height_error=0.052045m; support_not_centered=0.083150m; above_controller_max_com_z=0.441130m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4269354285714286,
+          "achieved_com_z_m": 0.43604633963790945,
+          "support_error_norm_xy": 0.08688326422206763,
+          "reason": "height_error=0.046962m; support_not_centered=0.086883m; above_controller_max_com_z=0.436046m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4526497142857144,
+          "achieved_com_z_m": 0.43085389689038184,
+          "support_error_norm_xy": 0.09048478497713142,
+          "reason": "height_error=0.041769m; support_not_centered=0.090485m; above_controller_max_com_z=0.430854m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.478364,
+          "achieved_com_z_m": 0.42558266055149596,
+          "support_error_norm_xy": 0.0939517892792424,
+          "reason": "height_error=0.036498m; support_not_centered=0.093952m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5040782857142858,
+          "achieved_com_z_m": 0.42020162328357824,
+          "support_error_norm_xy": 0.09728198478655496,
+          "reason": "height_error=0.031117m; support_not_centered=0.097282m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5297925714285716,
+          "achieved_com_z_m": 0.4147713223709602,
+          "support_error_norm_xy": 0.10047316961356681,
+          "reason": "height_error=0.025687m; support_not_centered=0.100473m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5555068571428572,
+          "achieved_com_z_m": 0.40923021700229045,
+          "support_error_norm_xy": 0.10352323378697857,
+          "reason": "height_error=0.020145m; support_not_centered=0.103523m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.581221142857143,
+          "achieved_com_z_m": 0.40363882922986827,
+          "support_error_norm_xy": 0.10643016064078276,
+          "reason": "height_error=0.014554m; support_not_centered=0.106430m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6069354285714286,
+          "achieved_com_z_m": 0.3979508624729636,
+          "support_error_norm_xy": 0.10919202814965898,
+          "reason": "height_error=0.008866m; support_not_centered=0.109192m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6326497142857144,
+          "achieved_com_z_m": 0.39221156611958874,
+          "support_error_norm_xy": 0.11180701019979387,
+          "reason": "support_not_centered=0.111807m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6583640000000002,
+          "achieved_com_z_m": 0.3864051479843062,
+          "support_error_norm_xy": 0.11427337779628577,
+          "reason": "support_not_centered=0.114273m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.684078285714286,
+          "achieved_com_z_m": 0.3805158098171532,
+          "support_error_norm_xy": 0.11658950020633507,
+          "reason": "height_error=0.008569m; support_not_centered=0.116590m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7097925714285716,
+          "achieved_com_z_m": 0.3745887828165774,
+          "support_error_norm_xy": 0.11875384603746544,
+          "reason": "height_error=0.014496m; support_not_centered=0.118754m; below_controller_min_com_z=0.374589m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7355068571428571,
+          "achieved_com_z_m": 0.3686082576773958,
+          "support_error_norm_xy": 0.12076498425006194,
+          "reason": "height_error=0.020477m; support_not_centered=0.120765m; below_controller_min_com_z=0.368608m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.761221142857143,
+          "achieved_com_z_m": 0.36257367890010156,
+          "support_error_norm_xy": 0.12262158510355764,
+          "reason": "height_error=0.026511m; support_not_centered=0.122622m; below_controller_min_com_z=0.362574m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7869354285714287,
+          "achieved_com_z_m": 0.3564844863690917,
+          "support_error_norm_xy": 0.1243224210356417,
+          "reason": "height_error=0.032600m; support_not_centered=0.124322m; below_controller_min_com_z=0.356484m"
+        }
+      ]
+    },
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.38908476112047824,
+    "height_error_m": 1.3261594864089066e-05,
+    "joint_limit_valid": true
+  },
+  {
+    "variant_name": "search_low_0.394m",
+    "requested_target_com_z_m": 0.39408476112047824,
+    "achieved_com_z_m": 0.3932865804918236,
+    "calibrated_root_z_m": 0.522369384765625,
+    "hip_pitch_ref": 0.9646234285714286,
+    "knee_ref": 1.8126497142857145,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -7.186614343346331e-07,
+    "support_center_y": -0.014443210967550787,
+    "com_x_m": -5.361703172666894e-08,
+    "com_y_m": -0.014387140307513991,
+    "com_support_error_x": 6.650444026079642e-07,
+    "com_support_error_y": 5.607066003679613e-05,
+    "com_support_error_norm_xy": 5.607460388642444e-05,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.0005177061539439268,
+    "total_wheel_floor_fz": 107.52156934684417,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.8353765714285715,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      0.9646234285714286,
+      1.8126497142857145,
+      0.0,
+      0.0,
+      0.0,
+      0.9646234285714286,
+      1.8126497142857145,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -5.361703172666894e-08,
+      -0.014387140307513991,
+      0.3932865804918236
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": {
+      "total_evaluated": 1296,
+      "passed_contact": 1295,
+      "passed_height": 93,
+      "passed_com_centering": 101,
+      "passed_orientation": 1296,
+      "passed_joint_margin": 1296,
+      "passed_all": 7,
+      "best_by_height": [
+        1.3503377142857143,
+        1.684078285714286,
+        1.028466918634452e-05,
+        7.1863665036035
+      ],
+      "best_by_com": [
+        0.9646234285714286,
+        1.8126497142857145,
+        5.607460388642444e-05,
+        0.18547893591693088
+      ],
+      "top_rejected": [
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.298364,
+          "achieved_com_z_m": 0.4604769719603538,
+          "support_error_norm_xy": 0.06694428168492601,
+          "reason": "height_error=0.066392m; support_not_centered=0.066944m; above_controller_max_com_z=0.460477m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3240782857142859,
+          "achieved_com_z_m": 0.4557935273712292,
+          "support_error_norm_xy": 0.07118094296555515,
+          "reason": "height_error=0.061709m; support_not_centered=0.071181m; above_controller_max_com_z=0.455794m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3497925714285715,
+          "achieved_com_z_m": 0.4510183463796879,
+          "support_error_norm_xy": 0.07529585126311783,
+          "reason": "height_error=0.056934m; support_not_centered=0.075296m; above_controller_max_com_z=0.451018m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3755068571428573,
+          "achieved_com_z_m": 0.4461204669525613,
+          "support_error_norm_xy": 0.079286285849361,
+          "reason": "height_error=0.052036m; support_not_centered=0.079286m; above_controller_max_com_z=0.446120m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.401221142857143,
+          "achieved_com_z_m": 0.44112995253930926,
+          "support_error_norm_xy": 0.08314960829657085,
+          "reason": "height_error=0.047045m; support_not_centered=0.083150m; above_controller_max_com_z=0.441130m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4269354285714286,
+          "achieved_com_z_m": 0.43604633963790945,
+          "support_error_norm_xy": 0.08688326422206763,
+          "reason": "height_error=0.041962m; support_not_centered=0.086883m; above_controller_max_com_z=0.436046m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4526497142857144,
+          "achieved_com_z_m": 0.43085389689038184,
+          "support_error_norm_xy": 0.09048478497713142,
+          "reason": "height_error=0.036769m; support_not_centered=0.090485m; above_controller_max_com_z=0.430854m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.478364,
+          "achieved_com_z_m": 0.42558266055149596,
+          "support_error_norm_xy": 0.0939517892792424,
+          "reason": "height_error=0.031498m; support_not_centered=0.093952m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5040782857142858,
+          "achieved_com_z_m": 0.42020162328357824,
+          "support_error_norm_xy": 0.09728198478655496,
+          "reason": "height_error=0.026117m; support_not_centered=0.097282m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5297925714285716,
+          "achieved_com_z_m": 0.4147713223709602,
+          "support_error_norm_xy": 0.10047316961356681,
+          "reason": "height_error=0.020687m; support_not_centered=0.100473m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5555068571428572,
+          "achieved_com_z_m": 0.40923021700229045,
+          "support_error_norm_xy": 0.10352323378697857,
+          "reason": "height_error=0.015145m; support_not_centered=0.103523m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.581221142857143,
+          "achieved_com_z_m": 0.40363882922986827,
+          "support_error_norm_xy": 0.10643016064078276,
+          "reason": "height_error=0.009554m; support_not_centered=0.106430m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6069354285714286,
+          "achieved_com_z_m": 0.3979508624729636,
+          "support_error_norm_xy": 0.10919202814965898,
+          "reason": "support_not_centered=0.109192m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6326497142857144,
+          "achieved_com_z_m": 0.39221156611958874,
+          "support_error_norm_xy": 0.11180701019979387,
+          "reason": "support_not_centered=0.111807m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6583640000000002,
+          "achieved_com_z_m": 0.3864051479843062,
+          "support_error_norm_xy": 0.11427337779628577,
+          "reason": "height_error=0.007680m; support_not_centered=0.114273m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.684078285714286,
+          "achieved_com_z_m": 0.3805158098171532,
+          "support_error_norm_xy": 0.11658950020633507,
+          "reason": "height_error=0.013569m; support_not_centered=0.116590m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7097925714285716,
+          "achieved_com_z_m": 0.3745887828165774,
+          "support_error_norm_xy": 0.11875384603746544,
+          "reason": "height_error=0.019496m; support_not_centered=0.118754m; below_controller_min_com_z=0.374589m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7355068571428571,
+          "achieved_com_z_m": 0.3686082576773958,
+          "support_error_norm_xy": 0.12076498425006194,
+          "reason": "height_error=0.025477m; support_not_centered=0.120765m; below_controller_min_com_z=0.368608m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.761221142857143,
+          "achieved_com_z_m": 0.36257367890010156,
+          "support_error_norm_xy": 0.12262158510355764,
+          "reason": "height_error=0.031511m; support_not_centered=0.122622m; below_controller_min_com_z=0.362574m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7869354285714287,
+          "achieved_com_z_m": 0.3564844863690917,
+          "support_error_norm_xy": 0.1243224210356417,
+          "reason": "height_error=0.037600m; support_not_centered=0.124322m; below_controller_min_com_z=0.356484m"
+        }
+      ]
+    },
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.39408476112047824,
+    "height_error_m": 0.0007981806286546655,
+    "joint_limit_valid": true
+  },
+  {
+    "variant_name": "search_low_0.399m",
+    "requested_target_com_z_m": 0.39908476112047825,
+    "achieved_com_z_m": 0.39737719840788666,
+    "calibrated_root_z_m": 0.527801513671875,
+    "hip_pitch_ref": 0.9389091428571429,
+    "knee_ref": 1.7869354285714287,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -7.675004902174543e-07,
+    "support_center_y": -0.010563948766646875,
+    "com_x_m": -6.712990405667568e-08,
+    "com_y_m": -0.013431381464650763,
+    "com_support_error_x": 7.003705861607786e-07,
+    "com_support_error_y": -0.0028674326980038887,
+    "com_support_error_norm_xy": 0.0028674327835366636,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.0005305729966211606,
+    "total_wheel_floor_fz": 110.35456685617925,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.8610908571428572,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      0.9389091428571429,
+      1.7869354285714287,
+      0.0,
+      0.0,
+      0.0,
+      0.9389091428571429,
+      1.7869354285714287,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -6.712990405667568e-08,
+      -0.013431381464650763,
+      0.39737719840788666
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": {
+      "total_evaluated": 1296,
+      "passed_contact": 1295,
+      "passed_height": 100,
+      "passed_com_centering": 101,
+      "passed_orientation": 1296,
+      "passed_joint_margin": 1296,
+      "passed_all": 5,
+      "best_by_height": [
+        0.5789091428571429,
+        1.6583640000000002,
+        2.2578220074676025e-06,
+        4.743179416791375
+      ],
+      "best_by_com": [
+        0.9646234285714286,
+        1.8126497142857145,
+        5.607460388642444e-05,
+        0.6854789359169313
+      ],
+      "top_rejected": [
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.298364,
+          "achieved_com_z_m": 0.4604769719603538,
+          "support_error_norm_xy": 0.06694428168492601,
+          "reason": "height_error=0.061392m; support_not_centered=0.066944m; above_controller_max_com_z=0.460477m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3240782857142859,
+          "achieved_com_z_m": 0.4557935273712292,
+          "support_error_norm_xy": 0.07118094296555515,
+          "reason": "height_error=0.056709m; support_not_centered=0.071181m; above_controller_max_com_z=0.455794m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3497925714285715,
+          "achieved_com_z_m": 0.4510183463796879,
+          "support_error_norm_xy": 0.07529585126311783,
+          "reason": "height_error=0.051934m; support_not_centered=0.075296m; above_controller_max_com_z=0.451018m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3755068571428573,
+          "achieved_com_z_m": 0.4461204669525613,
+          "support_error_norm_xy": 0.079286285849361,
+          "reason": "height_error=0.047036m; support_not_centered=0.079286m; above_controller_max_com_z=0.446120m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.401221142857143,
+          "achieved_com_z_m": 0.44112995253930926,
+          "support_error_norm_xy": 0.08314960829657085,
+          "reason": "height_error=0.042045m; support_not_centered=0.083150m; above_controller_max_com_z=0.441130m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4269354285714286,
+          "achieved_com_z_m": 0.43604633963790945,
+          "support_error_norm_xy": 0.08688326422206763,
+          "reason": "height_error=0.036962m; support_not_centered=0.086883m; above_controller_max_com_z=0.436046m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4526497142857144,
+          "achieved_com_z_m": 0.43085389689038184,
+          "support_error_norm_xy": 0.09048478497713142,
+          "reason": "height_error=0.031769m; support_not_centered=0.090485m; above_controller_max_com_z=0.430854m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.478364,
+          "achieved_com_z_m": 0.42558266055149596,
+          "support_error_norm_xy": 0.0939517892792424,
+          "reason": "height_error=0.026498m; support_not_centered=0.093952m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5040782857142858,
+          "achieved_com_z_m": 0.42020162328357824,
+          "support_error_norm_xy": 0.09728198478655496,
+          "reason": "height_error=0.021117m; support_not_centered=0.097282m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5297925714285716,
+          "achieved_com_z_m": 0.4147713223709602,
+          "support_error_norm_xy": 0.10047316961356681,
+          "reason": "height_error=0.015687m; support_not_centered=0.100473m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5555068571428572,
+          "achieved_com_z_m": 0.40923021700229045,
+          "support_error_norm_xy": 0.10352323378697857,
+          "reason": "height_error=0.010145m; support_not_centered=0.103523m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.581221142857143,
+          "achieved_com_z_m": 0.40363882922986827,
+          "support_error_norm_xy": 0.10643016064078276,
+          "reason": "support_not_centered=0.106430m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6069354285714286,
+          "achieved_com_z_m": 0.3979508624729636,
+          "support_error_norm_xy": 0.10919202814965898,
+          "reason": "support_not_centered=0.109192m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6326497142857144,
+          "achieved_com_z_m": 0.39221156611958874,
+          "support_error_norm_xy": 0.11180701019979387,
+          "reason": "height_error=0.006873m; support_not_centered=0.111807m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6583640000000002,
+          "achieved_com_z_m": 0.3864051479843062,
+          "support_error_norm_xy": 0.11427337779628577,
+          "reason": "height_error=0.012680m; support_not_centered=0.114273m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.684078285714286,
+          "achieved_com_z_m": 0.3805158098171532,
+          "support_error_norm_xy": 0.11658950020633507,
+          "reason": "height_error=0.018569m; support_not_centered=0.116590m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7097925714285716,
+          "achieved_com_z_m": 0.3745887828165774,
+          "support_error_norm_xy": 0.11875384603746544,
+          "reason": "height_error=0.024496m; support_not_centered=0.118754m; below_controller_min_com_z=0.374589m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7355068571428571,
+          "achieved_com_z_m": 0.3686082576773958,
+          "support_error_norm_xy": 0.12076498425006194,
+          "reason": "height_error=0.030477m; support_not_centered=0.120765m; below_controller_min_com_z=0.368608m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.761221142857143,
+          "achieved_com_z_m": 0.36257367890010156,
+          "support_error_norm_xy": 0.12262158510355764,
+          "reason": "height_error=0.036511m; support_not_centered=0.122622m; below_controller_min_com_z=0.362574m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7869354285714287,
+          "achieved_com_z_m": 0.3564844863690917,
+          "support_error_norm_xy": 0.1243224210356417,
+          "reason": "height_error=0.042600m; support_not_centered=0.124322m; below_controller_min_com_z=0.356484m"
+        }
+      ]
+    },
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.39908476112047825,
+    "height_error_m": 0.0017075627125915926,
+    "joint_limit_valid": true
+  },
+  {
+    "variant_name": "nominal_reference",
+    "requested_target_com_z_m": 0.4040847611204782,
+    "achieved_com_z_m": 0.4040847611204782,
+    "calibrated_root_z_m": 0.53582763671875,
+    "hip_pitch_ref": 0.926052,
+    "knee_ref": 1.748364,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -7.935115730606235e-07,
+    "support_center_y": -0.013403565351941316,
+    "com_x_m": -7.408496604254533e-08,
+    "com_y_m": -0.013535414193508717,
+    "com_support_error_x": 7.194266070180781e-07,
+    "com_support_error_y": -0.00013184884156740122,
+    "com_support_error_norm_xy": 0.00013185080431043475,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.0005270831121045247,
+    "total_wheel_floor_fz": 111.7330574884656,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.8739480000000001,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      0.926052,
+      1.748364,
+      0.0,
+      0.0,
+      0.0,
+      0.926052,
+      1.748364,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -7.408496604254533e-08,
+      -0.013535414193508717,
+      0.4040847611204782
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": null,
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.4040847611204782,
+    "height_error_m": 0.0,
+    "joint_limit_valid": true
+  },
+  {
+    "variant_name": "nominal_reference",
+    "requested_target_com_z_m": 0.4040847611204782,
+    "achieved_com_z_m": 0.4040847611204782,
+    "calibrated_root_z_m": 0.53582763671875,
+    "hip_pitch_ref": 0.926052,
+    "knee_ref": 1.748364,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -7.935115730606235e-07,
+    "support_center_y": -0.013403565351941316,
+    "com_x_m": -7.408496604254533e-08,
+    "com_y_m": -0.013535414193508717,
+    "com_support_error_x": 7.194266070180781e-07,
+    "com_support_error_y": -0.00013184884156740122,
+    "com_support_error_norm_xy": 0.00013185080431043475,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.0005270831121045247,
+    "total_wheel_floor_fz": 111.7330574884656,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.8739480000000001,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      0.926052,
+      1.748364,
+      0.0,
+      0.0,
+      0.0,
+      0.926052,
+      1.748364,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -7.408496604254533e-08,
+      -0.013535414193508717,
+      0.4040847611204782
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": null,
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.4040847611204782,
+    "height_error_m": 0.0,
+    "joint_limit_valid": true
+  },
+  {
+    "variant_name": "search_high_0.409m",
+    "requested_target_com_z_m": 0.4090847611204782,
+    "achieved_com_z_m": 0.4106616095069951,
+    "calibrated_root_z_m": 0.543701171875,
+    "hip_pitch_ref": 0.9131948571428572,
+    "knee_ref": 1.7097925714285716,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -8.2087655634e-07,
+    "support_center_y": -0.016344481822084214,
+    "com_x_m": -8.120769596556242e-08,
+    "com_y_m": -0.013647682813164733,
+    "com_support_error_x": 7.396688603744376e-07,
+    "com_support_error_y": 0.002696799008919481,
+    "com_support_error_norm_xy": 0.002696799110356409,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.0005243626688832617,
+    "total_wheel_floor_fz": 113.3188810190218,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.8868051428571428,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      0.9131948571428572,
+      1.7097925714285716,
+      0.0,
+      0.0,
+      0.0,
+      0.9131948571428572,
+      1.7097925714285716,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -8.120769596556242e-08,
+      -0.013647682813164733,
+      0.4106616095069951
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": {
+      "total_evaluated": 1296,
+      "passed_contact": 1295,
+      "passed_height": 105,
+      "passed_com_centering": 101,
+      "passed_orientation": 1296,
+      "passed_joint_margin": 1296,
+      "passed_all": 6,
+      "best_by_height": [
+        0.7589091428571428,
+        1.684078285714286,
+        5.0986947328413024e-05,
+        2.142074007688066
+      ],
+      "best_by_com": [
+        0.9646234285714286,
+        1.8126497142857145,
+        5.607460388642444e-05,
+        1.6854789359169264
+      ],
+      "top_rejected": [
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.298364,
+          "achieved_com_z_m": 0.4604769719603538,
+          "support_error_norm_xy": 0.06694428168492601,
+          "reason": "height_error=0.051392m; support_not_centered=0.066944m; above_controller_max_com_z=0.460477m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3240782857142859,
+          "achieved_com_z_m": 0.4557935273712292,
+          "support_error_norm_xy": 0.07118094296555515,
+          "reason": "height_error=0.046709m; support_not_centered=0.071181m; above_controller_max_com_z=0.455794m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3497925714285715,
+          "achieved_com_z_m": 0.4510183463796879,
+          "support_error_norm_xy": 0.07529585126311783,
+          "reason": "height_error=0.041934m; support_not_centered=0.075296m; above_controller_max_com_z=0.451018m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3755068571428573,
+          "achieved_com_z_m": 0.4461204669525613,
+          "support_error_norm_xy": 0.079286285849361,
+          "reason": "height_error=0.037036m; support_not_centered=0.079286m; above_controller_max_com_z=0.446120m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.401221142857143,
+          "achieved_com_z_m": 0.44112995253930926,
+          "support_error_norm_xy": 0.08314960829657085,
+          "reason": "height_error=0.032045m; support_not_centered=0.083150m; above_controller_max_com_z=0.441130m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4269354285714286,
+          "achieved_com_z_m": 0.43604633963790945,
+          "support_error_norm_xy": 0.08688326422206763,
+          "reason": "height_error=0.026962m; support_not_centered=0.086883m; above_controller_max_com_z=0.436046m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4526497142857144,
+          "achieved_com_z_m": 0.43085389689038184,
+          "support_error_norm_xy": 0.09048478497713142,
+          "reason": "height_error=0.021769m; support_not_centered=0.090485m; above_controller_max_com_z=0.430854m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.478364,
+          "achieved_com_z_m": 0.42558266055149596,
+          "support_error_norm_xy": 0.0939517892792424,
+          "reason": "height_error=0.016498m; support_not_centered=0.093952m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5040782857142858,
+          "achieved_com_z_m": 0.42020162328357824,
+          "support_error_norm_xy": 0.09728198478655496,
+          "reason": "height_error=0.011117m; support_not_centered=0.097282m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5297925714285716,
+          "achieved_com_z_m": 0.4147713223709602,
+          "support_error_norm_xy": 0.10047316961356681,
+          "reason": "height_error=0.005687m; support_not_centered=0.100473m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5555068571428572,
+          "achieved_com_z_m": 0.40923021700229045,
+          "support_error_norm_xy": 0.10352323378697857,
+          "reason": "support_not_centered=0.103523m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.581221142857143,
+          "achieved_com_z_m": 0.40363882922986827,
+          "support_error_norm_xy": 0.10643016064078276,
+          "reason": "height_error=0.005446m; support_not_centered=0.106430m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6069354285714286,
+          "achieved_com_z_m": 0.3979508624729636,
+          "support_error_norm_xy": 0.10919202814965898,
+          "reason": "height_error=0.011134m; support_not_centered=0.109192m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6326497142857144,
+          "achieved_com_z_m": 0.39221156611958874,
+          "support_error_norm_xy": 0.11180701019979387,
+          "reason": "height_error=0.016873m; support_not_centered=0.111807m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6583640000000002,
+          "achieved_com_z_m": 0.3864051479843062,
+          "support_error_norm_xy": 0.11427337779628577,
+          "reason": "height_error=0.022680m; support_not_centered=0.114273m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.684078285714286,
+          "achieved_com_z_m": 0.3805158098171532,
+          "support_error_norm_xy": 0.11658950020633507,
+          "reason": "height_error=0.028569m; support_not_centered=0.116590m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7097925714285716,
+          "achieved_com_z_m": 0.3745887828165774,
+          "support_error_norm_xy": 0.11875384603746544,
+          "reason": "height_error=0.034496m; support_not_centered=0.118754m; below_controller_min_com_z=0.374589m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7355068571428571,
+          "achieved_com_z_m": 0.3686082576773958,
+          "support_error_norm_xy": 0.12076498425006194,
+          "reason": "height_error=0.040477m; support_not_centered=0.120765m; below_controller_min_com_z=0.368608m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.761221142857143,
+          "achieved_com_z_m": 0.36257367890010156,
+          "support_error_norm_xy": 0.12262158510355764,
+          "reason": "height_error=0.046511m; support_not_centered=0.122622m; below_controller_min_com_z=0.362574m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7869354285714287,
+          "achieved_com_z_m": 0.3564844863690917,
+          "support_error_norm_xy": 0.1243224210356417,
+          "reason": "height_error=0.052600m; support_not_centered=0.124322m; below_controller_min_com_z=0.356484m"
+        }
+      ]
+    },
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.4090847611204782,
+    "height_error_m": 0.0015768483865168936,
+    "joint_limit_valid": true
+  },
+  {
+    "variant_name": "search_high_0.414m",
+    "requested_target_com_z_m": 0.4140847611204782,
+    "achieved_com_z_m": 0.41460476850130623,
+    "calibrated_root_z_m": 0.5489349365234375,
+    "hip_pitch_ref": 0.8874805714285714,
+    "knee_ref": 1.684078285714286,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -8.751327961187272e-07,
+    "support_center_y": -0.012190445300262087,
+    "com_x_m": -9.539542115092296e-08,
+    "com_y_m": -0.012624226049044156,
+    "com_support_error_x": 7.797373749678043e-07,
+    "com_support_error_y": -0.00043378074878206926,
+    "com_support_error_norm_xy": 0.00043378144958527976,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.0005289799092124334,
+    "total_wheel_floor_fz": 114.75809147327618,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.9125194285714286,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      0.8874805714285714,
+      1.684078285714286,
+      0.0,
+      0.0,
+      0.0,
+      0.8874805714285714,
+      1.684078285714286,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -9.539542115092296e-08,
+      -0.012624226049044156,
+      0.41460476850130623
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": {
+      "total_evaluated": 1296,
+      "passed_contact": 1295,
+      "passed_height": 104,
+      "passed_com_centering": 101,
+      "passed_orientation": 1296,
+      "passed_joint_margin": 1296,
+      "passed_all": 7,
+      "best_by_height": [
+        1.1446234285714285,
+        1.6583640000000002,
+        1.2947192160106535e-05,
+        4.355819105769878
+      ],
+      "best_by_com": [
+        0.9646234285714286,
+        1.8126497142857145,
+        5.607460388642444e-05,
+        2.185478935916927
+      ],
+      "top_rejected": [
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.298364,
+          "achieved_com_z_m": 0.4604769719603538,
+          "support_error_norm_xy": 0.06694428168492601,
+          "reason": "height_error=0.046392m; support_not_centered=0.066944m; above_controller_max_com_z=0.460477m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3240782857142859,
+          "achieved_com_z_m": 0.4557935273712292,
+          "support_error_norm_xy": 0.07118094296555515,
+          "reason": "height_error=0.041709m; support_not_centered=0.071181m; above_controller_max_com_z=0.455794m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3497925714285715,
+          "achieved_com_z_m": 0.4510183463796879,
+          "support_error_norm_xy": 0.07529585126311783,
+          "reason": "height_error=0.036934m; support_not_centered=0.075296m; above_controller_max_com_z=0.451018m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3755068571428573,
+          "achieved_com_z_m": 0.4461204669525613,
+          "support_error_norm_xy": 0.079286285849361,
+          "reason": "height_error=0.032036m; support_not_centered=0.079286m; above_controller_max_com_z=0.446120m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.401221142857143,
+          "achieved_com_z_m": 0.44112995253930926,
+          "support_error_norm_xy": 0.08314960829657085,
+          "reason": "height_error=0.027045m; support_not_centered=0.083150m; above_controller_max_com_z=0.441130m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4269354285714286,
+          "achieved_com_z_m": 0.43604633963790945,
+          "support_error_norm_xy": 0.08688326422206763,
+          "reason": "height_error=0.021962m; support_not_centered=0.086883m; above_controller_max_com_z=0.436046m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4526497142857144,
+          "achieved_com_z_m": 0.43085389689038184,
+          "support_error_norm_xy": 0.09048478497713142,
+          "reason": "height_error=0.016769m; support_not_centered=0.090485m; above_controller_max_com_z=0.430854m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.478364,
+          "achieved_com_z_m": 0.42558266055149596,
+          "support_error_norm_xy": 0.0939517892792424,
+          "reason": "height_error=0.011498m; support_not_centered=0.093952m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5040782857142858,
+          "achieved_com_z_m": 0.42020162328357824,
+          "support_error_norm_xy": 0.09728198478655496,
+          "reason": "height_error=0.006117m; support_not_centered=0.097282m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5297925714285716,
+          "achieved_com_z_m": 0.4147713223709602,
+          "support_error_norm_xy": 0.10047316961356681,
+          "reason": "support_not_centered=0.100473m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5555068571428572,
+          "achieved_com_z_m": 0.40923021700229045,
+          "support_error_norm_xy": 0.10352323378697857,
+          "reason": "support_not_centered=0.103523m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.581221142857143,
+          "achieved_com_z_m": 0.40363882922986827,
+          "support_error_norm_xy": 0.10643016064078276,
+          "reason": "height_error=0.010446m; support_not_centered=0.106430m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6069354285714286,
+          "achieved_com_z_m": 0.3979508624729636,
+          "support_error_norm_xy": 0.10919202814965898,
+          "reason": "height_error=0.016134m; support_not_centered=0.109192m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6326497142857144,
+          "achieved_com_z_m": 0.39221156611958874,
+          "support_error_norm_xy": 0.11180701019979387,
+          "reason": "height_error=0.021873m; support_not_centered=0.111807m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6583640000000002,
+          "achieved_com_z_m": 0.3864051479843062,
+          "support_error_norm_xy": 0.11427337779628577,
+          "reason": "height_error=0.027680m; support_not_centered=0.114273m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.684078285714286,
+          "achieved_com_z_m": 0.3805158098171532,
+          "support_error_norm_xy": 0.11658950020633507,
+          "reason": "height_error=0.033569m; support_not_centered=0.116590m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7097925714285716,
+          "achieved_com_z_m": 0.3745887828165774,
+          "support_error_norm_xy": 0.11875384603746544,
+          "reason": "height_error=0.039496m; support_not_centered=0.118754m; below_controller_min_com_z=0.374589m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7355068571428571,
+          "achieved_com_z_m": 0.3686082576773958,
+          "support_error_norm_xy": 0.12076498425006194,
+          "reason": "height_error=0.045477m; support_not_centered=0.120765m; below_controller_min_com_z=0.368608m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.761221142857143,
+          "achieved_com_z_m": 0.36257367890010156,
+          "support_error_norm_xy": 0.12262158510355764,
+          "reason": "height_error=0.051511m; support_not_centered=0.122622m; below_controller_min_com_z=0.362574m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7869354285714287,
+          "achieved_com_z_m": 0.3564844863690917,
+          "support_error_norm_xy": 0.1243224210356417,
+          "reason": "height_error=0.057600m; support_not_centered=0.124322m; below_controller_min_com_z=0.356484m"
+        }
+      ]
+    },
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.4140847611204782,
+    "height_error_m": 0.0005200073808280248,
+    "joint_limit_valid": true
+  },
+  {
+    "variant_name": "search_high_0.419m",
+    "requested_target_com_z_m": 0.4190847611204782,
+    "achieved_com_z_m": 0.41906025712628886,
+    "calibrated_root_z_m": 0.55401611328125,
+    "hip_pitch_ref": 0.8874805714285714,
+    "knee_ref": 1.6583640000000002,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -8.775747415840085e-07,
+    "support_center_y": -0.017289892894280887,
+    "com_x_m": -9.569599773786274e-08,
+    "com_y_m": -0.013251988733433473,
+    "com_support_error_x": 7.818787438461457e-07,
+    "com_support_error_y": 0.004037904160847414,
+    "com_support_error_norm_xy": 0.004037904236546879,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.0005303705371410908,
+    "total_wheel_floor_fz": 117.03998738440477,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.9125194285714286,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      0.8874805714285714,
+      1.6583640000000002,
+      0.0,
+      0.0,
+      0.0,
+      0.8874805714285714,
+      1.6583640000000002,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -9.569599773786274e-08,
+      -0.013251988733433473,
+      0.41906025712628886
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": {
+      "total_evaluated": 1296,
+      "passed_contact": 1295,
+      "passed_height": 100,
+      "passed_com_centering": 101,
+      "passed_orientation": 1296,
+      "passed_joint_margin": 1296,
+      "passed_all": 7,
+      "best_by_height": [
+        0.8874805714285714,
+        1.6583640000000002,
+        2.4503994189351008e-05,
+        0.3329170398177075
+      ],
+      "best_by_com": [
+        0.9646234285714286,
+        1.8126497142857145,
+        5.607460388642444e-05,
+        2.6854789359169278
+      ],
+      "top_rejected": [
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.298364,
+          "achieved_com_z_m": 0.4604769719603538,
+          "support_error_norm_xy": 0.06694428168492601,
+          "reason": "height_error=0.041392m; support_not_centered=0.066944m; above_controller_max_com_z=0.460477m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3240782857142859,
+          "achieved_com_z_m": 0.4557935273712292,
+          "support_error_norm_xy": 0.07118094296555515,
+          "reason": "height_error=0.036709m; support_not_centered=0.071181m; above_controller_max_com_z=0.455794m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3497925714285715,
+          "achieved_com_z_m": 0.4510183463796879,
+          "support_error_norm_xy": 0.07529585126311783,
+          "reason": "height_error=0.031934m; support_not_centered=0.075296m; above_controller_max_com_z=0.451018m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3755068571428573,
+          "achieved_com_z_m": 0.4461204669525613,
+          "support_error_norm_xy": 0.079286285849361,
+          "reason": "height_error=0.027036m; support_not_centered=0.079286m; above_controller_max_com_z=0.446120m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.401221142857143,
+          "achieved_com_z_m": 0.44112995253930926,
+          "support_error_norm_xy": 0.08314960829657085,
+          "reason": "height_error=0.022045m; support_not_centered=0.083150m; above_controller_max_com_z=0.441130m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4269354285714286,
+          "achieved_com_z_m": 0.43604633963790945,
+          "support_error_norm_xy": 0.08688326422206763,
+          "reason": "height_error=0.016962m; support_not_centered=0.086883m; above_controller_max_com_z=0.436046m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4526497142857144,
+          "achieved_com_z_m": 0.43085389689038184,
+          "support_error_norm_xy": 0.09048478497713142,
+          "reason": "height_error=0.011769m; support_not_centered=0.090485m; above_controller_max_com_z=0.430854m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.478364,
+          "achieved_com_z_m": 0.42558266055149596,
+          "support_error_norm_xy": 0.0939517892792424,
+          "reason": "height_error=0.006498m; support_not_centered=0.093952m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5040782857142858,
+          "achieved_com_z_m": 0.42020162328357824,
+          "support_error_norm_xy": 0.09728198478655496,
+          "reason": "support_not_centered=0.097282m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5297925714285716,
+          "achieved_com_z_m": 0.4147713223709602,
+          "support_error_norm_xy": 0.10047316961356681,
+          "reason": "support_not_centered=0.100473m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5555068571428572,
+          "achieved_com_z_m": 0.40923021700229045,
+          "support_error_norm_xy": 0.10352323378697857,
+          "reason": "height_error=0.009855m; support_not_centered=0.103523m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.581221142857143,
+          "achieved_com_z_m": 0.40363882922986827,
+          "support_error_norm_xy": 0.10643016064078276,
+          "reason": "height_error=0.015446m; support_not_centered=0.106430m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6069354285714286,
+          "achieved_com_z_m": 0.3979508624729636,
+          "support_error_norm_xy": 0.10919202814965898,
+          "reason": "height_error=0.021134m; support_not_centered=0.109192m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6326497142857144,
+          "achieved_com_z_m": 0.39221156611958874,
+          "support_error_norm_xy": 0.11180701019979387,
+          "reason": "height_error=0.026873m; support_not_centered=0.111807m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6583640000000002,
+          "achieved_com_z_m": 0.3864051479843062,
+          "support_error_norm_xy": 0.11427337779628577,
+          "reason": "height_error=0.032680m; support_not_centered=0.114273m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.684078285714286,
+          "achieved_com_z_m": 0.3805158098171532,
+          "support_error_norm_xy": 0.11658950020633507,
+          "reason": "height_error=0.038569m; support_not_centered=0.116590m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7097925714285716,
+          "achieved_com_z_m": 0.3745887828165774,
+          "support_error_norm_xy": 0.11875384603746544,
+          "reason": "height_error=0.044496m; support_not_centered=0.118754m; below_controller_min_com_z=0.374589m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7355068571428571,
+          "achieved_com_z_m": 0.3686082576773958,
+          "support_error_norm_xy": 0.12076498425006194,
+          "reason": "height_error=0.050477m; support_not_centered=0.120765m; below_controller_min_com_z=0.368608m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.761221142857143,
+          "achieved_com_z_m": 0.36257367890010156,
+          "support_error_norm_xy": 0.12262158510355764,
+          "reason": "height_error=0.056511m; support_not_centered=0.122622m; below_controller_min_com_z=0.362574m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7869354285714287,
+          "achieved_com_z_m": 0.3564844863690917,
+          "support_error_norm_xy": 0.1243224210356417,
+          "reason": "height_error=0.062600m; support_not_centered=0.124322m; below_controller_min_com_z=0.356484m"
+        }
+      ]
+    },
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.4190847611204782,
+    "height_error_m": 2.4503994189351008e-05,
+    "joint_limit_valid": true
+  },
+  {
+    "variant_name": "search_high_0.424m",
+    "requested_target_com_z_m": 0.4240847611204782,
+    "achieved_com_z_m": 0.4229233458231405,
+    "calibrated_root_z_m": 0.55914306640625,
+    "hip_pitch_ref": 0.8617662857142858,
+    "knee_ref": 1.6326497142857144,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -9.345091159795871e-07,
+    "support_center_y": -0.01300254413075555,
+    "com_x_m": -1.1020995358436408e-07,
+    "com_y_m": -0.012195686972694299,
+    "com_support_error_x": 8.24299162395223e-07,
+    "com_support_error_y": 0.000806857158061251,
+    "com_support_error_norm_xy": 0.0008068575791202482,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.0005332623008682952,
+    "total_wheel_floor_fz": 118.23929675351938,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.9382337142857142,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      0.8617662857142858,
+      1.6326497142857144,
+      0.0,
+      0.0,
+      0.0,
+      0.8617662857142858,
+      1.6326497142857144,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -1.1020995358436408e-07,
+      -0.012195686972694299,
+      0.4229233458231405
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": {
+      "total_evaluated": 1296,
+      "passed_contact": 1295,
+      "passed_height": 96,
+      "passed_com_centering": 101,
+      "passed_orientation": 1296,
+      "passed_joint_margin": 1296,
+      "passed_all": 5,
+      "best_by_height": [
+        0.6817662857142857,
+        1.581221142857143,
+        2.7273049987730502e-05,
+        2.6944258827250707
+      ],
+      "best_by_com": [
+        0.9646234285714286,
+        1.8126497142857145,
+        5.607460388642444e-05,
+        3.1854789359169278
+      ],
+      "top_rejected": [
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.298364,
+          "achieved_com_z_m": 0.4604769719603538,
+          "support_error_norm_xy": 0.06694428168492601,
+          "reason": "height_error=0.036392m; support_not_centered=0.066944m; above_controller_max_com_z=0.460477m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3240782857142859,
+          "achieved_com_z_m": 0.4557935273712292,
+          "support_error_norm_xy": 0.07118094296555515,
+          "reason": "height_error=0.031709m; support_not_centered=0.071181m; above_controller_max_com_z=0.455794m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3497925714285715,
+          "achieved_com_z_m": 0.4510183463796879,
+          "support_error_norm_xy": 0.07529585126311783,
+          "reason": "height_error=0.026934m; support_not_centered=0.075296m; above_controller_max_com_z=0.451018m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3755068571428573,
+          "achieved_com_z_m": 0.4461204669525613,
+          "support_error_norm_xy": 0.079286285849361,
+          "reason": "height_error=0.022036m; support_not_centered=0.079286m; above_controller_max_com_z=0.446120m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.401221142857143,
+          "achieved_com_z_m": 0.44112995253930926,
+          "support_error_norm_xy": 0.08314960829657085,
+          "reason": "height_error=0.017045m; support_not_centered=0.083150m; above_controller_max_com_z=0.441130m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4269354285714286,
+          "achieved_com_z_m": 0.43604633963790945,
+          "support_error_norm_xy": 0.08688326422206763,
+          "reason": "height_error=0.011962m; support_not_centered=0.086883m; above_controller_max_com_z=0.436046m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4526497142857144,
+          "achieved_com_z_m": 0.43085389689038184,
+          "support_error_norm_xy": 0.09048478497713142,
+          "reason": "height_error=0.006769m; support_not_centered=0.090485m; above_controller_max_com_z=0.430854m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.478364,
+          "achieved_com_z_m": 0.42558266055149596,
+          "support_error_norm_xy": 0.0939517892792424,
+          "reason": "support_not_centered=0.093952m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5040782857142858,
+          "achieved_com_z_m": 0.42020162328357824,
+          "support_error_norm_xy": 0.09728198478655496,
+          "reason": "support_not_centered=0.097282m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5297925714285716,
+          "achieved_com_z_m": 0.4147713223709602,
+          "support_error_norm_xy": 0.10047316961356681,
+          "reason": "height_error=0.009313m; support_not_centered=0.100473m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5555068571428572,
+          "achieved_com_z_m": 0.40923021700229045,
+          "support_error_norm_xy": 0.10352323378697857,
+          "reason": "height_error=0.014855m; support_not_centered=0.103523m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.581221142857143,
+          "achieved_com_z_m": 0.40363882922986827,
+          "support_error_norm_xy": 0.10643016064078276,
+          "reason": "height_error=0.020446m; support_not_centered=0.106430m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6069354285714286,
+          "achieved_com_z_m": 0.3979508624729636,
+          "support_error_norm_xy": 0.10919202814965898,
+          "reason": "height_error=0.026134m; support_not_centered=0.109192m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6326497142857144,
+          "achieved_com_z_m": 0.39221156611958874,
+          "support_error_norm_xy": 0.11180701019979387,
+          "reason": "height_error=0.031873m; support_not_centered=0.111807m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6583640000000002,
+          "achieved_com_z_m": 0.3864051479843062,
+          "support_error_norm_xy": 0.11427337779628577,
+          "reason": "height_error=0.037680m; support_not_centered=0.114273m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.684078285714286,
+          "achieved_com_z_m": 0.3805158098171532,
+          "support_error_norm_xy": 0.11658950020633507,
+          "reason": "height_error=0.043569m; support_not_centered=0.116590m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7097925714285716,
+          "achieved_com_z_m": 0.3745887828165774,
+          "support_error_norm_xy": 0.11875384603746544,
+          "reason": "height_error=0.049496m; support_not_centered=0.118754m; below_controller_min_com_z=0.374589m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7355068571428571,
+          "achieved_com_z_m": 0.3686082576773958,
+          "support_error_norm_xy": 0.12076498425006194,
+          "reason": "height_error=0.055477m; support_not_centered=0.120765m; below_controller_min_com_z=0.368608m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.761221142857143,
+          "achieved_com_z_m": 0.36257367890010156,
+          "support_error_norm_xy": 0.12262158510355764,
+          "reason": "height_error=0.061511m; support_not_centered=0.122622m; below_controller_min_com_z=0.362574m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7869354285714287,
+          "achieved_com_z_m": 0.3564844863690917,
+          "support_error_norm_xy": 0.1243224210356417,
+          "reason": "height_error=0.067600m; support_not_centered=0.124322m; below_controller_min_com_z=0.356484m"
+        }
+      ]
+    },
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.4240847611204782,
+    "height_error_m": 0.001161415297337709,
+    "joint_limit_valid": true
+  },
+  {
+    "variant_name": "max_operational_height",
+    "requested_target_com_z_m": 0.4290847611204782,
+    "achieved_com_z_m": 0.4267224586636587,
+    "calibrated_root_z_m": 0.564178466796875,
+    "hip_pitch_ref": 0.836052,
+    "knee_ref": 1.6069354285714286,
+    "nominal_hip_pitch_ref": 0.926052,
+    "nominal_knee_ref": 1.748364,
+    "hip_roll_left": 0.0,
+    "hip_roll_right": 0.0,
+    "hip_yaw_left": 0.0,
+    "hip_yaw_right": 0.0,
+    "support_center_x": -9.927326356379274e-07,
+    "support_center_y": -0.008584717869314973,
+    "com_x_m": -1.2487418755414415e-07,
+    "com_y_m": -0.011107238629443373,
+    "com_support_error_x": 8.678584480837832e-07,
+    "com_support_error_y": -0.0025225207601283998,
+    "com_support_error_norm_xy": 0.0025225209094191956,
+    "left_wheel_contact": true,
+    "right_wheel_contact": true,
+    "wheel_floor_contact_count": 2,
+    "non_wheel_floor_contact_count": 0,
+    "min_wheel_contact_dist_m": -0.0005157780067722162,
+    "total_wheel_floor_fz": 115.259347170601,
+    "pitch_x_rad": 0.0,
+    "roll_y_rad": 0.0,
+    "yaw_z_rad": 0.0,
+    "joint_limit_margin_min_rad": 0.963948,
+    "root_z_only": false,
+    "setup_valid": true,
+    "setup_failure_reason": null,
+    "equilibrium_joint_pos": [
+      0.0,
+      0.0,
+      0.836052,
+      1.6069354285714286,
+      0.0,
+      0.0,
+      0.0,
+      0.836052,
+      1.6069354285714286,
+      0.0
+    ],
+    "equilibrium_com_pos": [
+      -1.2487418755414415e-07,
+      -0.011107238629443373,
+      0.4267224586636587
+    ],
+    "equilibrium_pitch_x": 0.0,
+    "equilibrium_roll_y": 0.0,
+    "equilibrium_yaw_z": 0.0,
+    "posture_search_method": "operational_height_multiobjective_search",
+    "candidate_stats": {
+      "total_evaluated": 1296,
+      "passed_contact": 1295,
+      "passed_height": 90,
+      "passed_com_centering": 101,
+      "passed_orientation": 1296,
+      "passed_joint_margin": 1296,
+      "passed_all": 2,
+      "best_by_height": [
+        1.0931948571428571,
+        1.5555068571428572,
+        2.3876992353344395e-05,
+        4.74594738891067
+      ],
+      "best_by_com": [
+        0.9646234285714286,
+        1.8126497142857145,
+        5.607460388642444e-05,
+        3.6854789359169287
+      ],
+      "top_rejected": [
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.298364,
+          "achieved_com_z_m": 0.4604769719603538,
+          "support_error_norm_xy": 0.06694428168492601,
+          "reason": "height_error=0.031392m; support_not_centered=0.066944m; above_controller_max_com_z=0.460477m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3240782857142859,
+          "achieved_com_z_m": 0.4557935273712292,
+          "support_error_norm_xy": 0.07118094296555515,
+          "reason": "height_error=0.026709m; support_not_centered=0.071181m; above_controller_max_com_z=0.455794m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3497925714285715,
+          "achieved_com_z_m": 0.4510183463796879,
+          "support_error_norm_xy": 0.07529585126311783,
+          "reason": "height_error=0.021934m; support_not_centered=0.075296m; above_controller_max_com_z=0.451018m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.3755068571428573,
+          "achieved_com_z_m": 0.4461204669525613,
+          "support_error_norm_xy": 0.079286285849361,
+          "reason": "height_error=0.017036m; support_not_centered=0.079286m; above_controller_max_com_z=0.446120m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.401221142857143,
+          "achieved_com_z_m": 0.44112995253930926,
+          "support_error_norm_xy": 0.08314960829657085,
+          "reason": "height_error=0.012045m; support_not_centered=0.083150m; above_controller_max_com_z=0.441130m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4269354285714286,
+          "achieved_com_z_m": 0.43604633963790945,
+          "support_error_norm_xy": 0.08688326422206763,
+          "reason": "height_error=0.006962m; support_not_centered=0.086883m; above_controller_max_com_z=0.436046m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.4526497142857144,
+          "achieved_com_z_m": 0.43085389689038184,
+          "support_error_norm_xy": 0.09048478497713142,
+          "reason": "support_not_centered=0.090485m; above_controller_max_com_z=0.430854m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.478364,
+          "achieved_com_z_m": 0.42558266055149596,
+          "support_error_norm_xy": 0.0939517892792424,
+          "reason": "support_not_centered=0.093952m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5040782857142858,
+          "achieved_com_z_m": 0.42020162328357824,
+          "support_error_norm_xy": 0.09728198478655496,
+          "reason": "height_error=0.008883m; support_not_centered=0.097282m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5297925714285716,
+          "achieved_com_z_m": 0.4147713223709602,
+          "support_error_norm_xy": 0.10047316961356681,
+          "reason": "height_error=0.014313m; support_not_centered=0.100473m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.5555068571428572,
+          "achieved_com_z_m": 0.40923021700229045,
+          "support_error_norm_xy": 0.10352323378697857,
+          "reason": "height_error=0.019855m; support_not_centered=0.103523m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.581221142857143,
+          "achieved_com_z_m": 0.40363882922986827,
+          "support_error_norm_xy": 0.10643016064078276,
+          "reason": "height_error=0.025446m; support_not_centered=0.106430m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6069354285714286,
+          "achieved_com_z_m": 0.3979508624729636,
+          "support_error_norm_xy": 0.10919202814965898,
+          "reason": "height_error=0.031134m; support_not_centered=0.109192m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6326497142857144,
+          "achieved_com_z_m": 0.39221156611958874,
+          "support_error_norm_xy": 0.11180701019979387,
+          "reason": "height_error=0.036873m; support_not_centered=0.111807m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.6583640000000002,
+          "achieved_com_z_m": 0.3864051479843062,
+          "support_error_norm_xy": 0.11427337779628577,
+          "reason": "height_error=0.042680m; support_not_centered=0.114273m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.684078285714286,
+          "achieved_com_z_m": 0.3805158098171532,
+          "support_error_norm_xy": 0.11658950020633507,
+          "reason": "height_error=0.048569m; support_not_centered=0.116590m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7097925714285716,
+          "achieved_com_z_m": 0.3745887828165774,
+          "support_error_norm_xy": 0.11875384603746544,
+          "reason": "height_error=0.054496m; support_not_centered=0.118754m; below_controller_min_com_z=0.374589m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7355068571428571,
+          "achieved_com_z_m": 0.3686082576773958,
+          "support_error_norm_xy": 0.12076498425006194,
+          "reason": "height_error=0.060477m; support_not_centered=0.120765m; below_controller_min_com_z=0.368608m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.761221142857143,
+          "achieved_com_z_m": 0.36257367890010156,
+          "support_error_norm_xy": 0.12262158510355764,
+          "reason": "height_error=0.066511m; support_not_centered=0.122622m; below_controller_min_com_z=0.362574m"
+        },
+        {
+          "hip_pitch": 0.476052,
+          "knee": 1.7869354285714287,
+          "achieved_com_z_m": 0.3564844863690917,
+          "support_error_norm_xy": 0.1243224210356417,
+          "reason": "height_error=0.072600m; support_not_centered=0.124322m; below_controller_min_com_z=0.356484m"
+        }
+      ]
+    },
+    "wbc_applied": false,
+    "hidden_torque_norm_max": 0.0,
+    "ownership_violation_count_max": 0,
+    "target_com_z_m": 0.4290847611204782,
+    "height_error_m": 0.0023623024568195095,
+    "joint_limit_valid": true
+  }
+]

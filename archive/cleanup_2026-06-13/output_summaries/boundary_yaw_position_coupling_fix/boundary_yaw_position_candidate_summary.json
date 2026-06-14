@@ -1,0 +1,188 @@
+[
+  {
+    "candidate": "baseline",
+    "boundary": {
+      "low_0p300_1000": {
+        "metrics": {
+          "support_position_error_max": 0.1756271122657789,
+          "hip_yaw_abs_max": 0.1516163200139999,
+          "pitch_x_max": 0.1110548079013824,
+          "roll_y_max": 0.0132562918588519,
+          "height_error_final": 0.0098126399284073,
+          "wheel_vel_mean_max": null,
+          "steps": 1000,
+          "boundary_profile": "baseline",
+          "boundary_active": false,
+          "wbc_applied": false,
+          "ownership_violations": 0,
+          "hidden_torque_max": 0.0
+        },
+        "step_e": {
+          "verdict": "FAIL",
+          "failures": [
+            "support_position_error: 0.1756 > 0.15",
+            "hip_yaw_abs: 0.1516 > 0.07",
+            "pitch_x: 0.1111 > 0.1"
+          ]
+        },
+        "sim_success": true
+      }
+    },
+    "regression": {}
+  },
+  {
+    "candidate": "yaw_aware_position_only",
+    "boundary": {
+      "low_0p300_1000": {
+        "metrics": {
+          "support_position_error_max": 0.17562711351831278,
+          "hip_yaw_abs_max": 0.1516182273626327,
+          "pitch_x_max": 0.1110548228025436,
+          "roll_y_max": 0.0132567202672362,
+          "height_error_final": 0.0098128187423416,
+          "wheel_vel_mean_max": null,
+          "steps": 1000,
+          "boundary_profile": "yaw_aware_position_only",
+          "boundary_active": true,
+          "wbc_applied": false,
+          "ownership_violations": 0,
+          "hidden_torque_max": 0.0
+        },
+        "step_e": {
+          "verdict": "FAIL",
+          "failures": [
+            "support_position_error: 0.1756 > 0.15",
+            "hip_yaw_abs: 0.1516 > 0.07",
+            "pitch_x: 0.1111 > 0.1"
+          ]
+        },
+        "sim_success": true
+      }
+    },
+    "regression": {}
+  },
+  {
+    "candidate": "boundary_hip_yaw_profile",
+    "boundary": {
+      "low_0p300_1000": {
+        "metrics": {
+          "support_position_error_max": 0.1755096948407549,
+          "hip_yaw_abs_max": 0.116130881011486,
+          "pitch_x_max": 0.1110348254442215,
+          "roll_y_max": 0.0117642832919955,
+          "height_error_final": 0.0066823827987381,
+          "wheel_vel_mean_max": null,
+          "steps": 1000,
+          "boundary_profile": "boundary_hip_yaw_profile",
+          "boundary_active": true,
+          "wbc_applied": false,
+          "ownership_violations": 0,
+          "hidden_torque_max": 0.0
+        },
+        "step_e": {
+          "verdict": "FAIL",
+          "failures": [
+            "support_position_error: 0.1755 > 0.15",
+            "hip_yaw_abs: 0.1161 > 0.07",
+            "pitch_x: 0.1110 > 0.1"
+          ]
+        },
+        "sim_success": true
+      }
+    },
+    "regression": {}
+  },
+  {
+    "candidate": "yaw_aware_plus_boundary_hip_yaw",
+    "boundary": {
+      "low_0p300_1000": {
+        "metrics": {
+          "support_position_error_max": 0.17550971632518889,
+          "hip_yaw_abs_max": 0.1161305606365203,
+          "pitch_x_max": 0.1110348254442215,
+          "roll_y_max": 0.0117643326520919,
+          "height_error_final": 0.0066823529964157,
+          "wheel_vel_mean_max": null,
+          "steps": 1000,
+          "boundary_profile": "yaw_aware_plus_boundary_hip_yaw",
+          "boundary_active": true,
+          "wbc_applied": false,
+          "ownership_violations": 0,
+          "hidden_torque_max": 0.0
+        },
+        "step_e": {
+          "verdict": "FAIL",
+          "failures": [
+            "support_position_error: 0.1755 > 0.15",
+            "hip_yaw_abs: 0.1161 > 0.07",
+            "pitch_x: 0.1110 > 0.1"
+          ]
+        },
+        "sim_success": true
+      }
+    },
+    "regression": {}
+  },
+  {
+    "candidate": "boundary_hip_yaw_integral_light",
+    "boundary": {
+      "low_0p300_1000": {
+        "metrics": {
+          "support_position_error_max": 0.17561758846995418,
+          "hip_yaw_abs_max": 0.1853424459695816,
+          "pitch_x_max": 0.1110474988818168,
+          "roll_y_max": 0.0134125147014856,
+          "height_error_final": 0.0132740306621261,
+          "wheel_vel_mean_max": null,
+          "steps": 1000,
+          "boundary_profile": "boundary_hip_yaw_integral_light",
+          "boundary_active": true,
+          "wbc_applied": false,
+          "ownership_violations": 0,
+          "hidden_torque_max": 0.0
+        },
+        "step_e": {
+          "verdict": "FAIL",
+          "failures": [
+            "support_position_error: 0.1756 > 0.15",
+            "hip_yaw_abs: 0.1853 > 0.07",
+            "pitch_x: 0.1110 > 0.1"
+          ]
+        },
+        "sim_success": true
+      }
+    },
+    "regression": {}
+  },
+  {
+    "candidate": "yaw_aware_plus_integral_light",
+    "boundary": {
+      "low_0p300_1000": {
+        "metrics": {
+          "support_position_error_max": 0.1756176136275404,
+          "hip_yaw_abs_max": 0.1853405386209488,
+          "pitch_x_max": 0.1110474988818168,
+          "roll_y_max": 0.0134124541655182,
+          "height_error_final": 0.0132740902667709,
+          "wheel_vel_mean_max": null,
+          "steps": 1000,
+          "boundary_profile": "yaw_aware_plus_integral_light",
+          "boundary_active": true,
+          "wbc_applied": false,
+          "ownership_violations": 0,
+          "hidden_torque_max": 0.0
+        },
+        "step_e": {
+          "verdict": "FAIL",
+          "failures": [
+            "support_position_error: 0.1756 > 0.15",
+            "hip_yaw_abs: 0.1853 > 0.07",
+            "pitch_x: 0.1110 > 0.1"
+          ]
+        },
+        "sim_success": true
+      }
+    },
+    "regression": {}
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "envelope_search_verdict": "PASS",
+  "min_operational_height_m": 0.3932865804918236,
+  "max_operational_height_m": 0.4128130092062859,
+  "extrema_are_conservative": true,
+  "absolute_mechanical_extrema_claimed": false,
+  "selection_basis": {
+    "min": "lowest dynamically passing candidate from boundary probes",
+    "max": "highest dynamically passing candidate from boundary probes"
+  }
+}

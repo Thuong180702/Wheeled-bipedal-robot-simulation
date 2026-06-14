@@ -1,0 +1,308 @@
+{
+  "output_dir": "outputs\\phase_b9_step5_18_deployable_motor_torque_interface",
+  "actuators": [
+    {
+      "action_index": 0,
+      "actuator_index": 0,
+      "action_name": "l_hip_roll",
+      "actuator_name": "l_hip_roll_motor",
+      "joint_name": "l_hip_roll",
+      "actuator_type": "motor",
+      "gear": 1.0,
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ]
+    },
+    {
+      "action_index": 1,
+      "actuator_index": 1,
+      "action_name": "l_hip_yaw",
+      "actuator_name": "l_hip_yaw_motor",
+      "joint_name": "l_hip_yaw",
+      "actuator_type": "motor",
+      "gear": 1.0,
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ]
+    },
+    {
+      "action_index": 2,
+      "actuator_index": 2,
+      "action_name": "l_hip_pitch",
+      "actuator_name": "l_hip_pitch_motor",
+      "joint_name": "l_hip_pitch",
+      "actuator_type": "motor",
+      "gear": 1.0,
+      "ctrlrange": [
+        -30.0,
+        30.0
+      ],
+      "forcerange": [
+        -44.0,
+        44.0
+      ]
+    },
+    {
+      "action_index": 3,
+      "actuator_index": 3,
+      "action_name": "l_knee",
+      "actuator_name": "l_knee_motor",
+      "joint_name": "l_knee",
+      "actuator_type": "motor",
+      "gear": 1.0,
+      "ctrlrange": [
+        -30.0,
+        30.0
+      ],
+      "forcerange": [
+        -44.0,
+        44.0
+      ]
+    },
+    {
+      "action_index": 4,
+      "actuator_index": 4,
+      "action_name": "l_wheel",
+      "actuator_name": "l_wheel_motor",
+      "joint_name": "l_wheel",
+      "actuator_type": "motor",
+      "gear": 1.0,
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ]
+    },
+    {
+      "action_index": 5,
+      "actuator_index": 5,
+      "action_name": "r_hip_roll",
+      "actuator_name": "r_hip_roll_motor",
+      "joint_name": "r_hip_roll",
+      "actuator_type": "motor",
+      "gear": 1.0,
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ]
+    },
+    {
+      "action_index": 6,
+      "actuator_index": 6,
+      "action_name": "r_hip_yaw",
+      "actuator_name": "r_hip_yaw_motor",
+      "joint_name": "r_hip_yaw",
+      "actuator_type": "motor",
+      "gear": 1.0,
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ]
+    },
+    {
+      "action_index": 7,
+      "actuator_index": 7,
+      "action_name": "r_hip_pitch",
+      "actuator_name": "r_hip_pitch_motor",
+      "joint_name": "r_hip_pitch",
+      "actuator_type": "motor",
+      "gear": 1.0,
+      "ctrlrange": [
+        -30.0,
+        30.0
+      ],
+      "forcerange": [
+        -44.0,
+        44.0
+      ]
+    },
+    {
+      "action_index": 8,
+      "actuator_index": 8,
+      "action_name": "r_knee",
+      "actuator_name": "r_knee_motor",
+      "joint_name": "r_knee",
+      "actuator_type": "motor",
+      "gear": 1.0,
+      "ctrlrange": [
+        -30.0,
+        30.0
+      ],
+      "forcerange": [
+        -44.0,
+        44.0
+      ]
+    },
+    {
+      "action_index": 9,
+      "actuator_index": 9,
+      "action_name": "r_wheel",
+      "actuator_name": "r_wheel_motor",
+      "joint_name": "r_wheel",
+      "actuator_type": "motor",
+      "gear": 1.0,
+      "ctrlrange": [
+        -15.0,
+        15.0
+      ],
+      "forcerange": [
+        -22.0,
+        22.0
+      ]
+    }
+  ],
+  "answers": {
+    "what_are_10_actuators": [
+      "l_hip_roll_motor",
+      "l_hip_yaw_motor",
+      "l_hip_pitch_motor",
+      "l_knee_motor",
+      "l_wheel_motor",
+      "r_hip_roll_motor",
+      "r_hip_yaw_motor",
+      "r_hip_pitch_motor",
+      "r_knee_motor",
+      "r_wheel_motor"
+    ],
+    "actuator_index_maps_to_action_index": "identity mapping: actuator index i == action index i for all 10 actuators",
+    "all_actuators_are_motor": true,
+    "ctrlrange_and_forcerange": {
+      "l_hip_roll_motor": {
+        "ctrlrange": [
+          -15.0,
+          15.0
+        ],
+        "forcerange": [
+          -22.0,
+          22.0
+        ]
+      },
+      "l_hip_yaw_motor": {
+        "ctrlrange": [
+          -15.0,
+          15.0
+        ],
+        "forcerange": [
+          -22.0,
+          22.0
+        ]
+      },
+      "l_hip_pitch_motor": {
+        "ctrlrange": [
+          -30.0,
+          30.0
+        ],
+        "forcerange": [
+          -44.0,
+          44.0
+        ]
+      },
+      "l_knee_motor": {
+        "ctrlrange": [
+          -30.0,
+          30.0
+        ],
+        "forcerange": [
+          -44.0,
+          44.0
+        ]
+      },
+      "l_wheel_motor": {
+        "ctrlrange": [
+          -15.0,
+          15.0
+        ],
+        "forcerange": [
+          -22.0,
+          22.0
+        ]
+      },
+      "r_hip_roll_motor": {
+        "ctrlrange": [
+          -15.0,
+          15.0
+        ],
+        "forcerange": [
+          -22.0,
+          22.0
+        ]
+      },
+      "r_hip_yaw_motor": {
+        "ctrlrange": [
+          -15.0,
+          15.0
+        ],
+        "forcerange": [
+          -22.0,
+          22.0
+        ]
+      },
+      "r_hip_pitch_motor": {
+        "ctrlrange": [
+          -30.0,
+          30.0
+        ],
+        "forcerange": [
+          -44.0,
+          44.0
+        ]
+      },
+      "r_knee_motor": {
+        "ctrlrange": [
+          -30.0,
+          30.0
+        ],
+        "forcerange": [
+          -44.0,
+          44.0
+        ]
+      },
+      "r_wheel_motor": {
+        "ctrlrange": [
+          -15.0,
+          15.0
+        ],
+        "forcerange": [
+          -22.0,
+          22.0
+        ]
+      }
+    },
+    "ctrl_units": "MJCF motor actuator ctrl is actuator input force/torque scaled by gear; gear=1 here, so ctrl is joint torque command in Nm-equivalent simulation units.",
+    "ctrl_directly_produces_joint_torque_through_gear": true,
+    "wheel_actuators_motor_torque_capable": true,
+    "current_pid_conversion_location": "wheeled_biped/sim/low_level_control.py:pid_control() computes actuator ctrl; BalanceEnv.step() writes mjx_data.ctrl.",
+    "torque_mode_bypass": "low_level_control.mode='motor_torque' maps normalized action directly to actuator ctrl via ctrlrange, bypassing PID.",
+    "safety_clamps": [
+      "normalized action clip [-1,1]",
+      "max_ctrl_fraction",
+      "actuator ctrlrange",
+      "hip-yaw torque disabled by default",
+      "opt-in only"
+    ]
+  },
+  "current_best_controller": "outputs\\phase_b9_lqr_gain_strengthening\\best_lqr_config.yaml",
+  "balance_residual_yaml_touched": false,
+  "step6_status": "BLOCKED"
+}

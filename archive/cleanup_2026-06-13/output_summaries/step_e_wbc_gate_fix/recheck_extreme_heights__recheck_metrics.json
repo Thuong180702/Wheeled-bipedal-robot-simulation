@@ -1,0 +1,264 @@
+{
+  "low_0p300": {
+    "case_name": "low_0p300",
+    "target_com_z_m": 0.3,
+    "rows": 5000,
+    "survived_5000": true,
+    "terminated": false,
+    "termination_reasons": [],
+    "official_step_e": {
+      "support_position_error": {
+        "max_abs": 0.17569044061373276,
+        "final": 0.07910229048318815,
+        "rms": 0.0691158799350828,
+        "gate": "< 0.15 m",
+        "pass": false
+      },
+      "wheel_vel_mean": {
+        "max_abs": 4.3887152671813965,
+        "final": -2.4300520420074463,
+        "rms": 1.735242287144771,
+        "gate": "< 5.0 rad/s",
+        "pass": true
+      },
+      "hip_yaw_abs_max": {
+        "max": 0.31274181604385376,
+        "final": 0.28115329146385193,
+        "rms": 0.21791988113336994,
+        "gate": "< 0.10 rad",
+        "pass": false
+      },
+      "contact_valid_percent_raw": {
+        "value": 99.98,
+        "gate": ">= 99.9%",
+        "pass": true
+      },
+      "left_wheel_contact_percent": {
+        "value": 100.0,
+        "gate": "> 0%",
+        "pass": true
+      },
+      "right_wheel_contact_percent": {
+        "value": 100.0,
+        "gate": "> 0%",
+        "pass": true
+      },
+      "non_wheel_floor_contact_count": {
+        "max": 0.0,
+        "total_rows_with_contacts": 0,
+        "gate": "== 0",
+        "pass": true
+      },
+      "wbc_applied": {
+        "value": false,
+        "structural_qp_tau_norm": 14.489078521728516,
+        "per_actuator_wbc_authority_enabled": false,
+        "active_wbc_owners_detected": false,
+        "gate": "== false",
+        "pass": true
+      },
+      "hidden_torque_norm_max": {
+        "value": 0.0,
+        "gate": "== 0",
+        "pass": true
+      },
+      "ownership_violation_count": {
+        "max": 0,
+        "gate": "== 0",
+        "pass": true
+      }
+    },
+    "extended_height_monitoring": {
+      "initial_com_z_m": 0.29544979333877563,
+      "final_com_z_m": 0.27598121762275696,
+      "com_z_min": 0.27297502756118774,
+      "com_z_max": 0.29544979333877563,
+      "target_com_z_m": 0.3,
+      "height_error_max_abs": 0.027024972438812245,
+      "height_error_final": -0.02401878237724303,
+      "height_error_RMS": 0.01899972441153033,
+      "first_below_target_minus_1cm": {
+        "step": 309,
+        "time": 309,
+        "value": 0.28998127579689026
+      },
+      "first_below_target_minus_2cm": {
+        "step": 2303,
+        "time": 2303,
+        "value": 0.2799982726573944
+      },
+      "first_below_target_minus_3cm": null,
+      "no_height_collapse": true,
+      "final_height_error_strict_gate": 0.02,
+      "final_height_error_relaxed_gate": 0.03,
+      "strict_monitor_pass": false,
+      "relaxed_monitor_pass": true,
+      "posture": {
+        "pitch_max_abs": 0.01334306398889363,
+        "roll_max_abs": 0.11105314515387157,
+        "pitch_recorded": true,
+        "roll_remain_bounded": true
+      },
+      "contact_remains_valid": false,
+      "classification": "HEIGHT_MONITOR_PASS_RELAXED"
+    },
+    "posture_diagnostics": {
+      "pitch": {
+        "max_abs": 0.01334306398889363,
+        "final": 0.0018127073874441304,
+        "rms": 0.004043639409594141
+      },
+      "roll": {
+        "max_abs": 0.11105314515387157,
+        "final": 0.06532924362633252,
+        "rms": 0.05353272652070627
+      },
+      "hip_yaw": {
+        "abs_max": 0.31274181604385376,
+        "final": 0.28115329146385193,
+        "rms": 0.21791988113336994
+      }
+    },
+    "structural_invariants": {
+      "controller_mode": "upright",
+      "wbc_applied": false,
+      "structural_qp_tau_norm": 14.489078521728516,
+      "per_actuator_wbc_authority_enabled": false,
+      "active_wbc_owners_detected": false,
+      "hidden_torque_max": 0.0,
+      "ownership_violation_max": 0,
+      "hy2_div_enabled": false
+    },
+    "official_step_e_pass": false,
+    "combined_classification": "EXTREME_HEIGHT_STEP_E_FAIL"
+  },
+  "high_0p480": {
+    "case_name": "high_0p480",
+    "target_com_z_m": 0.48,
+    "rows": 5000,
+    "survived_5000": true,
+    "terminated": false,
+    "termination_reasons": [],
+    "official_step_e": {
+      "support_position_error": {
+        "max_abs": 0.17325973298691508,
+        "final": 0.11360457788748603,
+        "rms": 0.08736201963524072,
+        "gate": "< 0.15 m",
+        "pass": false
+      },
+      "wheel_vel_mean": {
+        "max_abs": 5.256767988204956,
+        "final": -2.4054765701293945,
+        "rms": 1.862354803979301,
+        "gate": "< 5.0 rad/s",
+        "pass": false
+      },
+      "hip_yaw_abs_max": {
+        "max": 0.27527499198913574,
+        "final": 0.2719133496284485,
+        "rms": 0.14024756174665767,
+        "gate": "< 0.10 rad",
+        "pass": false
+      },
+      "contact_valid_percent_raw": {
+        "value": 99.98,
+        "gate": ">= 99.9%",
+        "pass": true
+      },
+      "left_wheel_contact_percent": {
+        "value": 100.0,
+        "gate": "> 0%",
+        "pass": true
+      },
+      "right_wheel_contact_percent": {
+        "value": 100.0,
+        "gate": "> 0%",
+        "pass": true
+      },
+      "non_wheel_floor_contact_count": {
+        "max": 0.0,
+        "total_rows_with_contacts": 0,
+        "gate": "== 0",
+        "pass": true
+      },
+      "wbc_applied": {
+        "value": false,
+        "structural_qp_tau_norm": 20.130521774291992,
+        "per_actuator_wbc_authority_enabled": false,
+        "active_wbc_owners_detected": false,
+        "gate": "== false",
+        "pass": true
+      },
+      "hidden_torque_norm_max": {
+        "value": 0.0,
+        "gate": "== 0",
+        "pass": true
+      },
+      "ownership_violation_count": {
+        "max": 0,
+        "gate": "== 0",
+        "pass": true
+      }
+    },
+    "extended_height_monitoring": {
+      "initial_com_z_m": 0.4811374247074127,
+      "final_com_z_m": 0.4638286530971527,
+      "com_z_min": 0.4628660976886749,
+      "com_z_max": 0.49114468693733215,
+      "target_com_z_m": 0.48,
+      "height_error_max_abs": 0.017133902311325055,
+      "height_error_final": -0.016171346902847272,
+      "height_error_RMS": 0.008056582829572223,
+      "first_below_target_minus_1cm": {
+        "step": 4443,
+        "time": 4443,
+        "value": 0.46999794244766235
+      },
+      "first_below_target_minus_2cm": null,
+      "first_below_target_minus_3cm": null,
+      "no_height_collapse": true,
+      "final_height_error_strict_gate": 0.02,
+      "final_height_error_relaxed_gate": 0.03,
+      "strict_monitor_pass": true,
+      "relaxed_monitor_pass": true,
+      "posture": {
+        "pitch_max_abs": 0.004330296190491489,
+        "roll_max_abs": 0.10740910946288106,
+        "pitch_recorded": true,
+        "roll_remain_bounded": true
+      },
+      "contact_remains_valid": false,
+      "classification": "HEIGHT_MONITOR_PASS_STRICT"
+    },
+    "posture_diagnostics": {
+      "pitch": {
+        "max_abs": 0.004330296190491489,
+        "final": -0.0011207760935688107,
+        "rms": 0.0014785022131797107
+      },
+      "roll": {
+        "max_abs": 0.10740910946288106,
+        "final": 0.08386618837846754,
+        "rms": 0.062283059053539355
+      },
+      "hip_yaw": {
+        "abs_max": 0.27527499198913574,
+        "final": 0.2719133496284485,
+        "rms": 0.14024756174665767
+      }
+    },
+    "structural_invariants": {
+      "controller_mode": "upright",
+      "wbc_applied": false,
+      "structural_qp_tau_norm": 20.130521774291992,
+      "per_actuator_wbc_authority_enabled": false,
+      "active_wbc_owners_detected": false,
+      "hidden_torque_max": 0.0,
+      "ownership_violation_max": 0,
+      "hy2_div_enabled": false
+    },
+    "official_step_e_pass": false,
+    "combined_classification": "EXTREME_HEIGHT_STEP_E_FAIL"
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "report_type": "pitch_spike_root_cause",
+  "date": "2026-05-30",
+  "configuration": {
+    "name": "F4c bug-fixed",
+    "sagittal_controller": "SagittalVelocityDampedBalanceController",
+    "gains": {
+      "kp_pitch": 50.0,
+      "kd_pitch": 10.0,
+      "kp_cp": 30.0,
+      "kd_com_vy": 5.0,
+      "k_velocity": 15.0,
+      "k_wheel_velocity": 0.5,
+      "k_position": 10.0,
+      "max_tau_wheel": 5.0
+    }
+  },
+  "telemetry_file": "outputs/hierarchical_controller_sim/telemetry_1780125276.csv",
+  "root_cause_classification": "pitch_transient_from_sagittal_gain_coupling",
+  "prior_analysis_correction": {
+    "incorrect_claim": "tau_pitch (~10 Nm) overwhelms tau_position (-2.5 Nm)",
+    "correct_finding": "All terms are summed into tau_common before wheel application. Actual applied wheel torque at peak is ~0.37 Nm, not 10 Nm. The logged sagittal_term_pitch is a diagnostic value only.",
+    "key_insight": "tau_cp = -kp_cp * sagittal_position_error = -30.0 * 0.254 = -7.63 Nm nearly cancels tau_pitch = +10.3 Nm, leaving only +0.28 Nm net tau_common."
+  },
+  "event_localization": {
+    "max_sagittal_drift_step": 1666,
+    "max_sagittal_drift_m": 0.2543,
+    "max_pitch_step": 1672,
+    "max_pitch_deg": 11.84,
+    "causal_ordering": "drift_peak_before_pitch_peak",
+    "note": "Drift peak (step 1666) occurs BEFORE pitch peak (step 1672). The pitch buildup is gradual over ~1700 steps, not a sudden spike.",
+    "pitch_buildup_milestones": [
+      {"pitch_deg": 0, "step": 0, "com_z_m": 0.4041},
+      {"pitch_deg": 2, "step": 84, "com_z_m": 0.4085},
+      {"pitch_deg": 4, "step": 831, "com_z_m": 0.4058},
+      {"pitch_deg": 6, "step": 1398, "com_z_m": 0.3980},
+      {"pitch_deg": 8, "step": 1456, "com_z_m": 0.3916},
+      {"pitch_deg": 10, "step": 1504, "com_z_m": 0.3827},
+      {"pitch_deg": 11, "step": 1632, "com_z_m": 0.3787},
+      {"pitch_deg": 11.5, "step": 1651, "com_z_m": 0.3756}
+    ],
+    "acceleration_event": {
+      "description": "Pitch rises from 6 deg to 10 deg in 100 steps (1400-1500)",
+      "com_z_drop_m": -0.0258,
+      "com_z_drop_steps": 366,
+      "com_z_drop_rate_mm_per_s": -3.52
+    }
+  },
+  "state_at_peak": {
+    "step": 1666,
+    "pitch_x_rad": 0.2060,
+    "pitch_deg": 11.80,
+    "pitch_rate_x_rad_s": 0.0022,
+    "sagittal_position_error_m": 0.2543,
+    "sagittal_velocity_m_s": 0.0022,
+    "wheel_vel_mean_rad_s": -0.180,
+    "com_z_m": 0.3743,
+    "com_y_m": 0.2228,
+    "contact_supervisor_state": "double_contact",
+    "left_wheel_contact": true,
+    "right_wheel_contact": true
+  },
+  "term_decomposition": {
+    "controller_formula": {
+      "tau_pitch": "kp_pitch * pitch_x_rad = 50.0 * pitch_x",
+      "tau_pitch_rate": "kd_pitch * pitch_rate_x = 10.0 * pitch_rate",
+      "tau_sag_vel": "-k_velocity * sagittal_velocity = -15.0 * sag_vel",
+      "tau_com_vy": "-kd_com_vy * sagittal_velocity = -5.0 * sag_vel",
+      "tau_cp": "-kp_cp * sagittal_position_error = -30.0 * sag_pos_err",
+      "tau_position": "-k_position * sagittal_position_error = -10.0 * sag_pos_err",
+      "tau_common": "sum of all above terms",
+      "tau_left": "tau_common + tau_wheel_vel_left",
+      "tau_right": "tau_common + tau_wheel_vel_right"
+    },
+    "at_peak_step_1666": {
+      "tau_pitch_Nm": 10.299,
+      "tau_pitch_rate_Nm": 0.199,
+      "tau_cp_Nm": -7.630,
+      "tau_position_Nm": -2.543,
+      "tau_sag_vel_Nm": -0.034,
+      "tau_com_vy_Nm": -0.011,
+      "tau_common_Nm": 0.280,
+      "actual_wheel_torque_mean_Nm": 0.369,
+      "tau_pitch_plus_tau_cp_Nm": 2.669,
+      "near_cancellation_ratio": 0.741
+    },
+    "key_steps": [
+      {"step": 500, "pitch_deg": 0.29, "tau_pitch": 0.252, "tau_cp": -0.293, "tau_pos": -0.098, "tau_common": -0.479, "actual_wt_mean": -0.124},
+      {"step": 1000, "pitch_deg": 2.64, "tau_pitch": 2.304, "tau_cp": -1.732, "tau_pos": -0.577, "tau_common": -1.059, "actual_wt_mean": -0.026},
+      {"step": 1300, "pitch_deg": 5.61, "tau_pitch": 4.898, "tau_cp": -3.499, "tau_pos": -1.166, "tau_common": 0.164, "actual_wt_mean": 0.119},
+      {"step": 1500, "pitch_deg": 9.80, "tau_pitch": 8.550, "tau_cp": -6.401, "tau_pos": -2.134, "tau_common": -0.870, "actual_wt_mean": 0.217},
+      {"step": 1666, "pitch_deg": 11.80, "tau_pitch": 10.299, "tau_cp": -7.630, "tau_pos": -2.543, "tau_common": 0.280, "actual_wt_mean": 0.369},
+      {"step": 1700, "pitch_deg": 11.15, "tau_pitch": 9.732, "tau_cp": -7.091, "tau_pos": -2.364, "tau_common": 1.484, "actual_wt_mean": 0.372},
+      {"step": 1800, "pitch_deg": 4.87, "tau_pitch": 4.252, "tau_cp": -3.247, "tau_pos": -1.082, "tau_common": 0.513, "actual_wt_mean": 0.019}
+    ],
+    "saturation_status": "sagittal_saturated=False throughout; tau_total_raw=tau_total_clipped=tau_total_smooth; no rate limiting active"
+  },
+  "upstream_cause_analysis": {
+    "classification": "B_sagittal_controller_coupling",
+    "description": "tau_cp (kp_cp=30.0) uses sagittal_position_error as a proxy for capture point error. Combined with tau_position (k_position=10.0), the total position-return coefficient is effectively -40.0 * sag_pos_err. This nearly cancels tau_pitch (kp_pitch=50.0) at large displacements.",
+    "effective_position_return_coefficient": -40.0,
+    "pitch_coefficient": 50.0,
+    "cancellation_at_large_displacement": "At sag_pos_err=0.254m: tau_cp+tau_pos = -10.17 Nm vs tau_pitch = +10.30 Nm",
+    "ruled_out": {
+      "A_posture_support_transient": "tau_posture_norm=0 throughout; no posture controller active",
+      "C_contact_transient": "contact_supervisor_state=double_contact throughout; L/R contact=True/True",
+      "D_frame_yaw_artifact": "yaw_drift_correlation=-0.29; sagittal_controller_input columns all zero (telemetry artifact, not controller issue)",
+      "E_saturation_rate_limit": "sagittal_saturated=False; tau_total_raw=tau_total_clipped throughout",
+      "F_initialization_periodic": "Control mode transitions at steps 1477/1739/1901/2009 are consequences of pitch, not causes"
+    },
+    "control_mode_transitions": [
+      {"step": 0, "mode": "upright", "pitch_deg": 0.00},
+      {"step": 1477, "mode": "transition", "pitch_deg": 8.60},
+      {"step": 1739, "mode": "upright", "pitch_deg": 8.54},
+      {"step": 1901, "mode": "transition", "pitch_deg": 8.61},
+      {"step": 2009, "mode": "upright", "pitch_deg": 8.53}
+    ],
+    "telemetry_artifact_note": "sagittal_controller_input_* columns are all zero throughout all 5000 steps. This is a telemetry artifact — variables initialized to 0.0 and only set inside a conditional branch not reached in this run. Controller itself receives correct inputs (confirmed by matching actual wheel torques to computed values)."
+  },
+  "repeatability": {
+    "status": "DETERMINISTIC",
+    "note": "Second run crashed with pre-existing UnboundLocalError: local variable 'sagittal_diag' referenced before assignment. Simulator is deterministic (no randomness). All runs produce identical results.",
+    "crash_is_preexisting_bug": true,
+    "crash_unrelated_to_investigation": true
+  },
+  "fix_recommendations": [
+    {
+      "option": 1,
+      "name": "Disable tau_cp (Recommended)",
+      "change": "Set kp_cp=0.0",
+      "rationale": "tau_cp uses sagittal_position_error as a cp proxy, redundant with tau_position. Removing it eliminates the near-cancellation.",
+      "expected_effect": "At step 1666, tau_common increases from +0.28 Nm to +7.91 Nm — 28x increase in corrective torque",
+      "regression_risk": "Low — tau_cp is redundant with tau_position",
+      "test_required": "5000-step nominal run + height variant regression (high_5cm, low_5cm)"
+    },
+    {
+      "option": 2,
+      "name": "Reduce kp_cp",
+      "change": "Reduce kp_cp from 30.0 to 5.0 or 10.0",
+      "rationale": "Reduces near-cancellation without fully removing cp term",
+      "regression_risk": "Medium — requires tuning"
+    },
+    {
+      "option": 3,
+      "name": "Increase kp_pitch",
+      "change": "Increase kp_pitch from 50.0 to 70.0 or 80.0",
+      "rationale": "Increases tau_pitch to overcome near-cancellation",
+      "regression_risk": "High — may cause pitch oscillations at steady state"
+    }
+  ],
+  "practical_target_achievability": {
+    "target_m": 0.10,
+    "achievable": true,
+    "reasoning": "Steady state (last 20%) is already within +/-0.033 m. Transient overshoot is caused by insufficient net wheel torque. With kp_cp=0.0, net corrective torque at peak would be ~7.9 Nm instead of ~0.37 Nm — sufficient to prevent pitch buildup from reaching 11.8 deg.",
+    "requires_architectural_change": false,
+    "requires_only": "Remove conflicting tau_cp term (kp_cp=0.0)"
+  },
+  "verification": {
+    "no_wbc_changes": true,
+    "no_e0b_e0c_e0d_reintroduced": true,
+    "torque_ownership_unchanged": true,
+    "sagittal_controllers_mutually_exclusive": true,
+    "balance_core_mode": true,
+    "velocity_damped_controller": true
+  },
+  "do_not": [
+    "Proceed to Step C until this fix is reviewed and tested",
+    "Implement kp_cp=0.0 without user review",
+    "Tune k_position or k_velocity further (confirmed diminishing returns)",
+    "Reintroduce WBC, E0b/E0c/E0d",
+    "Change torque ownership"
+  ]
+}

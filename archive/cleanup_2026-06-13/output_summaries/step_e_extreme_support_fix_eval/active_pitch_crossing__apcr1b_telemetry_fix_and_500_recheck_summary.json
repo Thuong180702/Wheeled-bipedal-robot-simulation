@@ -1,0 +1,95 @@
+{
+  "task": "APCR1b telemetry fix and 500-step recheck",
+  "classification": "APCR1B_500_IMPROVES_BUT_NOT_ENOUGH",
+  "timestamp": "2026-06-09",
+
+  "telemetry_fix": {
+    "issue": "28 active_pitch_crossing_* fields missing from CSV",
+    "resolution": "Telemetry pipeline fixed in prior session (Phases 1-2)",
+    "verification": {
+      "total_columns": 553,
+      "apcr_columns_found": 28,
+      "rows": 500
+    }
+  },
+
+  "apcr1b_profile_parameters": {
+    "inner_exit_m": 0.07,
+    "outer_enter_m": 0.10,
+    "recovery_gate_mode": true,
+    "enabled": true
+  },
+
+  "signed_error_comparison": {
+    "d2_500": {
+      "mean": 0.0824,
+      "final": 0.0580,
+      "positive_pct": 93.2,
+      "outside_band_pct": 19.2,
+      "zero_crossings": 2
+    },
+    "apcr1_0_500": {
+      "mean": 0.0674,
+      "final": -0.0721,
+      "positive_pct": 79.4,
+      "outside_band_pct": 13.8,
+      "zero_crossings": 8
+    },
+    "apcr1b_500": {
+      "mean": 0.066,
+      "final": -0.0694,
+      "min": -0.0694,
+      "max": 0.1714,
+      "rms": 0.0937,
+      "mae": 0.0763,
+      "positive_pct": 79.2,
+      "negative_pct": 20.6,
+      "outside_plus_0.15": 69,
+      "outside_plus_0.15_pct": 13.8,
+      "outside_minus_0.15": 0,
+      "outside_minus_0.15_pct": 0,
+      "total_outside_band": 69,
+      "total_outside_band_pct": 13.8,
+      "zero_crossings": 5
+    }
+  },
+
+  "apcr_behavior": {
+    "active_steps": 221,
+    "active_pct": 44.2,
+    "states": {
+      "NEUTRAL": {"count": 279, "pct": 55.8},
+      "CROSS_FROM_POSITIVE": {"count": 221, "pct": 44.2}
+    },
+    "transitions": {
+      "neutral_to_cross": 2,
+      "cross_to_neutral": 2,
+      "total_cycles": 2
+    },
+    "exit_errors": {
+      "min": 0.0686,
+      "max": 0.0700,
+      "mean": 0.0693
+    }
+  },
+
+  "key_findings": [
+    "APCR1b activates correctly with inner_exit_m=0.07",
+    "Positive bias reduced: 79.2% vs D2's 93.2%",
+    "Zero crossings reduced: 5 vs APCR1's 8",
+    "Band violations unchanged: 13.8% vs APCR1's 13.8%",
+    "Exit threshold change too modest to reduce violations"
+  ],
+
+  "recommendation": {
+    "proceed_to_2000": false,
+    "reason": "Band violations at 13.8% unchanged from APCR1",
+    "next_steps": [
+      "Reduce outer_enter_m from 0.10 to 0.08",
+      "Or add tighter intermediate gates",
+      "Or combine with support velocity damping increase"
+    ]
+  },
+
+  "decision": "APCR1B_500_IMPROVES_BUT_NOT_ENOUGH"
+}

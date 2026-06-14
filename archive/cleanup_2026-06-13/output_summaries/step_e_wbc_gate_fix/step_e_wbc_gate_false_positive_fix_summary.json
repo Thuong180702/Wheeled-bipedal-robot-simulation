@@ -1,0 +1,78 @@
+{
+  "decision": "WBC_GATE_FIX_PASS_REMAINING_CONTROLLER_FAILURES",
+  "date": "2026-06-07",
+  "bug": "tau_wbc_norm used as proxy for WBC applied - false positive because tau_wbc_norm is structural QP output, not active WBC control",
+  "root_cause": "The QP solver produces nonzero tau_wbc_norm for support feedforward force distribution, which was misinterpreted as active WBC control",
+  "fix": "WBC gate now checks per_actuator_wbc_authority_enabled flag and active_torque_owner_per_joint for actual WBC owners",
+  "files_changed": [
+    "scripts/analyze_step_e_extreme_height_d2_official_check.py"
+  ],
+  "tests_added": [
+    "tests/test_step_e_wbc_gate_validator.py"
+  ],
+  "wbc_gate_results": {
+    "low_0p300": {
+      "old_result": "FAIL (tau_wbc_norm=13.5 Nm)",
+      "new_result": "PASS",
+      "structural_qp_tau_norm": 14.49,
+      "per_actuator_wbc_authority_enabled": false,
+      "active_wbc_owners_detected": false
+    },
+    "high_0p480": {
+      "old_result": "FAIL (tau_wbc_norm=20.1 Nm)",
+      "new_result": "PASS",
+      "structural_qp_tau_norm": 20.13,
+      "per_actuator_wbc_authority_enabled": false,
+      "active_wbc_owners_detected": false
+    }
+  },
+  "official_step_e_results": {
+    "low_0p300": {
+      "survived_5000_steps": true,
+      "wbc_gate": "PASS",
+      "support_position_error": "FAIL (0.176m > 0.15m)",
+      "wheel_velocity": "PASS (4.39 rad/s)",
+      "hip_yaw": "FAIL (0.313 rad > 0.10 rad)",
+      "contact_valid": "PASS",
+      "non_wheel_contacts": "PASS",
+      "hidden_torque": "PASS",
+      "ownership_violations": "PASS",
+      "overall": "FAIL"
+    },
+    "high_0p480": {
+      "survived_5000_steps": true,
+      "wbc_gate": "PASS",
+      "support_position_error": "FAIL (0.173m > 0.15m)",
+      "wheel_velocity": "FAIL (5.26 rad/s > 5.0 rad/s)",
+      "hip_yaw": "FAIL (0.275 rad > 0.10 rad)",
+      "contact_valid": "PASS",
+      "non_wheel_contacts": "PASS",
+      "hidden_torque": "PASS",
+      "ownership_violations": "PASS",
+      "overall": "FAIL"
+    }
+  },
+  "remaining_true_failures": {
+    "low_0p300": ["support_position_error", "hip_yaw"],
+    "high_0p480": ["support_position_error", "hip_yaw", "wheel_velocity"]
+  },
+  "next_controller_fixes_needed": [
+    "Support position error fix - needs explicit position-holding or drift compensation",
+    "Hip yaw divergence fix - needs explicit yaw authority (HY2-DIV or other)",
+    "High-height wheel velocity fix - needs additional damping at 0.480m"
+  ],
+  "what_this_fix_does_not_change": [
+    "Controller behavior remains unchanged",
+    "No WBC is enabled",
+    "No HY2-DIV is enabled",
+    "No gain tuning applied",
+    "tau_wbc_norm is still logged as structural_qp_tau_norm for diagnostics"
+  ],
+  "artifacts_created": [
+    "outputs/step_e_wbc_gate_fix/wbc_gate_logic_inventory.json",
+    "outputs/step_e_wbc_gate_fix/wbc_gate_logic_inventory.md",
+    "outputs/step_e_wbc_gate_fix/recheck_extreme_heights/",
+    "tests/test_step_e_wbc_gate_validator.py",
+    "docs/validation/step_e_wbc_gate_false_positive_fix_report.md"
+  ]
+}

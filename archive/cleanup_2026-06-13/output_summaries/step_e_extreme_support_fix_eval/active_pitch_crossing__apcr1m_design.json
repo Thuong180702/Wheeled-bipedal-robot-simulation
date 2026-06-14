@@ -1,0 +1,55 @@
+{
+  "profile_name": "APCR1m_conditional_pitch_blend_recenter",
+  "classification": "APCR1L_TELEMETRY_MISMATCH",
+  "design_rationale": "Conditional pitch blending instead of hard suppression - preserves tau_pitch during startup with safety guards",
+  "base_profile": "APCR1K_SUPPORT_HYSTERESIS_EARLY_ENTRY",
+  "new_parameters": {
+    "apc_pitch_blend_enabled": true,
+    "apc_pitch_blend_startup_guard_steps": 100,
+    "apc_pitch_blend_safe_pitch_rad": 0.15,
+    "apc_pitch_blend_safe_pitch_rate_rad_s": 0.5,
+    "apc_pitch_blend_min_com_z": 0.27,
+    "apc_pitch_blend_max_roll_rad": 0.15,
+    "apc_pitch_blend_deep_error_m": 0.12,
+    "apc_pitch_blend_mid_error_m": 0.08,
+    "apc_pitch_blend_soft_error_m": 0.05,
+    "apc_pitch_blend_scale_deep": 0.0,
+    "apc_pitch_blend_scale_mid": 0.25,
+    "apc_pitch_blend_scale_soft": 0.5,
+    "apc_pitch_blend_scale_near": 1.0
+  },
+  "telemetry_fields": [
+    "apcr1m_pitch_blend_active",
+    "apcr1m_pitch_blend_scale",
+    "apcr1m_pitch_blend_block_reason",
+    "apcr1m_tau_pitch_before_blend",
+    "apcr1m_tau_pitch_after_blend",
+    "apcr1m_startup_guard_active",
+    "apcr1m_recenter_active",
+    "apcr1m_pitch_safe",
+    "apcr1m_height_safe",
+    "apcr1m_contact_safe"
+  ],
+  "blend_logic": {
+    "never_blend_conditions": [
+      "Not in RECENTER state",
+      "During startup guard (first 100 steps)",
+      "Pitch or pitch rate unsafe",
+      "Height below minimum",
+      "Roll exceeds threshold",
+      "Contact state invalid"
+    ],
+    "error_bands": {
+      "deep": {"threshold_m": 0.12, "scale": 0.0},
+      "mid": {"threshold_m": 0.08, "scale": 0.25},
+      "soft": {"threshold_m": 0.05, "scale": 0.5},
+      "near": {"threshold_m": 0.0, "scale": 1.0}
+    }
+  },
+  "key_differences_from_apcr1l": {
+    "suppression_method": "Binary (0 or 1) vs Scaling (0.0 to 1.0)",
+    "startup_protection": "None vs Startup guard (100 steps)",
+    "safety_gates": "None vs Contact, height, roll, pitch",
+    "error_dependent": "No vs Yes"
+  }
+}

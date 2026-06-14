@@ -1,0 +1,24 @@
+{
+  "original_path": "outputs/step_c_contact_invalid_audit",
+  "original_size": "23.0K",
+  "original_size_bytes": 23508,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "contact_invalid_audit.json",
+      "size_bytes": 5718
+    },
+    {
+      "file": "contact_invalid_audit_report.md",
+      "size_bytes": 5430
+    },
+    {
+      "file": "contact_invalid_window.csv",
+      "size_bytes": 11259
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

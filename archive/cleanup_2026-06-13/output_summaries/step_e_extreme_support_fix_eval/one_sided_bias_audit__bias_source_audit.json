@@ -1,0 +1,318 @@
+{
+  "D2": {
+    "name": "D2",
+    "rows": 500,
+    "setup_bias": {
+      "initial_signed_support_error_m": 0.0,
+      "initial_pitch_x": -0.0,
+      "initial_wheel_vel_mean": 0.0,
+      "initial_com_y": -0.0219857655465602,
+      "initial_hip_yaw_abs_max": 0.0,
+      "initial_l_hip_yaw_pos": 0.0,
+      "initial_r_hip_yaw_pos": 0.0,
+      "initial_hip_yaw_asymmetry": 0.0,
+      "initial_root_z": 0.396830558449144,
+      "initial_contact_force_left": 18.162494659423828,
+      "initial_contact_force_right": 19.439821243286133,
+      "initial_signed_error_near_zero": true,
+      "has_initial_bias": false
+    },
+    "formula_bias": {
+      "hip_yaw_comp_mean": 0.08233315110347866,
+      "hip_yaw_comp_final": 0.0592818533092424,
+      "support_position_mean": 0.08244912312588618,
+      "support_position_final": 0.0579860112037527,
+      "difference_mean": -0.00011597202240750542,
+      "difference_final": 0.0012958421054896987,
+      "signed_error_range": 0.1792143027848111,
+      "magnitude_error_range": 0.1792143027848111,
+      "signed_always_non_negative": false,
+      "signed_never_negative_despite_magnitude": false
+    },
+    "controller_bias": {
+      "tau_position_mean": -2.614576800623472,
+      "tau_position_final": -2.3194403648376465,
+      "tau_position_std": 1.5152857987784265,
+      "tau_position_percent_positive": 6.6000000000000005,
+      "tau_pitch_mean": 2.5991776611271966,
+      "tau_pitch_final": 2.363297323084158,
+      "tau_pitch_std": 1.7704065684409698,
+      "tau_pitch_percent_positive": 89.2,
+      "tau_pitch_rate_mean": 0.09463108211057261,
+      "tau_pitch_rate_percent_positive": 42.0,
+      "tau_position_has_persistent_sign": true,
+      "tau_pitch_has_persistent_sign": false
+    },
+    "contact_bias": {
+      "left_fz_mean": 40.57886711883545,
+      "right_fz_mean": 38.845458835601804,
+      "left_fz_final": 40.64228439331055,
+      "right_fz_final": 38.75578308105469,
+      "fz_asymmetry_mean": 0.02234772294553864,
+      "left_contact_percent": 100.0,
+      "right_contact_percent": 100.0,
+      "persistent_contact_asymmetry": false
+    },
+    "hip_yaw_coupling": {
+      "left_yaw_mean": -0.034008401667932,
+      "right_yaw_mean": 0.044480149965107525,
+      "asymmetry_mean": 0.010667948909031062,
+      "asymmetry_std": 0.006401319839327823,
+      "asymmetry_max": 0.0195306576788425,
+      "left_yaw_percent_positive": 0.0,
+      "right_yaw_percent_positive": 99.8,
+      "asymmetry_signed_error_correlation": -0.3716635163282048,
+      "comp_tau_left_mean": 0.0,
+      "comp_tau_right_mean": 0.0,
+      "comp_tau_sum_mean": 0.0
+    },
+    "temporal_analysis": {
+      "signed_error_first_100_mean": 0.06656801403312533,
+      "signed_error_last_100_mean": 0.08087237665929786,
+      "signed_error_trend": 0.014304362626172532,
+      "bias_exists_from_step_0": true,
+      "bias_grows_over_time": false
+    },
+    "bias_classifications": [
+      "BIAS_FROM_PITCH_REFERENCE_OR_TORQUE_BIAS"
+    ],
+    "primary_bias_source": "BIAS_FROM_PITCH_REFERENCE_OR_TORQUE_BIAS"
+  },
+  "F1b": {
+    "name": "F1b",
+    "rows": 500,
+    "setup_bias": {
+      "initial_signed_support_error_m": 0.0,
+      "initial_pitch_x": -0.0,
+      "initial_wheel_vel_mean": 0.0,
+      "initial_com_y": -0.0219857655465602,
+      "initial_hip_yaw_abs_max": 0.0,
+      "initial_l_hip_yaw_pos": 0.0,
+      "initial_r_hip_yaw_pos": 0.0,
+      "initial_hip_yaw_asymmetry": 0.0,
+      "initial_root_z": 0.396830558449144,
+      "initial_contact_force_left": 18.162494659423828,
+      "initial_contact_force_right": 19.439821243286133,
+      "initial_signed_error_near_zero": true,
+      "has_initial_bias": false
+    },
+    "formula_bias": {
+      "hip_yaw_comp_mean": 0.07641035903184745,
+      "hip_yaw_comp_final": -0.0327057399621433,
+      "support_position_mean": 0.07634018334293867,
+      "support_position_final": -0.0350878444543883,
+      "difference_mean": 7.017568890877668e-05,
+      "difference_final": 0.0023821044922449977,
+      "signed_error_range": 0.2033482252384334,
+      "magnitude_error_range": 0.20457671325603138,
+      "signed_always_non_negative": false,
+      "signed_never_negative_despite_magnitude": false
+    },
+    "controller_bias": {
+      "tau_position_mean": -2.3618085135561704,
+      "tau_position_final": 1.403513789176941,
+      "tau_position_std": 1.9015687795960488,
+      "tau_position_percent_positive": 17.0,
+      "tau_pitch_mean": 2.6976371092715974,
+      "tau_pitch_final": -1.242797208950167,
+      "tau_pitch_std": 2.262877648045977,
+      "tau_pitch_percent_positive": 82.8,
+      "tau_pitch_rate_mean": -0.05050874748732895,
+      "tau_pitch_rate_percent_positive": 37.0,
+      "tau_position_has_persistent_sign": false,
+      "tau_pitch_has_persistent_sign": false
+    },
+    "contact_bias": {
+      "left_fz_mean": 40.647154556274415,
+      "right_fz_mean": 38.761204456329345,
+      "left_fz_final": 40.84487533569336,
+      "right_fz_final": 38.56821823120117,
+      "fz_asymmetry_mean": 0.024276120152297114,
+      "left_contact_percent": 100.0,
+      "right_contact_percent": 100.0,
+      "persistent_contact_asymmetry": false
+    },
+    "hip_yaw_coupling": {
+      "left_yaw_mean": -0.028681608768878455,
+      "right_yaw_mean": 0.039819004389297294,
+      "asymmetry_mean": 0.011332845451237469,
+      "asymmetry_std": 0.006706791880458652,
+      "asymmetry_max": 0.0199000984430313,
+      "left_yaw_percent_positive": 0.0,
+      "right_yaw_percent_positive": 99.8,
+      "asymmetry_signed_error_correlation": -0.3518281318025322,
+      "comp_tau_left_mean": 0.0,
+      "comp_tau_right_mean": 0.0,
+      "comp_tau_sum_mean": 0.0
+    },
+    "temporal_analysis": {
+      "signed_error_first_100_mean": 0.06609436207646428,
+      "signed_error_last_100_mean": 0.07729585177159286,
+      "signed_error_trend": 0.011201489695128575,
+      "bias_exists_from_step_0": true,
+      "bias_grows_over_time": false
+    },
+    "bias_classifications": [
+      "BIAS_SOURCE_INCONCLUSIVE"
+    ],
+    "primary_bias_source": "BIAS_SOURCE_INCONCLUSIVE"
+  },
+  "F2a": {
+    "name": "F2a",
+    "rows": 500,
+    "setup_bias": {
+      "initial_signed_support_error_m": 0.0,
+      "initial_pitch_x": -0.0,
+      "initial_wheel_vel_mean": 0.0,
+      "initial_com_y": -0.0219857655465602,
+      "initial_hip_yaw_abs_max": 0.0,
+      "initial_l_hip_yaw_pos": 0.0,
+      "initial_r_hip_yaw_pos": 0.0,
+      "initial_hip_yaw_asymmetry": 0.0,
+      "initial_root_z": 0.396830558449144,
+      "initial_contact_force_left": 18.162494659423828,
+      "initial_contact_force_right": 19.439821243286133,
+      "initial_signed_error_near_zero": true,
+      "has_initial_bias": false
+    },
+    "formula_bias": {
+      "hip_yaw_comp_mean": 0.08033275803882577,
+      "hip_yaw_comp_final": -0.014876259180293,
+      "support_position_mean": 0.08029704436340056,
+      "support_position_final": -0.0178568377126097,
+      "difference_mean": 3.571367542521942e-05,
+      "difference_final": 0.0029805785323167005,
+      "signed_error_range": 0.22355321053196162,
+      "magnitude_error_range": 0.22355321053196162,
+      "signed_always_non_negative": false,
+      "signed_never_negative_despite_magnitude": false
+    },
+    "controller_bias": {
+      "tau_position_mean": -2.3674179476038844,
+      "tau_position_final": 0.7142735123634338,
+      "tau_position_std": 2.0058334398326108,
+      "tau_position_percent_positive": 17.0,
+      "tau_pitch_mean": 2.797770068249912,
+      "tau_pitch_final": -0.317102290722424,
+      "tau_pitch_std": 2.376423869635656,
+      "tau_pitch_percent_positive": 83.6,
+      "tau_pitch_rate_mean": -0.01377963312494103,
+      "tau_pitch_rate_percent_positive": 39.2,
+      "tau_position_has_persistent_sign": false,
+      "tau_pitch_has_persistent_sign": false
+    },
+    "contact_bias": {
+      "left_fz_mean": 40.62471118164063,
+      "right_fz_mean": 38.78262746810913,
+      "left_fz_final": 40.865989685058594,
+      "right_fz_final": 38.38490295410156,
+      "fz_asymmetry_mean": 0.023725253955996388,
+      "left_contact_percent": 100.0,
+      "right_contact_percent": 100.0,
+      "persistent_contact_asymmetry": false
+    },
+    "hip_yaw_coupling": {
+      "left_yaw_mean": -0.02874886138574215,
+      "right_yaw_mean": 0.039553603659689504,
+      "asymmetry_mean": 0.011000942885802894,
+      "asymmetry_std": 0.006560207206831842,
+      "asymmetry_max": 0.0199243128299713,
+      "left_yaw_percent_positive": 0.0,
+      "right_yaw_percent_positive": 99.8,
+      "asymmetry_signed_error_correlation": -0.3071029402640832,
+      "comp_tau_left_mean": 0.0,
+      "comp_tau_right_mean": 0.0,
+      "comp_tau_sum_mean": 0.0
+    },
+    "temporal_analysis": {
+      "signed_error_first_100_mean": 0.06656801403312533,
+      "signed_error_last_100_mean": 0.09686825546394942,
+      "signed_error_trend": 0.03030024143082409,
+      "bias_exists_from_step_0": true,
+      "bias_grows_over_time": true
+    },
+    "bias_classifications": [
+      "BIAS_SOURCE_INCONCLUSIVE"
+    ],
+    "primary_bias_source": "BIAS_SOURCE_INCONCLUSIVE"
+  },
+  "F2b": {
+    "name": "F2b",
+    "rows": 500,
+    "setup_bias": {
+      "initial_signed_support_error_m": 0.0,
+      "initial_pitch_x": -0.0,
+      "initial_wheel_vel_mean": 0.0,
+      "initial_com_y": -0.0219857655465602,
+      "initial_hip_yaw_abs_max": 0.0,
+      "initial_l_hip_yaw_pos": 0.0,
+      "initial_r_hip_yaw_pos": 0.0,
+      "initial_hip_yaw_asymmetry": 0.0,
+      "initial_root_z": 0.396830558449144,
+      "initial_contact_force_left": 18.162494659423828,
+      "initial_contact_force_right": 19.439821243286133,
+      "initial_signed_error_near_zero": true,
+      "has_initial_bias": false
+    },
+    "formula_bias": {
+      "hip_yaw_comp_mean": 0.08305337590788854,
+      "hip_yaw_comp_final": 0.0024593636496264,
+      "support_position_mean": 0.08305147202215699,
+      "support_position_final": -0.0009519428657711,
+      "difference_mean": 1.9038857315422098e-06,
+      "difference_final": 0.0034113065153975,
+      "signed_error_range": 0.24014786656794251,
+      "magnitude_error_range": 0.24014786656794251,
+      "signed_always_non_negative": false,
+      "signed_never_negative_despite_magnitude": false
+    },
+    "controller_bias": {
+      "tau_position_mean": -2.3423820832610653,
+      "tau_position_final": 0.0380777157843112,
+      "tau_position_std": 2.1635152093746988,
+      "tau_position_percent_positive": 17.2,
+      "tau_pitch_mean": 2.8860870941216517,
+      "tau_pitch_final": 0.6240578916072074,
+      "tau_pitch_std": 2.5593194241353436,
+      "tau_pitch_percent_positive": 83.39999999999999,
+      "tau_pitch_rate_mean": 0.0236760213697562,
+      "tau_pitch_rate_percent_positive": 40.0,
+      "tau_position_has_persistent_sign": false,
+      "tau_pitch_has_persistent_sign": false
+    },
+    "contact_bias": {
+      "left_fz_mean": 40.59280655670166,
+      "right_fz_mean": 38.816012340545655,
+      "left_fz_final": 40.84806060791016,
+      "right_fz_final": 38.31615829467773,
+      "fz_asymmetry_mean": 0.022902848606804836,
+      "left_contact_percent": 100.0,
+      "right_contact_percent": 100.0,
+      "persistent_contact_asymmetry": false
+    },
+    "hip_yaw_coupling": {
+      "left_yaw_mean": -0.027224662202143424,
+      "right_yaw_mean": 0.037592230218768195,
+      "asymmetry_mean": 0.010563768628480326,
+      "asymmetry_std": 0.006175728044966828,
+      "asymmetry_max": 0.018597163259983,
+      "left_yaw_percent_positive": 5.2,
+      "right_yaw_percent_positive": 99.8,
+      "asymmetry_signed_error_correlation": -0.27201008600496457,
+      "comp_tau_left_mean": 0.0,
+      "comp_tau_right_mean": 0.0,
+      "comp_tau_sum_mean": 0.0
+    },
+    "temporal_analysis": {
+      "signed_error_first_100_mean": 0.06656801403312533,
+      "signed_error_last_100_mean": 0.11569502386169236,
+      "signed_error_trend": 0.049127009828567034,
+      "bias_exists_from_step_0": true,
+      "bias_grows_over_time": true
+    },
+    "bias_classifications": [
+      "BIAS_SOURCE_INCONCLUSIVE"
+    ],
+    "primary_bias_source": "BIAS_SOURCE_INCONCLUSIVE"
+  }
+}

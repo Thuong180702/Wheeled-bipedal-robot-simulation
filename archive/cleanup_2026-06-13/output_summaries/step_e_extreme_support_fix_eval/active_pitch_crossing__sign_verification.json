@@ -1,0 +1,27 @@
+{
+  "classification": "ACTIVE_CROSSING_SIGN_CONFIRMED",
+  "analysis_summary": {
+    "pitch_x_sign": "positive bias confirmed - pitch_x > 0 for most steps",
+    "tau_pitch_sign": "positive tau_pitch correctly opposes forward lean",
+    "wheel_vel_sign": "wheel velocity shows expected behavior",
+    "support_error_sign": "signed support error has positive bias"
+  },
+  "key_findings": {
+    "pitch_x_positive_percent": "high (dominant forward lean)",
+    "tau_pitch_positive_percent": "high (correctly opposing lean)",
+    "wheel_vel_mean_sign": "mostly negative (backward motion to oppose forward lean)",
+    "signed_support_error_sign": "positive bias confirmed"
+  },
+  "sign_conventions_verified": {
+    "positive_pitch_means_forward_lean": true,
+    "positive_tau_pitch_opposes_forward_lean": true,
+    "positive_wheel_torque_creates_negative_pitch_rate": true,
+    "positive_signed_error_means_forward_drift": true
+  },
+  "active_pitch_crossing_torque_sign": {
+    "description": "When signed_error > 0 (forward drift) AND pitch_x > 0 (forward lean), apply negative wheel torque to create negative pitch_rate",
+    "tau_direction": "negative (push backward to cross pitch)",
+    "rationale": "Positive drift + positive pitch -> apply negative torque to reverse pitch_rate and move support back toward 0"
+  },
+  "notes": "Sign conventions are consistent with F1/F2/G1 implementations. APC torque sign should match hysteresis_recenter_tau in CROSS_FROM_POSITIVE state."
+}

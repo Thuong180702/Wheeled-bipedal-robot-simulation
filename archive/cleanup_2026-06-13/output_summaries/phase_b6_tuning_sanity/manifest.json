@@ -1,0 +1,16 @@
+{
+  "original_path": "outputs/phase_b6_tuning_sanity",
+  "original_size": "8.4K",
+  "original_size_bytes": 8608,
+  "classification": "SUMMARIZE_THEN_DELETE",
+  "references_count": 0,
+  "copied_files": [
+    {
+      "file": "phase_b6_comparison.json",
+      "size_bytes": 5782
+    }
+  ],
+  "skipped_large_files": [],
+  "deletion_allowed": true,
+  "reason": "Summaries extracted; raw regenerable output safe to delete."
+}

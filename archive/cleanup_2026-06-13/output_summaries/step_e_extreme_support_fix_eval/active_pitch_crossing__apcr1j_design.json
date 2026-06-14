@@ -1,0 +1,43 @@
+{
+  "profile_name": "APCR1j_support_hysteresis_higher_authority",
+  "based_on": "APCR1i_support_hysteresis_recenter",
+  "root_cause": "APCR1i downstream apc_max_cross_tau = 1.5 Nm universal clip overrides hysteresis authority",
+  "fix": "explicitly set apc_max_cross_tau = 2.0",
+  "configuration": {
+    "apc_max_cross_tau": 2.0,
+    "apc_hysteresis_recenter_max_tau": 2.0,
+    "apc_hysteresis_emergency_max_tau": 2.2,
+    "apc_hysteresis_hold_max_tau": 1.75,
+    "apc_hysteresis_normal_rate": 0.40,
+    "apc_hysteresis_recenter_rate": 1.1,
+    "apc_hysteresis_emergency_rate": 1.3,
+    "apc_hysteresis_outer_enter_m": 0.08,
+    "apc_hysteresis_inner_exit_m": 0.03,
+    "apc_hysteresis_opposite_release_m": 0.03,
+    "apc_hysteresis_near_zero_m": 0.01,
+    "apc_hysteresis_emergency_m": 0.12,
+    "apc_hysteresis_hard_m": 0.15
+  },
+  "key_differences_from_apcr1i": {
+    "apc_max_cross_tau": {"apcr1i": 1.5, "apcr1j": 2.0, "delta": 0.5},
+    "apc_hysteresis_recenter_max_tau": {"apcr1i": 1.75, "apcr1j": 2.0, "delta": 0.25},
+    "apc_hysteresis_emergency_max_tau": {"apcr1i": 2.0, "apcr1j": 2.2, "delta": 0.2},
+    "apc_hysteresis_hold_max_tau": {"apcr1i": 1.5, "apcr1j": 1.75, "delta": 0.25},
+    "apc_hysteresis_normal_rate": {"apcr1i": 0.30, "apcr1j": 0.40, "delta": 0.1},
+    "apc_hysteresis_recenter_rate": {"apcr1i": 0.90, "apcr1j": 1.1, "delta": 0.2},
+    "apc_hysteresis_emergency_rate": {"apcr1i": 1.00, "apcr1j": 1.3, "delta": 0.3}
+  },
+  "expected_behavior": [
+    "APCR1j can produce APCR tau magnitude up to 2.0 Nm",
+    "APCR1j can reach selected_tau_limit = 2.0 or 2.2 Nm",
+    "APCR1j should reduce drift compared to APCR1i",
+    "APCR1j should have fewer torque clipping events than APCR1i",
+    "APCR1j should have faster e_dot reversal than APCR1i"
+  ],
+  "target_metrics": {
+    "survive_1000_steps": true,
+    "max_e_target_m": 0.15,
+    "outside_pm_0.15_target_percent": 2.6
+  },
+  "created": "2026-06-10"
+}

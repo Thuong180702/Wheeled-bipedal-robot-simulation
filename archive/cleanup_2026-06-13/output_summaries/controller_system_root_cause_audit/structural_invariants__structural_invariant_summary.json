@@ -1,0 +1,215 @@
+{
+  "wbc_audit": {
+    "low_0p300": {
+      "variant": "low_0p300",
+      "classification": "WBC_DIAGNOSTIC_ONLY",
+      "explanation": "WBC norm max=19.30 Nm but hidden_torque_norm max=0.00 Nm indicates WBC not applied to joints",
+      "wbc_norm_max": 19.299266815185547,
+      "wbc_norm_mean": 13.821243795776367,
+      "hidden_torque_max": 0.0,
+      "hidden_torque_mean": 0.0,
+      "tau_total_max": 13.114385604858398,
+      "tau_total_mean": 12.16061070098877,
+      "available_columns": [
+        "tau_wbc_norm",
+        "tau_wbc_max",
+        "tau_total_norm",
+        "hidden_torque_norm",
+        "tau_inverse_dynamics_norm"
+      ]
+    },
+    "nominal": {
+      "variant": "nominal",
+      "classification": "WBC_DIAGNOSTIC_ONLY",
+      "explanation": "WBC norm max=14.21 Nm but hidden_torque_norm max=0.00 Nm indicates WBC not applied to joints",
+      "wbc_norm_max": 14.207267761230469,
+      "wbc_norm_mean": 11.239483535385132,
+      "hidden_torque_max": 0.0,
+      "hidden_torque_mean": 0.0,
+      "tau_total_max": 13.162605285644531,
+      "tau_total_mean": 10.075320538902282,
+      "available_columns": [
+        "tau_wbc_norm",
+        "tau_wbc_max",
+        "tau_total_norm",
+        "hidden_torque_norm",
+        "tau_inverse_dynamics_norm"
+      ]
+    },
+    "high_0p480": {
+      "variant": "high_0p480",
+      "classification": "WBC_DIAGNOSTIC_ONLY",
+      "explanation": "WBC norm max=20.37 Nm but hidden_torque_norm max=0.00 Nm indicates WBC not applied to joints",
+      "wbc_norm_max": 20.36863899230957,
+      "wbc_norm_mean": 15.566144501113891,
+      "hidden_torque_max": 0.0,
+      "hidden_torque_mean": 0.0,
+      "tau_total_max": 12.849700927734375,
+      "tau_total_mean": 7.9355707281112675,
+      "available_columns": [
+        "tau_wbc_norm",
+        "tau_wbc_max",
+        "tau_total_norm",
+        "hidden_torque_norm",
+        "tau_inverse_dynamics_norm"
+      ]
+    }
+  },
+  "ownership_audit": {
+    "low_0p300": {
+      "variant": "low_0p300",
+      "ownership_violation_max": 0.0,
+      "ownership_violation_mean": 0.0,
+      "torque_saturation_events": 0,
+      "classification": "CLEAN"
+    },
+    "nominal": {
+      "variant": "nominal",
+      "ownership_violation_max": 0.0,
+      "ownership_violation_mean": 0.0,
+      "torque_saturation_events": 0,
+      "classification": "CLEAN"
+    },
+    "high_0p480": {
+      "variant": "high_0p480",
+      "ownership_violation_max": 0.0,
+      "ownership_violation_mean": 0.0,
+      "torque_saturation_events": 0,
+      "classification": "CLEAN"
+    }
+  },
+  "legacy_path_audit": {
+    "low_0p300": {
+      "variant": "low_0p300",
+      "controller_mode": "upright",
+      "control_mode": "upright",
+      "legacy_columns_available": [
+        "tau_legacy_wheel_balance_norm",
+        "tau_legacy_hip_roll_centering_norm"
+      ],
+      "legacy_norms": {
+        "tau_legacy_wheel_balance_norm": {
+          "max": 0.0,
+          "mean": 0.0
+        },
+        "tau_legacy_hip_roll_centering_norm": {
+          "max": 0.0,
+          "mean": 0.0
+        }
+      },
+      "legacy_path_active": false
+    },
+    "nominal": {
+      "variant": "nominal",
+      "controller_mode": "upright",
+      "control_mode": "upright",
+      "legacy_columns_available": [
+        "tau_legacy_wheel_balance_norm",
+        "tau_legacy_hip_roll_centering_norm"
+      ],
+      "legacy_norms": {
+        "tau_legacy_wheel_balance_norm": {
+          "max": 0.0,
+          "mean": 0.0
+        },
+        "tau_legacy_hip_roll_centering_norm": {
+          "max": 0.0,
+          "mean": 0.0
+        }
+      },
+      "legacy_path_active": false
+    },
+    "high_0p480": {
+      "variant": "high_0p480",
+      "controller_mode": "upright",
+      "control_mode": "upright",
+      "legacy_columns_available": [
+        "tau_legacy_wheel_balance_norm",
+        "tau_legacy_hip_roll_centering_norm"
+      ],
+      "legacy_norms": {
+        "tau_legacy_wheel_balance_norm": {
+          "max": 0.0,
+          "mean": 0.0
+        },
+        "tau_legacy_hip_roll_centering_norm": {
+          "max": 0.0,
+          "mean": 0.0
+        }
+      },
+      "legacy_path_active": false
+    }
+  },
+  "torque_composition_audit": {
+    "low_0p300": {
+      "variant": "low_0p300",
+      "per_joint_columns_available": [
+        "tau_wbc_per_joint",
+        "tau_wbc_scaled_per_joint",
+        "tau_hip_roll_centering_per_joint",
+        "tau_posture_per_joint",
+        "tau_leg_position_per_joint",
+        "tau_wheel_balance_per_joint",
+        "tau_static_feedforward_per_joint",
+        "tau_total_per_joint",
+        "tau_total_raw_per_joint",
+        "tau_total_clipped_per_joint",
+        "tau_smooth_per_joint",
+        "tau_shape_posture_per_joint",
+        "tau_support_feedforward_per_joint",
+        "tau_sagittal_wheel_balance_per_joint",
+        "tau_lateral_roll_balance_per_joint",
+        "tau_final_per_joint"
+      ],
+      "torque_saturation_events": 0,
+      "torque_rate_limit_events": 0
+    },
+    "nominal": {
+      "variant": "nominal",
+      "per_joint_columns_available": [
+        "tau_wbc_per_joint",
+        "tau_wbc_scaled_per_joint",
+        "tau_hip_roll_centering_per_joint",
+        "tau_posture_per_joint",
+        "tau_leg_position_per_joint",
+        "tau_wheel_balance_per_joint",
+        "tau_static_feedforward_per_joint",
+        "tau_total_per_joint",
+        "tau_total_raw_per_joint",
+        "tau_total_clipped_per_joint",
+        "tau_smooth_per_joint",
+        "tau_shape_posture_per_joint",
+        "tau_support_feedforward_per_joint",
+        "tau_sagittal_wheel_balance_per_joint",
+        "tau_lateral_roll_balance_per_joint",
+        "tau_final_per_joint"
+      ],
+      "torque_saturation_events": 0,
+      "torque_rate_limit_events": 0
+    },
+    "high_0p480": {
+      "variant": "high_0p480",
+      "per_joint_columns_available": [
+        "tau_wbc_per_joint",
+        "tau_wbc_scaled_per_joint",
+        "tau_hip_roll_centering_per_joint",
+        "tau_posture_per_joint",
+        "tau_leg_position_per_joint",
+        "tau_wheel_balance_per_joint",
+        "tau_static_feedforward_per_joint",
+        "tau_total_per_joint",
+        "tau_total_raw_per_joint",
+        "tau_total_clipped_per_joint",
+        "tau_smooth_per_joint",
+        "tau_shape_posture_per_joint",
+        "tau_support_feedforward_per_joint",
+        "tau_sagittal_wheel_balance_per_joint",
+        "tau_lateral_roll_balance_per_joint",
+        "tau_final_per_joint"
+      ],
+      "torque_saturation_events": 0,
+      "torque_rate_limit_events": 0
+    }
+  },
+  "overall_classification": "STRUCTURAL_INVARIANTS_CLEAN"
+}
