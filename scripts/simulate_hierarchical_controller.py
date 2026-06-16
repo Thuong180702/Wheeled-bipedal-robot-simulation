@@ -17,6 +17,7 @@ Usage:
 import argparse
 import csv
 import json
+import math
 import sys
 import time
 from collections import deque
@@ -93,7 +94,15 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     EMERGENCY_BUDGET_CAP_RAISE,
     PHASE_AWARE_AUTHORITY_RELEASE,
     SUPPORT_CENTERING_BIAS_TRIM,
+    ADAPTIVE_SUPPORT_CENTERING_TRIM,
     BAND_LIMITED_SUPPORT_RECENTER,
+    ZERO_CROSSING_SUPPORT_RECENTER,
+    EARLY_ZERO_CROSSING_RECENTER,
+    EARLY_ZERO_CROSSING_RECENTER_V2,
+    PITCH_BIAS_COMPENSATED_ZERO_CROSSING_RECENTER,
+    PITCH_EQUILIBRIUM_TRIM,
+    HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,
+    interpolate_pitch_ref_offset,
 )
 from wheeled_biped.controllers.pitch_rate_consistency_estimator import PitchRateConsistencyEstimator
 from wheeled_biped.controllers.sagittal_balance_state import (
@@ -1341,6 +1350,13 @@ SAGITTAL_AUTHORITY_PROFILES = {
     "phase_aware_authority_release": PHASE_AWARE_AUTHORITY_RELEASE,  # semantic
     "T6J_centering_bias_trim": SUPPORT_CENTERING_BIAS_TRIM,          # legacy alias
     "support_centering_bias_trim": SUPPORT_CENTERING_BIAS_TRIM,    # semantic
+    "adaptive_support_centering_trim": ADAPTIVE_SUPPORT_CENTERING_TRIM,  # opt-in adaptive trim
+    "zero_crossing_support_recenter": ZERO_CROSSING_SUPPORT_RECENTER,  # ZC hysteresis recenter
+    "early_zero_crossing_recenter": EARLY_ZERO_CROSSING_RECENTER,  # Early ZC: exits at zero, not opposite side
+    "early_zero_crossing_recenter_v2": EARLY_ZERO_CROSSING_RECENTER_V2,  # V2: anti-rebound fix
+    "pitch_bias_compensated_zero_crossing_recenter": PITCH_BIAS_COMPENSATED_ZERO_CROSSING_RECENTER,  # Phase 7: EZC V2 + pitch DC bias compensation
+    "pitch_equilibrium_trim": PITCH_EQUILIBRIUM_TRIM,  # Phase 3 structural fix: shift pitch reference to equilibrium to center support drift
+    "height_scheduled_pitch_equilibrium_trim": HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,  # Phase 2 structural fix: per-height scheduled offset
 }
 
 
@@ -2068,6 +2084,8 @@ def build_balance_core_controllers(
     vd_k_velocity: float = 15.0,
     vd_k_support_velocity: float = 0.0,
     vd_max_position_tau: float = 3.0,
+    vd_k_pitch: float = 50.0,
+    vd_pitch_ref_offset_deg: float = 0.0,
     vd_enable_capture_gate: bool = False,
     vd_capture_gate_pitch_threshold: float = 0.05,
     vd_capture_gate_conflict_factor: float = 0.0,
@@ -2175,7 +2193,7 @@ def build_balance_core_controllers(
             }
 
         sagittal_wheel_balance = SagittalVelocityDampedBalanceController(
-            kp_pitch=50.0,
+            kp_pitch=vd_k_pitch,
             kd_pitch=10.0,
             kp_cp=0.0,  # Step E coupling fix: disable tau_cp to prevent destructive cancellation with tau_pitch
             kd_com_vy=5.0,
@@ -2372,6 +2390,18 @@ def main():
         default="baseline",
         choices=["baseline", "velocity-damped"],
         help="Select sagittal wheel controller: baseline (SagittalWheelBalanceController) or velocity-damped (SagittalVelocityDampedBalanceController)",
+    )
+    parser.add_argument(
+        "--vd-k-pitch",
+        type=float,
+        default=50.0,
+        help="velocity-damped controller kp_pitch gain (Nm/rad). Default: 50.0. CAUTION: Reducing this below 25 may destabilize pitch control.",
+    )
+    parser.add_argument(
+        "--vd-pitch-ref-offset-deg",
+        type=float,
+        default=0.0,
+        help="Pitch reference offset in degrees. Positive = forward lean reference, Negative = backward lean reference. Default: 0.0 (zero pitch reference). CAUTION: Large offsets may destabilize.",
     )
     parser.add_argument(
         "--vd-k-position",
@@ -2643,6 +2673,13 @@ def main():
             "phase_aware_authority_release",
             "T6J_centering_bias_trim",
             "support_centering_bias_trim",
+            "adaptive_support_centering_trim",
+            "zero_crossing_support_recenter",
+            "early_zero_crossing_recenter",
+            "early_zero_crossing_recenter_v2",
+            "pitch_bias_compensated_zero_crossing_recenter",
+            "pitch_equilibrium_trim",
+            "height_scheduled_pitch_equilibrium_trim",
             "band_limited_support_recenter",
         ],
         help="Height-variant-aware sagittal authority schedule. Default: baseline",
@@ -3855,6 +3892,47 @@ def main():
             vd_integral_min_com_z_m = args.vd_integral_min_com_z_m
             vd_integral_max_com_z_m = args.vd_integral_max_com_z_m
 
+        # Pitch reference offset (Phase 3 structural fix + causal ablation experiments).
+        # Profile-driven offset takes precedence when the schedule defines a nonzero
+        # pitch_ref_offset_deg; otherwise fall back to the CLI value (default 0.0).
+        # This keeps the fix opt-in: baseline and all legacy profiles use 0.0.
+        vd_pitch_ref_offset_deg = args.vd_pitch_ref_offset_deg
+        profile_pitch_ref_offset = float(getattr(profile, "pitch_ref_offset_deg", 0.0))
+        if abs(profile_pitch_ref_offset) > 1e-9:
+            vd_pitch_ref_offset_deg = profile_pitch_ref_offset
+            print(f"[PITCH EQUILIBRIUM TRIM] {profile.profile_name}: pitch_ref_offset={vd_pitch_ref_offset_deg:+.2f} deg")
+
+        # Height-scheduled pitch reference offset (Phase 2 structural fix).
+        # When the profile enables the schedule, the per-height offset (looked up by
+        # piecewise-linear interpolation on the commanded/target CoM height) replaces
+        # the static offset. The schedule height is constant for fixed-height
+        # validation runs. Opt-in only: every legacy profile keeps the schedule
+        # disabled, so this branch is inert for them and the static path above stands.
+        pitch_ref_schedule_enabled = bool(
+            getattr(profile, "pitch_ref_height_schedule_enabled", False)
+        )
+        pitch_ref_schedule_height_m = 0.0
+        pitch_ref_offset_scheduled_deg = 0.0
+        if pitch_ref_schedule_enabled:
+            if height_variant_setup is not None:
+                pitch_ref_schedule_height_m = float(
+                    height_variant_setup.get("target_com_z_m", 0.40)
+                )
+            else:
+                pitch_ref_schedule_height_m = 0.40
+            pitch_ref_offset_scheduled_deg = interpolate_pitch_ref_offset(
+                pitch_ref_schedule_height_m,
+                tuple(profile.pitch_ref_height_schedule_heights_m),
+                tuple(profile.pitch_ref_height_schedule_offsets_deg),
+                clamp=bool(profile.pitch_ref_height_schedule_clamp),
+            )
+            vd_pitch_ref_offset_deg = pitch_ref_offset_scheduled_deg
+            print(
+                f"[HEIGHT SCHEDULED PITCH TRIM] {profile.profile_name}: "
+                f"height={pitch_ref_schedule_height_m:.3f} m -> "
+                f"pitch_ref_offset={vd_pitch_ref_offset_deg:+.2f} deg"
+            )
+
         balance_core_controllers = build_balance_core_controllers(
             control_dt=control_dt,
             support_feedforward_vector=support_feedforward_vector,
@@ -3865,6 +3943,8 @@ def main():
             vd_k_velocity=args.vd_k_velocity,
             vd_k_support_velocity=args.vd_k_support_velocity,
             vd_max_position_tau=args.vd_max_position_tau,
+            vd_k_pitch=args.vd_k_pitch,
+            vd_pitch_ref_offset_deg=vd_pitch_ref_offset_deg,
             vd_enable_capture_gate=args.vd_enable_capture_gate,
             vd_capture_gate_pitch_threshold=args.vd_capture_gate_pitch_threshold,
             vd_capture_gate_conflict_factor=args.vd_capture_gate_conflict_factor,
@@ -4649,7 +4729,7 @@ def main():
                 )
                 # Pitch error relative to equilibrium reference.
                 # Using raw pitch_x means the controller fights any residual equilibrium pitch offset.
-                pitch_x_ref = float(pitch_x_eq)
+                pitch_x_ref = float(pitch_x_eq) + math.radians(vd_pitch_ref_offset_deg)
                 pitch_x_error = float(centroidal_state_control.body_pitch_x) - pitch_x_ref
 
                 # Pitch rate consistency estimator: DISABLED by default in active control.

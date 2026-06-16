@@ -11,9 +11,11 @@ This controller replaces SagittalWheelBalanceController when selected via
 Output: nonzero torque only on wheel joints [4, 9].
 """
 
+import math
+
 import jax.numpy as jnp
 from jax import Array
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from wheeled_biped.controllers.balance_core_types import (
@@ -31,6 +33,64 @@ def smoothstep01(u: float) -> float:
     """Standard smoothstep interpolation: s(0)=0, s(1)=1, s'(0)=s'(1)=0."""
     u = max(0.0, min(1.0, u))
     return u * u * (3.0 - 2.0 * u)
+
+
+def interpolate_pitch_ref_offset(
+    height_m: float,
+    heights_m: tuple[float, ...],
+    offsets_deg: tuple[float, ...],
+    clamp: bool = True,
+) -> float:
+    """Piecewise-linear lookup of the scheduled pitch_ref offset for a height.
+
+    Used by the height_scheduled_pitch_equilibrium_trim structural fix: each
+    height has a distinct equilibrium pitch, so the offset that centers support
+    drift is height-dependent (see Phase 1 sweep). This is a pure offline lookup
+    — no JAX arrays — called once per step on a Python float height.
+
+    Args:
+        height_m: query height (commanded/target CoM height in metres).
+        heights_m: schedule breakpoints, strictly ascending.
+        offsets_deg: offset at each breakpoint, same length as heights_m.
+        clamp: when True (default) hold the endpoint offset outside the range;
+            when False, linearly extrapolate from the two nearest breakpoints.
+
+    Returns:
+        Interpolated pitch_ref offset in degrees. Returns 0.0 if the schedule is
+        empty or malformed (defensive: an empty schedule means "no offset").
+    """
+    n = len(heights_m)
+    if n == 0 or n != len(offsets_deg):
+        return 0.0
+    if n == 1:
+        return float(offsets_deg[0])
+
+    # Below the lowest breakpoint.
+    if height_m <= heights_m[0]:
+        if clamp:
+            return float(offsets_deg[0])
+        h0, h1 = heights_m[0], heights_m[1]
+        o0, o1 = offsets_deg[0], offsets_deg[1]
+        t = (height_m - h0) / (h1 - h0)
+        return float(o0 + t * (o1 - o0))
+
+    # Above the highest breakpoint.
+    if height_m >= heights_m[-1]:
+        if clamp:
+            return float(offsets_deg[-1])
+        h0, h1 = heights_m[-2], heights_m[-1]
+        o0, o1 = offsets_deg[-2], offsets_deg[-1]
+        t = (height_m - h0) / (h1 - h0)
+        return float(o0 + t * (o1 - o0))
+
+    # Interior: find the bracketing segment.
+    for i in range(1, n):
+        if height_m <= heights_m[i]:
+            h0, h1 = heights_m[i - 1], heights_m[i]
+            o0, o1 = offsets_deg[i - 1], offsets_deg[i]
+            t = (height_m - h0) / (h1 - h0)
+            return float(o0 + t * (o1 - o0))
+    return float(offsets_deg[-1])  # unreachable, defensive
 
 
 def scheduled_k_position(
@@ -138,6 +198,32 @@ class SagittalAuthoritySchedule:
     enable_position_integral: bool = False
     ki_position_integral: float = 0.0  # 0.0 when disabled
     integral_max_abs: float = 0.0  # 0.0 when disabled
+
+    # Pitch equilibrium trim (Phase 3 fix)
+    # Positive offset makes controller target backward lean, reducing forward drift
+    # Default 0.0, recommended values: 2.0-4.0 deg for high variants
+    pitch_ref_offset_deg: float = 0.0
+
+    # Height-scheduled pitch reference offset (structural fix, Phase 2).
+    # When enabled, the pitch_ref offset is looked up from a per-height schedule
+    # via piecewise-linear interpolation instead of using the static
+    # pitch_ref_offset_deg. The static offset (pitch_equilibrium_trim) stays a
+    # single forward lean tuned for high_0p480 and over-corrects low heights; the
+    # schedule supplies the correct equilibrium-pitch offset at each height.
+    # Disabled by default so baseline and all legacy profiles are unchanged.
+    # heights_m must be ascending and the same length as offsets_deg. Below the
+    # lowest / above the highest scheduled height the endpoint value is held when
+    # pitch_ref_height_schedule_clamp is True.
+    pitch_ref_height_schedule_enabled: bool = False
+    pitch_ref_height_schedule_heights_m: tuple[float, ...] = ()
+    pitch_ref_height_schedule_offsets_deg: tuple[float, ...] = ()
+    pitch_ref_height_schedule_clamp: bool = True
+    # Optional smoothing of the scheduled offset when the commanded height moves
+    # (only relevant for height transitions; inert for fixed-height runs).
+    # 0.0 disables each. rate_limit caps deg/step change; lowpass_alpha in (0,1].
+    pitch_ref_offset_rate_limit_deg_per_step: float = 0.0
+    pitch_ref_offset_lowpass_alpha: float = 0.0
+
     integral_pitch_error_threshold_rad: float = 0.03
     integral_support_velocity_threshold_m_s: float = 0.03
     integral_wheel_velocity_threshold_rad_s: float = 1.0
@@ -483,6 +569,136 @@ class SagittalAuthoritySchedule:
     t6j_bias_trim_disable_if_roll_gt_deg: float = 3.0
     t6j_bias_trim_disable_if_wheel_vel_gt_rad_s: float = 7.0
     t6j_bias_trim_disable_if_abs_error_gt_m: float = 0.22
+
+    # Adaptive Centering Bias Trim: proportional, height-aware, guarded trim
+    # Replaces the bang-bang T6J trim with smooth proportional authority
+    # when adaptive_support_centering_trim profile is selected.
+    adaptive_bias_trim_enabled: bool = False
+    adaptive_bias_trim_replace_t6j: bool = True  # True = adaptive replaces T6J entirely
+    adaptive_bias_window_steps: int = 300
+    adaptive_bias_fast_window_steps: int = 100
+    adaptive_bias_enter_threshold_m: float = 0.035
+    adaptive_bias_exit_threshold_m: float = 0.012
+    adaptive_bias_relief_hysteresis_m: float = 0.005
+    adaptive_bias_k_tau_per_m: float = 5.0
+    adaptive_bias_max_tau_low_nm: float = 0.35
+    adaptive_bias_max_tau_high_nm: float = 0.50
+    adaptive_bias_max_tau_extreme_nm: float = 0.55
+    adaptive_bias_height_low_m: float = 0.38
+    adaptive_bias_height_high_m: float = 0.48
+    adaptive_bias_height_extreme_m: float = 0.52
+    adaptive_bias_rate_nm_per_step: float = 0.006
+    adaptive_bias_fast_rate_nm_per_step: float = 0.012
+    adaptive_bias_decay_rate_nm_per_step: float = 0.018
+    adaptive_bias_only_when_upright: bool = True
+    adaptive_bias_only_when_contact_stable: bool = True
+    adaptive_bias_disable_if_pitch_gt_deg: float = 12.0
+    adaptive_bias_disable_if_roll_gt_deg: float = 5.0
+    adaptive_bias_disable_if_abs_error_gt_m: float = 0.24
+    adaptive_bias_disable_if_hip_yaw_gt_rad: float = 0.25
+    adaptive_bias_zero_crossing_guard_enabled: bool = True
+    adaptive_bias_zero_crossing_window_steps: int = 500
+    adaptive_bias_zero_crossing_limit: int = 8
+    adaptive_bias_zero_crossing_max_scale: float = 0.5
+    adaptive_bias_sign_reversal_hold_steps: int = 100
+
+    # Zero-Crossing Support Recenter: hysteresis recenter that forces drift to cross zero
+    # Key difference from adaptive_bias_trim: holds correction until drift crosses to
+    # opposite side, not just until near-zero. Enforces symmetric oscillation.
+    enable_zero_crossing_recenter: bool = False
+    zc_replace_adaptive: bool = False  # True = replace adaptive_bias_trim with ZC
+
+    # Entry/exit thresholds
+    zc_enter_m: float = 0.08           # Enter recenter when |e| > this
+    zc_exit_m: float = 0.025           # Exit recenter when |e| <= this (with dwell)
+    zc_cross_target_m: float = 0.02    # Target overshoot into opposite side
+    zc_near_zero_band_m: float = 0.03  # Error considered "near zero"
+
+    # Hold duration constraints
+    zc_min_hold_steps: int = 50        # Minimum hold before considering release
+    zc_max_hold_steps: int = 600       # Force exit after this many steps
+
+    # Torque authority
+    zc_base_tau_nm: float = 0.20       # Base correction torque
+    zc_max_tau_nm: float = 0.65        # Maximum correction torque
+    zc_rate_nm_per_step: float = 0.01  # Rate limit: increase toward target
+    zc_decay_nm_per_step: float = 0.02 # Decay rate: return to zero
+
+    # Error-proportional gain
+    zc_error_gain_nm_per_m: float = 3.0  # Nm per meter of error
+
+    # Optional velocity damping
+    zc_velocity_gain: float = 0.0      # Damping term (0.0 = disabled)
+
+    # Safety gates (absolute disable conditions)
+    zc_disable_if_abs_error_gt_m: float = 0.25
+    zc_disable_if_pitch_gt_deg: float = 12.0
+    zc_disable_if_roll_gt_deg: float = 5.0
+    zc_disable_if_hip_yaw_gt_rad: float = 0.25
+
+    # Dwell time for exit (converging signal)
+    zc_dwell_steps_for_exit: int = 30
+    zc_dwell_target_within_m: float = 0.015
+
+    # Early Zero-Crossing Support Recenter: exits at zero crossing, not opposite side
+    # Key differences from ZC:
+    # - Entry at 0.05 m (earlier) vs 0.08 m
+    # - Exit at e <= 0 (not -0.02)
+    # - No opposite-side target required
+    # - Immediate decay after zero crossing
+    enable_early_zero_crossing_recenter: bool = False
+    ezc_replace_adaptive: bool = False  # True = replace adaptive_bias_trim with EZC
+    ezc_replace_zc: bool = False  # True = replace old ZC with EZC
+
+    # Entry/exit thresholds
+    ezc_enter_m: float = 0.05           # Enter recenter when |e| > this
+    ezc_exit_at_zero: bool = True       # Exit when e <= 0 (or e >= 0)
+    ezc_zero_dwell_steps: int = 3       # Dwell at zero before decay starts
+    ezc_reentry_m: float = 0.05         # Re-enter when |e| > this again
+
+    # Hold duration constraints
+    ezc_min_hold_steps: int = 0        # No minimum hold (exit at zero)
+    ezc_max_hold_steps: int = 500      # Force exit after this many steps
+
+    # Torque authority
+    ezc_base_tau_nm: float = 0.18       # Base correction torque
+    ezc_max_tau_nm: float = 0.55        # Maximum correction torque
+    ezc_rate_nm_per_step: float = 0.012  # Rate limit: increase toward target
+    ezc_decay_nm_per_step: float = 0.025  # Decay rate: return to zero
+
+    # Error-proportional gain
+    ezc_error_gain_nm_per_m: float = 3.0  # Nm per meter of error
+
+    # Anti-rebound hold: keep decaying correction after zero crossing
+    # Key fix for EZC_FAILURE_EXIT_TOO_EARLY_REBOUND
+    # After crossing zero, keep a small decaying correction to prevent immediate rebound
+    ezc_antirebound_enabled: bool = False  # Enable anti-rebound decay
+    ezc_antirebound_decay_steps: int = 30  # Steps over which to decay after zero crossing
+    ezc_antirebound_initial_ratio: float = 0.50  # Start at 50% of current tau
+
+    # Safety gates (absolute disable conditions)
+    ezc_disable_if_abs_error_gt_m: float = 0.25
+    ezc_disable_if_pitch_gt_deg: float = 12.0
+    ezc_disable_if_roll_gt_deg: float = 5.0
+    ezc_disable_if_hip_yaw_gt_rad: float = 0.25
+
+    # Pitch bias DC compensation (Phase 7 mechanism)
+    # Removes slow residual tau_pitch DC component during stable upright posture.
+    # Does NOT zero tau_pitch; does NOT suppress dynamic pitch correction.
+    # See docs/validation/pitch_bias_compensated_zc_design.md for the full design.
+    pitch_bias_comp_enabled: bool = False                         # Master enable
+    pitch_bias_window_steps: int = 300                            # EMA window for tau_pitch estimate
+    pitch_bias_max_comp_nm: float = 0.60                          # Hard cap on compensation (Nm)
+    pitch_bias_comp_rate_nm_per_step: float = 0.005               # Rate limit growing comp
+    pitch_bias_decay_rate_nm_per_step: float = 0.012              # Decay rate when gate fails
+    pitch_bias_only_when_abs_pitch_lt_deg: float = 2.0            # Estimation gate: pitch upright
+    pitch_bias_only_when_abs_error_lt_m: float = 0.12             # Estimation gate: drift small
+    pitch_bias_disable_if_pitch_gt_deg: float = 12.0              # Hard safety disable on pitch
+    pitch_bias_disable_if_roll_gt_deg: float = 5.0                # Hard safety disable on roll
+    pitch_bias_disable_if_contact_unstable: bool = True           # Hard safety disable on contact
+    pitch_bias_disable_if_height_lt_m: float = 0.25               # Hard safety disable on low height
+    pitch_bias_gate_abs_error_soft_m: float = 0.12                # Soft gate (apply allowed)
+    pitch_bias_gate_abs_error_hard_m: float = 0.20                # Hard gate (apply blocked)
 
     def is_active_for_variant(self, variant_name: str | None) -> bool:
         return variant_name is not None and variant_name in self.applies_to_variants
@@ -1656,6 +1872,92 @@ SUPPORT_CENTERING_BIAS_TRIM = SagittalAuthoritySchedule(
     t6j_bias_trim_disable_if_abs_error_gt_m=0.22,
 )
 
+# Adaptive Centering Bias Trim: proportional, height-aware, guarded trim
+# Inherits all SUPPORT_CENTERING_BIAS_TRIM settings and adds adaptive trim.
+# When enabled, replaces the bang-bang T6J trim with proportional authority.
+ADAPTIVE_SUPPORT_CENTERING_TRIM = SagittalAuthoritySchedule(
+    profile_name="adaptive_support_centering_trim",
+    applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height", "high_0p430", "high_0p450", "high_0p465", "high_0p480"),
+    # Inherit all SUPPORT_CENTERING_BIAS_TRIM settings
+    continuous_max_position_tau=True,
+    max_position_tau_nominal=4.0,
+    velocity_damping_scale=1.10,
+    recenter_priority_enabled=True,
+    recenter_priority_startup_guard_steps=100,
+    vd_wheel_damping_recenter_override_enabled=True,
+    vd_wheel_damping_preserve_if_opposes_drift=True,
+    position_cap_recenter_boost_enabled=True,
+    recenter_priority_safe_min_com_z=0.27,
+    recenter_priority_safe_roll_rad=0.15,
+    recenter_priority_safe_pitch_rad=0.15,
+    recenter_priority_direct_enabled=True,
+    recenter_priority_direct_enter_m=0.06,
+    recenter_priority_direct_exit_m=0.03,
+    apcr1nd_tuned_enabled=True,
+    apcr1nd_tuned_variant_name="adaptive_support_centering_trim",
+    apcr1nd_soft_enter_m=0.05,
+    apcr1nd_direct_enter_m=0.06,
+    apcr1nd_desired_band_m=0.08,
+    apcr1nd_hard_band_m=0.10,
+    apcr1nd_emergency_band_m=0.12,
+    apcr1nd_release_inner_m=0.03,
+    apcr1nd_hold_outside_band=True,
+    apcr1nd_converging_release_steps=15,
+    apcr1nd_position_cap_normal_nm=4.0,
+    apcr1nd_position_cap_soft_nm=4.5,
+    apcr1nd_position_cap_desired_nm=5.5,
+    apcr1nd_position_cap_hard_nm=6.5,
+    apcr1nd_position_cap_emergency_nm=7.0,
+    apcr1nd_damping_scale_normal=1.0,
+    apcr1nd_damping_scale_soft=0.50,
+    apcr1nd_damping_scale_desired=0.30,
+    apcr1nd_damping_scale_hard=0.15,
+    apcr1nd_damping_scale_emergency=0.10,
+    apcr1nd_preserve_damping_if_helps=True,
+    arch_fix_enabled=True,
+    arch_fix_type="budget_cap_raise",
+    arch_fix_height_threshold_m=0.45,
+    arch_fix_hard_max_position_tau=6.5,
+    arch_fix_emergency_max_position_tau=7.0,
+    t6i_enabled=True,
+    t6i_convergence_window_steps=5,
+    t6i_convergence_threshold_m=0.12,
+    t6i_convergence_trend_threshold_m=0.03,
+    t6i_cap_decay_rate_nm_per_step=0.10,
+    t6i_cap_min_nm=4.0,
+    t6i_max_cap_delta_per_step_nm=0.30,
+    t6j_bias_trim_enabled=False,  # Replaced by adaptive trim
+    # Adaptive centering bias trim (replaces bang-bang T6J)
+    adaptive_bias_trim_enabled=True,
+    adaptive_bias_trim_replace_t6j=True,
+    adaptive_bias_window_steps=300,
+    adaptive_bias_fast_window_steps=100,
+    adaptive_bias_enter_threshold_m=0.035,
+    adaptive_bias_exit_threshold_m=0.012,
+    adaptive_bias_relief_hysteresis_m=0.005,
+    adaptive_bias_k_tau_per_m=5.0,
+    adaptive_bias_max_tau_low_nm=0.35,
+    adaptive_bias_max_tau_high_nm=0.50,
+    adaptive_bias_max_tau_extreme_nm=0.55,
+    adaptive_bias_height_low_m=0.38,
+    adaptive_bias_height_high_m=0.48,
+    adaptive_bias_height_extreme_m=0.52,
+    adaptive_bias_rate_nm_per_step=0.006,
+    adaptive_bias_fast_rate_nm_per_step=0.012,
+    adaptive_bias_decay_rate_nm_per_step=0.018,
+    adaptive_bias_only_when_upright=True,
+    adaptive_bias_only_when_contact_stable=True,
+    adaptive_bias_disable_if_pitch_gt_deg=12.0,
+    adaptive_bias_disable_if_roll_gt_deg=5.0,
+    adaptive_bias_disable_if_abs_error_gt_m=0.24,
+    adaptive_bias_disable_if_hip_yaw_gt_rad=0.25,
+    adaptive_bias_zero_crossing_guard_enabled=True,
+    adaptive_bias_zero_crossing_window_steps=500,
+    adaptive_bias_zero_crossing_limit=8,
+    adaptive_bias_zero_crossing_max_scale=0.5,
+    adaptive_bias_sign_reversal_hold_steps=100,
+)
+
 T6C_HIGH_EARLY_PLUS_STRONGER = SagittalAuthoritySchedule(
     profile_name="T6C_high_early_plus_stronger",
     applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height"),
@@ -1702,6 +2004,452 @@ T6C_HIGH_EARLY_PLUS_STRONGER = SagittalAuthoritySchedule(
 T6D_HIGH_TRANSIENT_BOOST = T6C_HIGH_EARLY_PLUS_STRONGER
 T6E_HIGH_PITCH_AWARE_BOOST = T6C_HIGH_EARLY_PLUS_STRONGER
 
+# Zero-Crossing Support Recenter: hysteresis recenter that forces drift to cross zero
+# Based on adaptive_support_centering_trim + ZC state machine
+ZERO_CROSSING_SUPPORT_RECENTER = SagittalAuthoritySchedule(
+    profile_name="zero_crossing_support_recenter",
+    applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height", "high_0p430", "high_0p450", "high_0p465", "high_0p480"),
+    # Inherit all ADAPTIVE_SUPPORT_CENTERING_TRIM settings
+    continuous_max_position_tau=True,
+    max_position_tau_nominal=4.0,
+    velocity_damping_scale=1.10,
+    recenter_priority_enabled=True,
+    recenter_priority_startup_guard_steps=100,
+    vd_wheel_damping_recenter_override_enabled=True,
+    vd_wheel_damping_preserve_if_opposes_drift=True,
+    position_cap_recenter_boost_enabled=True,
+    recenter_priority_safe_min_com_z=0.27,
+    recenter_priority_safe_roll_rad=0.15,
+    recenter_priority_safe_pitch_rad=0.15,
+    recenter_priority_direct_enabled=True,
+    recenter_priority_direct_enter_m=0.06,
+    recenter_priority_direct_exit_m=0.03,
+    apcr1nd_tuned_enabled=True,
+    apcr1nd_tuned_variant_name="zero_crossing_support_recenter",
+    apcr1nd_soft_enter_m=0.05,
+    apcr1nd_direct_enter_m=0.06,
+    apcr1nd_desired_band_m=0.08,
+    apcr1nd_hard_band_m=0.10,
+    apcr1nd_emergency_band_m=0.12,
+    apcr1nd_release_inner_m=0.03,
+    apcr1nd_hold_outside_band=True,
+    apcr1nd_converging_release_steps=15,
+    apcr1nd_position_cap_normal_nm=4.0,
+    apcr1nd_position_cap_soft_nm=4.5,
+    apcr1nd_position_cap_desired_nm=5.5,
+    apcr1nd_position_cap_hard_nm=6.5,
+    apcr1nd_position_cap_emergency_nm=7.0,
+    apcr1nd_damping_scale_normal=1.0,
+    apcr1nd_damping_scale_soft=0.50,
+    apcr1nd_damping_scale_desired=0.30,
+    apcr1nd_damping_scale_hard=0.15,
+    apcr1nd_damping_scale_emergency=0.10,
+    apcr1nd_preserve_damping_if_helps=True,
+    arch_fix_enabled=True,
+    arch_fix_type="budget_cap_raise",
+    arch_fix_height_threshold_m=0.45,
+    arch_fix_hard_max_position_tau=6.5,
+    arch_fix_emergency_max_position_tau=7.0,
+    t6i_enabled=True,
+    t6i_convergence_window_steps=5,
+    t6i_convergence_threshold_m=0.12,
+    t6i_convergence_trend_threshold_m=0.03,
+    t6i_cap_decay_rate_nm_per_step=0.10,
+    t6i_cap_min_nm=4.0,
+    t6i_max_cap_delta_per_step_nm=0.30,
+    t6j_bias_trim_enabled=False,
+    adaptive_bias_trim_enabled=True,
+    adaptive_bias_trim_replace_t6j=True,
+    adaptive_bias_window_steps=300,
+    adaptive_bias_fast_window_steps=100,
+    adaptive_bias_enter_threshold_m=0.035,
+    adaptive_bias_exit_threshold_m=0.012,
+    adaptive_bias_relief_hysteresis_m=0.005,
+    adaptive_bias_k_tau_per_m=5.0,
+    adaptive_bias_max_tau_low_nm=0.35,
+    adaptive_bias_max_tau_high_nm=0.50,
+    adaptive_bias_max_tau_extreme_nm=0.55,
+    adaptive_bias_height_low_m=0.38,
+    adaptive_bias_height_high_m=0.48,
+    adaptive_bias_height_extreme_m=0.52,
+    adaptive_bias_rate_nm_per_step=0.006,
+    adaptive_bias_fast_rate_nm_per_step=0.012,
+    adaptive_bias_decay_rate_nm_per_step=0.018,
+    adaptive_bias_only_when_upright=True,
+    adaptive_bias_only_when_contact_stable=True,
+    adaptive_bias_disable_if_pitch_gt_deg=12.0,
+    adaptive_bias_disable_if_roll_gt_deg=5.0,
+    adaptive_bias_disable_if_abs_error_gt_m=0.24,
+    adaptive_bias_disable_if_hip_yaw_gt_rad=0.25,
+    adaptive_bias_zero_crossing_guard_enabled=True,
+    adaptive_bias_zero_crossing_window_steps=500,
+    adaptive_bias_zero_crossing_limit=8,
+    adaptive_bias_zero_crossing_max_scale=0.5,
+    adaptive_bias_sign_reversal_hold_steps=100,
+    # ZC recenter: NEW - hysteresis hold-through-zero recenter
+    enable_zero_crossing_recenter=True,
+    zc_replace_adaptive=False,  # ZC supplements adaptive trim
+    zc_enter_m=0.08,
+    zc_exit_m=0.025,
+    zc_cross_target_m=0.02,
+    zc_near_zero_band_m=0.03,
+    zc_min_hold_steps=50,
+    zc_max_hold_steps=600,
+    zc_base_tau_nm=0.20,
+    zc_max_tau_nm=0.65,
+    zc_rate_nm_per_step=0.01,
+    zc_decay_nm_per_step=0.02,
+    zc_error_gain_nm_per_m=3.0,
+    zc_velocity_gain=0.0,
+    zc_disable_if_abs_error_gt_m=0.25,
+    zc_disable_if_pitch_gt_deg=12.0,
+    zc_disable_if_roll_gt_deg=5.0,
+    zc_disable_if_hip_yaw_gt_rad=0.25,
+    zc_dwell_steps_for_exit=30,
+    zc_dwell_target_within_m=0.015,
+)
+
+# Early Zero-Crossing Support Recenter: exits at zero crossing, not opposite side
+# Based on ZERO_CROSSING_SUPPORT_RECENTER with key changes:
+# - Entry at 0.05 m (earlier) vs 0.08 m
+# - Exit at e <= 0 (not -0.02)
+# - No opposite-side target required
+# - Immediate decay after zero crossing
+EARLY_ZERO_CROSSING_RECENTER = SagittalAuthoritySchedule(
+    profile_name="early_zero_crossing_recenter",
+    applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height", "high_0p430", "high_0p450", "high_0p465", "high_0p480"),
+    # Inherit all ZERO_CROSSING_SUPPORT_RECENTER settings
+    continuous_max_position_tau=True,
+    max_position_tau_nominal=4.0,
+    velocity_damping_scale=1.10,
+    recenter_priority_enabled=True,
+    recenter_priority_startup_guard_steps=100,
+    vd_wheel_damping_recenter_override_enabled=True,
+    vd_wheel_damping_preserve_if_opposes_drift=True,
+    position_cap_recenter_boost_enabled=True,
+    recenter_priority_safe_min_com_z=0.27,
+    recenter_priority_safe_roll_rad=0.15,
+    recenter_priority_safe_pitch_rad=0.15,
+    recenter_priority_direct_enabled=True,
+    recenter_priority_direct_enter_m=0.06,
+    recenter_priority_direct_exit_m=0.03,
+    apcr1nd_tuned_enabled=True,
+    apcr1nd_tuned_variant_name="early_zero_crossing_recenter",
+    apcr1nd_soft_enter_m=0.05,
+    apcr1nd_direct_enter_m=0.06,
+    apcr1nd_desired_band_m=0.08,
+    apcr1nd_hard_band_m=0.10,
+    apcr1nd_emergency_band_m=0.12,
+    apcr1nd_release_inner_m=0.03,
+    apcr1nd_hold_outside_band=True,
+    apcr1nd_converging_release_steps=15,
+    apcr1nd_position_cap_normal_nm=4.0,
+    apcr1nd_position_cap_soft_nm=4.5,
+    apcr1nd_position_cap_desired_nm=5.5,
+    apcr1nd_position_cap_hard_nm=6.5,
+    apcr1nd_position_cap_emergency_nm=7.0,
+    apcr1nd_damping_scale_normal=1.0,
+    apcr1nd_damping_scale_soft=0.50,
+    apcr1nd_damping_scale_desired=0.30,
+    apcr1nd_damping_scale_hard=0.15,
+    apcr1nd_damping_scale_emergency=0.10,
+    apcr1nd_preserve_damping_if_helps=True,
+    arch_fix_enabled=True,
+    arch_fix_type="budget_cap_raise",
+    arch_fix_height_threshold_m=0.45,
+    arch_fix_hard_max_position_tau=6.5,
+    arch_fix_emergency_max_position_tau=7.0,
+    t6i_enabled=True,
+    t6i_convergence_window_steps=5,
+    t6i_convergence_threshold_m=0.12,
+    t6i_convergence_trend_threshold_m=0.03,
+    t6i_cap_decay_rate_nm_per_step=0.10,
+    t6i_cap_min_nm=4.0,
+    t6i_max_cap_delta_per_step_nm=0.30,
+    t6j_bias_trim_enabled=False,
+    adaptive_bias_trim_enabled=True,
+    adaptive_bias_trim_replace_t6j=True,
+    adaptive_bias_window_steps=300,
+    adaptive_bias_fast_window_steps=100,
+    adaptive_bias_enter_threshold_m=0.035,
+    adaptive_bias_exit_threshold_m=0.012,
+    adaptive_bias_relief_hysteresis_m=0.005,
+    adaptive_bias_k_tau_per_m=5.0,
+    adaptive_bias_max_tau_low_nm=0.35,
+    adaptive_bias_max_tau_high_nm=0.50,
+    adaptive_bias_max_tau_extreme_nm=0.55,
+    adaptive_bias_height_low_m=0.38,
+    adaptive_bias_height_high_m=0.48,
+    adaptive_bias_height_extreme_m=0.52,
+    adaptive_bias_rate_nm_per_step=0.006,
+    adaptive_bias_fast_rate_nm_per_step=0.012,
+    adaptive_bias_decay_rate_nm_per_step=0.018,
+    adaptive_bias_only_when_upright=True,
+    adaptive_bias_only_when_contact_stable=True,
+    adaptive_bias_disable_if_pitch_gt_deg=12.0,
+    adaptive_bias_disable_if_roll_gt_deg=5.0,
+    adaptive_bias_disable_if_abs_error_gt_m=0.24,
+    adaptive_bias_disable_if_hip_yaw_gt_rad=0.25,
+    adaptive_bias_zero_crossing_guard_enabled=True,
+    adaptive_bias_zero_crossing_window_steps=500,
+    adaptive_bias_zero_crossing_limit=8,
+    adaptive_bias_zero_crossing_max_scale=0.5,
+    adaptive_bias_sign_reversal_hold_steps=100,
+    # Early ZC recenter: EXITS AT ZERO, not opposite side
+    enable_zero_crossing_recenter=False,  # Disable old ZC
+    enable_early_zero_crossing_recenter=True,
+    ezc_replace_adaptive=False,  # EZC supplements adaptive trim
+    ezc_replace_zc=True,  # EZC replaces old ZC
+    ezc_enter_m=0.05,  # Earlier entry than old ZC (0.08)
+    ezc_exit_at_zero=True,  # Exit at zero, not -0.02
+    ezc_zero_dwell_steps=3,  # Brief dwell at zero
+    ezc_reentry_m=0.05,
+    ezc_min_hold_steps=0,  # No minimum hold
+    ezc_max_hold_steps=500,  # 500 steps max hold
+    ezc_base_tau_nm=0.18,  # Slightly lower base torque
+    ezc_max_tau_nm=0.55,  # Slightly lower max torque
+    ezc_rate_nm_per_step=0.012,  # Faster rate
+    ezc_decay_nm_per_step=0.025,  # Faster decay
+    ezc_error_gain_nm_per_m=3.0,
+    ezc_disable_if_abs_error_gt_m=0.25,
+    ezc_disable_if_pitch_gt_deg=12.0,
+    ezc_disable_if_roll_gt_deg=5.0,
+    ezc_disable_if_hip_yaw_gt_rad=0.25,
+)
+
+
+# =====================================================================
+# EARLY_ZERO_CROSSING_RECENTER_V2: Anti-rebound fix
+# =====================================================================
+# Fix for EZC_FAILURE_EXIT_TOO_EARLY_REBOUND
+# Root cause: EZC exits at zero but positive bias (~+3.5 Nm) immediately
+# returns drift to +0.10 to +0.20 m before EZC can re-enter.
+#
+# Changes from V1 (early_zero_crossing_recenter):
+# - Stronger torque: base 0.25, max 0.70 (vs 0.18, 0.55)
+# - Anti-rebound decay: keep decaying correction for 30 steps after crossing zero
+# - Slower decay rate: 0.018 Nm/step (vs 0.025) to sustain correction longer
+# - Longer zero dwell: 5 steps (vs 3) before entering anti-rebound decay
+#
+# Anti-rebound logic:
+# When crossing zero (e <= 0), enter ANTIREBOUND_DECAY state instead of exiting.
+# Keep current tau (ezc_antirebound_initial_ratio * current tau) and decay over
+# ezc_antirebound_decay_steps (30). This prevents drift from immediately returning
+# positive while tau_position recovers from the positive bias.
+EARLY_ZERO_CROSSING_RECENTER_V2 = SagittalAuthoritySchedule(
+    profile_name="early_zero_crossing_recenter_v2",
+    applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height", "high_0p430", "high_0p450", "high_0p465", "high_0p480"),
+    # Inherit all EARLY_ZERO_CROSSING_RECENTER settings
+    continuous_max_position_tau=True,
+    max_position_tau_nominal=4.0,
+    velocity_damping_scale=1.10,
+    recenter_priority_enabled=True,
+    recenter_priority_startup_guard_steps=100,
+    vd_wheel_damping_recenter_override_enabled=True,
+    vd_wheel_damping_preserve_if_opposes_drift=True,
+    position_cap_recenter_boost_enabled=True,
+    recenter_priority_safe_min_com_z=0.27,
+    recenter_priority_safe_roll_rad=0.15,
+    recenter_priority_safe_pitch_rad=0.15,
+    recenter_priority_direct_enabled=True,
+    recenter_priority_direct_enter_m=0.06,
+    recenter_priority_direct_exit_m=0.03,
+    apcr1nd_tuned_enabled=True,
+    apcr1nd_tuned_variant_name="early_zero_crossing_recenter_v2",
+    apcr1nd_soft_enter_m=0.05,
+    apcr1nd_direct_enter_m=0.06,
+    apcr1nd_desired_band_m=0.08,
+    apcr1nd_hard_band_m=0.10,
+    apcr1nd_emergency_band_m=0.12,
+    apcr1nd_release_inner_m=0.03,
+    apcr1nd_hold_outside_band=True,
+    apcr1nd_converging_release_steps=15,
+    apcr1nd_position_cap_normal_nm=4.0,
+    apcr1nd_position_cap_soft_nm=4.5,
+    apcr1nd_position_cap_desired_nm=5.5,
+    apcr1nd_position_cap_hard_nm=6.5,
+    apcr1nd_position_cap_emergency_nm=7.0,
+    apcr1nd_damping_scale_normal=1.0,
+    apcr1nd_damping_scale_soft=0.50,
+    apcr1nd_damping_scale_desired=0.30,
+    apcr1nd_damping_scale_hard=0.15,
+    apcr1nd_damping_scale_emergency=0.10,
+    apcr1nd_preserve_damping_if_helps=True,
+    arch_fix_enabled=True,
+    arch_fix_type="budget_cap_raise",
+    arch_fix_height_threshold_m=0.45,
+    arch_fix_hard_max_position_tau=6.5,
+    arch_fix_emergency_max_position_tau=7.0,
+    t6i_enabled=True,
+    t6i_convergence_window_steps=5,
+    t6i_convergence_threshold_m=0.12,
+    t6i_convergence_trend_threshold_m=0.03,
+    t6i_cap_decay_rate_nm_per_step=0.10,
+    t6i_cap_min_nm=4.0,
+    t6i_max_cap_delta_per_step_nm=0.30,
+    t6j_bias_trim_enabled=False,
+    adaptive_bias_trim_enabled=True,
+    adaptive_bias_trim_replace_t6j=True,
+    adaptive_bias_window_steps=300,
+    adaptive_bias_fast_window_steps=100,
+    adaptive_bias_enter_threshold_m=0.035,
+    adaptive_bias_exit_threshold_m=0.012,
+    adaptive_bias_relief_hysteresis_m=0.005,
+    adaptive_bias_k_tau_per_m=5.0,
+    adaptive_bias_max_tau_low_nm=0.35,
+    adaptive_bias_max_tau_high_nm=0.50,
+    adaptive_bias_max_tau_extreme_nm=0.55,
+    adaptive_bias_height_low_m=0.38,
+    adaptive_bias_height_high_m=0.48,
+    adaptive_bias_height_extreme_m=0.52,
+    adaptive_bias_rate_nm_per_step=0.006,
+    adaptive_bias_fast_rate_nm_per_step=0.012,
+    adaptive_bias_decay_rate_nm_per_step=0.018,
+    adaptive_bias_only_when_upright=True,
+    adaptive_bias_only_when_contact_stable=True,
+    adaptive_bias_disable_if_pitch_gt_deg=12.0,
+    adaptive_bias_disable_if_roll_gt_deg=5.0,
+    adaptive_bias_disable_if_abs_error_gt_m=0.24,
+    adaptive_bias_disable_if_hip_yaw_gt_rad=0.25,
+    adaptive_bias_zero_crossing_guard_enabled=True,
+    adaptive_bias_zero_crossing_window_steps=500,
+    adaptive_bias_zero_crossing_limit=8,
+    adaptive_bias_zero_crossing_max_scale=0.5,
+    adaptive_bias_sign_reversal_hold_steps=100,
+    # Disable old ZC, enable EZC
+    enable_zero_crossing_recenter=False,
+    enable_early_zero_crossing_recenter=True,
+    ezc_replace_adaptive=False,
+    ezc_replace_zc=True,
+    # EZC V2 parameters: stronger, with anti-rebound
+    ezc_enter_m=0.05,
+    ezc_exit_at_zero=True,
+    ezc_zero_dwell_steps=5,  # Longer dwell before anti-rebound decay
+    ezc_reentry_m=0.05,
+    ezc_min_hold_steps=0,
+    ezc_max_hold_steps=500,
+    ezc_base_tau_nm=0.25,  # Stronger base (vs 0.18)
+    ezc_max_tau_nm=0.70,   # Stronger max (vs 0.55)
+    ezc_rate_nm_per_step=0.015,  # Faster ramp (vs 0.012)
+    ezc_decay_nm_per_step=0.018,  # Slower decay (vs 0.025) - KEY CHANGE
+    ezc_error_gain_nm_per_m=4.0,  # Stronger error gain (vs 3.0)
+    # Anti-rebound configuration (NEW)
+    ezc_antirebound_enabled=True,  # KEY FIX
+    ezc_antirebound_decay_steps=30,  # Decay over 30 steps after zero crossing
+    ezc_antirebound_initial_ratio=0.50,  # Start at 50% of current tau
+    ezc_disable_if_abs_error_gt_m=0.25,
+    ezc_disable_if_pitch_gt_deg=12.0,
+    ezc_disable_if_roll_gt_deg=5.0,
+    ezc_disable_if_hip_yaw_gt_rad=0.25,
+)
+
+
+# =====================================================================
+# Phase 7: Pitch Bias Compensated Zero-Crossing Recenter
+# Inherits all settings from EARLY_ZERO_CROSSING_RECENTER_V2 plus enables
+# pitch bias DC compensation. See:
+#   docs/validation/tau_pitch_positive_bias_audit.md
+#   docs/validation/pitch_bias_compensated_zc_design.md
+# =====================================================================
+PITCH_BIAS_COMPENSATED_ZERO_CROSSING_RECENTER = replace(
+    EARLY_ZERO_CROSSING_RECENTER_V2,
+    profile_name="pitch_bias_compensated_zero_crossing_recenter",
+    pitch_bias_comp_enabled=True,
+    pitch_bias_window_steps=300,
+    pitch_bias_max_comp_nm=0.60,
+    pitch_bias_comp_rate_nm_per_step=0.005,
+    pitch_bias_decay_rate_nm_per_step=0.012,
+    pitch_bias_only_when_abs_pitch_lt_deg=2.0,
+    pitch_bias_only_when_abs_error_lt_m=0.12,
+    pitch_bias_disable_if_pitch_gt_deg=12.0,
+    pitch_bias_disable_if_roll_gt_deg=5.0,
+    pitch_bias_disable_if_contact_unstable=True,
+    pitch_bias_disable_if_height_lt_m=0.25,
+    pitch_bias_gate_abs_error_soft_m=0.12,
+    pitch_bias_gate_abs_error_hard_m=0.20,
+)
+
+# =====================================================================
+# Pitch Equilibrium Trim (Phase 3 structural fix)
+# =====================================================================
+# ROOT CAUSE (see docs/validation/sagittal_root_cause_final_report.md):
+# The robot settles into a forward-pitched equilibrium (~+3.3 deg) because
+# the leg geometry at high heights places the CoM slightly forward of the
+# wheel contact line. With pitch_ref=0, tau_pitch = kp_pitch * pitch_x is
+# persistently positive (~+2.9 Nm), pushing wheels forward, while
+# tau_position pulls backward and saturates. The two net to ~0 final wheel
+# torque, freezing the robot in a forward-biased support stalemate and
+# producing one-sided positive drift (80-92% positive).
+#
+# FIX: shift the pitch reference to the measured equilibrium pitch via a
+# small positive offset. This makes tau_pitch oscillate symmetrically about
+# zero instead of biasing forward, so support drift centers about zero.
+# This is a coordination fix, NOT a suppression: full dynamic pitch gain is
+# preserved; only the setpoint moves. Causal ablation (kp_pitch sweep +
+# pitch_ref sweep) confirmed ROOT_CAUSE_PITCH_GAIN_TOO_HIGH relative to the
+# equilibrium requirement, and +4 deg on high_0p480 yielded 5000-step
+# pos%=46.7 / neg%=53.3 with no fall.
+#
+# Built on ADAPTIVE_SUPPORT_CENTERING_TRIM so all existing safety gates,
+# recenter machinery, and authority scheduling remain intact. Opt-in only.
+PITCH_EQUILIBRIUM_TRIM = replace(
+    ADAPTIVE_SUPPORT_CENTERING_TRIM,
+    profile_name="pitch_equilibrium_trim",
+    pitch_ref_offset_deg=4.0,
+)
+
+# =====================================================================
+# HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM (structural fix, Phase 2)
+# =====================================================================
+# The static pitch_equilibrium_trim above applies a single +4 deg forward
+# lean tuned for high_0p480. But each height settles at a DIFFERENT
+# equilibrium pitch, so a single offset over-corrects the low band (the
+# 0.32-0.36 m heights settle at a NEGATIVE equilibrium pitch and need a
+# negative offset, not +4). The Phase 1 blind 110-run height x offset sweep
+# (docs/validation/height_scheduled_pitch_offset_sweep_report.md) selected the
+# per-height offset that best centers signed support drift under the task
+# metric (|pos%-50|, maxabs, P2P, out15%, posture/hip-yaw safety; final drift
+# deliberately excluded). Verdict: HEIGHT_OFFSET_SWEEP_READY with a
+# baseline-relative hip-yaw gate (the absolute 0.20 rad gate flagged behavior
+# the accepted offset-0 adaptive baseline already exhibits).
+#
+# Selected per-height winners (raw, not smoothed — the user chose raw winners
+# over a monotone fit because the low band's score-vs-offset curve is flat and
+# a forced monotone ramp would discard the data-selected low-band offsets):
+#   0.300 m -> +3   0.320 m -> -2   0.330 m -> -4   0.340 m ->  0
+#   0.360 m -> -3   0.380 m -> +5   0.430 m -> +2   0.450 m -> +2
+#   0.465 m -> +3   0.480 m -> +3
+#
+# Inherits ALL safety machinery from ADAPTIVE_SUPPORT_CENTERING_TRIM. The only
+# differences from its parent are the profile name and the height schedule
+# fields. pitch_ref_offset_deg stays 0.0 so that when the schedule is active it
+# is the sole source of the offset (no double-application); the runtime uses
+# the scheduled value when pitch_ref_height_schedule_enabled is True. Opt-in
+# only — every other profile keeps the schedule disabled.
+HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM = replace(
+    ADAPTIVE_SUPPORT_CENTERING_TRIM,
+    profile_name="height_scheduled_pitch_equilibrium_trim",
+    pitch_ref_offset_deg=0.0,
+    pitch_ref_height_schedule_enabled=True,
+    pitch_ref_height_schedule_heights_m=(
+        0.300, 0.320, 0.330, 0.340, 0.360, 0.380, 0.430, 0.450, 0.465, 0.480,
+    ),
+    pitch_ref_height_schedule_offsets_deg=(
+        3.0, -2.0, -4.0, 0.0, -3.0, 5.0, 2.0, 2.0, 3.0, 3.0,
+    ),
+    pitch_ref_height_schedule_clamp=True,
+)
+
+# Backward-compatible aliases — development identifiers → semantic constants.
+# These allow existing imports and scripts to keep working. The primary names
+# (BAND_LIMITED_SUPPORT_RECENTER, EMERGENCY_BUDGET_CAP_RAISE, etc.) should be
+# used in new code.
+APCR1ND_T5_BAND_LIMITED_BALANCED = BAND_LIMITED_SUPPORT_RECENTER  # legacy
+T6F_BUDGET_CAP_RAISE = EMERGENCY_BUDGET_CAP_RAISE                  # legacy
+T6I_PHASE_AWARE_RELEASE = PHASE_AWARE_AUTHORITY_RELEASE            # legacy
+T6J_CENTERING_BIAS_TRIM = SUPPORT_CENTERING_BIAS_TRIM             # legacy
+ADAPTIVE_CENTERING_BIAS_TRIM = ADAPTIVE_SUPPORT_CENTERING_TRIM  # legacy alias
+
 # Profile registry for CLI selection
 JOINT_FIX_PROFILES = {
     "baseline": BASELINE_AUTHORITY_SCHEDULE,
@@ -1744,16 +2492,14 @@ JOINT_FIX_PROFILES = {
     "phase_aware_authority_release": PHASE_AWARE_AUTHORITY_RELEASE,  # semantic
     "T6J_centering_bias_trim": SUPPORT_CENTERING_BIAS_TRIM,      # legacy alias
     "support_centering_bias_trim": SUPPORT_CENTERING_BIAS_TRIM, # semantic
+    "adaptive_support_centering_trim": ADAPTIVE_SUPPORT_CENTERING_TRIM,  # opt-in proportional adaptive trim
+    "zero_crossing_support_recenter": ZERO_CROSSING_SUPPORT_RECENTER,  # ZC hysteresis recenter
+    "early_zero_crossing_recenter": EARLY_ZERO_CROSSING_RECENTER,  # Early ZC: exits at zero, not opposite side
+    "early_zero_crossing_recenter_v2": EARLY_ZERO_CROSSING_RECENTER_V2,  # V2: anti-rebound fix for EZC_FAILURE_EXIT_TOO_EARLY_REBOUND
+    "pitch_bias_compensated_zero_crossing_recenter": PITCH_BIAS_COMPENSATED_ZERO_CROSSING_RECENTER,  # Phase 7: EZC V2 + pitch DC bias compensation
+    "pitch_equilibrium_trim": PITCH_EQUILIBRIUM_TRIM,  # Phase 3 structural fix: shift pitch reference to equilibrium to center support drift
+    "height_scheduled_pitch_equilibrium_trim": HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,  # Phase 2 structural fix: per-height pitch_ref offset schedule
 }
-
-# Backward-compatible aliases — development identifiers → semantic constants.
-# These allow existing imports and scripts to keep working. The primary names
-# (BAND_LIMITED_SUPPORT_RECENTER, EMERGENCY_BUDGET_CAP_RAISE, etc.) should be
-# used in new code.
-APCR1ND_T5_BAND_LIMITED_BALANCED = BAND_LIMITED_SUPPORT_RECENTER  # legacy
-T6F_BUDGET_CAP_RAISE = EMERGENCY_BUDGET_CAP_RAISE                  # legacy
-T6I_PHASE_AWARE_RELEASE = PHASE_AWARE_AUTHORITY_RELEASE            # legacy
-T6J_CENTERING_BIAS_TRIM = SUPPORT_CENTERING_BIAS_TRIM             # legacy
 
 
 class SagittalVelocityDampedBalanceController:
@@ -1905,6 +2651,19 @@ class SagittalVelocityDampedBalanceController:
         self._t6j_bias_trim_target_tau = 0.0  # Current target trim torque before rate limiting
         self._t6j_bias_positive_duration_steps = 0
         self._t6j_bias_negative_duration_steps = 0
+        # State for Adaptive Centering Bias Trim (proportional, height-aware, guarded)
+        self._adaptive_bias_trim_tau = 0.0           # current applied trim torque
+        self._adaptive_bias_trim_target_tau = 0.0    # target before rate limiting
+        self._adaptive_bias_slow_error_history = []  # slow window signed errors
+        self._adaptive_bias_fast_error_history = []  # fast window signed errors
+        self._adaptive_bias_zero_crossing_history = []  # signed errors for crossing detection
+        self._adaptive_bias_crossing_count = 0        # crossings in current window
+        self._adaptive_bias_guard_trigger_count = 0   # consecutive guard triggers
+        self._adaptive_bias_prev_trim_sign = 0        # +1/-1/0
+        self._adaptive_bias_prev_error_sign = 0       # +1/-1/0
+        self._adaptive_bias_hold_steps = 0            # steps in sign-reversal hold
+        self._adaptive_bias_positive_area = 0.0       # accumulated positive drift area
+        self._adaptive_bias_negative_area = 0.0       # accumulated negative drift area
         self._apc_drift_priority_tau_limit = 0.0  # Current drift priority tau limit
         self._apc_drift_priority_rate_limit = 0.0  # Current drift priority rate limit
         self._apc_drift_priority_prev_tau = 0.0  # Previous tau for rate limiting
@@ -1932,6 +2691,56 @@ class SagittalVelocityDampedBalanceController:
         # State for APCR1nD Tuned Variants
         self._apcr1nd_tuned_converging_steps = 0  # Consecutive converging steps for release
         self._apcr1nd_tuned_recenter_held = False  # Recenter held outside band
+
+        # State for Zero-Crossing Support Recenter (ZC)
+        self._zc_state = "CENTER_IDLE"  # CENTER_IDLE, RECENTER_FROM_POSITIVE, RECENTER_FROM_NEGATIVE, HOLD_THROUGH_ZERO, SAFETY_DECAY
+        self._zc_state_id = 0           # 0=IDLE, 1=POS, 2=NEG, 3=HOLD, 4=DECAY
+        self._zc_direction = 0          # -1, 0, +1 correction direction
+        self._zc_hold_steps = 0         # steps in current hold
+        self._zc_dwell_steps = 0        # dwell steps in near-zero band
+        self._zc_tau = 0.0              # current applied ZC correction torque
+        self._zc_target_tau = 0.0       # target before rate limiting
+        self._zc_enter_event = 0         # cumulative enter events
+        self._zc_exit_event = 0          # cumulative exit events
+        self._zc_crossed_zero = False    # True if current episode crossed zero
+        self._zc_cross_target_reached = False  # True if crossed to opposite side
+        self._zc_episode_id = 0          # episode counter
+        self._zc_episode_start_error = 0.0  # error at episode start
+        self._zc_episode_min_error = 0.0  # min error in positive episode
+        self._zc_episode_max_error = 0.0  # max error in negative episode
+        self._zc_safety_gate_pass = True  # safety gate status
+        self._zc_block_reason = "none"   # block reason for telemetry
+        self._zc_exit_reason = "none"     # exit reason for telemetry
+
+        # State for Early Zero-Crossing Support Recenter (EZC)
+        # Key differences: exits at zero, not opposite side; earlier entry at 0.05 m
+        # V2 adds: ANTIREBOUND_DECAY state for anti-rebound hold
+        self._ezc_state = "CENTER_IDLE"  # CENTER_IDLE, RECENTER_FROM_POSITIVE, RECENTER_FROM_NEGATIVE, ZERO_CROSSED_DECAY, ANTIREBOUND_DECAY, SAFETY_DECAY
+        self._ezc_state_id = 0           # 0=IDLE, 1=POS, 2=NEG, 3=DECAY, 4=SAFETY, 5=ANTIREBOUND
+        self._ezc_direction = 0           # -1, 0, +1 correction direction
+        self._ezc_hold_steps = 0          # steps in current hold
+        self._ezc_tau = 0.0               # current applied EZC correction torque
+        self._ezc_target_tau = 0.0        # target before rate limiting
+        self._ezc_enter_event = 0         # cumulative enter events
+        self._ezc_zero_cross_exit_event = 0  # cumulative exits at zero
+        self._ezc_safety_exit_event = 0   # cumulative exits due to safety
+        self._ezc_crossed_zero = False     # True if current episode crossed zero
+        self._ezc_zero_dwell_steps = 0    # dwell steps after zero crossing
+        self._ezc_episode_id = 0          # episode counter
+        self._ezc_episode_start_error = 0.0  # error at episode start
+        self._ezc_episode_min_error = 0.0 # min error in positive episode
+        self._ezc_episode_max_error = 0.0 # max error in negative episode
+        self._ezc_safety_gate_pass = True # safety gate status
+        self._ezc_block_reason = "none"   # block reason for telemetry
+        self._ezc_exit_reason = "none"    # exit reason for telemetry
+        # Anti-rebound state (V2)
+        self._ezc_antirebound_steps = 0   # steps in anti-rebound decay
+        self._ezc_antirebound_tau_start = 0.0  # tau at start of anti-rebound
+
+        # Pitch bias DC compensation state (Phase 7)
+        self._pitch_bias_estimate_nm = 0.0   # EMA of tau_pitch in stable windows
+        self._pitch_bias_samples = 0          # number of EMA updates
+        self._pitch_bias_comp_tau_nm = 0.0   # current bounded compensation
 
         # Initialize capture gate if enabled
         if self.enable_capture_gate:
@@ -2108,6 +2917,30 @@ class SagittalVelocityDampedBalanceController:
         t6j_bias_applied_to_final_tau = 0.0
         t6j_bias_expected_direction_correct = False
 
+        # Adaptive centering bias trim telemetry variables (initialized before use)
+        adaptive_bias_trim_enabled = bool(self.authority_schedule.adaptive_bias_trim_enabled)
+        adaptive_bias_trim_active = False
+        adaptive_bias_mean_error_m = 0.0
+        adaptive_bias_fast_mean_error_m = 0.0
+        adaptive_bias_effective_error_m = 0.0
+        adaptive_bias_target_tau_nm = 0.0
+        adaptive_bias_tau_nm = float(self._adaptive_bias_trim_tau)
+        adaptive_bias_max_tau_current_nm = 0.0
+        adaptive_bias_height_scale = 0.0
+        adaptive_bias_rate_used_nm_per_step = 0.0
+        adaptive_bias_zero_crossing_count = 0
+        adaptive_bias_zero_crossing_guard_active = False
+        adaptive_bias_near_zero_relief_active = False
+        adaptive_bias_sign_reversal_blocked = False
+        adaptive_bias_safety_gate_pass = False
+        adaptive_bias_block_reason = "disabled"
+        adaptive_bias_expected_direction_correct = False
+        adaptive_bias_positive_area = 0.0
+        adaptive_bias_negative_area = 0.0
+        adaptive_bias_symmetry_ratio = 0.0
+        adaptive_bias_hip_yaw_gate_pass = True
+        adaptive_bias_hip_yaw_abs_max = 0.0
+
         if self.authority_schedule.arch_fix_enabled:
             # Gate 1: Height threshold (only at high heights >= 0.45m)
             arch_fix_height_gate_pass = schedule_height_ref >= self.authority_schedule.arch_fix_height_threshold_m
@@ -2222,6 +3055,113 @@ class SagittalVelocityDampedBalanceController:
             else:
                 tau_pitch = float(jnp.clip(tau_pitch_scheduled, -effective_pitch_tau_cap, effective_pitch_tau_cap))
                 tau_pitch_clipped = tau_pitch
+
+        # =====================================================================
+        # Pitch Bias DC Compensation (Phase 7 mechanism)
+        # Estimates and removes only the slow tau_pitch DC component during
+        # stable upright posture. Does NOT zero tau_pitch, does NOT suppress
+        # dynamic pitch correction. See docs/validation/tau_pitch_positive_bias_audit.md
+        # and docs/validation/pitch_bias_compensated_zc_design.md.
+        # =====================================================================
+        tau_pitch_before_bias_comp = float(tau_pitch)
+        pitch_bias_gate_pass = False
+        pitch_bias_block_reason = "disabled"
+        pitch_bias_comp_tau = 0.0
+        pitch_bias_estimation_active = False
+
+        if self.authority_schedule.pitch_bias_comp_enabled:
+            sched = self.authority_schedule
+            abs_pitch_deg = abs(float(pitch_x_rad)) * 180.0 / math.pi
+            abs_roll_deg = abs(float(roll_y_rad)) * 180.0 / math.pi
+            abs_error_pbc = abs(float(sagittal_position_error_m))
+
+            # Hard safety gates - never apply if any of these fail
+            safety_pass = True
+            if sched.pitch_bias_disable_if_contact_unstable and not contact_valid:
+                safety_pass = False
+                pitch_bias_block_reason = "contact_invalid"
+            elif float(com_z_m) < sched.pitch_bias_disable_if_height_lt_m:
+                safety_pass = False
+                pitch_bias_block_reason = "height_unsafe"
+            elif abs_pitch_deg > sched.pitch_bias_disable_if_pitch_gt_deg:
+                safety_pass = False
+                pitch_bias_block_reason = "pitch_unsafe"
+            elif abs_roll_deg > sched.pitch_bias_disable_if_roll_gt_deg:
+                safety_pass = False
+                pitch_bias_block_reason = "roll_unsafe"
+
+            if safety_pass:
+                # Estimation window: only when robot is upright AND drift is small
+                pitch_bias_estimation_active = (
+                    abs_pitch_deg < sched.pitch_bias_only_when_abs_pitch_lt_deg
+                    and abs_error_pbc < sched.pitch_bias_only_when_abs_error_lt_m
+                )
+
+                # Apply gate: hard band disables, soft band allows, estimation window forces apply
+                if abs_error_pbc >= sched.pitch_bias_gate_abs_error_hard_m:
+                    pitch_bias_gate_pass = False
+                    pitch_bias_block_reason = "error_hard_gate"
+                elif pitch_bias_estimation_active:
+                    pitch_bias_gate_pass = True
+                    pitch_bias_block_reason = "in_estimation_window"
+                elif abs_error_pbc < sched.pitch_bias_gate_abs_error_soft_m:
+                    pitch_bias_gate_pass = True
+                    pitch_bias_block_reason = "soft_gate_pass"
+                else:
+                    pitch_bias_gate_pass = False
+                    pitch_bias_block_reason = "outside_apply_window"
+
+                # Update EMA estimate only during estimation window
+                if pitch_bias_estimation_active:
+                    window = max(1, int(sched.pitch_bias_window_steps))
+                    alpha = 1.0 / window
+                    self._pitch_bias_estimate_nm = (
+                        (1.0 - alpha) * self._pitch_bias_estimate_nm
+                        + alpha * tau_pitch_before_bias_comp
+                    )
+                    self._pitch_bias_samples += 1
+
+                # Rate-limit current compensation toward target
+                # Only compensate the positive DC residual (negative bias should not be amplified)
+                target_comp = max(0.0, self._pitch_bias_estimate_nm)
+                target_comp = min(target_comp, sched.pitch_bias_max_comp_nm)
+
+                if pitch_bias_gate_pass:
+                    rate = sched.pitch_bias_comp_rate_nm_per_step
+                    if self._pitch_bias_comp_tau_nm < target_comp:
+                        self._pitch_bias_comp_tau_nm = min(
+                            target_comp,
+                            self._pitch_bias_comp_tau_nm + rate,
+                        )
+                    elif self._pitch_bias_comp_tau_nm > target_comp:
+                        decay = sched.pitch_bias_decay_rate_nm_per_step
+                        self._pitch_bias_comp_tau_nm = max(
+                            target_comp,
+                            self._pitch_bias_comp_tau_nm - decay,
+                        )
+                    pitch_bias_comp_tau = self._pitch_bias_comp_tau_nm
+                else:
+                    # Gate fails: decay toward zero (do not apply)
+                    decay = sched.pitch_bias_decay_rate_nm_per_step
+                    self._pitch_bias_comp_tau_nm = max(
+                        0.0,
+                        self._pitch_bias_comp_tau_nm - decay,
+                    )
+                    pitch_bias_comp_tau = 0.0
+            else:
+                # Safety gate failed - decay any active compensation
+                decay = self.authority_schedule.pitch_bias_decay_rate_nm_per_step
+                self._pitch_bias_comp_tau_nm = max(
+                    0.0,
+                    self._pitch_bias_comp_tau_nm - decay,
+                )
+                pitch_bias_comp_tau = 0.0
+
+            # Apply compensation - subtract from tau_pitch (positive comp -> reduces positive tau_pitch)
+            tau_pitch = tau_pitch - pitch_bias_comp_tau
+            tau_pitch_clipped = tau_pitch
+
+        tau_pitch_after_bias_comp = float(tau_pitch)
 
         # APCR1m: Conditional pitch blend (instead of hard suppression)
         # Blend tau_pitch based on error magnitude, with startup guard and safety gates
@@ -2743,6 +3683,223 @@ class SagittalVelocityDampedBalanceController:
                 tau_position_with_trim = float(tau_position + updated_trim)
                 tau_position = float(jnp.clip(tau_position_with_trim, -effective_max_position_tau, effective_max_position_tau))
                 t6j_bias_applied_to_final_tau = float(updated_trim)
+
+            # =====================================================================
+            # Adaptive Centering Bias Trim (ASCT): proportional, height-aware trim
+            # Replaces bang-bang T6J with smooth proportional authority
+            # =====================================================================
+            if adaptive_bias_trim_enabled:
+                signed_error = float(sagittal_position_error_m)
+                sch = self.authority_schedule
+
+                # --- Update slow and fast error histories ---
+                self._adaptive_bias_slow_error_history.append(signed_error)
+                if len(self._adaptive_bias_slow_error_history) > int(sch.adaptive_bias_window_steps):
+                    self._adaptive_bias_slow_error_history.pop(0)
+                self._adaptive_bias_fast_error_history.append(signed_error)
+                if len(self._adaptive_bias_fast_error_history) > int(sch.adaptive_bias_fast_window_steps):
+                    self._adaptive_bias_fast_error_history.pop(0)
+
+                # Compute means
+                slow_n = max(1, len(self._adaptive_bias_slow_error_history))
+                fast_n = max(1, len(self._adaptive_bias_fast_error_history))
+                mean_err = sum(self._adaptive_bias_slow_error_history) / slow_n
+                fast_mean_err = sum(self._adaptive_bias_fast_error_history) / fast_n
+                adaptive_bias_mean_error_m = mean_err
+                adaptive_bias_fast_mean_error_m = fast_mean_err
+
+                # --- Height-scheduled max trim ---
+                com_z = float(com_z_m)
+                z_low = float(sch.adaptive_bias_height_low_m)
+                z_high = float(sch.adaptive_bias_height_high_m)
+                z_extreme = float(sch.adaptive_bias_height_extreme_m)
+                max_low = float(sch.adaptive_bias_max_tau_low_nm)
+                max_high = float(sch.adaptive_bias_max_tau_high_nm)
+                max_extreme = float(sch.adaptive_bias_max_tau_extreme_nm)
+                if com_z <= z_low:
+                    max_tau_current = max_low
+                    adaptive_bias_height_scale = 0.0
+                elif com_z >= z_extreme:
+                    max_tau_current = max_extreme
+                    adaptive_bias_height_scale = 1.0
+                else:
+                    # Linear interpolation: low->high for [z_low, z_high], high->extreme for [z_high, z_extreme]
+                    if com_z <= z_high:
+                        t = (com_z - z_low) / max(z_high - z_low, 1e-9)
+                    else:
+                        t = 1.0 + (com_z - z_high) / max(z_extreme - z_high, 1e-9)
+                    t = max(0.0, min(2.0, t))
+                    if t <= 1.0:
+                        max_tau_current = max_low + (max_high - max_low) * t
+                    else:
+                        max_tau_current = max_high + (max_extreme - max_high) * (t - 1.0)
+                    adaptive_bias_height_scale = min(1.0, t)
+                adaptive_bias_max_tau_current_nm = max_tau_current
+
+                # --- Zero-crossing detection and guard ---
+                self._adaptive_bias_zero_crossing_history.append(signed_error)
+                max_zc_len = max(1, int(sch.adaptive_bias_zero_crossing_window_steps))
+                if len(self._adaptive_bias_zero_crossing_history) > max_zc_len:
+                    self._adaptive_bias_zero_crossing_history.pop(0)
+                zc_window = self._adaptive_bias_zero_crossing_history
+                zc_count = 0
+                for i in range(1, len(zc_window)):
+                    if (zc_window[i-1] < 0) != (zc_window[i] < 0):
+                        zc_count += 1
+                adaptive_bias_zero_crossing_count = zc_count
+                zc_guard_active = False
+                if sch.adaptive_bias_zero_crossing_guard_enabled and zc_count > int(sch.adaptive_bias_zero_crossing_limit):
+                    zc_guard_active = True
+                    self._adaptive_bias_guard_trigger_count += 1
+                    if self._adaptive_bias_guard_trigger_count >= 3:
+                        # Reset counter after 3 consecutive triggers
+                        self._adaptive_bias_guard_trigger_count = 0
+                else:
+                    self._adaptive_bias_guard_trigger_count = 0
+                adaptive_bias_zero_crossing_guard_active = zc_guard_active
+
+                # Apply guard scale
+                guard_scale = 1.0
+                if zc_guard_active:
+                    guard_scale = float(sch.adaptive_bias_zero_crossing_max_scale)
+                max_tau_guarded = max_tau_current * guard_scale
+
+                # --- Positive/negative area in slow window ---
+                pos_a = sum(v for v in self._adaptive_bias_slow_error_history if v > 0)
+                neg_a = abs(sum(v for v in self._adaptive_bias_slow_error_history if v < 0))
+                total_a = pos_a + neg_a
+                adaptive_bias_positive_area = pos_a
+                adaptive_bias_negative_area = neg_a
+                adaptive_bias_symmetry_ratio = (abs(pos_a - neg_a) / total_a) if total_a > 1e-9 else 0.0
+
+                # --- Safety gates ---
+                abs_pitch_deg = abs(float(pitch_x_rad)) * 180.0 / math.pi
+                abs_roll_deg = abs(float(roll_y_rad)) * 180.0 / math.pi
+                contact_ok = (not sch.adaptive_bias_only_when_contact_stable) or bool(contact_valid)
+                upright_ok = (
+                    (not sch.adaptive_bias_only_when_upright)
+                    or (abs_pitch_deg <= sch.adaptive_bias_disable_if_pitch_gt_deg
+                        and abs_roll_deg <= sch.adaptive_bias_disable_if_roll_gt_deg)
+                )
+                # hip_yaw_abs_max not directly available in compute() scope;
+                # use the same pattern as the rest of the controller: default to 0.0
+                # and let telemetry reveal it post-hoc. This avoids a hard dependency
+                # on an absent local variable.
+                try:
+                    hy_val = float(hip_yaw_abs_max_tracking)
+                except (NameError, TypeError, ValueError):
+                    hy_val = 0.0
+                hy_ok = hy_val <= float(sch.adaptive_bias_disable_if_hip_yaw_gt_rad)
+                adaptive_bias_hip_yaw_gate_pass = hy_ok
+                adaptive_bias_hip_yaw_abs_max = hy_val
+                abs_error_ok = abs(signed_error) <= float(sch.adaptive_bias_disable_if_abs_error_gt_m)
+                pitch_ok = abs_pitch_deg <= float(sch.adaptive_bias_disable_if_pitch_gt_deg)
+                roll_ok = abs_roll_deg <= float(sch.adaptive_bias_disable_if_roll_gt_deg)
+
+                safety_pass = bool(contact_ok and upright_ok and hy_ok and abs_error_ok)
+                adaptive_bias_safety_gate_pass = safety_pass
+
+                if not contact_ok:
+                    adaptive_bias_block_reason = "contact_unstable"
+                elif not upright_ok:
+                    adaptive_bias_block_reason = "upright_gate_fail"
+                elif not hy_ok:
+                    adaptive_bias_block_reason = "hip_yaw_unsafe"
+                elif not abs_error_ok:
+                    adaptive_bias_block_reason = "abs_error_too_large"
+                elif zc_guard_active:
+                    adaptive_bias_block_reason = "zero_crossing_guard"
+                else:
+                    adaptive_bias_block_reason = "ok"
+
+                # --- Proportional target computation ---
+                enter_th = float(sch.adaptive_bias_enter_threshold_m)
+                exit_th = float(sch.adaptive_bias_exit_threshold_m)
+                relief_th = float(sch.adaptive_bias_relief_hysteresis_m)
+                k_tau = float(sch.adaptive_bias_k_tau_per_m)
+
+                sign_err = 1.0 if mean_err > 1e-9 else (-1.0 if mean_err < -1e-9 else 0.0)
+                err_sign_changed = (sign_err != 0) and (sign_err != self._adaptive_bias_prev_error_sign)
+
+                # Sign-reversal guard: hold before reversing
+                if err_sign_changed:
+                    self._adaptive_bias_hold_steps = int(sch.adaptive_bias_sign_reversal_hold_steps)
+                    self._adaptive_bias_prev_error_sign = sign_err
+                elif self._adaptive_bias_hold_steps > 0:
+                    self._adaptive_bias_hold_steps -= 1
+                    self._adaptive_bias_prev_error_sign = sign_err
+
+                sign_reversal_blocked = (self._adaptive_bias_hold_steps > 0) and err_sign_changed
+                adaptive_bias_sign_reversal_blocked = sign_reversal_blocked
+
+                # Near-zero relief
+                near_zero = abs(mean_err) <= exit_th
+                in_hysteresis = abs(mean_err) <= exit_th + relief_th
+                adaptive_bias_near_zero_relief_active = near_zero
+
+                if near_zero:
+                    # Inside exit threshold: target zero
+                    raw_target = 0.0
+                elif sign_reversal_blocked:
+                    # Sign reversal in progress: decay toward zero
+                    raw_target = 0.0
+                elif in_hysteresis:
+                    # In hysteresis band: hold current
+                    raw_target = float(self._adaptive_bias_trim_tau)
+                else:
+                    # Normal proportional target
+                    eff_err = mean_err - sign_err * exit_th
+                    raw_target = -k_tau * eff_err
+
+                adaptive_bias_effective_error_m = mean_err - sign_err * exit_th if not near_zero and not sign_reversal_blocked else 0.0
+
+                # Apply height/guard ceiling
+                clipped_target = max(-max_tau_guarded, min(max_tau_guarded, raw_target))
+                adaptive_bias_target_tau_nm = float(clipped_target)
+
+                # Rate limiting
+                current_trim_a = float(self._adaptive_bias_trim_tau)
+                is_decay = abs(clipped_target) < abs(current_trim_a)
+                rate = float(sch.adaptive_bias_decay_rate_nm_per_step) if is_decay else float(sch.adaptive_bias_rate_nm_per_step)
+                adaptive_bias_rate_used_nm_per_step = rate
+
+                trim_delta_a = clipped_target - current_trim_a
+                if abs(trim_delta_a) > rate:
+                    trim_delta_a = rate if trim_delta_a > 0.0 else -rate
+                updated_trim_a = current_trim_a + trim_delta_a
+                updated_trim_a = max(-max_tau_guarded, min(max_tau_guarded, updated_trim_a))
+
+                self._adaptive_bias_trim_target_tau = clipped_target
+                self._adaptive_bias_trim_tau = updated_trim_a
+                adaptive_bias_tau_nm = updated_trim_a
+
+                # Direction correctness
+                if mean_err > 1e-9:
+                    adaptive_bias_expected_direction_correct = updated_trim_a <= 0.0
+                elif mean_err < -1e-9:
+                    adaptive_bias_expected_direction_correct = updated_trim_a >= 0.0
+                else:
+                    adaptive_bias_expected_direction_correct = abs(updated_trim_a) < 1e-9
+
+                # Apply to tau_position AFTER T6J block (or independently if T6J disabled)
+                adaptive_trim_to_apply = float(updated_trim_a)
+                if safety_pass:
+                    # Only apply if safety gates pass
+                    tau_position = float(jnp.clip(
+                        tau_position + adaptive_trim_to_apply,
+                        -effective_max_position_tau,
+                        effective_max_position_tau
+                    ))
+                    # "Active" = meaningful corrective trim is being applied, not merely
+                    # that the gates passed. Trim is inactive at near-zero error, during
+                    # sign-reversal hold, or when magnitude is negligible.
+                    adaptive_bias_trim_active = bool(
+                        (not near_zero)
+                        and (not sign_reversal_blocked)
+                        and abs(updated_trim_a) > 1e-9
+                    )
+                    if adaptive_bias_trim_active:
+                        adaptive_bias_block_reason = "ok"
             tau_position_total_bound_clipped = False
             tau_position_saturated = abs(tau_position_before_clip) >= effective_max_position_tau * 0.99
             tau_position_saturation_reason = "fixed_cap" if tau_position_saturated else "none"
@@ -2758,6 +3915,541 @@ class SagittalVelocityDampedBalanceController:
             tau_position_lower_bound = -float(effective_max_position_tau)
             tau_position_upper_bound = float(effective_max_position_tau)
             position_authority_mode = "scheduled_fixed_cap" if schedule_active else "fixed_cap"
+
+        # =====================================================================
+        # Zero-Crossing Support Recenter (ZC): hysteresis hold-through-zero
+        # Supplements adaptive_bias_trim when enable_zero_crossing_recenter is True
+        # Forces drift to cross to opposite side before releasing correction
+        # =====================================================================
+        zc_state = "CENTER_IDLE"
+        zc_state_id = 0
+        zc_active = False
+        zc_direction = 0
+        zc_tau_nm = 0.0
+        zc_target_tau_nm = 0.0
+        zc_crossed_zero = False
+        zc_cross_target_reached = False
+        zc_safety_gate_pass = True
+        zc_block_reason = "none"
+        zc_expected_direction_correct = True
+
+        if self.authority_schedule.enable_zero_crossing_recenter:
+            sch = self.authority_schedule
+
+            # Get primary drift signal (active_pitch_crossing_signed_error_m)
+            signed_error = float(sagittal_position_error_m)
+            abs_error = abs(signed_error)
+            pitch_rad = float(pitch_x_rad)
+            roll_rad = float(roll_y_rad)
+
+            # Get hip_yaw if available (column 534)
+            hip_yaw_abs = 0.0
+            if hasattr(self, '_hip_yaw_for_zc'):
+                hip_yaw_abs = abs(self._hip_yaw_for_zc)
+
+            # ZC Safety gate
+            if abs_error > sch.zc_disable_if_abs_error_gt_m:
+                zc_safety_gate_pass = False
+                zc_block_reason = "error_too_large"
+            elif abs(pitch_rad) > sch.zc_disable_if_pitch_gt_deg * (3.14159 / 180.0):
+                zc_safety_gate_pass = False
+                zc_block_reason = "pitch_unsafe"
+            elif abs(roll_rad) > sch.zc_disable_if_roll_gt_deg * (3.14159 / 180.0):
+                zc_safety_gate_pass = False
+                zc_block_reason = "roll_unsafe"
+            elif hip_yaw_abs > sch.zc_disable_if_hip_yaw_gt_rad:
+                zc_safety_gate_pass = False
+                zc_block_reason = "hip_yaw_unsafe"
+
+            # State machine transitions
+            prev_state = self._zc_state
+
+            if self._zc_state == "CENTER_IDLE":
+                # Check entry conditions
+                if zc_safety_gate_pass:
+                    if signed_error > sch.zc_enter_m:
+                        self._zc_state = "RECENTER_FROM_POSITIVE"
+                        self._zc_direction = -1  # negative correction
+                        self._zc_hold_steps = 0
+                        self._zc_dwell_steps = 0
+                        self._zc_enter_event += 1
+                        self._zc_episode_id += 1
+                        self._zc_episode_start_error = signed_error
+                        self._zc_episode_min_error = signed_error
+                        self._zc_crossed_zero = False
+                        self._zc_cross_target_reached = False
+                        self._zc_tau = 0.0
+                        self._zc_target_tau = 0.0
+                    elif signed_error < -sch.zc_enter_m:
+                        self._zc_state = "RECENTER_FROM_NEGATIVE"
+                        self._zc_direction = +1  # positive correction
+                        self._zc_hold_steps = 0
+                        self._zc_dwell_steps = 0
+                        self._zc_enter_event += 1
+                        self._zc_episode_id += 1
+                        self._zc_episode_start_error = signed_error
+                        self._zc_episode_max_error = signed_error
+                        self._zc_crossed_zero = False
+                        self._zc_cross_target_reached = False
+                        self._zc_tau = 0.0
+                        self._zc_target_tau = 0.0
+
+            elif self._zc_state == "RECENTER_FROM_POSITIVE":
+                # Apply negative correction
+                self._zc_hold_steps += 1
+                self._zc_episode_min_error = min(self._zc_episode_min_error, signed_error)
+
+                # Check if crossed zero
+                if signed_error < 0:
+                    self._zc_crossed_zero = True
+                if signed_error < -sch.zc_cross_target_m:
+                    self._zc_cross_target_reached = True
+
+                # Target torque: base + error proportional
+                target_tau = sch.zc_base_tau_nm + sch.zc_error_gain_nm_per_m * abs_error
+                target_tau = min(target_tau, sch.zc_max_tau_nm)
+                target_tau = max(target_tau, sch.zc_base_tau_nm)
+                self._zc_target_tau = target_tau
+
+                # Exit conditions
+                exit_to_decay = False
+                if signed_error <= -sch.zc_cross_target_m:
+                    # Crossed to opposite side - success
+                    self._zc_state = "HOLD_THROUGH_ZERO"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "cross_target"
+                    self._zc_hold_steps = 0
+                elif self._zc_hold_steps >= sch.zc_max_hold_steps:
+                    # Max hold reached
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "max_hold"
+                    self._zc_hold_steps = 0
+                elif zc_safety_gate_pass and abs_error <= sch.zc_near_zero_band_m and self._zc_hold_steps >= sch.zc_min_hold_steps:
+                    # In near-zero band after min hold - check dwell
+                    self._zc_dwell_steps += 1
+                    if self._zc_dwell_steps >= sch.zc_dwell_steps_for_exit:
+                        self._zc_state = "SAFETY_DECAY"
+                        self._zc_exit_event += 1
+                        self._zc_exit_reason = "dwell_exit"
+                        self._zc_hold_steps = 0
+                        self._zc_dwell_steps = 0
+                elif not zc_safety_gate_pass:
+                    # Safety gate failed
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "safety_gate"
+                    self._zc_hold_steps = 0
+
+            elif self._zc_state == "RECENTER_FROM_NEGATIVE":
+                # Apply positive correction
+                self._zc_hold_steps += 1
+                self._zc_episode_max_error = max(self._zc_episode_max_error, signed_error)
+
+                # Check if crossed zero
+                if signed_error > 0:
+                    self._zc_crossed_zero = True
+                if signed_error > sch.zc_cross_target_m:
+                    self._zc_cross_target_reached = True
+
+                # Target torque
+                target_tau = sch.zc_base_tau_nm + sch.zc_error_gain_nm_per_m * abs_error
+                target_tau = min(target_tau, sch.zc_max_tau_nm)
+                target_tau = max(target_tau, sch.zc_base_tau_nm)
+                self._zc_target_tau = target_tau
+
+                # Exit conditions
+                if signed_error >= sch.zc_cross_target_m:
+                    self._zc_state = "HOLD_THROUGH_ZERO"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "cross_target"
+                    self._zc_hold_steps = 0
+                elif self._zc_hold_steps >= sch.zc_max_hold_steps:
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "max_hold"
+                    self._zc_hold_steps = 0
+                elif zc_safety_gate_pass and abs_error <= sch.zc_near_zero_band_m and self._zc_hold_steps >= sch.zc_min_hold_steps:
+                    self._zc_dwell_steps += 1
+                    if self._zc_dwell_steps >= sch.zc_dwell_steps_for_exit:
+                        self._zc_state = "SAFETY_DECAY"
+                        self._zc_exit_event += 1
+                        self._zc_exit_reason = "dwell_exit"
+                        self._zc_hold_steps = 0
+                        self._zc_dwell_steps = 0
+                elif not zc_safety_gate_pass:
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "safety_gate"
+                    self._zc_hold_steps = 0
+
+            elif self._zc_state == "HOLD_THROUGH_ZERO":
+                # Continue reduced correction to ensure full crossing
+                self._zc_hold_steps += 1
+                hold_tau = min(self._zc_target_tau, sch.zc_base_tau_nm)
+                self._zc_target_tau = hold_tau
+
+                # Exit conditions
+                if abs_error <= sch.zc_exit_m and self._zc_hold_steps >= sch.zc_min_hold_steps:
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "hold_through_zero"
+                    self._zc_hold_steps = 0
+                elif self._zc_hold_steps >= sch.zc_max_hold_steps:
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "max_hold"
+                    self._zc_hold_steps = 0
+
+            elif self._zc_state == "SAFETY_DECAY":
+                # Decay correction toward zero
+                if abs(self._zc_tau) > 1e-9:
+                    decay = sch.zc_decay_nm_per_step
+                    if self._zc_tau > 0:
+                        self._zc_tau = max(0, self._zc_tau - decay)
+                    else:
+                        self._zc_tau = min(0, self._zc_tau + decay)
+                else:
+                    self._zc_tau = 0.0
+                    self._zc_direction = 0
+                    self._zc_state = "CENTER_IDLE"
+
+            # Rate limit toward target (except in SAFETY_DECAY)
+            if self._zc_state != "SAFETY_DECAY" and abs(self._zc_target_tau) > 1e-9:
+                is_increase = abs(self._zc_target_tau) > abs(self._zc_tau)
+                rate = sch.zc_rate_nm_per_step if is_increase else sch.zc_decay_nm_per_step
+                delta = self._zc_target_tau - self._zc_tau
+                if abs(delta) > rate:
+                    delta = rate if delta > 0 else -rate
+                self._zc_tau = self._zc_tau + delta
+
+            # Apply ZC correction to tau_position
+            if self._zc_state not in ("CENTER_IDLE", "SAFETY_DECAY"):
+                zc_active = True
+                # Direction sign is in _zc_direction (-1 or +1), tau is positive magnitude
+                zc_tau_signed = self._zc_direction * abs(self._zc_tau)
+                tau_position = float(jnp.clip(
+                    tau_position + zc_tau_signed,
+                    -effective_max_position_tau,
+                    effective_max_position_tau
+                ))
+
+            # Telemetry output
+            zc_state = self._zc_state
+            zc_state_id = {"CENTER_IDLE": 0, "RECENTER_FROM_POSITIVE": 1, "RECENTER_FROM_NEGATIVE": 2,
+                          "HOLD_THROUGH_ZERO": 3, "SAFETY_DECAY": 4}.get(zc_state, 0)
+            zc_direction = self._zc_direction
+            zc_tau_nm = float(self._zc_tau) * self._zc_direction  # signed tau
+            zc_target_tau_nm = self._zc_target_tau * self._zc_direction  # signed
+            zc_crossed_zero = self._zc_crossed_zero
+            zc_cross_target_reached = self._zc_cross_target_reached
+            zc_safety_gate_pass = zc_safety_gate_pass
+            zc_block_reason = zc_block_reason if not zc_safety_gate_pass else "none"
+
+            # Direction correctness
+            if signed_error > 1e-9:
+                zc_expected_direction_correct = (zc_tau_nm <= 0)
+            elif signed_error < -1e-9:
+                zc_expected_direction_correct = (zc_tau_nm >= 0)
+            else:
+                zc_expected_direction_correct = True
+
+        # =====================================================================
+        # Early Zero-Crossing Support Recenter (EZC)
+        # Key differences from old ZC:
+        # - Entry at 0.05 m (earlier) vs 0.08 m
+        # - Exit at e <= 0 (not -0.02)
+        # - No opposite-side target required
+        # - Immediate decay after zero crossing
+        # =====================================================================
+        ezc_state = "CENTER_IDLE"
+        ezc_state_id = 0
+        ezc_active = False
+        ezc_direction = 0
+        ezc_tau_nm = 0.0
+        ezc_target_tau_nm = 0.0
+        ezc_crossed_zero = False
+        ezc_safety_gate_pass = True
+        ezc_block_reason = "none"
+        ezc_expected_direction_correct = True
+
+        if self.authority_schedule.enable_early_zero_crossing_recenter:
+            sch = self.authority_schedule
+
+            # Get primary drift signal (active_pitch_crossing_signed_error_m)
+            signed_error = float(sagittal_position_error_m)
+            abs_error = abs(signed_error)
+            pitch_rad = float(pitch_x_rad)
+            roll_rad = float(roll_y_rad)
+
+            # Get hip_yaw if available
+            hip_yaw_abs = 0.0
+            if hasattr(self, '_hip_yaw_for_ezc'):
+                hip_yaw_abs = abs(self._hip_yaw_for_ezc)
+
+            # EZC Safety gate
+            if abs_error > sch.ezc_disable_if_abs_error_gt_m:
+                ezc_safety_gate_pass = False
+                ezc_block_reason = "error_too_large"
+            elif abs(pitch_rad) > sch.ezc_disable_if_pitch_gt_deg * (3.14159 / 180.0):
+                ezc_safety_gate_pass = False
+                ezc_block_reason = "pitch_unsafe"
+            elif abs(roll_rad) > sch.ezc_disable_if_roll_gt_deg * (3.14159 / 180.0):
+                ezc_safety_gate_pass = False
+                ezc_block_reason = "roll_unsafe"
+            elif hip_yaw_abs > sch.ezc_disable_if_hip_yaw_gt_rad:
+                ezc_safety_gate_pass = False
+                ezc_block_reason = "hip_yaw_unsafe"
+
+            # State machine transitions
+            if self._ezc_state == "CENTER_IDLE":
+                # Check entry conditions
+                if ezc_safety_gate_pass:
+                    if signed_error > sch.ezc_enter_m:
+                        self._ezc_state = "RECENTER_FROM_POSITIVE"
+                        self._ezc_direction = -1  # negative correction
+                        self._ezc_hold_steps = 0
+                        self._ezc_zero_dwell_steps = 0
+                        self._ezc_enter_event += 1
+                        self._ezc_episode_id += 1
+                        self._ezc_episode_start_error = signed_error
+                        self._ezc_episode_min_error = signed_error
+                        self._ezc_crossed_zero = False
+                        self._ezc_tau = 0.0
+                        self._ezc_target_tau = 0.0
+                        self._ezc_exit_reason = "none"
+                    elif signed_error < -sch.ezc_enter_m:
+                        self._ezc_state = "RECENTER_FROM_NEGATIVE"
+                        self._ezc_direction = +1  # positive correction
+                        self._ezc_hold_steps = 0
+                        self._ezc_zero_dwell_steps = 0
+                        self._ezc_enter_event += 1
+                        self._ezc_episode_id += 1
+                        self._ezc_episode_start_error = signed_error
+                        self._ezc_episode_max_error = signed_error
+                        self._ezc_crossed_zero = False
+                        self._ezc_tau = 0.0
+                        self._ezc_target_tau = 0.0
+                        self._ezc_exit_reason = "none"
+
+            elif self._ezc_state == "RECENTER_FROM_POSITIVE":
+                # Apply negative correction
+                self._ezc_hold_steps += 1
+                self._ezc_episode_min_error = min(self._ezc_episode_min_error, signed_error)
+
+                # Check if crossed zero
+                if signed_error < 0:
+                    self._ezc_crossed_zero = True
+
+                # Target torque: base + error proportional
+                target_tau = sch.ezc_base_tau_nm + sch.ezc_error_gain_nm_per_m * abs_error
+                target_tau = min(target_tau, sch.ezc_max_tau_nm)
+                target_tau = max(target_tau, sch.ezc_base_tau_nm)
+                self._ezc_target_tau = target_tau
+
+                # Exit conditions - EXIT AT ZERO, not opposite side
+                if signed_error <= 0:
+                    # CROSSED ZERO - check if anti-rebound is enabled (V2)
+                    if sch.ezc_antirebound_enabled:
+                        # Enter ANTIREBOUND_DECAY instead of immediate decay
+                        self._ezc_state = "ANTIREBOUND_DECAY"
+                        self._ezc_antirebound_steps = 0
+                        # Start with ezc_antirebound_initial_ratio of current tau
+                        self._ezc_antirebound_tau_start = abs(self._ezc_tau) * sch.ezc_antirebound_initial_ratio
+                        self._ezc_target_tau = self._ezc_antirebound_tau_start
+                        self._ezc_zero_cross_exit_event += 1
+                        self._ezc_exit_reason = "anti_rebound"
+                        self._ezc_hold_steps = 0
+                    else:
+                        # Original behavior: exit to ZERO_CROSSED_DECAY
+                        self._ezc_state = "ZERO_CROSSED_DECAY"
+                        self._ezc_zero_cross_exit_event += 1
+                        self._ezc_exit_reason = "zero_cross"
+                        self._ezc_hold_steps = 0
+                        self._ezc_target_tau = 0.0  # Start decaying toward zero
+                elif self._ezc_hold_steps >= sch.ezc_max_hold_steps:
+                    # Max hold reached
+                    self._ezc_state = "SAFETY_DECAY"
+                    self._ezc_safety_exit_event += 1
+                    self._ezc_exit_reason = "max_hold"
+                    self._ezc_hold_steps = 0
+                elif not ezc_safety_gate_pass:
+                    # Safety gate failed
+                    self._ezc_state = "SAFETY_DECAY"
+                    self._ezc_safety_exit_event += 1
+                    self._ezc_exit_reason = "safety_gate"
+                    self._ezc_hold_steps = 0
+
+            elif self._ezc_state == "RECENTER_FROM_NEGATIVE":
+                # Apply positive correction
+                self._ezc_hold_steps += 1
+                self._ezc_episode_max_error = max(self._ezc_episode_max_error, signed_error)
+
+                # Check if crossed zero
+                if signed_error > 0:
+                    self._ezc_crossed_zero = True
+
+                # Target torque
+                target_tau = sch.ezc_base_tau_nm + sch.ezc_error_gain_nm_per_m * abs_error
+                target_tau = min(target_tau, sch.ezc_max_tau_nm)
+                target_tau = max(target_tau, sch.ezc_base_tau_nm)
+                self._ezc_target_tau = target_tau
+
+                # Exit conditions - EXIT AT ZERO, not opposite side
+                if signed_error >= 0:
+                    # CROSSED ZERO - check if anti-rebound is enabled (V2)
+                    if sch.ezc_antirebound_enabled:
+                        # Enter ANTIREBOUND_DECAY instead of immediate decay
+                        self._ezc_state = "ANTIREBOUND_DECAY"
+                        self._ezc_antirebound_steps = 0
+                        # Start with ezc_antirebound_initial_ratio of current tau
+                        self._ezc_antirebound_tau_start = abs(self._ezc_tau) * sch.ezc_antirebound_initial_ratio
+                        self._ezc_target_tau = self._ezc_antirebound_tau_start
+                        self._ezc_zero_cross_exit_event += 1
+                        self._ezc_exit_reason = "anti_rebound"
+                        self._ezc_hold_steps = 0
+                    else:
+                        # Original behavior: exit to ZERO_CROSSED_DECAY
+                        self._ezc_state = "ZERO_CROSSED_DECAY"
+                        self._ezc_zero_cross_exit_event += 1
+                        self._ezc_exit_reason = "zero_cross"
+                        self._ezc_hold_steps = 0
+                        self._ezc_target_tau = 0.0  # Start decaying toward zero
+                elif self._ezc_hold_steps >= sch.ezc_max_hold_steps:
+                    self._ezc_state = "SAFETY_DECAY"
+                    self._ezc_safety_exit_event += 1
+                    self._ezc_exit_reason = "max_hold"
+                    self._ezc_hold_steps = 0
+                elif not ezc_safety_gate_pass:
+                    self._ezc_state = "SAFETY_DECAY"
+                    self._ezc_safety_exit_event += 1
+                    self._ezc_exit_reason = "safety_gate"
+                    self._ezc_hold_steps = 0
+
+            elif self._ezc_state == "ZERO_CROSSED_DECAY":
+                # Decay correction toward zero after zero crossing
+                self._ezc_hold_steps += 1
+                self._ezc_zero_dwell_steps += 1
+                self._ezc_target_tau = 0.0  # Target is zero
+
+                # Decay tau toward zero
+                if abs(self._ezc_tau) > 1e-9:
+                    decay = sch.ezc_decay_nm_per_step
+                    if self._ezc_tau > 0:
+                        self._ezc_tau = max(0, self._ezc_tau - decay)
+                    else:
+                        self._ezc_tau = min(0, self._ezc_tau + decay)
+                else:
+                    self._ezc_tau = 0.0
+                    self._ezc_direction = 0
+                    self._ezc_state = "CENTER_IDLE"
+
+            elif self._ezc_state == "ANTIREBOUND_DECAY":
+                # V2 Anti-rebound hold: decay slowly after zero crossing
+                # This prevents immediate rebound while tau_position recovers
+                self._ezc_hold_steps += 1
+                self._ezc_antirebound_steps += 1
+
+                # Check if anti-rebound is complete
+                decay_steps = sch.ezc_antirebound_decay_steps
+                if self._ezc_antirebound_steps >= decay_steps:
+                    # Decay complete - exit to idle
+                    self._ezc_tau = 0.0
+                    self._ezc_direction = 0
+                    self._ezc_state = "CENTER_IDLE"
+                    self._ezc_exit_reason = "antirebound_complete"
+                else:
+                    # Linear decay from ezc_antirebound_initial_ratio * tau to 0
+                    progress = self._ezc_antirebound_steps / decay_steps
+                    target_tau = self._ezc_antirebound_tau_start * (1.0 - progress)
+                    self._ezc_target_tau = target_tau
+
+                    # Smoothly decay tau (use smaller decay rate for smoother transition)
+                    if abs(self._ezc_tau) > 1e-9:
+                        decay = sch.ezc_decay_nm_per_step * 0.5  # Slower decay during anti-rebound
+                        if self._ezc_tau > 0:
+                            self._ezc_tau = max(0, self._ezc_tau - decay)
+                        else:
+                            self._ezc_tau = min(0, self._ezc_tau + decay)
+                    else:
+                        self._ezc_tau = 0.0
+                        self._ezc_direction = 0
+                        self._ezc_state = "CENTER_IDLE"
+
+                # Check for re-entry: if error grows back to enter threshold while in anti-rebound
+                # Allow re-entry to handle large rebound quickly
+                if signed_error > sch.ezc_enter_m:
+                    # Re-enter recenter state
+                    if self._ezc_direction < 0:  # Was correcting positive drift
+                        self._ezc_state = "RECENTER_FROM_POSITIVE"
+                        self._ezc_hold_steps = 0
+                        self._ezc_enter_event += 1
+                        self._ezc_episode_id += 1
+                        self._ezc_episode_start_error = signed_error
+                        self._ezc_episode_min_error = signed_error
+                        self._ezc_tau = 0.0
+                        self._ezc_target_tau = 0.0
+                        self._ezc_exit_reason = "none"
+                    # Note: No need to check RECENTER_FROM_NEGATIVE since we only correct positive drift
+
+            elif self._ezc_state == "SAFETY_DECAY":
+                # Decay correction toward zero if safety gate failed
+                if abs(self._ezc_tau) > 1e-9:
+                    decay = sch.ezc_decay_nm_per_step
+                    if self._ezc_tau > 0:
+                        self._ezc_tau = max(0, self._ezc_tau - decay)
+                    else:
+                        self._ezc_tau = min(0, self._ezc_tau + decay)
+                else:
+                    self._ezc_tau = 0.0
+                    self._ezc_direction = 0
+                    self._ezc_state = "CENTER_IDLE"
+
+            # Rate limit toward target (except in decay states)
+            if self._ezc_state not in ("ZERO_CROSSED_DECAY", "SAFETY_DECAY", "CENTER_IDLE") and abs(self._ezc_target_tau) > 1e-9:
+                is_increase = abs(self._ezc_target_tau) > abs(self._ezc_tau)
+                rate = sch.ezc_rate_nm_per_step if is_increase else sch.ezc_decay_nm_per_step
+                delta = self._ezc_target_tau - self._ezc_tau
+                if abs(delta) > rate:
+                    delta = rate if delta > 0 else -rate
+                self._ezc_tau = self._ezc_tau + delta
+
+            # Apply EZC correction to tau_position
+            if self._ezc_state not in ("CENTER_IDLE", "SAFETY_DECAY"):
+                ezc_active = True
+                # Direction sign is in _ezc_direction (-1 or +1), tau is positive magnitude
+                ezc_tau_signed = self._ezc_direction * abs(self._ezc_tau)
+                tau_position = float(jnp.clip(
+                    tau_position + ezc_tau_signed,
+                    -effective_max_position_tau,
+                    effective_max_position_tau
+                ))
+
+            # Telemetry output
+            ezc_state = self._ezc_state
+            ezc_state_id_map = {
+                "CENTER_IDLE": 0,
+                "RECENTER_FROM_POSITIVE": 1,
+                "RECENTER_FROM_NEGATIVE": 2,
+                "ZERO_CROSSED_DECAY": 3,
+                "SAFETY_DECAY": 4,
+                "ANTIREBOUND_DECAY": 5  # V2 anti-rebound state
+            }
+            ezc_state_id = ezc_state_id_map.get(ezc_state, 0)
+            ezc_direction = self._ezc_direction
+            ezc_tau_nm = float(self._ezc_tau) * self._ezc_direction  # signed tau
+            ezc_target_tau_nm = self._ezc_target_tau * self._ezc_direction  # signed
+            ezc_crossed_zero = self._ezc_crossed_zero
+            ezc_safety_gate_pass = ezc_safety_gate_pass
+            ezc_block_reason = ezc_block_reason if not ezc_safety_gate_pass else "none"
+
+            # Direction correctness
+            if signed_error > 1e-9:
+                ezc_expected_direction_correct = (ezc_tau_nm <= 0)
+            elif signed_error < -1e-9:
+                ezc_expected_direction_correct = (ezc_tau_nm >= 0)
+            else:
+                ezc_expected_direction_correct = True
 
         # =====================================================================
         # APCR1nD: Direct Support Drift Trigger (BEFORE APCR1n block)
@@ -4505,6 +6197,81 @@ class SagittalVelocityDampedBalanceController:
             "t6j_bias_block_reason": str(t6j_bias_block_reason),
             "t6j_bias_applied_to_final_tau": float(t6j_bias_applied_to_final_tau),
             "t6j_bias_expected_direction_correct": bool(t6j_bias_expected_direction_correct),
+            # ---- Adaptive Centering Bias Trim telemetry ----
+            "adaptive_bias_trim_enabled": bool(adaptive_bias_trim_enabled),
+            "adaptive_bias_trim_active": bool(adaptive_bias_trim_active),
+            "adaptive_bias_mean_error_m": float(adaptive_bias_mean_error_m),
+            "adaptive_bias_fast_mean_error_m": float(adaptive_bias_fast_mean_error_m),
+            "adaptive_bias_effective_error_m": float(adaptive_bias_effective_error_m),
+            "adaptive_bias_target_tau_nm": float(adaptive_bias_target_tau_nm),
+            "adaptive_bias_tau_nm": float(adaptive_bias_tau_nm),
+            "adaptive_bias_max_tau_current_nm": float(adaptive_bias_max_tau_current_nm),
+            "adaptive_bias_height_scale": float(adaptive_bias_height_scale),
+            "adaptive_bias_rate_used_nm_per_step": float(adaptive_bias_rate_used_nm_per_step),
+            "adaptive_bias_zero_crossing_count": int(adaptive_bias_zero_crossing_count),
+            "adaptive_bias_zero_crossing_guard_active": bool(adaptive_bias_zero_crossing_guard_active),
+            "adaptive_bias_near_zero_relief_active": bool(adaptive_bias_near_zero_relief_active),
+            "adaptive_bias_sign_reversal_blocked": bool(adaptive_bias_sign_reversal_blocked),
+            "adaptive_bias_safety_gate_pass": bool(adaptive_bias_safety_gate_pass),
+            "adaptive_bias_block_reason": str(adaptive_bias_block_reason),
+            "adaptive_bias_expected_direction_correct": bool(adaptive_bias_expected_direction_correct),
+            "adaptive_bias_positive_area": float(adaptive_bias_positive_area),
+            "adaptive_bias_negative_area": float(adaptive_bias_negative_area),
+            "adaptive_bias_symmetry_ratio": float(adaptive_bias_symmetry_ratio),
+            "adaptive_bias_hip_yaw_gate_pass": bool(adaptive_bias_hip_yaw_gate_pass),
+            "adaptive_bias_hip_yaw_abs_max": float(adaptive_bias_hip_yaw_abs_max),
+            # ---- Zero-Crossing Support Recenter (ZC) telemetry ----
+            "zc_state": str(zc_state),
+            "zc_state_id": int(zc_state_id),
+            "zc_active": bool(zc_active),
+            "zc_direction": int(zc_direction),
+            "zc_enter_event": int(self._zc_enter_event),
+            "zc_exit_event": int(self._zc_exit_event),
+            "zc_hold_steps": int(self._zc_hold_steps),
+            "zc_tau_nm": float(zc_tau_nm),
+            "zc_target_tau_nm": float(zc_target_tau_nm),
+            "zc_crossed_zero": bool(zc_crossed_zero),
+            "zc_cross_target_reached": bool(zc_cross_target_reached),
+            "zc_safety_gate_pass": bool(zc_safety_gate_pass),
+            "zc_block_reason": str(zc_block_reason),
+            "zc_episode_id": int(self._zc_episode_id),
+            "zc_episode_start_error": float(self._zc_episode_start_error),
+            "zc_episode_min_error": float(self._zc_episode_min_error),
+            "zc_episode_max_error": float(self._zc_episode_max_error),
+            "zc_expected_direction_correct": bool(zc_expected_direction_correct),
+            # ---- Early Zero-Crossing Recenter telemetry (EZC) ----
+            "ezc_state_id": int(ezc_state_id),
+            "ezc_active": bool(ezc_active),
+            "ezc_direction": int(ezc_direction),
+            "ezc_enter_event": int(self._ezc_enter_event),
+            "ezc_zero_cross_exit_event": int(self._ezc_zero_cross_exit_event),
+            "ezc_safety_exit_event": int(self._ezc_safety_exit_event),
+            "ezc_hold_steps": int(self._ezc_hold_steps),
+            "ezc_tau_nm": float(ezc_tau_nm),
+            "ezc_target_tau_nm": float(ezc_target_tau_nm),
+            "ezc_crossed_zero": bool(ezc_crossed_zero),
+            "ezc_zero_dwell_steps": int(self._ezc_zero_dwell_steps),
+            "ezc_safety_gate_pass": bool(ezc_safety_gate_pass),
+            "ezc_block_reason": str(ezc_block_reason),
+            "ezc_episode_id": int(self._ezc_episode_id),
+            "ezc_episode_start_error": float(self._ezc_episode_start_error),
+            "ezc_episode_min_error": float(self._ezc_episode_min_error),
+            "ezc_episode_max_error": float(self._ezc_episode_max_error),
+            "ezc_expected_direction_correct": bool(ezc_expected_direction_correct),
+            "ezc_exit_reason": str(self._ezc_exit_reason),
+            # V2 Anti-rebound telemetry
+            "ezc_antirebound_steps": int(self._ezc_antirebound_steps),
+            "ezc_antirebound_tau_start": float(self._ezc_antirebound_tau_start),
+            # ---- Pitch Bias DC Compensation telemetry (Phase 7) ----
+            "pitch_bias_comp_enabled": bool(self.authority_schedule.pitch_bias_comp_enabled),
+            "pitch_bias_comp_active": bool(pitch_bias_gate_pass),
+            "pitch_bias_estimation_active": bool(pitch_bias_estimation_active),
+            "pitch_bias_estimate_nm": float(self._pitch_bias_estimate_nm),
+            "pitch_bias_comp_tau_nm": float(pitch_bias_comp_tau),
+            "pitch_bias_samples": int(self._pitch_bias_samples),
+            "pitch_bias_block_reason": str(pitch_bias_block_reason),
+            "tau_pitch_before_bias_comp": float(tau_pitch_before_bias_comp),
+            "tau_pitch_after_bias_comp": float(tau_pitch_after_bias_comp),
             # ---- Phase-aware recenter telemetry (F1_strategy) ----
             "phase_recenter_enabled": bool(phase_recenter_enabled),
             "phase_recenter_active": bool(recenter_gate_safe and not recenter_deadband_active),
