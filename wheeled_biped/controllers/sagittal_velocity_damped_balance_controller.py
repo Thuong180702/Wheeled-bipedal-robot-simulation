@@ -93,6 +93,91 @@ def interpolate_pitch_ref_offset(
     return float(offsets_deg[-1])  # unreachable, defensive
 
 
+def compute_outer_loop_pitch_ref(
+    support_error_m: float,
+    support_error_rate_m_s: float,
+    integral_error_m_s: float,
+    kp_deg_per_m: float,
+    kd_deg_per_mps: float,
+    ki_deg_per_m_s: float,
+    deadband_m: float,
+    theta_ref_max_deg: float,
+) -> float:
+    """Raw dynamic pitch_ref offset (deg) for the Phase B support-position outer loop.
+
+    PD(+I) on the live support-position error, layered on top of the frozen
+    height schedule. Pure Python float — no JAX — called once per control step.
+
+    The restoring SIGN is carried entirely by the caller-supplied gain signs; this
+    function applies no implicit sign convention. A positive ``support_error_m``
+    (forward drift) times a positive ``kp_deg_per_m`` produces a positive offset.
+
+    Order of operations:
+      1. Deadband: the proportional term is zeroed while ``abs(support_error)`` is
+         below ``deadband_m`` (no nudging while already centered). The derivative
+         and integral terms are NOT deadbanded — damping/integral should keep
+         acting through the band.
+      2. Sum: ``Kp*error_after_deadband + Kd*error_rate + Ki*integral``.
+      3. Saturation: clamp to ``[-theta_ref_max_deg, +theta_ref_max_deg]``.
+
+    Args:
+        support_error_m: live signed support-position error (m). Positive = forward.
+        support_error_rate_m_s: low-passed derivative of the support error (m/s).
+        integral_error_m_s: clamped integral accumulator (m*s); pass 0.0 when the
+            integral path is disabled.
+        kp_deg_per_m: proportional gain (deg per m). Sign selects restoring direction.
+        kd_deg_per_mps: derivative gain (deg per m/s).
+        ki_deg_per_m_s: integral gain (deg per m*s); 0.0 disables the integral path.
+        deadband_m: proportional deadband half-width (m).
+        theta_ref_max_deg: saturation half-range for the dynamic offset (deg).
+
+    Returns:
+        Saturated dynamic pitch_ref offset in degrees (before rate-limit/lowpass).
+    """
+    if abs(support_error_m) < deadband_m:
+        error_p = 0.0
+    else:
+        error_p = support_error_m
+    dynamic = (
+        kp_deg_per_m * error_p
+        + kd_deg_per_mps * support_error_rate_m_s
+        + ki_deg_per_m_s * integral_error_m_s
+    )
+    if dynamic > theta_ref_max_deg:
+        return float(theta_ref_max_deg)
+    if dynamic < -theta_ref_max_deg:
+        return float(-theta_ref_max_deg)
+    return float(dynamic)
+
+
+def apply_rate_limit(prev: float, target: float, max_delta: float) -> float:
+    """Limit the per-step change from ``prev`` toward ``target`` to ``max_delta``.
+
+    ``max_delta <= 0`` disables limiting (returns ``target`` unchanged). Pure float.
+    """
+    if max_delta <= 0.0:
+        return float(target)
+    delta = target - prev
+    if delta > max_delta:
+        return float(prev + max_delta)
+    if delta < -max_delta:
+        return float(prev - max_delta)
+    return float(target)
+
+
+def apply_lowpass(prev: float, target: float, alpha: float) -> float:
+    """First-order low-pass: ``(1-alpha)*prev + alpha*target``.
+
+    ``alpha <= 0`` holds ``prev``; ``alpha >= 1`` returns ``target`` (no filtering).
+    Pure float.
+    """
+    if alpha <= 0.0:
+        return float(prev)
+    if alpha >= 1.0:
+        return float(target)
+    return float((1.0 - alpha) * prev + alpha * target)
+
+
 def scheduled_k_position(
     z_ref: float,
     k_nominal: float,
@@ -223,6 +308,63 @@ class SagittalAuthoritySchedule:
     # 0.0 disables each. rate_limit caps deg/step change; lowpass_alpha in (0,1].
     pitch_ref_offset_rate_limit_deg_per_step: float = 0.0
     pitch_ref_offset_lowpass_alpha: float = 0.0
+
+    
+    # Support-position outer loop (Phase B dynamic pitch-reference correction).
+    # A bounded, gated, opt-in real-time correction to pitch_ref driven by the live
+    # support-position error, layered ON TOP of the frozen height schedule above.
+    # The schedule supplies the height-dependent DC operating point; this loop adds
+    # slow centering feedback around it. Disabled by default so every legacy profile
+    # (and height_scheduled_pitch_equilibrium_trim itself) is byte-for-byte unchanged.
+    # The restoring SIGN is carried by the configured Kp sign, proven empirically in
+    # the Phase 4 sign sweep — no sign is hard-coded as "correct". Integral is
+    # disabled initially (Ki = 0). See
+    # docs/validation/support_position_outer_loop_pitch_ref_design.md.
+    outer_loop_enabled: bool = False
+    outer_loop_kp_deg_per_m: float = 0.0
+    outer_loop_kd_deg_per_mps: float = 0.0
+    outer_loop_ki_deg_per_m_s: float = 0.0
+    outer_loop_integral_enabled: bool = False
+    outer_loop_integral_clamp_m_s: float = 0.05
+    outer_loop_theta_ref_max_deg: float = 3.0
+    outer_loop_theta_ref_rate_limit_deg_per_step: float = 0.03
+    outer_loop_theta_ref_lowpass_alpha: float = 0.15
+    outer_loop_support_error_deadband_m: float = 0.015
+    outer_loop_support_velocity_lowpass_alpha: float = 0.20
+    outer_loop_disable_if_abs_error_gt_m: float = 0.25
+    outer_loop_disable_if_pitch_gt_deg: float = 12.0
+    outer_loop_disable_if_roll_gt_deg: float = 5.0
+    outer_loop_contact_required: bool = True
+    outer_loop_height_schedule_required: bool = True
+
+    # Support-position outer loop (Phase B dynamic centering).
+    # A bounded, gated, opt-in additive nudge to pitch_ref driven by the live
+    # support-position error, layered ON TOP of the frozen height schedule above.
+    # Disabled by default so every legacy profile (and the Phase A base profile
+    # height_scheduled_pitch_equilibrium_trim) is byte-for-byte unchanged: when
+    # outer_loop_enabled is False the dynamic term is identically 0.0 and the
+    # applied pitch_ref equals the scheduled offset.
+    # The sign of the restoring direction lives entirely in the configured
+    # outer_loop_kp_deg_per_m value; it is NOT hard-coded in the control law and
+    # must be selected empirically (Phase 4 two-sign sweep). Integral disabled
+    # initially (Ki = 0, integral_enabled = False) — PD only.
+    # See docs/validation/support_position_outer_loop_pitch_ref_design.md.
+    outer_loop_enabled: bool = False
+    outer_loop_kp_deg_per_m: float = 0.0
+    outer_loop_kd_deg_per_mps: float = 0.0
+    outer_loop_ki_deg_per_m_s: float = 0.0
+    outer_loop_integral_enabled: bool = False
+    outer_loop_integral_clamp_m_s: float = 0.05
+    outer_loop_theta_ref_max_deg: float = 3.0
+    outer_loop_theta_ref_rate_limit_deg_per_step: float = 0.03
+    outer_loop_theta_ref_lowpass_alpha: float = 0.15
+    outer_loop_support_error_deadband_m: float = 0.015
+    outer_loop_support_velocity_lowpass_alpha: float = 0.20
+    outer_loop_disable_if_abs_error_gt_m: float = 0.25
+    outer_loop_disable_if_pitch_gt_deg: float = 12.0
+    outer_loop_disable_if_roll_gt_deg: float = 5.0
+    outer_loop_contact_required: bool = True
+    outer_loop_height_schedule_required: bool = True
 
     integral_pitch_error_threshold_rad: float = 0.03
     integral_support_velocity_threshold_m_s: float = 0.03
@@ -2440,6 +2582,26 @@ HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM = replace(
     pitch_ref_height_schedule_clamp=True,
 )
 
+
+# Phase B — Support-position outer-loop pitch reference.
+# Opt-in dynamic centering layered on top of the frozen Phase A height schedule.
+# Inherits the full HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM schedule and all
+# safety machinery; only the outer_loop_* fields are turned on. The initial Kp
+# below is a POSITIVE-sign placeholder consistent with the Phase A evidence
+# (forward drift -> positive scheduled offset reduced it); the final sign and
+# gain are selected empirically by the Phase 4 two-sign sweep and may be edited
+# here. Kd starts at 0.0 (P-only) until the PD screening in Phase 4. Integral
+# stays disabled. See docs/validation/support_position_outer_loop_pitch_ref_design.md.
+SUPPORT_POSITION_OUTER_LOOP_PITCH_REF = replace(
+    HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,
+    profile_name="support_position_outer_loop_pitch_ref",
+    outer_loop_enabled=True,
+    outer_loop_kp_deg_per_m=1.0,
+    outer_loop_kd_deg_per_mps=0.0,
+    outer_loop_ki_deg_per_m_s=0.0,
+    outer_loop_integral_enabled=False,
+)
+
 # Backward-compatible aliases — development identifiers → semantic constants.
 # These allow existing imports and scripts to keep working. The primary names
 # (BAND_LIMITED_SUPPORT_RECENTER, EMERGENCY_BUDGET_CAP_RAISE, etc.) should be
@@ -2499,6 +2661,7 @@ JOINT_FIX_PROFILES = {
     "pitch_bias_compensated_zero_crossing_recenter": PITCH_BIAS_COMPENSATED_ZERO_CROSSING_RECENTER,  # Phase 7: EZC V2 + pitch DC bias compensation
     "pitch_equilibrium_trim": PITCH_EQUILIBRIUM_TRIM,  # Phase 3 structural fix: shift pitch reference to equilibrium to center support drift
     "height_scheduled_pitch_equilibrium_trim": HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,  # Phase 2 structural fix: per-height pitch_ref offset schedule
+    "support_position_outer_loop_pitch_ref": SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # Phase B dynamic outer loop on top of height schedule
 }
 
 

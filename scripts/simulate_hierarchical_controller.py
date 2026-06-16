@@ -102,7 +102,11 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     PITCH_BIAS_COMPENSATED_ZERO_CROSSING_RECENTER,
     PITCH_EQUILIBRIUM_TRIM,
     HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,
+    SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,
     interpolate_pitch_ref_offset,
+    compute_outer_loop_pitch_ref,
+    apply_rate_limit,
+    apply_lowpass,
 )
 from wheeled_biped.controllers.pitch_rate_consistency_estimator import PitchRateConsistencyEstimator
 from wheeled_biped.controllers.sagittal_balance_state import (
@@ -1357,6 +1361,7 @@ SAGITTAL_AUTHORITY_PROFILES = {
     "pitch_bias_compensated_zero_crossing_recenter": PITCH_BIAS_COMPENSATED_ZERO_CROSSING_RECENTER,  # Phase 7: EZC V2 + pitch DC bias compensation
     "pitch_equilibrium_trim": PITCH_EQUILIBRIUM_TRIM,  # Phase 3 structural fix: shift pitch reference to equilibrium to center support drift
     "height_scheduled_pitch_equilibrium_trim": HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,  # Phase 2 structural fix: per-height scheduled offset
+    "support_position_outer_loop_pitch_ref": SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # Phase B dynamic centering outer loop
 }
 
 
@@ -2680,6 +2685,7 @@ def main():
             "pitch_bias_compensated_zero_crossing_recenter",
             "pitch_equilibrium_trim",
             "height_scheduled_pitch_equilibrium_trim",
+            "support_position_outer_loop_pitch_ref",
             "band_limited_support_recenter",
         ],
         help="Height-variant-aware sagittal authority schedule. Default: baseline",
@@ -3560,6 +3566,21 @@ def main():
         "com_position_error_sagittal_m": [],
         "pitch_x_ref_rad": [],
         "pitch_x_error_rad": [],
+        # Phase B support-position outer-loop telemetry
+        "outer_loop_active": [],
+        "outer_loop_support_error_m": [],
+        "outer_loop_support_error_rate_mps": [],
+        "outer_loop_pitch_ref_dynamic_deg": [],
+        "outer_loop_pitch_ref_total_deg": [],
+        "outer_loop_pitch_ref_limited_deg": [],
+        "outer_loop_pitch_ref_rate_limited_deg": [],
+        "outer_loop_integral_m_s": [],
+        "outer_loop_gate_pass": [],
+        "outer_loop_block_reason": [],
+        "outer_loop_sign_selected": [],
+        "pitch_ref_offset_scheduled_deg": [],
+        "pitch_ref_total_after_outer_loop_deg": [],
+        "pitch_x_error_after_outer_loop_rad": [],
         "wheel_torque_saturation_left": [],
         "wheel_torque_saturation_right": [],
         "wheel_torque_rate_saturation_left": [],
@@ -3931,6 +3952,72 @@ def main():
                 f"[HEIGHT SCHEDULED PITCH TRIM] {profile.profile_name}: "
                 f"height={pitch_ref_schedule_height_m:.3f} m -> "
                 f"pitch_ref_offset={vd_pitch_ref_offset_deg:+.2f} deg"
+            )
+
+        # Support-position outer loop (Phase B dynamic centering).
+        # Read the outer_loop_* config from the resolved profile. Disabled by
+        # default for every legacy profile, so the dynamic term stays 0.0 and the
+        # applied pitch_ref equals the scheduled offset above (Phase A unchanged).
+        # The loop only activates when the base profile also enables the height
+        # schedule (outer_loop_height_schedule_required), binding it to Phase A.
+        outer_loop_enabled = bool(getattr(profile, "outer_loop_enabled", False))
+        outer_loop_schedule_bound = bool(
+            getattr(profile, "outer_loop_height_schedule_required", True)
+        )
+        outer_loop_active_profile = (
+            outer_loop_enabled
+            and (pitch_ref_schedule_enabled or not outer_loop_schedule_bound)
+        )
+        outer_loop_kp = float(getattr(profile, "outer_loop_kp_deg_per_m", 0.0))
+        outer_loop_kd = float(getattr(profile, "outer_loop_kd_deg_per_mps", 0.0))
+        outer_loop_ki = float(getattr(profile, "outer_loop_ki_deg_per_m_s", 0.0))
+        outer_loop_integral_enabled = bool(
+            getattr(profile, "outer_loop_integral_enabled", False)
+        )
+        outer_loop_integral_clamp = float(
+            getattr(profile, "outer_loop_integral_clamp_m_s", 0.05)
+        )
+        outer_loop_theta_ref_max = float(
+            getattr(profile, "outer_loop_theta_ref_max_deg", 3.0)
+        )
+        outer_loop_theta_rate_limit = float(
+            getattr(profile, "outer_loop_theta_ref_rate_limit_deg_per_step", 0.03)
+        )
+        outer_loop_theta_lowpass = float(
+            getattr(profile, "outer_loop_theta_ref_lowpass_alpha", 0.15)
+        )
+        outer_loop_error_deadband = float(
+            getattr(profile, "outer_loop_support_error_deadband_m", 0.015)
+        )
+        outer_loop_vel_lowpass = float(
+            getattr(profile, "outer_loop_support_velocity_lowpass_alpha", 0.20)
+        )
+        outer_loop_disable_abs_error = float(
+            getattr(profile, "outer_loop_disable_if_abs_error_gt_m", 0.25)
+        )
+        outer_loop_disable_pitch_deg = float(
+            getattr(profile, "outer_loop_disable_if_pitch_gt_deg", 12.0)
+        )
+        outer_loop_disable_roll_deg = float(
+            getattr(profile, "outer_loop_disable_if_roll_gt_deg", 5.0)
+        )
+        outer_loop_contact_required = bool(
+            getattr(profile, "outer_loop_contact_required", True)
+        )
+        outer_loop_sign_selected = "none"
+        if outer_loop_active_profile:
+            outer_loop_sign_selected = "positive" if outer_loop_kp >= 0.0 else "negative"
+        # Per-run outer-loop state (reset each simulation).
+        outer_loop_prev_support_error_m = None  # set on first control step
+        outer_loop_support_error_rate_smoothed = 0.0
+        outer_loop_pitch_ref_smoothed_deg = 0.0
+        outer_loop_integral_accum_m_s = 0.0
+        if outer_loop_active_profile:
+            print(
+                f"[OUTER LOOP] {profile.profile_name}: enabled "
+                f"Kp={outer_loop_kp:+.3f} deg/m Kd={outer_loop_kd:+.3f} deg/(m/s) "
+                f"Ki={outer_loop_ki:+.3f} (integral={'on' if outer_loop_integral_enabled else 'off'}) "
+                f"sign={outer_loop_sign_selected} theta_max={outer_loop_theta_ref_max:.1f} deg"
             )
 
         balance_core_controllers = build_balance_core_controllers(
@@ -4727,9 +4814,99 @@ def main():
                     sagittal_axis_xy=sagittal_axis_xy_initial,
                     velocity_xy=(float(centroidal_state_control.com_vel[0]), float(centroidal_state_control.com_vel[1])),
                 )
+                # ---- Phase B: support-position outer loop ----------------------
+                # Bounded, gated, opt-in dynamic nudge to pitch_ref driven by the
+                # live (unscaled) support-position error, layered on top of the
+                # frozen height-scheduled offset. Inert for every legacy profile
+                # (outer_loop_active_profile is False): the dynamic term stays 0.0
+                # and pitch_ref_total_deg == vd_pitch_ref_offset_deg.
+                # See docs/validation/support_position_outer_loop_pitch_ref_design.md.
+                outer_loop_pitch_ref_dynamic_deg = 0.0
+                outer_loop_pitch_ref_total_deg = float(vd_pitch_ref_offset_deg)
+                outer_loop_support_error_rate_mps = 0.0
+                outer_loop_gate_pass = False
+                outer_loop_block_reason = "disabled"
+                if outer_loop_active_profile:
+                    ol_support_error = float(sag_pos_error)
+                    # Low-passed numerical derivative of the support error.
+                    if outer_loop_prev_support_error_m is None:
+                        ol_rate_raw = 0.0
+                    else:
+                        ol_rate_raw = (
+                            ol_support_error - outer_loop_prev_support_error_m
+                        ) / control_dt
+                    outer_loop_support_error_rate_smoothed = apply_lowpass(
+                        outer_loop_support_error_rate_smoothed,
+                        ol_rate_raw,
+                        outer_loop_vel_lowpass,
+                    )
+                    outer_loop_prev_support_error_m = ol_support_error
+                    outer_loop_support_error_rate_mps = (
+                        outer_loop_support_error_rate_smoothed
+                    )
+                    # Safety gates (additive; never relax inner-loop gates).
+                    ol_pitch_deg = abs(float(centroidal_state_control.body_pitch_x)) * 180.0 / math.pi
+                    ol_roll_deg = abs(float(centroidal_state_control.body_roll_y)) * 180.0 / math.pi
+                    ol_contact_ok = bool(
+                        contact_output.left_wheel_contact
+                        and contact_output.right_wheel_contact
+                        and contact_output.contact_force_valid
+                    )
+                    if outer_loop_contact_required and not ol_contact_ok:
+                        outer_loop_block_reason = "contact_invalid"
+                    elif abs(ol_support_error) > outer_loop_disable_abs_error:
+                        outer_loop_block_reason = "error_too_large"
+                    elif ol_pitch_deg > outer_loop_disable_pitch_deg:
+                        outer_loop_block_reason = "pitch_unsafe"
+                    elif ol_roll_deg > outer_loop_disable_roll_deg:
+                        outer_loop_block_reason = "roll_unsafe"
+                    else:
+                        outer_loop_gate_pass = True
+                        outer_loop_block_reason = "active"
+
+                    if outer_loop_gate_pass:
+                        # Integral path (disabled initially: Ki=0, integral off).
+                        if outer_loop_integral_enabled:
+                            outer_loop_integral_accum_m_s += ol_support_error * control_dt
+                            if outer_loop_integral_accum_m_s > outer_loop_integral_clamp:
+                                outer_loop_integral_accum_m_s = outer_loop_integral_clamp
+                            elif outer_loop_integral_accum_m_s < -outer_loop_integral_clamp:
+                                outer_loop_integral_accum_m_s = -outer_loop_integral_clamp
+                        target_dynamic_deg = compute_outer_loop_pitch_ref(
+                            support_error_m=ol_support_error,
+                            support_error_rate_m_s=outer_loop_support_error_rate_smoothed,
+                            integral_error_m_s=outer_loop_integral_accum_m_s,
+                            kp_deg_per_m=outer_loop_kp,
+                            kd_deg_per_mps=outer_loop_kd,
+                            ki_deg_per_m_s=outer_loop_ki,
+                            deadband_m=outer_loop_error_deadband,
+                            theta_ref_max_deg=outer_loop_theta_ref_max,
+                        )
+                    else:
+                        # Gated off: decay the dynamic term toward 0 (no step).
+                        target_dynamic_deg = 0.0
+                    # Rate-limit then low-pass toward the target (or toward 0).
+                    rate_limited = apply_rate_limit(
+                        outer_loop_pitch_ref_smoothed_deg,
+                        target_dynamic_deg,
+                        outer_loop_theta_rate_limit,
+                    )
+                    outer_loop_pitch_ref_smoothed_deg = apply_lowpass(
+                        outer_loop_pitch_ref_smoothed_deg,
+                        rate_limited,
+                        outer_loop_theta_lowpass,
+                    )
+                    outer_loop_pitch_ref_dynamic_deg = (
+                        outer_loop_pitch_ref_smoothed_deg
+                    )
+                    outer_loop_pitch_ref_total_deg = (
+                        float(vd_pitch_ref_offset_deg)
+                        + outer_loop_pitch_ref_dynamic_deg
+                    )
+
                 # Pitch error relative to equilibrium reference.
                 # Using raw pitch_x means the controller fights any residual equilibrium pitch offset.
-                pitch_x_ref = float(pitch_x_eq) + math.radians(vd_pitch_ref_offset_deg)
+                pitch_x_ref = float(pitch_x_eq) + math.radians(outer_loop_pitch_ref_total_deg)
                 pitch_x_error = float(centroidal_state_control.body_pitch_x) - pitch_x_ref
 
                 # Pitch rate consistency estimator: DISABLED by default in active control.
@@ -4842,6 +5019,21 @@ def main():
                 sagittal_diag["com_position_error_sagittal_m"] = float(com_pos_error_sagittal)
                 sagittal_diag["pitch_x_ref_rad"] = pitch_x_ref
                 sagittal_diag["pitch_x_error_rad"] = pitch_x_error
+                # Phase B support-position outer-loop diagnostics
+                sagittal_diag["outer_loop_active"] = bool(outer_loop_active_profile and outer_loop_gate_pass)
+                sagittal_diag["outer_loop_support_error_m"] = float(sag_pos_error)
+                sagittal_diag["outer_loop_support_error_rate_mps"] = float(outer_loop_support_error_rate_mps)
+                sagittal_diag["outer_loop_pitch_ref_dynamic_deg"] = float(outer_loop_pitch_ref_dynamic_deg)
+                sagittal_diag["outer_loop_pitch_ref_total_deg"] = float(outer_loop_pitch_ref_total_deg)
+                sagittal_diag["outer_loop_pitch_ref_limited_deg"] = float(outer_loop_pitch_ref_dynamic_deg)
+                sagittal_diag["outer_loop_pitch_ref_rate_limited_deg"] = float(outer_loop_pitch_ref_dynamic_deg)
+                sagittal_diag["outer_loop_integral_m_s"] = float(outer_loop_integral_accum_m_s)
+                sagittal_diag["outer_loop_gate_pass"] = bool(outer_loop_gate_pass)
+                sagittal_diag["outer_loop_block_reason"] = str(outer_loop_block_reason)
+                sagittal_diag["outer_loop_sign_selected"] = str(outer_loop_sign_selected)
+                sagittal_diag["pitch_ref_offset_scheduled_deg"] = float(pitch_ref_offset_scheduled_deg)
+                sagittal_diag["pitch_ref_total_after_outer_loop_deg"] = float(outer_loop_pitch_ref_total_deg)
+                sagittal_diag["pitch_x_error_after_outer_loop_rad"] = float(pitch_x_error)
                 # Transient capture diagnostics
                 sagittal_diag["transient_detected"] = transient_detected
                 sagittal_diag["transient_by_pitch"] = transient_by_pitch
@@ -5416,6 +5608,22 @@ def main():
         telemetry["com_position_error_sagittal_m"].append(sagittal_diag.get("com_position_error_sagittal_m", 0.0))
         telemetry["pitch_x_ref_rad"].append(sagittal_diag.get("pitch_x_ref_rad", 0.0))
         telemetry["pitch_x_error_rad"].append(sagittal_diag.get("pitch_x_error_rad", 0.0))
+
+        # Phase B support-position outer-loop telemetry (zeros / "disabled" for legacy profiles)
+        telemetry["outer_loop_active"].append(sagittal_diag.get("outer_loop_active", False))
+        telemetry["outer_loop_support_error_m"].append(sagittal_diag.get("outer_loop_support_error_m", 0.0))
+        telemetry["outer_loop_support_error_rate_mps"].append(sagittal_diag.get("outer_loop_support_error_rate_mps", 0.0))
+        telemetry["outer_loop_pitch_ref_dynamic_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_dynamic_deg", 0.0))
+        telemetry["outer_loop_pitch_ref_total_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_total_deg", 0.0))
+        telemetry["outer_loop_pitch_ref_limited_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_limited_deg", 0.0))
+        telemetry["outer_loop_pitch_ref_rate_limited_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_rate_limited_deg", 0.0))
+        telemetry["outer_loop_integral_m_s"].append(sagittal_diag.get("outer_loop_integral_m_s", 0.0))
+        telemetry["outer_loop_gate_pass"].append(sagittal_diag.get("outer_loop_gate_pass", False))
+        telemetry["outer_loop_block_reason"].append(sagittal_diag.get("outer_loop_block_reason", "disabled"))
+        telemetry["outer_loop_sign_selected"].append(sagittal_diag.get("outer_loop_sign_selected", "none"))
+        telemetry["pitch_ref_offset_scheduled_deg"].append(sagittal_diag.get("pitch_ref_offset_scheduled_deg", 0.0))
+        telemetry["pitch_ref_total_after_outer_loop_deg"].append(sagittal_diag.get("pitch_ref_total_after_outer_loop_deg", 0.0))
+        telemetry["pitch_x_error_after_outer_loop_rad"].append(sagittal_diag.get("pitch_x_error_after_outer_loop_rad", 0.0))
 
         # Capture gate telemetry (velocity-damped controller only)
         telemetry["capture_gate_enabled"].append(sagittal_diag.get("capture_gate_enabled", False))

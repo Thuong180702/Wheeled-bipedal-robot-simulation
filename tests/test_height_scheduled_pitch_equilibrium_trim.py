@@ -77,8 +77,16 @@ class TestExistingProfilesUnchanged:
         )
 
     def test_all_other_profiles_schedule_disabled(self):
+        # These profiles intentionally have the height schedule enabled:
+        # - height_scheduled_pitch_equilibrium_trim: the Phase A schedule itself
+        # - support_position_outer_loop_pitch_ref: Phase B outer loop, inherits
+        #   from Phase A and requires the schedule to be active
+        SCHEDULE_ENABLED_PROFILES = {
+            "height_scheduled_pitch_equilibrium_trim",
+            "support_position_outer_loop_pitch_ref",
+        }
         for name, prof in JOINT_FIX_PROFILES.items():
-            if name == "height_scheduled_pitch_equilibrium_trim":
+            if name in SCHEDULE_ENABLED_PROFILES:
                 continue
             assert prof.pitch_ref_height_schedule_enabled is False, (
                 f"profile {name} unexpectedly enables the pitch_ref height schedule"
