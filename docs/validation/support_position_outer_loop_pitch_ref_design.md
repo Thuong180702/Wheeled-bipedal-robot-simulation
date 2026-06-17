@@ -116,6 +116,30 @@ destabilize posture / hip-yaw. If the sweep contradicts the hypothesis, the swee
 and the design doc is corrected. No sign is hard-coded as "correct" in the controller —
 the sign lives entirely in the configured `Kp` value of the profile.
 
+### 3.1 Phase 4 empirical result (CONFIRMED)
+
+The 500-step `high_0p480` two-sign sweep (see
+`docs/validation/outer_loop_500_gain_sweep_report.md`,
+classification `OUTER_LOOP_500_CANDIDATE_SELECTED`) confirmed the **positive** sign as the
+pos%-centering direction:
+
+| Kp (deg/m) | pos% | max_abs (m) | P2P (m) |
+|---|---|---|---|
+| baseline (no loop) | 61.1 | 0.042 | 0.071 |
+| +0.5 | 60.9 | 0.043 | 0.073 |
+| +1.0 | 60.3 | 0.044 | 0.076 |
+| +1.5 | 60.1 | 0.044 | 0.079 |
+| −0.5 | 61.5 | 0.041 | 0.068 |
+| −1.0 | 61.9 | 0.041 | 0.065 |
+| −1.5 | 62.3 | 0.040 | 0.063 |
+
+**Caveat — magnitude:** at `high_0p480 / 500 steps` the baseline is already well-centered
+(drift mostly inside the 0.015 m deadband), so the loop has little to act on and all
+deltas are within 0.001–0.005 m (noise). Positive Kp moves pos% toward 50 at a small cost
+to max/P2P; negative Kp does the reverse. Selected candidate: **Kp=+1.0 deg/m, Kd=0.0
+(P-only)**, matching the placeholder already baked into the profile constant. The decisive
+test is Phase 5's longer runs (1200/2000/5000 steps) where drift accumulates.
+
 ---
 
 ## 4. Configuration fields (added to `SagittalAuthoritySchedule`)
