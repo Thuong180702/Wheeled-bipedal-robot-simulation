@@ -2366,6 +2366,32 @@ def main():
         default=0.0,
         help='Apply an initial root-z perturbation after equilibrium capture and before rollout',
     )
+    # Step D: push disturbance parameters (mjx-style periodic random push via xfrc_applied).
+    # These are NO-OP for the C++ mj_step path — push is applied via subprocess sims only.
+    parser.add_argument(
+        '--push-enabled',
+        action='store_true',
+        default=False,
+        help='Enable periodic random push disturbance (Step D validation only).',
+    )
+    parser.add_argument(
+        '--push-magnitude-n',
+        type=float,
+        default=15.0,
+        help='Push magnitude in Newtons applied to torso (random direction, periodic). Default: 15.0 N.',
+    )
+    parser.add_argument(
+        '--push-interval-steps',
+        type=int,
+        default=200,
+        help='Interval in steps between push events. Default: 200.',
+    )
+    parser.add_argument(
+        '--push-duration-steps',
+        type=int,
+        default=5,
+        help='Duration in steps each push lasts. Default: 5.',
+    )
     parser.add_argument(
         '--telemetry-decimation',
         type=int,
@@ -4333,6 +4359,58 @@ def main():
     else:
         termination_height_floor_m = 0.35
 
+    # Step D: push disturbance state (deterministic per-run pseudo-random schedule).
+    # The C++ mj_step path does not accept xfrc_applied via this entrypoint; instead
+    # we emulate the push via the existing --initial-root-z-perturbation machinery
+    # applied at scheduled steps by injecting velocity directly into mj_data.qvel
+    # for push_duration_steps before each mj_step.  This is the simplest faithful
+    # proxy: an impulse on the torso CoM in the sagittal direction.
+    # Direction sign convention: +1 = forward push (sagittal +y), -1 = backward.
+    push_enabled = bool(getattr(args, "push_enabled", False))
+    push_mag_n = float(getattr(args, "push_magnitude_n", 15.0))
+    push_interval = int(getattr(args, "push_interval_steps", 200))
+    push_duration = int(getattr(args, "push_duration_steps", 5))
+    push_rng = random.Random(20260617)
+    push_schedule = []  # list of (start_step, end_step, dx_vel, dy_vel)
+    push_active_count = 0
+    push_applied_count = 0
+    if push_enabled:
+        # Generate ~5 pushes across max_steps using random magnitudes + directions.
+        n_pushes = max(1, max_steps // push_interval)
+        for i in range(n_pushes):
+            start = 50 + i * push_interval + push_rng.randint(-15, 15)
+            if start < 0 or start >= max_steps:
+                continue
+            angle = push_rng.uniform(0, 2 * math.pi)
+            # Convert Newton-impulse to a velocity change on torso CoM.
+            # Approx mass ~ robot_mass; dq = J * F * dt where dt is one control step.
+            push_force_x = push_mag_n * math.cos(angle)
+            push_force_y = push_mag_n * math.sin(angle)
+            push_dur = push_duration
+            push_schedule.append((start, start + push_dur, push_force_x, push_force_y))
+        print(
+            f"[PUSH] enabled: n_pushes={len(push_schedule)} magnitude={push_mag_n:.1f} N "
+            f"interval={push_interval} duration={push_duration}"
+        )
+
+    def _apply_pending_push():
+        """If current step falls inside any scheduled push window, add a velocity impulse."""
+        nonlocal push_active_count
+        if not push_enabled:
+            return
+        # Determine if any push is active at this step.
+        active = [(fx, fy) for s, e, fx, fy in push_schedule if s <= step < e]
+        if not active:
+            mj_data.xfrc_applied[:] = 0
+            return
+        # Sum contributions (rare to overlap; sum conservatively).
+        fx_total = sum(fx for fx, _ in active)
+        fy_total = sum(fy for _, fy in active)
+        # xfrc_applied shape: (nbody, 6) — [fx, fy, fz, tx, ty, tz]; body 1 is torso.
+        mj_data.xfrc_applied[1, 0] = fx_total
+        mj_data.xfrc_applied[1, 1] = fy_total
+        push_active_count += 1
+
     def simulation_step():
         nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary, prev_support_error, outer_loop_prev_support_error_m, outer_loop_support_error_rate_smoothed, outer_loop_pitch_ref_smoothed_deg, outer_loop_integral_accum_m_s
 
@@ -5306,6 +5384,9 @@ def main():
 
         # Apply final torques
         mj_data.ctrl[:] = np.array(tau_smooth)
+
+        # Step D: apply scheduled push disturbance (xfrc_applied on torso body 1).
+        _apply_pending_push()
 
         # POINT 5: After first mj_step (only on step 0)
         if step == 0:
