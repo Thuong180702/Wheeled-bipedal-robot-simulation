@@ -2408,6 +2408,22 @@ def main():
         default=0.0,
         help="Pitch reference offset in degrees. Positive = forward lean reference, Negative = backward lean reference. Default: 0.0 (zero pitch reference). CAUTION: Large offsets may destabilize.",
     )
+    # Phase B support-position outer-loop gain overrides (screening only).
+    # When set (not None) they override the resolved profile's outer_loop_* gains.
+    # Used by the Phase 4 sign/gain sweep so candidates can be screened without
+    # editing the source constant. Default None = use the profile value.
+    parser.add_argument(
+        "--vd-outer-loop-kp-deg-per-m",
+        type=float,
+        default=None,
+        help="Override outer_loop_kp_deg_per_m for the support-position outer loop. Default: None (use profile). Sign selects restoring direction.",
+    )
+    parser.add_argument(
+        "--vd-outer-loop-kd-deg-per-mps",
+        type=float,
+        default=None,
+        help="Override outer_loop_kd_deg_per_mps for the support-position outer loop. Default: None (use profile).",
+    )
     parser.add_argument(
         "--vd-k-position",
         type=float,
@@ -3971,6 +3987,11 @@ def main():
         outer_loop_kp = float(getattr(profile, "outer_loop_kp_deg_per_m", 0.0))
         outer_loop_kd = float(getattr(profile, "outer_loop_kd_deg_per_mps", 0.0))
         outer_loop_ki = float(getattr(profile, "outer_loop_ki_deg_per_m_s", 0.0))
+        # Phase 4 screening overrides: CLI gains take precedence when provided.
+        if getattr(args, "vd_outer_loop_kp_deg_per_m", None) is not None:
+            outer_loop_kp = float(args.vd_outer_loop_kp_deg_per_m)
+        if getattr(args, "vd_outer_loop_kd_deg_per_mps", None) is not None:
+            outer_loop_kd = float(args.vd_outer_loop_kd_deg_per_mps)
         outer_loop_integral_enabled = bool(
             getattr(profile, "outer_loop_integral_enabled", False)
         )
@@ -4313,7 +4334,7 @@ def main():
         termination_height_floor_m = 0.35
 
     def simulation_step():
-        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary, prev_support_error
+        nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary, prev_support_error, outer_loop_prev_support_error_m, outer_loop_support_error_rate_smoothed, outer_loop_pitch_ref_smoothed_deg, outer_loop_integral_accum_m_s
 
         if terminated or step >= max_steps:
             return False
