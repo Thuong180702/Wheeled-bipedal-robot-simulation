@@ -1,4 +1,4 @@
-"""Tests for height_scheduled_pitch_equilibrium_trim profile (Phase 2 structural fix).
+﻿"""Tests for height_scheduled_pitch_equilibrium_trim profile (Phase 2 structural fix).
 
 The static pitch_equilibrium_trim applies a single +4 deg forward-lean offset
 tuned for high_0p480. But each height settles at a DIFFERENT equilibrium pitch,
@@ -81,9 +81,13 @@ class TestExistingProfilesUnchanged:
         # - height_scheduled_pitch_equilibrium_trim: the Phase A schedule itself
         # - support_position_outer_loop_pitch_ref: Phase B outer loop, inherits
         #   from Phase A and requires the schedule to be active
+        # - calibrated_support_position_outer_loop_pitch_ref: Phase B calibration,
+        #   inherits from the Phase B outer loop and keeps the same schedule
         SCHEDULE_ENABLED_PROFILES = {
             "height_scheduled_pitch_equilibrium_trim",
             "support_position_outer_loop_pitch_ref",
+            "calibrated_support_position_outer_loop_pitch_ref",
+            "calibrated_support_position_outer_loop_pitch_ref_v2",
         }
         for name, prof in JOINT_FIX_PROFILES.items():
             if name in SCHEDULE_ENABLED_PROFILES:

@@ -72,8 +72,14 @@ def test_base_height_scheduled_profile_unchanged():
 # 3. Old profiles unchanged (outer loop disabled)
 # --------------------------------------------------------------------------- #
 def test_old_profiles_unchanged():
+    # Profiles that intentionally enable the outer loop (Phase B + calibrated variant):
+    OUTER_LOOP_ENABLED_PROFILES = {
+        "support_position_outer_loop_pitch_ref",
+        "calibrated_support_position_outer_loop_pitch_ref",
+        "calibrated_support_position_outer_loop_pitch_ref_v2",
+    }
     for name, prof in JOINT_FIX_PROFILES.items():
-        if name == "support_position_outer_loop_pitch_ref":
+        if name in OUTER_LOOP_ENABLED_PROFILES:
             continue
         assert prof.outer_loop_enabled is False, (
             f"profile {name} unexpectedly enables the outer loop"
