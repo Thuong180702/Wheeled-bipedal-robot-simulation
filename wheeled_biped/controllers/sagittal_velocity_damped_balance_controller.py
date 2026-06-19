@@ -366,6 +366,18 @@ class SagittalAuthoritySchedule:
     outer_loop_contact_required: bool = True
     outer_loop_height_schedule_required: bool = True
 
+    # Calibrated height-dependent outer loop (Phase B calibration, opt-in).
+    # When True, the runtime computes Kp/Kd/Ki/theta_max/deadband/rate_limit/
+    # lowpass from the continuous height functions in
+    # wheeled_biped/controllers/calibrated_outer_loop_functions.py (fitted from
+    # the Phase 2 per-height gain sweep) instead of the fixed scalar outer_loop_*
+    # values above. NO setup-name branching — every parameter is interpolated
+    # from the commanded target CoM height. Disabled by default so the base
+    # support_position_outer_loop_pitch_ref profile and all legacy profiles keep
+    # their fixed scalar gains byte-for-byte. See
+    # docs/validation/calibrated_support_position_outer_loop_pitch_ref_final_report.md.
+    calibrated_outer_loop_enabled: bool = False
+
     integral_pitch_error_threshold_rad: float = 0.03
     integral_support_velocity_threshold_m_s: float = 0.03
     integral_wheel_velocity_threshold_rad_s: float = 1.0
@@ -2602,6 +2614,39 @@ SUPPORT_POSITION_OUTER_LOOP_PITCH_REF = replace(
     outer_loop_integral_enabled=False,
 )
 
+
+# Phase B calibration — Calibrated support-position outer-loop pitch reference.
+# Opt-in refinement of SUPPORT_POSITION_OUTER_LOOP_PITCH_REF (B) that replaces
+# the single fixed (Kp=1.0, Kd=0.0, Ki=0.0) gains with smooth height-dependent
+# functions fitted from the Phase 2 per-height gain sweep. The scalar
+# outer_loop_* fields below are retained only as the OFF-RANGE fallback / default
+# (they are overridden at runtime by the calibrated height functions when
+# calibrated_outer_loop_enabled is True). Inherits the full frozen Phase A height
+# schedule and every safety gate from B unchanged. The base B profile and all
+# legacy profiles keep calibrated_outer_loop_enabled=False, so they are
+# byte-for-byte unchanged. See
+# wheeled_biped/controllers/calibrated_outer_loop_functions.py and
+# docs/validation/calibrated_support_position_outer_loop_pitch_ref_final_report.md.
+CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF = replace(
+    SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,
+    profile_name="calibrated_support_position_outer_loop_pitch_ref",
+    calibrated_outer_loop_enabled=True,
+)
+
+# Calibrated height-dependent outer loop (Phase B calibration v2, opt-in).
+# v2 differs from the v1 calibrated profile only in the upper band (0.465, 0.480)
+# where v1's Kp was too aggressive, causing regressions at 2000 steps. v2 lowers
+# Kp(0.465) from 1.350 to 1.000 and Kp(0.480) from 1.575 to 1.050 based on
+# targeted upper-band resweep results. All other breakpoints (0.300-0.450) are
+# unchanged from v1. See
+# wheeled_biped/controllers/calibrated_outer_loop_functions_v2.py and
+# docs/validation/calibrated_outer_loop_upper_band_resweep_report.md.
+CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2 = replace(
+    SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,
+    profile_name="calibrated_support_position_outer_loop_pitch_ref_v2",
+    calibrated_outer_loop_enabled=True,
+)
+
 # Backward-compatible aliases — development identifiers → semantic constants.
 # These allow existing imports and scripts to keep working. The primary names
 # (BAND_LIMITED_SUPPORT_RECENTER, EMERGENCY_BUDGET_CAP_RAISE, etc.) should be
@@ -2662,6 +2707,8 @@ JOINT_FIX_PROFILES = {
     "pitch_equilibrium_trim": PITCH_EQUILIBRIUM_TRIM,  # Phase 3 structural fix: shift pitch reference to equilibrium to center support drift
     "height_scheduled_pitch_equilibrium_trim": HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,  # Phase 2 structural fix: per-height pitch_ref offset schedule
     "support_position_outer_loop_pitch_ref": SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # Phase B dynamic outer loop on top of height schedule
+    "calibrated_support_position_outer_loop_pitch_ref": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # v1 — failed Phase 6 upper-band regressions
+    "calibrated_support_position_outer_loop_pitch_ref_v2": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,  # v2 — opt-in, no regressions  # Phase B calibration: height-dependent outer-loop gains
 }
 
 

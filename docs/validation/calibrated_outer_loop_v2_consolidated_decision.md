@@ -171,5 +171,7 @@ The low_0p320 regression is harmless in random/changing height but produces a re
 - Safe in all dynamic conditions. No fall, no WBC, no divergence.
 - Equal-or-better than B in aggregate, with clear wins in random-height and low_0p330 push.
 - Does NOT *clearly* beat B due to the low_0p320 30N push regression (D7).
-- **Keep `support_position_outer_loop_pitch_ref` (B) as current best.**
+- **Keep `support_position_outer_loop_pitch_ref` (B) as current best** (production default).
+- **Use `calibrated_support_position_outer_loop_pitch_ref_v2` + `centered_posture_height_schedule` as practical baseline for the no-offset controller redesign experiments** (unified_sagittal_state_feedback_no_offset).
+- Fallback controller for experiments: `support_position_outer_loop_pitch_ref` (B) + original geometric height schedule.
 - Commit B2v2 as an opt-in experimental profile (already opt-in; no default change).

@@ -18,6 +18,7 @@ import argparse
 import csv
 import json
 import math
+import random
 import sys
 import time
 from collections import deque
@@ -103,6 +104,8 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     PITCH_EQUILIBRIUM_TRIM,
     HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,
     SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,
+    CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,
+    CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,
     interpolate_pitch_ref_offset,
     compute_outer_loop_pitch_ref,
     apply_rate_limit,
@@ -1362,6 +1365,8 @@ SAGITTAL_AUTHORITY_PROFILES = {
     "pitch_equilibrium_trim": PITCH_EQUILIBRIUM_TRIM,  # Phase 3 structural fix: shift pitch reference to equilibrium to center support drift
     "height_scheduled_pitch_equilibrium_trim": HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,  # Phase 2 structural fix: per-height scheduled offset
     "support_position_outer_loop_pitch_ref": SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # Phase B dynamic centering outer loop
+    "calibrated_support_position_outer_loop_pitch_ref": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # Phase B calibration: height-dependent outer-loop gains
+    "calibrated_support_position_outer_loop_pitch_ref_v2": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,  # Phase B calibration v2: smoothed upper-band Kp
 }
 
 
@@ -2410,6 +2415,13 @@ def main():
         help='Write whole-run summary sidecar JSON with authoritative simulated-step counts and full-rate maxima',
     )
     parser.add_argument(
+        '--output-dir',
+        type=str,
+        default=None,
+        help='Directory for telemetry/summary output. Default: outputs/hierarchical_controller_sim. '
+             'Set a unique path per run to avoid collisions when running sims in parallel.',
+    )
+    parser.add_argument(
         "--height-variant-setup",
         type=str,
         default=None,
@@ -2449,6 +2461,41 @@ def main():
         type=float,
         default=None,
         help="Override outer_loop_kd_deg_per_mps for the support-position outer loop. Default: None (use profile).",
+    )
+    parser.add_argument(
+        "--vd-outer-loop-ki-deg-per-m-s",
+        type=float,
+        default=None,
+        help="Override outer_loop_ki_deg_per_m_s for the support-position outer loop. Default: None (use profile).",
+    )
+    parser.add_argument(
+        "--vd-outer-loop-integral-enabled",
+        action="store_true",
+        help="Force-enable the support-position outer-loop integral path (calibration sweep).",
+    )
+    parser.add_argument(
+        "--vd-outer-loop-theta-ref-max-deg",
+        type=float,
+        default=None,
+        help="Override outer_loop_theta_ref_max_deg (saturation half-range, deg). Default: None (use profile).",
+    )
+    parser.add_argument(
+        "--vd-outer-loop-deadband-m",
+        type=float,
+        default=None,
+        help="Override outer_loop_support_error_deadband_m (m). Default: None (use profile).",
+    )
+    parser.add_argument(
+        "--vd-outer-loop-rate-limit-deg-per-step",
+        type=float,
+        default=None,
+        help="Override outer_loop_theta_ref_rate_limit_deg_per_step. Default: None (use profile).",
+    )
+    parser.add_argument(
+        "--vd-outer-loop-lowpass-alpha",
+        type=float,
+        default=None,
+        help="Override outer_loop_theta_ref_lowpass_alpha. Default: None (use profile).",
     )
     parser.add_argument(
         "--vd-k-position",
@@ -2728,6 +2775,8 @@ def main():
             "pitch_equilibrium_trim",
             "height_scheduled_pitch_equilibrium_trim",
             "support_position_outer_loop_pitch_ref",
+            "calibrated_support_position_outer_loop_pitch_ref",
+            "calibrated_support_position_outer_loop_pitch_ref_v2",
             "band_limited_support_recenter",
         ],
         help="Height-variant-aware sagittal authority schedule. Default: baseline",
@@ -2854,7 +2903,8 @@ def main():
     print("=" * 80)
 
     # Create output directory
-    output_dir = Path("outputs/hierarchical_controller_sim")
+    _out_dir_arg = getattr(args, "output_dir", None)
+    output_dir = Path(_out_dir_arg) if _out_dir_arg else Path("outputs/hierarchical_controller_sim")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load robot model
@@ -4018,24 +4068,36 @@ def main():
             outer_loop_kp = float(args.vd_outer_loop_kp_deg_per_m)
         if getattr(args, "vd_outer_loop_kd_deg_per_mps", None) is not None:
             outer_loop_kd = float(args.vd_outer_loop_kd_deg_per_mps)
+        if getattr(args, "vd_outer_loop_ki_deg_per_m_s", None) is not None:
+            outer_loop_ki = float(args.vd_outer_loop_ki_deg_per_m_s)
         outer_loop_integral_enabled = bool(
             getattr(profile, "outer_loop_integral_enabled", False)
         )
+        if getattr(args, "vd_outer_loop_integral_enabled", False):
+            outer_loop_integral_enabled = True
         outer_loop_integral_clamp = float(
             getattr(profile, "outer_loop_integral_clamp_m_s", 0.05)
         )
         outer_loop_theta_ref_max = float(
             getattr(profile, "outer_loop_theta_ref_max_deg", 3.0)
         )
+        if getattr(args, "vd_outer_loop_theta_ref_max_deg", None) is not None:
+            outer_loop_theta_ref_max = float(args.vd_outer_loop_theta_ref_max_deg)
         outer_loop_theta_rate_limit = float(
             getattr(profile, "outer_loop_theta_ref_rate_limit_deg_per_step", 0.03)
         )
+        if getattr(args, "vd_outer_loop_rate_limit_deg_per_step", None) is not None:
+            outer_loop_theta_rate_limit = float(args.vd_outer_loop_rate_limit_deg_per_step)
         outer_loop_theta_lowpass = float(
             getattr(profile, "outer_loop_theta_ref_lowpass_alpha", 0.15)
         )
+        if getattr(args, "vd_outer_loop_lowpass_alpha", None) is not None:
+            outer_loop_theta_lowpass = float(args.vd_outer_loop_lowpass_alpha)
         outer_loop_error_deadband = float(
             getattr(profile, "outer_loop_support_error_deadband_m", 0.015)
         )
+        if getattr(args, "vd_outer_loop_deadband_m", None) is not None:
+            outer_loop_error_deadband = float(args.vd_outer_loop_deadband_m)
         outer_loop_vel_lowpass = float(
             getattr(profile, "outer_loop_support_velocity_lowpass_alpha", 0.20)
         )
@@ -4051,6 +4113,65 @@ def main():
         outer_loop_contact_required = bool(
             getattr(profile, "outer_loop_contact_required", True)
         )
+
+        # Calibrated height-dependent outer loop (Phase B calibration, opt-in).
+        # When the profile enables it, the scalar Kp/Kd/Ki/theta/deadband/rate/
+        # lowpass above are REPLACED by smooth continuous functions of the
+        # commanded target CoM height (no setup-name branching). CLI overrides
+        # still take precedence (they are applied above and below this block).
+        calibrated_outer_loop_enabled = bool(
+            getattr(profile, "calibrated_outer_loop_enabled", False)
+        )
+        calibrated_function_profile_name = ""
+        calibrated_height_m_telemetry = 0.0
+        if calibrated_outer_loop_enabled and outer_loop_active_profile:
+            # Select the correct calibration version based on profile name.
+            profile_name = profile.profile_name
+            if profile_name == "calibrated_support_position_outer_loop_pitch_ref_v2":
+                from wheeled_biped.controllers.calibrated_outer_loop_functions_v2 import (
+                    calibrated_outer_loop_params as _cal_params_v2,
+                )
+                _cal_params = _cal_params_v2
+            else:
+                from wheeled_biped.controllers.calibrated_outer_loop_functions import (
+                    calibrated_outer_loop_params as _cal_params_v1,
+                )
+                _cal_params = _cal_params_v1
+            cal_height_m = (
+                float(height_variant_setup.get("target_com_z_m", 0.40))
+                if height_variant_setup is not None
+                else 0.40
+            )
+            cal = _cal_params(cal_height_m)
+            calibrated_function_profile_name = cal["calibrated_function_profile_name"]
+            calibrated_height_m_telemetry = cal_height_m
+            # CLI overrides win over the calibrated functions (sweep/diagnostic use).
+            if getattr(args, "vd_outer_loop_kp_deg_per_m", None) is None:
+                outer_loop_kp = cal["calibrated_kp_deg_per_m"]
+            if getattr(args, "vd_outer_loop_kd_deg_per_mps", None) is None:
+                outer_loop_kd = cal["calibrated_kd_deg_per_mps"]
+            if getattr(args, "vd_outer_loop_ki_deg_per_m_s", None) is None:
+                outer_loop_ki = cal["calibrated_ki_deg_per_m_s"]
+            if getattr(args, "vd_outer_loop_theta_ref_max_deg", None) is None:
+                outer_loop_theta_ref_max = cal["calibrated_theta_ref_max_deg"]
+            if getattr(args, "vd_outer_loop_deadband_m", None) is None:
+                outer_loop_error_deadband = cal["calibrated_deadband_m"]
+            if getattr(args, "vd_outer_loop_rate_limit_deg_per_step", None) is None:
+                outer_loop_theta_rate_limit = cal["calibrated_rate_limit_deg_per_step"]
+            if getattr(args, "vd_outer_loop_lowpass_alpha", None) is None:
+                outer_loop_theta_lowpass = cal["calibrated_lowpass_alpha"]
+            # Enable integral only if the calibrated Ki is nonzero (anti-windup
+            # gating happens in the control loop as for the manual integral).
+            if outer_loop_ki != 0.0:
+                outer_loop_integral_enabled = True
+            print(
+                f"[CALIBRATED OUTER LOOP] {profile.profile_name}: "
+                f"height={cal_height_m:.3f} m -> Kp={outer_loop_kp:.3f} "
+                f"Kd={outer_loop_kd:.3f} Ki={outer_loop_ki:.4f} "
+                f"theta_max={outer_loop_theta_ref_max:.2f} db={outer_loop_error_deadband:.4f} "
+                f"({calibrated_function_profile_name})"
+            )
+
         outer_loop_sign_selected = "none"
         if outer_loop_active_profile:
             outer_loop_sign_selected = "positive" if outer_loop_kp >= 0.0 else "negative"
@@ -5133,6 +5254,19 @@ def main():
                 sagittal_diag["pitch_ref_offset_scheduled_deg"] = float(pitch_ref_offset_scheduled_deg)
                 sagittal_diag["pitch_ref_total_after_outer_loop_deg"] = float(outer_loop_pitch_ref_total_deg)
                 sagittal_diag["pitch_x_error_after_outer_loop_rad"] = float(pitch_x_error)
+                # Calibrated outer-loop telemetry (Phase B calibration)
+                sagittal_diag["calibrated_outer_loop_active"] = calibrated_outer_loop_enabled
+                sagittal_diag["calibrated_function_profile_name"] = calibrated_function_profile_name
+                sagittal_diag["calibrated_height_m"] = float(calibrated_height_m_telemetry)
+                sagittal_diag["calibrated_kp_deg_per_m"] = outer_loop_kp if calibrated_outer_loop_enabled else 0.0
+                sagittal_diag["calibrated_kd_deg_per_mps"] = outer_loop_kd if calibrated_outer_loop_enabled else 0.0
+                sagittal_diag["calibrated_ki_deg_per_m_s"] = outer_loop_ki if calibrated_outer_loop_enabled else 0.0
+                sagittal_diag["calibrated_theta_ref_max_deg"] = outer_loop_theta_ref_max if calibrated_outer_loop_enabled else 0.0
+                sagittal_diag["calibrated_deadband_m"] = outer_loop_error_deadband if calibrated_outer_loop_enabled else 0.0
+                sagittal_diag["calibrated_rate_limit_deg_per_step"] = outer_loop_theta_rate_limit if calibrated_outer_loop_enabled else 0.0
+                sagittal_diag["calibrated_lowpass_alpha"] = outer_loop_theta_lowpass if calibrated_outer_loop_enabled else 0.0
+                sagittal_diag["calibrated_integral_active"] = bool(outer_loop_integral_enabled and calibrated_outer_loop_enabled)
+                sagittal_diag["calibrated_integral_value"] = outer_loop_integral_accum_m_s if calibrated_outer_loop_enabled else 0.0
                 # Transient capture diagnostics
                 sagittal_diag["transient_detected"] = transient_detected
                 sagittal_diag["transient_by_pitch"] = transient_by_pitch
@@ -5726,6 +5860,19 @@ def main():
         telemetry["pitch_ref_offset_scheduled_deg"].append(sagittal_diag.get("pitch_ref_offset_scheduled_deg", 0.0))
         telemetry["pitch_ref_total_after_outer_loop_deg"].append(sagittal_diag.get("pitch_ref_total_after_outer_loop_deg", 0.0))
         telemetry["pitch_x_error_after_outer_loop_rad"].append(sagittal_diag.get("pitch_x_error_after_outer_loop_rad", 0.0))
+        # Calibrated outer-loop telemetry (Phase B calibration)
+        telemetry.setdefault("calibrated_outer_loop_active", []).append(sagittal_diag.get("calibrated_outer_loop_active", False))
+        telemetry.setdefault("calibrated_function_profile_name", []).append(sagittal_diag.get("calibrated_function_profile_name", ""))
+        telemetry.setdefault("calibrated_height_m", []).append(sagittal_diag.get("calibrated_height_m", 0.0))
+        telemetry.setdefault("calibrated_kp_deg_per_m", []).append(sagittal_diag.get("calibrated_kp_deg_per_m", 0.0))
+        telemetry.setdefault("calibrated_kd_deg_per_mps", []).append(sagittal_diag.get("calibrated_kd_deg_per_mps", 0.0))
+        telemetry.setdefault("calibrated_ki_deg_per_m_s", []).append(sagittal_diag.get("calibrated_ki_deg_per_m_s", 0.0))
+        telemetry.setdefault("calibrated_theta_ref_max_deg", []).append(sagittal_diag.get("calibrated_theta_ref_max_deg", 0.0))
+        telemetry.setdefault("calibrated_deadband_m", []).append(sagittal_diag.get("calibrated_deadband_m", 0.0))
+        telemetry.setdefault("calibrated_rate_limit_deg_per_step", []).append(sagittal_diag.get("calibrated_rate_limit_deg_per_step", 0.0))
+        telemetry.setdefault("calibrated_lowpass_alpha", []).append(sagittal_diag.get("calibrated_lowpass_alpha", 0.0))
+        telemetry.setdefault("calibrated_integral_active", []).append(sagittal_diag.get("calibrated_integral_active", False))
+        telemetry.setdefault("calibrated_integral_value", []).append(sagittal_diag.get("calibrated_integral_value", 0.0))
 
         # Capture gate telemetry (velocity-damped controller only)
         telemetry["capture_gate_enabled"].append(sagittal_diag.get("capture_gate_enabled", False))
