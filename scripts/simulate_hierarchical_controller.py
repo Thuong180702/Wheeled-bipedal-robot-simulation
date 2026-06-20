@@ -106,6 +106,8 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,
     CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,
     CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,
+    UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET,
     interpolate_pitch_ref_offset,
     compute_outer_loop_pitch_ref,
     apply_rate_limit,
@@ -1367,6 +1369,8 @@ SAGITTAL_AUTHORITY_PROFILES = {
     "support_position_outer_loop_pitch_ref": SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # Phase B dynamic centering outer loop
     "calibrated_support_position_outer_loop_pitch_ref": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # Phase B calibration: height-dependent outer-loop gains
     "calibrated_support_position_outer_loop_pitch_ref_v2": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,  # Phase B calibration v2: smoothed upper-band Kp
+    "physics_equilibrium_feedforward_outer_loop": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,  # Phase D: physics-based equilibrium wheel torque feedforward
+    "unified_sagittal_state_feedback_no_offset": UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET,  # Unified sagittal state-feedback no-offset controller
 }
 
 
@@ -2777,6 +2781,8 @@ def main():
             "support_position_outer_loop_pitch_ref",
             "calibrated_support_position_outer_loop_pitch_ref",
             "calibrated_support_position_outer_loop_pitch_ref_v2",
+            "physics_equilibrium_feedforward_outer_loop",
+            "unified_sagittal_state_feedback_no_offset",
             "band_limited_support_recenter",
         ],
         help="Height-variant-aware sagittal authority schedule. Default: baseline",
@@ -4046,6 +4052,59 @@ def main():
                 f"pitch_ref_offset={vd_pitch_ref_offset_deg:+.2f} deg"
             )
 
+        # Physics-based equilibrium feedforward (Phase D, opt-in).
+        # When the profile enables it, the empirical pitch_ref_offset mechanism
+        # (either static or height-scheduled) is REPLACED by a physics-derived
+        # pitch_ref value that emerges from the closed-loop equilibrium dynamics.
+        # The implementation uses the EQUIVALENT PITCH_REF path (Option B in the
+        # task spec): pitch_ref_physics(h) = pitch_eq_no_off_deg(h). When the
+        # controller's pitch_ref equals this value, tau_pitch = Kp_pitch *
+        # (pitch_x - pitch_ref) ≈ 0 at steady state, which is exactly what the
+        # empirical pitch_ref_offset achieves. The difference: the value is
+        # derived from MuJoCo closed-loop dynamics (not hand-tuned per-height
+        # sweep). No setup-name branching, no hand tuning.
+        #
+        # IMPORTANT: A direct additive wheel torque feedforward (Option A) was
+        # tried first and FAILED — the controller's tau_position does not
+        # cancel a constant torque injection, so the robot accelerates
+        # forward. The equivalent pitch_ref path preserves the controller's
+        # state-dependent torque balance contract.
+        physics_ff_enabled = bool(
+            getattr(profile, "physics_equilibrium_feedforward_enabled", False)
+        )
+        physics_ff_height_m = 0.0
+        physics_ff_tau_eq_each_wheel_nm = 0.0
+        physics_ff_pitch_eq_no_off_deg = 0.0
+        physics_ff_function_version = ""
+        physics_ff_clamped = False
+        if physics_ff_enabled:
+            from wheeled_biped.controllers.physics_equilibrium_feedforward import (
+                physics_equilibrium_feedforward_params,
+            )
+            if height_variant_setup is not None:
+                physics_ff_height_m = float(
+                    height_variant_setup.get("target_com_z_m", 0.40)
+                )
+            else:
+                physics_ff_height_m = 0.40
+            _pff = physics_equilibrium_feedforward_params(physics_ff_height_m)
+            physics_ff_tau_eq_each_wheel_nm = _pff["physics_ff_tau_eq_each_wheel_nm"]
+            physics_ff_pitch_eq_no_off_deg = _pff["physics_ff_pitch_eq_no_off_deg"]
+            physics_ff_function_version = _pff["physics_ff_function_version"]
+            physics_ff_clamped = bool(_pff["physics_ff_clamped_below"] or _pff["physics_ff_clamped_above"])
+            # Equivalent pitch_ref path: set pitch_ref_total = pitch_eq_no_off_deg
+            # This makes tau_pitch = 0 at steady state, matching the empirical
+            # schedule but with values derived from MuJoCo closed-loop dynamics.
+            vd_pitch_ref_offset_deg = physics_ff_pitch_eq_no_off_deg
+            pitch_ref_offset_scheduled_deg = physics_ff_pitch_eq_no_off_deg
+            print(
+                f"[PHYSICS EQ FEEDFORWARD] {profile.profile_name}: "
+                f"height={physics_ff_height_m:.3f} m -> "
+                f"equivalent pitch_ref={physics_ff_pitch_eq_no_off_deg:+.3f} deg, "
+                f"tau_eq_ff_each_wheel={physics_ff_tau_eq_each_wheel_nm:+.3f} Nm "
+                f"({_pff['physics_ff_function_profile_name']} v{physics_ff_function_version})"
+            )
+
         # Support-position outer loop (Phase B dynamic centering).
         # Read the outer_loop_* config from the resolved profile. Disabled by
         # default for every legacy profile, so the dynamic term stays 0.0 and the
@@ -5267,6 +5326,15 @@ def main():
                 sagittal_diag["calibrated_lowpass_alpha"] = outer_loop_theta_lowpass if calibrated_outer_loop_enabled else 0.0
                 sagittal_diag["calibrated_integral_active"] = bool(outer_loop_integral_enabled and calibrated_outer_loop_enabled)
                 sagittal_diag["calibrated_integral_value"] = outer_loop_integral_accum_m_s if calibrated_outer_loop_enabled else 0.0
+                # Physics-based equilibrium feedforward telemetry (Phase D)
+                sagittal_diag["physics_ff_enabled"] = bool(physics_ff_enabled)
+                sagittal_diag["physics_ff_height_m"] = float(physics_ff_height_m)
+                sagittal_diag["physics_ff_tau_eq_each_wheel_nm"] = float(physics_ff_tau_eq_each_wheel_nm)
+                sagittal_diag["physics_ff_pitch_eq_no_off_deg"] = float(physics_ff_pitch_eq_no_off_deg)
+                sagittal_diag["physics_ff_function_version"] = str(physics_ff_function_version)
+                sagittal_diag["physics_ff_clamped"] = bool(physics_ff_clamped)
+                sagittal_diag["empirical_pitch_ref_offset_disabled"] = bool(physics_ff_enabled)
+                sagittal_diag["physics_equivalent_pitch_ref_deg"] = 0.0 if physics_ff_enabled else float(vd_pitch_ref_offset_deg)
                 # Transient capture diagnostics
                 sagittal_diag["transient_detected"] = transient_detected
                 sagittal_diag["transient_by_pitch"] = transient_by_pitch
@@ -5351,6 +5419,25 @@ def main():
             tau_total_clipped = balance_core_result.tau_total_clipped
             tau_smooth = balance_core_result.tau_final
             tau_prev = tau_smooth
+
+            # Physics-based equilibrium feedforward (Phase D, opt-in).
+            # When enabled via Option B (equivalent pitch_ref path), the value of
+            # vd_pitch_ref_offset_deg is set to pitch_eq_no_off_deg(h) above,
+            # which makes the controller's tau_pitch = 0 at steady state. No
+            # additive torque injection is needed here (Option A direct-torque
+            # was tried and FAILED — see comment block above the physics_ff
+            # branch). We still emit telemetry so callers can distinguish the
+            # two telemetry sources (physics-derived vs empirical schedule).
+            if physics_ff_enabled:
+                sagittal_diag["physics_ff_applied_each_wheel_nm"] = 0.0  # Option A: not used
+                sagittal_diag["physics_ff_final_wheel_tau_with_ff"] = float(0.5 * (np.array(tau_total_clipped)[4] + np.array(tau_total_clipped)[9]))
+                sagittal_diag["physics_ff_final_wheel_tau_without_ff"] = float(0.5 * (np.array(tau_total_clipped)[4] + np.array(tau_total_clipped)[9]))
+                sagittal_diag["physics_ff_active_this_step"] = True
+            else:
+                sagittal_diag["physics_ff_applied_each_wheel_nm"] = 0.0
+                sagittal_diag["physics_ff_final_wheel_tau_with_ff"] = 0.0
+                sagittal_diag["physics_ff_final_wheel_tau_without_ff"] = 0.0
+                sagittal_diag["physics_ff_active_this_step"] = False
 
             # Zero legacy torques for telemetry clarity
             legacy_zeros = zero_legacy_torque_sources_for_balance_core()
@@ -5873,6 +5960,19 @@ def main():
         telemetry.setdefault("calibrated_lowpass_alpha", []).append(sagittal_diag.get("calibrated_lowpass_alpha", 0.0))
         telemetry.setdefault("calibrated_integral_active", []).append(sagittal_diag.get("calibrated_integral_active", False))
         telemetry.setdefault("calibrated_integral_value", []).append(sagittal_diag.get("calibrated_integral_value", 0.0))
+        # Physics-based equilibrium feedforward telemetry (Phase D)
+        telemetry.setdefault("physics_ff_enabled", []).append(sagittal_diag.get("physics_ff_enabled", False))
+        telemetry.setdefault("physics_ff_height_m", []).append(sagittal_diag.get("physics_ff_height_m", 0.0))
+        telemetry.setdefault("physics_ff_tau_eq_each_wheel_nm", []).append(sagittal_diag.get("physics_ff_tau_eq_each_wheel_nm", 0.0))
+        telemetry.setdefault("physics_ff_pitch_eq_no_off_deg", []).append(sagittal_diag.get("physics_ff_pitch_eq_no_off_deg", 0.0))
+        telemetry.setdefault("physics_ff_function_version", []).append(sagittal_diag.get("physics_ff_function_version", ""))
+        telemetry.setdefault("physics_ff_clamped", []).append(sagittal_diag.get("physics_ff_clamped", False))
+        telemetry.setdefault("physics_ff_applied_each_wheel_nm", []).append(sagittal_diag.get("physics_ff_applied_each_wheel_nm", 0.0))
+        telemetry.setdefault("physics_ff_final_wheel_tau_with_ff", []).append(sagittal_diag.get("physics_ff_final_wheel_tau_with_ff", 0.0))
+        telemetry.setdefault("physics_ff_final_wheel_tau_without_ff", []).append(sagittal_diag.get("physics_ff_final_wheel_tau_without_ff", 0.0))
+        telemetry.setdefault("physics_ff_active_this_step", []).append(sagittal_diag.get("physics_ff_active_this_step", False))
+        telemetry.setdefault("empirical_pitch_ref_offset_disabled", []).append(sagittal_diag.get("empirical_pitch_ref_offset_disabled", False))
+        telemetry.setdefault("physics_equivalent_pitch_ref_deg", []).append(sagittal_diag.get("physics_equivalent_pitch_ref_deg", 0.0))
 
         # Capture gate telemetry (velocity-damped controller only)
         telemetry["capture_gate_enabled"].append(sagittal_diag.get("capture_gate_enabled", False))

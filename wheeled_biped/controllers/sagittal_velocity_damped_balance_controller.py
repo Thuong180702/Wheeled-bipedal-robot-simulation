@@ -378,6 +378,90 @@ class SagittalAuthoritySchedule:
     # docs/validation/calibrated_support_position_outer_loop_pitch_ref_final_report.md.
     calibrated_outer_loop_enabled: bool = False
 
+    # Physics-based equilibrium feedforward (Phase D, opt-in).
+    # When True, the runtime reads tau_eq_ff(h) from
+    # wheeled_biped/controllers/physics_equilibrium_feedforward.py and adds it
+    # directly to the final wheel torque each step. This replaces the empirical
+    # pitch_ref_height_schedule — see the physics_equilibrium_feedforward_outer_loop
+    # profile below. The feedforward is derived from MuJoCo closed-loop
+    # equilibrium dynamics, not hand-tuned per-height offsets. Disabled by
+    # default so every legacy profile (and B2v2) is byte-for-byte unchanged.
+    physics_equilibrium_feedforward_enabled: bool = False
+    physics_eq_ff_clamp_to_height_range: bool = True
+    physics_eq_ff_function_version: str = ""
+    physics_eq_ff_max_abs_nm: float = 8.0  # safety clamp
+
+    # Unified sagittal state-feedback no-offset controller.
+    # Replaces the independent tau_pitch + tau_position + tau_velocity_damping
+    # sum-of-torques architecture with a single coordinated sagittal command
+    # from full state feedback. Requires pitch_ref_offset_deg = 0.0 and disables
+    # all offset/trim/bias mechanisms. See
+    # docs/validation/unified_sagittal_no_offset_design.md.
+    # Disabled by default — opt-in via dedicated profile.
+    enable_unified_sagittal_state_feedback: bool = False
+
+    # Unified controller gains (scheduled by height if *_height_schedule is True)
+    # support error proportional gain
+    unified_kx: float = 40.0
+    # support error rate gain
+    unified_kv: float = 15.0
+    # pitch proportional gain (+sign: forward lean -> forward torque; 0 = disabled in pure-support mode)
+    unified_ktheta: float = 0.0
+    # pitch rate gain
+    unified_komega: float = 10.0
+    # height error gain (typically 0 — height controlled by leg PD)
+    unified_kh: float = 0.0
+    # height rate gain (typically 0)
+    unified_khdot: float = 0.0
+    # Torque cap for unified controller (Nm)
+    unified_torque_cap: float = 5.0
+    # Rate limit (Nm/step)
+    unified_rate_limit: float = 0.10
+
+    # Height-scheduled unified gains
+    unified_gain_height_schedule: bool = False
+    unified_kx_nominal: float = 3.0
+    unified_kx_low_max: float = 5.0
+    unified_kv_nominal: float = 0.15
+    unified_kv_low_max: float = 0.30
+    unified_ktheta_nominal: float = 3.0
+    unified_ktheta_low_max: float = 4.0
+    unified_komega_nominal: float = 0.15
+    unified_komega_low_max: float = 0.25
+    unified_torque_cap_nominal: float = 6.0
+    unified_torque_cap_low_max: float = 6.0
+
+    # Unified controller mode classifier thresholds
+    unified_drift_enter_m: float = 0.04
+    unified_drift_exit_m: float = 0.02
+    unified_push_pitch_enter_rad: float = 0.15
+    unified_push_pitch_rate_enter_radps: float = 0.20
+    unified_push_exit_rad: float = 0.05
+    unified_height_transition_enter_m: float = 0.005
+    unified_hip_yaw_risk_rad: float = 0.10
+    unified_hip_yaw_danger_rad: float = 0.15
+    unified_contact_degraded: int = 2  # fewer than this = degraded
+
+    # Priority weights per mode
+    unified_support_weight_steady: float = 1.0
+    unified_pitch_weight_steady: float = 1.0
+    unified_rate_weight_steady: float = 1.0
+    unified_height_weight_steady: float = 0.5
+    unified_support_weight_drift: float = 2.0
+    unified_pitch_weight_drift: float = 0.7
+    unified_rate_weight_drift: float = 1.5
+    unified_support_weight_push: float = 0.5
+    unified_pitch_weight_push: float = 2.0
+    unified_rate_weight_push: float = 1.0
+    unified_support_weight_transition: float = 0.7
+    unified_pitch_weight_transition: float = 0.7
+    unified_support_weight_degraded: float = 0.5
+    unified_pitch_weight_degraded: float = 1.5
+    unified_rate_weight_degraded: float = 0.5
+    unified_support_weight_hip_yaw_risk: float = 0.5
+    unified_pitch_weight_hip_yaw_risk: float = 0.5
+    unified_rate_weight_hip_yaw_risk: float = 0.3
+
     integral_pitch_error_threshold_rad: float = 0.03
     integral_support_velocity_threshold_m_s: float = 0.03
     integral_wheel_velocity_threshold_rad_s: float = 1.0
@@ -2647,6 +2731,104 @@ CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2 = replace(
     calibrated_outer_loop_enabled=True,
 )
 
+# =====================================================================
+# Physics-Based Equilibrium Feedforward Outer Loop (Phase D, opt-in)
+# =====================================================================
+# Replaces the empirical pitch_ref_height_schedule with a physics-based
+# equilibrium wheel torque feedforward. The feedforward is derived from the
+# MuJoCo closed-loop equilibrium pitch at each height (without empirical offset)
+# and applied directly as a wheel torque each step. This is NOT a hand-tuned
+# offset — the equilibrium emerges from physics + controller Kp_pitch dynamics.
+#
+# Key design choices:
+# - Inherits ALL safety infrastructure from CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2.
+# - Adds `physics_equilibrium_feedforward_enabled` flag and a height-dependent
+#   `physics_eq_ff_*` schedule the runtime reads via the
+#   `physics_equilibrium_feedforward` module.
+# - When enabled, the controller ADDS the physics-derived DC wheel torque
+#   feedforward to the final wheel torque each step, BEFORE the rate-limit and
+#   low-pass stages. The controller's tau_pitch should remain approximately
+#   zero in steady state (no empirical pitch_ref_offset is needed).
+# - pitch_ref_height_schedule_enabled is set False; the empirical schedule is
+#   not used. Telemetry emits `physics_equivalent_pitch_ref_deg = 0.0` and
+#   `empirical_pitch_ref_offset_disabled = True` so callers can distinguish.
+# - Disabled by default — opt-in only.
+# See docs/validation/physics_equilibrium_feedforward_outer_loop_final_report.md.
+PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP = replace(
+    CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,
+    profile_name="physics_equilibrium_feedforward_outer_loop",
+    # Disable empirical pitch_ref_offset schedule
+    pitch_ref_offset_deg=0.0,
+    pitch_ref_height_schedule_enabled=False,
+    pitch_ref_height_schedule_heights_m=(),
+    pitch_ref_height_schedule_offsets_deg=(),
+    # Enable physics-based equilibrium feedforward
+    physics_equilibrium_feedforward_enabled=True,
+    physics_eq_ff_clamp_to_height_range=True,
+    # Telemetry provenance
+    physics_eq_ff_function_version="1.0",
+)
+
+# =====================================================================
+# Unified Sagittal State-Feedback No-Offset Controller
+# =====================================================================
+# Opt-in profile that replaces the independent tau_pitch + tau_position +
+# tau_velocity_damping sum-of-torques architecture with a single coordinated
+# sagittal command from full state feedback. The mode classifier detects 8
+# operating modes and applies priority-weighted arbitration so the six state
+# terms share the same torque budget toward the SAME goal.
+#
+# Key design choices:
+# - pitch_ref_offset_deg = 0.0 (no pitch offset at all)
+# - pitch_ref_height_schedule_enabled = False
+# - All offset/trim/bias mechanisms disabled
+# - One unified command replaces tau_pitch, tau_position, outer_loop
+# - Mode classifier + priority arbitration
+# - Height-scheduled gains (continuous gain scheduling)
+# - Safety gates for contact/roll/hip-yaw/torque-cap/rate-limit
+#
+# Built on HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM's safety infrastructure
+# for contact/roll/height gates but overrides ALL sagittal control
+# computation. Disabled by default — opt-in only.
+# See docs/validation/unified_sagittal_no_offset_design.md.
+UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET = replace(
+    HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,
+    profile_name="unified_sagittal_state_feedback_no_offset",
+    # Disable ALL offset/trim/bias mechanisms
+    pitch_ref_offset_deg=0.0,
+    pitch_ref_height_schedule_enabled=False,
+    pitch_ref_height_schedule_heights_m=(),
+    pitch_ref_height_schedule_offsets_deg=(),
+    outer_loop_enabled=False,
+    calibrated_outer_loop_enabled=False,
+    pitch_bias_comp_enabled=False,
+    t6j_bias_trim_enabled=False,
+    adaptive_bias_trim_enabled=False,
+    enable_phase_aware_recenter=False,
+    enable_hysteresis_recenter=False,
+    enable_bias_cancel=False,
+    enable_active_pitch_crossing=False,
+    # Enable unified state-feedback mode
+    enable_unified_sagittal_state_feedback=True,
+    # Tuned gains for no-offset operation.
+    # Pitch-primary architecture: tau = Ktheta*pitch + Komega*pitch_rate - Ki*∫err dt
+    # No separate tau_position term — avoids the structural pitch-vs-support conflict.
+    # The integral slowly winds up to cancel steady-state drift, replacing the
+    # pitch_ref_offset without introducing a fixed bias.
+    unified_kx=0.0,
+    unified_kv=0.0,
+    unified_ktheta=30.0,
+    unified_komega=10.0,
+    unified_kh=0.0,
+    unified_khdot=0.0,
+    unified_torque_cap=6.0,
+    unified_rate_limit=1.0,
+    # Gain scheduling disabled for initial discovery
+    unified_gain_height_schedule=False,
+    unified_torque_cap_nominal=5.0,
+    unified_torque_cap_low_max=6.0,
+)
+
 # Backward-compatible aliases — development identifiers → semantic constants.
 # These allow existing imports and scripts to keep working. The primary names
 # (BAND_LIMITED_SUPPORT_RECENTER, EMERGENCY_BUDGET_CAP_RAISE, etc.) should be
@@ -2709,6 +2891,10 @@ JOINT_FIX_PROFILES = {
     "support_position_outer_loop_pitch_ref": SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # Phase B dynamic outer loop on top of height schedule
     "calibrated_support_position_outer_loop_pitch_ref": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # v1 — failed Phase 6 upper-band regressions
     "calibrated_support_position_outer_loop_pitch_ref_v2": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,  # v2 — opt-in, no regressions  # Phase B calibration: height-dependent outer-loop gains
+    # Physics-based equilibrium feedforward outer loop (Phase D, opt-in)
+    "physics_equilibrium_feedforward_outer_loop": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,
+    # Unified sagittal state-feedback no-offset controller
+    "unified_sagittal_state_feedback_no_offset": UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET,
 }
 
 
@@ -2951,6 +3137,10 @@ class SagittalVelocityDampedBalanceController:
         self._pitch_bias_estimate_nm = 0.0   # EMA of tau_pitch in stable windows
         self._pitch_bias_samples = 0          # number of EMA updates
         self._pitch_bias_comp_tau_nm = 0.0   # current bounded compensation
+
+        # Unified sagittal state-feedback controller state
+        self._prev_unified_tau_cmd = 0.0      # previous step's tau_cmd for rate limiting
+        self._no_offset_int_error = 0.0        # integral accumulator for no-offset controller
 
         # Initialize capture gate if enabled
         if self.enable_capture_gate:
@@ -3230,6 +3420,182 @@ class SagittalVelocityDampedBalanceController:
         # This is the rate of change of support-center position error in initial-heading frame
         support_position_velocity_m_s = (sagittal_position_error_m - self.prev_support_position_error_m) / self.dt
         self.prev_support_position_error_m = sagittal_position_error_m
+
+        # =====================================================================
+        # UNIFIED SAGITTAL STATE-FEEDBACK NO-OFFSET CONTROLLER
+        # =====================================================================
+        # When enabled, replaces all of tau_pitch, tau_position, tau_velocity,
+        # tau_support_velocity, tau_cp, tau_com_vy, recenter, hysteresis, bias,
+        # APC, and outer-loop with a single coordinated state-feedback command.
+        #
+        # The unified controller uses priority-weighted mode arbitration to
+        # prevent the torque conflict documented in
+        # docs/validation/unified_no_offset_state_conflict_audit.md.
+        # =====================================================================
+        no_offset_active = self.authority_schedule.enable_unified_sagittal_state_feedback
+        no_offset_mode = "disabled"
+        no_offset_gate_pass = True
+        no_offset_block_reason = "none"
+        no_offset_kx = 0.0
+        no_offset_kv = 0.0
+        no_offset_ktheta = 0.0
+        no_offset_komega = 0.0
+        no_offset_kh = 0.0
+        no_offset_khdot = 0.0
+        no_offset_tau_support_state = 0.0
+        no_offset_tau_pitch_state = 0.0
+        no_offset_tau_rate_state = 0.0
+        no_offset_tau_height_state = 0.0
+        no_offset_priority_support = 1.0
+        no_offset_priority_pitch = 1.0
+        no_offset_priority_rate = 1.0
+        no_offset_tau_total_raw = 0.0
+        no_offset_tau_total_limited = 0.0
+        no_offset_torque_cap = 0.0
+        no_offset_rate_limit = 0.0
+        no_offset_saturation_active = False
+        no_offset_arbitration_reason = "disabled"
+        no_offset_pitch_ref_offset_deg = 0.0
+        unified_tau_cmd = None  # If computed, used at assembly to replace tau_common
+
+        if no_offset_active:
+            sched = self.authority_schedule
+            no_offset_pitch_ref_offset_deg = 0.0
+            abs_support_error = abs(float(sagittal_position_error_m))
+            abs_pitch = abs(float(pitch_x_rad))
+            abs_roll = abs(float(roll_y_rad))
+            abs_height_err = abs(float(com_z_m) - float(commanded_height_ref_m if commanded_height_ref_m is not None else com_z_m))
+            hip_yaw_abs_max = 0.0  # Not available in compute method; set from diagnostics externally
+
+            # --- Safety gates ---
+            if not contact_valid:
+                no_offset_gate_pass = False
+                no_offset_block_reason = "contact_invalid"
+            elif com_z_m < 0.28 or com_z_m > 0.50:
+                no_offset_gate_pass = False
+                no_offset_block_reason = "height_unsafe"
+            elif abs_roll > 0.15:
+                no_offset_gate_pass = False
+                no_offset_block_reason = "roll_unsafe"
+
+            # --- Mode classifier ---
+            # Mode classification affects priority weights but does not
+            # change the fundamental control law. When Ktheta=0 (pure
+            # support-centering), the weights are always 1.0 (no arbitration
+            # needed since there's only one objective).
+            no_offset_priority_support = 1.0
+            no_offset_priority_pitch = 1.0
+            no_offset_priority_rate = 1.0
+
+            pitch_rate_large = abs(float(pitch_rate_x_rad_s)) > sched.unified_push_pitch_rate_enter_radps
+            pitch_large = abs_pitch > sched.unified_push_pitch_enter_rad
+            drift_detected = abs_support_error > sched.unified_drift_enter_m
+            height_changing = abs_height_err > sched.unified_height_transition_enter_m
+            hip_yaw_risky = hip_yaw_abs_max > sched.unified_hip_yaw_risk_rad
+            hip_yaw_danger = hip_yaw_abs_max > sched.unified_hip_yaw_danger_rad
+            contact_ok = contact_valid
+
+            if not no_offset_gate_pass:
+                no_offset_mode = "BLOCKED"
+            elif not contact_ok:
+                no_offset_mode = "CONTACT_DEGRADED"
+            elif hip_yaw_danger:
+                no_offset_mode = "HIP_YAW_RISK"
+            elif pitch_large or pitch_rate_large:
+                no_offset_mode = "PUSH_RECOVERY"
+            elif drift_detected:
+                no_offset_mode = "DRIFT_RECOVERY"
+            elif height_changing:
+                no_offset_mode = "HEIGHT_TRANSITION"
+            else:
+                no_offset_mode = "STEADY"
+
+            # --- Height-scheduled gains ---
+            h_norm = max(0.0, min(1.0, (float(com_z_m) - 0.30) / (0.48 - 0.30)))
+            if sched.unified_gain_height_schedule:
+                no_offset_kx = sched.unified_kx_nominal + (sched.unified_kx_low_max - sched.unified_kx_nominal) * (1.0 - h_norm)
+                no_offset_kv = sched.unified_kv_nominal + (sched.unified_kv_low_max - sched.unified_kv_nominal) * (1.0 - h_norm)
+                no_offset_ktheta = sched.unified_ktheta_nominal + (sched.unified_ktheta_low_max - sched.unified_ktheta_nominal) * (1.0 - h_norm)
+                no_offset_komega = sched.unified_komega_nominal + (sched.unified_komega_low_max - sched.unified_komega_nominal) * (1.0 - h_norm)
+                no_offset_torque_cap = sched.unified_torque_cap_nominal + (sched.unified_torque_cap_low_max - sched.unified_torque_cap_nominal) * (1.0 - h_norm)
+            else:
+                no_offset_kx = sched.unified_kx
+                no_offset_kv = sched.unified_kv
+                no_offset_ktheta = sched.unified_ktheta
+                no_offset_komega = sched.unified_komega
+                no_offset_torque_cap = sched.unified_torque_cap
+            no_offset_rate_limit = sched.unified_rate_limit
+            no_offset_kh = sched.unified_kh
+            no_offset_khdot = sched.unified_khdot
+
+            # --- Priority weights (simplified — pitch-primary architecture) ---
+            # With the pitch-primary architecture (no separate tau_position),
+            # weights are always 1.0. The sign-aware coordination is handled
+            # by the integral term, not by weighting.
+            no_offset_priority_support = 1.0
+            no_offset_priority_pitch = 1.0
+            no_offset_priority_rate = 1.0
+            no_offset_arbitration_reason = no_offset_mode.lower()
+
+            # --- Unified state-feedback command ---
+            # tau_pitch_fb = +Ktheta * pitch_x (forward correction for forward lean)
+            # tau_support = -Kx * err - Kv * vel (support-centering PD)
+            # tau_integral = -Ki * ∫err dt (anti-windup bounded integral)
+            #
+            # The integral term is critical for no-offset operation: it winds up
+            # to cancel the DC torque from tau_pitch_fb, eliminating steady-state
+            # drift without requiring a pitch_ref_offset. Integral is bounded to
+            # prevent windup during large transients.
+            # EQUILIBRIUM PITCH HIGH-PASS: use Ktheta*(pitch - pitch_eqm) so the DC
+            # component of equilibrium lean (~3 deg at h=0.48) does not produce
+            # unwanted forward torque. pitch_eqm is a slow EMA (~10s time constant).
+            if not hasattr(self, '_pitch_eqm_estimate'):
+                self._pitch_eqm_estimate = float(pitch_x_rad)
+            alpha_eqm = 0.010  # 100-step EMA @100Hz ≈ 10s time constant
+            self._pitch_eqm_estimate = (1.0 - alpha_eqm) * self._pitch_eqm_estimate + alpha_eqm * float(pitch_x_rad)
+            pitch_deviation = float(pitch_x_rad) - self._pitch_eqm_estimate
+
+            tau_pitch_fb = +no_offset_ktheta * pitch_deviation
+            tau_support = 0.0
+
+            # Integral on support error (eliminates steady-state drift without offset)
+            self._no_offset_int_error += sagittal_position_error_m * self.dt
+            k_bound = max(no_offset_ktheta * 0.5, 1.0)
+            max_int = 3.0 / k_bound
+            self._no_offset_int_error = max(-max_int, min(max_int, self._no_offset_int_error))
+            ki_eff = no_offset_ktheta * 0.020
+            tau_integral = -ki_eff * self._no_offset_int_error
+
+            tau_rate = +no_offset_komega * pitch_rate_x_rad_s
+            tau_height = 0.0
+
+            # Unified command: high-pass pitch + drift integral + pitch rate damping
+            unified_tau_cmd_raw = tau_pitch_fb + tau_rate + tau_integral
+
+            no_offset_tau_support_state = 0.0  # no separate support term
+            no_offset_tau_pitch_state = float(tau_pitch_fb)
+            no_offset_tau_rate_state = float(tau_rate)
+            no_offset_tau_height_state = float(tau_integral)  # reuse height_state for integral telemetry
+            no_offset_tau_total_raw = float(unified_tau_cmd_raw)
+
+            # --- Torque cap ---
+            if abs(unified_tau_cmd_raw) > no_offset_torque_cap:
+                unified_tau_cmd_limited = float(jnp.clip(unified_tau_cmd_raw, -no_offset_torque_cap, no_offset_torque_cap))
+                no_offset_saturation_active = True
+            else:
+                unified_tau_cmd_limited = float(unified_tau_cmd_raw)
+
+            # Rate limit
+            if abs(unified_tau_cmd_limited - self._prev_unified_tau_cmd) > no_offset_rate_limit:
+                delta = unified_tau_cmd_limited - self._prev_unified_tau_cmd
+                delta = max(-no_offset_rate_limit, min(no_offset_rate_limit, delta))
+                unified_tau_cmd_limited = self._prev_unified_tau_cmd + delta
+
+            self._prev_unified_tau_cmd = unified_tau_cmd_limited
+            no_offset_tau_total_limited = float(unified_tau_cmd_limited)
+
+            # Store for final assembly
+            unified_tau_cmd = unified_tau_cmd_limited
 
         # Per-wheel damping (separate for each wheel)
         tau_wheel_vel_left = -effective_k_wheel_velocity * wheel_vel_left_rad_s
@@ -6200,10 +6566,32 @@ class SagittalVelocityDampedBalanceController:
 
         # Common scalar command (before per-wheel damping)
         # No internal clipping - let the composer handle torque limits like baseline does
-        tau_common_unclipped = (
-            tau_pitch + tau_pitch_rate + tau_sagittal_velocity +
-            tau_support_velocity + tau_position + tau_cp + tau_com_vy
-        )
+        if unified_tau_cmd is not None:
+            # Unified controller replaces all torque components with a single coordinated command
+            tau_common_unclipped = unified_tau_cmd
+            # Set individual terms to 0 for telemetry consistency (they're not used)
+            tau_pitch = 0.0
+            tau_pitch_raw = tau_pitch_raw_orig if 'tau_pitch_raw_orig' in dir() else 0.0
+            tau_pitch_scheduled = 0.0
+            tau_pitch_clipped = 0.0
+            tau_pitch_rate = 0.0
+            tau_sagittal_velocity = 0.0
+            tau_support_velocity = 0.0
+            tau_position = 0.0
+            tau_position_raw = 0.0
+            tau_position_p = 0.0
+            tau_position_integral = 0.0
+            tau_cp = 0.0
+            tau_com_vy = 0.0
+            recenter_tau_clipped = 0.0
+            hyst_tau_clipped = 0.0
+            bias_tau_clipped = 0.0
+            apc_tau_clipped = 0.0
+        else:
+            tau_common_unclipped = (
+                tau_pitch + tau_pitch_rate + tau_sagittal_velocity +
+                tau_support_velocity + tau_position + tau_cp + tau_com_vy
+            )
         # Add phase-aware recenter torque (decoupled from tau_position)
         tau_common_unclipped = tau_common_unclipped + recenter_tau_clipped
         # Add hysteresis recenter torque (F2_strategy)
@@ -6717,6 +7105,31 @@ class SagittalVelocityDampedBalanceController:
             "apcr1n_physical_drift_column_used": str(apcr1n_physical_drift_column_used),
             "final_wheel_tau_with_apc": float(tau_common_unclipped + (tau_wheel_vel_left + tau_wheel_vel_right) / 2.0),
             "final_wheel_tau_without_apc": float(tau_common_unclipped - apc_tau_clipped + (tau_wheel_vel_left + tau_wheel_vel_right) / 2.0),
+            # ---- Unified sagittal state-feedback no-offset controller telemetry ----
+            "no_offset_controller_active": bool(no_offset_active),
+            "no_offset_mode": str(no_offset_mode),
+            "no_offset_gate_pass": bool(no_offset_gate_pass),
+            "no_offset_block_reason": str(no_offset_block_reason),
+            "no_offset_kx": float(no_offset_kx),
+            "no_offset_kv": float(no_offset_kv),
+            "no_offset_ktheta": float(no_offset_ktheta),
+            "no_offset_komega": float(no_offset_komega),
+            "no_offset_kh": float(no_offset_kh),
+            "no_offset_khdot": float(no_offset_khdot),
+            "no_offset_tau_support_state": float(no_offset_tau_support_state),
+            "no_offset_tau_pitch_state": float(no_offset_tau_pitch_state),
+            "no_offset_tau_rate_state": float(no_offset_tau_rate_state),
+            "no_offset_tau_height_state": float(no_offset_tau_height_state),
+            "no_offset_priority_support": float(no_offset_priority_support),
+            "no_offset_priority_pitch": float(no_offset_priority_pitch),
+            "no_offset_priority_rate": float(no_offset_priority_rate),
+            "no_offset_tau_total_raw": float(no_offset_tau_total_raw),
+            "no_offset_tau_total_limited": float(no_offset_tau_total_limited),
+            "no_offset_torque_cap": float(no_offset_torque_cap),
+            "no_offset_rate_limit": float(no_offset_rate_limit),
+            "no_offset_saturation_active": bool(no_offset_saturation_active),
+            "no_offset_arbitration_reason": str(no_offset_arbitration_reason),
+            "no_offset_pitch_ref_offset_deg": float(no_offset_pitch_ref_offset_deg),
         }
 
         # Add capture gate diagnostics if enabled

@@ -77,6 +77,9 @@ def test_old_profiles_unchanged():
         "support_position_outer_loop_pitch_ref",
         "calibrated_support_position_outer_loop_pitch_ref",
         "calibrated_support_position_outer_loop_pitch_ref_v2",
+        # Phase D physics-equilibrium feedforward profile inherits outer_loop
+        # from B2v2 by design (it is B2v2 + physics-derived pitch_ref).
+        "physics_equilibrium_feedforward_outer_loop",
     }
     for name, prof in JOINT_FIX_PROFILES.items():
         if name in OUTER_LOOP_ENABLED_PROFILES:
