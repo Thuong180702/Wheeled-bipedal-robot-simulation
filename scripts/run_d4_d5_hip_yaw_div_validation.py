@@ -44,11 +44,14 @@ PROFILE_C = "physics_equilibrium_feedforward_outer_loop_low_band_support_v2"
 PROFILE_D = "physics_equilibrium_feedforward_outer_loop_low_band_support_v2"
 
 # Default opt-in tunings for the mode-based hip-yaw divergence candidate.
-DIV_KP = 1.0
-DIV_KD = 0.10
-DIV_MAX_TORQUE = 1.0
+DIV_KP = 5.0
+DIV_KD = 0.20
+DIV_MAX_TORQUE = 2.0
+# Soft-limit set so the controller is active across the protected height band
+# (low_0p330 ~ 0.33 m). With soft_limit_rad=0.30 and soft_gain=0.25 the gate
+# remains above 0.6 at h=0.40 and reaches zero at h=0.55.
 DIV_SOFT_LIMIT_RAD = 0.30
-DIV_SOFT_GAIN = 0.10
+DIV_SOFT_GAIN = 0.25
 
 OUT_BASE = ROOT / "outputs" / "mode_based_hip_yaw_divergence_real_sim_validation"
 D4_D5_CASES = [
@@ -65,22 +68,8 @@ def _run(profile: str, tag: str, case_id: str, height_label: str, steps: int,
     """
     out_dir = OUT_BASE / f"step_{case_id}_{tag}"
     is_div = tag == "D"
-    cmd_kwargs = dict(
-        height_label=height_label,
-        steps=steps,
-        profile=profile,
-        out_dir=out_dir,
-        push_magnitude=push_mag,
-        push_duration=push_dur,
-        push_interval=push_int,
-        enable_wheel_yaw=False,
-    )
     if is_div:
         # Enable the new opt-in mode-based hip-yaw divergence controller.
-        # The runner currently routes enable_wheel_yaw through --enable-wheel-yaw-stabilizer
-        # but the mode-based path is wired via a different flag. The simplest
-        # path here is to call simulate_hierarchical_controller.py directly
-        # with the new args. See ``_run_direct`` below.
         return _run_direct(
             profile=profile,
             tag=tag,
@@ -91,7 +80,16 @@ def _run(profile: str, tag: str, case_id: str, height_label: str, steps: int,
             push_dur=push_dur,
             push_int=push_int,
         )
-    return runner.run_sim(**cmd_kwargs)
+    return runner.run_sim(
+        label=height_label,
+        steps=steps,
+        profile=profile,
+        out_dir=out_dir,
+        push_magnitude=push_mag,
+        push_duration=push_dur,
+        push_interval=push_int,
+        enable_wheel_yaw=False,
+    )
 
 
 def _run_direct(*, profile: str, tag: str, case_id: str, height_label: str,

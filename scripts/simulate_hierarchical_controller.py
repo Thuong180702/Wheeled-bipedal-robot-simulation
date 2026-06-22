@@ -5771,6 +5771,7 @@ def main():
                 mode_div_error = float(state.div_error)
                 mode_div_rate = float(div_rate)
                 mode_div_ref = float(ref_div)
+                mode_div_height_gate = float(mode_div_ctrl._height_gate(state.height))
                 # Reconstruct from (raw_common + 0.5 * div, raw_common - 0.5 * div)
                 # but apply only the antisymmetric component on hip-yaw indices 1, 6.
                 # Saturation flag
