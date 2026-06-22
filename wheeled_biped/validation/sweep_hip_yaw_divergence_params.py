@@ -1,65 +1,120 @@
-"""Sweep hip-yaw divergence parameters over a grid.
+"""Parameter sweep over mode-based hip-yaw divergence controller.
 
-This module provides a lightweight parameter sweep that, for each
-parameter dictionary in the supplied grid, calls
-``wheeled_biped.validation.d4_d5_validation.run_and_check`` with the
-fixed candidate profile name
-``physics_equilibrium_feedforward_outer_loop_low_band_support_v2_mode_hip_yaw_div_v1``
-and applies a simple analytic adjustment: the base
-``hip_yaw_abs_max`` metric is reduced by ``kp * 0.01`` (clipped at
-zero). The result is returned as a list of parameter dicts augmented
-with the adjusted ``hip_yaw_abs_max`` value.
+Real-simulation sweep:
+The function reads pre-computed per-run metric CSVs from a sweep
+directory structure where each subdirectory contains a ``summary.json``
+or ``telemetry_<steps>.csv`` produced by
+``scripts/simulate_hierarchical_controller.py``.
 
-The sweep is intended for early-stage TDD exploration of how a single
-``kp`` dimension affects the reported hip-yaw magnitude. The function
-is deliberately thin; the heavy simulation remains in
-``scripts/run_d4_d5_hip_yaw_validation.py`` and is mocked at this layer.
+For each ``(kp, kd, max_torque, soft_limit_rad)`` candidate, the sweep
+expects a subdirectory named ``sweep_<kp>_<kd>_<max>_<soft>/`` under
+``SWEEP_DIR``. Each entry's ``hip_yaw_abs_max`` is parsed from the
+highest absolute hip-yaw value found in the matching telemetry CSV.
+
+If the candidate directory does not exist, the entry's
+``hip_yaw_abs_max`` is set to ``None`` and ``validation_source`` to
+``"missing"`` so callers can tell real runs apart from missing ones.
+
+Stub-only behaviour is no longer supported here. Callers that want a
+stub-mode failure should expect a non-zero exit / error from the sweep
+runner that drives the simulation.
 """
 
-from typing import List, Dict, Any
+from __future__ import annotations
 
-# Import the stub validation module which provides run_and_check
-from wheeled_biped.validation import d4_d5_validation
+import csv
+import math
+from pathlib import Path
+from typing import Any, Dict, List
 
-# Fixed profile name used for all sweeps
-_CANDIDATE_PROFILE = (
-    "physics_equilibrium_feedforward_outer_loop_"
-    "low_band_support_v2_mode_hip_yaw_div_v1"
-)
 
-# Coefficient for kp adjustment
-_KP_COEFFICIENT = 0.01
+ROOT = Path(__file__).resolve().parent.parent.parent
+SWEEP_DIR = ROOT / "outputs" / "mode_based_hip_yaw_divergence_sweep"
+
+
+def _read_csv(path: Path) -> list[dict]:
+    with path.open("r", newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _abs_max_col(rows: list[dict], col: str) -> float:
+    vals: list[float] = []
+    for r in rows:
+        try:
+            v = float(r.get(col, ""))
+            if math.isfinite(v):
+                vals.append(abs(v))
+        except ValueError:
+            continue
+    return max(vals) if vals else 0.0
+
+
+def _dir_for(params: Dict[str, float]) -> Path:
+    name = (
+        f"sweep_{params.get('kp', 0.0):.2f}_"
+        f"{params.get('kd', 0.0):.2f}_"
+        f"{params.get('max_torque', 0.0):.2f}_"
+        f"{params.get('soft_limit_rad', 0.0):.2f}"
+    )
+    return SWEEP_DIR / name
+
+
+def _evaluate(params: Dict[str, float]) -> Dict[str, Any]:
+    out_dir = _dir_for(params)
+    if not out_dir.exists():
+        return {
+            **params,
+            "hip_yaw_abs_max": None,
+            "validation_source": "missing",
+            "output_dir": str(out_dir),
+        }
+    # Find the most recent telemetry_*.csv
+    candidates = sorted(out_dir.glob("telemetry_*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not candidates:
+        return {
+            **params,
+            "hip_yaw_abs_max": None,
+            "validation_source": "missing",
+            "output_dir": str(out_dir),
+        }
+    rows = _read_csv(candidates[0])
+    # Prefer the tracking/gate metric, then per-joint hip-yaw error/position.
+    hy = _abs_max_col(rows, "hip_yaw_abs_max_tracking")
+    if hy == 0.0:
+        hy = _abs_max_col(rows, "hip_yaw_abs_max")
+    if hy == 0.0:
+        hy = max(
+            _abs_max_col(rows, "l_hip_yaw_pos"),
+            _abs_max_col(rows, "r_hip_yaw_pos"),
+        )
+    return {
+        **params,
+        "hip_yaw_abs_max": float(hy),
+        "validation_source": "real_simulation",
+        "output_dir": str(out_dir),
+    }
 
 
 def run_sweep(param_grid: List[Dict[str, float]]) -> List[Dict[str, Any]]:
-    """Run the candidate-profile evaluation over a parameter grid.
+    """Evaluate a parameter grid against real simulation outputs.
 
-    Args:
-        param_grid: List of parameter dictionaries, each expected to contain
-            at least a ``"kp"`` key. An empty list raises ``ValueError``.
+    Parameters
+    ----------
+    param_grid : list of dict
+        Each dict must contain ``kp``, ``kd``, ``max_torque``, and
+        ``soft_limit_rad`` (numeric). Empty list raises ``ValueError``.
 
-    Returns:
-        A list parallel to ``param_grid`` where each element is a copy
-        of the input parameter dict augmented with the key ``"hip_yaw_abs_max"``
-        holding the adjusted metric value (clipped to ``>= 0.0``).
+    Returns
+    -------
+    list of dict
+        Each entry is a copy of the input parameters augmented with:
+
+        * ``hip_yaw_abs_max`` – parsed from the simulation telemetry
+          for the corresponding sweep directory (or ``None`` if the
+          directory does not exist).
+        * ``validation_source`` – ``"real_simulation"`` or ``"missing"``.
+        * ``output_dir`` – path searched for telemetry.
     """
     if not param_grid:
         raise ValueError("param_grid must be non-empty")
-
-    # Obtain the baseline metric from the stub validation function.
-    base_metric = d4_d5_validation.run_and_check(_CANDIDATE_PROFILE)[
-        "hip_yaw_abs_max"
-    ]
-
-    results: List[Dict[str, Any]] = []
-    for params in param_grid:
-        # Ensure we work on a shallow copy so the original dict is not mutated.
-        entry = dict(params)
-        kp = entry.get("kp", 0.0)
-        adjusted = base_metric - kp * _KP_COEFFICIENT
-        if adjusted < 0.0:
-            adjusted = 0.0
-        entry["hip_yaw_abs_max"] = adjusted
-        results.append(entry)
-
-    return results
+    return [_evaluate(p) for p in param_grid]

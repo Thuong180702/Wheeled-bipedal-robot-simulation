@@ -3023,6 +3023,58 @@ def main():
         help="Height above which full wheel yaw authority applies [m]. Default: 0.350",
     )
 
+    # ---- Mode-Based Hip-Yaw Divergence Controller (architecture fix candidate) ---- #
+    # Opt-in only. When --enable-mode-hip-yaw-divergence is set the antisymmetric
+    # hip-yaw component owned by the divergence mode is computed by
+    # ``ModeBasedHipYawDivergenceController`` and added into the hip-yaw torque
+    # AFTER the YawController's body-yaw correction. This is independent from the
+    # older ``enable_hip_yaw_divergence_damping`` flag which lives inside
+    # ShapePostureController.
+    parser.add_argument(
+        "--enable-mode-hip-yaw-divergence",
+        action="store_true",
+        default=False,
+        help="Enable mode-based hip-yaw divergence controller (architecture fix candidate). "
+             "Default: disabled. Opt-in only.",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-kp",
+        type=float,
+        default=1.0,
+        help="Mode-based hip-yaw divergence proportional gain [Nm/rad]. Default: 1.0",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-kd",
+        type=float,
+        default=0.10,
+        help="Mode-based hip-yaw divergence derivative gain [Nm/(rad/s)]. Default: 0.10",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-max-torque",
+        type=float,
+        default=1.0,
+        help="Mode-based hip-yaw divergence max torque magnitude [Nm]. Default: 1.0",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-soft-limit-rad",
+        type=float,
+        default=0.30,
+        help="Mode-based hip-yaw divergence soft limit height [m]. Default: 0.30",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-soft-gain",
+        type=float,
+        default=0.10,
+        help="Mode-based hip-yaw divergence soft limit gain above soft-limit [m]. Default: 0.10",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-ref-source",
+        type=str,
+        default="target",
+        choices=["target", "zero_only_for_debug"],
+        help="Mode-based hip-yaw divergence reference source. Default: 'target'.",
+    )
+
     args = parser.parse_args()
 
     # Validate balance-core mode arguments
@@ -3938,6 +3990,23 @@ def main():
         "hip_yaw_div_tau_max": [],
         "hip_yaw_div_z_low": [],
         "hip_yaw_div_z_high": [],
+        # Mode-Based Hip-Yaw Divergence Controller (architecture fix candidate) — opt-in
+        "mode_hip_yaw_div_enabled": [],
+        "mode_hip_yaw_div_kp": [],
+        "mode_hip_yaw_div_kd": [],
+        "mode_hip_yaw_div_max_torque": [],
+        "mode_hip_yaw_div_soft_limit_rad": [],
+        "mode_hip_yaw_div_soft_gain": [],
+        "mode_hip_yaw_div_ref_source": [],
+        "mode_hip_yaw_div_height_gate": [],
+        "mode_hip_yaw_div_tau_left": [],
+        "mode_hip_yaw_div_tau_right": [],
+        "mode_hip_yaw_div_tau_left_sat": [],
+        "mode_hip_yaw_div_tau_right_sat": [],
+        "mode_hip_yaw_div_error": [],
+        "mode_hip_yaw_div_rate": [],
+        "mode_hip_yaw_div_ref": [],
+        "hip_yaw_mode_ownership_violation": [],
         # HY-FF debug telemetry
         "hy_ff_height_passed_to_shape": [],
         "hy_ff_support_error_passed_to_shape": [],
@@ -5642,6 +5711,85 @@ def main():
                 tau_shape_posture_with_yaw = tau_shape_posture_with_yaw.at[6].add(tau_yaw[6])
                 yaw_diag["wheel_yaw_enabled"] = False
 
+            # ------------------------------------------------------------------
+            # Mode-Based Hip-Yaw Divergence Controller (architecture fix candidate)
+            # Opt-in. Computes an antisymmetric hip-yaw torque on the divergence
+            # mode (left - right). The reference comes from the posture target
+            # via the balance-core's tau_shape_posture reference.
+            #
+            # Sign convention: positive div_error (left ahead of right) ->
+            # left torque negative, right torque positive.
+            # ------------------------------------------------------------------
+            mode_hip_yaw_div_enabled = bool(getattr(args, "enable_mode_hip_yaw_divergence", False))
+            mode_div_tau_left = 0.0
+            mode_div_tau_right = 0.0
+            mode_div_error = 0.0
+            mode_div_rate = 0.0
+            mode_div_ref = 0.0
+            mode_div_height_gate = 0.0
+            mode_div_tau_left_sat = False
+            mode_div_tau_right_sat = False
+            mode_ownership_violation = 0
+            if mode_hip_yaw_div_enabled:
+                from wheeled_biped.controllers.hip_yaw_mode_math import (
+                    decompose,
+                    torque_recompose,
+                    sign_for_divergence_correction,
+                )
+                from wheeled_biped.controllers.mode_based_hip_yaw_divergence_controller import (
+                    HipYawState,
+                    ModeBasedHipYawDivergenceController,
+                )
+                mode_div_cfg = {
+                    "enabled": True,
+                    "kp_div": float(args.mode_hip_yaw_div_kp),
+                    "kd_div": float(args.mode_hip_yaw_div_kd),
+                    "max_torque": float(args.mode_hip_yaw_div_max_torque),
+                    "soft_limit_rad": float(args.mode_hip_yaw_div_soft_limit_rad),
+                    "soft_limit_gain": float(args.mode_hip_yaw_div_soft_gain),
+                    "ref_source": str(args.mode_hip_yaw_div_ref_source),
+                }
+                mode_div_ctrl = ModeBasedHipYawDivergenceController(mode_div_cfg)
+                l_pos = float(joint_pos[1])
+                r_pos = float(joint_pos[6])
+                l_vel = float(joint_vel[1])
+                r_vel = float(joint_vel[6])
+                l_ref = float(equilibrium_joint_pos[1])
+                r_ref = float(equilibrium_joint_pos[6])
+                # Reference for the divergence mode from posture target
+                ref_common, ref_div = decompose(l_ref, r_ref)
+                _act_common, actual_div = decompose(l_pos, r_pos)
+                div_rate = l_vel - r_vel
+                state = HipYawState(
+                    div_error=actual_div - ref_div,
+                    div_rate=div_rate,
+                    height=float(centroidal_state_control.com_pos[2]),
+                )
+                mode_div_out = mode_div_ctrl.compute(state)
+                mode_div_tau_left = float(mode_div_out["tau_left"])
+                mode_div_tau_right = float(mode_div_out["tau_right"])
+                mode_div_error = float(state.div_error)
+                mode_div_rate = float(div_rate)
+                mode_div_ref = float(ref_div)
+                # Reconstruct from (raw_common + 0.5 * div, raw_common - 0.5 * div)
+                # but apply only the antisymmetric component on hip-yaw indices 1, 6.
+                # Saturation flag
+                mode_div_tau_left_sat = abs(mode_div_tau_left) >= (
+                    float(args.mode_hip_yaw_div_max_torque) - 1e-6
+                )
+                mode_div_tau_right_sat = abs(mode_div_tau_right) >= (
+                    float(args.mode_hip_yaw_div_max_torque) - 1e-6
+                )
+                # Sanity check sign convention
+                sign_for_divergence_correction(state.div_error, state.div_rate)
+                # Add the antisymmetric torque to the hip-yaw slots in
+                # tau_shape_posture_with_yaw BEFORE composer rate limiting.
+                tau_shape_posture_with_yaw = tau_shape_posture_with_yaw.at[1].add(mode_div_tau_left)
+                tau_shape_posture_with_yaw = tau_shape_posture_with_yaw.at[6].add(mode_div_tau_right)
+                # Ownership: divergence mode is owned by mode_based_divergence.
+                # Track any double-write to the same mode (placeholder count).
+                mode_ownership_violation = 0
+
             # Update previous-step support error for next iteration's HY-FF
             prev_support_error = sagittal_diag.get("support_position_error_m", 0.0)
 
@@ -6474,6 +6622,23 @@ def main():
         telemetry["hip_yaw_div_right_clipped"].append(shape_diag.get("hip_yaw_div_right_clipped", False) if is_balance_core_mode(args) else False)
         telemetry["hip_yaw_div_k_divergence"].append(shape_diag.get("hip_yaw_div_k_divergence", 0.0) if is_balance_core_mode(args) else 0.0)
         telemetry["hip_yaw_div_k_divergence_rate"].append(shape_diag.get("hip_yaw_div_k_divergence_rate", 0.0) if is_balance_core_mode(args) else 0.0)
+        # Mode-Based Hip-Yaw Divergence Controller telemetry (opt-in)
+        telemetry["mode_hip_yaw_div_enabled"].append(bool(mode_hip_yaw_div_enabled))
+        telemetry["mode_hip_yaw_div_kp"].append(float(getattr(args, "mode_hip_yaw_div_kp", 0.0)))
+        telemetry["mode_hip_yaw_div_kd"].append(float(getattr(args, "mode_hip_yaw_div_kd", 0.0)))
+        telemetry["mode_hip_yaw_div_max_torque"].append(float(getattr(args, "mode_hip_yaw_div_max_torque", 0.0)))
+        telemetry["mode_hip_yaw_div_soft_limit_rad"].append(float(getattr(args, "mode_hip_yaw_div_soft_limit_rad", 0.0)))
+        telemetry["mode_hip_yaw_div_soft_gain"].append(float(getattr(args, "mode_hip_yaw_div_soft_gain", 0.0)))
+        telemetry["mode_hip_yaw_div_ref_source"].append(str(getattr(args, "mode_hip_yaw_div_ref_source", "target")))
+        telemetry["mode_hip_yaw_div_height_gate"].append(float(mode_div_height_gate))
+        telemetry["mode_hip_yaw_div_tau_left"].append(float(mode_div_tau_left))
+        telemetry["mode_hip_yaw_div_tau_right"].append(float(mode_div_tau_right))
+        telemetry["mode_hip_yaw_div_tau_left_sat"].append(bool(mode_div_tau_left_sat))
+        telemetry["mode_hip_yaw_div_tau_right_sat"].append(bool(mode_div_tau_right_sat))
+        telemetry["mode_hip_yaw_div_error"].append(float(mode_div_error))
+        telemetry["mode_hip_yaw_div_rate"].append(float(mode_div_rate))
+        telemetry["mode_hip_yaw_div_ref"].append(float(mode_div_ref))
+        telemetry["hip_yaw_mode_ownership_violation"].append(int(mode_ownership_violation))
         telemetry["hip_yaw_div_tau_max"].append(shape_diag.get("hip_yaw_div_tau_max", 0.0) if is_balance_core_mode(args) else 0.0)
         telemetry["hip_yaw_div_z_low"].append(shape_diag.get("hip_yaw_div_z_low", 0.0) if is_balance_core_mode(args) else 0.0)
         telemetry["hip_yaw_div_z_high"].append(shape_diag.get("hip_yaw_div_z_high", 0.0) if is_balance_core_mode(args) else 0.0)
