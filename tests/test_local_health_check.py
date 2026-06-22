@@ -1,16 +1,14 @@
-import subprocess, sys
+import subprocess
+import os
 
-def test_all_scripts_compile():
-    scripts = [
-        "scripts/simulate_hierarchical_controller.py",
-        "scripts/run_outer_loop_step_d_push.py",
-        "scripts/run_calibrated_outer_loop_v2_step_d.py",
-        "wheeled_biped/controllers/physics_equilibrium_feedforward.py",
-        "wheeled_biped/controllers/support_outer_loop_low_band.py",
-        "wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py",
-        "wheeled_biped/validation/hip_yaw_gate_policy.py",
-        "wheeled_biped/controllers/hip_yaw_metrics.py",
-    ]
-    for s in scripts:
-        result = subprocess.run([sys.executable, "-m", "py_compile", s], capture_output=True, text=True)
-        assert result.returncode == 0, f"Compilation failed for {s}: {result.stderr}"
+def test_local_health_check():
+    """Run the local health check script and ensure it exits successfully."""
+    script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts", "run_local_health_check.sh"))
+    assert os.path.isfile(script_path), f"Health check script not found at {script_path}"
+    # Use sh interpreter which is available in this environment
+    result = subprocess.run(["sh", script_path], capture_output=True, text=True)
+    assert result.returncode == 0, (
+        f"Health check script failed with exit code {result.returncode}\n"
+        f"STDOUT:\n{result.stdout}\n"
+        f"STDERR:\n{result.stderr}"
+    )
