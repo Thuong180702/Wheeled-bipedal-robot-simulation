@@ -107,6 +107,8 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,
     CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,
     PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V1,
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
     UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET,
     interpolate_pitch_ref_offset,
     compute_outer_loop_pitch_ref,
@@ -125,6 +127,9 @@ from wheeled_biped.controllers.shape_posture_controller import (
 )
 from wheeled_biped.controllers.support_feedforward_controller import SupportFeedforwardController
 from wheeled_biped.controllers.yaw_controller import YawController
+from wheeled_biped.controllers.differential_wheel_yaw_stabilizer import (
+    DifferentialWheelYawStabilizer,
+)
 from wheeled_biped.controllers.balance_core_types import make_balance_core_telemetry_columns
 from wheeled_biped.validation.telemetry_adapter import (
     add_validation_telemetry_fields,
@@ -1370,6 +1375,8 @@ SAGITTAL_AUTHORITY_PROFILES = {
     "calibrated_support_position_outer_loop_pitch_ref": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # Phase B calibration: height-dependent outer-loop gains
     "calibrated_support_position_outer_loop_pitch_ref_v2": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,  # Phase B calibration v2: smoothed upper-band Kp
     "physics_equilibrium_feedforward_outer_loop": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,  # Phase D: physics-based equilibrium wheel torque feedforward
+    "physics_equilibrium_feedforward_outer_loop_low_band_support_v1": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V1,  # PFF low-band support correction candidate
+    "physics_equilibrium_feedforward_outer_loop_low_band_support_v2": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,  # PFF low-band support correction v2 candidate
     "unified_sagittal_state_feedback_no_offset": UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET,  # Unified sagittal state-feedback no-offset controller
 }
 
@@ -2130,6 +2137,17 @@ def build_balance_core_controllers(
     hip_yaw_divergence_tau_max: float = 0.5,
     hip_yaw_divergence_z_low: float = 0.300,
     hip_yaw_divergence_z_high: float = 0.393,
+    # Differential wheel yaw stabilizer (BODY_YAW_WRONG_ACTUATOR fix)
+    enable_wheel_yaw_stabilizer: bool = False,
+    wheel_yaw_kp: float = 5.0,
+    wheel_yaw_kd: float = 1.5,
+    wheel_yaw_max_torque: float = 5.0,
+    wheel_yaw_lowpass_alpha: float = 1.0,
+    wheel_yaw_height_gate_low: float = 0.250,
+    wheel_yaw_height_gate_high: float = 0.350,
+    yaw_controller_kp: float = 8.0,
+    yaw_controller_kd: float = 2.0,
+    yaw_controller_max_torque: float = 5.0,
 ):
     """Build all balance-core controller components.
 
@@ -2255,12 +2273,32 @@ def build_balance_core_controllers(
         hip_roll_torque_sign=1.0,
     )
 
-    # Instantiate yaw controller
+    # Instantiate yaw controller (antisymmetric hip-yaw, always created)
+    # When wheel yaw stabilizer is also enabled, the YawController still runs at
+    # full capacity and wheel yaw adds EXTRA correction — this avoids the problem
+    # where reducing YawController authority causes body yaw to diverge and fall.
     yaw_controller = YawController(
-        kp_yaw=8.0,
-        kd_yaw=2.0,
-        max_yaw_torque=5.0,
+        kp_yaw=yaw_controller_kp,
+        kd_yaw=yaw_controller_kd,
+        max_yaw_torque=yaw_controller_max_torque,
     )
+
+    # Instantiate differential wheel yaw stabilizer (opt-in BODY_YAW_WRONG_ACTUATOR fix)
+    # When enabled:
+    #   - YawController at full gain on hip-yaw (normal)
+    #   - Wheel yaw stabilizer provides ADDITIONAL yaw correction via antisymmetric
+    #     wheel torque added AFTER composer (no competition with sagittal budget)
+    #   - Faster body-yaw recovery → less hip-yaw saturation → stays below 0.35 rad
+    wheel_yaw_stabilizer = None
+    if enable_wheel_yaw_stabilizer:
+        wheel_yaw_stabilizer = DifferentialWheelYawStabilizer(
+            kp_yaw=wheel_yaw_kp,
+            kd_yaw=wheel_yaw_kd,
+            max_yaw_torque=wheel_yaw_max_torque,
+            lowpass_alpha=wheel_yaw_lowpass_alpha,
+            height_gate_low=wheel_yaw_height_gate_low,
+            height_gate_high=wheel_yaw_height_gate_high,
+        )
 
     # Instantiate torque composer
     composer = BalanceCoreTorqueComposer(
@@ -2278,6 +2316,7 @@ def build_balance_core_controllers(
         "yaw_controller": yaw_controller,
         "composer": composer,
         "sagittal_controller_name": sagittal_controller_name,
+        "wheel_yaw_stabilizer": wheel_yaw_stabilizer,
     }
 
 
@@ -2500,6 +2539,24 @@ def main():
         type=float,
         default=None,
         help="Override outer_loop_theta_ref_lowpass_alpha. Default: None (use profile).",
+    )
+    parser.add_argument(
+        "--vd-low-band-support-sigma-m",
+        type=float,
+        default=None,
+        help="Override low-band support Gaussian sigma for validation sweeps only. Default: None (use profile).",
+    )
+    parser.add_argument(
+        "--vd-low-band-support-kp-peak-deg-per-m",
+        type=float,
+        default=None,
+        help="Override low-band support peak Kp for validation sweeps only. Default: None (use profile).",
+    )
+    parser.add_argument(
+        "--vd-low-band-support-pitch-ref-offset-peak-deg",
+        type=float,
+        default=None,
+        help="Override low-band support peak pitch-ref trim for validation sweeps only. Default: None (use profile).",
     )
     parser.add_argument(
         "--vd-k-position",
@@ -2782,6 +2839,8 @@ def main():
             "calibrated_support_position_outer_loop_pitch_ref",
             "calibrated_support_position_outer_loop_pitch_ref_v2",
             "physics_equilibrium_feedforward_outer_loop",
+            "physics_equilibrium_feedforward_outer_loop_low_band_support_v1",
+            "physics_equilibrium_feedforward_outer_loop_low_band_support_v2",
             "unified_sagittal_state_feedback_no_offset",
             "band_limited_support_recenter",
         ],
@@ -2898,6 +2957,72 @@ def main():
         default=1.0,
         help="Hip-yaw integral anti-windup clamp in Nm (default: 1.0)",
     )
+    parser.add_argument(
+        "--yaw-controller-kp",
+        type=float,
+        default=8.0,
+        help="YawController proportional gain on yaw error [Nm/rad]. Default: 8.0",
+    )
+    parser.add_argument(
+        "--yaw-controller-kd",
+        type=float,
+        default=2.0,
+        help="YawController derivative gain on yaw rate [Nm/(rad/s)]. Default: 2.0",
+    )
+    parser.add_argument(
+        "--yaw-controller-max-torque",
+        type=float,
+        default=5.0,
+        help="YawController max antisymmetric hip-yaw torque [Nm]. Default: 5.0",
+    )
+
+    # ---- Differential Wheel Yaw Stabilizer (BODY_YAW_WRONG_ACTUATOR fix) ---- #
+    parser.add_argument(
+        "--enable-wheel-yaw-stabilizer",
+        action="store_true",
+        default=False,
+        help="Enable differential wheel yaw stabilizer. Body-yaw correction is split: "
+             "wheels handle bulk via differential torque, hip-yaw handles fine correction "
+             "at reduced gain (30%%). Opt-in only.",
+    )
+    parser.add_argument(
+        "--wheel-yaw-kp",
+        type=float,
+        default=5.0,
+        help="Wheel yaw stabilizer proportional gain on yaw error [Nm/rad]. Default: 5.0",
+    )
+    parser.add_argument(
+        "--wheel-yaw-kd",
+        type=float,
+        default=1.5,
+        help="Wheel yaw stabilizer derivative gain on yaw rate [Nm/(rad/s)]. Default: 1.5",
+    )
+    parser.add_argument(
+        "--wheel-yaw-max-torque",
+        type=float,
+        default=5.0,
+        help="Wheel yaw stabilizer max antisymmetric torque per wheel [Nm]. Default: 5.0",
+    )
+    parser.add_argument(
+        "--wheel-yaw-lowpass-alpha",
+        type=float,
+        default=1.0,
+        help="Wheel yaw stabilizer output lowpass alpha [0,1]. 1.0 = no filter (default). "
+             "The composer handles rate limiting, so no filter is safe.",
+    )
+    parser.add_argument(
+        "--wheel-yaw-height-gate-low",
+        type=float,
+        default=0.250,
+        help="Height below which wheel yaw is fully gated off [m]. Default: 0.250",
+    )
+    parser.add_argument(
+        "--wheel-yaw-height-gate-high",
+        type=float,
+        default=0.350,
+        help="Height above which full wheel yaw authority applies [m]. Default: 0.350",
+    )
+
     args = parser.parse_args()
 
     # Validate balance-core mode arguments
@@ -3676,6 +3801,12 @@ def main():
         "outer_loop_gate_pass": [],
         "outer_loop_block_reason": [],
         "outer_loop_sign_selected": [],
+        "support_outer_loop_height_scale": [],
+        "support_outer_loop_kp_effective": [],
+        "support_outer_loop_kd_effective": [],
+        "support_outer_loop_pitch_ref_offset_deg": [],
+        "support_outer_loop_pitch_ref_contrib": [],
+        "support_outer_loop_cap_active": [],
         "pitch_ref_offset_scheduled_deg": [],
         "pitch_ref_total_after_outer_loop_deg": [],
         "pitch_x_error_after_outer_loop_rad": [],
@@ -3952,6 +4083,19 @@ def main():
         "apcr1nd_moving_away": [],
         "apcr1nd_abs_error": [],
         "apcr1nd_error_rate": [],
+        # Wheel yaw stabilizer telemetry
+        "wheel_yaw_enabled": [],
+        "wheel_yaw_error": [],
+        "wheel_yaw_rate": [],
+        "wheel_yaw_tau_left": [],
+        "wheel_yaw_tau_right": [],
+        "wheel_yaw_saturated": [],
+        # Hip-yaw mode decomposition telemetry
+        "hip_yaw_common_error_rad": [],
+        "hip_yaw_common_error_sum_abs_rad": [],
+        "hip_yaw_divergence_error_rad": [],
+        "hip_yaw_asymmetry_abs_rad": [],
+        "hip_yaw_div_common_ratio": [],
     }
     telemetry.update(build_step1_telemetry_template())
 
@@ -3977,6 +4121,7 @@ def main():
 
     # Actuator limits (used by both balance-core and legacy modes for telemetry)
     torque_limit = np.array(mj_model.actuator_ctrlrange[:, 1])
+    torque_limit_jax = jnp.array(torque_limit)  # JAX copy for wheel yaw clipping
     max_torque_rate = np.full(10, 400.0)  # 400 Nm/s per joint
 
     # Balance-core controller instantiation
@@ -4183,10 +4328,17 @@ def main():
         )
         calibrated_function_profile_name = ""
         calibrated_height_m_telemetry = 0.0
+        support_outer_loop_height_scale = 0.0
+        support_outer_loop_kp_effective = outer_loop_kp
+        support_outer_loop_kd_effective = outer_loop_kd
+        support_outer_loop_pitch_ref_offset_deg = 0.0
+        support_outer_loop_cap_active = False
+        support_outer_loop_pitch_ref_contrib = 0.0
         if calibrated_outer_loop_enabled and outer_loop_active_profile:
             # Select the correct calibration version based on profile name.
             profile_name = profile.profile_name
-            if profile_name == "calibrated_support_position_outer_loop_pitch_ref_v2":
+            cal_version = str(getattr(profile, "calibrated_outer_loop_function_version", "v1"))
+            if profile_name == "calibrated_support_position_outer_loop_pitch_ref_v2" or cal_version == "v2":
                 from wheeled_biped.controllers.calibrated_outer_loop_functions_v2 import (
                     calibrated_outer_loop_params as _cal_params_v2,
                 )
@@ -4229,6 +4381,53 @@ def main():
                 f"Kd={outer_loop_kd:.3f} Ki={outer_loop_ki:.4f} "
                 f"theta_max={outer_loop_theta_ref_max:.2f} db={outer_loop_error_deadband:.4f} "
                 f"({calibrated_function_profile_name})"
+            )
+
+        if bool(getattr(profile, "low_band_support_outer_loop_enabled", False)) and outer_loop_active_profile:
+            from wheeled_biped.controllers.support_outer_loop_low_band import (
+                low_band_support_outer_loop_params,
+            )
+
+            shape_height_m = (
+                float(height_variant_setup.get("target_com_z_m", 0.40))
+                if height_variant_setup is not None
+                else 0.40
+            )
+            low_band_sigma_m = float(getattr(profile, "low_band_support_sigma_m", 0.006))
+            low_band_kp_peak_deg_per_m = float(getattr(profile, "low_band_support_kp_peak_deg_per_m", 7.0))
+            low_band_pitch_ref_offset_peak_deg = float(
+                getattr(profile, "low_band_support_pitch_ref_offset_peak_deg", 0.0)
+            )
+            if getattr(args, "vd_low_band_support_sigma_m", None) is not None:
+                low_band_sigma_m = float(args.vd_low_band_support_sigma_m)
+            if getattr(args, "vd_low_band_support_kp_peak_deg_per_m", None) is not None:
+                low_band_kp_peak_deg_per_m = float(args.vd_low_band_support_kp_peak_deg_per_m)
+            if getattr(args, "vd_low_band_support_pitch_ref_offset_peak_deg", None) is not None:
+                low_band_pitch_ref_offset_peak_deg = float(args.vd_low_band_support_pitch_ref_offset_peak_deg)
+            shaped = low_band_support_outer_loop_params(
+                shape_height_m,
+                base_kp_deg_per_m=outer_loop_kp,
+                base_kd_deg_per_mps=outer_loop_kd,
+                base_theta_ref_max_deg=outer_loop_theta_ref_max,
+                center_m=float(getattr(profile, "low_band_support_center_m", 0.320)),
+                sigma_m=low_band_sigma_m,
+                peak_kp_deg_per_m=low_band_kp_peak_deg_per_m,
+                peak_theta_ref_max_deg=float(getattr(profile, "low_band_support_theta_ref_max_peak_deg", 0.90)),
+                peak_pitch_ref_offset_deg=low_band_pitch_ref_offset_peak_deg,
+            )
+            support_outer_loop_height_scale = float(shaped["support_outer_loop_height_scale"])
+            outer_loop_kp = float(shaped["support_outer_loop_kp_effective"])
+            outer_loop_kd = float(shaped["support_outer_loop_kd_effective"])
+            outer_loop_theta_ref_max = float(shaped["support_outer_loop_theta_ref_max_effective_deg"])
+            support_outer_loop_pitch_ref_offset_deg = float(shaped["support_outer_loop_pitch_ref_offset_deg"])
+            support_outer_loop_kp_effective = outer_loop_kp
+            support_outer_loop_kd_effective = outer_loop_kd
+            print(
+                f"[LOW-BAND SUPPORT SHAPING] {profile.profile_name}: "
+                f"height={shape_height_m:.3f} m scale={support_outer_loop_height_scale:.3f} "
+                f"Kp={outer_loop_kp:.3f} Kd={outer_loop_kd:.3f} "
+                f"theta_max={outer_loop_theta_ref_max:.2f} "
+                f"pitch_ref_offset={support_outer_loop_pitch_ref_offset_deg:+.2f}"
             )
 
         outer_loop_sign_selected = "none"
@@ -4289,6 +4488,16 @@ def main():
             hip_yaw_divergence_tau_max=args.hip_yaw_divergence_tau_max,
             hip_yaw_divergence_z_low=args.hip_yaw_divergence_z_low,
             hip_yaw_divergence_z_high=args.hip_yaw_divergence_z_high,
+            enable_wheel_yaw_stabilizer=args.enable_wheel_yaw_stabilizer,
+            wheel_yaw_kp=args.wheel_yaw_kp,
+            wheel_yaw_kd=args.wheel_yaw_kd,
+            wheel_yaw_max_torque=args.wheel_yaw_max_torque,
+            wheel_yaw_lowpass_alpha=args.wheel_yaw_lowpass_alpha,
+            wheel_yaw_height_gate_low=args.wheel_yaw_height_gate_low,
+            wheel_yaw_height_gate_high=args.wheel_yaw_height_gate_high,
+            yaw_controller_kp=args.yaw_controller_kp,
+            yaw_controller_kd=args.yaw_controller_kd,
+            yaw_controller_max_torque=args.yaw_controller_max_torque,
         )
         sagittal_name = balance_core_controllers["sagittal_controller_name"]
         print(f"[BALANCE-CORE] Functional four-source controller stack enabled")
@@ -5101,10 +5310,15 @@ def main():
                 # and pitch_ref_total_deg == vd_pitch_ref_offset_deg.
                 # See docs/validation/support_position_outer_loop_pitch_ref_design.md.
                 outer_loop_pitch_ref_dynamic_deg = 0.0
-                outer_loop_pitch_ref_total_deg = float(vd_pitch_ref_offset_deg)
+                outer_loop_pitch_ref_total_deg = (
+                    float(vd_pitch_ref_offset_deg)
+                    + float(support_outer_loop_pitch_ref_offset_deg)
+                )
                 outer_loop_support_error_rate_mps = 0.0
                 outer_loop_gate_pass = False
                 outer_loop_block_reason = "disabled"
+                support_outer_loop_cap_active_step = False
+                support_outer_loop_pitch_ref_contrib_step = 0.0
                 if outer_loop_active_profile:
                     ol_support_error = float(sag_pos_error)
                     # Low-passed numerical derivative of the support error.
@@ -5161,6 +5375,9 @@ def main():
                             deadband_m=outer_loop_error_deadband,
                             theta_ref_max_deg=outer_loop_theta_ref_max,
                         )
+                        support_outer_loop_cap_active_step = (
+                            abs(target_dynamic_deg) >= outer_loop_theta_ref_max - 1e-9
+                        )
                     else:
                         # Gated off: decay the dynamic term toward 0 (no step).
                         target_dynamic_deg = 0.0
@@ -5178,8 +5395,10 @@ def main():
                     outer_loop_pitch_ref_dynamic_deg = (
                         outer_loop_pitch_ref_smoothed_deg
                     )
+                    support_outer_loop_pitch_ref_contrib_step = outer_loop_pitch_ref_dynamic_deg
                     outer_loop_pitch_ref_total_deg = (
                         float(vd_pitch_ref_offset_deg)
+                        + float(support_outer_loop_pitch_ref_offset_deg)
                         + outer_loop_pitch_ref_dynamic_deg
                     )
 
@@ -5310,6 +5529,12 @@ def main():
                 sagittal_diag["outer_loop_gate_pass"] = bool(outer_loop_gate_pass)
                 sagittal_diag["outer_loop_block_reason"] = str(outer_loop_block_reason)
                 sagittal_diag["outer_loop_sign_selected"] = str(outer_loop_sign_selected)
+                sagittal_diag["support_outer_loop_height_scale"] = float(support_outer_loop_height_scale)
+                sagittal_diag["support_outer_loop_kp_effective"] = float(support_outer_loop_kp_effective)
+                sagittal_diag["support_outer_loop_kd_effective"] = float(support_outer_loop_kd_effective)
+                sagittal_diag["support_outer_loop_pitch_ref_offset_deg"] = float(support_outer_loop_pitch_ref_offset_deg)
+                sagittal_diag["support_outer_loop_pitch_ref_contrib"] = float(support_outer_loop_pitch_ref_contrib_step)
+                sagittal_diag["support_outer_loop_cap_active"] = bool(support_outer_loop_cap_active_step)
                 sagittal_diag["pitch_ref_offset_scheduled_deg"] = float(pitch_ref_offset_scheduled_deg)
                 sagittal_diag["pitch_ref_total_after_outer_loop_deg"] = float(outer_loop_pitch_ref_total_deg)
                 sagittal_diag["pitch_x_error_after_outer_loop_rad"] = float(pitch_x_error)
@@ -5372,24 +5597,52 @@ def main():
                 hip_roll_ref=(float(equilibrium_joint_pos[0]), float(equilibrium_joint_pos[5])),
             )
 
-            # Compute yaw stabilization torque (antisymmetric hip-yaw)
+            # Compute yaw stabilization torque
             # Compute yaw directly from quaternion since centroidal_state yaw is NaN during control phase
             quat = np.array(mj_data.qpos[3:7])
             _, _, current_yaw = compute_orientation_from_quaternion(quat)
             yaw_rate = float(mj_data.qvel[5])  # Body-frame yaw rate (z-axis angular velocity)
             yaw_error = 0.0 - current_yaw  # Reference yaw is zero
-            tau_yaw, yaw_diag = balance_core_controllers["yaw_controller"].compute(
-                yaw_error=yaw_error,
-                yaw_rate=yaw_rate,
-            )
 
-            # Compose yaw torque with shape posture at hip-yaw joints [1, 6]
-            # Shape posture provides symmetric PD control, yaw provides antisymmetric stabilization
-            tau_shape_posture_with_yaw = tau_shape_posture.at[1].add(tau_yaw[1])
-            tau_shape_posture_with_yaw = tau_shape_posture_with_yaw.at[6].add(tau_yaw[6])
+            # Check if differential wheel yaw stabilizer is active
+            wheel_yaw_stabilizer = balance_core_controllers.get("wheel_yaw_stabilizer")
+            wheel_yaw_enabled = wheel_yaw_stabilizer is not None
+
+            if wheel_yaw_enabled:
+                # === WHEEL YAW stabilizer: reduced hip-yaw + post-composer wheel yaw ===
+                # The YawController already has a reduced max_yaw_torque=2.0 Nm
+                # (set at build time) to keep hip_yaw < 0.35 rad.
+                # Wheel yaw torque is applied AFTER the composer as a direct additive
+                # on the final tau_smooth, so it does NOT compete with the sagittal
+                # balance torque budget or the composer's rate limiting.
+                tau_yaw, yaw_diag = balance_core_controllers["yaw_controller"].compute(
+                    yaw_error=yaw_error,
+                    yaw_rate=yaw_rate,
+                )
+                # YawController goes to hip-yaw joints as normal (reduced max)
+                tau_shape_posture_with_yaw = tau_shape_posture.at[1].add(tau_yaw[1])
+                tau_shape_posture_with_yaw = tau_shape_posture_with_yaw.at[6].add(tau_yaw[6])
+                # Compute wheel yaw (additional yaw correction via wheels)
+                com_z_for_yaw = float(centroidal_state_control.com_pos[2])
+                tau_wheel_yaw, wheel_yaw_diag = wheel_yaw_stabilizer.compute(
+                    yaw_error=yaw_error,
+                    yaw_rate=yaw_rate,
+                    current_height_m=com_z_for_yaw,
+                )
+                yaw_diag["wheel_yaw_enabled"] = True
+                yaw_diag.update(wheel_yaw_diag)
+            else:
+                # === Legacy behavior: yaw via hip-yaw joints ===
+                tau_yaw, yaw_diag = balance_core_controllers["yaw_controller"].compute(
+                    yaw_error=yaw_error,
+                    yaw_rate=yaw_rate,
+                )
+                # Compose yaw torque with shape posture at hip-yaw joints [1, 6]
+                tau_shape_posture_with_yaw = tau_shape_posture.at[1].add(tau_yaw[1])
+                tau_shape_posture_with_yaw = tau_shape_posture_with_yaw.at[6].add(tau_yaw[6])
+                yaw_diag["wheel_yaw_enabled"] = False
 
             # Update previous-step support error for next iteration's HY-FF
-            # (shape_posture runs before sagittal, so HY-FF uses previous-step support error)
             prev_support_error = sagittal_diag.get("support_position_error_m", 0.0)
 
             balance_core_result = balance_core_controllers["composer"].compose(
@@ -5400,7 +5653,23 @@ def main():
                 tau_prev=tau_prev,
             )
 
-            # Append balance-core telemetry
+            tau_total_raw = balance_core_result.tau_total_raw
+            tau_total_clipped = balance_core_result.tau_total_clipped
+            tau_smooth = balance_core_result.tau_final
+            tau_prev = tau_smooth
+
+            # Apply wheel yaw torque POST-composer to tau_smooth directly.
+            # This does NOT compete with sagittal balance torque budget since
+            # the composer has already determined the final wheel torque and
+            # tau_prev is set BEFORE this addition (so rate limiting is unaffected
+            # on the next step — wheel yaw is a fast additive correction).
+            if wheel_yaw_enabled:
+                tau_smooth = tau_smooth.at[4].add(tau_wheel_yaw[4])
+                tau_smooth = tau_smooth.at[9].add(tau_wheel_yaw[9])
+                # Re-clip to actuator limits for safety
+                tau_smooth = jnp.clip(tau_smooth, -torque_limit_jax, torque_limit_jax)
+
+            # Append balance-core telemetry (before physics FF, so we see composer output)
             append_balance_core_telemetry(
                 telemetry,
                 balance_core_result,
@@ -5414,11 +5683,6 @@ def main():
                 hip_roll_pos=(float(joint_pos[0]), float(joint_pos[5])),
                 hip_roll_ref=(float(equilibrium_joint_pos[0]), float(equilibrium_joint_pos[5])),
             )
-
-            tau_total_raw = balance_core_result.tau_total_raw
-            tau_total_clipped = balance_core_result.tau_total_clipped
-            tau_smooth = balance_core_result.tau_final
-            tau_prev = tau_smooth
 
             # Physics-based equilibrium feedforward (Phase D, opt-in).
             # When enabled via Option B (equivalent pitch_ref path), the value of
@@ -5944,6 +6208,12 @@ def main():
         telemetry["outer_loop_gate_pass"].append(sagittal_diag.get("outer_loop_gate_pass", False))
         telemetry["outer_loop_block_reason"].append(sagittal_diag.get("outer_loop_block_reason", "disabled"))
         telemetry["outer_loop_sign_selected"].append(sagittal_diag.get("outer_loop_sign_selected", "none"))
+        telemetry["support_outer_loop_height_scale"].append(sagittal_diag.get("support_outer_loop_height_scale", 0.0))
+        telemetry["support_outer_loop_kp_effective"].append(sagittal_diag.get("support_outer_loop_kp_effective", 0.0))
+        telemetry["support_outer_loop_kd_effective"].append(sagittal_diag.get("support_outer_loop_kd_effective", 0.0))
+        telemetry["support_outer_loop_pitch_ref_offset_deg"].append(sagittal_diag.get("support_outer_loop_pitch_ref_offset_deg", 0.0))
+        telemetry["support_outer_loop_pitch_ref_contrib"].append(sagittal_diag.get("support_outer_loop_pitch_ref_contrib", 0.0))
+        telemetry["support_outer_loop_cap_active"].append(sagittal_diag.get("support_outer_loop_cap_active", False))
         telemetry["pitch_ref_offset_scheduled_deg"].append(sagittal_diag.get("pitch_ref_offset_scheduled_deg", 0.0))
         telemetry["pitch_ref_total_after_outer_loop_deg"].append(sagittal_diag.get("pitch_ref_total_after_outer_loop_deg", 0.0))
         telemetry["pitch_x_error_after_outer_loop_rad"].append(sagittal_diag.get("pitch_x_error_after_outer_loop_rad", 0.0))
@@ -6286,6 +6556,40 @@ def main():
         telemetry["boundary_profile_active"].append(fix_active)
         telemetry["hip_yaw_abs_max_tracking"].append(float(max(abs(l_hip_yaw_pos), abs(r_hip_yaw_pos))))
         telemetry["hip_yaw_abs_max_threshold"].append(0.07)
+
+        # Wheel yaw stabilizer telemetry (populated from yaw_diag)
+        is_wheel_yaw = yaw_diag.get("wheel_yaw_enabled", False)
+        telemetry["wheel_yaw_enabled"].append(is_wheel_yaw)
+        if is_wheel_yaw:
+            telemetry["wheel_yaw_error"].append(yaw_diag.get("wheel_yaw_error", 0.0))
+            telemetry["wheel_yaw_rate"].append(yaw_diag.get("wheel_yaw_rate", 0.0))
+            telemetry["wheel_yaw_tau_left"].append(yaw_diag.get("wheel_yaw_tau_left", 0.0))
+            telemetry["wheel_yaw_tau_right"].append(yaw_diag.get("wheel_yaw_tau_right", 0.0))
+            telemetry["wheel_yaw_saturated"].append(yaw_diag.get("wheel_yaw_saturated", False))
+        else:
+            telemetry["wheel_yaw_error"].append(0.0)
+            telemetry["wheel_yaw_rate"].append(0.0)
+            telemetry["wheel_yaw_tau_left"].append(0.0)
+            telemetry["wheel_yaw_tau_right"].append(0.0)
+            telemetry["wheel_yaw_saturated"].append(False)
+
+        # Hip-yaw mode decomposition telemetry
+        l_hip_yaw_err_rad = l_hip_yaw_error
+        r_hip_yaw_err_rad = r_hip_yaw_error
+        hip_yaw_common = 0.5 * (l_hip_yaw_err_rad + r_hip_yaw_err_rad)
+        hip_yaw_divergence = l_hip_yaw_err_rad - r_hip_yaw_err_rad
+        hip_yaw_common_sum_abs = abs(l_hip_yaw_err_rad + r_hip_yaw_err_rad)
+        hip_yaw_asymmetry = abs(l_hip_yaw_err_rad - r_hip_yaw_err_rad)
+        div_common_ratio = (
+            hip_yaw_asymmetry / (abs(hip_yaw_common) + 1e-12)
+            if abs(hip_yaw_common) > 1e-12
+            else float('inf')
+        )
+        telemetry["hip_yaw_common_error_rad"].append(float(hip_yaw_common))
+        telemetry["hip_yaw_common_error_sum_abs_rad"].append(float(hip_yaw_common_sum_abs))
+        telemetry["hip_yaw_divergence_error_rad"].append(float(hip_yaw_divergence))
+        telemetry["hip_yaw_asymmetry_abs_rad"].append(float(hip_yaw_asymmetry))
+        telemetry["hip_yaw_div_common_ratio"].append(float(div_common_ratio))
         telemetry["variant_name"].append(height_variant_setup.get("variant_name", "nominal_keyframe") if height_variant_setup else "nominal_keyframe")
         telemetry["height_variant_target_com_z_m"].append(float(height_variant_setup.get("target_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
         telemetry["height_variant_achieved_com_z_m"].append(float(height_variant_setup.get("achieved_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))

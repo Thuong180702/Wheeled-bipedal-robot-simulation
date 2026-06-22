@@ -1,3 +1,11 @@
+"""Run Step D push cases for profiles A, B, C and log metrics.
+
+Profiles:
+    A – calibrated_support_position_outer_loop_pitch_ref_v2 (B2v2)
+    B – physics_equilibrium_feedforward_outer_loop (current PFF)
+    C – physics_equilibrium_feedforward_outer_loop_low_band_support_v2
+    D – same as C + differential wheel yaw stabilizer (architecture fix candidate)
+"""
 import csv
 import sys
 import time
@@ -11,22 +19,22 @@ import run_outer_loop_step_d_push as runner
 #   A = calibrated_support_position_outer_loop_pitch_ref_v2 (B2v2 baseline)
 #   B = physics_equilibrium_feedforward_outer_loop (current PFF)
 #   C = physics_equilibrium_feedforward_outer_loop_low_band_support_v2 (candidate)
+#   D = same as C + differential wheel yaw stabilizer (architecture fix)
 PROFILE_A = "calibrated_support_position_outer_loop_pitch_ref_v2"
 PROFILE_B = "physics_equilibrium_feedforward_outer_loop"
 PROFILE_C = "physics_equilibrium_feedforward_outer_loop_low_band_support_v2"
+PROFILE_D = "physics_equilibrium_feedforward_outer_loop_low_band_support_v2"  # same sagittal profile + wheel yaw flag
 
 # Base output directory for all Step D runs
 ROOT = Path(__file__).resolve().parent.parent
-OUT_BASE = ROOT / "outputs" / "step_d_all"
+OUT_BASE = ROOT / "outputs" / "hip_yaw_push_limit_architecture_fix" / "step_d_all"
 
 
 def main() -> None:
-    """Run Step D push cases for profiles A, B, and C and aggregate metrics.
+    """Run Step D push cases for profiles A, B, C, D and aggregate metrics.
 
-    Profiles:
-        A – calibrated_support_position_outer_loop_pitch_ref_v2 (B2v2)
-        B – physics_equilibrium_feedforward_outer_loop (current PFF)
-        C – physics_equilibrium_feedforward_outer_loop_low_band_support_v2
+    Profile D uses the same sagittal controller as C but adds the differential
+    wheel yaw stabilizer (--enable-wheel-yaw-stabilizer).
     """
     OUT_BASE.mkdir(parents=True, exist_ok=True)
     all_rows = []
@@ -35,9 +43,12 @@ def main() -> None:
             (PROFILE_A, "A"),
             (PROFILE_B, "B"),
             (PROFILE_C, "C"),
+            (PROFILE_D, "D"),
         ]:
             out_dir = OUT_BASE / f"step_d_{case_id}_{tag}"
             t0 = time.time()
+            # Profile D uses wheel yaw stabilizer
+            use_wheel_yaw = (tag == "D")
             tel_path, _ = runner.run_sim(
                 height_label,
                 steps,
@@ -46,6 +57,7 @@ def main() -> None:
                 push_magnitude=push_mag,
                 push_duration=push_dur,
                 push_interval=push_int,
+                enable_wheel_yaw=use_wheel_yaw,
             )
             metrics = runner.analyze(tel_path)
             row = {

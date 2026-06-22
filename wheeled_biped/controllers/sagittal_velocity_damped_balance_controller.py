@@ -377,6 +377,17 @@ class SagittalAuthoritySchedule:
     # their fixed scalar gains byte-for-byte. See
     # docs/validation/calibrated_support_position_outer_loop_pitch_ref_final_report.md.
     calibrated_outer_loop_enabled: bool = False
+    calibrated_outer_loop_function_version: str = "v1"
+
+    # PFF low-band support shaping (opt-in candidate only).
+    # Smoothly enables a bounded support-position pitch-ref correction around
+    # 0.320 m without touching the physics equilibrium feedforward source.
+    low_band_support_outer_loop_enabled: bool = False
+    low_band_support_center_m: float = 0.320
+    low_band_support_sigma_m: float = 0.006
+    low_band_support_kp_peak_deg_per_m: float = 1.5
+    low_band_support_theta_ref_max_peak_deg: float = 3.00
+    low_band_support_pitch_ref_offset_peak_deg: float = 0.0
 
     # Physics-based equilibrium feedforward (Phase D, opt-in).
     # When True, the runtime reads tau_eq_ff(h) from
@@ -2729,6 +2740,7 @@ CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2 = replace(
     SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,
     profile_name="calibrated_support_position_outer_loop_pitch_ref_v2",
     calibrated_outer_loop_enabled=True,
+    calibrated_outer_loop_function_version="v2",
 )
 
 # =====================================================================
@@ -2767,6 +2779,42 @@ PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP = replace(
     physics_eq_ff_clamp_to_height_range=True,
     # Telemetry provenance
     physics_eq_ff_function_version="1.0",
+)
+
+
+# Opt-in low-band support correction for the PFF Step C focused_low_0p320 case.
+# The physics feedforward source and interpolation remain unchanged; this profile
+# only re-enables a smooth, bounded support-position pitch-ref correction around
+# 0.320 m where local telemetry shows a settling operating-point regression.
+PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,
+    profile_name="physics_equilibrium_feedforward_outer_loop_low_band_support_v1",
+    outer_loop_height_schedule_required=False,
+    calibrated_outer_loop_function_version="v2",
+    low_band_support_outer_loop_enabled=True,
+    low_band_support_center_m=0.320,
+    low_band_support_sigma_m=0.006,
+    low_band_support_kp_peak_deg_per_m=1.5,
+    low_band_support_theta_ref_max_peak_deg=3.00,
+    low_band_support_pitch_ref_offset_peak_deg=1.00,
+)
+
+
+# Opt-in v2 low-band support correction selected by
+# physics_ff_low_band_support_v2_tuning. It preserves the same continuous
+# low-band mechanism as v1 while narrowing the height support and reducing peak
+# Kp to lower fixed-height low_0p320 P2P. Disabled by default.
+PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,
+    profile_name="physics_equilibrium_feedforward_outer_loop_low_band_support_v2",
+    outer_loop_height_schedule_required=False,
+    calibrated_outer_loop_function_version="v2",
+    low_band_support_outer_loop_enabled=True,
+    low_band_support_center_m=0.320,
+    low_band_support_sigma_m=0.004,
+    low_band_support_kp_peak_deg_per_m=1.4,
+    low_band_support_theta_ref_max_peak_deg=3.00,
+    low_band_support_pitch_ref_offset_peak_deg=1.00,
 )
 
 # =====================================================================
@@ -2893,6 +2941,8 @@ JOINT_FIX_PROFILES = {
     "calibrated_support_position_outer_loop_pitch_ref_v2": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,  # v2 — opt-in, no regressions  # Phase B calibration: height-dependent outer-loop gains
     # Physics-based equilibrium feedforward outer loop (Phase D, opt-in)
     "physics_equilibrium_feedforward_outer_loop": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,
+    "physics_equilibrium_feedforward_outer_loop_low_band_support_v1": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V1,
+    "physics_equilibrium_feedforward_outer_loop_low_band_support_v2": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
     # Unified sagittal state-feedback no-offset controller
     "unified_sagittal_state_feedback_no_offset": UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET,
 }

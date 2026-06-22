@@ -14,8 +14,10 @@ Test cases:
   D6: random-direction push (45 N, 5 steps every 150 steps), high_0p480, 1000 steps
 
 Profiles:
-  A) height_scheduled_pitch_equilibrium_trim    (Phase A baseline)
-  B) support_position_outer_loop_pitch_ref      (Phase B candidate)
+  A) calibrated_support_position_outer_loop_pitch_ref_v2    (B2v2 baseline)
+  B) physics_equilibrium_feedforward_outer_loop              (current PFF)
+  C) physics_equilibrium_feedforward_outer_loop_low_band_support_v2 (v2 candidate)
+  D) same as C + differential wheel yaw stabilizer          (architecture fix)
 
 Pass criteria:
   - no fall in mild/medium push cases (D1-D4)
@@ -69,8 +71,26 @@ MUST_NOT_FALL = {"D1_small_push_high", "D2_medium_push_high",
                  "D3_small_push_low",  "D4_medium_push_low"}
 
 
-def run_sim(label, steps, profile, out_dir, push_magnitude=0, push_duration=5,
-            push_interval=150, push_sagittal=True):
+def run_sim(
+    label,
+    steps,
+    profile,
+    out_dir,
+    push_magnitude=0,
+    push_duration=5,
+    push_interval=150,
+    push_sagittal=True,
+    enable_wheel_yaw=False,
+    wheel_yaw_kp=None,
+    wheel_yaw_kd=None,
+    wheel_yaw_max_torque=None,
+    wheel_yaw_lowpass_alpha=None,
+    wheel_yaw_height_gate_low=None,
+    wheel_yaw_height_gate_high=None,
+    yaw_controller_kp=None,
+    yaw_controller_kd=None,
+    yaw_controller_max_torque=None,
+):
     """Run one push simulation segment."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -96,6 +116,26 @@ def run_sim(label, steps, profile, out_dir, push_magnitude=0, push_duration=5,
         "--failure-window-steps", str(steps),
         "--write-run-summary-sidecar",
     ]
+    if enable_wheel_yaw:
+        cmd += ["--enable-wheel-yaw-stabilizer"]
+        if wheel_yaw_kp is not None:
+            cmd += ["--wheel-yaw-kp", str(float(wheel_yaw_kp))]
+        if wheel_yaw_kd is not None:
+            cmd += ["--wheel-yaw-kd", str(float(wheel_yaw_kd))]
+        if wheel_yaw_max_torque is not None:
+            cmd += ["--wheel-yaw-max-torque", str(float(wheel_yaw_max_torque))]
+        if wheel_yaw_lowpass_alpha is not None:
+            cmd += ["--wheel-yaw-lowpass-alpha", str(float(wheel_yaw_lowpass_alpha))]
+        if wheel_yaw_height_gate_low is not None:
+            cmd += ["--wheel-yaw-height-gate-low", str(float(wheel_yaw_height_gate_low))]
+        if wheel_yaw_height_gate_high is not None:
+            cmd += ["--wheel-yaw-height-gate-high", str(float(wheel_yaw_height_gate_high))]
+        if yaw_controller_kp is not None:
+            cmd += ["--yaw-controller-kp", str(float(yaw_controller_kp))]
+        if yaw_controller_kd is not None:
+            cmd += ["--yaw-controller-kd", str(float(yaw_controller_kd))]
+        if yaw_controller_max_torque is not None:
+            cmd += ["--yaw-controller-max-torque", str(float(yaw_controller_max_torque))]
     if push_magnitude > 0:
         cmd += [
             "--push-enabled",
