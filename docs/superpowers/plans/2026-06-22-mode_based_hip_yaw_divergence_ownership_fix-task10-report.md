@@ -64,5 +64,14 @@ unchanged, remaining risks, next recommended task, and final classification.
 
 ## Commit
 
-Hash: see `git log -1` after the commit lands. (Will be filled in by the
-commit step that immediately follows this report.)
+Hash: `f8aae2d4174e5a2f96d495a21f70f78a3f4ee8af` (short: `f8aae2d`).
+
+Message: `doc,feat: final validation report and outputs dir for mode-based hip-yaw divergence fix (task 10)`
+
+Files committed (5):
+
+- `docs/validation/mode_based_hip_yaw_divergence_ownership_fix_report.md`
+- `outputs/mode_based_hip_yaw_divergence_ownership_fix/README.md`
+- `docs/superpowers/plans/2026-06-22-mode_based_hip_yaw_divergence_ownership_fix-task10-report.md`
+- `docs/superpowers/plans/2026-06-22-mode_based_hip_yaw_divergence_ownership_fix-task3-report.md`
+- `docs/superpowers/plans/2026-06-22-mode_based_hip_yaw_divergence_ownership_fix-task4-report.md`
