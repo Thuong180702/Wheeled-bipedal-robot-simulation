@@ -1,10 +1,19 @@
 import csv
+import sys
 import time
 from pathlib import Path
+
+# Add scripts/ to path for runner import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_outer_loop_step_d_push as runner
 
-# Low-band profile constant
-LOW_BAND_PROFILE = "physics_equilibrium_feedforward_outer_loop_low_band_support_v2"
+# Profiles per user's Step D comparison matrix:
+#   A = calibrated_support_position_outer_loop_pitch_ref_v2 (B2v2 baseline)
+#   B = physics_equilibrium_feedforward_outer_loop (current PFF)
+#   C = physics_equilibrium_feedforward_outer_loop_low_band_support_v2 (candidate)
+PROFILE_A = "calibrated_support_position_outer_loop_pitch_ref_v2"
+PROFILE_B = "physics_equilibrium_feedforward_outer_loop"
+PROFILE_C = "physics_equilibrium_feedforward_outer_loop_low_band_support_v2"
 
 # Base output directory for all Step D runs
 ROOT = Path(__file__).resolve().parent.parent
@@ -15,17 +24,17 @@ def main() -> None:
     """Run Step D push cases for profiles A, B, and C and aggregate metrics.
 
     Profiles:
-        A – height_scheduled_pitch_equilibrium_trim (runner.BASE_PROFILE)
-        B – support_position_outer_loop_pitch_ref (runner.OL_PROFILE)
-        C – low‑band support v2 (LOW_BAND_PROFILE)
+        A – calibrated_support_position_outer_loop_pitch_ref_v2 (B2v2)
+        B – physics_equilibrium_feedforward_outer_loop (current PFF)
+        C – physics_equilibrium_feedforward_outer_loop_low_band_support_v2
     """
     OUT_BASE.mkdir(parents=True, exist_ok=True)
     all_rows = []
     for case_id, height_label, steps, push_mag, push_dur, push_int in runner.PUSH_CASES:
         for profile, tag in [
-            (runner.BASE_PROFILE, "A"),
-            (runner.OL_PROFILE, "B"),
-            (LOW_BAND_PROFILE, "C"),
+            (PROFILE_A, "A"),
+            (PROFILE_B, "B"),
+            (PROFILE_C, "C"),
         ]:
             out_dir = OUT_BASE / f"step_d_{case_id}_{tag}"
             t0 = time.time()

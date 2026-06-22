@@ -1,9 +1,10 @@
 import importlib
 import pathlib
 import csv
+import sys
 
 
-def test_run_step_d_all(monkeypatch):
+def test_run_step_d_all(monkeypatch, tmp_path):
     # Import the runner module and modify PUSH_CASES
     runner = importlib.import_module('scripts.run_outer_loop_step_d_push')
     dummy_case = [("TEST0", "low_0p330", 10, 0, 5, 150)]
@@ -18,16 +19,18 @@ def test_run_step_d_all(monkeypatch):
         return tel, None
     monkeypatch.setattr(runner, 'run_sim', fake_run_sim, raising=False)
 
-    # Mock analyze to return a simple metric dict
+    # Mock analyze/safety_ok/fmt to avoid depending on real telemetry columns
     monkeypatch.setattr(runner, 'analyze', lambda path: {"metric": 42}, raising=False)
+    monkeypatch.setattr(runner, 'safety_ok', lambda metrics: (True, 'safe'), raising=False)
+    monkeypatch.setattr(runner, 'fmt', lambda metrics: 'ok', raising=False)
 
-    # Import and run the wrapper script
+    # Import wrapper and redirect its output directory to tmp_path
     wrapper = importlib.import_module('scripts.run_step_d_all')
+    monkeypatch.setattr(wrapper, 'OUT_BASE', tmp_path / 'step_d_all', raising=False)
     wrapper.main()
 
     # Verify the combined CSV exists and has at least one data row
-    repo_root = pathlib.Path(__file__).parents[2]
-    csv_path = repo_root / 'outputs' / 'step_d_all' / 'step_d_all_metrics.csv'
+    csv_path = wrapper.OUT_BASE / 'step_d_all_metrics.csv'
     assert csv_path.is_file(), f"CSV file not found at {csv_path}"
     with open(csv_path, newline='', encoding='utf-8') as f:
         rows = list(csv.DictReader(f))

@@ -74,7 +74,11 @@ DEFAULT_OUTPUT_REPORT = (
 # Constants matching run_step_d_all.py
 BASE_PROFILE_LABEL = "A"
 CANDIDATE_PROFILE_LABEL = "C"  # low-band v2
-LOW_BAND_PROFILE_NAME = "physics_equilibrium_feedforward_outer_loop_low_band_support_v2"
+
+# Profile names matching run_step_d_all.py
+PROFILE_A_NAME = "calibrated_support_position_outer_loop_pitch_ref_v2"
+PROFILE_B_NAME = "physics_equilibrium_feedforward_outer_loop"
+PROFILE_C_NAME = "physics_equilibrium_feedforward_outer_loop_low_band_support_v2"
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +254,9 @@ def generate_report(
         "# Step D: Random Push Disturbance Validation + Promotion Report",
         "",
         "**Profiles:**",
-        f"* **A (baseline):** `height_scheduled_pitch_equilibrium_trim`",
-        f"* **C (candidate):** `{LOW_BAND_PROFILE_NAME}`",
+        f"* **A (B2v2 baseline):** `{PROFILE_A_NAME}`",
+        f"* **B (current PFF):** `{PROFILE_B_NAME}`",
+        f"* **C (candidate):** `{PROFILE_C_NAME}`",
         f"",
         f"**Classification:** `{classification}`",
         "",
@@ -263,8 +268,9 @@ def generate_report(
 
     # Build a table per profile
     for profile_label, profile_title in [
-        ("A", "Baseline (A)"),
-        ("C", "Low-Band v2 Candidate (C)"),
+        ("A", "A – B2v2 Baseline (calibrated_support_position_outer_loop_pitch_ref_v2)"),
+        ("B", "B – Current PFF (physics_equilibrium_feedforward_outer_loop)"),
+        ("C", "C – Low-Band v2 Candidate (physics_equilibrium_feedforward_outer_loop_low_band_support_v2)"),
     ]:
         lines.append(f"### {profile_title}")
         lines.append("")

@@ -149,8 +149,8 @@ class TestAnalyzeStepD:
         text = out_report.read_text(encoding="utf-8")
         assert "Gate Summary" in text
         assert "STEP_D_RANDOM_PUSH_PASS" in text
-        assert "Baseline (A)" in text
-        assert "Low-Band v2 Candidate (C)" in text
+        assert "B2v2 Baseline" in text
+        assert "Low-Band v2 Candidate" in text
 
     def test_missing_csv_exits(self, tmp_path: pathlib.Path) -> None:
         """Running with a non-existent CSV should exit with code 1."""
