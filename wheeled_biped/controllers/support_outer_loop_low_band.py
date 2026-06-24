@@ -54,15 +54,29 @@ def low_band_support_outer_loop_params(
     peak_kp_deg_per_m: float = LOW_BAND_SUPPORT_KP_PEAK_DEG_PER_M,
     peak_theta_ref_max_deg: float = LOW_BAND_SUPPORT_THETA_REF_MAX_PEAK_DEG,
     peak_pitch_ref_offset_deg: float = LOW_BAND_SUPPORT_PITCH_REF_OFFSET_PEAK_DEG,
+    blend_with_base: bool = False,
 ) -> Dict[str, float | str]:
     """Apply a bounded support correction only inside the low-height band.
 
     The blend is continuous in height and keyed only by commanded height. It
     intentionally leaves Kd unchanged; the local telemetry points to a low-band
     operating-point issue, not a support-rate overshoot.
+
+    When ``blend_with_base=True``, the Kp is a smooth blend between the base Kp
+    (calibrated outer loop value at the current height) and the peak Kp:
+        kp = (1 - scale) * base_kp + scale * peak_kp
+    This ensures the support correction is active at ALL heights — the base Kp
+    provides centering feedback at tall heights while the peak Kp augments it in
+    the low band. This is the correct behavior for tall-height push recovery.
+
+    When ``blend_with_base=False`` (default, backward-compatible), the Kp is the
+    scaling-only version:
+        kp = scale * peak_kp
+    which drops to zero at heights far from the low-band center. This preserves
+    the original v1/v2 behavior for existing validations.
     """
     scale = low_band_support_height_scale(height_m, center_m=center_m, sigma_m=sigma_m)
-    _ = _clamp(_finite(float(base_kp_deg_per_m), 1.0), *KP_BOUNDS)
+    base_kp = _clamp(_finite(float(base_kp_deg_per_m), 1.0), *KP_BOUNDS)
     base_kd = _clamp(_finite(float(base_kd_deg_per_mps), 0.0), *KD_BOUNDS)
     base_theta = _clamp(_finite(float(base_theta_ref_max_deg), 3.0), *THETA_REF_MAX_BOUNDS_DEG)
     peak_kp = _clamp(_finite(float(peak_kp_deg_per_m), LOW_BAND_SUPPORT_KP_PEAK_DEG_PER_M), *KP_BOUNDS)
@@ -74,7 +88,12 @@ def low_band_support_outer_loop_params(
         _finite(float(peak_pitch_ref_offset_deg), LOW_BAND_SUPPORT_PITCH_REF_OFFSET_PEAK_DEG),
         *PITCH_REF_OFFSET_BOUNDS_DEG,
     )
-    kp = scale * peak_kp
+    if blend_with_base:
+        # Blend: at scale=1 (center), kp ≈ peak_kp; at scale=0 (far), kp ≈ base_kp.
+        kp = (1.0 - scale) * base_kp + scale * peak_kp
+    else:
+        # Legacy: kp is nonzero only near the low-band center.
+        kp = scale * peak_kp
     theta = base_theta + scale * (peak_theta - base_theta)
     return {
         "support_outer_loop_profile_name": LOW_BAND_SUPPORT_PROFILE_NAME,

@@ -3,11 +3,7 @@
 Moves body-yaw correction from hip-yaw joints [1, 6] to differential
 wheel torque [4, 9]. This addresses the BODY_YAW_WRONG_ACTUATOR issue
 where body yaw stabilization through hip-yaw joints causes hip_yaw > 0.35 rad
-under large push disturbances (D4/D5).
-
-When this stabilizer is enabled, the existing YawController's gains are reduced
-(shared authority mode) so that wheels handle the bulk of yaw correction while
-hip-yaw provides fine correction without exceeding the 0.35 rad gate.
+under large push disturbances.
 
 Key design: wheel yaw torque is added AFTER the torque composer to avoid
 competing with the sagittal balance torque budget.
@@ -46,20 +42,29 @@ class DifferentialWheelYawStabilizer:
     """Antisymmetric wheel torque for body yaw stabilization.
 
     Control law (per step):
-        tau_yaw_raw = kp_wheel_yaw * yaw_error - kd_wheel_yaw * yaw_rate
+        yaw_rate_eff = (yaw_error - prev_yaw_error) / DT  (numerical derivative)
+        tau_yaw_raw = kp_wheel_yaw * yaw_error + kd_wheel_yaw * yaw_rate_eff
         tau[4] = tau_yaw_raw        # left wheel
         tau[9] = -tau_yaw_raw       # right wheel
+
+    Uses a NUMERICAL derivative of yaw_error (not the raw body-frame gyro
+    yaw_rate from qvel[5]) because body-frame angular velocity diverges
+    from the world-frame yaw rate when the robot pitches significantly.
+    Using raw qvel[5] produces anti-damping during large pitch transients.
 
     Height-gated: authority scales from 0 at low_0p340 to full at 0.420 m.
 
     Sign convention (matches existing YawController on hip-yaw):
         - Positive yaw_error (robot yawed CW, needs CCW correction):
-          tau_yaw_raw > 0 → left wheel forward, right wheel backward → CCW moment
-        - Positive yaw_rate (CCW rotation):
-          tau_yaw_raw < 0 → left wheel backward, right wheel forward → CW damping
+          tau_yaw_raw > 0 -> left wheel forward, right wheel backward -> CCW moment
+        - Positive yaw_rate_eff (yaw error growing more CW):
+          +kd * rate_eff > 0 -> additional CCW torque -> extra CW correction
 
     Output: nonzero torque only on wheel indices [4, 9].
     """
+
+    # Control timestep - the simulator runs at 100 Hz (0.01 s).
+    _DT = 0.01
 
     def __init__(
         self,
@@ -69,6 +74,7 @@ class DifferentialWheelYawStabilizer:
         lowpass_alpha: float = 0.3,
         height_gate_low: float = 0.280,
         height_gate_high: float = 0.350,
+        use_numerical_rate: bool = True,
     ):
         """Initialize wheel yaw stabilizer.
 
@@ -80,6 +86,9 @@ class DifferentialWheelYawStabilizer:
                 1.0 = no filtering. 0.0 = holds previous value.
             height_gate_low: Height below which wheel yaw is zero [m]
             height_gate_high: Height above which full wheel yaw applies [m]
+            use_numerical_rate: If True, compute yaw rate from successive
+                yaw_error values (world-frame derivative). If False, use
+                the raw body-frame yaw_rate argument (qvel[5]).
         """
         self.kp_yaw = kp_yaw
         self.kd_yaw = kd_yaw
@@ -87,8 +96,10 @@ class DifferentialWheelYawStabilizer:
         self.lowpass_alpha = lowpass_alpha
         self.height_gate_low = height_gate_low
         self.height_gate_high = height_gate_high
+        self.use_numerical_rate = use_numerical_rate
         self._prev_tau_yaw_left = 0.0
         self._prev_tau_yaw_right = 0.0
+        self._prev_yaw_error = 0.0
 
     def compute(
         self,
@@ -100,7 +111,8 @@ class DifferentialWheelYawStabilizer:
 
         Args:
             yaw_error: Yaw error (reference - current) [rad]
-            yaw_rate: Body yaw angular velocity [rad/s]
+            yaw_rate: Body yaw angular velocity [rad/s] (qvel[5]).
+                Used only when use_numerical_rate=False.
             current_height_m: Current CoM height [m] for height gating
 
         Returns:
@@ -114,8 +126,25 @@ class DifferentialWheelYawStabilizer:
             z_high=self.height_gate_high,
         )
 
-        # PD control law
-        tau_yaw_raw = self.kp_yaw * yaw_error - self.kd_yaw * yaw_rate
+        # Compute effective yaw rate: use numerical derivative of yaw_error
+        # which gives a world-frame rate consistent with the yaw error signal,
+        # rather than the raw body-frame gyro (qvel[5]) which decouples from
+        # the world-frame yaw during large pitch/roll transients.
+        if self.use_numerical_rate:
+            yaw_rate_eff = (yaw_error - self._prev_yaw_error) / self._DT
+        else:
+            yaw_rate_eff = yaw_rate
+        self._prev_yaw_error = yaw_error
+
+        # PD control law. Uses standard form: tau = kp * error + kd * error_rate
+        # where error_rate = d(yaw_error)/dt = yaw_rate_eff (numerical derivative).
+        # With +kd * yaw_rate_eff:
+        #   - Error growing (yaw_rate_eff has same sign as error) -> MORE corrective torque
+        #   - Error shrinking (yaw_rate_eff opposite sign) -> LESS corrective torque (damping)
+        tau_yaw_raw = (
+            self.kp_yaw * yaw_error
+            + self.kd_yaw * yaw_rate_eff
+        )
 
         # Apply height gate
         tau_yaw_gated = tau_yaw_raw * height_gate
@@ -143,7 +172,7 @@ class DifferentialWheelYawStabilizer:
 
         diagnostics = {
             "wheel_yaw_error": float(yaw_error),
-            "wheel_yaw_rate": float(yaw_rate),
+            "wheel_yaw_rate": float(yaw_rate_eff),
             "wheel_yaw_tau_raw": float(tau_yaw_raw),
             "wheel_yaw_tau_gated": float(tau_yaw_gated),
             "wheel_yaw_tau_clipped": float(tau_yaw_clipped),
@@ -156,6 +185,7 @@ class DifferentialWheelYawStabilizer:
             "wheel_yaw_kd": float(self.kd_yaw),
             "wheel_yaw_max_torque": float(self.max_yaw_torque),
             "wheel_yaw_lowpass_alpha": float(self.lowpass_alpha),
+            "wheel_yaw_use_numerical_rate": bool(self.use_numerical_rate),
         }
 
         return tau, diagnostics
@@ -164,3 +194,4 @@ class DifferentialWheelYawStabilizer:
         """Reset internal state. Call on episode reset."""
         self._prev_tau_yaw_left = 0.0
         self._prev_tau_yaw_right = 0.0
+        self._prev_yaw_error = 0.0

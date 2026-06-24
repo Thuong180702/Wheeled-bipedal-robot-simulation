@@ -1,8 +1,20 @@
-"""Verify that the low-band v2 profile is available in the controller registry.
+"""Verify that the K1 pitch-rate notch profile is available in the
+controller registry and is the current-best/default profile.
 
-After promotion, the default/current-best PFF profile should be
-physics_equilibrium_feedforward_outer_loop_low_band_support_v2.
+After the evidence-based K1 best-current promotion, the default/current-best
+PFF profile should be ``k1_pitch_rate_notch_v1``, which is the low-band v2
+sagittal schedule plus the runtime mode-hip-yaw-divergence controller
+(kp=10.0, kd=0.50, max_torque=7.5, soft_limit=0.30, soft_gain=0.80,
+ref_source=target) and the causal IIR biquad notch filter on pitch_rate
+(fc=2.5 Hz, Q=6, blend=1.0, height gate 0.42-0.48 m).
+
+D_MODE_HIP_YAW_DIV_V1 remains available as the previous current-best
+legacy/reference profile.
+
 All legacy profiles must remain selectable.
+
+Promotion policy: best-current, not full-goal-solved.
+K1 is promoted with known WIP recovery limitation.
 """
 import sys
 import pathlib
@@ -16,7 +28,11 @@ PROFILES_TO_CHECK = {
     # Legacy PFF profiles
     "physics_equilibrium_feedforward_outer_loop": "Current PFF (pre-promotion)",
     "physics_equilibrium_feedforward_outer_loop_low_band_support_v1": "Low-band v1",
-    "physics_equilibrium_feedforward_outer_loop_low_band_support_v2": "Low-band v2 (promoted candidate)",
+    "physics_equilibrium_feedforward_outer_loop_low_band_support_v2": "Low-band v2 (sagittal base for current-best)",
+    # Previous current-best (legacy)
+    "physics_equilibrium_feedforward_outer_loop_low_band_support_v2_mode_hip_yaw_div_v1": "D_MODE_HIP_YAW_DIV_V1 (previous current-best, legacy)",
+    # Current-best (promoted with known WIP recovery limitation)
+    "k1_pitch_rate_notch_v1": "K1 pitch-rate notch v1 (current-best, promoted with known limitation)",
     # B2v2 baseline
     "calibrated_support_position_outer_loop_pitch_ref_v2": "B2v2 experimental",
     # Legacy B / A profiles
@@ -32,6 +48,65 @@ def test_all_profiles_available():
         assert name in SAGITTAL_AUTHORITY_PROFILES, (
             f"Missing profile: {name} ({label})"
         )
+
+
+def test_d_mode_hip_yaw_div_v1_resolves_to_low_band_v2_sagittal():
+    """D_MODE_HIP_YAW_DIV_V1 (previous current-best) must resolve to low-band v2.
+
+    This verifies backward compatibility: the sagittal schedule is byte-for-byte
+    identical to low-band v2; the divergence-mode controller is enabled separately
+    via runtime CLI flags. D remains available as legacy/reference.
+    """
+    from simulate_hierarchical_controller import SAGITTAL_AUTHORITY_PROFILES
+    d_profile = SAGITTAL_AUTHORITY_PROFILES.get(
+        "physics_equilibrium_feedforward_outer_loop_low_band_support_v2_mode_hip_yaw_div_v1"
+    )
+    c_profile = SAGITTAL_AUTHORITY_PROFILES.get(
+        "physics_equilibrium_feedforward_outer_loop_low_band_support_v2"
+    )
+    assert d_profile is not None
+    assert c_profile is not None
+    # Same profile object (alias). Both share the same sagittal schedule.
+    assert d_profile is c_profile, (
+        "D_MODE_HIP_YAW_DIV_V1 must resolve to the same SagittalAuthoritySchedule "
+        "as low-band v2; the divergence-mode controller is enabled at runtime."
+    )
+    # Sagittal signature of low-band v2.
+    assert d_profile.low_band_support_outer_loop_enabled is True
+    assert d_profile.low_band_support_center_m == 0.320
+    assert d_profile.low_band_support_sigma_m == 0.004
+
+
+def test_k1_pitch_rate_notch_v1_is_current_best():
+    """K1 pitch-rate notch v1 is the current-best/default controller (promoted
+    with known WIP recovery limitation).
+
+    K1 extends D_MODE_HIP_YAW_DIV_V1 / G1_sg080 (same low-band v2 sagittal base,
+    same mode-div params kp=10.0, kd=0.50, mt=7.5, sg=0.80) with a causal
+    IIR biquad notch filter on pitch_rate (fc=2.5 Hz, Q=6, blend=1.0, height
+    gate 0.42-0.48 m).
+    """
+    from simulate_hierarchical_controller import SAGITTAL_AUTHORITY_PROFILES
+    k1 = SAGITTAL_AUTHORITY_PROFILES.get(
+        "k1_pitch_rate_notch_v1"
+    )
+    assert k1 is not None, "K1 pitch_rate_notch_v1 profile missing"
+    # Sagittal base = low-band v2
+    assert k1.low_band_support_outer_loop_enabled is True
+    assert k1.low_band_support_center_m == 0.320
+    assert k1.low_band_support_sigma_m == 0.004
+    # Notch filter
+    assert k1.enable_wip_notch_filter is True
+    assert k1.wip_notch_target_signal == "pitch_rate"
+    assert k1.wip_notch_center_hz == 2.5
+    assert k1.wip_notch_q == 6.0
+    assert k1.wip_notch_filter_blend == 1.0
+    assert k1.wip_notch_height_gate_start_m == 0.42
+    assert k1.wip_notch_height_gate_full_m == 0.48
+    # No K3 combined notch
+    assert k1.wip_notch_target_signal != "pitch_rate_and_wheel_velocity"
+    # No WBC
+    assert getattr(k1, "wbc_enabled", False) is False
 
 
 def test_profile_is_continuous():

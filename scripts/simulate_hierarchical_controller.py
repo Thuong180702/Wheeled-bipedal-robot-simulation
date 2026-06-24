@@ -109,6 +109,25 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,
     PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V1,
     PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    I_SUPPORT_REFERENCE_REACQUISITION_V1,
+    J1A_TALL_KD_PITCH_V1,
+    J1B_TALL_KD_PITCH_V1,
+    J1C_TALL_KD_PITCH_V1,
+    J2A_TALL_K_WHEEL_VEL_V1,
+    J2B_TALL_K_WHEEL_VEL_V1,
+    J2C_TALL_K_WHEEL_VEL_V1,
+    J3A_TALL_COMBINED_V1,
+    J3B_TALL_COMBINED_V1,
+    K1_PITCH_RATE_NOTCH,
+    K1B_PITCH_RATE_NOTCH_2P3,
+    K1C_PITCH_RATE_NOTCH_2P7,
+    K1D_PITCH_RATE_NOTCH_Q4,
+    K1E_PITCH_RATE_NOTCH_Q8,
+    K1F_PITCH_RATE_NOTCH_BLEND075,
+    K1G_PITCH_RATE_NOTCH_BLEND050,
+    K2_WHEEL_VEL_NOTCH,
+    K3_PITCH_RATE_WHEEL_VEL_NOTCH,
+    K3B_PITCH_RATE_WHEEL_VEL_NOTCH_BLEND075,
     UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET,
     interpolate_pitch_ref_offset,
     compute_outer_loop_pitch_ref,
@@ -1377,6 +1396,44 @@ SAGITTAL_AUTHORITY_PROFILES = {
     "physics_equilibrium_feedforward_outer_loop": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,  # Phase D: physics-based equilibrium wheel torque feedforward
     "physics_equilibrium_feedforward_outer_loop_low_band_support_v1": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V1,  # PFF low-band support correction candidate
     "physics_equilibrium_feedforward_outer_loop_low_band_support_v2": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,  # PFF low-band support correction v2 candidate
+    # I_SUPPORT_REFERENCE_REACQUISITION_V1 — opt-in diagnostic candidate (support reference blend fix)
+    "i_support_reference_reacquisition_v1": I_SUPPORT_REFERENCE_REACQUISITION_V1,  # I1 candidate
+    # J_TALL_HEIGHT_SAGITTAL_WIP_DAMPING_V1 family — opt-in diagnostic candidates.
+    # Increases pitch-rate damping (kd_pitch) and/or wheel velocity damping
+    # (k_wheel_velocity) at tall heights via continuous height scheduling.
+    # All use the same low-band v2 sagittal base as D_MODE_HIP_YAW_DIV_V1.
+    "j1a_tall_kd_pitch_v1": J1A_TALL_KD_PITCH_V1,
+    "j1b_tall_kd_pitch_v1": J1B_TALL_KD_PITCH_V1,
+    "j1c_tall_kd_pitch_v1": J1C_TALL_KD_PITCH_V1,
+    "j2a_tall_k_wheel_vel_v1": J2A_TALL_K_WHEEL_VEL_V1,
+    "j2b_tall_k_wheel_vel_v1": J2B_TALL_K_WHEEL_VEL_V1,
+    "j2c_tall_k_wheel_vel_v1": J2C_TALL_K_WHEEL_VEL_V1,
+    "j3a_tall_combined_v1": J3A_TALL_COMBINED_V1,
+    "j3b_tall_combined_v1": J3B_TALL_COMBINED_V1,
+    # K_TARGETED_2P5HZ_WIP_NOTCH_V1 family — opt-in diagnostic candidates.
+    # Applies a causal IIR biquad notch filter around ~2.5 Hz on selected
+    # damping input signals to prevent phase-lagged damping from feeding
+    # the WIP oscillation mode. Uses the same low-band v2 sagittal base.
+    "k1_pitch_rate_notch_v1": K1_PITCH_RATE_NOTCH,
+    "k1b_pitch_rate_notch_2p3": K1B_PITCH_RATE_NOTCH_2P3,
+    "k1c_pitch_rate_notch_2p7": K1C_PITCH_RATE_NOTCH_2P7,
+    "k1d_pitch_rate_notch_q4": K1D_PITCH_RATE_NOTCH_Q4,
+    "k1e_pitch_rate_notch_q8": K1E_PITCH_RATE_NOTCH_Q8,
+    "k1f_pitch_rate_notch_blend075": K1F_PITCH_RATE_NOTCH_BLEND075,
+    "k1g_pitch_rate_notch_blend050": K1G_PITCH_RATE_NOTCH_BLEND050,
+    "k2_wheel_vel_notch_v1": K2_WHEEL_VEL_NOTCH,
+    "k3_pitch_rate_wheel_vel_notch_v1": K3_PITCH_RATE_WHEEL_VEL_NOTCH,
+    "k3b_pitch_rate_wheel_vel_notch_blend075": K3B_PITCH_RATE_WHEEL_VEL_NOTCH_BLEND075,
+    # D_MODE_HIP_YAW_DIV_V1 — current-best architecture-correct candidate.
+    # Resolves to the low-band v2 sagittal schedule; the divergence-mode
+    # controller is enabled separately at runtime via --enable-mode-hip-yaw-divergence.
+    "physics_equilibrium_feedforward_outer_loop_low_band_support_v2_mode_hip_yaw_div_v1": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,  # current-best candidate (sagittal + mode-div flags)
+    # E_MODE_HIP_YAW_DIV_PLUS_WHEEL_YAW_V1 — opt-in architecture-fix candidate.
+    # Combines D's mode-based hip-yaw divergence controller with the differential
+    # wheel-yaw stabilizer for body-yaw correction through the correct actuator path.
+    # Resolves to the same low-band v2 sagittal schedule; wheel-yaw and mode-div
+    # are enabled separately at runtime via CLI flags. Opt-in only — NOT default.
+    "physics_equilibrium_feedforward_outer_loop_low_band_support_v2_mode_hip_yaw_div_wheel_yaw_v1": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,  # opt-in candidate (sagittal + mode-div + wheel-yaw flags)
     "unified_sagittal_state_feedback_no_offset": UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET,  # Unified sagittal state-feedback no-offset controller
 }
 
@@ -1762,6 +1819,10 @@ def build_step1_telemetry_template():
         "initialize_tau_prev_from_wbc_enabled": [],
         "hip_roll_abs_max": [],
         "hip_yaw_abs_max": [],
+        "push_active": [],
+        "push_force_x": [],
+        "push_force_y": [],
+        "push_schedule_entries": [],
         "hip_pitch_error_max": [],
         "knee_error_max": [],
         "wheel_balance_torque": [],
@@ -2441,6 +2502,24 @@ def main():
         help='Duration in steps each push lasts. Default: 5.',
     )
     parser.add_argument(
+        '--push-count',
+        type=int,
+        default=None,
+        help='Override number of push events. Default: None (use steps // push_interval).',
+    )
+    parser.add_argument(
+        '--push-start-step',
+        type=int,
+        default=None,
+        help='Override start step for the first push. Default: None (use 50 + rand).',
+    )
+    parser.add_argument(
+        '--sagittal-push-only',
+        action='store_true',
+        default=False,
+        help='Force all pushes in the +y (forward sagittal) direction instead of random angles.',
+    )
+    parser.add_argument(
         '--telemetry-decimation',
         type=int,
         default=1,
@@ -2841,6 +2920,27 @@ def main():
             "physics_equilibrium_feedforward_outer_loop",
             "physics_equilibrium_feedforward_outer_loop_low_band_support_v1",
             "physics_equilibrium_feedforward_outer_loop_low_band_support_v2",
+            "physics_equilibrium_feedforward_outer_loop_low_band_support_v2_mode_hip_yaw_div_v1",
+            "physics_equilibrium_feedforward_outer_loop_low_band_support_v2_mode_hip_yaw_div_wheel_yaw_v1",
+            "i_support_reference_reacquisition_v1",
+            "j1a_tall_kd_pitch_v1",
+            "j1b_tall_kd_pitch_v1",
+            "j1c_tall_kd_pitch_v1",
+            "j2a_tall_k_wheel_vel_v1",
+            "j2b_tall_k_wheel_vel_v1",
+            "j2c_tall_k_wheel_vel_v1",
+            "j3a_tall_combined_v1",
+            "j3b_tall_combined_v1",
+            "k1_pitch_rate_notch_v1",
+            "k1b_pitch_rate_notch_2p3",
+            "k1c_pitch_rate_notch_2p7",
+            "k1d_pitch_rate_notch_q4",
+            "k1e_pitch_rate_notch_q8",
+            "k1f_pitch_rate_notch_blend075",
+            "k1g_pitch_rate_notch_blend050",
+            "k2_wheel_vel_notch_v1",
+            "k3_pitch_rate_wheel_vel_notch_v1",
+            "k3b_pitch_rate_wheel_vel_notch_blend075",
             "unified_sagittal_state_feedback_no_offset",
             "band_limited_support_recenter",
         ],
@@ -3073,6 +3173,49 @@ def main():
         default="target",
         choices=["target", "zero_only_for_debug"],
         help="Mode-based hip-yaw divergence reference source. Default: 'target'.",
+    )
+    # ---- Support-aware mode-div gating (opt-in) ---- #
+    parser.add_argument(
+        "--mode-hip-yaw-div-support-enabled",
+        action="store_true",
+        default=False,
+        help="Enable support-aware mode-div authority gating",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-support-threshold-m",
+        type=float,
+        default=0.25,
+        help="Support error threshold (m) below which support gate = 1.0",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-support-width-m",
+        type=float,
+        default=0.10,
+        help="Support error width (m) over which gate transitions from 1.0 to min",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-support-min-gate",
+        type=float,
+        default=0.70,
+        help="Minimum support-error gate value (at large support error)",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-support-rate-threshold-mps",
+        type=float,
+        default=0.05,
+        help="Support error rate threshold (m/s) below which rate gate = 1.0",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-support-rate-width-mps",
+        type=float,
+        default=0.03,
+        help="Support error rate width (m/s) over which rate gate transitions",
+    )
+    parser.add_argument(
+        "--mode-hip-yaw-div-support-rate-min-gate",
+        type=float,
+        default=0.70,
+        help="Minimum support-rate gate value",
     )
 
     args = parser.parse_args()
@@ -4001,11 +4144,25 @@ def main():
         "mode_hip_yaw_div_height_gate": [],
         "mode_hip_yaw_div_tau_left": [],
         "mode_hip_yaw_div_tau_right": [],
+        "mode_hip_yaw_div_tau_left_raw": [],
+        "mode_hip_yaw_div_tau_right_raw": [],
+        "mode_hip_yaw_div_tau_left_raw": [],
+        "mode_hip_yaw_div_tau_right_raw": [],
         "mode_hip_yaw_div_tau_left_sat": [],
         "mode_hip_yaw_div_tau_right_sat": [],
+        "mode_hip_yaw_div_torque_margin_left": [],
+        "mode_hip_yaw_div_torque_margin_right": [],
         "mode_hip_yaw_div_error": [],
         "mode_hip_yaw_div_rate": [],
         "mode_hip_yaw_div_ref": [],
+        # Support-aware mode-div gating telemetry (opt-in)
+        "mode_hip_yaw_div_support_gate_enabled": [],
+        "mode_hip_yaw_div_support_error_m": [],
+        "mode_hip_yaw_div_support_error_rate_mps": [],
+        "mode_hip_yaw_div_support_error_gate": [],
+        "mode_hip_yaw_div_support_rate_gate": [],
+        "mode_hip_yaw_div_effective_support_gate": [],
+        "mode_hip_yaw_div_combined_gate": [],
         "hip_yaw_mode_ownership_violation": [],
         # HY-FF debug telemetry
         "hy_ff_height_passed_to_shape": [],
@@ -4159,6 +4316,18 @@ def main():
         "wheel_yaw_tau_left": [],
         "wheel_yaw_tau_right": [],
         "wheel_yaw_saturated": [],
+        "wheel_yaw_kp": [],
+        "wheel_yaw_kd": [],
+        "wheel_yaw_max_torque": [],
+        "wheel_yaw_height_gate": [],
+        "wheel_yaw_tau_diff": [],
+        "wheel_yaw_use_numerical_rate": [],
+        # Body yaw and hip-yaw ownership telemetry
+        "body_yaw_owner": [],
+        "hip_yaw_divergence_owner": [],
+        # Yaw controller hip-yaw contribution telemetry
+        "yaw_controller_tau_hip_yaw_left": [],
+        "yaw_controller_tau_hip_yaw_right": [],
         # Hip-yaw mode decomposition telemetry
         "hip_yaw_common_error_rad": [],
         "hip_yaw_common_error_sum_abs_rad": [],
@@ -4483,6 +4652,7 @@ def main():
                 peak_kp_deg_per_m=low_band_kp_peak_deg_per_m,
                 peak_theta_ref_max_deg=float(getattr(profile, "low_band_support_theta_ref_max_peak_deg", 0.90)),
                 peak_pitch_ref_offset_deg=low_band_pitch_ref_offset_peak_deg,
+                blend_with_base=bool(getattr(profile, "low_band_support_blend_with_base", False)),
             )
             support_outer_loop_height_scale = float(shaped["support_outer_loop_height_scale"])
             outer_loop_kp = float(shaped["support_outer_loop_kp_effective"])
@@ -4496,7 +4666,8 @@ def main():
                 f"height={shape_height_m:.3f} m scale={support_outer_loop_height_scale:.3f} "
                 f"Kp={outer_loop_kp:.3f} Kd={outer_loop_kd:.3f} "
                 f"theta_max={outer_loop_theta_ref_max:.2f} "
-                f"pitch_ref_offset={support_outer_loop_pitch_ref_offset_deg:+.2f}"
+                f"pitch_ref_offset={support_outer_loop_pitch_ref_offset_deg:+.2f} "
+                f"blend={bool(getattr(profile, 'low_band_support_blend_with_base', False))}"
             )
 
         outer_loop_sign_selected = "none"
@@ -4828,18 +4999,32 @@ def main():
     push_mag_n = float(getattr(args, "push_magnitude_n", 15.0))
     push_interval = int(getattr(args, "push_interval_steps", 200))
     push_duration = int(getattr(args, "push_duration_steps", 5))
+    push_count_override = getattr(args, "push_count", None)
+    push_start_step_override = getattr(args, "push_start_step", None)
+    sagittal_push_only = bool(getattr(args, "sagittal_push_only", False))
     push_rng = random.Random(20260617)
     push_schedule = []  # list of (start_step, end_step, dx_vel, dy_vel)
     push_active_count = 0
     push_applied_count = 0
+    # Per-step push state for telemetry
+    push_active_now = False
+    push_fx_now = 0.0
+    push_fy_now = 0.0
     if push_enabled:
-        # Generate ~5 pushes across max_steps using random magnitudes + directions.
-        n_pushes = max(1, max_steps // push_interval)
+        n_pushes = (max(1, max_steps // push_interval)
+                    if push_count_override is None else push_count_override)
         for i in range(n_pushes):
-            start = 50 + i * push_interval + push_rng.randint(-15, 15)
+            if push_start_step_override is not None:
+                start = push_start_step_override + i * push_interval
+            else:
+                start = 50 + i * push_interval + push_rng.randint(-15, 15)
             if start < 0 or start >= max_steps:
                 continue
-            angle = push_rng.uniform(0, 2 * math.pi)
+            if sagittal_push_only:
+                # Forward sagittal push (+y direction)
+                angle = math.pi / 2
+            else:
+                angle = push_rng.uniform(0, 2 * math.pi)
             # Convert Newton-impulse to a velocity change on torso CoM.
             # Approx mass ~ robot_mass; dq = J * F * dt where dt is one control step.
             push_force_x = push_mag_n * math.cos(angle)
@@ -4853,13 +5038,19 @@ def main():
 
     def _apply_pending_push():
         """If current step falls inside any scheduled push window, add a velocity impulse."""
-        nonlocal push_active_count
+        nonlocal push_active_count, push_active_now, push_fx_now, push_fy_now
         if not push_enabled:
+            push_active_now = False
+            push_fx_now = 0.0
+            push_fy_now = 0.0
             return
         # Determine if any push is active at this step.
         active = [(fx, fy) for s, e, fx, fy in push_schedule if s <= step < e]
         if not active:
             mj_data.xfrc_applied[:] = 0
+            push_active_now = False
+            push_fx_now = 0.0
+            push_fy_now = 0.0
             return
         # Sum contributions (rare to overlap; sum conservatively).
         fx_total = sum(fx for fx, _ in active)
@@ -4868,6 +5059,9 @@ def main():
         mj_data.xfrc_applied[1, 0] = fx_total
         mj_data.xfrc_applied[1, 1] = fy_total
         push_active_count += 1
+        push_active_now = True
+        push_fx_now = fx_total
+        push_fy_now = fy_total
 
     def simulation_step():
         nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary, prev_support_error, outer_loop_prev_support_error_m, outer_loop_support_error_rate_smoothed, outer_loop_pitch_ref_smoothed_deg, outer_loop_integral_accum_m_s
@@ -5723,6 +5917,8 @@ def main():
             mode_hip_yaw_div_enabled = bool(getattr(args, "enable_mode_hip_yaw_divergence", False))
             mode_div_tau_left = 0.0
             mode_div_tau_right = 0.0
+            mode_div_tau_left_raw = 0.0
+            mode_div_tau_right_raw = 0.0
             mode_div_error = 0.0
             mode_div_rate = 0.0
             mode_div_ref = 0.0
@@ -5730,6 +5926,12 @@ def main():
             mode_div_tau_left_sat = False
             mode_div_tau_right_sat = False
             mode_ownership_violation = 0
+            mode_div_support_error_gate = 1.0
+            mode_div_support_rate_gate = 1.0
+            mode_div_effective_support_gate = 1.0
+            mode_div_combined_gate = 1.0
+            mode_div_support_error_val = 0.0
+            mode_div_support_error_rate_val = 0.0
             if mode_hip_yaw_div_enabled:
                 from wheeled_biped.controllers.hip_yaw_mode_math import (
                     decompose,
@@ -5748,6 +5950,14 @@ def main():
                     "soft_limit_rad": float(args.mode_hip_yaw_div_soft_limit_rad),
                     "soft_limit_gain": float(args.mode_hip_yaw_div_soft_gain),
                     "ref_source": str(args.mode_hip_yaw_div_ref_source),
+                    # Support-aware gating (opt-in)
+                    "support_gate_enabled": bool(getattr(args, "mode_hip_yaw_div_support_enabled", False)),
+                    "support_threshold_m": float(args.mode_hip_yaw_div_support_threshold_m),
+                    "support_width_m": float(args.mode_hip_yaw_div_support_width_m),
+                    "support_min_gate": float(args.mode_hip_yaw_div_support_min_gate),
+                    "support_rate_threshold_mps": float(args.mode_hip_yaw_div_support_rate_threshold_mps),
+                    "support_rate_width_mps": float(args.mode_hip_yaw_div_support_rate_width_mps),
+                    "support_rate_min_gate": float(args.mode_hip_yaw_div_support_rate_min_gate),
                 }
                 mode_div_ctrl = ModeBasedHipYawDivergenceController(mode_div_cfg)
                 l_pos = float(joint_pos[1])
@@ -5760,18 +5970,32 @@ def main():
                 ref_common, ref_div = decompose(l_ref, r_ref)
                 _act_common, actual_div = decompose(l_pos, r_pos)
                 div_rate = l_vel - r_vel
+                # Support state for support-aware gating
+                support_error = float(sagittal_diag.get("support_position_error_m", 0.0))
+                support_error_rate = float(sagittal_diag.get("outer_loop_support_error_rate_mps", 0.0))
+                mode_div_support_error_val = support_error
+                mode_div_support_error_rate_val = support_error_rate
                 state = HipYawState(
                     div_error=actual_div - ref_div,
                     div_rate=div_rate,
                     height=float(centroidal_state_control.com_pos[2]),
+                    support_error=support_error,
+                    support_error_rate=support_error_rate,
                 )
                 mode_div_out = mode_div_ctrl.compute(state)
                 mode_div_tau_left = float(mode_div_out["tau_left"])
                 mode_div_tau_right = float(mode_div_out["tau_right"])
+                mode_div_tau_left_raw = float(mode_div_out.get("tau_left_raw", mode_div_tau_left))
+                mode_div_tau_right_raw = float(mode_div_out.get("tau_right_raw", mode_div_tau_right))
                 mode_div_error = float(state.div_error)
                 mode_div_rate = float(div_rate)
                 mode_div_ref = float(ref_div)
                 mode_div_height_gate = float(mode_div_ctrl._height_gate(state.height))
+                # Support-aware gate telemetry
+                mode_div_support_error_gate = float(mode_div_out.get("support_error_gate", 1.0))
+                mode_div_support_rate_gate = float(mode_div_out.get("support_rate_gate", 1.0))
+                mode_div_effective_support_gate = float(mode_div_out.get("effective_support_gate", 1.0))
+                mode_div_combined_gate = float(mode_div_out.get("combined_gate", mode_div_height_gate))
                 # Reconstruct from (raw_common + 0.5 * div, raw_common - 0.5 * div)
                 # but apply only the antisymmetric component on hip-yaw indices 1, 6.
                 # Saturation flag
@@ -6634,11 +6858,35 @@ def main():
         telemetry["mode_hip_yaw_div_height_gate"].append(float(mode_div_height_gate))
         telemetry["mode_hip_yaw_div_tau_left"].append(float(mode_div_tau_left))
         telemetry["mode_hip_yaw_div_tau_right"].append(float(mode_div_tau_right))
+        telemetry["mode_hip_yaw_div_tau_left_raw"].append(float(mode_div_tau_left_raw))
+        telemetry["mode_hip_yaw_div_tau_right_raw"].append(float(mode_div_tau_right_raw))
         telemetry["mode_hip_yaw_div_tau_left_sat"].append(bool(mode_div_tau_left_sat))
         telemetry["mode_hip_yaw_div_tau_right_sat"].append(bool(mode_div_tau_right_sat))
+        telemetry["mode_hip_yaw_div_torque_margin_left"].append(
+            float(args.mode_hip_yaw_div_max_torque) - abs(float(mode_div_tau_left_raw))
+            if mode_hip_yaw_div_enabled else 0.0
+        )
+        telemetry["mode_hip_yaw_div_torque_margin_right"].append(
+            float(args.mode_hip_yaw_div_max_torque) - abs(float(mode_div_tau_right_raw))
+            if mode_hip_yaw_div_enabled else 0.0
+        )
         telemetry["mode_hip_yaw_div_error"].append(float(mode_div_error))
         telemetry["mode_hip_yaw_div_rate"].append(float(mode_div_rate))
         telemetry["mode_hip_yaw_div_ref"].append(float(mode_div_ref))
+        # Support-aware mode-div gating telemetry
+        telemetry["mode_hip_yaw_div_support_gate_enabled"].append(
+            bool(getattr(args, "mode_hip_yaw_div_support_enabled", False))
+        )
+        telemetry["mode_hip_yaw_div_support_error_m"].append(
+            float(mode_div_support_error_val) if mode_hip_yaw_div_enabled else 0.0
+        )
+        telemetry["mode_hip_yaw_div_support_error_rate_mps"].append(
+            float(mode_div_support_error_rate_val) if mode_hip_yaw_div_enabled else 0.0
+        )
+        telemetry["mode_hip_yaw_div_support_error_gate"].append(float(mode_div_support_error_gate))
+        telemetry["mode_hip_yaw_div_support_rate_gate"].append(float(mode_div_support_rate_gate))
+        telemetry["mode_hip_yaw_div_effective_support_gate"].append(float(mode_div_effective_support_gate))
+        telemetry["mode_hip_yaw_div_combined_gate"].append(float(mode_div_combined_gate))
         telemetry["hip_yaw_mode_ownership_violation"].append(int(mode_ownership_violation))
         telemetry["hip_yaw_div_tau_max"].append(shape_diag.get("hip_yaw_div_tau_max", 0.0) if is_balance_core_mode(args) else 0.0)
         telemetry["hip_yaw_div_z_low"].append(shape_diag.get("hip_yaw_div_z_low", 0.0) if is_balance_core_mode(args) else 0.0)
@@ -6732,12 +6980,43 @@ def main():
             telemetry["wheel_yaw_tau_left"].append(yaw_diag.get("wheel_yaw_tau_left", 0.0))
             telemetry["wheel_yaw_tau_right"].append(yaw_diag.get("wheel_yaw_tau_right", 0.0))
             telemetry["wheel_yaw_saturated"].append(yaw_diag.get("wheel_yaw_saturated", False))
+            telemetry["wheel_yaw_kp"].append(yaw_diag.get("wheel_yaw_kp", 0.0))
+            telemetry["wheel_yaw_kd"].append(yaw_diag.get("wheel_yaw_kd", 0.0))
+            telemetry["wheel_yaw_max_torque"].append(yaw_diag.get("wheel_yaw_max_torque", 0.0))
+            telemetry["wheel_yaw_height_gate"].append(yaw_diag.get("wheel_yaw_height_gate", 0.0))
+            telemetry["wheel_yaw_use_numerical_rate"].append(yaw_diag.get("wheel_yaw_use_numerical_rate", False))
+            tl = yaw_diag.get("wheel_yaw_tau_left", 0.0)
+            tr = yaw_diag.get("wheel_yaw_tau_right", 0.0)
+            telemetry["wheel_yaw_tau_diff"].append(float(tl - tr))
         else:
             telemetry["wheel_yaw_error"].append(0.0)
             telemetry["wheel_yaw_rate"].append(0.0)
             telemetry["wheel_yaw_tau_left"].append(0.0)
             telemetry["wheel_yaw_tau_right"].append(0.0)
             telemetry["wheel_yaw_saturated"].append(False)
+            telemetry["wheel_yaw_kp"].append(0.0)
+            telemetry["wheel_yaw_kd"].append(0.0)
+            telemetry["wheel_yaw_max_torque"].append(0.0)
+            telemetry["wheel_yaw_height_gate"].append(0.0)
+            telemetry["wheel_yaw_use_numerical_rate"].append(False)
+            telemetry["wheel_yaw_tau_diff"].append(0.0)
+
+        # Body yaw and hip-yaw ownership telemetry
+        # body_yaw_owner: "wheel_yaw_stabilizer" when enabled, else "yaw_controller"
+        telemetry["body_yaw_owner"].append(
+            "wheel_yaw_stabilizer" if is_wheel_yaw else "yaw_controller"
+        )
+        # hip_yaw_divergence_owner: "mode_based_divergence" when enabled, else "shape_posture"
+        telemetry["hip_yaw_divergence_owner"].append(
+            "mode_based_divergence" if mode_hip_yaw_div_enabled else "shape_posture"
+        )
+        # Yaw controller hip-yaw torque contribution (present regardless of wheel_yaw)
+        telemetry["yaw_controller_tau_hip_yaw_left"].append(
+            yaw_diag.get("tau_yaw_left", 0.0)
+        )
+        telemetry["yaw_controller_tau_hip_yaw_right"].append(
+            yaw_diag.get("tau_yaw_right", 0.0)
+        )
 
         # Hip-yaw mode decomposition telemetry
         l_hip_yaw_err_rad = l_hip_yaw_error
@@ -6879,6 +7158,11 @@ def main():
         telemetry["initialize_tau_prev_from_wbc_enabled"].append(args.initialize_tau_prev_from_wbc)
         telemetry["hip_roll_abs_max"].append(step1_diagnostics["hip_roll_abs_max"])
         telemetry["hip_yaw_abs_max"].append(step1_diagnostics["hip_yaw_abs_max"])
+        # Push disturbance telemetry
+        telemetry["push_active"].append(push_active_now)
+        telemetry["push_force_x"].append(push_fx_now)
+        telemetry["push_force_y"].append(push_fy_now)
+        telemetry["push_schedule_entries"].append(len(push_schedule))
         telemetry["hip_pitch_error_max"].append(step1_diagnostics["hip_pitch_error_max"])
         telemetry["knee_error_max"].append(step1_diagnostics["knee_error_max"])
         telemetry["wheel_balance_torque"].append(step1_diagnostics["wheel_balance_torque"])

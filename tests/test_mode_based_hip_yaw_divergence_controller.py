@@ -287,7 +287,10 @@ class TestControllerGuardRails:
 class TestTelemetryFieldsWhenEnabled:
     """When the candidate controller is enabled, output must contain telemetry keys."""
 
-    EXPECTED_OUTPUT_KEYS = ["tau_left", "tau_right"]
+    EXPECTED_OUTPUT_KEYS = [
+        "tau_left", "tau_right", "tau_left_raw", "tau_right_raw",
+        "support_error_gate", "support_rate_gate", "effective_support_gate", "combined_gate",
+    ]
 
     def test_output_has_required_keys(self):
         """Compute output dict has the expected keys."""
@@ -317,7 +320,11 @@ class TestTelemetryFieldsWhenEnabled:
         out = ctrl.compute(state)
         for key in self.EXPECTED_OUTPUT_KEYS:
             assert key in out, f"Missing key when disabled: {key}"
-            assert out[key] == 0.0
+            # Gate keys default to 1.0 when disabled (fully open = no attenuation)
+            if "gate" in key:
+                assert out[key] == 1.0, f"Gate key {key} should be 1.0 when disabled"
+            else:
+                assert out[key] == 0.0
 
     def test_config_attributes_exposed(self):
         """Controller exposes its config as attributes for telemetry/logging."""

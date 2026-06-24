@@ -27,6 +27,7 @@ from wheeled_biped.controllers.position_hold_capture_gate import (
     PositionHoldCaptureGate,
     CaptureGateDiagnostics,
 )
+from wheeled_biped.controllers.signal_filters import BiquadNotchFilter, smoothstep_gate
 
 
 def smoothstep01(u: float) -> float:
@@ -279,6 +280,19 @@ class SagittalAuthoritySchedule:
     k_wheel_velocity_z_low: float = 0.45
     k_wheel_velocity_z_high: float = 0.52
 
+    # Continuous kd_pitch scheduling (Tall-height WIP damping fix).
+    # Increases pitch-rate damping at tall heights to suppress the 2.5 Hz
+    # wheeled inverted pendulum mode without affecting low-height behavior.
+    # Maps: z_ref <= z_low -> kd_pitch_nominal (no extra damping)
+    #       z_ref >= z_high -> kd_pitch_high_max (full extra damping)
+    # Uses smoothstep interpolation between the two bounds.
+    # Disabled by default so every legacy profile is unchanged.
+    continuous_kd_pitch: bool = False
+    kd_pitch_nominal: float = 10.0
+    kd_pitch_high_max: float = 20.0
+    kd_pitch_z_low: float = 0.40
+    kd_pitch_z_high: float = 0.52
+
     # Position integral settings (Step E extreme height fix)
     enable_position_integral: bool = False
     ki_position_integral: float = 0.0  # 0.0 when disabled
@@ -388,6 +402,12 @@ class SagittalAuthoritySchedule:
     low_band_support_kp_peak_deg_per_m: float = 1.5
     low_band_support_theta_ref_max_peak_deg: float = 3.00
     low_band_support_pitch_ref_offset_peak_deg: float = 0.0
+    # When True, the low-band support Kp blends with the base (calibrated) Kp
+    # so that the effective Kp does not drop to zero at heights far from the
+    # low-band center. At scale=1 (near center), Kp ≈ peak_kp; at scale=0 (far),
+    # Kp ≈ base_kp. This is required for tall-height push recovery where the
+    # support correction must remain active. Default False for backward compat.
+    low_band_support_blend_with_base: bool = False
 
     # Physics-based equilibrium feedforward (Phase D, opt-in).
     # When True, the runtime reads tau_eq_ff(h) from
@@ -948,6 +968,44 @@ class SagittalAuthoritySchedule:
     pitch_bias_disable_if_height_lt_m: float = 0.25               # Hard safety disable on low height
     pitch_bias_gate_abs_error_soft_m: float = 0.12                # Soft gate (apply allowed)
     pitch_bias_gate_abs_error_hard_m: float = 0.20                # Hard gate (apply blocked)
+
+    # ---- Notch / band-stop filter for 2.5 Hz WIP mode (K candidate family) ----
+    # A causal IIR biquad notch filter centred on the observed 2.5 Hz WIP mode.
+    # Only active at tall heights via the height gate.  Opt-in only — every
+    # existing profile has enable_wip_notch_filter=False and is unchanged.
+    enable_wip_notch_filter: bool = False
+
+    # Target signal(s) to filter.  Allowed values:
+    #   "pitch_rate"                     — pitch_rate in tau_pitch_rate term
+    #   "wheel_velocity"                 — wheel_vel in tau_wheel_vel term
+    #   "pitch_rate_and_wheel_velocity"  — both
+    #   "support_velocity"               — support_vel in support velocity damping
+    #   "all_damping_signals"            — pitch_rate + wheel_velocity + support_vel
+    wip_notch_target_signal: str = "pitch_rate"
+
+    # Filter centre frequency (Hz).  Telemetry shows ~2.4–2.5 Hz for pitch_rate.
+    wip_notch_center_hz: float = 2.5
+
+    # Quality factor (Q).  Higher Q = narrower notch.
+    # Recommended: 4–8 for 100 Hz sample rate, 2.5 Hz centre.
+    wip_notch_q: float = 6.0
+
+    # Sample rate (Hz).  0 means auto-derive from controller dt.  100 Hz nominal.
+    wip_notch_fs_hz: float = 0.0  # 0 = auto
+
+    # Height gate for filter activation (smooth Hermite interpolation).
+    # Below z_start → filter blend = 0 (fully raw).
+    # Above z_full → filter blend = blend (fully filtered if blend=1).
+    wip_notch_height_gate_start_m: float = 0.42
+    wip_notch_height_gate_full_m: float = 0.48
+
+    # Enable the height gate.  When False, the filter is always at full blend
+    # (when enable_wip_notch_filter is True).
+    wip_notch_gate_enabled: bool = True
+
+    # Filter blend ratio.  0.0 = fully raw; 1.0 = fully filtered.
+    # Intermediate values allow partial blending.
+    wip_notch_filter_blend: float = 1.0
 
     def is_active_for_variant(self, variant_name: str | None) -> bool:
         return variant_name is not None and variant_name in self.applies_to_variants
@@ -2817,6 +2875,245 @@ PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2 = replace(
     low_band_support_pitch_ref_offset_peak_deg=1.00,
 )
 
+# I_SUPPORT_REFERENCE_REACQUISITION_V1 — candidate I1 for support reference
+# reacquisition and pitch-support limit-cycle suppression.
+# Based on the low-band v2 sagittal schedule, with the critical fix that the
+# low-band support Kp blends with the base (calibrated) Kp instead of replacing
+# it. This ensures the support outer loop provides centering feedback at ALL
+# heights, including the tall high_0p480 variant where the previous profile
+# zeroed the effective Kp (height_scale ≈ 0 far from the 0.320 m low-band center).
+#
+# Key change vs v2: low_band_support_blend_with_base=True
+# At scale=1 (near 0.320 m): Kp ≈ peak_kp = 1.4 deg/m (same as v2)
+# At scale=0 (at 0.480 m): Kp ≈ base_kp = 1.050 deg/m (calibrated v2 outer loop)
+# Smooth transition in between.
+#
+# This is an opt-in diagnostic candidate. D remains current-best.
+# Disabled by default.
+I_SUPPORT_REFERENCE_REACQUISITION_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="i_support_reference_reacquisition_v1",
+    low_band_support_blend_with_base=True,
+)
+
+# =====================================================================
+# J_TALL_HEIGHT_SAGITTAL_WIP_DAMPING_V1 Family (Tall-height WIP damping)
+# =====================================================================
+# Opt-in candidate family for increasing sagittal damping at tall height
+# to suppress the 2.505 Hz wheeled inverted pendulum pitch-support mode.
+#
+# Base: PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2
+#       (same sagittal base as G1_sg080/D_MODE_HIP_YAW_DIV_V1)
+#
+# Mode-div parameters are applied via CLI flags (same as G1_sg080:
+# kp=10, kd=0.5, mt=7.5, sl=0.30, sg=0.80).
+#
+# These profiles only add damping scheduling at tall heights. They do NOT
+# change pitch Kp, support outer loop Kp, PFF source, or any low-height
+# behavior. D remains current-best. J candidates are opt-in diagnostic only.
+#
+# All profiles: continuous height-scheduled damping increase above z_low,
+# with smoothstep interpolation to z_high. This ensures zero change at
+# low/nominal heights and progressive engagement from 0.40 m upward.
+#
+# J1 family — height-scheduled kd_pitch (pitch rate damping) increase at tall height.
+#   Directly dampens the 2.5 Hz pitch oscillation component.
+# J1a: mild increase (nominal 10.0 -> high_max 15.0)
+# J1b: moderate increase (nominal 10.0 -> high_max 20.0)
+# J1c: strong increase (nominal 10.0 -> high_max 30.0)
+#
+# J2 family — height-scheduled k_wheel_velocity increase at tall height.
+#   Uses the existing continuous_k_wheel_velocity infrastructure.
+#   Dampens the wheel velocity component of the WIP mode.
+# J2a: mild increase (nominal 0.50 -> high_max 0.85)
+# J2b: moderate increase (nominal 0.50 -> high_max 1.00)
+# J2c: stronger increase (nominal 0.50 -> high_max 1.25)
+#
+# J3 family — Combined kd_pitch + k_wheel_velocity damping.
+# J3a: mild combined (J1a + J2a)
+# J3b: moderate combined (J1b + J2b)
+# J3c: strong combined (J1c + J2c)
+# =====================================================================
+
+J1A_TALL_KD_PITCH_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j1a_tall_kd_pitch_v1",
+    continuous_kd_pitch=True,
+    kd_pitch_nominal=10.0,
+    kd_pitch_high_max=15.0,
+    kd_pitch_z_low=0.40,
+    kd_pitch_z_high=0.52,
+)
+
+J1B_TALL_KD_PITCH_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j1b_tall_kd_pitch_v1",
+    continuous_kd_pitch=True,
+    kd_pitch_nominal=10.0,
+    kd_pitch_high_max=20.0,
+    kd_pitch_z_low=0.40,
+    kd_pitch_z_high=0.52,
+)
+
+J1C_TALL_KD_PITCH_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j1c_tall_kd_pitch_v1",
+    continuous_kd_pitch=True,
+    kd_pitch_nominal=10.0,
+    kd_pitch_high_max=30.0,
+    kd_pitch_z_low=0.40,
+    kd_pitch_z_high=0.52,
+)
+
+J2A_TALL_K_WHEEL_VEL_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j2a_tall_k_wheel_vel_v1",
+    continuous_k_wheel_velocity=True,
+    k_wheel_velocity_nominal=0.50,
+    k_wheel_velocity_high_max=0.85,
+    k_wheel_velocity_z_low=0.45,
+    k_wheel_velocity_z_high=0.52,
+)
+
+J2B_TALL_K_WHEEL_VEL_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j2b_tall_k_wheel_vel_v1",
+    continuous_k_wheel_velocity=True,
+    k_wheel_velocity_nominal=0.50,
+    k_wheel_velocity_high_max=1.00,
+    k_wheel_velocity_z_low=0.45,
+    k_wheel_velocity_z_high=0.52,
+)
+
+J2C_TALL_K_WHEEL_VEL_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j2c_tall_k_wheel_vel_v1",
+    continuous_k_wheel_velocity=True,
+    k_wheel_velocity_nominal=0.50,
+    k_wheel_velocity_high_max=1.25,
+    k_wheel_velocity_z_low=0.45,
+    k_wheel_velocity_z_high=0.52,
+)
+
+J3A_TALL_COMBINED_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j3a_tall_combined_v1",
+    continuous_kd_pitch=True,
+    kd_pitch_nominal=10.0,
+    kd_pitch_high_max=15.0,
+    kd_pitch_z_low=0.40,
+    kd_pitch_z_high=0.52,
+    continuous_k_wheel_velocity=True,
+    k_wheel_velocity_nominal=0.50,
+    k_wheel_velocity_high_max=0.85,
+    k_wheel_velocity_z_low=0.45,
+    k_wheel_velocity_z_high=0.52,
+)
+
+J3B_TALL_COMBINED_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j3b_tall_combined_v1",
+    continuous_kd_pitch=True,
+    kd_pitch_nominal=10.0,
+    kd_pitch_high_max=20.0,
+    kd_pitch_z_low=0.40,
+    kd_pitch_z_high=0.52,
+    continuous_k_wheel_velocity=True,
+    k_wheel_velocity_nominal=0.50,
+    k_wheel_velocity_high_max=1.00,
+    k_wheel_velocity_z_low=0.45,
+    k_wheel_velocity_z_high=0.52,
+)
+
+# =====================================================================
+# K_TARGETED_2P5HZ_WIP_NOTCH_V1 Family (Notch-filtered damping, 2.5 Hz WIP)
+# =====================================================================
+# Opt-in candidate family that applies a causal IIR biquad notch filter
+# around the observed 2.5 Hz WIP mode to prevent phase-lagged damping
+# signals from feeding the oscillation.
+#
+# Base: G1_sg080 (same sagittal as D_MODE_HIP_YAW_DIV_V1)
+#       physics_equilibrium_feedforward_outer_loop_low_band_support_v2
+#       + enable_wip_notch_filter=True + filter parameters.
+#
+# Mode-div parameters are applied via CLI flags (same as G1_sg080:
+# kp=10, kd=0.5, mt=7.5, sl=0.30, sg=0.80).
+#
+# D remains current-best. K candidates are opt-in diagnostic only.
+# =====================================================================
+
+K1_PITCH_RATE_NOTCH = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="k1_pitch_rate_notch_v1",
+    enable_wip_notch_filter=True,
+    wip_notch_target_signal="pitch_rate",
+    wip_notch_center_hz=2.5,
+    wip_notch_q=6.0,
+    wip_notch_filter_blend=1.0,
+    wip_notch_gate_enabled=True,
+    wip_notch_height_gate_start_m=0.42,
+    wip_notch_height_gate_full_m=0.48,
+)
+K1B_PITCH_RATE_NOTCH_2P3 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1b_pitch_rate_notch_2p3",
+    wip_notch_center_hz=2.3,
+)
+K1C_PITCH_RATE_NOTCH_2P7 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1c_pitch_rate_notch_2p7",
+    wip_notch_center_hz=2.7,
+)
+K1D_PITCH_RATE_NOTCH_Q4 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1d_pitch_rate_notch_q4",
+    wip_notch_q=4.0,
+)
+K1E_PITCH_RATE_NOTCH_Q8 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1e_pitch_rate_notch_q8",
+    wip_notch_q=8.0,
+)
+K1F_PITCH_RATE_NOTCH_BLEND075 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1f_pitch_rate_notch_blend075",
+    wip_notch_filter_blend=0.75,
+)
+K1G_PITCH_RATE_NOTCH_BLEND050 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1g_pitch_rate_notch_blend050",
+    wip_notch_filter_blend=0.50,
+)
+K2_WHEEL_VEL_NOTCH = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="k2_wheel_vel_notch_v1",
+    enable_wip_notch_filter=True,
+    wip_notch_target_signal="wheel_velocity",
+    wip_notch_center_hz=2.5,
+    wip_notch_q=6.0,
+    wip_notch_filter_blend=1.0,
+    wip_notch_gate_enabled=True,
+    wip_notch_height_gate_start_m=0.42,
+    wip_notch_height_gate_full_m=0.48,
+)
+K3_PITCH_RATE_WHEEL_VEL_NOTCH = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="k3_pitch_rate_wheel_vel_notch_v1",
+    enable_wip_notch_filter=True,
+    wip_notch_target_signal="pitch_rate_and_wheel_velocity",
+    wip_notch_center_hz=2.5,
+    wip_notch_q=6.0,
+    wip_notch_filter_blend=1.0,
+    wip_notch_gate_enabled=True,
+    wip_notch_height_gate_start_m=0.42,
+    wip_notch_height_gate_full_m=0.48,
+)
+K3B_PITCH_RATE_WHEEL_VEL_NOTCH_BLEND075 = replace(
+    K3_PITCH_RATE_WHEEL_VEL_NOTCH,
+    profile_name="k3b_pitch_rate_wheel_vel_notch_blend075",
+    wip_notch_filter_blend=0.75,
+)
+
 # =====================================================================
 # Unified Sagittal State-Feedback No-Offset Controller
 # =====================================================================
@@ -2943,6 +3240,8 @@ JOINT_FIX_PROFILES = {
     "physics_equilibrium_feedforward_outer_loop": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,
     "physics_equilibrium_feedforward_outer_loop_low_band_support_v1": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V1,
     "physics_equilibrium_feedforward_outer_loop_low_band_support_v2": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    # I_SUPPORT_REFERENCE_REACQUISITION_V1 — candidate I1 (opt-in, diagnostic only)
+    "i_support_reference_reacquisition_v1": I_SUPPORT_REFERENCE_REACQUISITION_V1,
     # Unified sagittal state-feedback no-offset controller
     "unified_sagittal_state_feedback_no_offset": UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET,
 }
@@ -3187,6 +3486,13 @@ class SagittalVelocityDampedBalanceController:
         self._pitch_bias_estimate_nm = 0.0   # EMA of tau_pitch in stable windows
         self._pitch_bias_samples = 0          # number of EMA updates
         self._pitch_bias_comp_tau_nm = 0.0   # current bounded compensation
+
+        # Notch filter state (K candidate family — 2.5 Hz WIP mode)
+        self._wip_notch_pitch_rate: BiquadNotchFilter | None = None
+        self._wip_notch_wheel_left: BiquadNotchFilter | None = None
+        self._wip_notch_wheel_right: BiquadNotchFilter | None = None
+        self._wip_notch_support_vel: BiquadNotchFilter | None = None
+        self._wip_notch_fs_hz: float = 0.0
 
         # Unified sagittal state-feedback controller state
         self._prev_unified_tau_cmd = 0.0      # previous step's tau_cmd for rate limiting
@@ -3446,6 +3752,21 @@ class SagittalVelocityDampedBalanceController:
             effective_k_wheel_velocity = self.k_wheel_velocity
             high_height_wheel_damping_active = False
 
+        # kd_pitch scheduling (Tall-height WIP damping fix, J candidate).
+        # Uses the same smoothstep function as k_wheel_velocity (increases at tall heights).
+        if self.authority_schedule.continuous_kd_pitch:
+            effective_kd_pitch = scheduled_k_wheel_velocity(
+                z_ref=schedule_height_ref,
+                k_nominal=self.authority_schedule.kd_pitch_nominal,
+                k_high_max=self.authority_schedule.kd_pitch_high_max,
+                z_low=self.authority_schedule.kd_pitch_z_low,
+                z_high=self.authority_schedule.kd_pitch_z_high,
+            )
+            high_height_kd_pitch_active = effective_kd_pitch > self.authority_schedule.kd_pitch_nominal
+        else:
+            effective_kd_pitch = self.kd_pitch
+            high_height_kd_pitch_active = False
+
         SMALL_EPSILON = 1e-6
         low_height_sagittal_schedule_active = (
             (self.authority_schedule.continuous_k_position or
@@ -3470,6 +3791,96 @@ class SagittalVelocityDampedBalanceController:
         # This is the rate of change of support-center position error in initial-heading frame
         support_position_velocity_m_s = (sagittal_position_error_m - self.prev_support_position_error_m) / self.dt
         self.prev_support_position_error_m = sagittal_position_error_m
+
+        # ---- Notch filter for 2.5 Hz WIP mode (K candidate family) ----
+        # Applies causal IIR biquad notch filter to selected damping input signals
+        # to prevent phase-lagged damping from feeding the 2.5 Hz oscillation mode.
+        # Only active when enable_wip_notch_filter is True on the authority schedule.
+        notch_enabled = self.authority_schedule.enable_wip_notch_filter
+        notch_target = self.authority_schedule.wip_notch_target_signal
+        notch_center_hz = self.authority_schedule.wip_notch_center_hz
+        notch_q = self.authority_schedule.wip_notch_q
+        notch_blend = self.authority_schedule.wip_notch_filter_blend
+
+        # Derive fs from dt if not explicitly set
+        if self._wip_notch_fs_hz <= 0:
+            self._wip_notch_fs_hz = float(1.0 / self.dt) if self.dt > 0 else 100.0
+        fs_hz = self.authority_schedule.wip_notch_fs_hz if self.authority_schedule.wip_notch_fs_hz > 0 else self._wip_notch_fs_hz
+
+        # Compute height gate
+        if notch_enabled and self.authority_schedule.wip_notch_gate_enabled:
+            notch_height_gate = smoothstep_gate(
+                schedule_height_ref,
+                self.authority_schedule.wip_notch_height_gate_start_m,
+                self.authority_schedule.wip_notch_height_gate_full_m,
+            )
+        else:
+            notch_height_gate = 1.0 if notch_enabled else 0.0
+
+        # Telemetry: raw signals (always captured)
+        pitch_rate_raw = float(pitch_rate_x_rad_s)
+        wheel_left_raw = float(wheel_vel_left_rad_s)
+        wheel_right_raw = float(wheel_vel_right_rad_s)
+        support_vel_raw = float(support_position_velocity_m_s)
+
+        # Notched signals (may equal raw if filter disabled)
+        pitch_rate_notched = pitch_rate_raw
+        wheel_left_notched = wheel_left_raw
+        wheel_right_notched = wheel_right_raw
+        support_vel_notched = support_vel_raw
+
+        # Lazy-init filters
+        notch_filter_valid = False
+        if notch_enabled:
+            try:
+                if self._wip_notch_pitch_rate is None:
+                    self._wip_notch_pitch_rate = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+                    self._wip_notch_wheel_left = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+                    self._wip_notch_wheel_right = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+                    self._wip_notch_support_vel = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+
+                # Update filters
+                should_filter_pr = notch_target in ("pitch_rate", "pitch_rate_and_wheel_velocity", "all_damping_signals")
+                should_filter_wv = notch_target in ("wheel_velocity", "pitch_rate_and_wheel_velocity", "all_damping_signals")
+                should_filter_sv = notch_target in ("support_velocity", "all_damping_signals")
+
+                # Apply filter per signal
+                if should_filter_pr:
+                    pitch_rate_notched = self._wip_notch_pitch_rate.update(pitch_rate_raw)
+                if should_filter_wv:
+                    wheel_left_notched = self._wip_notch_wheel_left.update(wheel_left_raw)
+                    wheel_right_notched = self._wip_notch_wheel_right.update(wheel_right_raw)
+                if should_filter_sv:
+                    support_vel_notched = self._wip_notch_support_vel.update(support_vel_raw)
+
+                notch_filter_valid = True
+            except Exception:
+                # If filter fails, fall back to raw signals
+                notch_filter_valid = False
+
+        # Blend: gate * blend controls how much filtered vs raw signal is used
+        gate = notch_height_gate * notch_blend if notch_enabled else 0.0
+        pitch_rate_effective = (1.0 - gate) * pitch_rate_raw + gate * pitch_rate_notched
+        wheel_left_effective = (1.0 - gate) * wheel_left_raw + gate * wheel_left_notched
+        wheel_right_effective = (1.0 - gate) * wheel_right_raw + gate * wheel_right_notched
+        support_vel_effective = (1.0 - gate) * support_vel_raw + gate * support_vel_notched
+
+        # For telemetry: compute signal delta
+        notch_signal_delta_pr = float(pitch_rate_effective - pitch_rate_raw)
+        notch_signal_delta_wl = float(wheel_left_effective - wheel_left_raw)
+        notch_signal_delta_wr = float(wheel_right_effective - wheel_right_raw)
+
+        # Use effective (notched or raw) signals for damping computations
+        # Replace raw signals for the remainder of compute()
+        # Note: wheel_vel_mean is already computed from raw — recompute if filter active
+        if notch_enabled and gate > 1e-9:
+            wheel_vel_mean = 0.5 * (wheel_left_effective + wheel_right_effective)
+
+        # Override pitch_rate_x_rad_s and wheel velocity references for damping terms
+        pitch_rate_for_damping = pitch_rate_effective
+        wheel_left_for_damping = wheel_left_effective
+        wheel_right_for_damping = wheel_right_effective
+        support_vel_for_damping = support_vel_effective
 
         # =====================================================================
         # UNIFIED SAGITTAL STATE-FEEDBACK NO-OFFSET CONTROLLER
@@ -3648,8 +4059,8 @@ class SagittalVelocityDampedBalanceController:
             unified_tau_cmd = unified_tau_cmd_limited
 
         # Per-wheel damping (separate for each wheel)
-        tau_wheel_vel_left = -effective_k_wheel_velocity * wheel_vel_left_rad_s
-        tau_wheel_vel_right = -effective_k_wheel_velocity * wheel_vel_right_rad_s
+        tau_wheel_vel_left = -effective_k_wheel_velocity * wheel_left_for_damping
+        tau_wheel_vel_right = -effective_k_wheel_velocity * wheel_right_for_damping
 
         # APCR1l: Check if pitch suppression should be applied during RECENTER state
         # During RECENTER, tau_pitch fights drift correction (robot leans back intentionally,
@@ -3864,12 +4275,12 @@ class SagittalVelocityDampedBalanceController:
         # =====================================================================
         # Pitch suppression moved to after arch_fix_active computation
 
-        tau_pitch_rate = self.kd_pitch * pitch_rate_x_rad_s
+        tau_pitch_rate = effective_kd_pitch * pitch_rate_for_damping
         tau_sagittal_velocity = -effective_k_velocity * effective_velocity_damping_scale * sagittal_velocity_m_s
 
         # Support position velocity damping term
         # Directly opposes support-center drift velocity to prevent transient position excursions
-        tau_support_velocity = -effective_support_velocity_gain * effective_support_velocity_scale * support_position_velocity_m_s
+        tau_support_velocity = -effective_support_velocity_gain * effective_support_velocity_scale * support_vel_for_damping
 
         # Capture-point-like term matching baseline controller's cp/com_vy contributions
         # Uses sagittal_position_error as proxy for cp_error and sagittal_velocity as proxy for com_vy
@@ -6679,6 +7090,12 @@ class SagittalVelocityDampedBalanceController:
             "tau_pitch_scheduled": float(tau_pitch_scheduled),
             "tau_pitch_clipped": float(tau_pitch_clipped),
             "tau_pitch_rate": float(tau_pitch_rate),
+            "tau_pitch_rate_raw_signal": float(effective_kd_pitch * pitch_rate_raw),
+            "tau_pitch_rate_filtered_signal": float(effective_kd_pitch * pitch_rate_notched),
+            "tau_wheel_velocity_left_raw_signal": float(-effective_k_wheel_velocity * wheel_left_raw),
+            "tau_wheel_velocity_left_filtered_signal": float(-effective_k_wheel_velocity * wheel_left_notched),
+            "tau_wheel_velocity_right_raw_signal": float(-effective_k_wheel_velocity * wheel_right_raw),
+            "tau_wheel_velocity_right_filtered_signal": float(-effective_k_wheel_velocity * wheel_right_notched),
             "tau_cp": float(tau_cp),
             "tau_com_vy": float(tau_com_vy),
             "tau_sagittal_velocity": float(tau_sagittal_velocity),
@@ -6763,6 +7180,37 @@ class SagittalVelocityDampedBalanceController:
             "k_wheel_velocity_high_max": float(self.authority_schedule.k_wheel_velocity_high_max),
             "k_wheel_velocity_z_low": float(self.authority_schedule.k_wheel_velocity_z_low),
             "k_wheel_velocity_z_high": float(self.authority_schedule.k_wheel_velocity_z_high),
+            # ---- Tall-height kd_pitch scheduling telemetry (J candidate) ----
+            "effective_kd_pitch": float(effective_kd_pitch),
+            "high_height_kd_pitch_active": bool(high_height_kd_pitch_active),
+            "kd_pitch_nominal": float(self.authority_schedule.kd_pitch_nominal),
+            "kd_pitch_high_max": float(self.authority_schedule.kd_pitch_high_max),
+            "kd_pitch_z_low": float(self.authority_schedule.kd_pitch_z_low),
+            "kd_pitch_z_high": float(self.authority_schedule.kd_pitch_z_high),
+            # ---- Notch filter telemetry (K candidate — 2.5 Hz WIP notch) ----
+            "wip_notch_enabled": bool(notch_enabled),
+            "wip_notch_target_signal": str(notch_target),
+            "wip_notch_center_hz": float(notch_center_hz),
+            "wip_notch_q": float(notch_q),
+            "wip_notch_fs_hz": float(fs_hz),
+            "wip_notch_height_gate": float(notch_height_gate),
+            "wip_notch_filter_blend": float(notch_blend),
+            "wip_notch_filter_valid": bool(notch_filter_valid),
+            "pitch_rate_raw": float(pitch_rate_raw),
+            "pitch_rate_notched": float(pitch_rate_notched),
+            "pitch_rate_effective": float(pitch_rate_effective),
+            "wheel_velocity_left_raw": float(wheel_left_raw),
+            "wheel_velocity_left_notched": float(wheel_left_notched),
+            "wheel_velocity_left_effective": float(wheel_left_for_damping),
+            "wheel_velocity_right_raw": float(wheel_right_raw),
+            "wheel_velocity_right_notched": float(wheel_right_notched),
+            "wheel_velocity_right_effective": float(wheel_right_for_damping),
+            "support_velocity_raw": float(support_vel_raw),
+            "support_velocity_notched": float(support_vel_notched),
+            "support_velocity_effective": float(support_vel_for_damping),
+            "notch_signal_delta_pr": float(notch_signal_delta_pr),
+            "notch_signal_delta_wl": float(notch_signal_delta_wl),
+            "notch_signal_delta_wr": float(notch_signal_delta_wr),
             # ---- Pitch-aware position scaling telemetry ----
             "pitch_aware_position_scaling_enabled": bool(self.authority_schedule.enable_pitch_aware_position_scaling),
             "pitch_aware_position_scale": float(pitch_aware_position_scale),
