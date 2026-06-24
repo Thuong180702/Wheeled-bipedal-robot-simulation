@@ -128,6 +128,18 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     K2_WHEEL_VEL_NOTCH,
     K3_PITCH_RATE_WHEEL_VEL_NOTCH,
     K3B_PITCH_RATE_WHEEL_VEL_NOTCH_BLEND075,
+    L1_K1_COORDINATED_LOW_FREQ_FEEDBACK,
+    L2_K1_COORDINATED_PHASE_LEAD,
+    L3_K1_COORDINATED_PITCH_REF_STABILIZATION,
+    LR1_K1_REPLACEMENT_COORDINATED_LOW_FREQ_V1,
+    LR2_K1_REPLACEMENT_PHASE_LEAD_V1,
+    LR3_K1_REPLACEMENT_PITCH_REF_STABILIZED_V1,
+    M1_K1_BODY_YAW_DIFF_WHEEL_V1,
+    M2_K1_BODY_YAW_SUPPORT_AWARE_V1,
+    N1_K1_MILD_PHASE_LEAD_DAMPING,
+    N1B_K1_MILD_PHASE_LEAD_V1,
+    N1C_K1_MILD_PHASE_LEAD_V1,
+    N1D_K1_MILD_PHASE_LEAD_V1,
     UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET,
     interpolate_pitch_ref_offset,
     compute_outer_loop_pitch_ref,
@@ -1424,6 +1436,26 @@ SAGITTAL_AUTHORITY_PROFILES = {
     "k2_wheel_vel_notch_v1": K2_WHEEL_VEL_NOTCH,
     "k3_pitch_rate_wheel_vel_notch_v1": K3_PITCH_RATE_WHEEL_VEL_NOTCH,
     "k3b_pitch_rate_wheel_vel_notch_blend075": K3B_PITCH_RATE_WHEEL_VEL_NOTCH_BLEND075,
+    # L_K1_COORDINATED_SAGITTAL_STATE_FEEDBACK_V1 family — Phase 3
+    # K1 + coordinated sagittal state feedback for sustained posture recovery
+    "l1_k1_coordinated_low_freq_feedback_v1": L1_K1_COORDINATED_LOW_FREQ_FEEDBACK,
+    "l2_k1_coordinated_phase_lead_v1": L2_K1_COORDINATED_PHASE_LEAD,
+    "l3_k1_coordinated_pitch_ref_stabilization_v1": L3_K1_COORDINATED_PITCH_REF_STABILIZATION,
+    # LR_K1_REPLACEMENT_COORDINATED_FEEDBACK_V1 family — Replacement architecture
+    # K1 + replacement coordinated sagittal state feedback (not additive like L)
+    "lr1_k1_replacement_coordinated_low_freq_v1": LR1_K1_REPLACEMENT_COORDINATED_LOW_FREQ_V1,
+    "lr2_k1_replacement_phase_lead_v1": LR2_K1_REPLACEMENT_PHASE_LEAD_V1,
+    "lr3_k1_replacement_pitch_ref_stabilized_v1": LR3_K1_REPLACEMENT_PITCH_REF_STABILIZED_V1,
+    # M_K1_BODY_YAW_CORRECT_ACTUATOR_V1 family — Phase 4
+    # K1 + body-yaw/wheel-yaw correct-actuator fix for D4/D5 hip-yaw
+    "m1_k1_body_yaw_diff_wheel_v1": M1_K1_BODY_YAW_DIFF_WHEEL_V1,
+    "m2_k1_body_yaw_support_aware_v1": M2_K1_BODY_YAW_SUPPORT_AWARE_V1,
+    # N_K1_MILD_DAMPING_DIAGNOSTIC_V1 — Phase 5 (optional diagnostic)
+    "n1_k1_mild_phase_lead_damping_v1": N1_K1_MILD_PHASE_LEAD_DAMPING,
+    # N_K1_MILD_DAMPING_DIAGNOSTIC_V1 — N1 micro-sweep variants
+    "n1b_k1_mild_phase_lead_v1": N1B_K1_MILD_PHASE_LEAD_V1,
+    "n1c_k1_mild_phase_lead_v1": N1C_K1_MILD_PHASE_LEAD_V1,
+    "n1d_k1_mild_phase_lead_v1": N1D_K1_MILD_PHASE_LEAD_V1,
     # D_MODE_HIP_YAW_DIV_V1 — current-best architecture-correct candidate.
     # Resolves to the low-band v2 sagittal schedule; the divergence-mode
     # controller is enabled separately at runtime via --enable-mode-hip-yaw-divergence.
@@ -2345,13 +2377,22 @@ def build_balance_core_controllers(
     )
 
     # Instantiate differential wheel yaw stabilizer (opt-in BODY_YAW_WRONG_ACTUATOR fix)
-    # When enabled:
-    #   - YawController at full gain on hip-yaw (normal)
-    #   - Wheel yaw stabilizer provides ADDITIONAL yaw correction via antisymmetric
-    #     wheel torque added AFTER composer (no competition with sagittal budget)
-    #   - Faster body-yaw recovery → less hip-yaw saturation → stays below 0.35 rad
+    # Activation via --enable-wheel-yaw-stabilizer CLI flag OR profile-based M activation
+    # (enable_body_yaw_wheel_stabilization=True in the sagittal authority schedule).
     wheel_yaw_stabilizer = None
-    if enable_wheel_yaw_stabilizer:
+    m_profile_activation = False
+    if sagittal_authority_schedule is not None and sagittal_authority_schedule.enable_body_yaw_wheel_stabilization:
+        # M family profile activation: use profile parameters
+        m_profile_activation = True
+        wheel_yaw_stabilizer = DifferentialWheelYawStabilizer(
+            kp_yaw=sagittal_authority_schedule.wheel_yaw_kp,
+            kd_yaw=sagittal_authority_schedule.wheel_yaw_kd,
+            max_yaw_torque=sagittal_authority_schedule.wheel_yaw_max_torque,
+            lowpass_alpha=wheel_yaw_lowpass_alpha,
+            height_gate_low=sagittal_authority_schedule.wheel_yaw_height_gate_start_m,
+            height_gate_high=sagittal_authority_schedule.wheel_yaw_height_gate_full_m,
+        )
+    elif enable_wheel_yaw_stabilizer:
         wheel_yaw_stabilizer = DifferentialWheelYawStabilizer(
             kp_yaw=wheel_yaw_kp,
             kd_yaw=wheel_yaw_kd,
@@ -2941,6 +2982,23 @@ def main():
             "k2_wheel_vel_notch_v1",
             "k3_pitch_rate_wheel_vel_notch_v1",
             "k3b_pitch_rate_wheel_vel_notch_blend075",
+            # L_K1_COORDINATED_SAGITTAL_STATE_FEEDBACK_V1 family
+            "l1_k1_coordinated_low_freq_feedback_v1",
+            "l2_k1_coordinated_phase_lead_v1",
+            "l3_k1_coordinated_pitch_ref_stabilization_v1",
+            # LR_K1_REPLACEMENT_COORDINATED_FEEDBACK_V1 family
+            "lr1_k1_replacement_coordinated_low_freq_v1",
+            "lr2_k1_replacement_phase_lead_v1",
+            "lr3_k1_replacement_pitch_ref_stabilized_v1",
+            # M_K1_BODY_YAW_CORRECT_ACTUATOR_V1 family
+            "m1_k1_body_yaw_diff_wheel_v1",
+            "m2_k1_body_yaw_support_aware_v1",
+            # N_K1_MILD_DAMPING_DIAGNOSTIC_V1
+            "n1_k1_mild_phase_lead_damping_v1",
+            # N_K1_MILD_DAMPING_MICRO_SWEEP_VARIANTS
+            "n1b_k1_mild_phase_lead_v1",
+            "n1c_k1_mild_phase_lead_v1",
+            "n1d_k1_mild_phase_lead_v1",
             "unified_sagittal_state_feedback_no_offset",
             "band_limited_support_recenter",
         ],
@@ -3218,6 +3276,18 @@ def main():
         help="Minimum support-rate gate value",
     )
 
+    # ---- Dynamic height trajectory (for true dynamic-height validation) ---- #
+    parser.add_argument(
+        "--dynamic-height-trajectory",
+        type=str,
+        default=None,
+        help="Path to JSON file defining height waypoints for dynamic-height simulation. "
+             "Format: {\"height_profile_name\": \"...\", \"waypoints\": [{\"step\": N, \"height_m\": H}, ...]}. "
+             "Height is linearly interpolated between waypoints during the simulation. "
+             "When active, the robot's posture is updated dynamically from height_cmd "
+             "via the posture regularizer, and commanded_height_ref_m tracks the trajectory.",
+    )
+
     args = parser.parse_args()
 
     # Validate balance-core mode arguments
@@ -3253,6 +3323,37 @@ def main():
             height_variant_setup = json.load(f)
         print(f"[HEIGHT VARIANT] Loaded setup: {height_variant_setup['variant_name']}")
         print(f"[HEIGHT VARIANT] Target CoM Z: {height_variant_setup['target_com_z_m']:.6f} m")
+
+    # ---- Dynamic height trajectory (opt-in) ---- #
+    dynamic_height_traj = None  # Will hold {"profile_name": str, "waypoints": [(step, height_m), ...], "interp_fn": callable}
+    if args.dynamic_height_trajectory:
+        import json as _json
+        with open(args.dynamic_height_trajectory, "r") as f:
+            traj_data = _json.load(f)
+        waypoints = [(wp["step"], wp["height_m"]) for wp in traj_data["waypoints"]]
+        waypoints.sort(key=lambda x: x[0])
+        # Pre-compute segments for fast lookup
+        traj_segments = []
+        for i in range(len(waypoints) - 1):
+            s0, h0 = waypoints[i]
+            s1, h1 = waypoints[i + 1]
+            if s1 > s0:
+                traj_segments.append((s0, s1, h0, h1))
+        def _interp_height(step: int) -> float:
+            if step <= traj_segments[0][0]:
+                return traj_segments[0][2]
+            for s0, s1, h0, h1 in traj_segments:
+                if s0 <= step < s1:
+                    frac = (step - s0) / (s1 - s0)
+                    return h0 + frac * (h1 - h0)
+            return traj_segments[-1][3]
+        dynamic_height_traj = {
+            "profile_name": traj_data.get("height_profile_name", "unknown"),
+            "waypoints": waypoints,
+            "interp_fn": _interp_height,
+        }
+        print(f"[DYNAMIC HEIGHT] Loaded trajectory: {dynamic_height_traj['profile_name']} "
+              f"({len(waypoints)} waypoints, {max(w[0] for w in waypoints)} steps)")
 
     # Initialize robot on ground using keyframe 0 or height-variant setup
     if mj_model.nkey > 0:
@@ -3956,6 +4057,16 @@ def main():
         "sagittal_schedule_u": [],
         "sagittal_schedule_smoothstep": [],
         "tau_pitch_rate": [],
+        "tau_pitch_rate_raw_signal": [],
+        "tau_pitch_rate_filtered_signal": [],
+        "pitch_rate_raw_rad_s": [],
+        "pitch_rate_notched_rad_s": [],
+        "pitch_rate_effective_rad_s": [],
+        "wip_notch_height_gate": [],
+        "wip_notch_filter_valid": [],
+        "dynamic_height_active": [],
+        "dynamic_height_target_m": [],
+        "notch_height_gate_from_traj": [],
         "tau_sagittal_velocity": [],
         "tau_wheel_velocity_left": [],
         "tau_wheel_velocity_right": [],
@@ -4316,6 +4427,7 @@ def main():
         "wheel_yaw_tau_left": [],
         "wheel_yaw_tau_right": [],
         "wheel_yaw_saturated": [],
+        "wheel_yaw_profile_activated": [],
         "wheel_yaw_kp": [],
         "wheel_yaw_kd": [],
         "wheel_yaw_max_torque": [],
@@ -4979,6 +5091,12 @@ def main():
     height_cmd = 0.40  # Match equilibrium CoM height from compute_equilibrium_keyframe.py
     initial_yaw_z = float(centroidal_state_eq.body_yaw_z)
 
+    # Dynamic height trajectory tracking state
+    dynamic_height_active = dynamic_height_traj is not None
+    dynamic_height_target_m = float(height_cmd)
+    dynamic_height_actual_m = float(centroidal_state_eq.com_pos[2]) if hasattr(centroidal_state_eq, 'com_pos') else 0.40
+    dynamic_height_notch_gate = 0.0
+
     # Dynamic termination height floor for low-height variants
     if height_variant_setup is not None:
         achieved_com_z = float(height_variant_setup.get("achieved_com_z_m", 0.40))
@@ -5065,9 +5183,27 @@ def main():
 
     def simulation_step():
         nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary, prev_support_error, outer_loop_prev_support_error_m, outer_loop_support_error_rate_smoothed, outer_loop_pitch_ref_smoothed_deg, outer_loop_integral_accum_m_s
+        nonlocal dynamic_height_target_m, dynamic_height_actual_m, dynamic_height_notch_gate
 
         if terminated or step >= max_steps:
             return False
+
+        # ---- Dynamic height update (if trajectory active) ---- #
+        if dynamic_height_active:
+            dynamic_height_target_m = dynamic_height_traj["interp_fn"](step)
+            height_cmd = dynamic_height_target_m
+            # Update setup dict in-place so downstream reads of height_variant_setup["target_com_z_m"]
+            # automatically get the current dynamic target.
+            if height_variant_setup is not None:
+                height_variant_setup["target_com_z_m"] = dynamic_height_target_m
+            # Compute notch gate for telemetry (replicates smoothstep_gate for 0.42-0.48 m)
+            if dynamic_height_target_m <= 0.42:
+                dynamic_height_notch_gate = 0.0
+            elif dynamic_height_target_m >= 0.48:
+                dynamic_height_notch_gate = 1.0
+            else:
+                u = (dynamic_height_target_m - 0.42) / (0.48 - 0.42)
+                dynamic_height_notch_gate = u * u * (3.0 - 2.0 * u)
 
         # Convert MuJoCo data to JAX arrays for controller
         qpos_jax = jnp.array(mj_data.qpos)
@@ -5094,6 +5230,9 @@ def main():
         )
         prev_control_com_pos = control_com_pos
         centroidal_state_control = capture_estimator.update(centroidal_state_control)
+
+        # Update dynamic height actual from centroidal state
+        dynamic_height_actual_m = float(centroidal_state_control.com_pos[2])
 
         # Construct observation with ACTUAL gravity from IMU
         obs = jnp.zeros(42)
@@ -5288,7 +5427,10 @@ def main():
         # This prevents initial joint errors that cause tau_pitch bias and forward lean.
         # Before: target_joint_pos from posture_regularizer.height_targets (h=0.40 -> hip_pitch=0.9261)
         # After: target_joint_pos from setup.equilibrium_joint_pos (hip_pitch=1.3761 for low_0p300)
-        if height_variant_setup is not None and "equilibrium_joint_pos" in height_variant_setup:
+        # When dynamic height trajectory is active, always use posture regularizer for active height tracking.
+        if dynamic_height_active:
+            target_joint_pos = posture_regularizer.compute_target_posture_from_height(height_cmd)
+        elif height_variant_setup is not None and "equilibrium_joint_pos" in height_variant_setup:
             target_joint_pos = jnp.array(height_variant_setup["equilibrium_joint_pos"])
         else:
             target_joint_pos = posture_regularizer.compute_target_posture_from_height(height_cmd)
@@ -5893,6 +6035,9 @@ def main():
                     current_height_m=com_z_for_yaw,
                 )
                 yaw_diag["wheel_yaw_enabled"] = True
+                # Check if M family profile activated the stabilizer (vs CLI)
+                m_profile_name = balance_core_controllers["sagittal_wheel_balance"].authority_schedule.profile_name
+                yaw_diag["wheel_yaw_profile_activated"] = bool(m_profile_name.startswith("m"))
                 yaw_diag.update(wheel_yaw_diag)
             else:
                 # === Legacy behavior: yaw via hip-yaw joints ===
@@ -6540,6 +6685,16 @@ def main():
         telemetry["sagittal_schedule_u"].append(sagittal_diag.get("k_position_schedule_u", 0.0))
         telemetry["sagittal_schedule_smoothstep"].append(sagittal_diag.get("k_position_schedule_smoothstep", 0.0))
         telemetry["tau_pitch_rate"].append(sagittal_diag.get("tau_pitch_rate", 0.0))
+        telemetry["tau_pitch_rate_raw_signal"].append(sagittal_diag.get("tau_pitch_rate_raw_signal", 0.0))
+        telemetry["tau_pitch_rate_filtered_signal"].append(sagittal_diag.get("tau_pitch_rate_filtered_signal", 0.0))
+        telemetry["pitch_rate_raw_rad_s"].append(sagittal_diag.get("pitch_rate_raw", 0.0))
+        telemetry["pitch_rate_notched_rad_s"].append(sagittal_diag.get("pitch_rate_notched", 0.0))
+        telemetry["pitch_rate_effective_rad_s"].append(sagittal_diag.get("pitch_rate_effective", 0.0))
+        telemetry["wip_notch_height_gate"].append(sagittal_diag.get("wip_notch_height_gate", 0.0))
+        telemetry["wip_notch_filter_valid"].append(sagittal_diag.get("wip_notch_filter_valid", False))
+        telemetry["dynamic_height_active"].append(dynamic_height_active)
+        telemetry["dynamic_height_target_m"].append(dynamic_height_target_m if dynamic_height_active else 0.0)
+        telemetry["notch_height_gate_from_traj"].append(dynamic_height_notch_gate if dynamic_height_active else 0.0)
         telemetry["tau_sagittal_velocity"].append(sagittal_diag.get("tau_sagittal_velocity", 0.0))
         telemetry["tau_wheel_velocity_left"].append(sagittal_diag.get("tau_wheel_velocity_left", 0.0))
         telemetry["tau_wheel_velocity_right"].append(sagittal_diag.get("tau_wheel_velocity_right", 0.0))
@@ -6980,6 +7135,7 @@ def main():
             telemetry["wheel_yaw_tau_left"].append(yaw_diag.get("wheel_yaw_tau_left", 0.0))
             telemetry["wheel_yaw_tau_right"].append(yaw_diag.get("wheel_yaw_tau_right", 0.0))
             telemetry["wheel_yaw_saturated"].append(yaw_diag.get("wheel_yaw_saturated", False))
+            telemetry["wheel_yaw_profile_activated"].append(yaw_diag.get("wheel_yaw_profile_activated", False))
             telemetry["wheel_yaw_kp"].append(yaw_diag.get("wheel_yaw_kp", 0.0))
             telemetry["wheel_yaw_kd"].append(yaw_diag.get("wheel_yaw_kd", 0.0))
             telemetry["wheel_yaw_max_torque"].append(yaw_diag.get("wheel_yaw_max_torque", 0.0))
@@ -6994,6 +7150,7 @@ def main():
             telemetry["wheel_yaw_tau_left"].append(0.0)
             telemetry["wheel_yaw_tau_right"].append(0.0)
             telemetry["wheel_yaw_saturated"].append(False)
+            telemetry["wheel_yaw_profile_activated"].append(False)
             telemetry["wheel_yaw_kp"].append(0.0)
             telemetry["wheel_yaw_kd"].append(0.0)
             telemetry["wheel_yaw_max_torque"].append(0.0)

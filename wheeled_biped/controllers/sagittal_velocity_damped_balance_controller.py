@@ -1007,6 +1007,55 @@ class SagittalAuthoritySchedule:
     # Intermediate values allow partial blending.
     wip_notch_filter_blend: float = 1.0
 
+    # ---- L family: Coordinated sagittal state feedback (Phase 3) ---- #
+    # When enabled, a coordinated state-feedback term is added to the wheel
+    # torque AFTER the normal sagittal torque computation to synchronize
+    # the pitch, support, and rate contributions.
+    enable_coordinated_sagittal_feedback: bool = False
+    # Selects the feedback gain function:
+    #   "L1_low_freq"           — conservative low-frequency state feedback
+    #   "L2_phase_lead"         — phase-lead compensation on pitch rate
+    #   "L3_pitch_ref_stabilization" — pitch reference modulation
+    #   "N1_mild_phase_lead"    — mild phase-lead for damping diagnostic
+    coordinated_feedback_kind: str = "none"
+
+    # ---- LR family: Replacement coordinated sagittal feedback (Phase 2) ---- #
+    # Unlike the L family (which ADDS feedback on top of K1's existing terms),
+    # LR REPLACES the sum-of-independent-torques with a single coordinated
+    # feedback term. This avoids the torque double-counting that caused L1/L2/L3
+    # failures (4-5 Nm RMS added to K1's existing 5-8 Nm).
+    # Preserves equilibrium/feedforward path and notch filter.
+    # Disabled by default — opt-in via LR profiles.
+    enable_lr_replacement_feedback: bool = False
+    # Selects the replacement gain function:
+    #   "LR1_low_freq"              — LR coordinated low-frequency state feedback
+    #   "LR2_phase_lead"            — LR with phase-lead compensation
+    #   "LR3_pitch_ref_stabilized"  — LR with pitch reference stabilization
+    lr_replacement_kind: str = "none"
+
+    # ---- M family: Body-yaw/wheel-yaw correct-actuator fix (Phase 4) ---- #
+    # When enabled, adds body-yaw correction through differential wheel
+    # velocity with support-aware gating.
+    enable_body_yaw_wheel_stabilization: bool = False
+    wheel_yaw_kp: float = 0.5
+    wheel_yaw_kd: float = 0.1
+    wheel_yaw_max_torque: float = 1.5
+    wheel_yaw_height_gate_start_m: float = 0.34
+    wheel_yaw_height_gate_full_m: float = 0.42
+    wheel_yaw_activation_threshold_rad: float = 0.05
+    wheel_yaw_support_gate_enabled: bool = True
+    wheel_yaw_support_error_threshold_m: float = 0.15
+    wheel_yaw_support_rate_threshold_mps: float = 0.05
+
+    # N1 micro-sweep parameters (Phase 5)
+    # Controls the height-scheduled mild phase-lead damping.
+    # Only used when enable_coordinated_sagittal_feedback=True and
+    # coordinated_feedback_kind="N1_mild_phase_lead".
+    n1_rate_low: float = 0.3    # k_rate at low height (0.30 m)
+    n1_rate_high: float = 0.5   # k_rate at high height (0.48 m)
+    n1_lead_low: float = 0.02   # k_lead at low height (0.30 m)
+    n1_lead_high: float = 0.04  # k_lead at high height (0.48 m)
+
     def is_active_for_variant(self, variant_name: str | None) -> bool:
         return variant_name is not None and variant_name in self.applies_to_variants
 
@@ -3115,6 +3164,356 @@ K3B_PITCH_RATE_WHEEL_VEL_NOTCH_BLEND075 = replace(
 )
 
 # =====================================================================
+# L Family — K1 + Coordinated Sagittal State Feedback (Phase 3)
+# =====================================================================
+# Base: K1 (K1_PITCH_RATE_NOTCH)
+#
+# Purpose: Replace the independent sagittal torque summation with a
+# coordinated state-feedback command that accounts for coupled sagittal
+# states. The goal is to suppress the 2.5 Hz WIP mode by synchronizing
+# pitch, support, and rate contributions instead of letting them fight.
+#
+# State vector: [pitch_error, pitch_rate_effective, support_position_error,
+#                support_velocity, wheel_velocity_average]
+#
+# Controller form:
+#   tau_coordinated = K1_base_torque + coordinated_feedback(x)
+#
+# Where coordinated_feedback uses manually specified gains in an LQR-like
+# structure, NOT arbitrary independent term summation.
+#
+# Telemetry fields in sagittal_diag:
+#   L_enabled, L_candidate_kind, L_state_vector,
+#   L_gains, L_feedback_torque, L_base_torque, L_final_torque
+#
+# Key rule: Do NOT modify K1 parameters. Add coordinated_feedback on top.
+
+
+def _coordinated_feedback_gains_L1(height_m: float) -> dict:
+    """L1 gains: conservative state feedback focused on suppressing 2.5 Hz.
+
+    Gains are height-scheduled between low and high heights.
+    State vector order: [pitch, pitch_rate, support_err, support_vel, wheel_vel_mean]
+
+    At tall heights (0.48 m), pitch-rate and support-velocity gains are
+    tuned to provide phase-coherent damping at ~2.5 Hz.
+    At low heights (0.33 m), same gains but lower overall torque authority.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    # Gains interpolate between low-height and high-height values
+    k_pitch = 8.0 + (5.0 - 8.0) * h_norm           # pitch error (Nm/rad)
+    k_pitch_rate = 0.8 + (1.5 - 0.8) * h_norm        # pitch rate (Nm/(rad/s))
+    k_support = -15.0 + (-20.0 - (-15.0)) * h_norm    # support error (Nm/m)
+    k_support_vel = -0.5 + (-1.0 - (-0.5)) * h_norm   # support vel (Nm/(m/s))
+    k_wheel_vel = 0.0                                 # wheel vel not used in L1
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "k_wheel_vel": float(k_wheel_vel),
+        "kind": "coordinated_low_freq_state_feedback",
+    }
+
+
+def _coordinated_feedback_gains_L2(height_m: float) -> dict:
+    """L2 gains: coordinated feedback with phase-lead compensation.
+
+    Adds a small phase-lead on the pitch_rate path to reduce the ~90° phase
+    lag that causes damping to feed the 2.5 Hz mode. The lead compensation
+    is implemented as an additional term on pitch rate error rate (pitch
+    acceleration proxy) to create a phase-advanced damping component.
+
+    Lead: tau_lead = k_lead * d(pitch_rate)/dt (acceleration proxy)
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 8.0 + (5.0 - 8.0) * h_norm
+    k_pitch_rate = 0.8 + (1.2 - 0.8) * h_norm        # slightly lower rate gain than L1
+    k_support = -15.0 + (-20.0 - (-15.0)) * h_norm
+    k_support_vel = -0.5 + (-1.0 - (-0.5)) * h_norm
+    k_lead = 0.05 + (0.08 - 0.05) * h_norm            # phase-lead on pitch acceleration proxy
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "k_lead": float(k_lead),
+        "kind": "coordinated_phase_lead_compensation",
+    }
+
+
+def _coordinated_feedback_gains_L3(height_m: float) -> dict:
+    """L3 gains: coordinated feedback + pitch reference stabilization.
+
+    Small pitch reference correction based on support state. The correction
+    is a physical, state-tied modification: when support error is large, the
+    pitch reference is shifted slightly to reduce the pitch-vs-support
+    conflict without suppressing pitch torque or support torque.
+
+    pitch_ref_mod = small_k * support_error (deg)
+
+    The correction is amplitude-limited to prevent anti-phase injection.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 8.0 + (5.0 - 8.0) * h_norm
+    k_pitch_rate = 0.8 + (1.5 - 0.8) * h_norm
+    k_support = -15.0 + (-20.0 - (-15.0)) * h_norm
+    k_support_vel = -0.5 + (-1.0 - (-0.5)) * h_norm
+    pitch_ref_gain = 1.5 + (2.5 - 1.5) * h_norm       # deg/m of support error
+    pitch_ref_max = 1.0 + (1.5 - 1.0) * h_norm         # max correction (deg)
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "pitch_ref_gain": float(pitch_ref_gain),
+        "pitch_ref_max": float(pitch_ref_max),
+        "kind": "coordinated_pitch_ref_stabilization",
+    }
+
+
+# ---- LR family: Replacement coordinated sagittal feedback gain functions ---- #
+# These use similar gains to the L family but the feedback REPLACES the
+# sum-of-independent-torques rather than adding on top. The gains are
+# dimensioned to be the TOTAL feedback, not an additive supplement.
+# Height-scheduled with conservative bounds to avoid the L family's
+# torque double-counting failure.
+
+def _lr_replacement_gains_LR1(height_m: float) -> dict:
+    """LR1 gains: replacement coordinated low-frequency feedback.
+
+    Replaces the sum-of-independent-torques with a single coordinated
+    command. Gains are the full feedback authority, not additive.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    # Moderate replacement gains — total authority, not additive supplement
+    k_pitch = 6.0 + (3.5 - 6.0) * h_norm           # pitch error (Nm/rad) — moderate
+    k_pitch_rate = 0.6 + (1.2 - 0.6) * h_norm        # pitch rate (Nm/(rad/s))
+    k_support = -8.0 + (-12.0 - (-8.0)) * h_norm      # support error (Nm/m)
+    k_support_vel = -0.3 + (-0.6 - (-0.3)) * h_norm   # support vel (Nm/(m/s))
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "kind": "lr_replacement_low_freq_state_feedback",
+    }
+
+
+def _lr_replacement_gains_LR2(height_m: float) -> dict:
+    """LR2 gains: replacement coordinated feedback with phase-lead.
+
+    Adds phase-lead compensation on the pitch_rate path. Gains are
+    the full replacement authority.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 6.0 + (3.5 - 6.0) * h_norm
+    k_pitch_rate = 0.5 + (1.0 - 0.5) * h_norm        # slightly lower rate gain than LR1
+    k_support = -8.0 + (-12.0 - (-8.0)) * h_norm
+    k_support_vel = -0.3 + (-0.6 - (-0.3)) * h_norm
+    k_lead = 0.04 + (0.06 - 0.04) * h_norm            # phase-lead on pitch acceleration
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "k_lead": float(k_lead),
+        "kind": "lr_replacement_phase_lead_compensation",
+    }
+
+
+def _lr_replacement_gains_LR3(height_m: float) -> dict:
+    """LR3 gains: replacement coordinated feedback with pitch ref stabilization.
+
+    Includes small pitch reference correction based on support state.
+    Gains are the full replacement authority.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 6.0 + (3.5 - 6.0) * h_norm
+    k_pitch_rate = 0.6 + (1.2 - 0.6) * h_norm
+    k_support = -8.0 + (-12.0 - (-8.0)) * h_norm
+    k_support_vel = -0.3 + (-0.6 - (-0.3)) * h_norm
+    pitch_ref_gain = 1.0 + (2.0 - 1.0) * h_norm        # deg/m of support error
+    pitch_ref_max_deg = 0.8 + (1.2 - 0.8) * h_norm      # max correction (deg)
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "pitch_ref_gain": float(pitch_ref_gain),
+        "pitch_ref_max_deg": float(pitch_ref_max_deg),
+        "kind": "lr_replacement_pitch_ref_stabilization",
+    }
+
+
+# ---- LR Family Profile Constants ---- #
+# These profiles REPLACE the sum-of-independent-torques with coordinated
+# feedback, preserving equilibrium/feedforward and notch filter.
+# Built on K1_PITCH_RATE_NOTCH.
+
+LR1_K1_REPLACEMENT_COORDINATED_LOW_FREQ_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lr1_k1_replacement_coordinated_low_freq_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LR1_low_freq",
+)
+
+LR2_K1_REPLACEMENT_PHASE_LEAD_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lr2_k1_replacement_phase_lead_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LR2_phase_lead",
+)
+
+LR3_K1_REPLACEMENT_PITCH_REF_STABILIZED_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lr3_k1_replacement_pitch_ref_stabilized_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LR3_pitch_ref_stabilized",
+)
+
+
+# L1 — Lowest-risk coordinated feedback
+# Adds small coordinated LQR-style state feedback on top of K1's notch.
+# The feedback torque is added to the wheel torque AFTER the normal sagittal
+# torque computation, so K1's existing terms are unchanged.
+L1_K1_COORDINATED_LOW_FREQ_FEEDBACK = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="l1_k1_coordinated_low_freq_feedback_v1",
+    # Metadata: the coordinated feedback function is selected at runtime
+    # via a new field on SagittalAuthoritySchedule.
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="L1_low_freq",
+)
+
+# L2 — Coordinated with phase-lead compensation
+L2_K1_COORDINATED_PHASE_LEAD = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="l2_k1_coordinated_phase_lead_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="L2_phase_lead",
+)
+
+# L3 — Coordinated with pitch reference stabilization
+L3_K1_COORDINATED_PITCH_REF_STABILIZATION = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="l3_k1_coordinated_pitch_ref_stabilization_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="L3_pitch_ref_stabilization",
+)
+
+# =====================================================================
+# M Family — K1 + Body-Yaw/Wheel-Yaw Correct-Actuator Fix (Phase 4)
+# =====================================================================
+# Base: K1 (K1_PITCH_RATE_NOTCH)
+#
+# Purpose: Reduce D4/D5 hip_yaw > 0.35 rad by addressing body yaw drift
+# through the correct actuator path (differential wheel velocity), not
+# through hip-yaw torque increase.
+#
+# Key difference from old E candidate: M uses sagittal-coordinated wheel
+# yaw that accounts for pitch/support state to avoid yaw-spin instability.
+# The wheel yaw torque is modulated by a support-confidence gate and does
+# NOT fight the mode-div divergence controller.
+#
+# Telemetry: M_enabled, M_candidate_kind, M_wheel_yaw_torque,
+#            M_body_yaw_error, M_support_gate, M_yaw_correlation
+
+
+# M1 — Low-band body-yaw damping through differential wheel velocity.
+# Uses low gain with smooth yaw-rate-based activation.
+M1_K1_BODY_YAW_DIFF_WHEEL_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="m1_k1_body_yaw_diff_wheel_v1",
+    enable_body_yaw_wheel_stabilization=True,
+    wheel_yaw_kp=0.5,
+    wheel_yaw_kd=0.1,
+    wheel_yaw_max_torque=1.5,
+    wheel_yaw_height_gate_start_m=0.34,
+    wheel_yaw_height_gate_full_m=0.42,
+    wheel_yaw_activation_threshold_rad=0.05,
+    wheel_yaw_support_gate_enabled=True,
+)
+
+# M2 — Support-aware body-yaw damping.
+# Modulates wheel-yaw correction based on support/contact confidence.
+# Avoids injecting yaw torque during poor support states.
+M2_K1_BODY_YAW_SUPPORT_AWARE_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="m2_k1_body_yaw_support_aware_v1",
+    enable_body_yaw_wheel_stabilization=True,
+    wheel_yaw_kp=0.8,
+    wheel_yaw_kd=0.15,
+    wheel_yaw_max_torque=2.0,
+    wheel_yaw_height_gate_start_m=0.34,
+    wheel_yaw_height_gate_full_m=0.42,
+    wheel_yaw_activation_threshold_rad=0.05,
+    wheel_yaw_support_gate_enabled=True,
+    wheel_yaw_support_error_threshold_m=0.15,
+    wheel_yaw_support_rate_threshold_mps=0.05,
+)
+
+# =====================================================================
+# N Family — K1 + Mild Phase-Compensated Damping Diagnostic (Phase 5)
+# =====================================================================
+# Base: K1 (K1_PITCH_RATE_NOTCH)
+#
+# Purpose: Check whether K1 notch plus very mild coordinated damping
+# can recover the transient J3a benefit without J3a's growing oscillation.
+#
+# Restriction: No J3a as-is. No K3 combined notch. No wheel_velocity
+# notch full blend. Abort if RMS worsens vs K1.
+
+# N1 — Very mild phase-lead-compensated pitch rate damping increment.
+# Uses the same phase-lead concept from L2 but at a much lower level,
+# applied only to the pitch_rate path (not the full sagittal command).
+N1_K1_MILD_PHASE_LEAD_DAMPING = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="n1_k1_mild_phase_lead_damping_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="N1_mild_phase_lead",
+)
+
+# N1 micro-sweep variants (K1 + mild parameter changes)
+# All stay within bounds: k_rate <= 0.6, k_lead <= 0.06
+
+# N1b: slightly higher rate and lead
+N1B_K1_MILD_PHASE_LEAD_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="n1b_k1_mild_phase_lead_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="N1_mild_phase_lead",
+    n1_rate_low=0.4,
+    n1_rate_high=0.6,
+    n1_lead_low=0.03,
+    n1_lead_high=0.06,
+)
+
+# N1c: same rate as N1b but slightly lower lead
+N1C_K1_MILD_PHASE_LEAD_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="n1c_k1_mild_phase_lead_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="N1_mild_phase_lead",
+    n1_rate_low=0.4,
+    n1_rate_high=0.6,
+    n1_lead_low=0.025,
+    n1_lead_high=0.05,
+)
+
+# N1d: same lead as N1b but slightly lower rate
+N1D_K1_MILD_PHASE_LEAD_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="n1d_k1_mild_phase_lead_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="N1_mild_phase_lead",
+    n1_rate_low=0.35,
+    n1_rate_high=0.55,
+    n1_lead_low=0.03,
+    n1_lead_high=0.06,
+)
+
+# =====================================================================
 # Unified Sagittal State-Feedback No-Offset Controller
 # =====================================================================
 # Opt-in profile that replaces the independent tau_pitch + tau_position +
@@ -3497,6 +3896,11 @@ class SagittalVelocityDampedBalanceController:
         # Unified sagittal state-feedback controller state
         self._prev_unified_tau_cmd = 0.0      # previous step's tau_cmd for rate limiting
         self._no_offset_int_error = 0.0        # integral accumulator for no-offset controller
+
+        # L family: coordinated state-feedback state (Phase 3)
+        self._prev_pitch_rate_for_L = 0.0      # previous pitch_rate for phase-lead computation
+        self._prev_pitch_rate_for_N = 0.0      # previous pitch_rate for N1 mild damping
+        self._prev_pitch_rate_for_LR = 0.0     # previous pitch_rate for LR2 phase-lead computation
 
         # Initialize capture gate if enabled
         if self.enable_capture_gate:
@@ -7025,6 +7429,92 @@ class SagittalVelocityDampedBalanceController:
         else:
             apc_gate_reason = "active"
 
+        # ---- LR family: Replacement coordinated sagittal state feedback ---- #
+        # Unlike the L family (which ADDS on top), LR REPLACES the independent
+        # dynamic damping terms (tau_pitch_rate, tau_sagittal_velocity,
+        # tau_support_velocity) with a single coordinated state-feedback command.
+        #
+        # CRITICAL (EQ/FF pass-through fix): LR PRESERVES K1's equilibrium/
+        # feedforward baseline (tau_pitch + tau_position + tau_cp + tau_com_vy).
+        # These terms carry the pitch equilibrium authority through the pitch
+        # reference offset (pitch_eq + outer_loop + PFF) and the position
+        # centering bias. Without this pass-through, the LR path has zero
+        # equilibrium/feedforward and the total torque is ~10x too weak.
+        #
+        # Architecture:
+        #   tau_common = tau_eq_ff_pass_through + LR_dynamic_feedback
+        # where:
+        #   tau_eq_ff_pass_through = tau_pitch + tau_position + tau_cp + tau_com_vy
+        #     (equilibrium/feedforward — carries static authority to maintain height)
+        #   LR_dynamic_feedback = k_pitch*pitch + k_pitch_rate*pitch_rate
+        #     + k_support*support_err + k_support_vel*support_vel
+        #     (replaces tau_pitch_rate + tau_sagittal_velocity + tau_support_velocity)
+        LR_enabled = self.authority_schedule.enable_lr_replacement_feedback
+        LR_kind = self.authority_schedule.lr_replacement_kind
+        LR_feedback_torque = 0.0
+        LR_k1_existing_estimate = 0.0
+        LR_eq_ff_pass_through = 0.0
+        LR_removed_dynamic_terms_estimate = 0.0
+        LR_gains = {}
+        LR_replacement_mode = "none"
+        LR_state_vector = [
+            float(pitch_x_rad),
+            float(pitch_rate_for_damping),
+            float(sagittal_position_error_m),
+            float(support_position_velocity_m_s),
+            float(wheel_vel_mean),
+        ]
+        if LR_enabled and LR_kind.startswith("LR"):
+            height_fb = float(com_z_m)
+            if LR_kind == "LR1_low_freq":
+                LR_gains = _lr_replacement_gains_LR1(height_fb)
+                g = LR_gains
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                )
+            elif LR_kind == "LR2_phase_lead":
+                LR_gains = _lr_replacement_gains_LR2(height_fb)
+                g = LR_gains
+                pitch_accel = (LR_state_vector[1] - getattr(self, '_prev_pitch_rate_for_LR', 0.0)) / max(self.dt, 1e-6)
+                self._prev_pitch_rate_for_LR = LR_state_vector[1]
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                    + g.get("k_lead", 0.0) * pitch_accel
+                )
+            elif LR_kind == "LR3_pitch_ref_stabilized":
+                LR_gains = _lr_replacement_gains_LR3(height_fb)
+                g = LR_gains
+                pitch_ref_mod = g["pitch_ref_gain"] * LR_state_vector[2]
+                pitch_ref_mod = max(-g["pitch_ref_max_deg"], min(g["pitch_ref_max_deg"], pitch_ref_mod))
+                pitch_ref_mod_rad = math.radians(pitch_ref_mod)
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                    + self.kp_pitch * pitch_ref_mod_rad
+                )
+            # Capture what K1's full sum-of-torques would have been
+            LR_k1_existing_estimate = float(
+                tau_pitch + tau_pitch_rate + tau_sagittal_velocity +
+                tau_support_velocity + tau_position + tau_cp + tau_com_vy
+            )
+            # Equilibrium/feedforward pass-through: preserve K1's pitch equilibrium,
+            # position centering, and capture-point corrections.
+            # These carry the static authority to maintain the target height.
+            LR_eq_ff_pass_through = float(tau_pitch + tau_position + tau_cp + tau_com_vy)
+            # Dynamic terms that LR replaces (captured before zeroing for telemetry)
+            LR_removed_dynamic_terms_estimate = float(
+                tau_pitch_rate + tau_sagittal_velocity + tau_support_velocity
+            )
+            LR_replacement_mode = "eq_ff_pass_through"
+
         # Common scalar command (before per-wheel damping)
         # No internal clipping - let the composer handle torque limits like baseline does
         if unified_tau_cmd is not None:
@@ -7048,6 +7538,20 @@ class SagittalVelocityDampedBalanceController:
             hyst_tau_clipped = 0.0
             bias_tau_clipped = 0.0
             apc_tau_clipped = 0.0
+        elif LR_enabled and LR_kind.startswith("LR"):
+            # LR replacement with EQ/FF pass-through:
+            # tau_common = tau_eq_ff_pass_through + LR_dynamic_feedback
+            # where tau_eq_ff_pass_through preserves K1's equilibrium/feedforward
+            # (tau_pitch + tau_position + tau_cp + tau_com_vy) and
+            # LR_dynamic_feedback replaces the independent dynamic terms
+            # (tau_pitch_rate + tau_sagittal_velocity + tau_support_velocity).
+            tau_common_unclipped = LR_eq_ff_pass_through + LR_feedback_torque
+            # Zero only the dynamic terms that LR replaces (for clean telemetry).
+            # tau_pitch, tau_position, tau_cp, tau_com_vy are KEPT
+            # — they carry the equilibrium/feedforward pass-through.
+            tau_pitch_rate = 0.0
+            tau_sagittal_velocity = 0.0
+            tau_support_velocity = 0.0
         else:
             tau_common_unclipped = (
                 tau_pitch + tau_pitch_rate + tau_sagittal_velocity +
@@ -7061,6 +7565,99 @@ class SagittalVelocityDampedBalanceController:
         tau_common_unclipped = tau_common_unclipped + bias_tau_clipped
         # Add Active Pitch Crossing torque (APC_strategy)
         tau_common_unclipped = tau_common_unclipped + apc_tau_clipped
+
+        # ---- L family: Coordinated sagittal state feedback (Phase 3) ---- #
+        # Adds a coordinated state-feedback term on top of K1's existing terms.
+        # This synchronizes pitch, support, rate contributions to avoid the
+        # torque-phase-conflict that feeds the 2.5 Hz WIP mode.
+        L_enabled = self.authority_schedule.enable_coordinated_sagittal_feedback
+        L_candidate_kind = self.authority_schedule.coordinated_feedback_kind
+        L_state_vector = [
+            float(pitch_x_rad),
+            float(pitch_rate_for_damping),
+            float(sagittal_position_error_m),
+            float(support_position_velocity_m_s),
+            float(wheel_vel_mean),
+        ]
+        L_gains = {}
+        L_feedback_torque = 0.0
+        if L_enabled and L_candidate_kind.startswith("L"):
+            height_fb = float(com_z_m)
+            if L_candidate_kind == "L1_low_freq":
+                L_gains = _coordinated_feedback_gains_L1(height_fb)
+                g = L_gains
+                L_feedback_torque = (
+                    g["k_pitch"] * L_state_vector[0]
+                    + g["k_pitch_rate"] * L_state_vector[1]
+                    + g["k_support"] * L_state_vector[2]
+                    + g["k_support_vel"] * L_state_vector[3]
+                )
+            elif L_candidate_kind == "L2_phase_lead":
+                L_gains = _coordinated_feedback_gains_L2(height_fb)
+                g = L_gains
+                # Pitch acceleration proxy: use pitch_rate derivative (pitch rate diff / dt)
+                pitch_accel = (L_state_vector[1] - self._prev_pitch_rate_for_L) / max(self.dt, 1e-6)
+                L_feedback_torque = (
+                    g["k_pitch"] * L_state_vector[0]
+                    + g["k_pitch_rate"] * L_state_vector[1]
+                    + g["k_support"] * L_state_vector[2]
+                    + g["k_support_vel"] * L_state_vector[3]
+                    + g.get("k_lead", 0.0) * pitch_accel
+                )
+                self._prev_pitch_rate_for_L = L_state_vector[1]
+            elif L_candidate_kind == "L3_pitch_ref_stabilization":
+                L_gains = _coordinated_feedback_gains_L3(height_fb)
+                g = L_gains
+                # Pitch reference modulation based on support error
+                pitch_ref_mod = g["pitch_ref_gain"] * L_state_vector[2]
+                pitch_ref_mod = max(-g["pitch_ref_max"], min(g["pitch_ref_max"], pitch_ref_mod))
+                # Convert ref mod (deg) to additional torque: use Kp_pitch * ref_mod(rad)
+                pitch_ref_mod_rad = math.radians(pitch_ref_mod)
+                L_feedback_torque = (
+                    g["k_pitch"] * L_state_vector[0]
+                    + g["k_pitch_rate"] * L_state_vector[1]
+                    + g["k_support"] * L_state_vector[2]
+                    + g["k_support_vel"] * L_state_vector[3]
+                    + self.kp_pitch * pitch_ref_mod_rad
+                )
+            # Add coordinated feedback torque to common command
+            tau_common_unclipped = tau_common_unclipped + L_feedback_torque
+
+        # ---- N1 mild phase-lead damping diagnostic (Phase 5) ---- #
+        if L_enabled and L_candidate_kind == "N1_mild_phase_lead":
+            height_fb = float(com_z_m)
+            h_norm = max(0.0, min(1.0, (height_fb - 0.30) / (0.48 - 0.30)))
+            # Very mild phase-lead-compensated pitch rate damping
+            # Parameters from profile for micro-sweep support
+            sched = self.authority_schedule
+            k_rate = sched.n1_rate_low + (sched.n1_rate_high - sched.n1_rate_low) * h_norm
+            k_lead = sched.n1_lead_low + (sched.n1_lead_high - sched.n1_lead_low) * h_norm
+            pitch_accel = (float(pitch_rate_for_damping) - getattr(self, '_prev_pitch_rate_for_N', 0.0)) / max(self.dt, 1e-6)
+            self._prev_pitch_rate_for_N = float(pitch_rate_for_damping)
+            N_feedback_torque = k_rate * float(pitch_rate_for_damping) + k_lead * pitch_accel
+            tau_common_unclipped = tau_common_unclipped + N_feedback_torque
+            L_feedback_torque = N_feedback_torque
+            L_candidate_kind = "N1_mild_phase_lead"
+            L_gains = {"k_rate": float(k_rate), "k_lead": float(k_lead)}
+
+        # ---- M family: Body-yaw / wheel-yaw correct-actuator fix (Phase 4) ---- #
+        # Adds body-yaw correction through differential wheel velocity with
+        # support-aware gating. Does NOT fight mode-div divergence controller.
+        M_enabled = self.authority_schedule.enable_body_yaw_wheel_stabilization
+        M_wheel_yaw_torque = 0.0
+        M_body_yaw_error = 0.0
+        M_support_gate = 1.0
+        M_yaw_correlation = 0.0
+        if M_enabled:
+            sched = self.authority_schedule
+            # Yaw error: use yaw from orientation (negative pitch_yaw or available yaw signal)
+            # In the sagittal controller, yaw error is approximated from body orientation
+            yaw_error = float(0.0)  # Will be populated from external yaw signal
+            # For now, this is a stub — the actual yaw error is computed in the
+            # simulation harness and passed via commanded_height_ref_m or a new field.
+
+        # ---- End of L/M/N candidate additions ---- #
+
         tau_total_before_final_clip = float(tau_common_unclipped + (tau_wheel_vel_left + tau_wheel_vel_right) / 2.0)
         tau_common = self.wheel_torque_sign * tau_common_unclipped
 
@@ -7211,6 +7808,38 @@ class SagittalVelocityDampedBalanceController:
             "notch_signal_delta_pr": float(notch_signal_delta_pr),
             "notch_signal_delta_wl": float(notch_signal_delta_wl),
             "notch_signal_delta_wr": float(notch_signal_delta_wr),
+            # ---- L family: Coordinated sagittal state feedback telemetry ----
+            "L_enabled": bool(L_enabled),
+            "L_candidate_kind": str(L_candidate_kind),
+            "L_state_pitch_rad": float(L_state_vector[0]) if isinstance(L_state_vector, list) and len(L_state_vector) > 0 else 0.0,
+            "L_state_pitch_rate_rad_s": float(L_state_vector[1]) if isinstance(L_state_vector, list) and len(L_state_vector) > 1 else 0.0,
+            "L_state_support_error_m": float(L_state_vector[2]) if isinstance(L_state_vector, list) and len(L_state_vector) > 2 else 0.0,
+            "L_state_wheel_vel_rad_s": float(L_state_vector[4]) if isinstance(L_state_vector, list) and len(L_state_vector) > 4 else 0.0,
+            "L_feedback_torque_nm": float(L_feedback_torque),
+            "L_gains_kind": str(L_gains.get("kind", "none")) if isinstance(L_gains, dict) else "none",
+            # ---- LR family: Replacement coordinated feedback telemetry ---- #
+            "LR_enabled": bool(LR_enabled),
+            "LR_candidate_kind": str(LR_kind) if LR_enabled else "none",
+            "LR_state_pitch_rad": float(LR_state_vector[0]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 0 else 0.0,
+            "LR_state_pitch_rate_rad_s": float(LR_state_vector[1]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 1 else 0.0,
+            "LR_state_support_error_m": float(LR_state_vector[2]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 2 else 0.0,
+            "LR_state_wheel_vel_rad_s": float(LR_state_vector[4]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 4 else 0.0,
+            "LR_feedback_torque_nm": float(LR_feedback_torque),
+            "LR_dynamic_feedback_torque_nm": float(LR_feedback_torque),
+            "LR_eq_ff_pass_through_nm": float(LR_eq_ff_pass_through),
+            "LR_total_command_preclip_nm": float(LR_eq_ff_pass_through + LR_feedback_torque)
+                if LR_enabled and LR_kind.startswith("LR") else 0.0,
+            "LR_total_command_postclip_nm": float(tau_common),
+            "LR_k1_existing_estimate_nm": float(LR_k1_existing_estimate),
+            "LR_removed_dynamic_terms_estimate_nm": float(LR_removed_dynamic_terms_estimate),
+            "LR_eq_ff_estimate_nm": float(LR_eq_ff_pass_through),
+            "LR_replacement_mode": str(LR_replacement_mode),
+            "LR_gains_kind": str(LR_gains.get("kind", "none")) if isinstance(LR_gains, dict) else "none",
+            # ---- M family: Body-yaw/wheel-yaw telemetry ----
+            "M_enabled": bool(M_enabled),
+            "M_wheel_yaw_torque_nm": float(M_wheel_yaw_torque),
+            "M_body_yaw_error_rad": float(M_body_yaw_error),
+            "M_support_gate": float(M_support_gate),
             # ---- Pitch-aware position scaling telemetry ----
             "pitch_aware_position_scaling_enabled": bool(self.authority_schedule.enable_pitch_aware_position_scaling),
             "pitch_aware_position_scale": float(pitch_aware_position_scale),
