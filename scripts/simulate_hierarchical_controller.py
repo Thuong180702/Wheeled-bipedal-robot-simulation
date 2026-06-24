@@ -134,6 +134,12 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     LR1_K1_REPLACEMENT_COORDINATED_LOW_FREQ_V1,
     LR2_K1_REPLACEMENT_PHASE_LEAD_V1,
     LR3_K1_REPLACEMENT_PITCH_REF_STABILIZED_V1,
+    LRS1_SUPPORT_DOMINANT_V1,
+    LRS2_PITCH_RATE_DAMPING_V1,
+    LRS3_BALANCED_MEDIUM_V1,
+    LP1_K1_PRIORITY_PITCH_FIRST_SUPPORT_RESIDUAL_V1,
+    LP2_K1_PRIORITY_PITCH_STRONG_SUPPORT_SOFT_V1,
+    LP3_K1_PRIORITY_SUPPORT_RECENTER_WHEN_SAFE_V1,
     M1_K1_BODY_YAW_DIFF_WHEEL_V1,
     M2_K1_BODY_YAW_SUPPORT_AWARE_V1,
     N1_K1_MILD_PHASE_LEAD_DAMPING,
@@ -1446,6 +1452,17 @@ SAGITTAL_AUTHORITY_PROFILES = {
     "lr1_k1_replacement_coordinated_low_freq_v1": LR1_K1_REPLACEMENT_COORDINATED_LOW_FREQ_V1,
     "lr2_k1_replacement_phase_lead_v1": LR2_K1_REPLACEMENT_PHASE_LEAD_V1,
     "lr3_k1_replacement_pitch_ref_stabilized_v1": LR3_K1_REPLACEMENT_PITCH_REF_STABILIZED_V1,
+    # LRS family — Sign-audited constrained gain sweep (2026-06-24)
+    # All signs confirmed correct. Failure mode: gain magnitude.
+    "lrs1_support_dominant_v1": LRS1_SUPPORT_DOMINANT_V1,
+    "lrs2_pitch_rate_damping_v1": LRS2_PITCH_RATE_DAMPING_V1,
+    "lrs3_balanced_medium_v1": LRS3_BALANCED_MEDIUM_V1,
+    # LP family — Priority Sagittal Allocator (2026-06-24)
+    # Pitch-first support-residual architecture. Resolves LR/LRS support-pitch
+    # coupling via priority-based torque allocation.
+    "lp1_k1_priority_pitch_first_support_residual_v1": LP1_K1_PRIORITY_PITCH_FIRST_SUPPORT_RESIDUAL_V1,
+    "lp2_k1_priority_pitch_strong_support_soft_v1": LP2_K1_PRIORITY_PITCH_STRONG_SUPPORT_SOFT_V1,
+    "lp3_k1_priority_support_recenter_when_safe_v1": LP3_K1_PRIORITY_SUPPORT_RECENTER_WHEN_SAFE_V1,
     # M_K1_BODY_YAW_CORRECT_ACTUATOR_V1 family — Phase 4
     # K1 + body-yaw/wheel-yaw correct-actuator fix for D4/D5 hip-yaw
     "m1_k1_body_yaw_diff_wheel_v1": M1_K1_BODY_YAW_DIFF_WHEEL_V1,
@@ -2990,6 +3007,14 @@ def main():
             "lr1_k1_replacement_coordinated_low_freq_v1",
             "lr2_k1_replacement_phase_lead_v1",
             "lr3_k1_replacement_pitch_ref_stabilized_v1",
+            # LRS family — Sign-audited constrained gain sweep
+            "lrs1_support_dominant_v1",
+            "lrs2_pitch_rate_damping_v1",
+            "lrs3_balanced_medium_v1",
+            # LP family — Priority Sagittal Allocator
+            "lp1_k1_priority_pitch_first_support_residual_v1",
+            "lp2_k1_priority_pitch_strong_support_soft_v1",
+            "lp3_k1_priority_support_recenter_when_safe_v1",
             # M_K1_BODY_YAW_CORRECT_ACTUATOR_V1 family
             "m1_k1_body_yaw_diff_wheel_v1",
             "m2_k1_body_yaw_support_aware_v1",

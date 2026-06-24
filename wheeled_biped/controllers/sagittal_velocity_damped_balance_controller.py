@@ -1033,6 +1033,20 @@ class SagittalAuthoritySchedule:
     #   "LR3_pitch_ref_stabilized"  — LR with pitch reference stabilization
     lr_replacement_kind: str = "none"
 
+    # ---- LP family: Priority sagittal allocator — pitch-first support-residual ---- #
+    # Architectural alternative to LR/LRS coordinated feedback. Instead of a
+    # single equal-priority sum, LP computes pitch stabilization first and
+    # allocates support-centering torque only from residual safe authority.
+    # Support correction is gated by pitch state safety, saturation headroom,
+    # direction consistency, and slew limits. Preserves K1 EQ/FF baseline.
+    # Disabled by default — opt-in via LP profiles.
+    enable_lp_priority_allocator: bool = False
+    # Selects the priority-allocation variant:
+    #   "LP1_pitch_first_support_residual" — conservative pitch, soft support
+    #   "LP2_pitch_strong_support_soft"    — stronger pitch-rate, softer support
+    #   "LP3_support_recenter_when_safe"   — support only after pitch settles
+    lp_allocator_kind: str = "none"
+
     # ---- M family: Body-yaw/wheel-yaw correct-actuator fix (Phase 4) ---- #
     # When enabled, adds body-yaw correction through differential wheel
     # velocity with support-aware gating.
@@ -3346,6 +3360,195 @@ def _lr_replacement_gains_LR3(height_m: float) -> dict:
     }
 
 
+# ---- LRS Family: Sign-audited constrained gain sweep ---- #
+# All signs confirmed correct by Phase 1 audit (2026-06-24).
+# Failure mode is gain magnitude, not sign.
+# Hard bounds: k_pitch <= 15, k_pitch_rate <= 3, |k_support| <= 2.5x LR1, |k_support_vel| <= 2.5x LR1.
+
+def _lrs_replacement_gains_S1(height_m: float) -> dict:
+    """LRS1: Support-dominant — increase support position/velocity authority.
+
+    Target: fix support drift while keeping pitch gains moderate.
+    k_support ≈ 1.8x LR1, k_support_vel ≈ 1.8x LR1.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 6.0 + (3.5 - 6.0) * h_norm           # same as LR1
+    k_pitch_rate = 0.6 + (1.2 - 0.6) * h_norm        # same as LR1
+    # 1.8x LR1 support gains
+    k_support = -14.4 + (-21.6 - (-14.4)) * h_norm    # 1.8x: -12→-21.6 at h=0.48
+    k_support_vel = -0.54 + (-1.08 - (-0.54)) * h_norm  # 1.8x: -0.6→-1.08 at h=0.48
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "kind": "lrs1_support_dominant",
+    }
+
+
+def _lrs_replacement_gains_S2(height_m: float) -> dict:
+    """LRS2: Pitch-rate damping — increase damping around 0.5 Hz.
+
+    k_pitch_rate ≈ 2.5x LR1, other gains at LR1 level.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 6.0 + (3.5 - 6.0) * h_norm           # same as LR1
+    # 2.5x LR1 pitch rate gain (capped at hard bound 3.0)
+    k_pitch_rate_base = 1.5 + (3.0 - 1.5) * h_norm   # 2.5x LR1 baseline
+    k_pitch_rate = min(k_pitch_rate_base, 3.0)        # hard bound
+    k_support = -8.0 + (-12.0 - (-8.0)) * h_norm      # same as LR1
+    k_support_vel = -0.3 + (-0.6 - (-0.3)) * h_norm   # same as LR1
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "kind": "lrs2_pitch_rate_damping",
+    }
+
+
+def _lrs_replacement_gains_S3(height_m: float) -> dict:
+    """LRS3: Balanced medium — moderate increase across all gains.
+
+    k_pitch ≈ 1.5x LR1, k_pitch_rate ≈ 2x LR1, support ≈ 1.5x LR1.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 9.0 + (5.25 - 9.0) * h_norm             # 1.5x: 3.5→5.25 at h=0.48
+    k_pitch_rate = 1.2 + (2.4 - 1.2) * h_norm          # 2x: 1.2→2.4 at h=0.48
+    k_support = -12.0 + (-18.0 - (-12.0)) * h_norm     # 1.5x: -12→-18 at h=0.48
+    k_support_vel = -0.45 + (-0.9 - (-0.45)) * h_norm  # 1.5x: -0.6→-0.9 at h=0.48
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "kind": "lrs3_balanced_medium",
+    }
+
+
+# =============================================================================
+# LP PRIORITY SAGITTAL ALLOCATOR GAIN FUNCTIONS
+# =============================================================================
+# Architectural alternative to LR/LRS coordinated feedback. Instead of a single
+# equal-priority sum tau = k_pitch*pitch + k_pitch_rate*pitch_rate +
+# k_support*support + k_support_vel*support_vel, LP uses:
+#
+#   tau_common = tau_eq_ff_pass_through
+#              + tau_pitch_priority
+#              + tau_support_residual_allocated
+#
+# where pitch priority gets first access to dynamic authority and support
+# centering only uses remaining residual, gated by pitch safety, saturation
+# headroom, direction consistency, and slew limits.
+#
+# Hard safety bounds (same as LRS for comparability):
+#   |k_pitch_lp| <= 15 Nm/rad
+#   |k_pitch_rate_lp| <= 3 Nm/(rad/s)
+#   |k_support_lp| <= 30 (2.5× LR1 baseline)
+#   |k_support_vel_lp| <= 1.5 (2.5× LR1 baseline)
+
+
+def _lp_priority_gains_LP1(height_m: float) -> dict:
+    """LP1: Conservative pitch priority, soft support residual.
+
+    Pitch gets moderate authority. Support centering is soft and only allowed
+    when pitch state is controlled. Designed to test whether pitch-first
+    allocation can complete 3000 steps where LR/LRS failed.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch_lp = 8.0 + (5.0 - 8.0) * h_norm               # moderate pitch stiffness
+    k_pitch_rate_lp = 2.0 + (1.2 - 2.0) * h_norm            # moderate pitch damping
+    k_support_lp = -10.0 + (-16.0 - (-10.0)) * h_norm       # moderate support centering
+    k_support_vel_lp = -0.4 + (-0.8 - (-0.4)) * h_norm      # moderate support velocity damping
+    return {
+        "k_pitch_lp": float(k_pitch_lp),
+        "k_pitch_rate_lp": float(k_pitch_rate_lp),
+        "k_support_lp": float(k_support_lp),
+        "k_support_vel_lp": float(k_support_vel_lp),
+        # Safety gates
+        "pitch_safe_low_deg": 5.0,        # full support below this pitch
+        "pitch_safe_high_deg": 12.0,       # zero support above this pitch
+        "rate_safe_low_deg_s": 30.0,       # full support below this pitch rate
+        "rate_safe_high_deg_s": 80.0,      # zero support above this pitch rate
+        # Allocation limits
+        "pitch_priority_limit_nm": 5.0,     # max pitch priority torque
+        "support_residual_fraction": 0.6,   # fraction of residual authority for support
+        "support_slew_limit_nm_per_step": 0.3,  # max support torque change per step
+        "support_deadband_m": 0.02,         # ignore small support errors
+        # Direction gate
+        "direction_gate_enabled": True,
+        "kind": "lp1_pitch_first_support_residual",
+    }
+
+
+def _lp_priority_gains_LP2(height_m: float) -> dict:
+    """LP2: Stronger pitch-rate stabilization, softer support.
+
+    Higher pitch-rate damping with tighter support gates. Goal: test whether
+    stronger pitch damping + attenuated support can complete 3000 steps.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch_lp = 6.0 + (4.0 - 6.0) * h_norm                # slightly lower pitch stiffness
+    k_pitch_rate_lp = 2.8 + (1.8 - 2.8) * h_norm            # stronger pitch damping
+    k_pitch_rate_lp = min(k_pitch_rate_lp, 3.0)              # hard bound
+    k_support_lp = -8.0 + (-12.0 - (-8.0)) * h_norm         # softer support
+    k_support_vel_lp = -0.3 + (-0.6 - (-0.3)) * h_norm      # softer support velocity
+    return {
+        "k_pitch_lp": float(k_pitch_lp),
+        "k_pitch_rate_lp": float(k_pitch_rate_lp),
+        "k_support_lp": float(k_support_lp),
+        "k_support_vel_lp": float(k_support_vel_lp),
+        # Tighter safety gates
+        "pitch_safe_low_deg": 4.0,
+        "pitch_safe_high_deg": 10.0,
+        "rate_safe_low_deg_s": 25.0,
+        "rate_safe_high_deg_s": 70.0,
+        # Allocation limits
+        "pitch_priority_limit_nm": 4.5,
+        "support_residual_fraction": 0.4,   # less residual for support
+        "support_slew_limit_nm_per_step": 0.2,
+        "support_deadband_m": 0.03,
+        "direction_gate_enabled": True,
+        "kind": "lp2_pitch_strong_support_soft",
+    }
+
+
+def _lp_priority_gains_LP3(height_m: float) -> dict:
+    """LP3: Support recentering delayed/gated — only when pitch is safe.
+
+    Support correction is held at zero until post-push pitch settles below a
+    strict threshold. After settling, support recentering is enabled with
+    moderate gains. Goal: test temporal separation of pitch stabilization
+    and support recovery.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch_lp = 10.0 + (6.0 - 10.0) * h_norm               # strong pitch priority
+    k_pitch_rate_lp = 2.2 + (1.4 - 2.2) * h_norm             # moderate pitch damping
+    k_support_lp = -12.0 + (-18.0 - (-12.0)) * h_norm        # strong support (when active)
+    k_support_vel_lp = -0.5 + (-1.0 - (-0.5)) * h_norm       # moderate support vel damping
+    return {
+        "k_pitch_lp": float(k_pitch_lp),
+        "k_pitch_rate_lp": float(k_pitch_rate_lp),
+        "k_support_lp": float(k_support_lp),
+        "k_support_vel_lp": float(k_support_vel_lp),
+        # Very tight safety gates — support only when pitch is well-controlled
+        "pitch_safe_low_deg": 3.0,
+        "pitch_safe_high_deg": 7.0,
+        "rate_safe_low_deg_s": 20.0,
+        "rate_safe_high_deg_s": 50.0,
+        # Support settling: require pitch_abs below settle_threshold for N steps
+        "pitch_settle_threshold_deg": 4.0,
+        "pitch_settle_steps_required": 50,
+        # Allocation limits
+        "pitch_priority_limit_nm": 6.0,
+        "support_residual_fraction": 0.5,
+        "support_slew_limit_nm_per_step": 0.15,  # slower support ramp
+        "support_deadband_m": 0.015,
+        "direction_gate_enabled": True,
+        "kind": "lp3_support_recenter_when_safe",
+    }
+
+
 # ---- LR Family Profile Constants ---- #
 # These profiles REPLACE the sum-of-independent-torques with coordinated
 # feedback, preserving equilibrium/feedforward and notch filter.
@@ -3370,6 +3573,63 @@ LR3_K1_REPLACEMENT_PITCH_REF_STABILIZED_V1 = replace(
     profile_name="lr3_k1_replacement_pitch_ref_stabilized_v1",
     enable_lr_replacement_feedback=True,
     lr_replacement_kind="LR3_pitch_ref_stabilized",
+)
+
+
+# ---- LRS Family: Sign-audited constrained gain sweep profiles ---- #
+# All signs confirmed correct. Failure mode is gain magnitude, not sign.
+# See: scripts/audit_lr_support_drift_sign_phase.py (Phase 1 audit, 2026-06-24).
+# Built on K1_PITCH_RATE_NOTCH, opt-in only.
+
+LRS1_SUPPORT_DOMINANT_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lrs1_support_dominant_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LRS1_support_dominant",
+)
+
+LRS2_PITCH_RATE_DAMPING_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lrs2_pitch_rate_damping_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LRS2_pitch_rate_damping",
+)
+
+LRS3_BALANCED_MEDIUM_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lrs3_balanced_medium_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LRS3_balanced_medium",
+)
+
+
+# ---- LP Family: Priority Sagittal Allocator Profiles ---- #
+# Pitch-first support-residual architecture. Resolves the LR/LRS support-pitch
+# coupling by allocating pitch stabilization torque first and support-centering
+# torque only from residual safe authority, gated by pitch safety, saturation
+# headroom, direction consistency, and slew limits.
+# Built on K1_PITCH_RATE_NOTCH, opt-in only. Preserves K1 EQ/FF baseline.
+# See: docs/validation/lp_priority_sagittal_allocator_report.md
+
+LP1_K1_PRIORITY_PITCH_FIRST_SUPPORT_RESIDUAL_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lp1_k1_priority_pitch_first_support_residual_v1",
+    enable_lp_priority_allocator=True,
+    lp_allocator_kind="LP1_pitch_first_support_residual",
+)
+
+LP2_K1_PRIORITY_PITCH_STRONG_SUPPORT_SOFT_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lp2_k1_priority_pitch_strong_support_soft_v1",
+    enable_lp_priority_allocator=True,
+    lp_allocator_kind="LP2_pitch_strong_support_soft",
+)
+
+LP3_K1_PRIORITY_SUPPORT_RECENTER_WHEN_SAFE_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lp3_k1_priority_support_recenter_when_safe_v1",
+    enable_lp_priority_allocator=True,
+    lp_allocator_kind="LP3_support_recenter_when_safe",
 )
 
 
@@ -3901,6 +4161,8 @@ class SagittalVelocityDampedBalanceController:
         self._prev_pitch_rate_for_L = 0.0      # previous pitch_rate for phase-lead computation
         self._prev_pitch_rate_for_N = 0.0      # previous pitch_rate for N1 mild damping
         self._prev_pitch_rate_for_LR = 0.0     # previous pitch_rate for LR2 phase-lead computation
+        self._lp_prev_support_allocated = 0.0  # LP slew-limit state
+        self._lp_pitch_settle_counter = 0       # LP3 pitch-settle counter
 
         # Initialize capture gate if enabled
         if self.enable_capture_gate:
@@ -7429,6 +7691,49 @@ class SagittalVelocityDampedBalanceController:
         else:
             apc_gate_reason = "active"
 
+        # ---- LP family: Priority Sagittal Allocator (pitch-first support-residual) ---- #
+        # Architectural alternative to LR/LRS. Computes pitch priority first, then
+        # allocates support-centering torque only from residual safe authority.
+        # Support is gated by pitch safety, saturation headroom, direction
+        # consistency, and slew limits. Preserves K1 EQ/FF baseline.
+        LP_enabled = self.authority_schedule.enable_lp_priority_allocator
+        LP_kind = self.authority_schedule.lp_allocator_kind
+        LP_gains = {}
+        if LP_enabled and LP_kind.startswith("LP"):
+            height_fb = float(com_z_m)
+            if LP_kind == "LP1_pitch_first_support_residual":
+                LP_gains = _lp_priority_gains_LP1(height_fb)
+            elif LP_kind == "LP2_pitch_strong_support_soft":
+                LP_gains = _lp_priority_gains_LP2(height_fb)
+            elif LP_kind == "LP3_support_recenter_when_safe":
+                LP_gains = _lp_priority_gains_LP3(height_fb)
+
+        # LP telemetry defaults (populated when LP is active, zero otherwise)
+        LP_eq_ff_pass_through = 0.0
+        LP_pitch_error_rad = 0.0
+        LP_pitch_rate_rad_s = 0.0
+        LP_pitch_priority_raw = 0.0
+        LP_pitch_priority = 0.0
+        LP_pitch_priority_limit = 0.0
+        LP_pitch_abs_gate = 0.0
+        LP_pitch_rate_gate = 0.0
+        LP_saturation_gate = 0.0
+        LP_direction_gate = 0.0
+        LP_support_gate = 0.0
+        LP_support_error_m = 0.0
+        LP_support_velocity_m_s = 0.0
+        LP_support_raw = 0.0
+        LP_support_allocated_raw = 0.0
+        LP_support_allocated = 0.0
+        LP_support_slew_limited = 0.0
+        LP_support_limit_nm = 0.0
+        LP_residual_authority_nm = 0.0
+        LP_support_residual_fraction = 0.0
+        LP_tau_total_preclip = 0.0
+        LP_support_suppressed_reason = "lp_disabled"
+        LP_near_saturation = False
+        LP_support_direction_assists = False
+
         # ---- LR family: Replacement coordinated sagittal state feedback ---- #
         # Unlike the L family (which ADDS on top), LR REPLACES the independent
         # dynamic damping terms (tau_pitch_rate, tau_sagittal_velocity,
@@ -7457,6 +7762,11 @@ class SagittalVelocityDampedBalanceController:
         LR_removed_dynamic_terms_estimate = 0.0
         LR_gains = {}
         LR_replacement_mode = "none"
+        # LRS component-wise torque decomposition (for sign/phase audit)
+        LRS_tau_pitch_component = 0.0
+        LRS_tau_pitch_rate_component = 0.0
+        LRS_tau_support_component = 0.0
+        LRS_tau_support_vel_component = 0.0
         LR_state_vector = [
             float(pitch_x_rad),
             float(pitch_rate_for_damping),
@@ -7464,7 +7774,7 @@ class SagittalVelocityDampedBalanceController:
             float(support_position_velocity_m_s),
             float(wheel_vel_mean),
         ]
-        if LR_enabled and LR_kind.startswith("LR"):
+        if LR_enabled and (LR_kind.startswith("LR") or LR_kind.startswith("LRS")):
             height_fb = float(com_z_m)
             if LR_kind == "LR1_low_freq":
                 LR_gains = _lr_replacement_gains_LR1(height_fb)
@@ -7500,6 +7810,45 @@ class SagittalVelocityDampedBalanceController:
                     + g["k_support_vel"] * LR_state_vector[3]
                     + self.kp_pitch * pitch_ref_mod_rad
                 )
+            elif LR_kind == "LRS1_support_dominant":
+                LR_gains = _lrs_replacement_gains_S1(height_fb)
+                g = LR_gains
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                )
+            elif LR_kind == "LRS2_pitch_rate_damping":
+                LR_gains = _lrs_replacement_gains_S2(height_fb)
+                g = LR_gains
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                )
+            elif LR_kind == "LRS3_balanced_medium":
+                LR_gains = _lrs_replacement_gains_S3(height_fb)
+                g = LR_gains
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                )
+            # Component-wise torque decomposition for LRS variants
+            if LR_kind.startswith("LRS") and isinstance(LR_gains, dict) and LR_gains:
+                g = LR_gains
+                LRS_tau_pitch_component = float(g["k_pitch"] * LR_state_vector[0])
+                LRS_tau_pitch_rate_component = float(g["k_pitch_rate"] * LR_state_vector[1])
+                LRS_tau_support_component = float(g["k_support"] * LR_state_vector[2])
+                LRS_tau_support_vel_component = float(g["k_support_vel"] * LR_state_vector[3])
+            else:
+                LRS_tau_pitch_component = 0.0
+                LRS_tau_pitch_rate_component = 0.0
+                LRS_tau_support_component = 0.0
+                LRS_tau_support_vel_component = 0.0
             # Capture what K1's full sum-of-torques would have been
             LR_k1_existing_estimate = float(
                 tau_pitch + tau_pitch_rate + tau_sagittal_velocity +
@@ -7538,7 +7887,7 @@ class SagittalVelocityDampedBalanceController:
             hyst_tau_clipped = 0.0
             bias_tau_clipped = 0.0
             apc_tau_clipped = 0.0
-        elif LR_enabled and LR_kind.startswith("LR"):
+        elif LR_enabled and (LR_kind.startswith("LR") or LR_kind.startswith("LRS")):
             # LR replacement with EQ/FF pass-through:
             # tau_common = tau_eq_ff_pass_through + LR_dynamic_feedback
             # where tau_eq_ff_pass_through preserves K1's equilibrium/feedforward
@@ -7547,6 +7896,178 @@ class SagittalVelocityDampedBalanceController:
             # (tau_pitch_rate + tau_sagittal_velocity + tau_support_velocity).
             tau_common_unclipped = LR_eq_ff_pass_through + LR_feedback_torque
             # Zero only the dynamic terms that LR replaces (for clean telemetry).
+            # tau_pitch, tau_position, tau_cp, tau_com_vy are KEPT
+            # — they carry the equilibrium/feedforward pass-through.
+            tau_pitch_rate = 0.0
+            tau_sagittal_velocity = 0.0
+            tau_support_velocity = 0.0
+        elif LP_enabled and LP_kind.startswith("LP"):
+            # ---- LP family: Priority Sagittal Allocator ---- #
+            # Pitch-first support-residual architecture.
+            #
+            # tau_common = tau_eq_ff_pass_through
+            #            + tau_pitch_priority
+            #            + tau_support_residual_allocated
+            #
+            # where:
+            #   tau_eq_ff_pass_through = tau_pitch + tau_position + tau_cp + tau_com_vy
+            #     (K1 equilibrium/feedforward — preserved unchanged)
+            #   tau_pitch_priority = clamped pitch/pitch_rate damping
+            #     (gets first access to dynamic torque authority)
+            #   tau_support_residual_allocated = gated, slew-limited support centering
+            #     (only uses remaining residual authority after pitch priority)
+            #
+            # Support is attenuated when pitch|pitch_rate is high, when near
+            # torque saturation, or when support correction would worsen pitch.
+
+            # --- Step 1: EQ/FF pass-through (preserved K1 baseline) ---
+            LP_eq_ff_pass_through = float(tau_pitch + tau_position + tau_cp + tau_com_vy)
+
+            # --- Step 2: Pitch priority torque ---
+            LP_pitch_error_rad = float(pitch_x_rad)
+            LP_pitch_rate_rad_s = float(pitch_rate_for_damping)
+            LP_pitch_priority_raw = float(
+                LP_gains["k_pitch_lp"] * LP_pitch_error_rad
+                + LP_gains["k_pitch_rate_lp"] * LP_pitch_rate_rad_s
+            )
+            LP_pitch_priority_limit = float(LP_gains["pitch_priority_limit_nm"])
+            LP_pitch_priority = max(-LP_pitch_priority_limit,
+                                    min(LP_pitch_priority_limit, LP_pitch_priority_raw))
+
+            # --- Step 3: Safety gates ---
+            LP_pitch_abs_deg = float(abs(math.degrees(LP_pitch_error_rad)))
+            LP_pitch_rate_abs_deg_s = float(abs(math.degrees(LP_pitch_rate_rad_s)))
+
+            # pitch_abs_gate: 1.0 at or below safe_low, 0.0 at or above safe_high
+            _psl = float(LP_gains["pitch_safe_low_deg"])
+            _psh = float(LP_gains["pitch_safe_high_deg"])
+            if LP_pitch_abs_deg <= _psl:
+                LP_pitch_abs_gate = 1.0
+            elif LP_pitch_abs_deg >= _psh:
+                LP_pitch_abs_gate = 0.0
+            else:
+                LP_pitch_abs_gate = 1.0 - (LP_pitch_abs_deg - _psl) / (_psh - _psl)
+
+            # pitch_rate_gate: 1.0 at or below safe_low, 0.0 at or above safe_high
+            _rsl = float(LP_gains["rate_safe_low_deg_s"])
+            _rsh = float(LP_gains["rate_safe_high_deg_s"])
+            if LP_pitch_rate_abs_deg_s <= _rsl:
+                LP_pitch_rate_gate = 1.0
+            elif LP_pitch_rate_abs_deg_s >= _rsh:
+                LP_pitch_rate_gate = 0.0
+            else:
+                LP_pitch_rate_gate = 1.0 - (LP_pitch_rate_abs_deg_s - _rsl) / (_rsh - _rsl)
+
+            # saturation_gate: decreases as total torque approaches max_tau_wheel
+            LP_pre_support_torque = float(abs(LP_eq_ff_pass_through + LP_pitch_priority))
+            LP_saturation_gate = max(0.0, 1.0 - LP_pre_support_torque / max(self.max_tau_wheel * 0.85, 1e-6))
+            LP_saturation_gate = min(1.0, max(0.0, LP_saturation_gate))
+
+            # direction_gate: attenuate if support torque direction would worsen pitch
+            LP_support_error_m = float(sagittal_position_error_m)
+            LP_support_velocity_m_s = float(support_position_velocity_m_s)
+            LP_support_raw = float(
+                LP_gains["k_support_lp"] * LP_support_error_m
+                + LP_gains["k_support_vel_lp"] * LP_support_velocity_m_s
+            )
+            LP_direction_gate = 1.0
+            LP_support_direction_assists = False
+            if LP_gains.get("direction_gate_enabled", False):
+                # Support torque should move robot opposite to support error direction.
+                # If support_error > 0 (robot drifted forward), support torque should
+                # push backward (negative). If pitch > 0 (leaning forward), the
+                # support torque may worsen pitch if it adds forward torque.
+                # Simple heuristic: if support_raw and pitch_error have opposite signs
+                # AND pitch_error is significant, the support torque is helping hold
+                # pitch (robot is leaning one way, support pushes the other way to
+                # restore). If they have the SAME sign, support may worsen pitch.
+                if LP_pitch_abs_deg > 3.0:
+                    _supp_sign = 1.0 if LP_support_raw > 0 else (-1.0 if LP_support_raw < 0 else 0.0)
+                    _pitch_sign = 1.0 if LP_pitch_error_rad > 0 else (-1.0 if LP_pitch_error_rad < 0 else 0.0)
+                    if _supp_sign != 0 and _pitch_sign != 0:
+                        if _supp_sign == _pitch_sign:
+                            # Same sign — support may worsen pitch, attenuate
+                            LP_direction_gate = 0.3
+                        else:
+                            # Opposite signs — support helps pitch
+                            LP_direction_gate = 1.0
+                            LP_support_direction_assists = True
+
+            # --- Step 4: Composite support gate ---
+            LP_support_gate = float(
+                LP_pitch_abs_gate * LP_pitch_rate_gate * LP_saturation_gate * LP_direction_gate
+            )
+
+            # --- Step 5: Support deadband ---
+            LP_support_deadband_m = float(LP_gains.get("support_deadband_m", 0.02))
+            if abs(LP_support_error_m) < LP_support_deadband_m:
+                LP_support_gate = 0.0
+
+            # --- Step 6: Residual authority and support limit ---
+            LP_residual_authority_nm = float(max(0.0, self.max_tau_wheel * 0.85 - LP_pre_support_torque))
+            LP_support_residual_fraction = float(LP_gains["support_residual_fraction"])
+            LP_support_limit_nm = float(LP_residual_authority_nm * LP_support_residual_fraction)
+
+            LP_support_allocated_raw = float(LP_support_raw * LP_support_gate)
+            LP_support_allocated = max(-LP_support_limit_nm,
+                                       min(LP_support_limit_nm, LP_support_allocated_raw))
+
+            # --- Step 7: Slew limit on support allocated torque ---
+            LP_support_slew_limit = float(LP_gains.get("support_slew_limit_nm_per_step", 0.3))
+            LP_prev_support_allocated = float(getattr(self, '_lp_prev_support_allocated', 0.0))
+            LP_support_slew_limited = float(
+                LP_prev_support_allocated
+                + max(-LP_support_slew_limit,
+                      min(LP_support_slew_limit, LP_support_allocated - LP_prev_support_allocated))
+            )
+            self._lp_prev_support_allocated = LP_support_slew_limited
+
+            # --- Step 8: LP3 settling counter (delayed support activation) ---
+            LP_pitch_settled = True  # default for LP1/LP2
+            LP_settle_counter = getattr(self, '_lp_pitch_settle_counter', 0)
+            LP_settle_required = int(LP_gains.get("pitch_settle_steps_required", 0))
+            LP_settle_threshold = float(LP_gains.get("pitch_settle_threshold_deg", 999.0))
+            if LP_kind == "LP3_support_recenter_when_safe" and LP_settle_required > 0:
+                if LP_pitch_abs_deg < LP_settle_threshold:
+                    LP_settle_counter = LP_settle_counter + 1
+                else:
+                    LP_settle_counter = 0
+                self._lp_pitch_settle_counter = LP_settle_counter
+                LP_pitch_settled = LP_settle_counter >= LP_settle_required
+                if not LP_pitch_settled:
+                    LP_support_slew_limited = 0.0
+                    LP_support_gate = 0.0
+
+            # --- Step 9: Support suppression reason ---
+            LP_support_suppressed_reason = "none"
+            if LP_support_gate < 0.01:
+                reasons = []
+                if LP_pitch_abs_gate < 0.01:
+                    reasons.append("pitch_abs")
+                if LP_pitch_rate_gate < 0.01:
+                    reasons.append("pitch_rate")
+                if LP_saturation_gate < 0.01:
+                    reasons.append("saturation")
+                if LP_direction_gate < 0.3:
+                    reasons.append("direction")
+                if abs(LP_support_error_m) < LP_support_deadband_m:
+                    reasons.append("deadband")
+                if not LP_pitch_settled:
+                    reasons.append("pitch_not_settled")
+                LP_support_suppressed_reason = "+".join(reasons) if reasons else "gate_zero"
+
+            # --- Step 10: Compose final torque ---
+            LP_tau_total_preclip = float(
+                LP_eq_ff_pass_through + LP_pitch_priority + LP_support_slew_limited
+            )
+
+            # Near-saturation flag
+            LP_near_saturation = bool(
+                abs(LP_tau_total_preclip) >= self.max_tau_wheel * 0.95
+            )
+
+            tau_common_unclipped = LP_tau_total_preclip
+            # Zero the dynamic terms that LP replaces (for clean telemetry).
             # tau_pitch, tau_position, tau_cp, tau_com_vy are KEPT
             # — they carry the equilibrium/feedforward pass-through.
             tau_pitch_rate = 0.0
@@ -7823,18 +8344,52 @@ class SagittalVelocityDampedBalanceController:
             "LR_state_pitch_rad": float(LR_state_vector[0]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 0 else 0.0,
             "LR_state_pitch_rate_rad_s": float(LR_state_vector[1]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 1 else 0.0,
             "LR_state_support_error_m": float(LR_state_vector[2]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 2 else 0.0,
+            "LR_state_support_velocity_m_s": float(LR_state_vector[3]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 3 else 0.0,
             "LR_state_wheel_vel_rad_s": float(LR_state_vector[4]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 4 else 0.0,
             "LR_feedback_torque_nm": float(LR_feedback_torque),
             "LR_dynamic_feedback_torque_nm": float(LR_feedback_torque),
             "LR_eq_ff_pass_through_nm": float(LR_eq_ff_pass_through),
             "LR_total_command_preclip_nm": float(LR_eq_ff_pass_through + LR_feedback_torque)
-                if LR_enabled and LR_kind.startswith("LR") else 0.0,
+                if LR_enabled and (LR_kind.startswith("LR") or LR_kind.startswith("LRS")) else 0.0,
             "LR_total_command_postclip_nm": float(tau_common),
             "LR_k1_existing_estimate_nm": float(LR_k1_existing_estimate),
             "LR_removed_dynamic_terms_estimate_nm": float(LR_removed_dynamic_terms_estimate),
             "LR_eq_ff_estimate_nm": float(LR_eq_ff_pass_through),
             "LR_replacement_mode": str(LR_replacement_mode),
             "LR_gains_kind": str(LR_gains.get("kind", "none")) if isinstance(LR_gains, dict) else "none",
+            # ---- LRS family: Component-wise torque decomposition ---- #
+            "LRS_tau_pitch_component_nm": float(LRS_tau_pitch_component),
+            "LRS_tau_pitch_rate_component_nm": float(LRS_tau_pitch_rate_component),
+            "LRS_tau_support_component_nm": float(LRS_tau_support_component),
+            "LRS_tau_support_vel_component_nm": float(LRS_tau_support_vel_component),
+            # ---- LP family: Priority Sagittal Allocator telemetry ---- #
+            "LP_enabled": bool(LP_enabled),
+            "LP_candidate_kind": str(LP_kind) if LP_enabled else "none",
+            "LP_allocator_mode": str(LP_kind) if LP_enabled else "none",
+            "LP_tau_eq_ff_nm": float(LP_eq_ff_pass_through) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_pitch_priority_raw_nm": float(LP_pitch_priority_raw) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_pitch_priority_nm": float(LP_pitch_priority) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_support_raw_nm": float(LP_support_raw) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_support_allocated_nm": float(LP_support_allocated) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_support_slew_limited_nm": float(LP_support_slew_limited) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_total_preclip_nm": float(LP_tau_total_preclip) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_total_postclip_nm": float(tau_common) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_pitch_abs_gate": float(LP_pitch_abs_gate) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_pitch_rate_gate": float(LP_pitch_rate_gate) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_saturation_gate": float(LP_saturation_gate) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_direction_gate": float(LP_direction_gate) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_gate": float(LP_support_gate) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_residual_authority_nm": float(LP_residual_authority_nm) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_limit_nm": float(LP_support_limit_nm) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_residual_fraction": float(LP_support_residual_fraction) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_pitch_error_rad": float(LP_pitch_error_rad) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_pitch_rate_effective_rad_s": float(LP_pitch_rate_rad_s) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_error_m": float(LP_support_error_m) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_velocity_m_s": float(LP_support_velocity_m_s) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_suppressed_reason": str(LP_support_suppressed_reason) if LP_enabled and LP_kind.startswith("LP") else "lp_disabled",
+            "LP_near_saturation": bool(LP_near_saturation) if LP_enabled and LP_kind.startswith("LP") else False,
+            "LP_support_direction_assists_pitch_error": bool(LP_support_direction_assists) if LP_enabled and LP_kind.startswith("LP") else False,
+            "LP_gains_kind": str(LP_gains.get("kind", "none")) if isinstance(LP_gains, dict) else "none",
             # ---- M family: Body-yaw/wheel-yaw telemetry ----
             "M_enabled": bool(M_enabled),
             "M_wheel_yaw_torque_nm": float(M_wheel_yaw_torque),
