@@ -1114,12 +1114,7 @@ def k2_jax_controller_step(
     lb_offset, _ = k2_jax_low_band_support_pitch_ref(
         schedule_h, support_pos_err, 0.320, 0.004, 1.4, 3.0, 1.0)
 
-    # Outer loop: update state.
-    # NOTE: In the real simulator, the outer loop pitch_ref_offset is computed
-    # and applied to pitch_x BEFORE calling the sagittal controller. For parity
-    # comparison where pitch_eff = pitch_raw - offset is pre-applied, the
-    # outer loop dynamic contribution should be DISABLED (state held at zero).
-    # In Stage 5 simulation integration, the outer loop will be re-enabled.
+    # Outer loop: update state — active K2 mechanism.
     support_error_rate_raw = jnp.where(
         ol_prev_support_error == 0.0, 0.0,
         (support_pos_err - ol_prev_support_error) / control_dt)
@@ -1127,13 +1122,13 @@ def k2_jax_controller_step(
         ol_support_error_rate, support_error_rate_raw, cal_lowpass_alpha)
     new_ol_prev_support_error = support_pos_err
 
-    # Outer loop dynamic contribution DISABLED for parity comparison.
-    # The comparison harness pre-applies pitch_ref_offset to Python inputs.
-    # When integrating in Stage 5, re-enable this line:
-    # ol_dynamic = k2_jax_compute_outer_loop_pitch_ref(...)
-    # new_ol_pitch_ref = _jax_apply_lowpass(_jax_apply_rate_limit(...))
-    ol_dynamic_disabled = 0.0
-    new_ol_pitch_ref = ol_pitch_ref_smoothed  # hold at current value (zero init)
+    ol_dynamic = k2_jax_compute_outer_loop_pitch_ref(
+        support_pos_err, new_ol_support_error_rate, 0.0,
+        cal_kp, cal_kd, 0.0, cal_deadband, cal_theta_max)
+    ol_target = _jax_apply_rate_limit(
+        ol_pitch_ref_smoothed, ol_dynamic, cal_rate_limit)
+    new_ol_pitch_ref = _jax_apply_lowpass(
+        ol_pitch_ref_smoothed, ol_target, cal_lowpass_alpha)
 
     # Total pitch ref offset (physics FF + low-band static only for comparison)
     physics_pitch_eq = k2_jax_grid_interpolate(
@@ -1188,18 +1183,11 @@ def k2_jax_controller_step(
     tau_support_ff = k2_jax_support_feedforward_compute(
         support_pos_err, schedule_h)
 
-    # === Step 10: Sum and compose ===
+    # === Step 10: Sum and compose (active K2 mechanism) ===
     tau_sum = tau_sag + tau_posture + tau_lateral + tau_yaw + tau_mode_div + tau_support_ff
 
-    # COMPOSER DISABLED for parity comparison.
-    # Python compute() returns pre-composer raw sagittal torque.
-    # Composer is applied externally by the simulation loop.
-    # Re-enable in Stage 5 integration:
-    # tau_final, tau_clipped, sat_mask, rate_mask = k2_jax_torque_composer_step(tau_sum, prev_tau, params_flat)
-    tau_final = tau_sum
-    tau_clipped = tau_sum
-    sat_mask = jnp.zeros(10, dtype=jnp.bool_)
-    rate_mask = jnp.zeros(10, dtype=jnp.bool_)
+    tau_final, tau_clipped, sat_mask, rate_mask = k2_jax_torque_composer_step(
+        tau_sum, prev_tau, params_flat)
 
     # === Pack new state ===
     new_state = state_flat.at[_S_NOTCH_X1].set(new_notch_x1)
