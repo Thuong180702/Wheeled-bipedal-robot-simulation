@@ -2562,6 +2562,14 @@ def main():
         help="Controller mode: legacy (all features), balance-core (clean WBC), standing-balance (future)",
     )
     parser.add_argument(
+        "--controller-backend",
+        type=str,
+        default="python",
+        choices=["python", "jax"],
+        help="Controller backend: python (default, reference), jax (JIT-accelerated, opt-in). "
+             "JAX backend requires balance-core mode. Python backend is always available.",
+    )
+    parser.add_argument(
         "--enable-secondary-wheel-balance",
         action="store_true",
         help="Enable secondary wheel-balance torque path (default: disabled for WBC-only wheel torque)",
@@ -5238,6 +5246,42 @@ def main():
 
     start_time = time.time()
 
+    # Stage 5: JAX backend initialization (once before loop)
+    _backend = getattr(args, "controller_backend", "python")
+    _jax_enabled = (_backend == "jax")
+    _jax_step_fn = None
+    _jax_params = None
+    _jax_state = None
+    _jax_compile_time_s = 0.0
+    if _jax_enabled:
+        if not is_balance_core_mode(args):
+            print("[JAX BACKEND] ERROR: --controller-backend jax requires --controller-mode balance-core")
+            sys.exit(1)
+        import jax as _jax
+        _jax.config.update("jax_enable_x64", True)
+        from wheeled_biped.controllers.k2_jax_controller import (
+            pack_state_k2, pack_params_stage2, k2_jax_controller_step,
+            K2_JAX_INPUT_SIZE, pack_input_k2,
+        )
+        import jax.numpy as _jnp
+
+        _t_compile_start = time.perf_counter()
+        _jax_params = pack_params_stage2(
+            fs_hz=100.0, fc_hz=2.5, Q=2.0,
+            torque_limit=_jnp.ones(10) * float(torque_limit[0]) if hasattr(torque_limit, '__len__') else 10.0,
+            max_torque_rate=_jnp.ones(10) * 400.0,
+            control_dt=float(control_dt),
+        )
+        _jax_state = pack_state_k2()
+        _jax_step_fn = _jax.jit(k2_jax_controller_step)
+        # Warmup compile
+        _dummy_in = _jnp.zeros(K2_JAX_INPUT_SIZE, dtype=_jnp.float64)
+        _ = _jax_step_fn(_jax_state, _dummy_in, _jax_params)
+        _ = _jax_step_fn(_jax_state, _dummy_in, _jax_params)
+        _jax_compile_time_s = time.perf_counter() - _t_compile_start
+        print(f"[JAX BACKEND] Enabled — JIT compile time: {_jax_compile_time_s:.2f}s")
+        print(f"[JAX BACKEND] State size: {_jax_state.shape[0]}, Params size: {_jax_params.shape[0]}, Input size: {K2_JAX_INPUT_SIZE}")
+
     # Stage 1: Per-component controller profiling accumulators (--profile-controller)
     _profile_enabled = getattr(args, "profile_controller", False)
     _profile_timing = {
@@ -5381,6 +5425,7 @@ def main():
         nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary, prev_support_error, outer_loop_prev_support_error_m, outer_loop_support_error_rate_smoothed, outer_loop_pitch_ref_smoothed_deg, outer_loop_integral_accum_m_s
         nonlocal dynamic_height_target_m, dynamic_height_actual_m, dynamic_height_notch_gate
         nonlocal _profile_enabled, _profile_timing
+        nonlocal _jax_enabled, _jax_step_fn, _jax_params, _jax_state
 
         if terminated or step >= max_steps:
             return False
@@ -6382,6 +6427,40 @@ def main():
             tau_total_clipped = balance_core_result.tau_total_clipped
             tau_smooth = balance_core_result.tau_final
             tau_prev = tau_smooth
+
+            # === JAX fast-path override (Stage 5) ===
+            # When backend=jax, replace Python-computed tau_smooth with JAX output.
+            # Python path still runs for telemetry but torque is from JAX.
+            if _jax_enabled:
+                _t_jax_start = time.perf_counter()
+                _jax_input = pack_input_k2(
+                    pitch_x_rad=float(pitch_x_error) if 'pitch_x_error' in dir() else float(centroidal_state_control.body_pitch_x),
+                    pitch_rate_x_rad_s=float(pitch_rate_for_control_boosted) if 'pitch_rate_for_control_boosted' in dir() else float(centroidal_state_control.body_pitch_rate_x),
+                    roll_y_rad=float(centroidal_state_control.body_roll_y),
+                    roll_rate_y_rad_s=float(centroidal_state_control.body_roll_rate_y),
+                    yaw_error_rad=float(centroidal_state_control.body_yaw_z - initial_yaw_z),
+                    yaw_rate_rad_s=float(centroidal_state_control.body_yaw_rate_z),
+                    com_z_m=float(centroidal_state_control.com_pos[2]),
+                    com_vy_m_s=float(centroidal_state_control.com_vel[1]),
+                    sagittal_velocity_m_s=float(centroidal_state_control.com_vel[1]),
+                    sagittal_position_error_m=float(prev_support_error),
+                    wheel_vel_left_rad_s=float(joint_vel[4]),
+                    wheel_vel_right_rad_s=float(joint_vel[9]),
+                    support_velocity_m_s=0.0,
+                    commanded_height_ref_m=float(height_cmd),
+                    hip_yaw_div_error=float(joint_pos[1] - joint_pos[6]),
+                    hip_yaw_div_rate=float(joint_vel[1] - joint_vel[6]),
+                    joint_pos=jnp.array(joint_pos),
+                    joint_vel=jnp.array(joint_vel),
+                    q_ref=jnp.array(equilibrium_joint_pos),
+                    support_position_error_m=float(prev_support_error),
+                )
+                _jax_tau, _jax_state, _jax_diag = _jax_step_fn(_jax_state, _jax_input, _jax_params)
+                tau_smooth = _jax_tau
+                tau_prev = tau_smooth  # sync tau_prev for composer on next Python step (rate limiting)
+                if _profile_enabled:
+                    _dt_jax = (time.perf_counter() - _t_jax_start) * 1000.0
+                    _profile_timing["jax_step_ms"] = _profile_timing.get("jax_step_ms", 0.0) + _dt_jax
 
             # Apply wheel yaw torque POST-composer to tau_smooth directly.
             # This does NOT compete with sagittal balance torque budget since
