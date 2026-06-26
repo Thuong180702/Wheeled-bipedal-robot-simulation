@@ -180,7 +180,7 @@ def _find_telemetry(out_dir: Path, steps: int) -> Path | None:
 
 
 def run_dynamic_scenario(scenario_name: str, info: dict, profile: str,
-                         tag: str) -> Path | None:
+                         tag: str, backend: str = "python") -> Path | None:
     """Run one dynamic-height simulation. Returns telemetry path or None."""
     scenario_dir = RAW_DIR / f"{scenario_name}_{tag}"
     scenario_dir.mkdir(parents=True, exist_ok=True)
@@ -217,9 +217,11 @@ def run_dynamic_scenario(scenario_name: str, info: dict, profile: str,
         "--dynamic-height-trajectory", str(traj_path),
     ]
     cmd += MODE_DIV_FLAGS
+    if backend != "python":
+        cmd += ["--controller-backend", backend]
 
     desc = info["description"]
-    print(f"  [{tag}] {scenario_name}: {desc} ({info['steps']} steps)", flush=True)
+    print(f"  [{tag}] {scenario_name}: {desc} ({info['steps']} steps) backend={backend}", flush=True)
     t0 = time.time()
     try:
         result = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True,
@@ -531,6 +533,8 @@ def main():
     parser.add_argument("--scenarios", nargs="*", default=None,
                         help="Specific scenarios to run")
     parser.add_argument("--report-only", action="store_true")
+    parser.add_argument("--controller-backend", choices=["python", "jax"], default="python",
+                        help="Controller backend (default: python)")
     args = parser.parse_args()
 
     OUT_BASE.mkdir(parents=True, exist_ok=True)
@@ -552,7 +556,7 @@ def main():
             print(f"{'='*60}")
 
             if args.profile in ("k1", "both"):
-                tel = run_dynamic_scenario(sname, info, K1_PROFILE, "K1")
+                tel = run_dynamic_scenario(sname, info, K1_PROFILE, "K1", args.controller_backend)
                 if tel:
                     m = analyze_dynamic_telemetry(sname, tel, "K1")
                     if m:
@@ -561,7 +565,7 @@ def main():
                               f"pitch={m.get('pitch_rms_deg','?'):.2f} fell={m.get('fell','?')}")
 
             if args.profile in ("k2", "both"):
-                tel = run_dynamic_scenario(sname, info, K2_PROFILE, "K2")
+                tel = run_dynamic_scenario(sname, info, K2_PROFILE, "K2", args.controller_backend)
                 if tel:
                     m = analyze_dynamic_telemetry(sname, tel, "K2")
                     if m:

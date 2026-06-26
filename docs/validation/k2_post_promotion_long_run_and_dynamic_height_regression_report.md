@@ -75,3 +75,55 @@ python -m py_compile scripts/validate_k2_post_promotion_long_run.py
 python -m py_compile wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py
 python -m py_compile scripts/simulate_hierarchical_controller.py
 ```
+# K2 Post-Promotion Dynamic Height Gate-Crossing Results
+
+**Date:** 2026-06-25
+**Classification:** `K2_POST_PROMOTION_LONG_RUN_STRONG_PASS`
+
+## Dynamic Height Scenarios
+
+| Scenario | K1 pitch | K2 pitch | K1 ht_rmse | K2 ht_rmse | K1 gate_spike | K2 gate_spike | K1 hy | K2 hy | Fell | Class |
+|----------|----------|----------|------------|------------|---------------|---------------|-------|-------|------|-------|
+
+## Gate Alpha Behavior
+
+| Scenario | K1 notch_frac | K2 notch_frac | Gate Monotonic? |
+|----------|--------------|--------------|-----------------|
+| ramp_up_0p330_to_0p480 | 0.000 | 0.420 | True |
+
+## Safety Gates
+| Gate | Result |
+|------|--------|
+| K2 Falls | 0 |
+| Hip-yaw <= 0.35 | PASS |
+| No hidden torque | PASS |
+| No WBC | PASS |
+
+## Aggregate Dynamic Classification
+**`K2_POST_PROMOTION_LONG_RUN_STRONG_PASS`**
+# K2 Post-Promotion Dynamic Height Gate-Crossing Results
+
+**Date:** 2026-06-25
+**Classification:** `K2_POST_PROMOTION_LONG_RUN_STRONG_PASS`
+
+## Dynamic Height Scenarios
+
+| Scenario | K1 pitch | K2 pitch | K1 ht_rmse | K2 ht_rmse | K1 gate_spike | K2 gate_spike | K1 hy | K2 hy | Fell | Class |
+|----------|----------|----------|------------|------------|---------------|---------------|-------|-------|------|-------|
+
+## Gate Alpha Behavior
+
+| Scenario | K1 notch_frac | K2 notch_frac | Gate Monotonic? |
+|----------|--------------|--------------|-----------------|
+| ramp_up_0p330_to_0p480 | 0.000 | 0.000 | True |
+
+## Safety Gates
+| Gate | Result |
+|------|--------|
+| K2 Falls | 0 |
+| Hip-yaw <= 0.35 | PASS |
+| No hidden torque | PASS |
+| No WBC | PASS |
+
+## Aggregate Dynamic Classification
+**`K2_POST_PROMOTION_LONG_RUN_STRONG_PASS`**
