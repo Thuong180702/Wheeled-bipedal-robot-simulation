@@ -559,3 +559,497 @@ class TestIndexConstants:
         assert K2_JAX_STATE_FIELDS_STAGE2.index("notch_x2") == _IDX_NOTCH_X2
         assert K2_JAX_STATE_FIELDS_STAGE2.index("notch_y1") == _IDX_NOTCH_Y1
         assert K2_JAX_STATE_FIELDS_STAGE2.index("notch_y2") == _IDX_NOTCH_Y2
+
+
+# ===========================================================================
+# Stage 3: Height scheduling parity
+# ===========================================================================
+
+
+class TestHeightSchedulingParity:
+    """K2 height scheduling functions match Python reference."""
+
+    def test_smoothstep01_parity(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            _jax_smoothstep01, python_smoothstep01,
+        )
+        for val in [0.0, 0.25, 0.5, 0.75, 1.0, -0.1, 1.5]:
+            py = python_smoothstep01(val)
+            jx = float(_jax_smoothstep01(jnp.array(val)))
+            assert jx == pytest.approx(py, abs=1e-15)
+
+    @pytest.mark.parametrize("z_ref", [0.33, 0.40, 0.45, 0.48, 0.30, 0.55])
+    def test_scheduled_k_position(self, z_ref):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_scheduled_k_position, python_scheduled_k_position,
+        )
+        args = (z_ref, 0.0, 5.0, 0.35, 0.45)
+        py = python_scheduled_k_position(*args)
+        jx = float(k2_jax_scheduled_k_position(
+            jnp.array(args[0]), *args[1:]))
+        assert jx == pytest.approx(py, abs=1e-10)
+
+    @pytest.mark.parametrize("z_ref", [0.33, 0.40, 0.45, 0.48, 0.30, 0.55])
+    def test_scheduled_k_wheel_velocity(self, z_ref):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_scheduled_k_wheel_velocity, python_scheduled_k_wheel_velocity,
+        )
+        args = (z_ref, 0.5, 3.0, 0.35, 0.45)
+        py = python_scheduled_k_wheel_velocity(*args)
+        jx = float(k2_jax_scheduled_k_wheel_velocity(
+            jnp.array(args[0]), *args[1:]))
+        assert jx == pytest.approx(py, abs=1e-10)
+
+
+# ===========================================================================
+# Stage 3: Pitch ref offset + outer loop parity
+# ===========================================================================
+
+
+class TestPitchRefOffsetParity:
+    """Pitch reference offset interpolation matches Python."""
+
+    def test_k2_height_schedule_interpolation(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_interpolate_pitch_ref_offset, python_interpolate_pitch_ref_offset,
+        )
+        heights = (0.300, 0.320, 0.330, 0.340, 0.360, 0.380, 0.430, 0.450, 0.465, 0.480)
+        offsets = (3.0, -2.0, -4.0, 0.0, -3.0, 5.0, 2.0, 2.0, 3.0, 3.0)
+        for h in [0.28, 0.30, 0.33, 0.40, 0.45, 0.48, 0.50]:
+            py = python_interpolate_pitch_ref_offset(h, heights, offsets, clamp=True)
+            jx = float(k2_jax_interpolate_pitch_ref_offset(
+                jnp.array(h), jnp.array(heights), jnp.array(offsets), True))
+            assert jx == pytest.approx(py, abs=1e-10)
+
+
+class TestOuterLoopParity:
+    """Support-position outer loop pitch ref matches Python."""
+
+    def test_outer_loop_basic(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_compute_outer_loop_pitch_ref, python_compute_outer_loop_pitch_ref,
+        )
+        args = (0.02, 0.001, 0.0, 1.0, 0.0, 0.0, 0.015, 3.0)
+        py = python_compute_outer_loop_pitch_ref(*args)
+        jx = float(k2_jax_compute_outer_loop_pitch_ref(
+            jnp.array(args[0]), jnp.array(args[1]), jnp.array(args[2]),
+            *args[3:]))
+        assert jx == pytest.approx(py, abs=1e-10)
+
+    def test_outer_loop_deadband(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_compute_outer_loop_pitch_ref, python_compute_outer_loop_pitch_ref,
+        )
+        # Error within deadband → zero proportional
+        args = (0.005, 0.001, 0.0, 1.0, 0.0, 0.0, 0.015, 3.0)
+        py = python_compute_outer_loop_pitch_ref(*args)
+        jx = float(k2_jax_compute_outer_loop_pitch_ref(
+            jnp.array(args[0]), jnp.array(args[1]), jnp.array(args[2]),
+            *args[3:]))
+        assert jx == pytest.approx(py, abs=1e-10)
+
+    def test_outer_loop_saturation(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_compute_outer_loop_pitch_ref, python_compute_outer_loop_pitch_ref,
+        )
+        # Large error should saturate
+        args = (10.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 3.0)
+        py = python_compute_outer_loop_pitch_ref(*args)
+        jx = float(k2_jax_compute_outer_loop_pitch_ref(
+            jnp.array(args[0]), jnp.array(args[1]), jnp.array(args[2]),
+            *args[3:]))
+        assert jx == pytest.approx(py, abs=1e-10)
+
+
+# ===========================================================================
+# Stage 3: PCHIP grid interpolation verification
+# ===========================================================================
+
+
+class TestCalibratedOuterLoopParity:
+    """Calibrated outer loop grid interpolation vs PCHIP."""
+
+    @pytest.fixture(scope="class")
+    def grid_params(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            build_calibrated_grid_params,
+        )
+        # Default 20000-pt grid — empirically verified <1e-6 for all functions
+        return build_calibrated_grid_params()
+
+    @pytest.fixture(scope="class")
+    def pchip_refs(self):
+        from wheeled_biped.controllers.calibrated_outer_loop_functions import (
+            calibrated_kp_deg_per_m,
+            calibrated_kd_deg_per_mps,
+            calibrated_theta_ref_max_deg,
+            calibrated_deadband_m,
+            calibrated_rate_limit_deg_per_step,
+            calibrated_lowpass_alpha,
+        )
+        return {
+            "kp": calibrated_kp_deg_per_m,
+            "kd": calibrated_kd_deg_per_mps,
+            "theta_max": calibrated_theta_ref_max_deg,
+            "deadband": calibrated_deadband_m,
+            "rate_limit": calibrated_rate_limit_deg_per_step,
+            "lowpass": calibrated_lowpass_alpha,
+        }
+
+    def _max_error(self, grid_heights, grid_values, pchip_fn):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_grid_interpolate,
+        )
+        max_err = 0.0
+        rng = random.Random(42)
+        for _ in range(10000):
+            h = rng.uniform(0.28, 0.50)
+            py = pchip_fn(h)
+            jx = float(k2_jax_grid_interpolate(
+                jnp.array(h), grid_heights, grid_values))
+            max_err = max(max_err, abs(jx - py))
+        return max_err
+
+    def test_kp_grid_error(self, grid_params, pchip_refs):
+        err = self._max_error(
+            grid_params["grid_heights"], grid_params["kp_grid"], pchip_refs["kp"])
+        assert err <= 1e-6, f"Kp grid max error: {err:.2e}"
+
+    def test_kd_grid_error(self, grid_params, pchip_refs):
+        err = self._max_error(
+            grid_params["grid_heights"], grid_params["kd_grid"], pchip_refs["kd"])
+        assert err <= 1e-6, f"Kd grid max error: {err:.2e}"
+
+    def test_theta_max_grid_error(self, grid_params, pchip_refs):
+        err = self._max_error(
+            grid_params["grid_heights"], grid_params["theta_max_grid"],
+            pchip_refs["theta_max"])
+        assert err <= 1e-6, f"theta_max grid max error: {err:.2e}"
+
+    def test_deadband_grid_error(self, grid_params, pchip_refs):
+        err = self._max_error(
+            grid_params["grid_heights"], grid_params["deadband_grid"],
+            pchip_refs["deadband"])
+        assert err <= 1e-6, f"deadband grid max error: {err:.2e}"
+
+    def test_rate_limit_grid_error(self, grid_params, pchip_refs):
+        err = self._max_error(
+            grid_params["grid_heights"], grid_params["rate_limit_grid"],
+            pchip_refs["rate_limit"])
+        assert err <= 1e-6, f"rate_limit grid max error: {err:.2e}"
+
+    def test_lowpass_grid_error(self, grid_params, pchip_refs):
+        err = self._max_error(
+            grid_params["grid_heights"], grid_params["lowpass_grid"],
+            pchip_refs["lowpass"])
+        assert err <= 1e-6, f"lowpass grid max error: {err:.2e}"
+
+
+class TestPhysicsFFParity:
+    """Physics equilibrium feedforward grid interpolation vs PCHIP."""
+
+    @pytest.fixture(scope="class")
+    def ff_grid_params(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            build_physics_ff_grid_params,
+        )
+        # Default 100000-pt grid for high-curvature physics FF functions
+        return build_physics_ff_grid_params()
+
+    def _max_error(self, grid_heights, grid_values, pchip_fn):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_grid_interpolate,
+        )
+        max_err = 0.0
+        rng = random.Random(99)
+        for _ in range(10000):
+            h = rng.uniform(0.28, 0.50)
+            py = pchip_fn(h)
+            jx = float(k2_jax_grid_interpolate(
+                jnp.array(h), grid_heights, grid_values))
+            max_err = max(max_err, abs(jx - py))
+        return max_err
+
+    def test_tau_eq_ff_grid_error(self, ff_grid_params):
+        from wheeled_biped.controllers.physics_equilibrium_feedforward import (
+            physics_equilibrium_feedforward_tau_each_wheel_nm,
+        )
+        err = self._max_error(
+            ff_grid_params["grid_heights"],
+            ff_grid_params["tau_eq_ff_grid"],
+            physics_equilibrium_feedforward_tau_each_wheel_nm)
+        assert err <= 1e-6, f"tau_eq_ff grid max error: {err:.2e}"
+
+    def test_pitch_eq_grid_error(self, ff_grid_params):
+        from wheeled_biped.controllers.physics_equilibrium_feedforward import (
+            physics_equilibrium_pitch_eq_no_off_deg,
+        )
+        err = self._max_error(
+            ff_grid_params["grid_heights"],
+            ff_grid_params["pitch_eq_grid"],
+            physics_equilibrium_pitch_eq_no_off_deg)
+        assert err <= 1e-6, f"pitch_eq grid max error: {err:.2e}"
+
+
+# ===========================================================================
+# Stage 3: Low-band support parity
+# ===========================================================================
+
+
+class TestLowBandSupportParity:
+    """Low-band support outer loop matches Python reference behavior."""
+
+    def test_gate_at_center(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_low_band_support_gate,
+        )
+        g = float(k2_jax_low_band_support_gate(jnp.array(0.320), 0.320, 0.004))
+        assert g == pytest.approx(1.0, abs=1e-10)
+
+    def test_gate_at_480(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_low_band_support_gate,
+        )
+        g = float(k2_jax_low_band_support_gate(jnp.array(0.480), 0.320, 0.004))
+        assert g < 1e-10  # essentially zero far from center
+
+    def test_pitch_ref_at_center(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_low_band_support_pitch_ref,
+        )
+        offset, theta_max = k2_jax_low_band_support_pitch_ref(
+            jnp.array(0.320), jnp.array(0.02),
+            0.320, 0.004, 1.4, 3.0, 1.0,
+        )
+        assert float(offset) != 0.0  # active at center
+        assert float(theta_max) == pytest.approx(3.0, abs=1e-4)
+
+
+# ===========================================================================
+# Stage 3: Component controller parity
+# ===========================================================================
+
+
+class TestShapePostureParity:
+    """Shape posture JAX PD matches Python ShapePostureController."""
+
+    def test_pd_torque_match(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_shape_posture_compute,
+        )
+        q_ref = jnp.array([0.0, 0.0, 0.635, 1.232, 0.0, 0.0, 0.0, 0.635, 1.232, 0.0])
+        q = jnp.array([0.01, -0.02, 0.63, 1.23, 0.0, -0.01, 0.02, 0.64, 1.24, 0.0])
+        qd = jnp.zeros(10)
+        tau, diag = k2_jax_shape_posture_compute(q_ref, q, qd)
+        assert tau.shape == (10,)
+        # hip_yaw [1,6], hip_pitch [2,7], knee [3,8] should be nonzero
+        assert float(jnp.abs(tau[1])) > 0
+        assert float(jnp.abs(tau[6])) > 0
+        assert float(jnp.abs(tau[2])) > 0
+        assert float(jnp.abs(tau[7])) > 0
+        assert float(jnp.abs(tau[3])) > 0
+        assert float(jnp.abs(tau[8])) > 0
+        # wheels [4,9] should be zero
+        assert float(tau[4]) == 0.0
+        assert float(tau[9]) == 0.0
+
+
+class TestLateralRollParity:
+    """Lateral roll JAX matches Python LateralRollBalanceController."""
+
+    def test_positive_roll_produces_antisymmetric_torque(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_lateral_roll_compute,
+        )
+        tau, _ = k2_jax_lateral_roll_compute(
+            jnp.array(0.1), jnp.array(0.0),
+        )
+        # Positive roll → left hip roll positive, right negative
+        assert float(tau[0]) > 0
+        assert float(tau[5]) < 0
+
+    def test_stance_regularization_disabled_by_default(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_lateral_roll_compute,
+        )
+        tau_no_stance, _ = k2_jax_lateral_roll_compute(
+            jnp.array(0.0), jnp.array(0.0),
+            hip_roll_pos_left=0.1, hip_roll_pos_right=-0.1,
+            hip_roll_ref_left=0.0, hip_roll_ref_right=0.0,
+            enable_stance_regularization=False,
+        )
+        tau_stance, _ = k2_jax_lateral_roll_compute(
+            jnp.array(0.0), jnp.array(0.0),
+            hip_roll_pos_left=0.1, hip_roll_pos_right=-0.1,
+            hip_roll_ref_left=0.0, hip_roll_ref_right=0.0,
+            enable_stance_regularization=True,
+        )
+        # With stance, torques should differ from without
+        assert float(tau_no_stance[0]) != float(tau_stance[0])
+
+
+class TestYawControllerParity:
+    """Yaw JAX matches Python YawController."""
+
+    def test_positive_yaw_error_antisymmetric(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_yaw_compute,
+        )
+        tau = k2_jax_yaw_compute(jnp.array(0.1), jnp.array(0.0))
+        # Positive yaw error → negative on left, positive on right
+        assert float(tau[1]) < 0
+        assert float(tau[6]) > 0
+
+
+class TestModeDivParity:
+    """Mode-div JAX matches Python ModeBasedHipYawDivergenceController."""
+
+    def test_k2_params_produce_torque(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_mode_div_compute,
+        )
+        tau = k2_jax_mode_div_compute(
+            jnp.array(0.05), jnp.array(0.01), jnp.array(0.40),
+            kp_div=10.0, kd_div=0.50, max_torque=7.5,
+            soft_limit_rad=0.30, soft_gain=0.80,
+        )
+        assert float(tau[1]) != 0.0
+        assert float(tau[6]) != 0.0
+        # Antisymmetric
+        assert float(tau[1]) == pytest.approx(-float(tau[6]), abs=1e-10)
+
+    def test_height_gate_reduces_torque_at_high_height(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_mode_div_compute,
+        )
+        # At low height (0.30m): gate = 1.0, full torque
+        tau_low = k2_jax_mode_div_compute(
+            jnp.array(0.05), jnp.array(0.01), jnp.array(0.30),
+            kp_div=10.0, kd_div=0.50, max_torque=7.5,
+            soft_limit_rad=0.30, soft_gain=0.80,
+        )
+        # At high height (1.0m): gate << 1.0, reduced torque
+        tau_high = k2_jax_mode_div_compute(
+            jnp.array(0.05), jnp.array(0.01), jnp.array(1.0),
+            kp_div=10.0, kd_div=0.50, max_torque=7.5,
+            soft_limit_rad=0.30, soft_gain=0.80,
+        )
+        # At height >= soft_limit + soft_gain (1.10m): gate = 0, zero torque
+        tau_zero = k2_jax_mode_div_compute(
+            jnp.array(0.05), jnp.array(0.01), jnp.array(1.20),
+            kp_div=10.0, kd_div=0.50, max_torque=7.5,
+            soft_limit_rad=0.30, soft_gain=0.80,
+        )
+        # Gate reduces torque significantly at high height
+        assert abs(float(tau_high[1])) < abs(float(tau_low[1]))
+        # Gate is zero above soft_limit + soft_gain
+        assert float(tau_zero[1]) == 0.0
+
+    def test_torque_clips_at_max(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_mode_div_compute,
+        )
+        tau = k2_jax_mode_div_compute(
+            jnp.array(10.0), jnp.array(0.0), jnp.array(0.30),  # huge error, low height
+            kp_div=10.0, kd_div=0.50, max_torque=7.5,
+            soft_limit_rad=0.30, soft_gain=0.80,
+        )
+        assert abs(float(tau[1])) <= 7.5 + 1e-10
+
+
+# ===========================================================================
+# Stage 3: Sagittal torque assembly parity
+# ===========================================================================
+
+
+class TestSagittalTorqueAssemblyParity:
+    """K2-active sagittal torque assembly matches Python reference.
+
+    Note: This is NOT a full-step parity test (that's Stage 4).
+    It verifies that individual torque terms are computed correctly.
+    """
+
+    def test_zero_inputs_produce_zero_wheel_torque(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_sagittal_torque_assembly,
+        )
+        tau, diag = k2_jax_sagittal_torque_assembly(
+            pitch_x_rad=jnp.array(0.0),
+            pitch_rate_rad_s=jnp.array(0.0),
+            sagittal_velocity_m_s=jnp.array(0.0),
+            sagittal_position_error_m=jnp.array(0.0),
+            wheel_vel_left_rad_s=jnp.array(0.0),
+            wheel_vel_right_rad_s=jnp.array(0.0),
+            support_velocity_m_s=jnp.array(0.0),
+            kp_pitch=50.0, effective_pitch_scale=1.0, effective_pitch_tau_cap=0.0,
+            effective_kd_pitch=10.0,
+            effective_k_velocity=0.0, effective_velocity_damping_scale=1.0,
+            effective_support_velocity_gain=0.0, effective_support_velocity_scale=1.0,
+            effective_k_wheel_velocity=0.5,
+            effective_k_position=0.0, effective_max_position_tau=3.0,
+            kp_cp=0.0, kd_com_vy=5.0,
+            wheel_torque_sign=1.0,
+        )
+        assert tau.shape == (10,)
+        # Non-wheel joints should be zero
+        for i in [0, 1, 2, 3, 5, 6, 7, 8]:
+            assert float(tau[i]) == 0.0, f"Joint {i} should be zero"
+        # Wheels should be zero (no velocity)
+        assert float(tau[4]) == 0.0
+        assert float(tau[9]) == 0.0
+
+    def test_forward_pitch_produces_forward_wheel_torque(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            k2_jax_sagittal_torque_assembly,
+        )
+        tau, _ = k2_jax_sagittal_torque_assembly(
+            pitch_x_rad=jnp.array(0.1),  # forward pitch
+            pitch_rate_rad_s=jnp.array(0.0),
+            sagittal_velocity_m_s=jnp.array(0.0),
+            sagittal_position_error_m=jnp.array(0.0),
+            wheel_vel_left_rad_s=jnp.array(0.0),
+            wheel_vel_right_rad_s=jnp.array(0.0),
+            support_velocity_m_s=jnp.array(0.0),
+            kp_pitch=50.0, effective_pitch_scale=1.0, effective_pitch_tau_cap=0.0,
+            effective_kd_pitch=10.0,
+            effective_k_velocity=0.0, effective_velocity_damping_scale=1.0,
+            effective_support_velocity_gain=0.0, effective_support_velocity_scale=1.0,
+            effective_k_wheel_velocity=0.5,
+            effective_k_position=0.0, effective_max_position_tau=3.0,
+            kp_cp=0.0, kd_com_vy=5.0,
+            wheel_torque_sign=1.0,
+        )
+        # Forward pitch → forward wheel torque (positive on both wheels)
+        assert float(tau[4]) > 0, f"Left wheel torque should be positive, got {float(tau[4])}"
+        assert float(tau[9]) > 0, f"Right wheel torque should be positive, got {float(tau[9])}"
+
+
+# ===========================================================================
+# Stage 3: Rate limit + lowpass parity
+# ===========================================================================
+
+
+class TestRateLimitLowpassParity:
+    """JAX rate limit and lowpass match Python."""
+
+    def test_rate_limit_parity(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            _jax_apply_rate_limit, python_apply_rate_limit,
+        )
+        cases = [(0.0, 5.0, 2.0), (0.0, 0.5, 2.0), (0.0, -5.0, 2.0), (0.0, 1.0, -1.0)]
+        for prev, target, max_delta in cases:
+            py = python_apply_rate_limit(prev, target, max_delta)
+            jx = float(_jax_apply_rate_limit(
+                jnp.array(prev), jnp.array(target), max_delta))
+            assert jx == pytest.approx(py, abs=1e-15)
+
+    def test_lowpass_parity(self):
+        from wheeled_biped.controllers.k2_jax_controller import (
+            _jax_apply_lowpass, python_apply_lowpass,
+        )
+        cases = [(0.0, 5.0, 0.15), (3.0, 5.0, 0.15), (0.0, 1.0, 0.0), (0.0, 1.0, 1.0)]
+        for prev, target, alpha in cases:
+            py = python_apply_lowpass(prev, target, alpha)
+            jx = float(_jax_apply_lowpass(
+                jnp.array(prev), jnp.array(target), alpha))
+            assert jx == pytest.approx(py, abs=1e-15)
