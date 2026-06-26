@@ -284,3 +284,100 @@ def smoothstep_gate(
     u = (value - start) / (end - start)
     u_clamped = max(0.0, min(1.0, u))
     return u_clamped * u_clamped * (3.0 - 2.0 * u_clamped)
+
+
+# ---------------------------------------------------------------------------
+# JAX-compatible pure functions for biquad notch and smoothstep gate
+# ---------------------------------------------------------------------------
+# These are pure, stateless functions that can be used inside JAX JIT
+# compilation. They produce identical results to the class-based versions
+# above when called with the same inputs.
+#
+# IMPORTANT: These functions are additive — the existing BiquadNotchFilter,
+# FirstOrderLowPassFilter, and smoothstep_gate() are NOT modified.
+
+import jax.numpy as _jnp
+
+
+def biquad_notch_coefficients(
+    fs_hz: float,
+    fc_hz: float,
+    Q: float,
+) -> tuple[float, float, float, float, float]:
+    """Compute biquad notch filter coefficients (RBJ / Audio EQ Cookbook).
+
+    Pure function — identical math to BiquadNotchFilter._compute_coefficients().
+
+    Args:
+        fs_hz: Sampling frequency in Hz
+        fc_hz: Centre (notch) frequency in Hz
+        Q: Quality factor
+
+    Returns:
+        (b0, b1, b2, a1, a2) — feedforward and feedback coefficients
+    """
+    w0 = 2.0 * math.pi * fc_hz / fs_hz
+    alpha = math.sin(w0) / (2.0 * Q)
+    cos_w0 = math.cos(w0)
+
+    denom = 1.0 + alpha
+    b0 = 1.0 / denom
+    b1 = -2.0 * cos_w0 / denom
+    b2 = 1.0 / denom
+    a1 = -2.0 * cos_w0 / denom
+    a2 = (1.0 - alpha) / denom
+
+    return (b0, b1, b2, a1, a2)
+
+
+def biquad_notch_update(
+    x: float,
+    x1: float,
+    x2: float,
+    y1: float,
+    y2: float,
+    b0: float,
+    b1: float,
+    b2: float,
+    a1: float,
+    a2: float,
+) -> tuple[float, float, float, float, float]:
+    """Process one sample through a biquad notch filter (Direct Form II Transposed).
+
+    Pure function — identical math to BiquadNotchFilter.update().
+
+    Args:
+        x: Current input sample
+        x1: Previous input x[n-1]
+        x2: Previous input x[n-2]
+        y1: Previous output y[n-1]
+        y2: Previous output y[n-2]
+        b0, b1, b2: Feedforward coefficients
+        a1, a2: Feedback coefficients (negated, as used in DF2T)
+
+    Returns:
+        (y, x1_new, x2_new, y1_new, y2_new) — filtered output and new state
+    """
+    y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+    # Shift state: x[n-2]←x[n-1], x[n-1]←x, y[n-2]←y[n-1], y[n-1]←y
+    return (y, x, x1, y, y1)
+
+
+def smoothstep_gate_jax(
+    value: _jnp.ndarray | float,
+    start: float,
+    end: float,
+) -> _jnp.ndarray | float:
+    """Smooth Hermite interpolation gate in [start, end] — JAX compatible.
+
+    Pure function — identical math to smoothstep_gate().
+    Accepts both scalar floats and JAX arrays.
+
+    Returns 0.0 when *value* <= *start*, 1.0 when *value* >= *end*,
+    and smooth Hermite interpolation in between.
+    """
+    if end <= start:
+        return _jnp.where(value >= end, 1.0, 0.0)
+    u = (value - start) / (end - start)
+    u_clamped = _jnp.clip(u, 0.0, 1.0)
+    return u_clamped * u_clamped * (3.0 - 2.0 * u_clamped)
