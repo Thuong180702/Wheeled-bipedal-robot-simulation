@@ -25,6 +25,7 @@ import numpy as np
 from wheeled_biped.controllers.signal_filters import (
     biquad_notch_coefficients as _python_biquad_notch_coefficients,
     biquad_notch_update as _python_biquad_notch_update,
+    smoothstep_gate_jax,
 )
 
 # ===========================================================================
@@ -814,3 +815,408 @@ def python_apply_lowpass(prev, target, alpha):
     if alpha >= 1.0:
         return float(target)
     return float((1.0 - alpha) * prev + alpha * target)
+
+
+# ===========================================================================
+# Stage 4: Full K2 JAX controller step — complete layout + compose function
+# ===========================================================================
+
+# --- Complete state layout (19 fields, confirmed from Python sources) ---
+
+K2_JAX_STATE_FIELDS: tuple[str, ...] = (
+    # Notch filter (4) — BiquadNotchFilter state
+    "notch_x1", "notch_x2", "notch_y1", "notch_y2",
+    # Previous torque for rate limiting (10)
+    "prev_tau_0", "prev_tau_1", "prev_tau_2", "prev_tau_3", "prev_tau_4",
+    "prev_tau_5", "prev_tau_6", "prev_tau_7", "prev_tau_8", "prev_tau_9",
+    # Height scheduling (1) — sagittal._filtered_com_z
+    "filtered_com_z",
+    # Previous support error (1) — sim loop prev_support_error
+    "prev_support_error",
+    # Outer loop state (3) — sim loop nonlocal
+    "outer_loop_pitch_ref_smoothed_deg",
+    "outer_loop_prev_support_error_m",
+    "outer_loop_support_error_rate_smoothed",
+)
+K2_JAX_STATE_SIZE: int = len(K2_JAX_STATE_FIELDS)  # 19
+
+# Index constants
+_S_NOTCH_X1, _S_NOTCH_X2, _S_NOTCH_Y1, _S_NOTCH_Y2 = 0, 1, 2, 3
+_S_PREV_TAU_START = 4
+_S_FILTERED_COM_Z = 14
+_S_PREV_SUPPORT_ERROR = 15
+_S_OL_PITCH_REF_SMOOTHED = 16
+_S_OL_PREV_SUPPORT_ERROR = 17
+_S_OL_SUPPORT_ERROR_RATE = 18
+
+
+def pack_state_k2(
+    notch_x1=0.0, notch_x2=0.0, notch_y1=0.0, notch_y2=0.0,
+    prev_tau=None, filtered_com_z=0.4, prev_support_error=0.0,
+    ol_pitch_ref_smoothed=0.0, ol_prev_support_error=0.0, ol_support_error_rate=0.0,
+):
+    """Pack all K2 state into flat JAX array (19,)."""
+    s = jnp.zeros(K2_JAX_STATE_SIZE, dtype=jnp.float64)
+    s = s.at[_S_NOTCH_X1].set(notch_x1)
+    s = s.at[_S_NOTCH_X2].set(notch_x2)
+    s = s.at[_S_NOTCH_Y1].set(notch_y1)
+    s = s.at[_S_NOTCH_Y2].set(notch_y2)
+    if prev_tau is not None:
+        s = s.at[_S_PREV_TAU_START:_S_PREV_TAU_START + 10].set(jnp.asarray(prev_tau, dtype=jnp.float64))
+    s = s.at[_S_FILTERED_COM_Z].set(filtered_com_z)
+    s = s.at[_S_PREV_SUPPORT_ERROR].set(prev_support_error)
+    s = s.at[_S_OL_PITCH_REF_SMOOTHED].set(ol_pitch_ref_smoothed)
+    s = s.at[_S_OL_PREV_SUPPORT_ERROR].set(ol_prev_support_error)
+    s = s.at[_S_OL_SUPPORT_ERROR_RATE].set(ol_support_error_rate)
+    return s
+
+
+# --- Complete input layout ---
+
+K2_JAX_INPUT_FIELDS: tuple[str, ...] = (
+    "pitch_x_rad", "pitch_rate_x_rad_s",
+    "roll_y_rad", "roll_rate_y_rad_s",
+    "yaw_error_rad", "yaw_rate_rad_s",
+    "com_z_m", "com_vy_m_s",
+    "sagittal_velocity_m_s", "sagittal_position_error_m",
+    "wheel_vel_left_rad_s", "wheel_vel_right_rad_s",
+    "support_velocity_m_s",
+    "commanded_height_ref_m",
+    "hip_yaw_div_error", "hip_yaw_div_rate",
+    "q_hip_yaw_l", "q_hip_yaw_r", "q_hip_pitch_l", "q_hip_pitch_r",
+    "q_knee_l", "q_knee_r", "q_hip_roll_l", "q_hip_roll_r",
+    "qd_hip_yaw_l", "qd_hip_yaw_r", "qd_hip_pitch_l", "qd_hip_pitch_r",
+    "qd_knee_l", "qd_knee_r", "qd_hip_roll_l", "qd_hip_roll_r",
+    "q_ref_hip_yaw_l", "q_ref_hip_yaw_r", "q_ref_hip_pitch_l", "q_ref_hip_pitch_r",
+    "q_ref_knee_l", "q_ref_knee_r", "q_ref_hip_roll_l", "q_ref_hip_roll_r",
+    "support_position_error_m",
+)
+K2_JAX_INPUT_SIZE: int = len(K2_JAX_INPUT_FIELDS)  # 42
+
+_I_PITCH_X, _I_PITCH_RATE, _I_ROLL_Y, _I_ROLL_RATE = 0, 1, 2, 3
+_I_YAW_ERR, _I_YAW_RATE, _I_COM_Z, _I_COM_VY = 4, 5, 6, 7
+_I_SAG_VEL, _I_SAG_POS_ERR, _I_WHEEL_VEL_L, _I_WHEEL_VEL_R = 8, 9, 10, 11
+_I_SUPPORT_VEL, _I_HEIGHT_REF = 12, 13
+_I_HY_DIV_ERR, _I_HY_DIV_RATE = 14, 15
+_I_Q_START, _I_QD_START = 16, 24
+_I_QREF_START, _I_SUPPORT_POS_ERR = 32, 40
+_I_TARGET_COM_HEIGHT = 41  # alias for height ref used by support FF
+
+
+def pack_input_k2(
+    pitch_x_rad, pitch_rate_x_rad_s, roll_y_rad, roll_rate_y_rad_s,
+    yaw_error_rad, yaw_rate_rad_s, com_z_m, com_vy_m_s,
+    sagittal_velocity_m_s, sagittal_position_error_m,
+    wheel_vel_left_rad_s, wheel_vel_right_rad_s,
+    support_velocity_m_s, commanded_height_ref_m,
+    hip_yaw_div_error, hip_yaw_div_rate,
+    joint_pos, joint_vel, q_ref,
+    support_position_error_m,
+):
+    """Pack all K2 inputs into flat JAX array (42,)."""
+    inp = jnp.zeros(K2_JAX_INPUT_SIZE, dtype=jnp.float64)
+    inp = inp.at[_I_PITCH_X].set(pitch_x_rad)
+    inp = inp.at[_I_PITCH_RATE].set(pitch_rate_x_rad_s)
+    inp = inp.at[_I_ROLL_Y].set(roll_y_rad)
+    inp = inp.at[_I_ROLL_RATE].set(roll_rate_y_rad_s)
+    inp = inp.at[_I_YAW_ERR].set(yaw_error_rad)
+    inp = inp.at[_I_YAW_RATE].set(yaw_rate_rad_s)
+    inp = inp.at[_I_COM_Z].set(com_z_m)
+    inp = inp.at[_I_COM_VY].set(com_vy_m_s)
+    inp = inp.at[_I_SAG_VEL].set(sagittal_velocity_m_s)
+    inp = inp.at[_I_SAG_POS_ERR].set(sagittal_position_error_m)
+    inp = inp.at[_I_WHEEL_VEL_L].set(wheel_vel_left_rad_s)
+    inp = inp.at[_I_WHEEL_VEL_R].set(wheel_vel_right_rad_s)
+    inp = inp.at[_I_SUPPORT_VEL].set(support_velocity_m_s)
+    inp = inp.at[_I_HEIGHT_REF].set(commanded_height_ref_m)
+    inp = inp.at[_I_HY_DIV_ERR].set(hip_yaw_div_error)
+    inp = inp.at[_I_HY_DIV_RATE].set(hip_yaw_div_rate)
+    inp = inp.at[_I_Q_START:_I_Q_START + 8].set(jnp.asarray([
+        joint_pos[1], joint_pos[6], joint_pos[2], joint_pos[7],
+        joint_pos[3], joint_pos[8], joint_pos[0], joint_pos[5],
+    ], dtype=jnp.float64))
+    inp = inp.at[_I_QD_START:_I_QD_START + 8].set(jnp.asarray([
+        joint_vel[1], joint_vel[6], joint_vel[2], joint_vel[7],
+        joint_vel[3], joint_vel[8], joint_vel[0], joint_vel[5],
+    ], dtype=jnp.float64))
+    inp = inp.at[_I_QREF_START:_I_QREF_START + 8].set(jnp.asarray([
+        q_ref[1], q_ref[6], q_ref[2], q_ref[7],
+        q_ref[3], q_ref[8], q_ref[0], q_ref[5],
+    ], dtype=jnp.float64))
+    inp = inp.at[_I_SUPPORT_POS_ERR].set(support_position_error_m)
+    inp = inp.at[_I_TARGET_COM_HEIGHT].set(commanded_height_ref_m)
+    return inp
+
+
+# --- Complete params layout (includes grid data) ---
+# Params are built dynamically at init time via pack_params_k2()
+
+# --- Diagnostics layout ---
+
+K2_JAX_DIAG_FIELDS: tuple[str, ...] = (
+    "notch_output", "notch_height_gate",
+    "tau_pitch", "tau_pitch_rate", "tau_sagittal_velocity", "tau_support_velocity",
+    "tau_position", "tau_wheel_vel_left", "tau_wheel_vel_right",
+    "scheduled_k_position", "scheduled_k_wheel_velocity", "scheduled_kd_pitch",
+    "calib_kp", "calib_kd", "calib_theta_max", "calib_deadband",
+    "physics_ff_tau", "low_band_pitch_ref",
+    "tau_final_0", "tau_final_1", "tau_final_2", "tau_final_3", "tau_final_4",
+    "tau_final_5", "tau_final_6", "tau_final_7", "tau_final_8", "tau_final_9",
+    "clip_saturation_count", "rate_limit_active_count",
+)
+K2_JAX_DIAG_SIZE: int = len(K2_JAX_DIAG_FIELDS)  # 30
+
+_D_NOTCH_OUT, _D_NOTCH_GATE = 0, 1
+_D_TAU_PITCH, _D_TAU_PITCH_RATE, _D_TAU_SAG_VEL = 2, 3, 4
+_D_TAU_SUPPORT_VEL, _D_TAU_POSITION = 5, 6
+_D_TAU_WHEEL_L, _D_TAU_WHEEL_R = 7, 8
+_D_SCHED_KPOS, _D_SCHED_KWHEEL, _D_SCHED_KD = 9, 10, 11
+_D_CALIB_KP, _D_CALIB_KD, _D_CALIB_THETA, _D_CALIB_DB = 12, 13, 14, 15
+_D_PHYSICS_FF, _D_LOW_BAND = 16, 17
+_D_TAU_FINAL_START = 18
+_D_CLIP_COUNT, _D_RATE_COUNT = 28, 29
+
+
+def k2_jax_diag_flat_to_dict(diag_flat):
+    """Map flat JAX diagnostics to named dict."""
+    d = np.asarray(diag_flat, dtype=np.float64)
+    return {K2_JAX_DIAG_FIELDS[i]: float(d[i]) for i in range(K2_JAX_DIAG_SIZE)}
+
+
+# --- Grid params (built at init, passed into params flat array) ---
+# These are module-level singletons, built once.
+_calibrated_grid_cache = None
+_physics_ff_grid_cache = None
+
+
+def _get_calibrated_grid():
+    global _calibrated_grid_cache
+    if _calibrated_grid_cache is None:
+        _calibrated_grid_cache = build_calibrated_grid_params()
+    return _calibrated_grid_cache
+
+
+def _get_physics_ff_grid():
+    global _physics_ff_grid_cache
+    if _physics_ff_grid_cache is None:
+        _physics_ff_grid_cache = build_physics_ff_grid_params()
+    return _physics_ff_grid_cache
+
+
+# ===========================================================================
+# Stage 4: Full K2 JAX controller step (JIT-compatible)
+# ===========================================================================
+
+def k2_jax_controller_step(
+    state_flat: jnp.ndarray,   # (19,)
+    input_flat: jnp.ndarray,   # (42,)
+    params_flat: jnp.ndarray,  # (P,) — contains notch coeffs + torque limits + grid refs
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Full K2 balance-core controller step — pure JAX function.
+
+    Composes all Stage 2+3 components: notch → height schedule → sagittal →
+    shape posture → lateral roll → yaw → mode-div → support FF → composer.
+
+    Returns:
+        tau: (10,) actuator torque vector
+        next_state_flat: (19,) updated state
+        diag_flat: (30,) diagnostics
+    """
+    # Unpack state
+    notch_x1 = state_flat[_S_NOTCH_X1]
+    notch_x2 = state_flat[_S_NOTCH_X2]
+    notch_y1 = state_flat[_S_NOTCH_Y1]
+    notch_y2 = state_flat[_S_NOTCH_Y2]
+    prev_tau = state_flat[_S_PREV_TAU_START:_S_PREV_TAU_START + 10]
+    filtered_com_z = state_flat[_S_FILTERED_COM_Z]
+    prev_support_error = state_flat[_S_PREV_SUPPORT_ERROR]
+    ol_pitch_ref_smoothed = state_flat[_S_OL_PITCH_REF_SMOOTHED]
+    ol_prev_support_error = state_flat[_S_OL_PREV_SUPPORT_ERROR]
+    ol_support_error_rate = state_flat[_S_OL_SUPPORT_ERROR_RATE]
+
+    # Unpack inputs
+    pitch_x = input_flat[_I_PITCH_X]
+    pitch_rate = input_flat[_I_PITCH_RATE]
+    roll_y = input_flat[_I_ROLL_Y]
+    roll_rate = input_flat[_I_ROLL_RATE]
+    yaw_err = input_flat[_I_YAW_ERR]
+    yaw_rate = input_flat[_I_YAW_RATE]
+    com_z = input_flat[_I_COM_Z]
+    com_vy = input_flat[_I_COM_VY]
+    sag_vel = input_flat[_I_SAG_VEL]
+    sag_pos_err = input_flat[_I_SAG_POS_ERR]
+    wheel_vel_l = input_flat[_I_WHEEL_VEL_L]
+    wheel_vel_r = input_flat[_I_WHEEL_VEL_R]
+    support_vel = input_flat[_I_SUPPORT_VEL]
+    height_ref = input_flat[_I_HEIGHT_REF]
+    hy_div_err = input_flat[_I_HY_DIV_ERR]
+    hy_div_rate = input_flat[_I_HY_DIV_RATE]
+    q_hy_l = input_flat[_I_Q_START + 0]; q_hy_r = input_flat[_I_Q_START + 1]
+    q_hp_l = input_flat[_I_Q_START + 2]; q_hp_r = input_flat[_I_Q_START + 3]
+    q_kn_l = input_flat[_I_Q_START + 4]; q_kn_r = input_flat[_I_Q_START + 5]
+    q_hr_l = input_flat[_I_Q_START + 6]; q_hr_r = input_flat[_I_Q_START + 7]
+    qd_hy_l = input_flat[_I_QD_START + 0]; qd_hy_r = input_flat[_I_QD_START + 1]
+    qd_hp_l = input_flat[_I_QD_START + 2]; qd_hp_r = input_flat[_I_QD_START + 3]
+    qd_kn_l = input_flat[_I_QD_START + 4]; qd_kn_r = input_flat[_I_QD_START + 5]
+    qd_hr_l = input_flat[_I_QD_START + 6]; qd_hr_r = input_flat[_I_QD_START + 7]
+    qref_hy_l = input_flat[_I_QREF_START + 0]; qref_hy_r = input_flat[_I_QREF_START + 1]
+    qref_hp_l = input_flat[_I_QREF_START + 2]; qref_hp_r = input_flat[_I_QREF_START + 3]
+    qref_kn_l = input_flat[_I_QREF_START + 4]; qref_kn_r = input_flat[_I_QREF_START + 5]
+    qref_hr_l = input_flat[_I_QREF_START + 6]; qref_hr_r = input_flat[_I_QREF_START + 7]
+    support_pos_err = input_flat[_I_SUPPORT_POS_ERR]
+
+    # Unpack params
+    notch_b0 = params_flat[_IDX_NOTCH_B0]
+    notch_b1 = params_flat[_IDX_NOTCH_B1]
+    notch_b2 = params_flat[_IDX_NOTCH_B2]
+    notch_a1 = params_flat[_IDX_NOTCH_A1]
+    notch_a2 = params_flat[_IDX_NOTCH_A2]
+    torque_limit = params_flat[_IDX_TORQUE_LIMIT_START:_IDX_TORQUE_LIMIT_START + 10]
+    max_torque_rate = params_flat[_IDX_MAX_TORQUE_RATE_START:_IDX_MAX_TORQUE_RATE_START + 10]
+    control_dt = params_flat[_IDX_CONTROL_DT]
+
+    # === Step 1: Notch filter ===
+    notch_out = notch_b0 * pitch_rate + notch_b1 * notch_x1 + notch_b2 * notch_x2 - notch_a1 * notch_y1 - notch_a2 * notch_y2
+    new_notch_x1 = pitch_rate
+    new_notch_x2 = notch_x1
+    new_notch_y1 = notch_out
+    new_notch_y2 = notch_y1
+
+    # Height gate for notch blend
+    notch_gate = smoothstep_gate_jax(height_ref, 0.42, 0.48)
+    pitch_rate_eff = (1.0 - notch_gate) * pitch_rate + notch_gate * notch_out
+
+    # === Step 2: Height scheduling ===
+    schedule_h = jnp.where(height_ref > 0.0, height_ref,
+                 0.9 * filtered_com_z + 0.1 * com_z)
+    new_filtered_com_z = schedule_h
+
+    # K2 uses continuous scheduling. Use K2 defaults from profile chain.
+    kpos = k2_jax_scheduled_k_position(schedule_h, 0.0, 5.0, 0.35, 0.45)
+    kwheel = k2_jax_scheduled_k_wheel_velocity(schedule_h, 0.5, 3.0, 0.35, 0.45)
+    kd_pitch = k2_jax_scheduled_k_wheel_velocity(schedule_h, 10.0, 20.0, 0.35, 0.45)
+
+    # === Step 3: Calibrated outer loop + physics FF ===
+    cal_grid = _get_calibrated_grid()
+    cal_kp = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["kp_grid"])
+    cal_kd = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["kd_grid"])
+    cal_theta_max = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["theta_max_grid"])
+    cal_deadband = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["deadband_grid"])
+    cal_rate_limit = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["rate_limit_grid"])
+    cal_lowpass_alpha = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["lowpass_grid"])
+
+    ff_grid = _get_physics_ff_grid()
+    physics_ff_tau = k2_jax_grid_interpolate(schedule_h, ff_grid["grid_heights"], ff_grid["tau_eq_ff_grid"])
+
+    # Low-band support
+    lb_offset, _ = k2_jax_low_band_support_pitch_ref(
+        schedule_h, support_pos_err, 0.320, 0.004, 1.4, 3.0, 1.0)
+
+    # Outer loop: update state
+    support_error_rate_raw = jnp.where(
+        ol_prev_support_error == 0.0, 0.0,
+        (support_pos_err - ol_prev_support_error) / control_dt)
+    new_ol_support_error_rate = _jax_apply_lowpass(
+        ol_support_error_rate, support_error_rate_raw, cal_lowpass_alpha)
+    new_ol_prev_support_error = support_pos_err
+
+    ol_dynamic = k2_jax_compute_outer_loop_pitch_ref(
+        support_pos_err, new_ol_support_error_rate, 0.0,
+        cal_kp, cal_kd, 0.0, cal_deadband, cal_theta_max)
+    ol_target = _jax_apply_rate_limit(
+        ol_pitch_ref_smoothed, ol_dynamic, cal_rate_limit)
+    new_ol_pitch_ref = _jax_apply_lowpass(
+        ol_pitch_ref_smoothed, ol_target, cal_lowpass_alpha)
+
+    # Total pitch ref offset (height schedule + outer loop + low-band + physics)
+    # Physics FF: converted to equivalent pitch_ref offset
+    physics_pitch_eq = k2_jax_grid_interpolate(
+        schedule_h, ff_grid["grid_heights"], ff_grid["pitch_eq_grid"])
+    total_pitch_ref_offset_deg = new_ol_pitch_ref + lb_offset + physics_pitch_eq
+
+    # === Step 4: Sagittal torque assembly ===
+    tau_sag, sag_diag = k2_jax_sagittal_torque_assembly(
+        pitch_x_rad=pitch_x, pitch_rate_rad_s=pitch_rate_eff,
+        sagittal_velocity_m_s=sag_vel, sagittal_position_error_m=sag_pos_err,
+        wheel_vel_left_rad_s=wheel_vel_l, wheel_vel_right_rad_s=wheel_vel_r,
+        support_velocity_m_s=support_vel,
+        kp_pitch=50.0, effective_pitch_scale=1.0, effective_pitch_tau_cap=0.0,
+        effective_kd_pitch=kd_pitch,
+        effective_k_velocity=0.0, effective_velocity_damping_scale=1.0,
+        effective_support_velocity_gain=0.0, effective_support_velocity_scale=1.0,
+        effective_k_wheel_velocity=kwheel,
+        effective_k_position=kpos, effective_max_position_tau=3.0,
+        kp_cp=0.0, kd_com_vy=5.0,
+        wheel_torque_sign=1.0,
+    )
+
+    # === Step 5: Shape posture ===
+    joint_pos_full = jnp.array([q_hr_l, q_hy_l, q_hp_l, q_kn_l, 0.0,
+                                  q_hr_r, q_hy_r, q_hp_r, q_kn_r, 0.0], dtype=jnp.float64)
+    joint_vel_full = jnp.array([qd_hr_l, qd_hy_l, qd_hp_l, qd_kn_l, 0.0,
+                                  qd_hr_r, qd_hy_r, qd_hp_r, qd_kn_r, 0.0], dtype=jnp.float64)
+    q_ref_full = jnp.array([qref_hr_l, qref_hy_l, qref_hp_l, qref_kn_l, 0.0,
+                              qref_hr_r, qref_hy_r, qref_hp_r, qref_kn_r, 0.0], dtype=jnp.float64)
+
+    tau_posture, _ = k2_jax_shape_posture_compute(q_ref_full, joint_pos_full, joint_vel_full)
+
+    # === Step 6: Lateral roll ===
+    tau_lateral, _ = k2_jax_lateral_roll_compute(roll_y, roll_rate,
+        hip_roll_pos_left=q_hr_l, hip_roll_pos_right=q_hr_r,
+        hip_roll_vel_left=qd_hr_l, hip_roll_vel_right=qd_hr_r,
+        hip_roll_ref_left=qref_hr_l, hip_roll_ref_right=qref_hr_r)
+
+    # === Step 7: Yaw ===
+    tau_yaw = k2_jax_yaw_compute(yaw_err, yaw_rate)
+
+    # === Step 8: Mode-div ===
+    tau_mode_div = k2_jax_mode_div_compute(
+        hy_div_err, hy_div_rate, schedule_h)
+
+    # === Step 9: Support feedforward ===
+    tau_support_ff = k2_jax_support_feedforward_compute(
+        support_pos_err, schedule_h)
+
+    # === Step 10: Sum and compose ===
+    tau_sum = tau_sag + tau_posture + tau_lateral + tau_yaw + tau_mode_div + tau_support_ff
+
+    tau_final, tau_clipped, sat_mask, rate_mask = k2_jax_torque_composer_step(
+        tau_sum, prev_tau, params_flat)
+
+    # === Pack new state ===
+    new_state = state_flat.at[_S_NOTCH_X1].set(new_notch_x1)
+    new_state = new_state.at[_S_NOTCH_X2].set(new_notch_x2)
+    new_state = new_state.at[_S_NOTCH_Y1].set(new_notch_y1)
+    new_state = new_state.at[_S_NOTCH_Y2].set(new_notch_y2)
+    new_state = new_state.at[_S_PREV_TAU_START:_S_PREV_TAU_START + 10].set(tau_final)
+    new_state = new_state.at[_S_FILTERED_COM_Z].set(new_filtered_com_z)
+    new_state = new_state.at[_S_PREV_SUPPORT_ERROR].set(support_pos_err)
+    new_state = new_state.at[_S_OL_PITCH_REF_SMOOTHED].set(new_ol_pitch_ref)
+    new_state = new_state.at[_S_OL_PREV_SUPPORT_ERROR].set(new_ol_prev_support_error)
+    new_state = new_state.at[_S_OL_SUPPORT_ERROR_RATE].set(new_ol_support_error_rate)
+
+    # === Pack diagnostics ===
+    diag = jnp.zeros(K2_JAX_DIAG_SIZE, dtype=jnp.float64)
+    diag = diag.at[_D_NOTCH_OUT].set(notch_out)
+    diag = diag.at[_D_NOTCH_GATE].set(notch_gate)
+    diag = diag.at[_D_TAU_PITCH].set(sag_diag["tau_pitch"])
+    diag = diag.at[_D_TAU_PITCH_RATE].set(sag_diag["tau_pitch_rate"])
+    diag = diag.at[_D_TAU_SAG_VEL].set(sag_diag["tau_sagittal_velocity"])
+    diag = diag.at[_D_TAU_SUPPORT_VEL].set(sag_diag["tau_support_velocity"])
+    diag = diag.at[_D_TAU_POSITION].set(sag_diag["tau_position"])
+    diag = diag.at[_D_TAU_WHEEL_L].set(sag_diag["tau_wheel_vel_left"])
+    diag = diag.at[_D_TAU_WHEEL_R].set(sag_diag["tau_wheel_vel_right"])
+    diag = diag.at[_D_SCHED_KPOS].set(kpos)
+    diag = diag.at[_D_SCHED_KWHEEL].set(kwheel)
+    diag = diag.at[_D_SCHED_KD].set(kd_pitch)
+    diag = diag.at[_D_CALIB_KP].set(cal_kp)
+    diag = diag.at[_D_CALIB_KD].set(cal_kd)
+    diag = diag.at[_D_CALIB_THETA].set(cal_theta_max)
+    diag = diag.at[_D_CALIB_DB].set(cal_deadband)
+    diag = diag.at[_D_PHYSICS_FF].set(physics_ff_tau)
+    diag = diag.at[_D_LOW_BAND].set(lb_offset)
+    diag = diag.at[_D_TAU_FINAL_START:_D_TAU_FINAL_START + 10].set(tau_final)
+    diag = diag.at[_D_CLIP_COUNT].set(jnp.sum(sat_mask).astype(jnp.float64))
+    diag = diag.at[_D_RATE_COUNT].set(jnp.sum(rate_mask).astype(jnp.float64))
+
+    return tau_final, new_state, diag
