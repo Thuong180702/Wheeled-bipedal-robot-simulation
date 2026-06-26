@@ -6459,7 +6459,22 @@ def main():
                     support_position_error_m=float(prev_support_error),
                 )
                 _jax_tau, _jax_state, _jax_diag = _jax_step_fn(_jax_state, _jax_input, _jax_params)
+                # Add empirical support feedforward (same as Python support_feedforward controller)
+                # Scale=0.5 × [0,0,4.1,-15.5,0, 0,0,3.2,-15.8,0] at hip_pitch_knee joints
+                _jax_tau = _jax_tau.at[2].add(2.05)   # l_hip_pitch: 4.1*0.5
+                _jax_tau = _jax_tau.at[3].add(-7.75)   # l_knee: -15.5*0.5
+                _jax_tau = _jax_tau.at[7].add(1.6)     # r_hip_pitch: 3.2*0.5
+                _jax_tau = _jax_tau.at[8].add(-7.9)    # r_knee: -15.8*0.5
                 tau_smooth = _jax_tau
+                # Stage 6G-B: dump q_ref and joint_pos
+                if step == 0:
+                    print(f"EQPOS={[float(equilibrium_joint_pos[i]) for i in range(10)]}", flush=True)
+                    print(f"JPOS={[float(joint_pos[i]) for i in range(10)]}", flush=True)
+                    _pt = [float(balance_core_result.tau_final[i]) for i in range(10)]
+                    _jt = [float(_jax_tau[i]) for i in range(10)]
+                    _diffs = [abs(_pt[i]-_jt[i]) for i in range(10)]
+                    _md = max(_diffs); _mi = _diffs.index(_md)
+                    print(f"ABLATE_MAX={_md:.4f}_at[{_mi}]_PY={_pt[_mi]:.4f}_JX={_jt[_mi]:.4f}", flush=True)
                 tau_total_clipped = _jax_tau
                 tau_prev = tau_smooth
                 if _profile_enabled:
