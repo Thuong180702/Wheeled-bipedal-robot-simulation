@@ -6433,8 +6433,11 @@ def main():
             # Python path still runs for telemetry but torque is from JAX.
             if _jax_enabled:
                 _t_jax_start = time.perf_counter()
+                # Pass RAW pitch_x (body pitch) — JAX applies pitch_ref_offset internally.
+                # pitch_x_error already has the offset removed by the sim loop; passing it
+                # would cause double-subtraction.
                 _jax_input = pack_input_k2(
-                    pitch_x_rad=float(pitch_x_error) if 'pitch_x_error' in dir() else float(centroidal_state_control.body_pitch_x),
+                    pitch_x_rad=float(centroidal_state_control.body_pitch_x),
                     pitch_rate_x_rad_s=float(pitch_rate_for_control_boosted) if 'pitch_rate_for_control_boosted' in dir() else float(centroidal_state_control.body_pitch_rate_x),
                     roll_y_rad=float(centroidal_state_control.body_roll_y),
                     roll_rate_y_rad_s=float(centroidal_state_control.body_roll_rate_y),
@@ -6457,7 +6460,8 @@ def main():
                 )
                 _jax_tau, _jax_state, _jax_diag = _jax_step_fn(_jax_state, _jax_input, _jax_params)
                 tau_smooth = _jax_tau
-                tau_prev = tau_smooth  # sync tau_prev for composer on next Python step (rate limiting)
+                tau_total_clipped = _jax_tau  # sync for rate-limiting code below
+                tau_prev = tau_smooth  # sync tau_prev for rate limiting on next step
                 if _profile_enabled:
                     _dt_jax = (time.perf_counter() - _t_jax_start) * 1000.0
                     _profile_timing["jax_step_ms"] = _profile_timing.get("jax_step_ms", 0.0) + _dt_jax

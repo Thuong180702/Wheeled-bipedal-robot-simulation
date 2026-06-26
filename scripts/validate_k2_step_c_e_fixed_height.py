@@ -150,8 +150,12 @@ def run_sim_fixed_height(height_label: str, steps: int, out_dir: Path,
         "--output-dir", str(out_dir),
     ]
     cmd += MODE_DIV_FLAGS
+    # Stage 6: --controller-backend support
+    _backend = getattr(args, "controller_backend", "python") if 'args' in dir() else "python"
+    if isinstance(_backend, str) and _backend != "python":
+        cmd += ["--controller-backend", _backend]
 
-    print(f"  [{tag}] sim {height_label} {steps} steps profile={profile}", flush=True)
+    print(f"  [{tag}] sim {height_label} {steps} steps profile={profile} backend={_backend}", flush=True)
     t0 = time.time()
     try:
         result = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True,
