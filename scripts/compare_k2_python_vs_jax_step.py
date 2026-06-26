@@ -77,6 +77,7 @@ def compute_pitch_offset_python(h, support_error, ol_state):
 
 
 def build_python_balance_core():
+    # Use FULL K2 profile (adaptive_bias_trim enabled, matching JAX)
     auth = K2_NOTCH_LOW_Q_V1
     sagittal = SagittalVelocityDampedBalanceController(
         kp_pitch=50.0, kd_pitch=10.0, k_velocity=0.0, k_wheel_velocity=0.5,
