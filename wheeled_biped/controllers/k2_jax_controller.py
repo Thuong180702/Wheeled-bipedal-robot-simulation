@@ -1128,10 +1128,9 @@ def k2_jax_controller_step(
         schedule_h, ff_grid["grid_heights"], ff_grid["pitch_eq_grid"])
     total_pitch_ref_offset_deg = new_ol_pitch_ref + lb_offset + physics_pitch_eq
 
-    # Apply pitch_ref_offset to effective pitch: offset reduces tau_pitch to center drift.
-    # Sign: positive offset_deg → subtract from pitch_x (shift reference forward).
-    pitch_ref_offset_rad = total_pitch_ref_offset_deg * (jnp.pi / 180.0)
-    effective_pitch_x = pitch_x - pitch_ref_offset_rad
+    # pitch_x is pre-adjusted by the simulation loop (pitch_x_error = raw - offset).
+    # Do NOT apply pitch_ref_offset internally — it's already applied externally.
+    effective_pitch_x = pitch_x
 
     # === Step 4a: Adaptive bias trim (active K2 strategy) ===
     # Read ABS state (indices 19-24 if present, else zeros for backward compat)

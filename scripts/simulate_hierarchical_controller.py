@@ -6433,11 +6433,11 @@ def main():
             # Python path still runs for telemetry but torque is from JAX.
             if _jax_enabled:
                 _t_jax_start = time.perf_counter()
-                # Pass RAW pitch_x (body pitch) — JAX applies pitch_ref_offset internally.
-                # pitch_x_error already has the offset removed by the sim loop; passing it
-                # would cause double-subtraction.
+                # Pass pitch_x_error (ALREADY adjusted by sim loop).
+                # JAX step must NOT apply pitch_ref_offset internally when receiving
+                # pre-adjusted pitch — the sim loop applies the offset via vd_pitch_ref_offset_deg.
                 _jax_input = pack_input_k2(
-                    pitch_x_rad=float(centroidal_state_control.body_pitch_x),
+                    pitch_x_rad=float(pitch_x_error) if 'pitch_x_error' in dir() else 0.0,
                     pitch_rate_x_rad_s=float(pitch_rate_for_control_boosted) if 'pitch_rate_for_control_boosted' in dir() else float(centroidal_state_control.body_pitch_rate_x),
                     roll_y_rad=float(centroidal_state_control.body_roll_y),
                     roll_rate_y_rad_s=float(centroidal_state_control.body_roll_rate_y),
