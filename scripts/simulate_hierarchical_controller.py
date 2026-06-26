@@ -2509,6 +2509,39 @@ def main():
     parser.add_argument(
         "--visual", action="store_true", help="Run with MuJoCo viewer (visual mode)"
     )
+    # ---- Visual realtime pacing flags ---- #
+    parser.add_argument(
+        "--visual-realtime-factor",
+        type=float,
+        default=1.0,
+        help="Target realtime factor for visual pacing (default 1.0 = 1:1 wall clock). "
+             "Values > 1.0 run faster than realtime; < 1.0 run slower. "
+             "Set to 0 to disable pacing entirely (run as fast as possible).",
+    )
+    parser.add_argument(
+        "--visual-sync-hz",
+        type=float,
+        default=30.0,
+        help="Target viewer sync rate in Hz (default 30). "
+             "Syncs the MuJoCo viewer at this approximate rate, decoupled from control rate. "
+             "Lower values reduce render overhead but make viewer less responsive.",
+    )
+    parser.add_argument(
+        "--visual-disable-realtime-pacing",
+        action="store_true",
+        help="Disable all realtime pacing sleep in visual mode (run as fast as possible).",
+    )
+    parser.add_argument(
+        "--visual-profile-timing",
+        action="store_true",
+        help="Print detailed per-step timing diagnostics in visual mode.",
+    )
+    parser.add_argument(
+        "--wbc-quiet",
+        action="store_true",
+        help="Suppress per-step WBC diagnostic prints (PID, wheel torque, force feedback, pipeline). "
+             "Automatically enabled in --visual mode. Use this to benchmark headless without print overhead.",
+    )
     parser.add_argument(
         "--steps", type=int, default=200, help="Number of 100 Hz control steps to simulate"
     )
@@ -3567,6 +3600,7 @@ def main():
         roll_integral_limit=0.52,  # Anti-windup limit: ~30 degrees
         dt=mj_model.opt.timestep,
         use_per_actuator_authority=args.use_per_actuator_wbc_authority,
+        verbose=not (args.visual or getattr(args, "wbc_quiet", False)),
     )
     momentum_coordinator = MomentumCoordinator(
         MomentumCoordinatorConfig(
@@ -5181,7 +5215,8 @@ def main():
 
     def drop_last_telemetry_row() -> None:
         for values in telemetry.values():
-            values.pop()
+            if values:
+                values.pop()
 
     def append_telemetry_row(row: dict) -> None:
         for key in telemetry.keys():
@@ -5441,7 +5476,7 @@ def main():
             tau_wbc = jnp.array(tau_wbc_wrapped)
 
         # Diagnostic: log WBC output on first step
-        if step == 0:
+        if step == 0 and not args.visual:
             print(f"\n[WBC DIAGNOSTIC - Step 0]")
 
             # Show computed orientation from gravity vector using unified computation
@@ -6463,7 +6498,7 @@ def main():
         ]
         support_ratio_mean = float(np.mean(support_ratios))
 
-        if step < 10:
+        if step < 10 and not args.visual:
             print(f"[EARLY SUPPORT][step={step}] tau_wbc={np.array(tau_wbc)}")
             print(f"[EARLY SUPPORT][step={step}] tau_wbc_scaled={np.array(tau_wbc_scaled)}")
             print(f"[EARLY SUPPORT][step={step}] tau_total_raw={np.array(tau_total_raw)}")
@@ -6562,7 +6597,7 @@ def main():
         )
         centroidal_state_log = capture_estimator.update(centroidal_state_log)
 
-        if step < 20:
+        if step < 20 and not args.visual:
             prev_ctrl_txt = (
                 "None"
                 if prev_control_before_estimate is None
@@ -7548,7 +7583,7 @@ def main():
             last_full_rate_row = None
             last_full_rate_step = step
 
-        if step < 20 and static_feedforward_controller is not None:
+        if step < 20 and static_feedforward_controller is not None and not args.visual:
             idx = [2, 3, 7, 8]
             sat_flags = np.abs(np.array(tau_total_raw)) > np.array(torque_limit)
             rate_flags = np.abs(np.array(tau_rate_vec)) > max_torque_rate
@@ -7625,7 +7660,9 @@ def main():
             )
 
         # Progress updates with orientation feedback
-        if (step + 1) % 10 == 0 or step < 5:
+        # In visual mode, reduce print frequency to avoid I/O stutter
+        _progress_interval = 100 if args.visual else 10
+        if (step + 1) % _progress_interval == 0 or step < 5:
             elapsed = time.time() - start_time
             # Show what controller is sensing using unified orientation computation
             gravity_body = obs[0:3]
@@ -7647,35 +7684,130 @@ def main():
         step += 1
         return True
 
-    # Run simulation
+    # ---- Visual realtime pacing configuration ---- #
     if args.visual:
-        print("\nLaunching MuJoCo viewer...")
-        print("Close the viewer window to end simulation and save telemetry.")
-        print("Control at 50 Hz, viewer at 30 Hz, maintaining 1:1 real-time display")
+        # Read pacing flags
+        visual_realtime_factor = float(getattr(args, "visual_realtime_factor", 1.0) or 1.0)
+        visual_sync_hz = float(getattr(args, "visual_sync_hz", 30.0) or 30.0)
+        visual_disable_pacing = bool(getattr(args, "visual_disable_realtime_pacing", False))
+        visual_profile_timing = bool(getattr(args, "visual_profile_timing", False))
 
-        viewer_steps_per_sync = (
-            2  # Sync viewer every 2 control steps (30 Hz viewer, 50 Hz control)
-        )
+        # Clamp to sensible ranges
+        if visual_realtime_factor <= 0.0:
+            visual_disable_pacing = True
+            visual_realtime_factor = 1.0  # placeholder for reporting
+        visual_sync_hz = max(5.0, min(visual_sync_hz, 120.0))
+
+        # Compute pacing parameters from actual control_dt (0.01 s = 100 Hz)
+        control_hz = 1.0 / control_dt
+        sim_duration_s = max_steps * control_dt
+        pacing_dt = control_dt / max(visual_realtime_factor, 1e-6)
+        sync_interval_s = 1.0 / visual_sync_hz
+
+        # Viewer sync scheduling (decoupled from step count)
+        last_viewer_sync_time = 0.0  # sim-time of last sync
+
+        # Timing profiling accumulators
+        profile_step_times_s = [] if visual_profile_timing else None
+        profile_sync_times_s = [] if visual_profile_timing else None
+        profile_sleep_times_s = [] if visual_profile_timing else None
+        profile_n_syncs = 0
+        profile_n_overslept = 0
+        cumul_sleep_debt_s = 0.0
+
+        if visual_disable_pacing:
+            print("\nLaunching MuJoCo viewer...")
+            print("Close the viewer window to end simulation and save telemetry.")
+            print(f"Control: {control_hz:.0f} Hz | Viewer sync: {visual_sync_hz:.0f} Hz")
+            print("Realtime pacing: DISABLED (running as fast as possible)")
+        else:
+            print("\nLaunching MuJoCo viewer...")
+            print("Close the viewer window to end simulation and save telemetry.")
+            print(
+                f"Control: {control_hz:.0f} Hz | Viewer sync: {visual_sync_hz:.0f} Hz | "
+                f"Realtime factor: {visual_realtime_factor:.2f}"
+            )
+        print(f"Expected sim duration: {sim_duration_s:.1f} s ({max_steps} steps)")
+        if visual_profile_timing:
+            print("[PROFILING] Timing diagnostics enabled. Expect slightly higher overhead.")
+
         sim_start_time = time.time()
+        step_start_time = sim_start_time
 
         with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
             while viewer.is_running():
+                t_before_step = time.time()
+                if visual_profile_timing:
+                    step_start_time = t_before_step
+
                 if not simulation_step():
                     break
 
-                # Sync viewer every 2 control steps (30 Hz viewer, 50 Hz control)
-                if step % viewer_steps_per_sync == 0:
-                    viewer.sync()
+                t_after_step = time.time()
+                step_wall_elapsed = t_after_step - t_before_step
 
-                # Sleep to maintain 1:1 real-time pacing
-                # step is already incremented inside simulation_step(), so use step directly
-                target_time = sim_start_time + step * control_dt
-                current_time = time.time()
-                sleep_time = target_time - current_time
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
+                if visual_profile_timing:
+                    profile_step_times_s.append(step_wall_elapsed)
+
+                # Viewer sync: decoupled from step count — sync when enough wall time has passed
+                wall_since_sync = t_after_step - (sim_start_time + last_viewer_sync_time)
+                if wall_since_sync >= sync_interval_s:
+                    t_before_sync = time.time()
+                    viewer.sync()
+                    t_after_sync = time.time()
+                    if visual_profile_timing:
+                        profile_sync_times_s.append(t_after_sync - t_before_sync)
+                    profile_n_syncs += 1
+                    last_viewer_sync_time = t_after_sync - sim_start_time
+
+                # Realtime pacing (unless disabled)
+                if not visual_disable_pacing:
+                    # Target wall time for this step: sim_start + step * pacing_dt
+                    target_time = sim_start_time + step * pacing_dt
+                    current_time = time.time()
+                    sleep_time = target_time - current_time
+
+                    if sleep_time > 0:
+                        # Apply sleep-debt floor: don't oversleep more than 1 control_dt
+                        cumul_sleep_debt_s = min(cumul_sleep_debt_s, 0.0)
+                        effective_sleep = max(sleep_time + cumul_sleep_debt_s, 0.0)
+                        if effective_sleep > 0.0:
+                            time.sleep(effective_sleep)
+                            actual_sleep = time.time() - current_time
+                            cumul_sleep_debt_s += sleep_time - actual_sleep
+                            if visual_profile_timing:
+                                profile_sleep_times_s.append(actual_sleep)
+                        else:
+                            cumul_sleep_debt_s += sleep_time
+                            if visual_profile_timing:
+                                profile_sleep_times_s.append(0.0)
+                    else:
+                        # Running behind: accumulate negative debt (but capped)
+                        cumul_sleep_debt_s = max(cumul_sleep_debt_s + sleep_time, -control_dt)
+                        if visual_profile_timing:
+                            profile_sleep_times_s.append(0.0)
+                        profile_n_overslept += 0  # track oversleep count via debt
+
+        # Collect final timing for summary
+        visual_elapsed_wall = time.time() - sim_start_time
+        visual_sim_s = step * control_dt
+        visual_achieved_rf = visual_sim_s / max(visual_elapsed_wall, 1e-6)
+        visual_target_rf = visual_realtime_factor if not visual_disable_pacing else float("inf")
     else:
-        # Headless mode
+        # ---- Headless mode ---- #
+        visual_elapsed_wall = None
+        visual_sim_s = None
+        visual_achieved_rf = None
+        visual_target_rf = None
+        visual_sync_hz = None
+        visual_realtime_factor = None
+        visual_disable_pacing = None
+        visual_profile_timing = False
+        profile_n_syncs = 0
+        profile_step_times_s = None
+        profile_sync_times_s = None
+        profile_sleep_times_s = None
+
         while simulation_step():
             pass
 
@@ -7758,6 +7890,7 @@ def main():
             "terminated": bool(terminated),
             "termination_reason": termination_reason or "completed",
             "final_sim_time_s": float(simulated_steps * control_dt),
+            "wall_clock_time_s": float(elapsed_time),
             "telemetry_decimation": telemetry_decimation,
             "failure_window_steps": failure_window_steps,
             "written_telemetry_rows": n_rows,  # Use n_rows to match actual CSV rows
@@ -7766,6 +7899,27 @@ def main():
             "telemetry_columns_empty": len(empty_cols),
             **finalized_summary_metrics,
         }
+        # Visual pacing metadata
+        if args.visual:
+            sim_s = simulated_steps * control_dt
+            wall_s = visual_elapsed_wall or elapsed_time
+            sidecar_payload["visual_pacing"] = {
+                "mode": "visual",
+                "target_realtime_factor": visual_realtime_factor if not visual_disable_pacing else None,
+                "achieved_realtime_factor": float(sim_s / max(wall_s, 1e-6)),
+                "pacing_disabled": visual_disable_pacing,
+                "control_hz": float(1.0 / control_dt),
+                "control_dt_s": float(control_dt),
+                "physics_dt_s": float(physics_dt),
+                "n_substeps_per_control": int(n_substeps),
+                "target_viewer_sync_hz": float(visual_sync_hz) if visual_sync_hz else None,
+                "viewer_sync_count": int(profile_n_syncs),
+                "wall_clock_s": float(wall_s),
+                "sim_time_s": float(sim_s),
+                "mean_step_time_ms": float(wall_s / max(simulated_steps, 1) * 1000),
+            }
+        else:
+            sidecar_payload["visual_pacing"] = {"mode": "headless"}
         with open(sidecar_path, "w", encoding="utf-8") as f:
             json.dump(sidecar_payload, f, indent=2)
 
@@ -7773,10 +7927,61 @@ def main():
     print("\n" + "=" * 80)
     print("Simulation Summary")
     print("=" * 80)
+    print(f"Mode: {'VISUAL' if args.visual else 'HEADLESS'}")
     print(f"Total simulated steps: {simulated_steps}")
     print(f"Written telemetry rows: {len(telemetry['time'])}")
     print(f"Simulation time: {simulated_steps * control_dt:.1f} seconds")
     print(f"Wall clock time: {elapsed_time:.1f} seconds")
+
+    # Realtime factor reporting
+    if args.visual:
+        sim_s = simulated_steps * control_dt
+        wall_s = visual_elapsed_wall or elapsed_time
+        achieved_rf = sim_s / max(wall_s, 1e-6)
+        target_rf = visual_realtime_factor if not visual_disable_pacing else float("inf")
+
+        print(f"\n--- Visual Realtime Pacing ---")
+        print(f"Target realtime factor: {'∞ (no pacing)' if visual_disable_pacing else f'{target_rf:.2f}x'}")
+        print(f"Achieved realtime factor: {achieved_rf:.3f}x")
+        if achieved_rf < 0.95 * target_rf and not visual_disable_pacing:
+            bottleneck_ratio = target_rf / max(achieved_rf, 1e-6)
+            print(f"  ⚠ Realtime target NOT met — simulation is {bottleneck_ratio:.1f}x slower than target")
+            print(f"  Likely causes: controller compute > pacing interval, viewer render overhead, CPU bound")
+        elif achieved_rf >= 0.95 * target_rf and not visual_disable_pacing:
+            print(f"  ✓ Realtime target met within ±5%")
+        print(f"Control rate: {1.0/control_dt:.0f} Hz (control_dt={control_dt:.3f}s)")
+        print(f"Viewer sync rate: {visual_sync_hz:.0f} Hz (target)")
+        print(f"Viewer sync count: {profile_n_syncs}")
+        print(f"Mean step time: {wall_s/max(simulated_steps,1)*1000:.1f} ms (target: {control_dt*1000:.1f} ms @ {1.0/control_dt:.0f} Hz)")
+
+        # Profiling details
+        if visual_profile_timing and profile_step_times_s:
+            step_times = np.array(profile_step_times_s)
+            print(f"\n--- Step Timing Profile (n={len(step_times)}) ---")
+            print(f"  Mean: {np.mean(step_times)*1000:.2f} ms")
+            print(f"  Median: {np.median(step_times)*1000:.2f} ms")
+            print(f"  P50: {np.percentile(step_times,50)*1000:.2f} ms")
+            print(f"  P95: {np.percentile(step_times,95)*1000:.2f} ms")
+            print(f"  P99: {np.percentile(step_times,99)*1000:.2f} ms")
+            print(f"  Max: {np.max(step_times)*1000:.2f} ms")
+            print(f"  Std: {np.std(step_times)*1000:.2f} ms")
+            if profile_sync_times_s:
+                sync_times = np.array(profile_sync_times_s)
+                print(f"\n  Viewer sync (n={len(sync_times)}):")
+                print(f"    Mean: {np.mean(sync_times)*1000:.2f} ms")
+                print(f"    P95: {np.percentile(sync_times,95)*1000:.2f} ms")
+                print(f"    Max: {np.max(sync_times)*1000:.2f} ms")
+            if profile_sleep_times_s:
+                sleep_times = np.array(profile_sleep_times_s)
+                nonsleep = np.sum(sleep_times > 0)
+                print(f"\n  Sleep (n={len(sleep_times)}, slept={nonsleep} steps):")
+                if nonsleep > 0:
+                    pos_sleep = sleep_times[sleep_times > 0]
+                    print(f"    Mean when sleeping: {np.mean(pos_sleep)*1000:.2f} ms")
+                    print(f"    Max sleep: {np.max(pos_sleep)*1000:.2f} ms")
+                print(f"    Steps with zero/negative sleep: {len(sleep_times) - nonsleep}")
+                print(f"    Sleep ratio: {nonsleep}/{len(sleep_times)} ({100*nonsleep/max(len(sleep_times),1):.1f}%)")
+
     print(f"Terminated: {terminated}")
     if terminated:
         print(f"Termination reason: {termination_reason}")

@@ -52,6 +52,7 @@ class IntegratedWBC:
         roll_integral_limit: float = 0.52,
         dt: float = 0.01,
         use_per_actuator_authority: bool = False,
+        verbose: bool = True,
     ):
         """Initialize integrated WBC.
 
@@ -82,8 +83,10 @@ class IntegratedWBC:
             roll_integral_limit: Anti-windup limit for roll integral (radians, ~30 degrees)
             dt: Control timestep in seconds
             use_per_actuator_authority: If True, clip WBC torque elementwise by actuator limits
+            verbose: If True (default), print per-step diagnostics. Set False for visual mode.
         """
         self.mj_model = mj_model
+        self.verbose = verbose
 
         # Derive robot mass from model if not provided
         if robot_mass is None:
@@ -197,7 +200,8 @@ class IntegratedWBC:
             # Reset integral when roll is too large (robot falling)
             self.roll_integral = 0.0
 
-        print(f"[PID STATE] roll={roll_rad*180/3.14159:.2f}°, roll_integral={self.roll_integral:.4f}, integral_contribution={self.wrench_computer.k_roll_integral * self.roll_integral:.2f} Nm")
+        if self.verbose:
+            print(f"[PID STATE] roll={roll_rad*180/3.14159:.2f}°, roll_integral={self.roll_integral:.4f}, integral_contribution={self.wrench_computer.k_roll_integral * self.roll_integral:.2f} Nm")
 
         desired_force, desired_moment, correction_breakdown = (
             self.wrench_computer.compute_desired_wrench_from_state_with_breakdown(
@@ -249,7 +253,8 @@ class IntegratedWBC:
         else:
             tau_wheel_expected = Fy_total * wheel_radius / 2.0
 
-        print(f"[WHEEL TORQUE DIAGNOSTIC] Fy_total={Fy_total:.4f} N, active_wheels={active_wheels}, expected_wheel_torque={tau_wheel_expected:.4f} Nm (Jacobian will produce this)")
+        if self.verbose:
+            print(f"[WHEEL TORQUE DIAGNOSTIC] Fy_total={Fy_total:.4f} N, active_wheels={active_wheels}, expected_wheel_torque={tau_wheel_expected:.4f} Nm (Jacobian will produce this)")
 
         # CRITICAL FIX: Do NOT add wheel torques separately
         # The contact Jacobian ALREADY converts sagittal force Fy into wheel torques
@@ -319,19 +324,23 @@ class IntegratedWBC:
         if self.correction_only_mode:
             force_scale = 1.0
             force_feedback_mode = "disabled_correction_only"
-            print("[FORCE FEEDBACK] Disabled in correction-only mode, scale=1.0")
+            if self.verbose:
+                print("[FORCE FEEDBACK] Disabled in correction-only mode, scale=1.0")
         elif self.force_feedback_gain <= 0.0:
             force_scale = 1.0
             force_feedback_mode = "disabled"
-            print("[FORCE FEEDBACK] Disabled (gain <= 0), scale=1.0")
+            if self.verbose:
+                print("[FORCE FEEDBACK] Disabled (gain <= 0), scale=1.0")
         elif self.step_count < self.force_feedback_warmup_steps:
             force_scale = 1.0
             force_feedback_mode = "warmup"
-            print(f"[FORCE FEEDBACK] Warmup step {self.step_count}/{self.force_feedback_warmup_steps}, scale=1.0 (no correction)")
+            if self.verbose:
+                print(f"[FORCE FEEDBACK] Warmup step {self.step_count}/{self.force_feedback_warmup_steps}, scale=1.0 (no correction)")
         elif not contact_force_valid:
             force_scale = 1.0
             force_feedback_mode = "invalid_contact"
-            print("[FORCE FEEDBACK] Contact force invalid before first mj_step, scale=1.0 (no correction)")
+            if self.verbose:
+                print("[FORCE FEEDBACK] Contact force invalid before first mj_step, scale=1.0 (no correction)")
         elif desired_fz_total > 1e-3:  # Avoid division by zero
             force_error_ratio = (actual_fz_total - desired_fz_total) / desired_fz_total
             # force_scale = 1.0 means no correction
@@ -340,18 +349,21 @@ class IntegratedWBC:
             force_scale = 1.0 - self.force_feedback_gain * force_error_ratio
             force_scale = float(jnp.clip(force_scale, 0.1, 2.0))  # Limit scale range
             force_feedback_mode = "active"
-            print(f"[FORCE FEEDBACK] Active: actual={actual_fz_total:.1f}N, desired={desired_fz_total:.1f}N, scale={force_scale:.3f}")
+            if self.verbose:
+                print(f"[FORCE FEEDBACK] Active: actual={actual_fz_total:.1f}N, desired={desired_fz_total:.1f}N, scale={force_scale:.3f}")
         else:
             force_scale = 1.0
             force_feedback_mode = "neutral"
 
         self.step_count += 1
         tau_before_clip = tau_wbc_masked * force_scale
-        print(f"[WBC PIPELINE] Before clipping - wheel torques: L={tau_before_clip[4]:.4f} Nm, R={tau_before_clip[9]:.4f} Nm, max_all={jnp.max(jnp.abs(tau_before_clip)):.4f} Nm")
+        if self.verbose:
+            print(f"[WBC PIPELINE] Before clipping - wheel torques: L={tau_before_clip[4]:.4f} Nm, R={tau_before_clip[9]:.4f} Nm, max_all={jnp.max(jnp.abs(tau_before_clip)):.4f} Nm")
         tau_wbc = self.clip_to_authority_budget(tau_before_clip)
-        print(f"[WBC PIPELINE] After authority clipping: {tau_wbc}")
-        print(f"[WBC PIPELINE] After clipping - wheel torques: L={tau_wbc[4]:.4f} Nm, R={tau_wbc[9]:.4f} Nm")
-        print(f"[WBC PIPELINE] Max final torque: {jnp.max(jnp.abs(tau_wbc)):.4f} Nm")
+        if self.verbose:
+            print(f"[WBC PIPELINE] After authority clipping: {tau_wbc}")
+            print(f"[WBC PIPELINE] After clipping - wheel torques: L={tau_wbc[4]:.4f} Nm, R={tau_wbc[9]:.4f} Nm")
+            print(f"[WBC PIPELINE] Max final torque: {jnp.max(jnp.abs(tau_wbc)):.4f} Nm")
 
         solution = jnp.concatenate([f_left, f_right, tau_hip_roll])
         A_wrench = self.contact_jacobian.build_wrench_matrix(
