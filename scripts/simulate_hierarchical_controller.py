@@ -6460,8 +6460,8 @@ def main():
                 )
                 _jax_tau, _jax_state, _jax_diag = _jax_step_fn(_jax_state, _jax_input, _jax_params)
                 tau_smooth = _jax_tau
-                tau_total_clipped = _jax_tau  # sync for rate-limiting code below
-                tau_prev = tau_smooth  # sync tau_prev for rate limiting on next step
+                tau_total_clipped = _jax_tau
+                tau_prev = tau_smooth
                 if _profile_enabled:
                     _dt_jax = (time.perf_counter() - _t_jax_start) * 1000.0
                     _profile_timing["jax_step_ms"] = _profile_timing.get("jax_step_ms", 0.0) + _dt_jax
