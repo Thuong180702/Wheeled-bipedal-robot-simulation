@@ -602,7 +602,7 @@ actual calibrated functions, not assumed from smoothness properties.
 
 ### Stage 6: C/D/E + Push + Dynamic Validation
 - Step C: 7 cases, 0 falls on JAX
-- Step D: push matrix, 24 paired runs, 0 falls on JAX
+- Step D: push matrix, 12 conditions × 2 backends (python, jax) = 24 runs, 0 falls on JAX, same K2 profile
 - Step E: 10 heights, 0 falls on JAX
 - Single-push: high_0p480 forward/backward 90N on JAX
 - Dynamic height: ramp_up, ramp_down, cycle, gate_dwell, gate_chatter on JAX
@@ -743,7 +743,7 @@ python scripts/simulate_hierarchical_controller.py \
   --visual
 ```
 
-### Profile controller cost (headless)
+### Profile controller cost (headless; omit --visual for headless default)
 ```bash
 python scripts/simulate_hierarchical_controller.py \
   --controller-mode balance-core \
@@ -751,7 +751,7 @@ python scripts/simulate_hierarchical_controller.py \
   --vd-sagittal-authority-profile k2_notch_low_q_v1 \
   --height-variant-setup outputs/physical_target_height_setups_centered/high_0p480_setup.json \
   --controller-backend jax \
-  --no-visual --steps 1000
+  --steps 1000
 ```
 
 ### Parity comparison
@@ -762,12 +762,12 @@ python scripts/compare_k2_python_vs_jax_step.py \
   --output-dir outputs/k2_jax_parity
 ```
 
-### Benchmark
+### Benchmark (headless; omit --visual)
 ```bash
 python scripts/benchmark_k2_jax_controller.py \
   --profile k2_notch_low_q_v1 \
   --scenarios fixed_high_0p480 fixed_low_0p330 push_90N ramp_up \
-  --no-visual --steps 5000
+  --steps 5000
 ```
 
 ### Tests

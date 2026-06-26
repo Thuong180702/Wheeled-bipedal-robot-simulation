@@ -478,10 +478,11 @@ equivalence or improvement vs Python K2.
    - **Gate:** 0 falls, 0 REGRESSION classifications
 
 2. **Step D push matrix (24 runs):**
-   - 3 heights × 2 directions × 2 magnitudes × 2 profiles (K2 Python vs K2 JAX)
-   - All runs with `--controller-backend jax`
-   - Compare push recovery metrics vs Python K2 baseline
-   - **Gate:** 0 falls, 0 REGRESSION classifications
+   - 12 push conditions (3 heights × 2 directions × 2 magnitudes) × 2 backends = 24 runs
+   - Backends: `--controller-backend python` and `--controller-backend jax`
+   - Profile is the same in both: `--vd-sagittal-authority-profile k2_notch_low_q_v1`
+   - Compare push recovery metrics: Python K2 backend vs JAX K2 backend
+   - **Gate:** 0 falls on JAX backend, 0 REGRESSION classifications
 
 3. **Step E validation (10 heights):**
    - Run each height with `--controller-backend jax`
@@ -510,10 +511,13 @@ equivalence or improvement vs Python K2.
 
 ### Tests to Add/Run
 
-- Run existing validation scripts with `--controller-backend jax`:
-  - `python scripts/run_k2_step_c_validation.py --backend jax`
-  - `python scripts/run_k2_step_d_push_matrix.py --backend jax`
-  - `python scripts/run_k2_step_e_validation.py --backend jax`
+- **Discover and reuse existing validation runners first.** Known likely existing runners:
+  - `scripts/validate_k2_step_c_e_fixed_height.py`
+  - `scripts/validate_k2_step_d_push_matrix.py`
+  - `scripts/validate_k2_dynamic_height_gate_crossing.py`
+  - `scripts/validate_k2_post_promotion_long_run.py`
+- If an existing runner does not accept `--controller-backend`, extend it without changing validation semantics
+- If no runner exists for a suite, create a small backend-aware wrapper that reproduces the existing validated matrix exactly
 - All existing K2 tests must pass with backend=python
 - `tests/test_k2_jax_backend_cli.py::TestJaxStepCPasses` — 7 cases, 0 falls
 - `tests/test_k2_jax_backend_cli.py::TestJaxStepDPasses` — push matrix subset
@@ -565,7 +569,8 @@ equivalence or improvement vs Python K2.
 
 1. **Create benchmark script:**
    - `scripts/benchmark_k2_jax_controller.py`
-   - Arg: `--backend {python,jax}`, `--scenarios [...]`, `--steps N`, `--no-visual`, `--warmup-steps N`
+   - Arg: `--backend {python,jax}`, `--scenarios [...]`, `--steps N`, `--warmup-steps N`
+   - Headless by default (omit `--visual`); add `--visual` only for visual benchmark
 
 2. **Benchmark scenarios:**
    - A. Python backend, headless (baseline)
@@ -660,7 +665,7 @@ equivalence or improvement vs Python K2.
 
 ## File Manifest
 
-### Created (10 files)
+### Created (11 files)
 
 | Stage | File |
 |-------|------|
