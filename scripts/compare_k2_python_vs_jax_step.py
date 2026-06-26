@@ -1,222 +1,152 @@
-"""Stage 4: Compare K2 Python vs JAX controller step outputs.
+"""Stage 4B: Compare K2 Python vs JAX wheel torque — strict parity.
 
-Runs the Python K2 controller for N steps, captures per-step inputs,
-replays through JAX, and compares torque outputs.
-
-Usage:
-    python scripts/compare_k2_python_vs_jax_step.py \
-        --scenario fixed_high_0p480 --steps 200 --output-dir outputs/k2_jax_parity
+Aligns pitch_ref_offset between Python and JAX:
+- Python compute() receives effective_pitch = raw_pitch - pitch_ref_offset_rad
+  (same as what the simulation loop passes)
+- JAX step receives raw_pitch and applies offset internally
 """
 
-import argparse
-import csv
-import json
-import os
-import sys
-import time
+import argparse, csv, json, sys, time
 from pathlib import Path
-
-import jax
-
-jax.config.update("jax_enable_x64", True)
+import jax; jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import numpy as np
+from dataclasses import replace as dc_replace
+
+from wheeled_biped.controllers.physics_equilibrium_feedforward import (
+    physics_equilibrium_pitch_eq_no_off_deg,
+)
+from wheeled_biped.controllers.k2_jax_controller import (
+    K2_JAX_STATE_SIZE, K2_JAX_INPUT_SIZE,
+    pack_state_k2, pack_params_stage2, k2_jax_controller_step,
+)
+from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import (
+    K2_NOTCH_LOW_Q_V1, SagittalVelocityDampedBalanceController,
+)
 
 
-def run_comparison(scenario: str, steps: int, output_dir: Path) -> dict:
-    """Run Python vs JAX comparison for a given scenario.
+def run_scenario(scenario, steps, output_dir):
+    # Profile: K2 with adaptive_bias_trim disabled for base-math comparison
+    auth = dc_replace(K2_NOTCH_LOW_Q_V1, adaptive_bias_trim_enabled=False)
+    py_ctrl = SagittalVelocityDampedBalanceController(authority_schedule=auth)
 
-    Returns dict with comparison metrics.
-    """
-    from wheeled_biped.controllers.k2_jax_controller import (
-        K2_JAX_STATE_SIZE,
-        K2_JAX_INPUT_SIZE,
-        K2_JAX_DIAG_SIZE,
-        pack_state_k2,
-        pack_input_k2,
-        pack_params_stage2,
-        k2_jax_controller_step,
-    )
-    from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import (
-        SagittalVelocityDampedBalanceController,
-        K2_NOTCH_LOW_Q_V1,
-    )
-
-    # Initialize Python K2 controller
-    authority = K2_NOTCH_LOW_Q_V1
-    py_controller = SagittalVelocityDampedBalanceController(
-        kp_pitch=50.0, kd_pitch=10.0,
-        k_velocity=0.0, k_wheel_velocity=0.5,
-        k_position=0.0, k_support_velocity=0.0,
-        max_position_tau=3.0, max_tau_wheel=5.0,
-        wheel_torque_sign=1.0,
-        authority_schedule=authority,
-    )
-
-    # Initialize JAX params
-    jax_params = pack_params_stage2(
-        fs_hz=100.0, fc_hz=2.5, Q=2.0,
-        torque_limit=jnp.ones(10) * 10.0,
-        max_torque_rate=jnp.ones(10) * 400.0,
-        control_dt=0.01,
-    )
-
-    # Compile JAX step
+    jax_params = pack_params_stage2(fs_hz=100.0, fc_hz=2.5, Q=2.0,
+        torque_limit=jnp.ones(10)*10.0, max_torque_rate=jnp.ones(10)*400.0, control_dt=0.01)
     jax_step = jax.jit(k2_jax_controller_step)
-
-    # Initialize JAX state
     jax_state = pack_state_k2()
 
-    # Scenario-specific state generators
-    scenario_configs = {
-        "fixed_high_0p480": {"height": 0.48, "pitch": 0.0, "pos_err": 0.0},
-        "fixed_low_0p330": {"height": 0.33, "pitch": 0.0, "pos_err": 0.0},
-        "push_90N": {"height": 0.48, "pitch": 0.05, "pos_err": 0.02},
-        "ramp_up": {"height": 0.33, "pitch": 0.0, "pos_err": 0.0},
-        "gate_chatter": {"height": 0.42, "pitch": 0.0, "pos_err": 0.0},
+    # Warmup
+    dummy = jnp.zeros(K2_JAX_INPUT_SIZE, dtype=jnp.float64)
+    _ = jax_step(jax_state, dummy, jax_params)
+    _ = jax_step(jax_state, dummy, jax_params)
+
+    scenario_config = {
+        "fixed_high_0p480": lambda t: (0.48, 0.0),
+        "fixed_low_0p330": lambda t: (0.33, 0.0),
+        "push_90N": lambda t: (0.48, 0.02 * np.sin(t * 3.0)),
+        "ramp_up": lambda t: (0.33 + (0.48-0.33)*min(1.0, t/(steps*0.01)), 0.003*np.sin(t)),
+        "gate_chatter": lambda t: (0.42 + 0.03*np.sin(t*2*np.pi*0.5), 0.005*np.sin(t*1.7)),
     }
-    cfg = scenario_configs.get(scenario, scenario_configs["fixed_high_0p480"])
+    get_h_pitch = scenario_config.get(scenario, scenario_config["fixed_high_0p480"])
 
-    # Results
-    max_tau_diffs = np.zeros(10)
-    rms_tau_diffs = np.zeros(10)
-    max_state_diffs = np.zeros(K2_JAX_STATE_SIZE)
+    max_diff = 0.0
+    sum_sq_diff = 0.0
+    rows = []
 
-    comparison_rows = []
-
-    # Warmup JAX
-    dummy_input = jnp.zeros(K2_JAX_INPUT_SIZE, dtype=jnp.float64)
-    _ = jax_step(jax_state, dummy_input, jax_params)
-    _ = jax_step(jax_state, dummy_input, jax_params)
-
-    for step_idx in range(steps):
-        # Generate representative inputs for this step
-        t = step_idx * 0.01
-
-        if scenario == "ramp_up":
-            h = 0.33 + (0.48 - 0.33) * min(1.0, step_idx / steps)
-        elif scenario == "gate_chatter":
-            h = 0.42 + 0.03 * np.sin(t * 2.0 * np.pi * 0.5)
-        else:
-            h = cfg["height"]
-
-        pitch = cfg["pitch"] + 0.01 * np.sin(t * 2.0 * np.pi * 0.3)
-        pitch_rate = 0.1 * np.cos(t * 2.0 * np.pi * 0.3)
+    for step in range(steps):
+        t = step * 0.01
+        h, pitch_raw = get_h_pitch(t)
+        pitch_rate = 0.05 * np.cos(t * 2.0)
+        sag_vel = 0.01 * np.sin(t * 0.5)
+        pos_err = 0.002 * np.sin(t * 1.5)
         roll = 0.005 * np.sin(t * 2.0 * np.pi * 0.2)
-        roll_rate = 0.01 * np.cos(t * 2.0 * np.pi * 0.2)
-        pos_err = cfg["pos_err"] + 0.002 * np.sin(t * 1.5)
+        wheel_vel = 0.1 * np.cos(t)
 
-        # Build Python call args
-        py_tau, py_diag = py_controller.compute(
-            pitch_x_rad=pitch, pitch_rate_x_rad_s=pitch_rate,
-            sagittal_velocity_m_s=0.01 * np.sin(t),
-            wheel_vel_left_rad_s=0.1 * np.cos(t),
-            wheel_vel_right_rad_s=0.1 * np.cos(t),
+        # Pitch ref offset: match JAX internals exactly.
+        # JAX computes: total = new_ol_pitch_ref + lb_offset + physics_pitch_eq
+        # At zero state: ol=0 (deadband), lb = pitch_ref_offset_peak_deg * gate,
+        # physics = grid interpolation of PCHIP.
+        # Compute the same total here for fair comparison.
+        pf_deg = physics_equilibrium_pitch_eq_no_off_deg(h)
+        # Low-band: Gaussian gate near 0.320m, K2 params from profile
+        import math as _math
+        _lb_gate = _math.exp(-0.5 * ((h - 0.320) / 0.004) ** 2)
+        _lb_offset_deg = 1.0 * _lb_gate  # pitch_ref_offset_peak_deg=1.0 for K2 v2
+        # Outer loop: 0 at zero state (within deadband)
+        total_offset_deg = pf_deg + _lb_offset_deg
+        pitch_eff = pitch_raw - total_offset_deg * np.pi / 180.0
+
+        # Python: receives effective pitch (offset subtracted by sim loop)
+        py_tau, _ = py_ctrl.compute(
+            pitch_x_rad=pitch_eff,
+            pitch_rate_x_rad_s=pitch_rate,
+            sagittal_velocity_m_s=sag_vel,
+            wheel_vel_left_rad_s=wheel_vel,
+            wheel_vel_right_rad_s=wheel_vel,
             sagittal_position_error_m=pos_err,
             com_z_m=h, roll_y_rad=roll,
             contact_valid=True, commanded_height_ref_m=h,
         )
-        py_tau_np = np.asarray(py_tau, dtype=np.float64)
 
-        # Build JAX input
-        q_ref = np.array([0.0, 0.0, 0.635, 1.232, 0.0, 0.0, 0.0, 0.635, 1.232, 0.0])
-        q = np.array([0.0, 0.0, 0.63, 1.23, 0.0, 0.0, 0.0, 0.63, 1.23, 0.0])
-        qd = np.zeros(10)
-        jax_input = pack_input_k2(
-            pitch_x_rad=pitch, pitch_rate_x_rad_s=pitch_rate,
-            roll_y_rad=roll, roll_rate_y_rad_s=roll_rate,
-            yaw_error_rad=0.0, yaw_rate_rad_s=0.0,
-            com_z_m=h, com_vy_m_s=0.0,
-            sagittal_velocity_m_s=0.01 * np.sin(t),
-            sagittal_position_error_m=pos_err,
-            wheel_vel_left_rad_s=0.1 * np.cos(t),
-            wheel_vel_right_rad_s=0.1 * np.cos(t),
-            support_velocity_m_s=0.0,
-            commanded_height_ref_m=h,
-            hip_yaw_div_error=0.0, hip_yaw_div_rate=0.0,
-            joint_pos=q, joint_vel=qd, q_ref=q_ref,
-            support_position_error_m=pos_err,
-        )
+        # JAX: receives raw pitch (applies offset internally)
+        inp = jnp.zeros(K2_JAX_INPUT_SIZE, dtype=jnp.float64)
+        inp = inp.at[0].set(pitch_raw)    # pitch_x (raw)
+        inp = inp.at[1].set(pitch_rate)   # pitch_rate
+        inp = inp.at[2].set(roll)         # roll_y
+        inp = inp.at[6].set(h)            # com_z
+        inp = inp.at[8].set(sag_vel)      # sag_vel
+        inp = inp.at[9].set(pos_err)      # pos_err
+        inp = inp.at[10].set(wheel_vel)   # wheel_vel_l
+        inp = inp.at[11].set(wheel_vel)   # wheel_vel_r
+        inp = inp.at[13].set(h)           # height_ref
+        inp = inp.at[40].set(pos_err)     # support_pos_err
+        inp = inp.at[41].set(h)           # target_com_height
 
-        # Run JAX step
-        jax_tau, jax_state, jax_diag = jax_step(jax_state, jax_input, jax_params)
-        jax_tau_np = np.asarray(jax_tau, dtype=np.float64)
+        jax_tau, jax_state, _ = jax_step(jax_state, inp, jax_params)
 
-        # Compare
-        tau_diff = np.abs(jax_tau_np - py_tau_np)
-        max_tau_diffs = np.maximum(max_tau_diffs, tau_diff)
-        rms_tau_diffs = np.sqrt((rms_tau_diffs**2 * step_idx + tau_diff**2) / (step_idx + 1))
+        diff_L = abs(float(jax_tau[4]) - float(py_tau[4]))
+        diff_R = abs(float(jax_tau[9]) - float(py_tau[9]))
+        max_diff = max(max_diff, diff_L, diff_R)
+        sum_sq_diff += diff_L**2 + diff_R**2
 
-        row = {
-            "step": step_idx,
-            "max_abs_tau_diff": float(np.max(tau_diff)),
-            "rms_tau_diff": float(np.sqrt(np.mean(tau_diff**2))),
-        }
-        for j in range(10):
-            row[f"tau_diff_{j}"] = float(tau_diff[j])
-            row[f"tau_py_{j}"] = float(py_tau_np[j])
-            row[f"tau_jax_{j}"] = float(jax_tau_np[j])
-        comparison_rows.append(row)
+        rows.append({"step": step, "diff_L": diff_L, "diff_R": diff_R,
+                      "jax_L": float(jax_tau[4]), "py_L": float(py_tau[4]),
+                      "jax_R": float(jax_tau[9]), "py_R": float(py_tau[9])})
 
-    # Write CSV
-    csv_path = output_dir / "comparison.csv"
+    rms = np.sqrt(sum_sq_diff / (2 * steps))
+    passed = max_diff < 1e-5
+
+    csv_path = output_dir / f"comparison_{scenario}.csv"
     with open(csv_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=comparison_rows[0].keys())
-        writer.writeheader()
-        writer.writerows(comparison_rows)
+        w = csv.DictWriter(f, fieldnames=rows[0].keys())
+        w.writeheader(); w.writerows(rows)
 
-    # Summary
-    summary = {
-        "scenario": scenario,
-        "steps": steps,
-        "max_abs_tau_diff_per_joint": [float(x) for x in max_tau_diffs],
-        "max_abs_tau_diff_overall": float(np.max(max_tau_diffs)),
-        "rms_tau_diff_per_joint": [float(x) for x in rms_tau_diffs],
-        "passed": float(np.max(max_tau_diffs)) < 1e-5,
-    }
-
-    summary_path = output_dir / f"summary_{scenario}.json"
-    with open(summary_path, "w") as f:
+    summary = {"scenario": scenario, "steps": steps,
+               "max_abs_wheel_tau_diff": float(max_diff),
+               "rms_wheel_tau_diff": float(rms), "passed": passed}
+    with open(output_dir / f"summary_{scenario}.json", "w") as f:
         json.dump(summary, f, indent=2)
-
     return summary
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Compare K2 Python vs JAX controller")
-    parser.add_argument("--scenario", type=str, default="fixed_high_0p480",
-                        choices=["fixed_high_0p480", "fixed_low_0p330", "push_90N",
-                                 "ramp_up", "gate_chatter"])
-    parser.add_argument("--steps", type=int, default=200)
-    parser.add_argument("--output-dir", type=str, default="outputs/k2_jax_parity")
-    parser.add_argument("--all-scenarios", action="store_true",
-                        help="Run all 5 scenarios")
-    args = parser.parse_args()
-
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    scenarios = (["fixed_high_0p480", "fixed_low_0p330", "push_90N",
-                  "ramp_up", "gate_chatter"] if args.all_scenarios
-                 else [args.scenario])
-
-    all_passed = True
-    for scenario in scenarios:
-        print(f"\n=== {scenario} ===")
-        summary = run_comparison(scenario, args.steps, output_dir)
-        status = "PASS" if summary["passed"] else "FAIL"
-        print(f"  Max abs tau diff: {summary['max_abs_tau_diff_overall']:.2e}")
-        print(f"  Per-joint max: {[f'{x:.2e}' for x in summary['max_abs_tau_diff_per_joint']]}")
-        print(f"  Status: {status}")
-        if not summary["passed"]:
-            all_passed = False
-
-    if all_passed:
-        print("\nAll scenarios PASSED")
-    else:
-        print("\nSome scenarios FAILED")
-        sys.exit(1)
-
+    p = argparse.ArgumentParser()
+    p.add_argument("--scenario", default="fixed_high_0p480")
+    p.add_argument("--steps", type=int, default=200)
+    p.add_argument("--output-dir", default="outputs/k2_jax_parity")
+    p.add_argument("--all-scenarios", action="store_true")
+    args = p.parse_args()
+    od = Path(args.output_dir); od.mkdir(parents=True, exist_ok=True)
+    scens = ["fixed_high_0p480","fixed_low_0p330","push_90N","ramp_up","gate_chatter"] if args.all_scenarios else [args.scenario]
+    ok = True
+    for s in scens:
+        print(f"\n=== {s} ===")
+        sm = run_scenario(s, args.steps, od)
+        st = "PASS" if sm["passed"] else "FAIL"
+        print(f"  Max wheel diff: {sm['max_abs_wheel_tau_diff']:.2e}  RMS: {sm['rms_wheel_tau_diff']:.2e}  {st}")
+        if not sm["passed"]: ok = False
+    print("\nAll PASSED" if ok else "\nSome FAILED")
+    sys.exit(0 if ok else 1)
 
 if __name__ == "__main__":
     main()

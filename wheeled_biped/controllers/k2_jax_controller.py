@@ -1091,10 +1091,12 @@ def k2_jax_controller_step(
                  0.9 * filtered_com_z + 0.1 * com_z)
     new_filtered_com_z = schedule_h
 
-    # K2 uses continuous scheduling. Use K2 defaults from profile chain.
-    kpos = k2_jax_scheduled_k_position(schedule_h, 0.0, 5.0, 0.35, 0.45)
-    kwheel = k2_jax_scheduled_k_wheel_velocity(schedule_h, 0.5, 3.0, 0.35, 0.45)
-    kd_pitch = k2_jax_scheduled_k_wheel_velocity(schedule_h, 10.0, 20.0, 0.35, 0.45)
+    # K2 profile: continuous_k_position=False, continuous_k_wheel_velocity=False,
+    # continuous_kd_pitch=False. Use base constructor values directly.
+    # Only max_position_tau is continuous-scheduled (continuous_max_position_tau=True).
+    kpos = 0.0        # base k_position for K2
+    kwheel = 0.5       # base k_wheel_velocity for K2
+    kd_pitch = 10.0    # base kd_pitch for K2 (not scheduled)
 
     # === Step 3: Calibrated outer loop + physics FF ===
     cal_grid = _get_calibrated_grid()
@@ -1134,9 +1136,14 @@ def k2_jax_controller_step(
         schedule_h, ff_grid["grid_heights"], ff_grid["pitch_eq_grid"])
     total_pitch_ref_offset_deg = new_ol_pitch_ref + lb_offset + physics_pitch_eq
 
+    # Apply pitch_ref_offset to effective pitch: offset reduces tau_pitch to center drift.
+    # Sign: positive offset_deg → subtract from pitch_x (shift reference forward).
+    pitch_ref_offset_rad = total_pitch_ref_offset_deg * (jnp.pi / 180.0)
+    effective_pitch_x = pitch_x - pitch_ref_offset_rad
+
     # === Step 4: Sagittal torque assembly ===
     tau_sag, sag_diag = k2_jax_sagittal_torque_assembly(
-        pitch_x_rad=pitch_x, pitch_rate_rad_s=pitch_rate_eff,
+        pitch_x_rad=effective_pitch_x, pitch_rate_rad_s=pitch_rate_eff,
         sagittal_velocity_m_s=sag_vel, sagittal_position_error_m=sag_pos_err,
         wheel_vel_left_rad_s=wheel_vel_l, wheel_vel_right_rad_s=wheel_vel_r,
         support_velocity_m_s=support_vel,
