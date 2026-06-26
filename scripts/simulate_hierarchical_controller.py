@@ -6450,7 +6450,7 @@ def main():
                     wheel_vel_left_rad_s=float(joint_vel[4]),
                     wheel_vel_right_rad_s=float(joint_vel[9]),
                     support_velocity_m_s=0.0,
-                    commanded_height_ref_m=float(height_cmd),
+                    commanded_height_ref_m=float(height_variant_setup.get("target_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd),
                     hip_yaw_div_error=float(joint_pos[1] - joint_pos[6]),
                     hip_yaw_div_rate=float(joint_vel[1] - joint_vel[6]),
                     joint_pos=jnp.array(joint_pos),
