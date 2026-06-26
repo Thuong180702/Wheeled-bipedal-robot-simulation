@@ -31,8 +31,10 @@ PROFILES_TO_CHECK = {
     "physics_equilibrium_feedforward_outer_loop_low_band_support_v2": "Low-band v2 (sagittal base for current-best)",
     # Previous current-best (legacy)
     "physics_equilibrium_feedforward_outer_loop_low_band_support_v2_mode_hip_yaw_div_v1": "D_MODE_HIP_YAW_DIV_V1 (previous current-best, legacy)",
-    # Current-best (promoted with known WIP recovery limitation)
-    "k1_pitch_rate_notch_v1": "K1 pitch-rate notch v1 (current-best, promoted with known limitation)",
+    # Current-best (K2 promoted 2026-06-25; Step C/E/D all gates passed)
+    "k2_notch_low_q_v1": "K2 notch low-Q v1 (current-best, promoted with Step C/E/D validation)",
+    # Previous current-best (K1, legacy)
+    "k1_pitch_rate_notch_v1": "K1 pitch-rate notch v1 (previous current-best, legacy)",
     # B2v2 baseline
     "calibrated_support_position_outer_loop_pitch_ref_v2": "B2v2 experimental",
     # Legacy B / A profiles
@@ -77,36 +79,52 @@ def test_d_mode_hip_yaw_div_v1_resolves_to_low_band_v2_sagittal():
     assert d_profile.low_band_support_sigma_m == 0.004
 
 
-def test_k1_pitch_rate_notch_v1_is_current_best():
-    """K1 pitch-rate notch v1 is the current-best/default controller (promoted
-    with known WIP recovery limitation).
+def test_k2_notch_low_q_v1_is_current_best():
+    """K2 notch low-Q v1 is the current-best/default controller (promoted
+    2026-06-25 after Step C/E/D validation gates passed).
 
-    K1 extends D_MODE_HIP_YAW_DIV_V1 / G1_sg080 (same low-band v2 sagittal base,
-    same mode-div params kp=10.0, kd=0.50, mt=7.5, sg=0.80) with a causal
-    IIR biquad notch filter on pitch_rate (fc=2.5 Hz, Q=6, blend=1.0, height
+    K2 extends K1 with wip_notch_q=2.0 (wider notch). Same low-band v2 sagittal
+    base, same mode-div params kp=10.0, kd=0.50, mt=7.5, sg=0.80, with a causal
+    IIR biquad notch filter on pitch_rate (fc=2.5 Hz, Q=2.0, blend=1.0, height
     gate 0.42-0.48 m).
     """
+    from simulate_hierarchical_controller import SAGITTAL_AUTHORITY_PROFILES
+    k2 = SAGITTAL_AUTHORITY_PROFILES.get(
+        "k2_notch_low_q_v1"
+    )
+    assert k2 is not None, "K2 notch_low_q_v1 profile missing"
+    # Sagittal base = low-band v2
+    assert k2.low_band_support_outer_loop_enabled is True
+    assert k2.low_band_support_center_m == 0.320
+    assert k2.low_band_support_sigma_m == 0.004
+    # Notch filter — Q=2.0 (wider, better LF suppression)
+    assert k2.enable_wip_notch_filter is True
+    assert k2.wip_notch_target_signal == "pitch_rate"
+    assert k2.wip_notch_center_hz == 2.5
+    assert k2.wip_notch_q == 2.0
+    assert k2.wip_notch_filter_blend == 1.0
+    assert k2.wip_notch_height_gate_start_m == 0.42
+    assert k2.wip_notch_height_gate_full_m == 0.48
+    # No K3 combined notch
+    assert k2.wip_notch_target_signal != "pitch_rate_and_wheel_velocity"
+    # No WBC
+    assert getattr(k2, "wbc_enabled", False) is False
+
+
+def test_k1_pitch_rate_notch_v1_is_legacy():
+    """K1 pitch-rate notch v1 is the previous current-best, available as legacy.
+    Must remain unchanged and selectable."""
     from simulate_hierarchical_controller import SAGITTAL_AUTHORITY_PROFILES
     k1 = SAGITTAL_AUTHORITY_PROFILES.get(
         "k1_pitch_rate_notch_v1"
     )
-    assert k1 is not None, "K1 pitch_rate_notch_v1 profile missing"
-    # Sagittal base = low-band v2
-    assert k1.low_band_support_outer_loop_enabled is True
-    assert k1.low_band_support_center_m == 0.320
-    assert k1.low_band_support_sigma_m == 0.004
-    # Notch filter
-    assert k1.enable_wip_notch_filter is True
-    assert k1.wip_notch_target_signal == "pitch_rate"
-    assert k1.wip_notch_center_hz == 2.5
+    assert k1 is not None, "K1 pitch_rate_notch_v1 must remain available as legacy"
+    # K1 Q remains 6.0 (unchanged)
     assert k1.wip_notch_q == 6.0
+    # All other params unchanged
+    assert k1.enable_wip_notch_filter is True
+    assert k1.wip_notch_center_hz == 2.5
     assert k1.wip_notch_filter_blend == 1.0
-    assert k1.wip_notch_height_gate_start_m == 0.42
-    assert k1.wip_notch_height_gate_full_m == 0.48
-    # No K3 combined notch
-    assert k1.wip_notch_target_signal != "pitch_rate_and_wheel_velocity"
-    # No WBC
-    assert getattr(k1, "wbc_enabled", False) is False
 
 
 def test_profile_is_continuous():

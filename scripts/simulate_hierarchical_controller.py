@@ -125,9 +125,11 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     K1E_PITCH_RATE_NOTCH_Q8,
     K1F_PITCH_RATE_NOTCH_BLEND075,
     K1G_PITCH_RATE_NOTCH_BLEND050,
+    K2_NOTCH_LOW_Q_V1,
     K2_WHEEL_VEL_NOTCH,
     K3_PITCH_RATE_WHEEL_VEL_NOTCH,
     K3B_PITCH_RATE_WHEEL_VEL_NOTCH_BLEND075,
+    ALL_K_SWEEP_PROFILES,
     L1_K1_COORDINATED_LOW_FREQ_FEEDBACK,
     L2_K1_COORDINATED_PHASE_LEAD,
     L3_K1_COORDINATED_PITCH_REF_STABILIZATION,
@@ -1439,9 +1441,12 @@ SAGITTAL_AUTHORITY_PROFILES = {
     "k1e_pitch_rate_notch_q8": K1E_PITCH_RATE_NOTCH_Q8,
     "k1f_pitch_rate_notch_blend075": K1F_PITCH_RATE_NOTCH_BLEND075,
     "k1g_pitch_rate_notch_blend050": K1G_PITCH_RATE_NOTCH_BLEND050,
+    "k2_notch_low_q_v1": K2_NOTCH_LOW_Q_V1,
     "k2_wheel_vel_notch_v1": K2_WHEEL_VEL_NOTCH,
     "k3_pitch_rate_wheel_vel_notch_v1": K3_PITCH_RATE_WHEEL_VEL_NOTCH,
     "k3b_pitch_rate_wheel_vel_notch_blend075": K3B_PITCH_RATE_WHEEL_VEL_NOTCH_BLEND075,
+    # K_SWEEP audit-only filter parameter sweep profiles
+    **ALL_K_SWEEP_PROFILES,
     # L_K1_COORDINATED_SAGITTAL_STATE_FEEDBACK_V1 family — Phase 3
     # K1 + coordinated sagittal state feedback for sustained posture recovery
     "l1_k1_coordinated_low_freq_feedback_v1": L1_K1_COORDINATED_LOW_FREQ_FEEDBACK,
@@ -1845,6 +1850,63 @@ def build_stage2b_drift_audit_field_names():
         "tau_static_feedforward", "tau_static_posture", "tau_total_raw", "tau_final",
         "saturation_flags", "rate_limit_flags",
     ]
+
+
+# K1 augmented telemetry fields — must be forwarded from controller diagnostics to CSV.
+# Each field is read-only in the controller; this list mirrors the diagnostics dict keys.
+K1_AUGMENTED_TELEMETRY_FIELDS = [
+    # A. Pitch-rate notch / filter path
+    "k1_raw_pitch_rate_x",
+    "k1_filtered_pitch_rate_x",
+    "k1_notch_output",
+    "k1_notch_input",
+    "k1_notch_state_1",
+    "k1_notch_state_2",
+    "k1_notch_state_y1",
+    "k1_notch_state_y2",
+    "k1_notch_enabled",
+    "k1_notch_blend",
+    "k1_notch_center_hz",
+    "k1_notch_q",
+    "k1_notch_height_gate_alpha",
+    "k1_notch_filter_type",
+    "k1_lowpass_cutoff_hz",
+    # B. Torque decomposition before clipping
+    "k1_tau_pitch_raw",
+    "k1_tau_pitch_rate_raw",
+    "k1_tau_position_raw",
+    "k1_tau_com_velocity_raw",
+    "k1_tau_wheel_velocity_raw",
+    "k1_tau_support_velocity_raw",
+    "k1_tau_eq_ff_raw",
+    "k1_tau_common_preclip",
+    "k1_tau_left_preclip",
+    "k1_tau_right_preclip",
+    # C. Torque clipping / saturation
+    "k1_tau_position_cap_active",
+    "k1_tau_position_cap_margin_nm",
+    "k1_tau_total_clip_active",
+    "k1_tau_total_clip_margin_nm",
+    "k1_tau_left_postclip",
+    "k1_tau_right_postclip",
+    "k1_tau_clip_delta_left",
+    "k1_tau_clip_delta_right",
+    "k1_tau_clip_delta_common",
+    "k1_saturation_fraction_window_50",
+    "k1_saturation_fraction_window_200",
+    # D. Support / coupling diagnostics
+    "k1_support_error_m",
+    "k1_support_velocity_m_s",
+    "k1_com_y_velocity_m_s",
+    "k1_pitch_support_phase_lag_s_est",
+    "k1_pitch_support_corr_window_200",
+    # E. Controller mode flags
+    "k1_feedback_mode",
+    "k1_profile_name",
+    "k1_current_best_id",
+    "k1_audit_ablation_mode",
+    "k1_telemetry_augmented_version",
+]
 
 
 def build_step1_telemetry_template():
@@ -2578,6 +2640,13 @@ def main():
         help='Force all pushes in the +y (forward sagittal) direction instead of random angles.',
     )
     parser.add_argument(
+        '--push-sequence-file',
+        type=str,
+        default=None,
+        help='Path to JSON file containing a push sequence: list of [step, force_x_N, force_y_N, duration_steps]. '
+             'When provided, overrides --push-magnitude-n/--push-interval-steps for deterministic excitation.',
+    )
+    parser.add_argument(
         '--telemetry-decimation',
         type=int,
         default=1,
@@ -2996,6 +3065,7 @@ def main():
             "k1e_pitch_rate_notch_q8",
             "k1f_pitch_rate_notch_blend075",
             "k1g_pitch_rate_notch_blend050",
+            "k2_notch_low_q_v1",
             "k2_wheel_vel_notch_v1",
             "k3_pitch_rate_wheel_vel_notch_v1",
             "k3b_pitch_rate_wheel_vel_notch_blend075",
@@ -3026,6 +3096,14 @@ def main():
             "n1d_k1_mild_phase_lead_v1",
             "unified_sagittal_state_feedback_no_offset",
             "band_limited_support_recenter",
+            # K_SWEEP audit-only filter parameter sweep profiles
+            "k_sweep_fc_1p50", "k_sweep_fc_1p75", "k_sweep_fc_2p00",
+            "k_sweep_fc_2p25", "k_sweep_fc_2p75", "k_sweep_fc_3p00",
+            "k_sweep_fc_3p25", "k_sweep_fc_3p50",
+            "k_sweep_q_2p0", "k_sweep_q_3p0", "k_sweep_q_8p0", "k_sweep_q_10p0",
+            "k_sweep_blend_0p00", "k_sweep_blend_0p25",
+            "k_sweep_notch_disabled",
+            "k_sweep_lp_3p0", "k_sweep_lp_4p0", "k_sweep_lp_5p0", "k_sweep_lp_6p0",
         ],
         help="Height-variant-aware sagittal authority schedule. Default: baseline",
     )
@@ -4485,6 +4563,11 @@ def main():
     telemetry.setdefault("vd_sagittal_authority_profile", [])
     telemetry.setdefault("height_variant_setup_name", [])
 
+    # Pre-register K1 augmented telemetry fields in the telemetry dict
+    # so the CSV writer includes them (values flow from sagittal_diag each step).
+    for _k1_field in K1_AUGMENTED_TELEMETRY_FIELDS:
+        telemetry.setdefault(_k1_field, [])
+
     # Simulation parameters
     max_steps = args.steps
     control_dt = 0.01  # 100 Hz
@@ -5145,15 +5228,45 @@ def main():
     push_count_override = getattr(args, "push_count", None)
     push_start_step_override = getattr(args, "push_start_step", None)
     sagittal_push_only = bool(getattr(args, "sagittal_push_only", False))
+    push_sequence_file = getattr(args, "push_sequence_file", None)
     push_rng = random.Random(20260617)
-    push_schedule = []  # list of (start_step, end_step, dx_vel, dy_vel)
+    push_schedule = []  # list of (start_step, end_step, fx_N, fy_N)
     push_active_count = 0
     push_applied_count = 0
     # Per-step push state for telemetry
     push_active_now = False
     push_fx_now = 0.0
     push_fy_now = 0.0
-    if push_enabled:
+
+    # Load push sequence from JSON file (deterministic excitation for identification)
+    if push_sequence_file and not push_enabled:
+        import json as _json_push
+        with open(push_sequence_file, "r") as _f:
+            _seq_data = _json_push.load(_f)
+        # Accept either a flat list of entries or a dict with a "sequence" key
+        if isinstance(_seq_data, list):
+            _seq_entries = _seq_data
+        elif isinstance(_seq_data, dict):
+            _seq_entries = _seq_data.get("sequence", [])
+        else:
+            _seq_entries = []
+        for _entry in _seq_entries:
+            _step = int(_entry[0])
+            _fx = float(_entry[1])
+            _fy = float(_entry[2])
+            _dur = int(_entry[3])
+            if 0 <= _step < max_steps:
+                push_schedule.append((_step, _step + _dur, _fx, _fy))
+        if push_schedule:
+            push_enabled = True
+            print(
+                f"[PUSH] sequence-file: n_pushes={len(push_schedule)} "
+                f"from {push_sequence_file}"
+            )
+        else:
+            print(f"[PUSH] sequence-file {push_sequence_file} produced empty schedule; push disabled")
+
+    if push_enabled and not push_schedule:
         n_pushes = (max(1, max_steps // push_interval)
                     if push_count_override is None else push_count_override)
         for i in range(n_pushes):
@@ -6796,6 +6909,10 @@ def main():
         telemetry.setdefault("physics_ff_active_this_step", []).append(sagittal_diag.get("physics_ff_active_this_step", False))
         telemetry.setdefault("empirical_pitch_ref_offset_disabled", []).append(sagittal_diag.get("empirical_pitch_ref_offset_disabled", False))
         telemetry.setdefault("physics_equivalent_pitch_ref_deg", []).append(sagittal_diag.get("physics_equivalent_pitch_ref_deg", 0.0))
+
+        # Auto-forward all K1 augmented telemetry fields from controller diagnostics to CSV
+        for _k1_field in K1_AUGMENTED_TELEMETRY_FIELDS:
+            telemetry.setdefault(_k1_field, []).append(sagittal_diag.get(_k1_field, 0.0))
 
         # Capture gate telemetry (velocity-damped controller only)
         telemetry["capture_gate_enabled"].append(sagittal_diag.get("capture_gate_enabled", False))

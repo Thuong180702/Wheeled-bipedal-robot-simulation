@@ -201,6 +201,71 @@ class BiquadNotchFilter:
 
 
 # ---------------------------------------------------------------------------
+# First-order low-pass filter (single-pole IIR)
+# ---------------------------------------------------------------------------
+
+class FirstOrderLowPassFilter:
+    """Causal first-order IIR low-pass filter.
+
+    Difference equation:
+        y[n] = alpha * x[n] + (1 - alpha) * y[n-1]
+
+    where alpha = 2*pi*dt*fc / (2*pi*dt*fc + 1) for -3 dB cutoff at fc.
+
+    Usage
+    -----
+    >>> lp = FirstOrderLowPassFilter(fs_hz=100.0, cutoff_hz=3.0)
+    >>> y = lp.update(x)
+    >>> lp.reset()
+    """
+
+    def __init__(self, fs_hz: float, cutoff_hz: float):
+        _validate_finite(fs_hz, "fs_hz")
+        _validate_finite(cutoff_hz, "cutoff_hz")
+        if fs_hz <= 0:
+            raise ValueError(f"fs_hz must be positive, got {fs_hz}")
+        if cutoff_hz <= 0:
+            raise ValueError(f"cutoff_hz must be positive, got {cutoff_hz}")
+        if cutoff_hz >= fs_hz / 2.0:
+            raise ValueError(
+                f"cutoff_hz ({cutoff_hz}) must be < fs_hz/2 ({fs_hz/2})"
+            )
+
+        self.fs_hz = float(fs_hz)
+        self.cutoff_hz = float(cutoff_hz)
+
+        dt = 1.0 / fs_hz
+        omega_c = 2.0 * math.pi * cutoff_hz
+        self._alpha = omega_c * dt / (omega_c * dt + 1.0)
+        self._y_prev = 0.0
+
+    def reset(self) -> None:
+        """Reset filter state (zero initial condition)."""
+        self._y_prev = 0.0
+
+    def update(self, x: float) -> float:
+        """Process one sample and return the filtered output."""
+        y = self._alpha * x + (1.0 - self._alpha) * self._y_prev
+        self._y_prev = y
+        return y
+
+    def get_state(self) -> Tuple[float, float, float, float]:
+        """Return state as (y_prev, 0.0, 0.0, 0.0) for telemetry compatibility."""
+        return (self._y_prev, 0.0, 0.0, 0.0)
+
+    @property
+    def alpha(self) -> float:
+        """Filter coefficient alpha."""
+        return self._alpha
+
+    def __repr__(self) -> str:
+        return (
+            f"FirstOrderLowPassFilter(fs={self.fs_hz:.1f}, "
+            f"fc={self.cutoff_hz:.3f}, alpha={self._alpha:.4f})"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Smoothstep gate helper for continuous filter activation
 # ---------------------------------------------------------------------------
 

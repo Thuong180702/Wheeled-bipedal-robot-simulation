@@ -27,7 +27,7 @@ from wheeled_biped.controllers.position_hold_capture_gate import (
     PositionHoldCaptureGate,
     CaptureGateDiagnostics,
 )
-from wheeled_biped.controllers.signal_filters import BiquadNotchFilter, smoothstep_gate
+from wheeled_biped.controllers.signal_filters import BiquadNotchFilter, FirstOrderLowPassFilter, smoothstep_gate
 
 
 def smoothstep01(u: float) -> float:
@@ -1006,6 +1006,18 @@ class SagittalAuthoritySchedule:
     # Filter blend ratio.  0.0 = fully raw; 1.0 = fully filtered.
     # Intermediate values allow partial blending.
     wip_notch_filter_blend: float = 1.0
+
+    # ---- Filter topology selection (K notch/filter sweep, audit-only) ----
+    # Allowed values:
+    #   "biquad_notch"          — current K1 biquad notch (default, unchanged)
+    #   "first_order_lowpass"   — first-order IIR low-pass on pitch rate
+    #   "notch_disabled"        — diagnostic: disable filter entirely
+    # Audit-only.  K1 is "biquad_notch" and must remain unchanged.
+    wip_notch_filter_type: str = "biquad_notch"
+
+    # Cutoff frequency for first_order_lowpass filter type (Hz).
+    # Ignored for biquad_notch filter type.
+    wip_lowpass_cutoff_hz: float = 3.0
 
     # ---- L family: Coordinated sagittal state feedback (Phase 3) ---- #
     # When enabled, a coordinated state-feedback term is added to the wheel
@@ -3147,6 +3159,11 @@ K1G_PITCH_RATE_NOTCH_BLEND050 = replace(
     profile_name="k1g_pitch_rate_notch_blend050",
     wip_notch_filter_blend=0.50,
 )
+K2_NOTCH_LOW_Q_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k2_notch_low_q_v1",
+    wip_notch_q=2.0,
+)
 K2_WHEEL_VEL_NOTCH = replace(
     PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
     profile_name="k2_wheel_vel_notch_v1",
@@ -3176,6 +3193,156 @@ K3B_PITCH_RATE_WHEEL_VEL_NOTCH_BLEND075 = replace(
     profile_name="k3b_pitch_rate_wheel_vel_notch_blend075",
     wip_notch_filter_blend=0.75,
 )
+
+# =====================================================================
+# K_SWEEP factory — audit-only filter parameter sweep profiles
+# =====================================================================
+# These profiles are generated programmatically from K1_PITCH_RATE_NOTCH.
+# All are audit-only — none may become current-best.
+# =====================================================================
+
+
+def _make_sweep_profile(base, name, **overrides):
+    """Create an audit-only sweep profile from a base profile.
+
+    Marks the profile as audit-only by appending '--audit-sweep' to the name.
+    All sweep profiles inherit from K1_PITCH_RATE_NOTCH.
+    """
+    return replace(base, profile_name=name, **overrides)
+
+
+# ── Group A: Centre frequency sweep (Q=6, blend=1.0, biquad_notch) ──
+K_SWEEP_FC_1P50 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_1p50",
+    wip_notch_center_hz=1.5, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_1P75 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_1p75",
+    wip_notch_center_hz=1.75, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_2P00 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_2p00",
+    wip_notch_center_hz=2.0, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_2P25 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_2p25",
+    wip_notch_center_hz=2.25, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_2P75 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_2p75",
+    wip_notch_center_hz=2.75, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_3P00 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_3p00",
+    wip_notch_center_hz=3.0, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_3P25 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_3p25",
+    wip_notch_center_hz=3.25, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_3P50 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_3p50",
+    wip_notch_center_hz=3.5, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+
+# ── Group B: Q sweep (fc=2.5, blend=1.0, biquad_notch) ──
+K_SWEEP_Q_2P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_q_2p0",
+    wip_notch_center_hz=2.5, wip_notch_q=2.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_Q_3P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_q_3p0",
+    wip_notch_center_hz=2.5, wip_notch_q=3.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_Q_8P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_q_8p0",
+    wip_notch_center_hz=2.5, wip_notch_q=8.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_Q_10P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_q_10p0",
+    wip_notch_center_hz=2.5, wip_notch_q=10.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+
+# ── Group C: Blend sweep (fc=2.5, Q=6, biquad_notch) ──
+K_SWEEP_BLEND_0P00 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_blend_0p00",
+    wip_notch_center_hz=2.5, wip_notch_q=6.0, wip_notch_filter_blend=0.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_BLEND_0P25 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_blend_0p25",
+    wip_notch_center_hz=2.5, wip_notch_q=6.0, wip_notch_filter_blend=0.25,
+    wip_notch_filter_type="biquad_notch",
+)
+
+# ── Group D: Topology variants ──
+# Notch-disabled diagnostic
+K_SWEEP_NOTCH_DISABLED = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_notch_disabled",
+    wip_notch_filter_type="notch_disabled",
+)
+
+# First-order lowpass variants (cutoff sweep: 3.0, 4.0, 5.0, 6.0 Hz)
+K_SWEEP_LP_3P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_lp_3p0",
+    wip_notch_filter_type="first_order_lowpass",
+    wip_lowpass_cutoff_hz=3.0,
+)
+K_SWEEP_LP_4P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_lp_4p0",
+    wip_notch_filter_type="first_order_lowpass",
+    wip_lowpass_cutoff_hz=4.0,
+)
+K_SWEEP_LP_5P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_lp_5p0",
+    wip_notch_filter_type="first_order_lowpass",
+    wip_lowpass_cutoff_hz=5.0,
+)
+K_SWEEP_LP_6P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_lp_6p0",
+    wip_notch_filter_type="first_order_lowpass",
+    wip_lowpass_cutoff_hz=6.0,
+)
+
+# ── All sweep profile names for registry ──
+ALL_K_SWEEP_PROFILES = {
+    # Group A: centre frequency
+    "k_sweep_fc_1p50": K_SWEEP_FC_1P50,
+    "k_sweep_fc_1p75": K_SWEEP_FC_1P75,
+    "k_sweep_fc_2p00": K_SWEEP_FC_2P00,
+    "k_sweep_fc_2p25": K_SWEEP_FC_2P25,
+    "k_sweep_fc_2p75": K_SWEEP_FC_2P75,
+    "k_sweep_fc_3p00": K_SWEEP_FC_3P00,
+    "k_sweep_fc_3p25": K_SWEEP_FC_3P25,
+    "k_sweep_fc_3p50": K_SWEEP_FC_3P50,
+    # Group B: Q
+    "k_sweep_q_2p0": K_SWEEP_Q_2P0,
+    "k_sweep_q_3p0": K_SWEEP_Q_3P0,
+    "k_sweep_q_8p0": K_SWEEP_Q_8P0,
+    "k_sweep_q_10p0": K_SWEEP_Q_10P0,
+    # Group C: blend
+    "k_sweep_blend_0p00": K_SWEEP_BLEND_0P00,
+    "k_sweep_blend_0p25": K_SWEEP_BLEND_0P25,
+    # Group D: topology
+    "k_sweep_notch_disabled": K_SWEEP_NOTCH_DISABLED,
+    "k_sweep_lp_3p0": K_SWEEP_LP_3P0,
+    "k_sweep_lp_4p0": K_SWEEP_LP_4P0,
+    "k_sweep_lp_5p0": K_SWEEP_LP_5P0,
+    "k_sweep_lp_6p0": K_SWEEP_LP_6P0,
+}
+
 
 # =====================================================================
 # L Family — K1 + Coordinated Sagittal State Feedback (Phase 3)
@@ -4463,6 +4630,9 @@ class SagittalVelocityDampedBalanceController:
         # to prevent phase-lagged damping from feeding the 2.5 Hz oscillation mode.
         # Only active when enable_wip_notch_filter is True on the authority schedule.
         notch_enabled = self.authority_schedule.enable_wip_notch_filter
+        # Audit-only: notch_disabled filter type forces filter off for diagnostics
+        if self.authority_schedule.wip_notch_filter_type == "notch_disabled":
+            notch_enabled = False
         notch_target = self.authority_schedule.wip_notch_target_signal
         notch_center_hz = self.authority_schedule.wip_notch_center_hz
         notch_q = self.authority_schedule.wip_notch_q
@@ -4499,11 +4669,20 @@ class SagittalVelocityDampedBalanceController:
         notch_filter_valid = False
         if notch_enabled:
             try:
+                filter_type = self.authority_schedule.wip_notch_filter_type
                 if self._wip_notch_pitch_rate is None:
-                    self._wip_notch_pitch_rate = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
-                    self._wip_notch_wheel_left = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
-                    self._wip_notch_wheel_right = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
-                    self._wip_notch_support_vel = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+                    if filter_type == "first_order_lowpass":
+                        lp_cutoff = self.authority_schedule.wip_lowpass_cutoff_hz
+                        self._wip_notch_pitch_rate = FirstOrderLowPassFilter(fs_hz=fs_hz, cutoff_hz=lp_cutoff)
+                        self._wip_notch_wheel_left = FirstOrderLowPassFilter(fs_hz=fs_hz, cutoff_hz=lp_cutoff)
+                        self._wip_notch_wheel_right = FirstOrderLowPassFilter(fs_hz=fs_hz, cutoff_hz=lp_cutoff)
+                        self._wip_notch_support_vel = FirstOrderLowPassFilter(fs_hz=fs_hz, cutoff_hz=lp_cutoff)
+                    else:
+                        # Default: biquad_notch (K1 behaviour preserved)
+                        self._wip_notch_pitch_rate = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+                        self._wip_notch_wheel_left = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+                        self._wip_notch_wheel_right = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+                        self._wip_notch_support_vel = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
 
                 # Update filters
                 should_filter_pr = notch_target in ("pitch_rate", "pitch_rate_and_wheel_velocity", "all_damping_signals")
@@ -8310,6 +8489,8 @@ class SagittalVelocityDampedBalanceController:
             "wip_notch_target_signal": str(notch_target),
             "wip_notch_center_hz": float(notch_center_hz),
             "wip_notch_q": float(notch_q),
+            "wip_notch_filter_type": str(self.authority_schedule.wip_notch_filter_type),
+            "wip_lowpass_cutoff_hz": float(self.authority_schedule.wip_lowpass_cutoff_hz),
             "wip_notch_fs_hz": float(fs_hz),
             "wip_notch_height_gate": float(notch_height_gate),
             "wip_notch_filter_blend": float(notch_blend),
@@ -8812,6 +8993,58 @@ class SagittalVelocityDampedBalanceController:
             "no_offset_saturation_active": bool(no_offset_saturation_active),
             "no_offset_arbitration_reason": str(no_offset_arbitration_reason),
             "no_offset_pitch_ref_offset_deg": float(no_offset_pitch_ref_offset_deg),
+            # === K1 Augmented Telemetry — Phase 1 (read-only, behavior-neutral) ===
+            # A. Pitch-rate notch / filter path
+            "k1_raw_pitch_rate_x": float(pitch_rate_raw),
+            "k1_filtered_pitch_rate_x": float(pitch_rate_effective),
+            "k1_notch_output": float(pitch_rate_notched),
+            "k1_notch_input": float(pitch_rate_raw),
+            "k1_notch_state_1": float(self._wip_notch_pitch_rate.get_state()[0]) if self._wip_notch_pitch_rate is not None else 0.0,
+            "k1_notch_state_2": float(self._wip_notch_pitch_rate.get_state()[1]) if self._wip_notch_pitch_rate is not None else 0.0,
+            "k1_notch_state_y1": float(self._wip_notch_pitch_rate.get_state()[2]) if self._wip_notch_pitch_rate is not None else 0.0,
+            "k1_notch_state_y2": float(self._wip_notch_pitch_rate.get_state()[3]) if self._wip_notch_pitch_rate is not None else 0.0,
+            "k1_notch_enabled": bool(notch_enabled),
+            "k1_notch_blend": float(notch_blend),
+            "k1_notch_center_hz": float(notch_center_hz),
+            "k1_notch_q": float(notch_q),
+            "k1_notch_height_gate_alpha": float(notch_height_gate),
+            "k1_notch_filter_type": str(self.authority_schedule.wip_notch_filter_type),
+            "k1_lowpass_cutoff_hz": float(self.authority_schedule.wip_lowpass_cutoff_hz),
+            # B. Torque decomposition before clipping
+            "k1_tau_pitch_raw": float(tau_pitch),
+            "k1_tau_pitch_rate_raw": float(tau_pitch_rate),
+            "k1_tau_position_raw": float(tau_position_before_clip),
+            "k1_tau_com_velocity_raw": float(tau_sagittal_velocity),
+            "k1_tau_wheel_velocity_raw": float(tau_wheel_vel_left + tau_wheel_vel_right),
+            "k1_tau_support_velocity_raw": float(tau_support_velocity),
+            "k1_tau_eq_ff_raw": 0.0,
+            "k1_tau_common_preclip": float(tau_common_unclipped),
+            "k1_tau_left_preclip": float(tau_common_unclipped + tau_wheel_vel_left),
+            "k1_tau_right_preclip": float(tau_common_unclipped + tau_wheel_vel_right),
+            # C. Torque clipping / saturation
+            "k1_tau_position_cap_active": bool(tau_position_saturated),
+            "k1_tau_position_cap_margin_nm": float(effective_max_position_tau - abs(float(tau_position_before_clip))),
+            "k1_tau_total_clip_active": bool(saturated),
+            "k1_tau_total_clip_margin_nm": float(final_wheel_torque_margin),
+            "k1_tau_left_postclip": float(tau_left),
+            "k1_tau_right_postclip": float(tau_right),
+            "k1_tau_clip_delta_left": float((tau_common_unclipped + tau_wheel_vel_left) - tau_left),
+            "k1_tau_clip_delta_right": float((tau_common_unclipped + tau_wheel_vel_right) - tau_right),
+            "k1_tau_clip_delta_common": float(tau_common_unclipped - tau_common),
+            "k1_saturation_fraction_window_50": -1.0,
+            "k1_saturation_fraction_window_200": -1.0,
+            # D. Support / coupling diagnostics
+            "k1_support_error_m": float(sagittal_position_error_m),
+            "k1_support_velocity_m_s": float(support_position_velocity_m_s),
+            "k1_com_y_velocity_m_s": float(sagittal_velocity_m_s),
+            "k1_pitch_support_phase_lag_s_est": 0.0,
+            "k1_pitch_support_corr_window_200": 0.0,
+            # E. Controller mode flags
+            "k1_feedback_mode": str("balance-core"),
+            "k1_profile_name": str(self.authority_schedule.profile_name),
+            "k1_current_best_id": "K2_NOTCH_LOW_Q_V1",  # K2 promoted 2026-06-25 (Step C/E/D passed; K1 legacy)
+            "k1_audit_ablation_mode": "none",
+            "k1_telemetry_augmented_version": 1,
         }
 
         # Add capture gate diagnostics if enabled
