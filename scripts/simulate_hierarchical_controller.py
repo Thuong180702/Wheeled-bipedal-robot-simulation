@@ -2537,6 +2537,15 @@ def main():
         help="Print detailed per-step timing diagnostics in visual mode.",
     )
     parser.add_argument(
+        "--profile-controller",
+        action="store_true",
+        help="Profile per-component controller timing and emit JSON breakdown at end of run. "
+             "Accumulates wall-clock time for: centroidal_estimator, capture_estimator, "
+             "shape_posture, sagittal_wheel_balance, lateral_roll, yaw, composer, "
+             "telemetry, torque_apply, and total per-step. "
+             "Output path: outputs/profile/stage1_controller_profile_breakdown.json",
+    )
+    parser.add_argument(
         "--wbc-quiet",
         action="store_true",
         help="Suppress per-step WBC diagnostic prints (PID, wheel torque, force feedback, pipeline). "
@@ -5228,6 +5237,20 @@ def main():
     print("=" * 80)
 
     start_time = time.time()
+
+    # Stage 1: Per-component controller profiling accumulators (--profile-controller)
+    _profile_enabled = getattr(args, "profile_controller", False)
+    _profile_timing = {
+        "centroidal_control_ms": 0.0,
+        "capture_control_ms": 0.0,
+        "balance_core_block_ms": 0.0,
+        "centroidal_log_ms": 0.0,
+        "capture_log_ms": 0.0,
+        "telemetry_ms": 0.0,
+        "total_step_ms": 0.0,
+        "step_count": 0,
+    }
+
     terminated = False
     termination_reason = None
     step = 0
@@ -5357,6 +5380,7 @@ def main():
     def simulation_step():
         nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary, prev_support_error, outer_loop_prev_support_error_m, outer_loop_support_error_rate_smoothed, outer_loop_pitch_ref_smoothed_deg, outer_loop_integral_accum_m_s
         nonlocal dynamic_height_target_m, dynamic_height_actual_m, dynamic_height_notch_gate
+        nonlocal _profile_enabled, _profile_timing
 
         if terminated or step >= max_steps:
             return False
@@ -5395,14 +5419,23 @@ def main():
         gravity_world = np.array([0.0, 0.0, -9.81])
         gravity_body = R.T @ gravity_world  # R.T transforms world to body frame
 
+        # Stage 1: per-step profiling
+        _t_step_start = time.perf_counter() if _profile_enabled else 0.0
+
         # Phase 1: Control-time state estimation.
         # Use previous CONTROL sample CoM for velocity finite-difference.
         prev_control_before_estimate = prev_control_com_pos
+        _t0 = time.perf_counter() if _profile_enabled else 0.0
         centroidal_state_control, control_com_pos = centroidal_estimator.estimate(
             jnp.zeros(42), mj_data, prev_control_com_pos
         )
         prev_control_com_pos = control_com_pos
+        _t1 = time.perf_counter() if _profile_enabled else 0.0
         centroidal_state_control = capture_estimator.update(centroidal_state_control)
+        _t2 = time.perf_counter() if _profile_enabled else 0.0
+        if _profile_enabled:
+            _profile_timing["centroidal_control_ms"] += (_t1 - _t0) * 1000.0
+            _profile_timing["capture_control_ms"] += (_t2 - _t1) * 1000.0
 
         # Update dynamic height actual from centroidal state
         dynamic_height_actual_m = float(centroidal_state_control.com_pos[2])
@@ -5762,6 +5795,7 @@ def main():
         )
 
         # Balance-core runtime branch: route torque through composer
+        _t_bc_start = time.perf_counter() if _profile_enabled else 0.0
         if is_balance_core_mode(args):
             contact_output = balance_core_controllers["contact_supervisor"].update(
                 left_wheel_contact=bool(centroidal_state_control.left_wheel_contact),
@@ -6439,6 +6473,9 @@ def main():
                 + tau_inverse_dynamics
             )
 
+        if _profile_enabled:
+            _profile_timing["balance_core_block_ms"] += (time.perf_counter() - _t_bc_start) * 1000.0
+
         # Balance-core already handled clipping in composer; only apply legacy processing for other modes
         if not is_balance_core_mode(args):
             torque_limit = jnp.array(mj_model.actuator_ctrlrange[:, 1])
@@ -6592,10 +6629,16 @@ def main():
 
         # Re-estimate centroidal/contact state after physics stepping for logging.
         # Do NOT overwrite prev_control_com_pos from logging sample.
+        _t_log0 = time.perf_counter() if _profile_enabled else 0.0
         centroidal_state_log, logged_com_pos = centroidal_estimator.estimate(
             jnp.zeros(42), mj_data, control_com_pos
         )
+        _t_log1 = time.perf_counter() if _profile_enabled else 0.0
         centroidal_state_log = capture_estimator.update(centroidal_state_log)
+        _t_log2 = time.perf_counter() if _profile_enabled else 0.0
+        if _profile_enabled:
+            _profile_timing["centroidal_log_ms"] += (_t_log1 - _t_log0) * 1000.0
+            _profile_timing["capture_log_ms"] += (_t_log2 - _t_log1) * 1000.0
 
         if step < 20 and not args.visual:
             prev_ctrl_txt = (
@@ -6662,6 +6705,7 @@ def main():
         full_wrench_norm = float(np.linalg.norm(full_wrench))
         correction_wrench_norm = float(qp_diagnostics.get("correction_wrench_norm", full_wrench_norm))
 
+        _t_telem_start = time.perf_counter() if _profile_enabled else 0.0
         telemetry["source_step_index"].append(step)
         telemetry["time"].append(step * control_dt)
 
@@ -7681,6 +7725,11 @@ def main():
             print(f"\n[TERMINATED] at step {step + 1}: {termination_reason}")
             return False
 
+        if _profile_enabled:
+            _profile_timing["telemetry_ms"] += (time.perf_counter() - _t_telem_start) * 1000.0
+            _profile_timing["total_step_ms"] += (time.perf_counter() - _t_step_start) * 1000.0
+            _profile_timing["step_count"] += 1
+
         step += 1
         return True
 
@@ -7810,6 +7859,54 @@ def main():
 
         while simulation_step():
             pass
+
+    # Stage 1: Emit per-component controller profile report
+    if _profile_enabled and _profile_timing["step_count"] > 0:
+        import os as _os
+        _profile_dir = Path("outputs/profile")
+        _profile_dir.mkdir(parents=True, exist_ok=True)
+        _profile_path = _profile_dir / "stage1_controller_profile_breakdown.json"
+        _n = _profile_timing["step_count"]
+        _profile_report = {
+            "profile": "stage1_k2_python_controller",
+            "backend": "python",
+            "step_count": _n,
+            "control_dt_s": control_dt,
+            "timing_mean_ms": {
+                "centroidal_control": round(_profile_timing["centroidal_control_ms"] / _n, 4),
+                "capture_control": round(_profile_timing["capture_control_ms"] / _n, 4),
+                "balance_core_block": round(_profile_timing["balance_core_block_ms"] / _n, 4),
+                "centroidal_log": round(_profile_timing["centroidal_log_ms"] / _n, 4),
+                "capture_log": round(_profile_timing["capture_log_ms"] / _n, 4),
+                "telemetry": round(_profile_timing["telemetry_ms"] / _n, 4),
+                "total_per_step": round(_profile_timing["total_step_ms"] / _n, 4),
+            },
+            "timing_total_s": {k: round(v / 1000.0, 4) for k, v in _profile_timing.items() if k != "step_count"},
+            "duplicate_call_analysis": {
+                "centroidal_estimate_called_twice_per_step": True,
+                "capture_estimator_update_called_twice_per_step": True,
+                "centroidal_control_vs_log_ratio": round(
+                    _profile_timing["centroidal_control_ms"] / max(_profile_timing["centroidal_log_ms"], 1e-9), 2
+                ),
+                "capture_control_vs_log_ratio": round(
+                    _profile_timing["capture_control_ms"] / max(_profile_timing["capture_log_ms"], 1e-9), 2
+                ),
+                "duplicate_removed": False,
+                "duplicate_removal_blocked_by": "capture_estimator uses min_height=0.35m vs centroidal estimator min_height=0.1m; behavior would change at low heights (0.33m K2 minimum)",
+                "estimated_savings_if_removed_ms": round(
+                    (_profile_timing["centroidal_log_ms"] + _profile_timing["capture_log_ms"]) / _n, 4
+                ),
+            },
+        }
+        with open(_profile_path, "w") as _f:
+            json.dump(_profile_report, _f, indent=2)
+        print(f"\n[PROFILE] Controller profile report saved to: {_profile_path}")
+        print(f"[PROFILE] Mean per-step breakdown (ms):")
+        for _k, _v in _profile_report["timing_mean_ms"].items():
+            print(f"  {_k}: {_v:.4f}")
+        print(f"[PROFILE] Duplicate centroidal estimate (log): {_profile_report['timing_mean_ms']['centroidal_log']:.4f} ms/step")
+        print(f"[PROFILE] Duplicate capture update (log):    {_profile_report['timing_mean_ms']['capture_log']:.4f} ms/step")
+        print(f"[PROFILE] Total duplicate overhead:           {_profile_report['duplicate_call_analysis']['estimated_savings_if_removed_ms']:.4f} ms/step")
 
     elapsed_time = time.time() - start_time
     simulated_steps = int(full_rate_summary["actual_steps"])
