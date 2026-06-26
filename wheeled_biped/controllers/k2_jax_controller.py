@@ -1184,10 +1184,18 @@ def k2_jax_controller_step(
         support_pos_err, schedule_h)
 
     # === Step 10: Sum and compose (active K2 mechanism) ===
-    tau_sum = tau_sag + tau_posture + tau_lateral + tau_yaw + tau_mode_div + tau_support_ff
+    # Compose the four primary sources. Yaw and mode_div are applied POST-composer
+    # (matching real simulation order where they're added to tau_smooth after).
+    tau_sum = tau_sag + tau_posture + tau_lateral + tau_support_ff
 
     tau_final, tau_clipped, sat_mask, rate_mask = k2_jax_torque_composer_step(
         tau_sum, prev_tau, params_flat)
+
+    # Post-composer additions: yaw and mode_div on hip-yaw joints
+    tau_final = tau_final.at[1].add(tau_yaw[1])
+    tau_final = tau_final.at[6].add(tau_yaw[6])
+    tau_final = tau_final.at[1].add(tau_mode_div[1])
+    tau_final = tau_final.at[6].add(tau_mode_div[6])
 
     # === Pack new state ===
     new_state = state_flat.at[_S_NOTCH_X1].set(new_notch_x1)

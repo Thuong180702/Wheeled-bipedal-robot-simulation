@@ -154,7 +154,7 @@ def run_scenario(scenario, steps, output_dir):
         )
         tau_posture, _ = shape.compute(q_ref=q_ref, joint_pos=q, joint_vel=qd)
         tau_lateral, _ = lateral.compute(roll_y_rad=roll, roll_rate_y_rad_s=roll_rate)
-        tau_yaw = yaw_ctrl.compute(yaw_error=yaw_err, yaw_rate=yaw_rate)
+        tau_yaw, _ = yaw_ctrl.compute(yaw_error=yaw_err, yaw_rate=yaw_rate)
         hy_state = HipYawState(div_error=hy_div_err, div_rate=hy_div_rate, height=h,
                                support_error=pos_err, support_error_rate=0.0)
         md_result = mode_div.compute(hy_state)
@@ -163,12 +163,17 @@ def run_scenario(scenario, steps, output_dir):
         tau_md = tau_md.at[6].set(md_result.get("tau_right", 0.0))
         tau_support_ff = jnp.zeros(10, dtype=jnp.float64)
 
+        # Apply yaw + mode_div POST-composer (matches real sim order)
+        tau_sum = tau_posture + tau_support_ff + tau_sag + tau_lateral
         result = composer.compose(
             tau_shape_posture=tau_posture, tau_support_feedforward=tau_support_ff,
             tau_sagittal_wheel_balance=tau_sag, tau_lateral_roll_balance=tau_lateral,
             tau_prev=py_tau_prev, validate_ownership=False,
         )
-        py_tau = np.asarray(result.tau_final, dtype=np.float64)
+        py_tau = np.array(result.tau_final, dtype=np.float64, copy=True)
+        # Post-composer additions: yaw and mode_div on hip-yaw
+        py_tau[1] += float(tau_yaw[1]) + float(tau_md[1])
+        py_tau[6] += float(tau_yaw[6]) + float(tau_md[6])
         py_tau_prev = jnp.asarray(py_tau)
 
         # --- JAX full step ---
