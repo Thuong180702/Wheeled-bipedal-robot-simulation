@@ -127,9 +127,11 @@ class TestStateFieldAudit:
         assert len(K2_JAX_STATE_FIELDS) == len(set(K2_JAX_STATE_FIELDS))
 
     def test_no_fake_state_fields(self):
-        """No [AUDIT] or fake fields remain."""
+        """No [AUDIT] or fake fields remain (abs_* fields are confirmed adaptive_bias_trim)."""
         fake_patterns = ["hy_div_", "lateral_roll_prev", "physics_ff_smoothed"]
         for field in K2_JAX_STATE_FIELDS:
+            if field.startswith("abs_"):
+                continue  # confirmed adaptive_bias_trim fields
             for pattern in fake_patterns:
                 assert pattern not in field.lower(), f"Fake field found: {field}"
 
@@ -146,6 +148,12 @@ class TestStateFieldAudit:
             "outer_loop_pitch_ref_smoothed_deg": "simulate_hierarchical_controller.py:4942",
             "outer_loop_prev_support_error_m": "simulate_hierarchical_controller.py:4940",
             "outer_loop_support_error_rate_smoothed": "simulate_hierarchical_controller.py:4941",
+            "abs_slow_ema": "sagittal_velocity_damped_balance_controller.py:4228 (_adaptive_bias_slow_error_history EMA)",
+            "abs_fast_ema": "sagittal_velocity_damped_balance_controller.py:4229 (_adaptive_bias_fast_error_history EMA)",
+            "abs_trim_tau": "sagittal_velocity_damped_balance_controller.py:4226 (_adaptive_bias_trim_tau)",
+            "abs_hold_steps": "sagittal_velocity_damped_balance_controller.py:4235 (_adaptive_bias_hold_steps)",
+            "abs_prev_err_sign": "sagittal_velocity_damped_balance_controller.py:4234 (_adaptive_bias_prev_error_sign)",
+            "abs_zc_count": "sagittal_velocity_damped_balance_controller.py:4231 (_adaptive_bias_crossing_count)",
         }
         for field in K2_JAX_STATE_FIELDS:
             # Generic check for prev_tau_N

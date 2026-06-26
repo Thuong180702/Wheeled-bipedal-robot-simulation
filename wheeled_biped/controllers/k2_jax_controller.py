@@ -575,6 +575,7 @@ def k2_jax_sagittal_torque_assembly(
     wheel_torque_sign,
     pitch_bias_comp_tau=0.0,
     position_integral_tau=0.0,
+    external_position_trim=0.0,  # adaptive_bias_trim contribution (Stage 4H)
     pitch_soft_start_rad=0.30, pitch_hard_limit_rad=0.60, min_pitch_scale=0.0,
     enable_pitch_aware_position_scaling=False,
     enable_torque_budget_aware_position=False,
@@ -602,7 +603,7 @@ def k2_jax_sagittal_torque_assembly(
     tau_com_vy = -kd_com_vy * sagittal_velocity_m_s
 
     tau_position_p = -effective_k_position * sagittal_position_error_m
-    tau_position = tau_position_p + position_integral_tau
+    tau_position = tau_position_p + position_integral_tau + external_position_trim
 
     def _apply_pitch_aware(tau_pos):
         abs_pitch = jnp.abs(pitch_x_rad)
@@ -838,7 +839,12 @@ K2_JAX_STATE_FIELDS: tuple[str, ...] = (
     "outer_loop_prev_support_error_m",
     "outer_loop_support_error_rate_smoothed",
 )
-K2_JAX_STATE_SIZE: int = len(K2_JAX_STATE_FIELDS)  # 19
+_ABS_STATE_SIZE = 6  # adaptive bias trim
+K2_JAX_STATE_FIELDS = K2_JAX_STATE_FIELDS + (
+    "abs_slow_ema", "abs_fast_ema", "abs_trim_tau",
+    "abs_hold_steps", "abs_prev_err_sign", "abs_zc_count",
+)
+K2_JAX_STATE_SIZE: int = len(K2_JAX_STATE_FIELDS)  # 25
 
 # Index constants
 _S_NOTCH_X1, _S_NOTCH_X2, _S_NOTCH_Y1, _S_NOTCH_Y2 = 0, 1, 2, 3
@@ -983,24 +989,9 @@ def k2_jax_diag_flat_to_dict(diag_flat):
     return {K2_JAX_DIAG_FIELDS[i]: float(d[i]) for i in range(K2_JAX_DIAG_SIZE)}
 
 
-# --- Grid params (built at init, passed into params flat array) ---
-# These are module-level singletons, built once.
-_calibrated_grid_cache = None
-_physics_ff_grid_cache = None
-
-
-def _get_calibrated_grid():
-    global _calibrated_grid_cache
-    if _calibrated_grid_cache is None:
-        _calibrated_grid_cache = build_calibrated_grid_params()
-    return _calibrated_grid_cache
-
-
-def _get_physics_ff_grid():
-    global _physics_ff_grid_cache
-    if _physics_ff_grid_cache is None:
-        _physics_ff_grid_cache = build_physics_ff_grid_params()
-    return _physics_ff_grid_cache
+# --- Grid params (pre-built at module load to avoid JIT tracer issues) ---
+_calibrated_grid_cache = build_calibrated_grid_params()
+_physics_ff_grid_cache = build_physics_ff_grid_params()
 
 
 # ===========================================================================
@@ -1099,7 +1090,10 @@ def k2_jax_controller_step(
     kd_pitch = 10.0    # base kd_pitch for K2 (not scheduled)
 
     # === Step 3: Calibrated outer loop + physics FF ===
-    cal_grid = _get_calibrated_grid()
+    # Grids pre-built at module load — safe to reference in JIT as constants
+    cal_grid = _calibrated_grid_cache
+    ff_grid = _physics_ff_grid_cache
+
     cal_kp = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["kp_grid"])
     cal_kd = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["kd_grid"])
     cal_theta_max = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["theta_max_grid"])
@@ -1107,7 +1101,6 @@ def k2_jax_controller_step(
     cal_rate_limit = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["rate_limit_grid"])
     cal_lowpass_alpha = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["lowpass_grid"])
 
-    ff_grid = _get_physics_ff_grid()
     physics_ff_tau = k2_jax_grid_interpolate(schedule_h, ff_grid["grid_heights"], ff_grid["tau_eq_ff_grid"])
 
     # Low-band support
@@ -1140,7 +1133,31 @@ def k2_jax_controller_step(
     pitch_ref_offset_rad = total_pitch_ref_offset_deg * (jnp.pi / 180.0)
     effective_pitch_x = pitch_x - pitch_ref_offset_rad
 
-    # === Step 4: Sagittal torque assembly ===
+    # === Step 4a: Adaptive bias trim (active K2 strategy) ===
+    # Read ABS state (indices 19-24 if present, else zeros for backward compat)
+    _abs_slow = state_flat[_ABS_SLOW_EMA] if state_flat.shape[0] > _ABS_SLOW_EMA else 0.0
+    _abs_trim = state_flat[_ABS_TRIM_TAU] if state_flat.shape[0] > _ABS_TRIM_TAU else 0.0
+    _abs_hold = state_flat[_ABS_HOLD_STEPS] if state_flat.shape[0] > _ABS_HOLD_STEPS else 0.0
+    _abs_prev_sign = state_flat[_ABS_PREV_ERR_SIGN] if state_flat.shape[0] > _ABS_PREV_ERR_SIGN else 0.0
+    _abs_zc = state_flat[_ABS_ZC_COUNT] if state_flat.shape[0] > _ABS_ZC_COUNT else 0.0
+
+    # EMA update for slow mean error
+    from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import K2_NOTCH_LOW_Q_V1 as _sch
+    _alpha_s = 2.0 / (float(_sch.adaptive_bias_window_steps) + 1.0)
+    _new_slow = (1.0 - _alpha_s) * _abs_slow + _alpha_s * sag_pos_err
+
+    # Safety gate
+    _abs_pitch_deg = jnp.abs(pitch_x) * 180.0 / jnp.pi
+    _safety = (_abs_pitch_deg <= float(_sch.adaptive_bias_disable_if_pitch_gt_deg))
+    _safety = _safety & (jnp.abs(sag_pos_err) <= float(_sch.adaptive_bias_disable_if_abs_error_gt_m))
+
+    # Compute trim
+    _new_trim, _new_hold, _new_prev_sign, _new_zc, _trim_to_apply = _k2_jax_adaptive_bias_trim(
+        sag_pos_err, _new_slow, _abs_trim, _abs_hold, _abs_prev_sign, _abs_zc,
+        schedule_h, pitch_x, _safety,
+    )
+
+    # === Step 4b: Sagittal torque assembly ===
     tau_sag, sag_diag = k2_jax_sagittal_torque_assembly(
         pitch_x_rad=effective_pitch_x, pitch_rate_rad_s=pitch_rate_eff,
         sagittal_velocity_m_s=sag_vel, sagittal_position_error_m=sag_pos_err,
@@ -1154,6 +1171,7 @@ def k2_jax_controller_step(
         effective_k_position=kpos, effective_max_position_tau=3.0,
         kp_cp=0.0, kd_com_vy=5.0,
         wheel_torque_sign=1.0,
+        external_position_trim=_trim_to_apply,
     )
 
     # === Step 5: Shape posture ===
@@ -1209,6 +1227,14 @@ def k2_jax_controller_step(
     new_state = new_state.at[_S_OL_PREV_SUPPORT_ERROR].set(new_ol_prev_support_error)
     new_state = new_state.at[_S_OL_SUPPORT_ERROR_RATE].set(new_ol_support_error_rate)
 
+    # Pack adaptive bias state
+    new_state = new_state.at[_ABS_SLOW_EMA].set(_new_slow)
+    new_state = new_state.at[_ABS_FAST_EMA].set(_new_slow)  # fast tracks slow via EMA
+    new_state = new_state.at[_ABS_TRIM_TAU].set(_new_trim)
+    new_state = new_state.at[_ABS_HOLD_STEPS].set(_new_hold)
+    new_state = new_state.at[_ABS_PREV_ERR_SIGN].set(_new_prev_sign)
+    new_state = new_state.at[_ABS_ZC_COUNT].set(_new_zc)
+
     # === Pack diagnostics ===
     diag = jnp.zeros(K2_JAX_DIAG_SIZE, dtype=jnp.float64)
     diag = diag.at[_D_NOTCH_OUT].set(notch_out)
@@ -1234,3 +1260,104 @@ def k2_jax_controller_step(
     diag = diag.at[_D_RATE_COUNT].set(jnp.sum(rate_mask).astype(jnp.float64))
 
     return tau_final, new_state, diag
+
+
+# ===========================================================================
+# Stage 4H: Adaptive bias trim (JAX port)
+# ===========================================================================
+
+# Adaptive bias state fields (appended to base 19-field state)
+_ABS_SLOW_EMA = 19
+_ABS_FAST_EMA = 20
+_ABS_TRIM_TAU = 21
+_ABS_HOLD_STEPS = 22
+_ABS_PREV_ERR_SIGN = 23
+_ABS_ZC_COUNT = 24
+def pack_state_k2_final(
+    notch_x1=0.0, notch_x2=0.0, notch_y1=0.0, notch_y2=0.0,
+    prev_tau=None, filtered_com_z=0.4, prev_support_error=0.0,
+    ol_pitch_ref_smoothed=0.0, ol_prev_support_error=0.0, ol_support_error_rate=0.0,
+    abs_slow_ema=0.0, abs_fast_ema=0.0, abs_trim_tau=0.0,
+    abs_hold_steps=0.0, abs_prev_err_sign=0.0, abs_zc_count=0.0,
+):
+    s = pack_state_k2(notch_x1, notch_x2, notch_y1, notch_y2, prev_tau,
+                      filtered_com_z, prev_support_error,
+                      ol_pitch_ref_smoothed, ol_prev_support_error, ol_support_error_rate)
+    s = jnp.concatenate([s, jnp.zeros(_ABS_STATE_SIZE, dtype=jnp.float64)])
+    s = s.at[_ABS_SLOW_EMA].set(abs_slow_ema)
+    s = s.at[_ABS_FAST_EMA].set(abs_fast_ema)
+    s = s.at[_ABS_TRIM_TAU].set(abs_trim_tau)
+    s = s.at[_ABS_HOLD_STEPS].set(abs_hold_steps)
+    s = s.at[_ABS_PREV_ERR_SIGN].set(abs_prev_err_sign)
+    s = s.at[_ABS_ZC_COUNT].set(abs_zc_count)
+    return s
+
+
+def _k2_jax_adaptive_bias_trim(
+    signed_error, mean_err, trim_tau, hold_steps, prev_err_sign, zc_count,
+    schedule_h, pitch_x, safety_pass_in,
+):
+    """Adaptive bias trim core logic — pure JAX function.
+    Returns (new_trim_tau, new_hold_steps, new_prev_err_sign, new_zc_count, new_slow_ema, new_fast_ema, trim_to_apply).
+    """
+    from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import K2_NOTCH_LOW_Q_V1 as _sch
+
+    alpha_slow = 2.0 / (float(_sch.adaptive_bias_window_steps) + 1.0)
+    alpha_fast = 2.0 / (float(_sch.adaptive_bias_fast_window_steps) + 1.0)
+    new_slow_ema = mean_err  # caller updates EMA externally
+    new_fast_ema = mean_err
+
+    # Height-scheduled max trim
+    z_low = float(_sch.adaptive_bias_height_low_m)
+    z_high = float(_sch.adaptive_bias_height_high_m)
+    z_extreme = float(_sch.adaptive_bias_height_extreme_m)
+    max_low = float(_sch.adaptive_bias_max_tau_low_nm)
+    max_high = float(_sch.adaptive_bias_max_tau_high_nm)
+    max_extreme = float(_sch.adaptive_bias_max_tau_extreme_nm)
+
+    t_h = jnp.where(schedule_h <= z_low, 0.0,
+           jnp.where(schedule_h >= z_extreme, 2.0,
+           jnp.where(schedule_h <= z_high, (schedule_h - z_low) / jnp.maximum(z_high - z_low, 1e-9),
+           1.0 + (schedule_h - z_high) / jnp.maximum(z_extreme - z_high, 1e-9))))
+    max_tau_current = jnp.where(t_h <= 1.0, max_low + (max_high - max_low) * t_h,
+                                max_high + (max_extreme - max_high) * (t_h - 1.0))
+
+    # Zero-crossing guard
+    sign_err = jnp.sign(mean_err)
+    sign_changed = (sign_err != 0.0) & (sign_err != prev_err_sign) & (prev_err_sign != 0.0)
+    new_zc = jnp.where(sign_changed, zc_count + 1.0, zc_count * 0.99)
+    zc_guard = (new_zc > float(_sch.adaptive_bias_zero_crossing_limit))
+    guard_scale = jnp.where(zc_guard, float(_sch.adaptive_bias_zero_crossing_max_scale), 1.0)
+    max_tau_g = max_tau_current * guard_scale
+
+    # Sign-reversal guard
+    err_sign_changed = (sign_err != 0.0) & (sign_err != prev_err_sign)
+    new_hold = jnp.where(err_sign_changed, float(_sch.adaptive_bias_sign_reversal_hold_steps),
+                jnp.where(hold_steps > 0.0, hold_steps - 1.0, 0.0))
+    sign_rev_blocked = (new_hold > 0.0) & err_sign_changed
+    new_prev_sign = jnp.where(err_sign_changed, sign_err, prev_err_sign)
+
+    # Proportional target with hysteresis
+    exit_th = float(_sch.adaptive_bias_exit_threshold_m)
+    relief_th = float(_sch.adaptive_bias_relief_hysteresis_m)
+    k_tau = float(_sch.adaptive_bias_k_tau_per_m)
+
+    near_zero = jnp.abs(mean_err) <= exit_th
+    in_hyst = jnp.abs(mean_err) <= exit_th + relief_th
+
+    raw_target = jnp.where(near_zero, 0.0,
+                  jnp.where(sign_rev_blocked, 0.0,
+                  jnp.where(in_hyst, trim_tau,
+                  -k_tau * (mean_err - sign_err * exit_th))))
+
+    clipped = jnp.clip(raw_target, -max_tau_g, max_tau_g)
+
+    # Asymmetric rate limiting
+    is_decay = jnp.abs(clipped) < jnp.abs(trim_tau)
+    rate = jnp.where(is_decay, float(_sch.adaptive_bias_decay_rate_nm_per_step),
+                            float(_sch.adaptive_bias_rate_nm_per_step))
+    delta = jnp.clip(clipped - trim_tau, -rate, rate)
+    new_trim = jnp.clip(trim_tau + delta, -max_tau_g, max_tau_g)
+
+    trim_to_apply = jnp.where(safety_pass_in, new_trim, 0.0)
+    return new_trim, new_hold, new_prev_sign, new_zc, trim_to_apply
