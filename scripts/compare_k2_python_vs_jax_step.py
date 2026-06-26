@@ -110,7 +110,7 @@ def run_scenario(scenario, steps, output_dir):
     q_ref = jnp.array([0.0, 0.0, 0.635, 1.232, 0.0, 0.0, 0.0, 0.635, 1.232, 0.0])
     q = jnp.array([0.0, 0.0, 0.63, 1.23, 0.0, 0.0, 0.0, 0.63, 1.23, 0.0])
     qd = jnp.zeros(10)
-    py_tau_prev = jnp.zeros(10)
+    py_tau_prev = jnp.zeros(10, dtype=jnp.float64)
     py_ol_state = (0.0, None, 0.0)  # (ref, prev_e, rate)
 
     sc = {
@@ -155,13 +155,20 @@ def run_scenario(scenario, steps, output_dir):
         tau_posture, _ = shape.compute(q_ref=q_ref, joint_pos=q, joint_vel=qd)
         tau_lateral, _ = lateral.compute(roll_y_rad=roll, roll_rate_y_rad_s=roll_rate)
         tau_yaw, _ = yaw_ctrl.compute(yaw_error=yaw_err, yaw_rate=yaw_rate)
+        # Convert to float64 for parity with JAX (Python controllers use float32)
+        tau_sag = jnp.asarray(tau_sag, dtype=jnp.float64)
+        tau_posture = jnp.asarray(tau_posture, dtype=jnp.float64)
+        tau_lateral = jnp.asarray(tau_lateral, dtype=jnp.float64)
+        tau_yaw = jnp.asarray(tau_yaw, dtype=jnp.float64)
         hy_state = HipYawState(div_error=hy_div_err, div_rate=hy_div_rate, height=h,
                                support_error=pos_err, support_error_rate=0.0)
         md_result = mode_div.compute(hy_state)
         tau_md = jnp.zeros(10, dtype=jnp.float64)
-        tau_md = tau_md.at[1].set(md_result.get("tau_left", 0.0))
-        tau_md = tau_md.at[6].set(md_result.get("tau_right", 0.0))
+        tau_md = tau_md.at[1].set(float(md_result.get("tau_left", 0.0)))
+        tau_md = tau_md.at[6].set(float(md_result.get("tau_right", 0.0)))
         tau_support_ff = jnp.zeros(10, dtype=jnp.float64)
+        # Use float64 tau_prev
+        py_tau_prev = jnp.asarray(py_tau_prev, dtype=jnp.float64)
 
         # Apply yaw + mode_div POST-composer (matches real sim order)
         tau_sum = tau_posture + tau_support_ff + tau_sag + tau_lateral
@@ -174,7 +181,7 @@ def run_scenario(scenario, steps, output_dir):
         # Post-composer additions: yaw and mode_div on hip-yaw
         py_tau[1] += float(tau_yaw[1]) + float(tau_md[1])
         py_tau[6] += float(tau_yaw[6]) + float(tau_md[6])
-        py_tau_prev = jnp.asarray(py_tau)
+        py_tau_prev = jnp.asarray(py_tau, dtype=jnp.float64)
 
         # --- JAX full step ---
         inp = jnp.zeros(K2_JAX_INPUT_SIZE, dtype=jnp.float64)
