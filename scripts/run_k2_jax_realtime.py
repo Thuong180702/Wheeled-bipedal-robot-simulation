@@ -73,7 +73,15 @@ from wheeled_biped.controllers.k2_jax_controller import (
 from wheeled_biped.controllers.sagittal_balance_state import compute_support_center_xy
 from wheeled_biped.controllers.orientation_utils import compute_robot_frame_orientation_from_quaternion
 from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import (
-    K2_NOTCH_LOW_Q_V1 as _K2_AUTH_SCHED,
+    K2_NOTCH_LOW_Q_V1,
+    K2_JAX_DEDICATED_DEFAULT_V1,
+    K2_JAX_DEDICATED_DEFAULT_V2 as _K2_AUTH_SCHED,
+    K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    DRIFT_ITER2_VEL_ONLY_WIDE_GATE,
+    DRIFT_ITER2_VEL_HEADING_WIDE_GATE,
+    DRIFT_ITER2_VEL_HEADING_LATE_POSITION,
+    DRIFT_ITER2_PUSH_DAMPING,
+    DRIFT_ITER2_DYNAMIC_YIELD,
 )
 
 # ── constants ────────────────────────────────────────────────────────────────
@@ -120,6 +128,40 @@ FULL_CSV_COLUMNS = [
     "contact_valid", "contact_left", "contact_right",
     # Termination
     "fall", "terminated",
+    # Phase 3: Per-component torque telemetry (conflict audit)
+    # Posture PD at each leg joint
+    "tau_posture_hy_l", "tau_posture_hy_r",
+    "tau_posture_hp_l", "tau_posture_hp_r",
+    "tau_posture_kn_l", "tau_posture_kn_r",
+    "tau_posture_hr_l", "tau_posture_hr_r",
+    # Yaw controller at hip_yaw
+    "tau_yaw_l", "tau_yaw_r",
+    # Mode-div controller at hip_yaw
+    "tau_mode_div_l", "tau_mode_div_r",
+    # Lateral roll at hip_roll
+    "tau_lateral_l", "tau_lateral_r",
+    # Support feedforward (height-gated, EXCLUDED from tau_sum)
+    "tau_support_ff_hy_l", "tau_support_ff_hy_r",
+    # Empirical support FF (constant, INCLUDED in tau_sum)
+    "tau_emp_support_hp_l", "tau_emp_support_hp_r",
+    "tau_emp_support_kn_l", "tau_emp_support_kn_r",
+    # Pre/post-composer wheel torques
+    "tau_preclip_4", "tau_preclip_9",
+    "tau_postclip_4", "tau_postclip_9",
+    # Cancellation metrics
+    "cancel_hip_yaw", "cancel_hip_roll", "cancel_hip_pitch", "cancel_knee", "cancel_total",
+    # Saturation/rate-limit attribution
+    "sat_attr_sagittal", "sat_attr_posture", "sat_attr_yaw", "sat_attr_lateral",
+    "rate_attr_balance", "rate_attr_posture",
+    # Drift controller telemetry (15 fields)
+    "drift_world_x_m", "drift_world_y_m",
+    "drift_body_x_m", "drift_body_y_m",
+    "drift_distance_m", "drift_velocity_m_s",
+    "yaw_error_drift_rad",
+    "drift_stability_gate", "drift_heading_gate",
+    "drift_position_gate", "drift_height_gate",
+    "tau_drift_raw_l_nm", "tau_drift_raw_r_nm",
+    "tau_drift_bounded_l_nm", "tau_drift_bounded_r_nm",
 ]
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
@@ -160,8 +202,8 @@ def parse_args():
                    help="Delay in seconds after viewer launch before advancing simulation (default: 0.5)")
     p.add_argument("--push-seq", type=str, default=None,
                    help="Path to push sequence JSON file")
-    p.add_argument("--profile", type=str, default="k2_notch_low_q_v1",
-                   help="Sagittal authority profile name (default: k2_notch_low_q_v1)")
+    p.add_argument("--profile", type=str, default="k2_jax_dedicated_default_v2",
+                   help="Sagittal authority profile name (default: k2_jax_dedicated_default_v2)")
     p.add_argument("--dynamic-height-trajectory", type=str, default=None,
                    help="Path to dynamic height trajectory JSON")
     p.add_argument("--dump-k2-params", type=str, default=None,
@@ -399,12 +441,59 @@ def main():
     vel_damp_scale = compute_velocity_damping_scale(variant_name)
 
     if not args.quiet:
-        print(f"Profile: {args.profile}, velocity_damping_scale={vel_damp_scale}")
+        print(f"Profile: {args.profile}  |  velocity_damping_scale: {vel_damp_scale}")
 
     t_compile = time.perf_counter()
 
-    # Read all control-affecting params from canonical K2_NOTCH_LOW_Q_V1 profile
-    _auth = _K2_AUTH_SCHED
+    # Profile lookup: exact string-matched keys, no fallback ambiguity.
+    # K2_JAX_DEDICATED_DEFAULT_V2 is the OFFICIAL default.
+    # K2_JAX_DEDICATED_DEFAULT_V1 is kept as historical rollback baseline.
+    _PROFILE_MAP = {
+        "k2_notch_low_q_v1": K2_NOTCH_LOW_Q_V1,
+        # Default V2 (CURRENT — promoted 2026-06-30)
+        "k2_jax_dedicated_default_v2": _K2_AUTH_SCHED,  # K2_JAX_DEDICATED_DEFAULT_V2
+        "K2_JAX_DEDICATED_DEFAULT_V2": _K2_AUTH_SCHED,
+        # Default V1 (ROLLBACK — historical baseline)
+        "k2_jax_dedicated_default_v1": K2_JAX_DEDICATED_DEFAULT_V1,
+        "K2_JAX_DEDICATED_DEFAULT_V1": K2_JAX_DEDICATED_DEFAULT_V1,
+        # Drift candidates / iteration variants
+        "k2_jax_dedicated_default_v1_drift_fixed": K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+        "K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED_CANDIDATE": K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+        "DRIFT_ITER2_VEL_ONLY_WIDE_GATE": DRIFT_ITER2_VEL_ONLY_WIDE_GATE,
+        "DRIFT_ITER2_VEL_HEADING_WIDE_GATE": DRIFT_ITER2_VEL_HEADING_WIDE_GATE,
+        "DRIFT_ITER2_VEL_HEADING_LATE_POSITION": DRIFT_ITER2_VEL_HEADING_LATE_POSITION,
+        "DRIFT_ITER2_PUSH_DAMPING": DRIFT_ITER2_PUSH_DAMPING,
+        "DRIFT_ITER2_DYNAMIC_YIELD": DRIFT_ITER2_DYNAMIC_YIELD,
+    }
+    # Strict lookup: fail with clear error on unknown profile (no silent fallback)
+    if args.profile in _PROFILE_MAP:
+        _auth = _PROFILE_MAP[args.profile]
+    else:
+        print(f"ERROR: Unknown profile '{args.profile}'")
+        print(f"Available profiles: {', '.join(sorted(_PROFILE_MAP.keys()))}")
+        return 1
+
+    # Startup drift controller info
+    if not args.quiet:
+        _drift_enabled = getattr(_auth, "enable_drift_controller", False)
+        print(f"  drift controller: {'ENABLED' if _drift_enabled else 'DISABLED'}")
+        if _drift_enabled:
+            _dk = getattr(_auth, "drift_k_vel", 0.0)
+            _dp = getattr(_auth, "drift_k_pos", 0.0)
+            _dh = getattr(_auth, "drift_k_heading", 0.0)
+            _dhr = getattr(_auth, "drift_k_heading_rate", 0.0)
+            _dmt = getattr(_auth, "drift_max_tau", 0.0)
+            _dhl = getattr(_auth, "drift_hgate_low", 0.0)
+            _dhh = getattr(_auth, "drift_hgate_high", 0.0)
+            _dpl = getattr(_auth, "drift_pgate_low", 0.0)
+            _dph = getattr(_auth, "drift_pgate_high", 0.0)
+            print(f"    drift_k_vel: {_dk}")
+            print(f"    drift_k_pos: {_dp}")
+            print(f"    drift_k_heading: {_dh}")
+            print(f"    drift_k_heading_rate: {_dhr}")
+            print(f"    drift_max_tau: {_dmt}")
+            print(f"    drift_hgate: [{_dhl:.3f}, {_dhh:.3f}] m/s")
+            print(f"    drift_pgate: [{_dpl:.3f}, {_dph:.3f}] m")
     _mode_div_ref_src = DEFAULT_MODE_DIV_REF_SOURCE if args.enable_mode_hip_yaw_divergence else "disabled"
     jax_params = pack_params_stage2(
         fs_hz=100.0, fc_hz=2.5, Q=2.0,
@@ -429,6 +518,18 @@ def main():
         support_center_eq_y_m=float(support_center_eq[1]),
         sagittal_axis_x=sagittal_axis_x,
         sagittal_axis_y=sagittal_axis_y,
+        # Drift controller params (read from profile if available)
+        drift_k_vel=getattr(_auth, "drift_k_vel", 6.0),
+        drift_k_pos=getattr(_auth, "drift_k_pos", 1.5),
+        drift_k_heading=getattr(_auth, "drift_k_heading", 3.0),
+        drift_k_heading_rate=getattr(_auth, "drift_k_heading_rate", 0.8),
+        drift_push_damp_mult=getattr(_auth, "drift_push_damp_mult", 1.5),
+        drift_max_tau=getattr(_auth, "drift_max_tau", 5.0),
+        drift_enabled=getattr(_auth, "enable_drift_controller", False),
+        drift_hgate_low=getattr(_auth, "drift_hgate_low", 0.03),
+        drift_hgate_high=getattr(_auth, "drift_hgate_high", 0.15),
+        drift_pgate_low=getattr(_auth, "drift_pgate_low", 0.15),
+        drift_pgate_high=getattr(_auth, "drift_pgate_high", 0.80),
     )
     jax_state = pack_state_k2()
     jax_step_fn = jax.jit(k2_jax_controller_step)
@@ -705,8 +806,16 @@ def main():
             support_center_x_m=float(support_xy[0]),
             support_center_y_m=float(support_xy[1]),
             contact_valid=contact_valid,
+            # Drift controller estimator inputs — world pose from MuJoCo
+            # (hardware: same fields from IMU + wheel odometry + contact estimator)
+            est_world_x_m=float(centroidal.com_pos[0]),
+            est_world_y_m=float(centroidal.com_pos[1]),
+            est_yaw_rad=float(centroidal.body_yaw_z),
+            est_world_vx_m_s=float(centroidal.com_vel[0]),
+            est_world_vy_m_s=float(centroidal.com_vel[1]),
+            est_yaw_rate_rad_s=float(centroidal.body_yaw_rate_z),
         )
-        jax_tau, jax_state, _diag = jax_step_fn(jax_state, jax_input, jax_params)
+        jax_tau, jax_state, jax_diag = jax_step_fn(jax_state, jax_input, jax_params)
 
         # ── Apply torque ─────────────────────────────────────────────────
         tau = np.array(jax_tau, dtype=np.float64)
@@ -875,6 +984,34 @@ def main():
                     "contact_valid": contact_valid,
                     "contact_left": contact_l, "contact_right": contact_r,
                     "fall": int(terminated), "terminated": int(terminated),
+                    # Phase 3: Per-component torque telemetry (conflict audit)
+                    "tau_posture_hy_l": float(jax_diag[54]), "tau_posture_hy_r": float(jax_diag[58]),
+                    "tau_posture_hp_l": float(jax_diag[55]), "tau_posture_hp_r": float(jax_diag[59]),
+                    "tau_posture_kn_l": float(jax_diag[56]), "tau_posture_kn_r": float(jax_diag[60]),
+                    "tau_posture_hr_l": float(jax_diag[53]), "tau_posture_hr_r": float(jax_diag[57]),
+                    "tau_yaw_l": float(jax_diag[61]), "tau_yaw_r": float(jax_diag[62]),
+                    "tau_mode_div_l": float(jax_diag[63]), "tau_mode_div_r": float(jax_diag[64]),
+                    "tau_lateral_l": float(jax_diag[65]), "tau_lateral_r": float(jax_diag[66]),
+                    "tau_support_ff_hy_l": float(jax_diag[69]), "tau_support_ff_hy_r": float(jax_diag[70]),
+                    "tau_emp_support_hp_l": float(jax_diag[71]), "tau_emp_support_hp_r": float(jax_diag[72]),
+                    "tau_emp_support_kn_l": float(jax_diag[73]), "tau_emp_support_kn_r": float(jax_diag[74]),
+                    "tau_preclip_4": float(jax_diag[79]), "tau_preclip_9": float(jax_diag[84]),
+                    "tau_postclip_4": float(jax_diag[89]), "tau_postclip_9": float(jax_diag[94]),
+                    "cancel_hip_yaw": float(jax_diag[95]), "cancel_hip_roll": float(jax_diag[96]),
+                    "cancel_hip_pitch": float(jax_diag[97]), "cancel_knee": float(jax_diag[98]),
+                    "cancel_total": float(jax_diag[99]),
+                    "sat_attr_sagittal": float(jax_diag[100]), "sat_attr_posture": float(jax_diag[101]),
+                    "sat_attr_yaw": float(jax_diag[102]), "sat_attr_lateral": float(jax_diag[103]),
+                    "rate_attr_balance": float(jax_diag[104]), "rate_attr_posture": float(jax_diag[105]),
+                    # Drift controller telemetry
+                    "drift_world_x_m": float(jax_diag[106]), "drift_world_y_m": float(jax_diag[107]),
+                    "drift_body_x_m": float(jax_diag[108]), "drift_body_y_m": float(jax_diag[109]),
+                    "drift_distance_m": float(jax_diag[110]), "drift_velocity_m_s": float(jax_diag[111]),
+                    "yaw_error_drift_rad": float(jax_diag[112]),
+                    "drift_stability_gate": float(jax_diag[113]), "drift_heading_gate": float(jax_diag[114]),
+                    "drift_position_gate": float(jax_diag[115]), "drift_height_gate": float(jax_diag[116]),
+                    "tau_drift_raw_l_nm": float(jax_diag[117]), "tau_drift_raw_r_nm": float(jax_diag[118]),
+                    "tau_drift_bounded_l_nm": float(jax_diag[119]), "tau_drift_bounded_r_nm": float(jax_diag[120]),
                 })
 
         step += 1
@@ -1034,6 +1171,12 @@ def main():
     print(f"K2 JAX Realtime Runner -- {status}")
     print(f"{'='*70}")
     print(f"Profile: {args.profile}  |  Variant: {variant_name or 'none'}")
+    _drift_enabled_final = getattr(_auth, "enable_drift_controller", False)
+    if _drift_enabled_final:
+        _dinfo = f"k_vel={getattr(_auth, 'drift_k_vel', 0)} k_pos={getattr(_auth, 'drift_k_pos', 0)} k_head={getattr(_auth, 'drift_k_heading', 0)} max_tau={getattr(_auth, 'drift_max_tau', 0)}"
+    else:
+        _dinfo = "OFF"
+    print(f"Drift:   {'ON' if _drift_enabled_final else 'OFF'}  |  {_dinfo}")
     print(f"Steps: {step}/{max_steps}  |  Sim: {sim_s:.1f}s  |  Wall: {wall_s:.2f}s")
     print(f"Hz: {achieved_hz:.1f}  |  Mean step: {mean_step_ms:.2f} ms  |  JIT: {jax_compile_s:.2f}s")
     if terminated:

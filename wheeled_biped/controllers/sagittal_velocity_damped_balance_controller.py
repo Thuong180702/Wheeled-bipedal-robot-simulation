@@ -783,6 +783,33 @@ class SagittalAuthoritySchedule:
     apcr1nd_damping_scale_emergency: float = 0.10
     apcr1nd_preserve_damping_if_helps: bool = True
 
+    # ── K2 JAX Dedicated Default V1: Pitch-damping enhancement ────────────
+    # Candidate E v2 (2026-06-30). Adds continuous pitch-rate-dependent wheel
+    # damping during oscillations. Smoothstep-gated, height-transition-aware,
+    # zero steady-state effect. Enabled by default in DEFAULT_V1 profile.
+    enable_pitch_damping_boost: bool = False
+    pitch_damping_boost_kd: float = 3.0                # Nm/(rad/s)
+    pitch_damping_rate_threshold_low: float = 0.035     # rad/s (~2 deg/s)
+    pitch_damping_rate_threshold_high: float = 0.262    # rad/s (~15 deg/s)
+    pitch_damping_height_gate_enabled: bool = True
+
+    # ── Drift Controller (K2 JAX dedicated) ──────────────────────────────────
+    # Coordinated wheel-torque drift correction with continuous state-dependent
+    # gating. Corrects sagittal velocity drift, heading/yaw drift, and provides
+    # weak position return — all through smoothstep-gated wheel torques.
+    # Zero effect when disabled. Hardware-compatible estimator interface.
+    enable_drift_controller: bool = False
+    drift_k_vel: float = 6.0             # Nm/(m/s) velocity damping gain
+    drift_k_pos: float = 1.5             # Nm/m position return gain (intentionally weak)
+    drift_k_heading: float = 3.0         # Nm/rad heading hold proportional gain
+    drift_k_heading_rate: float = 0.8    # Nm/(rad/s) heading rate damping
+    drift_push_damp_mult: float = 1.5    # max additional velocity damping during push-like states
+    drift_max_tau: float = 5.0           # Nm per-wheel max drift torque (smooth tanh bound)
+    drift_hgate_low: float = 0.03        # CoM z-vel (m/s) below which height_gate ≈ 1.0
+    drift_hgate_high: float = 0.15       # CoM z-vel (m/s) above which height_gate ≈ 0.0
+    drift_pgate_low: float = 0.15        # drift distance (m) below which pos_gate ≈ 0.0
+    drift_pgate_high: float = 0.80       # drift distance (m) above which pos_gate ≈ 1.0
+
     # T6F Architecture Fix: Budget Cap Raise
     # Conditionally raises upstream max_position_tau cap during safe high-height emergency recenter
     # Addresses upstream 4.0 Nm clipping that prevents tuned cap authority from reaching wheels
@@ -3180,6 +3207,149 @@ K2_NOTCH_LOW_Q_V1 = replace(
     # robustness.  Matches APCR1ND_T2 hold-outside-band variant.
     apcr1nd_hold_outside_band=True,
 )
+
+# ── K2 JAX Dedicated Default V1 ────────────────────────────────────────────────
+# Promoted from Candidate E v2 (2026-06-30).
+# Identical to K2_NOTCH_LOW_Q_V1 plus continuous pitch-damping enhancement.
+# This is the OFFICIAL default controller for all future development.
+K2_JAX_DEDICATED_DEFAULT_V1 = replace(
+    K2_NOTCH_LOW_Q_V1,
+    profile_name="k2_jax_dedicated_default_v1",
+    # Phase 4 Candidate E v2: continuous pitch-damping enhancement.
+    # Adds 3.0 Nm/(rad/s) additional pitch-rate damping at wheels during
+    # oscillations (>2 deg/s), gated by height-velocity to avoid fighting
+    # natural pitch during intentional height transitions.
+    # Zero steady-state effect. Smoothstep-gated. No discrete thresholds.
+    enable_pitch_damping_boost=True,
+    pitch_damping_boost_kd=3.0,       # Nm/(rad/s)
+    pitch_damping_rate_threshold_low=0.035,   # rad/s (2 deg/s)
+    pitch_damping_rate_threshold_high=0.262,  # rad/s (15 deg/s)
+    pitch_damping_height_gate_enabled=True,
+)
+
+# ── K2 JAX Dedicated Default V2 ────────────────────────────────────────────────
+# Promoted from DRIFT_ITER2_VEL_ONLY_WIDE_GATE (2026-06-30).
+# Identical to K2_JAX_DEDICATED_DEFAULT_V1 plus velocity-only drift damping.
+#
+# This is the OFFICIAL default controller for all future development.
+# For rollback, use K2_JAX_DEDICATED_DEFAULT_V1.
+#
+# Configuration:
+#   - Velocity damping only (k_vel=10.0, no heading, no position return)
+#   - Wide height gate: smoothstep(0.03→0.15 m/s CoM z-velocity)
+#   - Position gate remains configurable but k_pos=0 disables it
+#   - No wheel-differential heading correction (known unsafe at low height)
+#
+# Known limitations:
+#   - Does not fully solve heading/yaw drift
+#   - Does not fully solve dynamic-height drift
+#   - Next development should target: heading/yaw estimation, wheel asymmetry,
+#     dynamic-height transition speed, dynamic-height drift, push drift decay.
+K2_JAX_DEDICATED_DEFAULT_V2 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1,
+    profile_name="k2_jax_dedicated_default_v2",
+    # Drift controller: velocity-only damping, no heading, no position return
+    enable_drift_controller=True,
+    drift_k_vel=10.0,              # Nm/(m/s) — validated best safe gain
+    drift_k_pos=0.0,               # Nm/m — disabled (unsafe at low height)
+    drift_k_heading=0.0,           # Nm/rad — disabled (unsafe at low height)
+    drift_k_heading_rate=0.0,      # Nm/(rad/s) — disabled
+    drift_max_tau=8.0,             # Nm per-wheel smooth tanh bound
+    drift_push_damp_mult=1.5,      # Conservative push damping
+    drift_hgate_low=0.03,          # CoM z-vel below 0.03 m/s → height_gate ≈ 1.0
+    drift_hgate_high=0.15,         # CoM z-vel above 0.15 m/s → height_gate ≈ 0.0
+    drift_pgate_low=0.15,          # drift distance below 0.15m → pos_gate ≈ 0.0
+    drift_pgate_high=0.80,         # drift distance above 0.80m → pos_gate ≈ 1.0
+)
+
+# ── K2 JAX Dedicated Default V1 + Drift Controller ────────────────────────────
+# Candidate: adds coordinated wheel-torque drift correction with continuous
+# stability/height/contact/hip-yaw gating. All gates are smoothstep — no hard
+# thresholds, no scenario flags, no lateral pseudo-force.
+# Ablation-safe: set enable_drift_controller=False to revert to DEFAULT_V1
+# through the same code path.
+K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1,
+    profile_name="k2_jax_dedicated_default_v1_drift_fixed",
+    # Drift controller: coordinated wheel-torque correction
+    enable_drift_controller=True,
+    drift_k_vel=6.0,              # Nm/(m/s) — conservative first pass
+    drift_k_pos=1.5,              # Nm/m — intentionally weak
+    drift_k_heading=3.0,          # Nm/rad
+    drift_k_heading_rate=0.8,     # Nm/(rad/s)
+    drift_push_damp_mult=1.5,     # max 2.5x damping during push-like states
+    drift_max_tau=5.0,            # Nm per-wheel smooth tanh bound
+    drift_hgate_low=0.03,         # CoM z-vel below 0.03 m/s → height_gate ≈ 1.0
+    drift_hgate_high=0.15,        # CoM z-vel above 0.15 m/s → height_gate ≈ 0.0
+    drift_pgate_low=0.15,         # drift distance below 0.15m → pos_gate ≈ 0.0
+    drift_pgate_high=0.80,        # drift distance above 0.80m → pos_gate ≈ 1.0
+)
+
+# ─── Drift Iteration 2 Variants ──────────────────────────────────────────────
+
+# Variant A: Velocity damping only, wide gate, no position/heading
+DRIFT_ITER2_VEL_ONLY_WIDE_GATE = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    profile_name="drift_iter2_vel_only_wide_gate",
+    drift_k_vel=10.0,
+    drift_k_pos=0.0,
+    drift_k_heading=0.0,
+    drift_k_heading_rate=0.0,
+    drift_max_tau=8.0,
+)
+
+# Variant B: Velocity damping + heading hold, wide gate
+DRIFT_ITER2_VEL_HEADING_WIDE_GATE = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    profile_name="drift_iter2_vel_heading_wide_gate",
+    drift_k_vel=10.0,
+    drift_k_pos=0.0,
+    drift_k_heading=5.0,
+    drift_k_heading_rate=1.5,
+    drift_max_tau=8.0,
+)
+
+# Variant C: Velocity + heading + late position return
+DRIFT_ITER2_VEL_HEADING_LATE_POSITION = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    profile_name="drift_iter2_vel_heading_late_position",
+    drift_k_vel=10.0,
+    drift_k_pos=1.5,
+    drift_k_heading=5.0,
+    drift_k_heading_rate=1.5,
+    drift_max_tau=8.0,
+    drift_pgate_low=0.15,
+    drift_pgate_high=0.80,
+)
+
+# Variant D: Push damping emphasis (higher push_damp_mult)
+DRIFT_ITER2_PUSH_DAMPING = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    profile_name="drift_iter2_push_damping",
+    drift_k_vel=10.0,
+    drift_k_pos=0.0,
+    drift_k_heading=5.0,
+    drift_k_heading_rate=1.5,
+    drift_max_tau=8.0,
+    drift_push_damp_mult=3.0,
+)
+
+# Variant E: Dynamic height yield (late position, wide height gate)
+DRIFT_ITER2_DYNAMIC_YIELD = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    profile_name="drift_iter2_dynamic_yield",
+    drift_k_vel=10.0,
+    drift_k_pos=0.0,
+    drift_k_heading=5.0,
+    drift_k_heading_rate=1.5,
+    drift_max_tau=8.0,
+    drift_hgate_low=0.03,
+    drift_hgate_high=0.15,
+    drift_pgate_low=0.50,
+    drift_pgate_high=1.50,
+)
+
+
 K2_WHEEL_VEL_NOTCH = replace(
     PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
     profile_name="k2_wheel_vel_notch_v1",
