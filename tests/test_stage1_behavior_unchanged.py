@@ -19,6 +19,7 @@ BASE_K2_ARGS = [
     "--controller-mode", "balance-core",
     "--sagittal-controller", "velocity-damped",
     "--vd-sagittal-authority-profile", "k2_notch_low_q_v1",
+    "--controller-backend", "python",
     "--steps", "200",
 ]
 

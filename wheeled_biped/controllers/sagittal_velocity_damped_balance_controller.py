@@ -3163,6 +3163,22 @@ K2_NOTCH_LOW_Q_V1 = replace(
     K1_PITCH_RATE_NOTCH,
     profile_name="k2_notch_low_q_v1",
     wip_notch_q=2.0,
+    # K2 JAX dedicated runner promotion — Phase 1 parameter parity fixes:
+    # K2 inherits empty applies_to_variants from the SagittalAuthoritySchedule
+    # default, which causes is_active_for_variant() to always return False and
+    # _eff_velocity_damping_scale to stay at the baseline 1.0.  Set the intended
+    # variant list and velocity_damping_scale so the canonical path matches the
+    # documented K2 profile behaviour.
+    applies_to_variants=(
+        "low_0p300", "low_0p330", "low_0p360", "extreme_height",
+        "high_0p430", "high_0p450", "high_0p465", "high_0p480",
+    ),
+    velocity_damping_scale=1.10,
+    # APCR1ND hold_outside_band: keep the recentering-engaged state until the
+    # support error falls below the inner release band (hysteresis).  The class
+    # default is False (immediate release); K2 intends True for push-recovery
+    # robustness.  Matches APCR1ND_T2 hold-outside-band variant.
+    apcr1nd_hold_outside_band=True,
 )
 K2_WHEEL_VEL_NOTCH = replace(
     PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
@@ -4262,6 +4278,7 @@ class SagittalVelocityDampedBalanceController:
         # State for APCR1nD Tuned Variants
         self._apcr1nd_tuned_converging_steps = 0  # Consecutive converging steps for release
         self._apcr1nd_tuned_recenter_held = False  # Recenter held outside band
+        self._apcr1nd_wd_override_active = False  # Phase 0: wheel damping override applied this step
 
         # State for Zero-Crossing Support Recenter (ZC)
         self._zc_state = "CENTER_IDLE"  # CENTER_IDLE, RECENTER_FROM_POSITIVE, RECENTER_FROM_NEGATIVE, HOLD_THROUGH_ZERO, SAFETY_DECAY
@@ -5763,6 +5780,42 @@ class SagittalVelocityDampedBalanceController:
                 else:
                     adaptive_bias_expected_direction_correct = abs(updated_trim_a) < 1e-9
 
+                # Phase 0: ABS trim state/timing trace — capture all intermediates
+                # for JAX parity comparison. Accessed by simulate_hierarchical_controller.py.
+                self._py_abs_trim_trace = {
+                    'signed_error': float(signed_error),
+                    'mean_err': float(mean_err),
+                    'fast_mean_err': float(fast_mean_err),
+                    'sign_err': float(sign_err),
+                    'max_tau_current': float(max_tau_current),
+                    'max_tau_g': float(max_tau_guarded),
+                    'guard_scale': float(guard_scale),
+                    'raw_target': float(raw_target),
+                    'clipped_target': float(clipped_target),
+                    'is_decay': bool(is_decay),
+                    'rate': float(rate),
+                    'trim_delta': float(trim_delta_a),
+                    'new_trim': float(updated_trim_a),
+                    'safety_pass': bool(safety_pass),
+                    'trim_to_apply': float(updated_trim_a),  # same as new_trim, gated later
+                    'tau_position_before_trim': float(tau_position),
+                    'tau_position_raw': float(tau_position_raw),
+                    'effective_max_position_tau': float(effective_max_position_tau),
+                    'hold_steps': int(self._adaptive_bias_hold_steps),
+                    'err_sign_changed': bool(err_sign_changed),
+                    'sign_rev_blocked': bool(sign_reversal_blocked),
+                    'near_zero': bool(near_zero),
+                    'in_hysteresis': bool(in_hysteresis),
+                    'zc_guard_active': bool(zc_guard_active),
+                    # Phase 0: safety gate component diagnostics for parity tracing
+                    'safety_contact_ok': bool(contact_ok),
+                    'safety_upright_ok': bool(upright_ok),
+                    'safety_hy_ok': bool(hy_ok),
+                    'safety_abs_error_ok': bool(abs_error_ok),
+                    'safety_pitch_deg': float(abs_pitch_deg),
+                    'safety_roll_deg': float(abs_roll_deg),
+                }
+
                 # Apply to tau_position AFTER T6J block (or independently if T6J disabled)
                 adaptive_trim_to_apply = float(updated_trim_a)
                 if safety_pass:
@@ -6498,6 +6551,7 @@ class SagittalVelocityDampedBalanceController:
         apcr1n_recenter_priority_active = False
         apcr1n_startup_guard_active = False
         apcr1n_wheel_damping_override_active = False
+        self._apcr1nd_wd_override_active = False  # Phase 0: reset for this step
         apcr1n_wheel_damping_scale = 1.0
         apcr1n_wheel_damping_before = 0.0
         apcr1n_wheel_damping_after = 0.0
@@ -6626,6 +6680,7 @@ class SagittalVelocityDampedBalanceController:
 
                             # Telemetry
                             apcr1n_wheel_damping_override_active = True
+                            self._apcr1nd_wd_override_active = True  # Phase 0: JAX parity state
                             apcr1n_wheel_damping_scale = wheel_scale
                             apcr1n_wheel_damping_before = float(tau_wheel_vel_left_orig)
                             apcr1n_wheel_damping_after = float(tau_wheel_vel_left)

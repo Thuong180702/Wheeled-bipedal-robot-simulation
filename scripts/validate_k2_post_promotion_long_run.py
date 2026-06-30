@@ -99,10 +99,11 @@ def _find_telemetry(out_dir: Path, steps: int) -> Path | None:
 
 
 def run_sim(height_label: str, steps: int, out_dir: Path,
-            profile: str, tag: str, prbs: bool = False) -> tuple[Path | None, Path | None]:
+            profile: str, tag: str, backend: str = "python", prbs: bool = False) -> tuple[Path | None, Path | None]:
     """Run fixed-height simulation. Returns (telemetry_path, summary_path)."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    tel_path = out_dir / f"telemetry_{steps}.csv"
+    backend_suffix = f"_{backend}" if backend != "python" else ""
+    tel_path = out_dir / f"telemetry_{steps}{backend_suffix}.csv"
     sum_path = out_dir / "run_summary.json"
     if tel_path.exists():
         return tel_path, sum_path if sum_path.exists() else None
@@ -124,6 +125,7 @@ def run_sim(height_label: str, steps: int, out_dir: Path,
         "--failure-window-steps", str(steps),
         "--write-run-summary-sidecar",
         "--output-dir", str(out_dir),
+        "--controller-backend", backend,
     ]
     cmd += MODE_DIV_FLAGS
     if prbs:
@@ -425,9 +427,9 @@ def classify_aggregate(condition_results: list[dict]) -> str:
 # Suite runners
 # =========================================================================
 
-def run_equilibrium(profile: str, tag: str) -> list[dict]:
+def run_equilibrium(profile: str, tag: str, backend: str = "python") -> list[dict]:
     print("=" * 70, flush=True)
-    print(f"LONG-RUN EQUILIBRIUM ({tag}, 6000 steps)", flush=True)
+    print(f"LONG-RUN EQUILIBRIUM ({tag}, 6000 steps, backend={backend})", flush=True)
     print("=" * 70, flush=True)
 
     out_dir = OUT_BASE / "equilibrium"
@@ -435,8 +437,9 @@ def run_equilibrium(profile: str, tag: str) -> list[dict]:
 
     for height in LONG_RUN_HEIGHTS:
         t0 = time.time()
-        sim_dir = out_dir / f"{height}_{tag}"
-        tel_path, _ = run_sim(height, LONG_STEPS, sim_dir, profile, tag, prbs=False)
+        backend_tag = f"{tag}_{backend}" if backend != "python" else tag
+        sim_dir = out_dir / f"{height}_{backend_tag}"
+        tel_path, _ = run_sim(height, LONG_STEPS, sim_dir, profile, backend_tag, backend=backend, prbs=False)
         if tel_path is None:
             print(f"  SKIP {height} - no telemetry", flush=True)
             continue
@@ -478,9 +481,9 @@ def run_equilibrium(profile: str, tag: str) -> list[dict]:
     return all_rows
 
 
-def run_prbs(profile: str, tag: str) -> list[dict]:
+def run_prbs(profile: str, tag: str, backend: str = "python") -> list[dict]:
     print("=" * 70, flush=True)
-    print(f"LONG-RUN PRBS ({tag}, 6000 steps)", flush=True)
+    print(f"LONG-RUN PRBS ({tag}, 6000 steps, backend={backend})", flush=True)
     print("=" * 70, flush=True)
 
     out_dir = OUT_BASE / "prbs"
@@ -488,8 +491,9 @@ def run_prbs(profile: str, tag: str) -> list[dict]:
 
     for height in PRBS_HEIGHTS:
         t0 = time.time()
-        sim_dir = out_dir / f"{height}_{tag}_prbs"
-        tel_path, _ = run_sim(height, LONG_STEPS, sim_dir, profile, tag, prbs=True)
+        backend_tag = f"{tag}_{backend}" if backend != "python" else tag
+        sim_dir = out_dir / f"{height}_{backend_tag}_prbs"
+        tel_path, _ = run_sim(height, LONG_STEPS, sim_dir, profile, backend_tag, backend=backend, prbs=True)
         if tel_path is None:
             print(f"  SKIP {height} PRBS - no telemetry", flush=True)
             continue
@@ -679,6 +683,8 @@ def main():
     parser.add_argument("--suite", choices=["eq", "prbs", "all"], default="all")
     parser.add_argument("--report-only", action="store_true")
     parser.add_argument("--profile", choices=["k1", "k2", "both"], default="both")
+    parser.add_argument("--controller-backend", choices=["python", "jax"], default="python",
+                        help="Controller backend: python (default), jax (JIT-accelerated, opt-in)")
     args = parser.parse_args()
 
     OUT_BASE.mkdir(parents=True, exist_ok=True)
@@ -695,13 +701,13 @@ def main():
 
         for profile, tag in profiles_to_run:
             if args.suite in ("all", "eq"):
-                rows = run_equilibrium(profile, tag)
+                rows = run_equilibrium(profile, tag, backend=args.controller_backend)
                 if tag == "K1":
                     k1_eq = rows
                 else:
                     k2_eq = rows
             if args.suite in ("all", "prbs"):
-                rows = run_prbs(profile, tag)
+                rows = run_prbs(profile, tag, backend=args.controller_backend)
                 if tag == "K1":
                     k1_prbs = rows
                 else:

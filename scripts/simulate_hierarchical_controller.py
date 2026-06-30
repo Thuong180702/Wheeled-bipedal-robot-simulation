@@ -2096,6 +2096,52 @@ def is_balance_core_mode(args) -> bool:
     return args.controller_mode in {"balance-core", "standing-balance"}
 
 
+# K2 JAX validated scope constants
+_K2_JAX_DEFAULT_SAGITTAL_CONTROLLER = "velocity-damped"
+_K2_JAX_DEFAULT_AUTHORITY_PROFILE = "k2_notch_low_q_v1"
+
+
+def _is_validated_k2_jax_scope(args) -> bool:
+    """Check if the current configuration is within the validated K2 JAX scope.
+
+    JAX may be default only when ALL of:
+      - controller_mode is balance-core
+      - sagittal_controller is velocity-damped
+      - vd_sagittal_authority_profile is k2_notch_low_q_v1
+    """
+    mode = getattr(args, "controller_mode", "legacy")
+    sagittal = getattr(args, "sagittal_controller", "baseline")
+    profile = getattr(args, "vd_sagittal_authority_profile", "baseline")
+    return (
+        mode == "balance-core"
+        and sagittal == _K2_JAX_DEFAULT_SAGITTAL_CONTROLLER
+        and profile == _K2_JAX_DEFAULT_AUTHORITY_PROFILE
+    )
+
+
+def resolve_controller_backend(args) -> str:
+    """Resolve the controller backend with K2 JAX default promotion.
+
+    Resolution order:
+    1. If user explicitly set --controller-backend → use that value.
+    2. If in validated K2 scope (balance-core + velocity-damped + k2_notch_low_q_v1)
+       → default to "jax".
+    3. Otherwise → default to "python".
+
+    Returns:
+        str: "python", "jax", "both", or "both-synced"
+    """
+    explicit = getattr(args, "controller_backend", None)
+
+    if explicit is not None:
+        return explicit
+
+    if _is_validated_k2_jax_scope(args):
+        return "jax"
+
+    return "python"
+
+
 def resolve_active_sagittal_controller_set(sagittal_controller_choice: str) -> set[str]:
     """Return the set of active sagittal controller names for mutual exclusion verification.
 
@@ -2545,6 +2591,41 @@ def main():
              "telemetry, torque_apply, and total per-step. "
              "Output path: outputs/profile/stage1_controller_profile_breakdown.json",
     )
+    # Stage 7: Performance benchmark mode (measurement only, no behavior change)
+    parser.add_argument(
+        "--stage7-benchmark",
+        action="store_true",
+        help="Enable Stage 7 performance benchmark mode. Adds high-precision timing "
+             "instrumentation with warmup/measured step separation. "
+             "Output path: outputs/benchmark/stage7_{tag}_{backend}.json",
+    )
+    parser.add_argument(
+        "--stage7-benchmark-tag",
+        type=str,
+        default="unnamed",
+        help="Label for benchmark output filename (default: 'unnamed').",
+    )
+    parser.add_argument(
+        "--stage7-benchmark-warmup-steps",
+        type=int,
+        default=100,
+        help="Steps to exclude from timing statistics (default: 100).",
+    )
+    parser.add_argument(
+        "--stage7-benchmark-measured-steps",
+        type=int,
+        default=1000,
+        help="Steps to measure after warmup for statistics (default: 1000).",
+    )
+
+    parser.add_argument(
+        "--synced-trace-steps",
+        type=str,
+        default=None,
+        help="Comma-separated step ranges for forced both-synced diagnostic output, "
+             "e.g. '220-280' or '200-300,400-500'. All steps in the ranges are printed. "
+             "Useful for ABS ring buffer accumulation tracing.",
+    )
     parser.add_argument(
         "--wbc-quiet",
         action="store_true",
@@ -2563,11 +2644,16 @@ def main():
     )
     parser.add_argument(
         "--controller-backend",
-        type=str,
-        default="python",
-        choices=["python", "jax"],
-        help="Controller backend: python (default, reference), jax (JIT-accelerated, opt-in). "
-             "JAX backend requires balance-core mode. Python backend is always available.",
+        default=None,
+        choices=["python", "jax", "both", "both-synced"],
+        help="Controller backend. "
+             "Default (when not specified): JAX for validated K2 balance-core + velocity-damped + k2_notch_low_q_v1 profile; "
+             "Python for all other profiles. "
+             "Choices: python (reference), jax (JIT-accelerated), "
+             "both (teacher-forcing with independent state), "
+             "both-synced (teacher-forcing with state-synced JAX). "
+             "JAX backend requires balance-core mode. Python backend is always available. "
+             "Use --controller-backend python to force Python backend.",
     )
     parser.add_argument(
         "--enable-secondary-wheel-balance",
@@ -3441,10 +3527,60 @@ def main():
              "via the posture regularizer, and commanded_height_ref_m tracks the trajectory.",
     )
 
+    # ---- Production runtime / quiet mode ---- #
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        default=False,
+        help="Suppress all non-essential terminal output. "
+             "No per-step progress prints, no per-step diagnostics. "
+             "Only startup summary and final summary are printed. "
+             "Default for production JAX mode is implied (prints suppressed) "
+             "unless --verbose or --telemetry-mode full is explicit.",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="Enable verbose per-step output (overrides --quiet). "
+             "Use for debugging only — very slow.",
+    )
+
+    # ---- Telemetry mode ---- #
+    parser.add_argument(
+        "--telemetry-mode",
+        type=str,
+        choices=["off", "summary", "decimated", "full"],
+        default=None,
+        help="Telemetry collection mode:\n"
+             "  off       — No per-step telemetry. Only final summary.\n"
+             "  summary   — Minimal per-step metrics (height, pitch, torque max, etc.).\n"
+             "  decimated — Full telemetry recorded every N steps (N from --telemetry-decimation).\n"
+             "  full      — Full per-step telemetry (756 columns, slow). Alias for debug.\n"
+             "Default: 'decimated' for production JAX, 'full' for Python/both-synced/debug.",
+    )
+    parser.add_argument(
+        "--telemetry-buffered",
+        action="store_true",
+        default=False,
+        help="Collect telemetry rows in memory and write CSV once at end. "
+             "(Already the default — this flag is a no-op for backward compat.)",
+    )
+
     args = parser.parse_args()
 
     # Validate balance-core mode arguments
     validate_balance_core_mode_args(args)
+
+    # Resolve controller backend (K2 JAX default promotion)
+    _backend_explicit = args.controller_backend is not None
+    args.controller_backend = resolve_controller_backend(args)
+    if _backend_explicit:
+        print(f"[BACKEND] Controller backend: {args.controller_backend} (explicit user override)")
+    elif args.controller_backend == "jax":
+        print(f"[BACKEND] Controller backend: jax (default for validated K2 balance-core + velocity-damped + k2_notch_low_q_v1 profile)")
+    else:
+        print(f"[BACKEND] Controller backend: {args.controller_backend} (default fallback for non-validated profile)")
 
     print("=" * 80)
     print("Hierarchical Controller Simulation with Telemetry")
@@ -3453,8 +3589,12 @@ def main():
 
     # Create output directory
     _out_dir_arg = getattr(args, "output_dir", None)
-    output_dir = Path(_out_dir_arg) if _out_dir_arg else Path("outputs/hierarchical_controller_sim")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    _skip_output = (_out_dir_arg is not None and _out_dir_arg.lower() == "none")
+    if _skip_output:
+        output_dir = None
+    else:
+        output_dir = Path(_out_dir_arg) if _out_dir_arg else Path("outputs/hierarchical_controller_sim")
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load robot model
     model_path = "assets/robot/wheeled_biped_real.xml"
@@ -5247,8 +5387,64 @@ def main():
     start_time = time.time()
 
     # Stage 5: JAX backend initialization (once before loop)
-    _backend = getattr(args, "controller_backend", "python")
-    _jax_enabled = (_backend == "jax")
+    # Backend was resolved in main() via resolve_controller_backend(); fallback to python if somehow unset.
+    _backend = getattr(args, "controller_backend", None) or "python"
+    _jax_enabled = (_backend in ("jax", "both", "both-synced"))
+    _both_enabled = (_backend == "both")
+    _both_synced_enabled = (_backend == "both-synced")
+    # JAX fast path: when backend=jax and NOT both-synced, skip Python WBC+posture pipeline.
+    # Python controller output is discarded at line 7100 anyway; skipping it saves ~48 ms/step.
+    _jax_fast_path = _jax_enabled and not _both_synced_enabled
+    _both_synced_max_diff = 0.0
+    _both_synced_max_diff_step = 0
+    _both_synced_max_diff_actuator = 0
+
+    # ---- Production runtime: quiet mode resolution ---- #
+    # _quiet: suppress per-step terminal output (progress prints, diagnostics)
+    # _verbose: force per-step output even in production mode
+    _verbose = bool(getattr(args, "verbose", False))
+    _quiet_explicit = bool(getattr(args, "quiet", False))
+    if _verbose:
+        _quiet = False  # --verbose overrides --quiet
+    elif _quiet_explicit:
+        _quiet = True
+    elif _jax_fast_path:
+        # Production JAX: quiet by default unless verbose
+        _quiet = True
+    else:
+        # Python/both-synced: verbose by default (legacy behavior)
+        _quiet = False
+
+    # ---- Telemetry mode resolution ---- #
+    _telemetry_mode = getattr(args, "telemetry_mode", None)
+    if _telemetry_mode is None:
+        # Default: decimated for production JAX, full for everything else
+        _telemetry_mode = "decimated" if _jax_fast_path else "full"
+    _telemetry_decimation_user = getattr(args, "telemetry_decimation", None)
+    if _telemetry_decimation_user is not None and _telemetry_decimation_user > 1:
+        _telemetry_decimation = int(_telemetry_decimation_user)
+    elif _telemetry_mode == "decimated" and _jax_fast_path:
+        _telemetry_decimation = 10  # production JAX default: record every 10th step
+    else:
+        _telemetry_decimation = 1  # legacy: keep every step
+    _telemetry_off = (_telemetry_mode == "off")
+    _telemetry_summary = (_telemetry_mode == "summary")
+    _telemetry_decimated = (_telemetry_mode == "decimated")
+    _telemetry_full = (_telemetry_mode == "full")
+    # Sync the legacy decimation variable (used by should_keep_main_telemetry_row)
+    telemetry_decimation = _telemetry_decimation
+    # Phase 0: synced trace step ranges for ABS ring buffer debugging
+    _synced_trace_ranges = set()
+    _trace_steps_raw = getattr(args, "synced_trace_steps", None)
+    if _trace_steps_raw:
+        for part in _trace_steps_raw.split(","):
+            part = part.strip()
+            if "-" in part:
+                lo, hi = part.split("-", 1)
+                for s in range(int(lo.strip()), int(hi.strip()) + 1):
+                    _synced_trace_ranges.add(s)
+            else:
+                _synced_trace_ranges.add(int(part))
     _jax_step_fn = None
     _jax_params = None
     _jax_state = None
@@ -5261,25 +5457,69 @@ def main():
         _jax.config.update("jax_enable_x64", True)
         from wheeled_biped.controllers.k2_jax_controller import (
             pack_state_k2, pack_params_stage2, k2_jax_controller_step,
-            K2_JAX_INPUT_SIZE, pack_input_k2,
+            K2_JAX_INPUT_SIZE, K2_JAX_INPUT_SIZE_STANDALONE, K2_JAX_DIAG_SIZE,
+            pack_input_k2, pack_input_k2_standalone, k2_jax_diag_flat_to_dict,
+            k2_jax_input_flat_to_dict, pack_state_from_python_k2,
+            _S_PREV_SUPPORT_ERROR,
         )
         import jax.numpy as _jnp
 
         _t_compile_start = time.perf_counter()
+        # Phase 4 parity fix: compute effective velocity_damping_scale matching Python runtime.
+        # schedule_active determines whether K2 variant-specific gains apply.
+        _auth_sched = balance_core_controllers["sagittal_wheel_balance"].authority_schedule
+        _eff_velocity_damping_scale = 1.0
+        if height_variant_setup is not None:
+            _vname = height_variant_setup.get("variant_name")
+            if _vname and _auth_sched.is_active_for_variant(_vname):
+                _eff_velocity_damping_scale = float(_auth_sched.velocity_damping_scale)
+        # Phase 0 fix: check MODE_DIV enabled flag before JAX param packing.
+        # When --enable-mode-hip-yaw-divergence is NOT set, pass "disabled"
+        # so JAX matches Python (MODE_DIV controller not called).
+        _md_enabled_init = bool(getattr(args, "enable_mode_hip_yaw_divergence", False))
+        _md_ref_src_init = str(getattr(args, "mode_hip_yaw_div_ref_source", "target"))
+        # Phase 3 standalone: equilibrium constants for JAX-native sagittal preprocessing
+        _use_standalone = _jax_fast_path  # True when backend=jax and not both-synced
+        _pitch_x_eq_rad = float(pitch_x_eq)  # from centroidal_state_eq initial orientation
+        _support_center_eq_x = float(support_center_eq_xy[0])
+        _support_center_eq_y = float(support_center_eq_xy[1])
+        _sag_axis_x = float(sagittal_axis_xy_initial[0])
+        _sag_axis_y = float(sagittal_axis_xy_initial[1])
+
         _jax_params = pack_params_stage2(
             fs_hz=100.0, fc_hz=2.5, Q=2.0,
-            torque_limit=_jnp.ones(10) * float(torque_limit[0]) if hasattr(torque_limit, '__len__') else 10.0,
-            max_torque_rate=_jnp.ones(10) * 400.0,
+            torque_limit=_jnp.asarray(torque_limit, dtype=_jnp.float64),
+            max_torque_rate=_jnp.ones(10, dtype=_jnp.float64) * 400.0,
             control_dt=float(control_dt),
+            mode_div_soft_gain=float(getattr(args, "mode_hip_yaw_div_soft_gain", 0.80)),
+            mode_div_ref_source=_md_ref_src_init if _md_enabled_init else "disabled",
+            k_velocity=float(balance_core_controllers["sagittal_wheel_balance"].k_velocity),
+            velocity_damping_scale=_eff_velocity_damping_scale,
+            apcr1nd_startup_guard_steps=float(_auth_sched.recenter_priority_startup_guard_steps),
+            apcr1nd_safe_min_com_z=float(_auth_sched.recenter_priority_safe_min_com_z),
+            apcr1nd_safe_roll_rad=float(_auth_sched.recenter_priority_safe_roll_rad),
+            apcr1nd_safe_pitch_rad=float(_auth_sched.recenter_priority_safe_pitch_rad),
+            apcr1nd_direct_enter_m=float(_auth_sched.apcr1nd_direct_enter_m),
+            apcr1nd_release_inner_m=float(_auth_sched.apcr1nd_release_inner_m),
+            apcr1nd_hold_outside_band=bool(_auth_sched.apcr1nd_hold_outside_band),
+            apcr1nd_converging_release_steps=float(_auth_sched.apcr1nd_converging_release_steps),
+            # Phase 3 standalone: equilibrium constants
+            standalone_mode=_use_standalone,
+            pitch_x_eq_rad=_pitch_x_eq_rad,
+            support_center_eq_x_m=_support_center_eq_x,
+            support_center_eq_y_m=_support_center_eq_y,
+            sagittal_axis_x=_sag_axis_x,
+            sagittal_axis_y=_sag_axis_y,
         )
         _jax_state = pack_state_k2()
         _jax_step_fn = _jax.jit(k2_jax_controller_step)
-        # Warmup compile
+        # Warmup compile — input size always 45 (unified contract)
         _dummy_in = _jnp.zeros(K2_JAX_INPUT_SIZE, dtype=_jnp.float64)
         _ = _jax_step_fn(_jax_state, _dummy_in, _jax_params)
         _ = _jax_step_fn(_jax_state, _dummy_in, _jax_params)
         _jax_compile_time_s = time.perf_counter() - _t_compile_start
-        print(f"[JAX BACKEND] Enabled — JIT compile time: {_jax_compile_time_s:.2f}s")
+        _standalone_label = " [STANDALONE]" if _use_standalone else ""
+        print(f"[JAX BACKEND] Enabled{_standalone_label} — JIT compile time: {_jax_compile_time_s:.2f}s")
         print(f"[JAX BACKEND] State size: {_jax_state.shape[0]}, Params size: {_jax_params.shape[0]}, Input size: {K2_JAX_INPUT_SIZE}")
 
     # Stage 1: Per-component controller profiling accumulators (--profile-controller)
@@ -5294,6 +5534,24 @@ def main():
         "total_step_ms": 0.0,
         "step_count": 0,
     }
+
+    # Stage 7: Performance benchmark instrumentation (--stage7-benchmark)
+    _stage7_enabled = getattr(args, "stage7_benchmark", False)
+    _stage7_tag = getattr(args, "stage7_benchmark_tag", "unnamed")
+    _stage7_warmup_steps = getattr(args, "stage7_benchmark_warmup_steps", 100)
+    _stage7_measured_steps = getattr(args, "stage7_benchmark_measured_steps", 1000)
+    _stage7_total_needed = _stage7_warmup_steps + _stage7_measured_steps
+    _stage7_timing_lists = {}  # populated lazily; keys = channel names, values = list[float] (seconds)
+    _stage7_recompile_count = 0
+    _stage7_nan_detected = False
+    _stage7_actuator_violation_count = 0
+    _stage7_max_hip_yaw_rad = 0.0
+    _stage7_hidden_torque_flag = False
+    _stage7_wbc_flag = False
+    # Snapshot accumulators each step for per-step delta computation
+    _stage7_prev_accum = {}  # copy of _profile_timing-like accumulators before current step
+    if _stage7_enabled:
+        print(f"[STAGE7 BENCHMARK] Enabled: tag={_stage7_tag}, warmup={_stage7_warmup_steps}, measured={_stage7_measured_steps}, backend={_backend}")
 
     terminated = False
     termination_reason = None
@@ -5425,10 +5683,17 @@ def main():
         nonlocal prev_control_com_pos, terminated, termination_reason, step, height_cmd, tau_prev, prev_log_pitch_x, prev_log_roll_y, prev_wheel_vel_left, prev_wheel_vel_right, torque_limit, max_torque_rate, last_full_rate_row, last_full_rate_step, full_rate_summary, prev_support_error, outer_loop_prev_support_error_m, outer_loop_support_error_rate_smoothed, outer_loop_pitch_ref_smoothed_deg, outer_loop_integral_accum_m_s
         nonlocal dynamic_height_target_m, dynamic_height_actual_m, dynamic_height_notch_gate
         nonlocal _profile_enabled, _profile_timing
-        nonlocal _jax_enabled, _jax_step_fn, _jax_params, _jax_state
+        nonlocal _jax_enabled, _jax_step_fn, _jax_params, _jax_state, _both_synced_max_diff, _both_synced_max_diff_step, _both_synced_max_diff_actuator, _jax_fast_path
+        nonlocal telemetry
+        nonlocal _stage7_enabled, _stage7_timing_lists, _stage7_recompile_count
+        nonlocal _stage7_nan_detected, _stage7_actuator_violation_count, _stage7_max_hip_yaw_rad
+        nonlocal _stage7_hidden_torque_flag, _stage7_wbc_flag
 
         if terminated or step >= max_steps:
             return False
+
+        # Stage 7: per-step timing — top of step
+        _stage7_t_step_top = time.perf_counter() if _stage7_enabled else 0.0
 
         # ---- Dynamic height update (if trajectory active) ---- #
         if dynamic_height_active:
@@ -5495,6 +5760,11 @@ def main():
 
         joint_pos = qpos_jax[7:17]
         joint_vel = qvel_jax[6:16]
+        # Pre-convert to NumPy for JAX input packing (avoids device-to-host
+        # transfer of individual elements inside pack_input_k2_standalone).
+        joint_pos_np = np.array(mj_data.qpos[7:17])  # NumPy from MuJoCo data
+        joint_vel_np = np.array(mj_data.qvel[6:16])
+        equilibrium_joint_pos_np = np.array(equilibrium_joint_pos)
 
         # Phase 2-4: Compute controller torques
         # WBC uses unified QP force distribution (not JIT-compiled)
@@ -5516,16 +5786,36 @@ def main():
         # Adaptive height adjustment was causing instability by reducing natural frequency
         # when the robot was already unstable
 
-        tau_wbc, qp_diagnostics = wbc_controller.compute_wbc_torque_with_diagnostics(
-            mj_data,
-            obs,
-            centroidal_state_control,
-            height_cmd,
-            hip_roll_authority_scale=compute_step6_hip_roll_authority_scale(control_mode),
-        )
+        if not _jax_fast_path:
+            tau_wbc, qp_diagnostics = wbc_controller.compute_wbc_torque_with_diagnostics(
+                mj_data,
+                obs,
+                centroidal_state_control,
+                height_cmd,
+                hip_roll_authority_scale=compute_step6_hip_roll_authority_scale(control_mode),
+            )
+        else:
+            # JAX fast path: skip expensive WBC QP solve (~40-50 ms/step).
+            # tau_wbc is never used — JAX overrides final torque at line 7100.
+            tau_wbc = jnp.zeros(10)
+            qp_diagnostics = {
+                "wrench_error_norm": 0.0,
+                "desired_wrench_Fx": 0.0, "desired_wrench_Fy": 0.0, "desired_wrench_Fz": 0.0,
+                "desired_wrench_Mx": 0.0, "desired_wrench_My": 0.0, "desired_wrench_Mz": 0.0,
+                "f_left": np.zeros(3), "f_right": np.zeros(3),
+                "tau_hip_roll": np.zeros(2),
+                "solve_time_ms": 0.0,
+                "contact_force_valid": False,
+                "actual_fz_total": 0.0, "desired_fz_total": 0.0,
+                "force_scale": 1.0,
+                "f_left_z": 0.0, "f_right_z": 0.0,
+                "force_distribution_feasible": True, "force_distribution_reason": "jax_fast_path",
+                "distributed_left_fx": 0.0, "distributed_left_fy": 0.0, "distributed_left_fz": 0.0,
+                "distributed_right_fx": 0.0, "distributed_right_fy": 0.0, "distributed_right_fz": 0.0,
+            }
 
         # Apply StaticBalanceController wrapper if enabled
-        if static_balance_wrapper is not None:
+        if static_balance_wrapper is not None and not _jax_fast_path:
             # Build current_state dict with required keys
             current_state = {
                 'com_z': float(centroidal_state_control.com_pos[2]),
@@ -5547,14 +5837,14 @@ def main():
             )
 
             # Log wrapper telemetry for first 20 steps
-            if step < 20:
+            if step < 20 and not _quiet:
                 log_wrapper_telemetry(step, wrapper_telemetry)
 
             # Use wrapped torque for rest of pipeline
             tau_wbc = jnp.array(tau_wbc_wrapped)
 
-        # Diagnostic: log WBC output on first step
-        if step == 0 and not args.visual:
+        # Diagnostic: log WBC output on first step (skip in JAX fast path — no WBC run)
+        if step == 0 and not args.visual and not _jax_fast_path and not _quiet:
             print(f"\n[WBC DIAGNOSTIC - Step 0]")
 
             # Show computed orientation from gravity vector using unified computation
@@ -5655,7 +5945,7 @@ def main():
             else:
                 tau_static_feedforward = jnp.zeros(10)
 
-            if step < 10:
+            if step < 10 and not _quiet:
                 print(f"[STAGE 2][step={step}] tau_static_posture={np.array(tau_static_posture)}")
                 print(f"[STAGE 2][step={step}] posture_error_norm={posture_diag['posture_error_norm']:.6f}")
                 if static_feedforward_controller is not None:
@@ -5841,6 +6131,51 @@ def main():
 
         # Balance-core runtime branch: route torque through composer
         _t_bc_start = time.perf_counter() if _profile_enabled else 0.0
+
+        # ---- state-synced teacher-forcing: capture Python state BEFORE compute ----
+        # ---- state-synced teacher-forcing: capture Python state BEFORE compute ----
+        _both_synced_capture = None
+        if _both_synced_enabled and is_balance_core_mode(args):
+            _sag = balance_core_controllers["sagittal_wheel_balance"]
+            # Snapshot notch filter state VALUES (not reference) BEFORE Python mutates them.
+            # The filter object is mutated in-place by compute() → update(), so we must
+            # capture the scalar state before compute runs. Otherwise JAX reads post-mutation
+            # state (one filter step ahead), causing systematic tau_pitch_rate divergence.
+            _nf = _sag._wip_notch_pitch_rate
+            _both_synced_capture = {
+                "notch_filter": _nf,  # BiquadNotchFilter or None (reference for backward compat)
+                "notch_x1": float(_nf._x1) if _nf is not None else 0.0,
+                "notch_x2": float(_nf._x2) if _nf is not None else 0.0,
+                "notch_y1": float(_nf._y1) if _nf is not None else 0.0,
+                "notch_y2": float(_nf._y2) if _nf is not None else 0.0,
+                "tau_prev": jnp.asarray(tau_prev, dtype=jnp.float64).copy(),
+                "filtered_com_z": float(_sag._filtered_com_z),
+                "prev_support_error": float(prev_support_error),
+                "ol_pitch_ref_smoothed": float(outer_loop_pitch_ref_smoothed_deg) if outer_loop_pitch_ref_smoothed_deg is not None else 0.0,
+                "ol_prev_support_error": float(outer_loop_prev_support_error_m) if outer_loop_prev_support_error_m is not None else 0.0,
+                "ol_support_error_rate": float(outer_loop_support_error_rate_smoothed) if outer_loop_support_error_rate_smoothed is not None else 0.0,
+                "abs_trim_tau": float(_sag._adaptive_bias_trim_tau),
+                "abs_hold_steps": int(_sag._adaptive_bias_hold_steps),
+                "abs_prev_err_sign": int(_sag._adaptive_bias_prev_error_sign),
+                "abs_zc_count": int(_sag._adaptive_bias_crossing_count),
+                "abs_guard_trigger": int(_sag._adaptive_bias_guard_trigger_count),
+                "abs_slow_error_history": list(_sag._adaptive_bias_slow_error_history),
+                "abs_fast_error_history": list(_sag._adaptive_bias_fast_error_history),
+                "abs_zc_error_history": list(_sag._adaptive_bias_zero_crossing_history),  # Phase 6M
+                # APCR1ND gating state (Phase 4+ APCR1ND full port)
+                "apcr1nd_step_counter": float(_sag._apcr1nd_step_counter),
+                "apcr1nd_prev_error": float(_sag._apcr1nd_prev_error),
+                "apcr1nd_converging_steps": float(_sag._apcr1nd_tuned_converging_steps),
+                "apcr1nd_recenter_held": float(1.0 if _sag._apcr1nd_tuned_recenter_held else 0.0),
+                # Phase 0: APCR1ND base recenter active flag from instance attribute.
+                # Captured BEFORE compute, reflects previous step's gate state.
+                # Python sets self._apc_drift_priority_active during compute().
+                # This gates the ENTIRE wheel damping override section (svdbc.py:6572).
+                # -1.0 = Python gate not active, 0.0 = standalone, 1.0 = Python gate active.
+                "py_wd_override_active": float(
+                    1.0 if _sag._apc_drift_priority_active else -1.0),
+            }
+
         if is_balance_core_mode(args):
             contact_output = balance_core_controllers["contact_supervisor"].update(
                 left_wheel_contact=bool(centroidal_state_control.left_wheel_contact),
@@ -5850,6 +6185,99 @@ def main():
                 right_normal_force_n=float(centroidal_state_control.right_wheel_force),
             )
 
+            # === Phase 3 standalone JAX fast-path: skip Python controller compute ===
+            # When backend=jax and not both-synced, JAX computes ALL control internals
+            # from raw state. Python sagittal/shape/lateral/composer are NOT called.
+            # This saves ~55-75 ms/step (the Python controller bottleneck).
+            _support_center_x_ctrl = 0.0
+            _support_center_y_ctrl = 0.0
+            if _jax_fast_path:
+                # Compute support center from wheel world positions (sensor read, ~1 μs)
+                _l_wx = (float(mj_data.xpos[l_wheel_body_id][0]),
+                         float(mj_data.xpos[l_wheel_body_id][1]),
+                         float(mj_data.xpos[l_wheel_body_id][2]))
+                _r_wx = (float(mj_data.xpos[r_wheel_body_id][0]),
+                         float(mj_data.xpos[r_wheel_body_id][1]),
+                         float(mj_data.xpos[r_wheel_body_id][2]))
+                _support_center_xy = compute_support_center_xy(_l_wx, _r_wx)
+                _support_center_x_ctrl = float(_support_center_xy[0])
+                _support_center_y_ctrl = float(_support_center_xy[1])
+                # Pre-set all placeholder vars for downstream code
+                tau_shape_posture = jnp.zeros(10)
+                tau_shape_posture_with_yaw = jnp.zeros(10)
+                tau_support_feedforward = jnp.zeros(10)
+                tau_sagittal_wheel_balance = jnp.zeros(10)
+                tau_lateral_roll_balance = jnp.zeros(10)
+                shape_diag = {}
+                sagittal_diag = {"support_position_error_m": float(prev_support_error)}
+                tau_total_raw = jnp.zeros(10)
+                tau_total_clipped = jnp.zeros(10)
+                # Dummy balance_core_result for telemetry
+                balance_core_result = type('_Dummy', (), {
+                    'tau_total_raw': tau_total_raw,
+                    'tau_total_clipped': tau_total_clipped,
+                    'tau_shape_posture': jnp.zeros(10),
+                    'tau_support_feedforward': jnp.zeros(10),
+                    'tau_sagittal_wheel_balance': jnp.zeros(10),
+                    'tau_lateral_roll_balance': jnp.zeros(10),
+                    'ownership_violation_count': 0,
+                    'telemetry': {},
+                })()
+                # Pack JAX input from RAW state (no Python controller outputs)
+                _stage7_t_pack = time.perf_counter() if _stage7_enabled else 0.0
+                _jax_input = pack_input_k2_standalone(
+                    pitch_x_rad=float(centroidal_state_control.body_pitch_x),
+                    pitch_rate_x_rad_s=float(centroidal_state_control.body_pitch_rate_x),
+                    roll_y_rad=float(centroidal_state_control.body_roll_y),
+                    roll_rate_y_rad_s=float(centroidal_state_control.body_roll_rate_y),
+                    yaw_error_rad=float(initial_yaw_z - centroidal_state_control.body_yaw_z),
+                    yaw_rate_rad_s=float(centroidal_state_control.body_yaw_rate_z),
+                    com_z_m=float(centroidal_state_control.com_pos[2]),
+                    com_vx_m_s=float(centroidal_state_control.com_vel[0]),
+                    com_vy_m_s=float(centroidal_state_control.com_vel[1]),
+                    wheel_vel_left_rad_s=float(joint_vel_np[4]),
+                    wheel_vel_right_rad_s=float(joint_vel_np[9]),
+                    commanded_height_ref_m=float(
+                        height_variant_setup.get("target_com_z_m", -1.0)
+                    ) if height_variant_setup else -1.0,
+                    hip_yaw_div_error=float(
+                        (joint_pos_np[1] - joint_pos_np[6])
+                        - (equilibrium_joint_pos_np[1] - equilibrium_joint_pos_np[6])
+                    ),
+                    hip_yaw_div_rate=float(joint_vel_np[1] - joint_vel_np[6]),
+                    joint_pos=joint_pos_np,
+                    joint_vel=joint_vel_np,
+                    q_ref=equilibrium_joint_pos_np,
+                    support_center_x_m=_support_center_x_ctrl,
+                    support_center_y_m=_support_center_y_ctrl,
+                    contact_valid=float(
+                        contact_output.left_wheel_contact
+                        and contact_output.right_wheel_contact
+                        and contact_output.contact_force_valid
+                    ),
+                )
+                if _stage7_enabled:
+                    _stage7_pack_dt = time.perf_counter() - _stage7_t_pack
+                # Run JAX standalone step (no Python state sync needed)
+                _stage7_t_jit = time.perf_counter() if _stage7_enabled else 0.0
+                _jax_tau, _jax_state, _jax_diag = _jax_step_fn(_jax_state, _jax_input, _jax_params)
+                if _stage7_enabled:
+                    _ = _jax_tau.block_until_ready()
+                    _stage7_jit_dt = time.perf_counter() - _stage7_t_jit
+                    _stage7_ff_dt = 0.0  # No support FF in standalone mode
+                    _stage7_diag_dt = 0.0  # No diag mapping in standalone mode
+                # JAX output becomes final torque
+                tau_smooth = _jax_tau
+                tau_prev = tau_smooth
+                # Update prev_support_error from JAX state
+                _new_prev_support_error = float(_jax_state[_S_PREV_SUPPORT_ERROR])
+                prev_support_error = _new_prev_support_error
+                sagittal_diag["support_position_error_m"] = float(prev_support_error)
+                # Production fast path: JAX produced final torque.
+                # Skip the remainder of balance_core_block (Python controller,
+                # torque smoothing, diagnostics) — saves ~10 ms/step.
+                _skip_balance_core_remainder = True
+
             # HY-FF debug: Capture values being passed to shape_posture.compute()
             hy_ff_height_input = float(height_variant_setup.get("target_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd)
             hy_ff_support_error_input = prev_support_error
@@ -5858,7 +6286,8 @@ def main():
             hy_ff_root_z = float(mj_data.qpos[2]) if len(mj_data.qpos) > 2 else 0.0
             hy_ff_current_com_z = float(centroidal_state_control.com_pos[2])
 
-            tau_shape_posture, shape_diag = balance_core_controllers["shape_posture"].compute(
+            if not _jax_fast_path:
+                tau_shape_posture, shape_diag = balance_core_controllers["shape_posture"].compute(
                 q_ref=equilibrium_joint_pos,
                 joint_pos=joint_pos,
                 joint_vel=joint_vel,
@@ -5916,7 +6345,11 @@ def main():
             cp_error_y_m = float(centroidal_state_control.capture_point[1] - centroidal_state_control.com_pos[1])
 
             # Sagittal controller dispatch (mutually exclusive)
-            sagittal_ctrl_name = balance_core_controllers.get("sagittal_controller_name", "baseline")
+            # Phase 3 standalone: skip entire Python sagittal controller when JAX computes internally
+            if not _jax_fast_path:
+                sagittal_ctrl_name = balance_core_controllers.get("sagittal_controller_name", "baseline")
+            else:
+                sagittal_ctrl_name = "standalone-skipped"
             if sagittal_ctrl_name == "velocity-damped":
                 # SagittalVelocityDampedBalanceController
                 # Support-position error: track wheel midpoint, NOT COM.
@@ -6233,7 +6666,7 @@ def main():
                 sagittal_diag["actual_sagittal_velocity_passed_to_controller_m_s"] = float(centroidal_state_control.com_vel[1])
                 sagittal_diag["support_center_x"] = float(support_center_ctrl_xy[0])
                 sagittal_diag["support_center_y"] = float(support_center_ctrl_xy[1])
-            else:
+            elif not _jax_fast_path:
                 # Baseline SagittalWheelBalanceController
                 tau_sagittal_wheel_balance, sagittal_diag = balance_core_controllers["sagittal_wheel_balance"].compute(
                     pitch_x_rad=float(centroidal_state_control.body_pitch_x),
@@ -6246,7 +6679,8 @@ def main():
                     position_y_m=float(centroidal_state_control.com_pos[1]),
                     roll_y_rad=float(centroidal_state_control.body_roll_y),
                 )
-            tau_lateral_roll_balance, lateral_diag = balance_core_controllers["lateral_roll_balance"].compute(
+            if not _jax_fast_path:
+                tau_lateral_roll_balance, lateral_diag = balance_core_controllers["lateral_roll_balance"].compute(
                 roll_y_rad=float(centroidal_state_control.body_roll_y),
                 roll_rate_y_rad_s=float(centroidal_state_control.body_roll_rate_y),
                 hip_roll_pos=(float(joint_pos[0]), float(joint_pos[5])),
@@ -6415,33 +6849,55 @@ def main():
             # Update previous-step support error for next iteration's HY-FF
             prev_support_error = sagittal_diag.get("support_position_error_m", 0.0)
 
-            balance_core_result = balance_core_controllers["composer"].compose(
-                tau_shape_posture=tau_shape_posture_with_yaw,
-                tau_support_feedforward=tau_support_feedforward,
-                tau_sagittal_wheel_balance=tau_sagittal_wheel_balance,
-                tau_lateral_roll_balance=tau_lateral_roll_balance,
-                tau_prev=tau_prev,
-            )
+            if not _jax_fast_path:
+                balance_core_result = balance_core_controllers["composer"].compose(
+                    tau_shape_posture=tau_shape_posture_with_yaw,
+                    tau_support_feedforward=tau_support_feedforward,
+                    tau_sagittal_wheel_balance=tau_sagittal_wheel_balance,
+                    tau_lateral_roll_balance=tau_lateral_roll_balance,
+                    tau_prev=tau_prev,
+                )
 
-            tau_total_raw = balance_core_result.tau_total_raw
-            tau_total_clipped = balance_core_result.tau_total_clipped
-            tau_smooth = balance_core_result.tau_final
-            tau_prev = tau_smooth
+                tau_total_raw = balance_core_result.tau_total_raw
+                tau_total_clipped = balance_core_result.tau_total_clipped
+                tau_smooth = balance_core_result.tau_final
+                tau_prev = tau_smooth
+            else:
+                # JAX fast path: skip Python composer (~2 ms/step).
+                # tau_smooth will be overridden by JAX at line 7100.
+                tau_total_raw = jnp.zeros(10)
+                tau_total_clipped = jnp.zeros(10)
+                # Dummy result for telemetry compatibility
+                balance_core_result = type('_Dummy', (), {
+                    'tau_total_raw': tau_total_raw,
+                    'tau_total_clipped': tau_total_clipped,
+                    'tau_final': jnp.zeros(10),
+                    'tau_shape_posture': jnp.zeros(10),
+                    'tau_support_feedforward': jnp.zeros(10),
+                    'tau_sagittal_wheel_balance': tau_sagittal_wheel_balance,
+                    'tau_lateral_roll_balance': tau_lateral_roll_balance,
+                    'ownership_violation_count': 0,
+                    'telemetry': {},
+                })()
 
             # === JAX fast-path override (Stage 5) ===
-            # When backend=jax, replace Python-computed tau_smooth with JAX output.
-            # Python path still runs for telemetry but torque is from JAX.
-            if _jax_enabled:
+            # When backend=jax (not standalone), replace Python-computed tau_smooth with JAX output.
+            # In standalone mode (_jax_fast_path), JAX already ran above with raw inputs.
+            # In both-synced mode, this runs teacher-forcing comparison.
+            if _jax_enabled and not _jax_fast_path:
                 _t_jax_start = time.perf_counter()
                 # Pass pitch_x_error (ALREADY adjusted by sim loop).
                 # JAX step must NOT apply pitch_ref_offset internally when receiving
                 # pre-adjusted pitch — the sim loop applies the offset via vd_pitch_ref_offset_deg.
+
+                # Stage 7: fine-grained JAX timing — pack input
+                _stage7_t_pack = time.perf_counter() if _stage7_enabled else 0.0
                 _jax_input = pack_input_k2(
                     pitch_x_rad=float(pitch_x_error) if 'pitch_x_error' in dir() else 0.0,
                     pitch_rate_x_rad_s=float(pitch_rate_for_control_boosted) if 'pitch_rate_for_control_boosted' in dir() else float(centroidal_state_control.body_pitch_rate_x),
                     roll_y_rad=float(centroidal_state_control.body_roll_y),
                     roll_rate_y_rad_s=float(centroidal_state_control.body_roll_rate_y),
-                    yaw_error_rad=float(centroidal_state_control.body_yaw_z - initial_yaw_z),
+                    yaw_error_rad=float(initial_yaw_z - centroidal_state_control.body_yaw_z),
                     yaw_rate_rad_s=float(centroidal_state_control.body_yaw_rate_z),
                     com_z_m=float(centroidal_state_control.com_pos[2]),
                     com_vy_m_s=float(centroidal_state_control.com_vel[1]),
@@ -6449,37 +6905,445 @@ def main():
                     sagittal_position_error_m=float(prev_support_error),
                     wheel_vel_left_rad_s=float(joint_vel[4]),
                     wheel_vel_right_rad_s=float(joint_vel[9]),
-                    support_velocity_m_s=0.0,
-                    commanded_height_ref_m=float(height_variant_setup.get("target_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd),
-                    hip_yaw_div_error=float(joint_pos[1] - joint_pos[6]),
+                    support_velocity_m_s=float(sagittal_diag.get("support_position_velocity_m_s", 0.0)),
+                    commanded_height_ref_m=float(height_variant_setup["target_com_z_m"]) if (height_variant_setup and "target_com_z_m" in height_variant_setup) else -1.0,
+                    hip_yaw_div_error=float((joint_pos[1] - joint_pos[6]) - (equilibrium_joint_pos[1] - equilibrium_joint_pos[6])),
                     hip_yaw_div_rate=float(joint_vel[1] - joint_vel[6]),
                     joint_pos=jnp.array(joint_pos),
                     joint_vel=jnp.array(joint_vel),
                     q_ref=jnp.array(equilibrium_joint_pos),
                     support_position_error_m=float(prev_support_error),
+                    contact_valid=float(contact_output.left_wheel_contact and contact_output.right_wheel_contact and contact_output.contact_force_valid),  # Phase 0 APCR1ND fix: match Python svdbc.py compute() signature
                 )
-                _jax_tau, _jax_state, _jax_diag = _jax_step_fn(_jax_state, _jax_input, _jax_params)
-                # Add empirical support feedforward (same as Python support_feedforward controller)
-                # Scale=0.5 × [0,0,4.1,-15.5,0, 0,0,3.2,-15.8,0] at hip_pitch_knee joints
-                _jax_tau = _jax_tau.at[2].add(2.05)   # l_hip_pitch: 4.1*0.5
-                _jax_tau = _jax_tau.at[3].add(-7.75)   # l_knee: -15.5*0.5
-                _jax_tau = _jax_tau.at[7].add(1.6)     # r_hip_pitch: 3.2*0.5
-                _jax_tau = _jax_tau.at[8].add(-7.9)    # r_knee: -15.8*0.5
-                tau_smooth = _jax_tau
-                # Stage 6G-B: dump q_ref and joint_pos
-                if step == 0:
-                    print(f"EQPOS={[float(equilibrium_joint_pos[i]) for i in range(10)]}", flush=True)
-                    print(f"JPOS={[float(joint_pos[i]) for i in range(10)]}", flush=True)
-                    _pt = [float(balance_core_result.tau_final[i]) for i in range(10)]
-                    _jt = [float(_jax_tau[i]) for i in range(10)]
-                    _diffs = [abs(_pt[i]-_jt[i]) for i in range(10)]
-                    _md = max(_diffs); _mi = _diffs.index(_md)
-                    print(f"ABLATE_MAX={_md:.4f}_at[{_mi}]_PY={_pt[_mi]:.4f}_JX={_jt[_mi]:.4f}", flush=True)
-                tau_total_clipped = _jax_tau
-                tau_prev = tau_smooth
+                if _stage7_enabled:
+                    _stage7_pack_dt = time.perf_counter() - _stage7_t_pack
+
+                # Stage 7: JIT step timing with block_until_ready for true hot-path cost
+                _stage7_t_jit = time.perf_counter() if _stage7_enabled else 0.0
+
+                if _both_synced_enabled:
+                    # === State-synced teacher-forcing: JAX from Python-equivalent state ===
+                    # Pack captured Python state → JAX state (before Python computed this step)
+                    _py_state_snap = _both_synced_capture
+                    _jax_state_synced = pack_state_from_python_k2(
+                        notch_filter=_py_state_snap["notch_filter"],
+                        tau_prev=_py_state_snap["tau_prev"],
+                        filtered_com_z=_py_state_snap["filtered_com_z"],
+                        prev_support_error=_py_state_snap["prev_support_error"],
+                        ol_pitch_ref_smoothed=_py_state_snap["ol_pitch_ref_smoothed"],
+                        ol_prev_support_error=_py_state_snap["ol_prev_support_error"],
+                        ol_support_error_rate=_py_state_snap["ol_support_error_rate"],
+                        abs_trim_tau=_py_state_snap["abs_trim_tau"],
+                        abs_hold_steps=_py_state_snap["abs_hold_steps"],
+                        abs_prev_err_sign=_py_state_snap["abs_prev_err_sign"],
+                        abs_zc_count=_py_state_snap["abs_zc_count"],
+                        abs_guard_trigger=_py_state_snap["abs_guard_trigger"],
+                        abs_slow_error_history=_py_state_snap["abs_slow_error_history"],
+                        abs_fast_error_history=_py_state_snap["abs_fast_error_history"],
+                        abs_zc_error_history=_py_state_snap["abs_zc_error_history"],  # Phase 6M
+                        # Phase 1 fix: pass pre-snapshot notch state to avoid
+                        # reference-mutation bug (Python compute mutates filter in-place)
+                        notch_x1=_py_state_snap["notch_x1"],
+                        notch_x2=_py_state_snap["notch_x2"],
+                        notch_y1=_py_state_snap["notch_y1"],
+                        notch_y2=_py_state_snap["notch_y2"],
+                        # APCR1ND gating state (Phase 4+ full port)
+                        apcr1nd_step_counter=_py_state_snap["apcr1nd_step_counter"],
+                        apcr1nd_prev_error=_py_state_snap["apcr1nd_prev_error"],
+                        apcr1nd_tuned_converging_steps=_py_state_snap["apcr1nd_converging_steps"],
+                        apcr1nd_tuned_recenter_held=_py_state_snap["apcr1nd_recenter_held"],
+                        # Phase 7: Python's runtime effective_max_position_tau (includes T6F/T6I raises)
+                        effective_max_position_tau_py=float(sagittal_diag.get('effective_max_position_tau', 0.0)),
+                        # Phase 0: APCR1ND wheel damping override state (-1=Python-skipped, 0=standalone, +1=Python-applied)
+                        py_wd_override_active=_py_state_snap.get("py_wd_override_active", 0.0),
+                    )
+                    # Run JAX from synced state (same starting point as Python had)
+                    _jax_tau, _jax_new_state, _jax_diag = _jax_step_fn(_jax_state_synced, _jax_input, _jax_params)
+                    if _stage7_enabled:
+                        _ = _jax_tau.block_until_ready()
+                        _stage7_jit_dt = time.perf_counter() - _stage7_t_jit
+
+                    # Teacher-forcing comparison: JAX from synced state vs Python output
+                    _py_tau = balance_core_result.tau_final
+                    _diff = jnp.max(jnp.abs(_jax_tau - _py_tau))
+                    _first_divergent = int(jnp.argmax(jnp.abs(_jax_tau - _py_tau)))
+                    _first_divergent_val = float(jnp.abs(_jax_tau - _py_tau)[_first_divergent])
+
+                    # Print diagnostics every step for first 20, then every 100 steps, or if diff exceeds threshold
+                    _print_synced = (step < 20) or (step % 100 == 0) or (_diff > 1e-4) or (step in _synced_trace_ranges)
+                    if _print_synced:
+                        _pt_vec = [float(_py_tau[i]) for i in range(10)]
+                        _jt_vec = [float(_jax_tau[i]) for i in range(10)]
+                        _all_diffs = [_jt_vec[i] - _pt_vec[i] for i in range(10)]
+                        print(f"[SYNCED@{step}] max_abs_diff={_diff:.6e} first_divergent_idx={_first_divergent} val={_first_divergent_val:.6e}")
+                        print(f"  PY_tau=[{', '.join(f'{v:.10e}' for v in _pt_vec)}]")
+                        print(f"  JX_tau=[{', '.join(f'{v:.10e}' for v in _jt_vec)}]")
+                        print(f"  DIFF=   [{', '.join(f'{v:.10e}' for v in _all_diffs)}]")
+                        # Print state snapshot hashes for verification
+                        _py_notch_str = f"{_py_state_snap['notch_filter']._x1:.15e}_{_py_state_snap['notch_filter']._x2:.15e}_{_py_state_snap['notch_filter']._y1:.15e}_{_py_state_snap['notch_filter']._y2:.15e}" if _py_state_snap["notch_filter"] is not None else "none"
+                        print(f"  PY_STATE: notch=[{_py_notch_str}] filt_com_z={_py_state_snap['filtered_com_z']:.10f} prev_support_err={_py_state_snap['prev_support_error']:.10e}")
+                        print(f"  PY_STATE: ol_ref={_py_state_snap['ol_pitch_ref_smoothed']:.10f} ol_prev_err={_py_state_snap['ol_prev_support_error']:.10e} ol_rate={_py_state_snap['ol_support_error_rate']:.10e}")
+                        print(f"  PY_STATE: abs_trim={_py_state_snap['abs_trim_tau']:.10e} abs_hold={_py_state_snap['abs_hold_steps']} abs_err_sign={_py_state_snap['abs_prev_err_sign']} abs_zc={_py_state_snap['abs_zc_count']} abs_guard={_py_state_snap['abs_guard_trigger']}")
+                        _abs_len = len(_py_state_snap['abs_slow_error_history'])
+                        print(f"  PY_STATE: abs_hist_len={_abs_len} abs_slow_sum={sum(_py_state_snap['abs_slow_error_history'][-300:]):.10e}")
+                        # Input hash for verification
+                        _inp_d = k2_jax_input_flat_to_dict(_jax_input)
+                        print(f"  INPUT: pitch_x={_inp_d['pitch_x_rad']:.12f} pitch_rate={_inp_d['pitch_rate_x_rad_s']:.12f} com_z={_inp_d['com_z_m']:.10f} height_ref={_inp_d['commanded_height_ref_m']:.10f}")
+                        # Support velocity diagnostics (Phase 1 parity fix)
+                        _py_support_vel = float(sagittal_diag.get("support_position_velocity_m_s", 0.0))
+                        _jx_support_vel = float(_inp_d.get("support_velocity_m_s", 0.0))
+                        _py_tau_sv = float(sagittal_diag.get("tau_support_velocity", 0.0))
+                        _jx_diag_d = k2_jax_diag_flat_to_dict(_jax_diag)
+                        _jx_tau_sv = float(_jx_diag_d.get("tau_support_velocity", 0.0))
+                        _sv_gain = float(sagittal_diag.get("effective_support_velocity_gain", 0.0))
+                        print(f"  SV: py_support_vel={_py_support_vel:.12e} jax_input_support_vel={_jx_support_vel:.12e} diff={_jx_support_vel-_py_support_vel:.12e}")
+                        print(f"  SV: py_tau_sv={_py_tau_sv:.12e} jax_tau_sv={_jx_tau_sv:.12e} diff={_jx_tau_sv-_py_tau_sv:.12e} gain={_sv_gain}")
+                        # Per-term sagittal torque comparison (PY vs JX diag)
+                        _sag_term_keys = [
+                            ("tau_pitch", "tau_pitch"),
+                            ("tau_pitch_rate", "tau_pitch_rate"),
+                            ("tau_sagittal_velocity", "tau_sagittal_velocity"),
+                            ("tau_support_velocity", "tau_support_velocity"),
+                        ]
+                        _sag_diffs_a = []
+                        for _py_key, _jx_key in _sag_term_keys:
+                            _py_val = float(sagittal_diag.get(_py_key, 0.0))
+                            _jx_val = float(_jx_diag_d.get(_jx_key, 0.0))
+                            _sag_diffs_a.append(f"{_py_key}: py={_py_val:.6e} jx={_jx_val:.6e}")
+                        print(f"  SAG_TERMS: {' | '.join(_sag_diffs_a)}")
+                        _sag_term_keys_b = [
+                            ("tau_cp", None),  # JAX doesn't expose tau_cp (gain=0)
+                            ("tau_com_vy", "tau_com_vy"),  # Phase 3: now in diag
+                            ("tau_wheel_velocity_left", "tau_wheel_vel_left"),
+                            ("tau_wheel_velocity_right", "tau_wheel_vel_right"),
+                            ("tau_position_total", "tau_position"),
+                        ]
+                        _sag_diffs_b = []
+                        for _py_key, _jx_key in _sag_term_keys_b:
+                            _py_val = float(sagittal_diag.get(_py_key, 0.0))
+                            _jx_val = float(_jx_diag_d.get(_jx_key, 0.0)) if _jx_key else 0.0
+                            _sag_diffs_b.append(f"{_py_key}: py={_py_val:.6e} jx={_jx_val:.6e}")
+                        print(f"  SAG_TERMS: {' | '.join(_sag_diffs_b)}")
+                        # Mode-div hip-yaw diagnostics (Phase 2 parity fix)
+                        _py_md_error = float(mode_div_error) if mode_hip_yaw_div_enabled else float(joint_pos[1] - joint_pos[6])
+                        _jx_md_error = float(_inp_d.get("hip_yaw_div_error", 0.0))
+                        _py_md_rate = float(mode_div_rate) if mode_hip_yaw_div_enabled else float(joint_vel[1] - joint_vel[6])
+                        _jx_md_rate = float(_inp_d.get("hip_yaw_div_rate", 0.0))
+                        _py_md_hgate = float(mode_div_height_gate) if mode_hip_yaw_div_enabled else 0.0
+                        _py_md_tau_l = float(mode_div_tau_left) if mode_hip_yaw_div_enabled else 0.0
+                        _py_md_tau_r = float(mode_div_tau_right) if mode_hip_yaw_div_enabled else 0.0
+                        _jx_tau_hy_1 = float(_jax_tau[1])
+                        _jx_tau_hy_6 = float(_jax_tau[6])
+                        _py_tau_hy_1 = float(_py_tau[1])
+                        _py_tau_hy_6 = float(_py_tau[6])
+                        print(f"  MODE_DIV: py_err={_py_md_error:.10e} jx_err={_jx_md_error:.10e} diff={_jx_md_error-_py_md_error:.10e}")
+                        print(f"  MODE_DIV: py_rate={_py_md_rate:.10e} jx_rate={_jx_md_rate:.10e} diff={_jx_md_rate-_py_md_rate:.10e}")
+                        print(f"  MODE_DIV: py_hgate={_py_md_hgate:.10e} py_tau_l={_py_md_tau_l:.10e} py_tau_r={_py_md_tau_r:.10e}")
+                        print(f"  MODE_DIV: py_tau[1]={_py_tau_hy_1:.10e} jx_tau[1]={_jx_tau_hy_1:.10e} diff={_jx_tau_hy_1-_py_tau_hy_1:.10e}")
+                        print(f"  MODE_DIV: py_tau[6]={_py_tau_hy_6:.10e} jx_tau[6]={_jx_tau_hy_6:.10e} diff={_jx_tau_hy_6-_py_tau_hy_6:.10e}")
+                        # APCR1ND gating diagnostics (Phase 4+ full port)
+                        _sag = balance_core_controllers["sagittal_wheel_balance"]
+                        _py_apcr1nd_step = float(_py_state_snap.get("apcr1nd_step_counter", -1))
+                        _py_apcr1nd_prev = float(_py_state_snap.get("apcr1nd_prev_error", 0))
+                        _py_apcr1nd_conv = float(_py_state_snap.get("apcr1nd_converging_steps", 0))
+                        _py_apcr1nd_held = float(_py_state_snap.get("apcr1nd_recenter_held", 0))
+                        _py_sag_pos_err = float(sagittal_diag.get("sagittal_position_error_m", prev_support_error))
+                        _py_direct_active = bool(_sag._apcr1nd_tuned_recenter_held)  # Phase 0 fix: read actual post-compute state
+                        _py_wd_override = bool(getattr(_sag, '_apcr1n_wheel_damping_override_active', False))
+                        # Also read from the controller directly for cross-check
+                        _py_held_post = bool(_sag._apcr1nd_tuned_recenter_held)
+                        _py_contact_valid = bool(centroidal_state_control.contact_force_valid)
+                        print(f"  APCR1ND: py_step={_py_apcr1nd_step:.1f} py_prev={_py_apcr1nd_prev:.6e} py_held={_py_apcr1nd_held:.1f} py_conv={_py_apcr1nd_conv:.1f}")
+                        print(f"  APCR1ND: py_pos_err={_py_sag_pos_err:.6e} py_direct_active={_py_direct_active} py_wd_override={_py_wd_override} py_held_post={_py_held_post} cv={_py_contact_valid}")
+                        # Phase 0: Also print JAX APCR1ND from diag (indices 45-52)
+                        _jx_apcr = jnp.asarray(_jax_diag)
+                        if _jx_apcr.shape[0] >= 53:
+                            _jx_active = float(_jx_apcr[45])
+                            _jx_step = float(_jx_apcr[46])
+                            _jx_prev = float(_jx_apcr[47])
+                            _jx_conv = float(_jx_apcr[48])
+                            _jx_held = float(_jx_apcr[49])
+                            _jx_safety = float(_jx_apcr[50])
+                            _jx_wd_apply = float(_jx_apcr[51])
+                            _jx_wd_scale = float(_jx_apcr[52])
+                            _jx_contact_valid = float(_inp_d.get("contact_valid", 0.0))
+                            print(f"  APCR1ND_JX: jx_active={_jx_active:.0f} jx_step={_jx_step:.1f} jx_prev={_jx_prev:.6e} jx_held={_jx_held:.1f} jx_conv={_jx_conv:.1f}")
+                            print(f"  APCR1ND_JX: jx_safety={_jx_safety:.0f} jx_wd_apply={_jx_wd_apply:.0f} jx_wd_scale={_jx_wd_scale:.6f} contact_valid={_jx_contact_valid:.0f}")
+                            if _jx_active != (1.0 if _py_direct_active else 0.0):
+                                print(f"  APCR1ND MISMATCH: recenter_active jx={_jx_active:.0f} py={1 if _py_direct_active else 0}")
+
+                    # Phase 6M debug: print sagittal component comparison when diff grows
+                    # Phase 0: always print during synced trace ranges
+                    if _diff > 1e-7 and (step >= 50 or step in _synced_trace_ranges):
+                        _diag_d = k2_jax_diag_flat_to_dict(_jax_diag)
+                        _py_sag_d = sagittal_diag
+                        _py_tau_p = float(_py_sag_d.get("tau_pitch", 0))
+                        _py_tau_pr = float(_py_sag_d.get("tau_pitch_rate", 0))
+                        _py_tau_sv = float(_py_sag_d.get("tau_sagittal_velocity", 0))
+                        _py_tau_spv = float(_py_sag_d.get("tau_support_velocity", 0))
+                        _py_tau_pos = float(_py_sag_d.get("tau_position", 0))
+                        _py_tau_wl = float(_py_sag_d.get("tau_wheel_velocity_left", 0))
+                        _py_tau_wr = float(_py_sag_d.get("tau_wheel_velocity_right", 0))
+                        _py_abs_trim = float(_py_state_snap.get("abs_trim_tau", 0))
+                        _py_zc = int(_py_state_snap.get("abs_zc_count", 0))
+                        _py_guard = int(_py_state_snap.get("abs_guard_trigger", 0))
+                        # Phase 0 fix: read from _jax_state_synced (packed state), not _jax_state (zero init)
+                        _jx_zc = float(_jax_state_synced[24]) if _jax_state_synced.shape[0] > 24 else 0.0
+                        _jx_guard = float(_jax_state_synced[27]) if _jax_state_synced.shape[0] > 27 else 0.0
+                        _jx_zc_buf_count = float(_jax_state_synced[328]) if _jax_state_synced.shape[0] > 328 else 0.0
+                        _jx_abs_trim = float(_jax_state_synced[21]) if _jax_state_synced.shape[0] > 21 else 0.0
+                        # Also read post-compute ABS state from _jax_new_state
+                        _jx_abs_trim_post = float(_jax_new_state[21]) if _jax_new_state.shape[0] > 21 else 0.0
+                        _jx_slow_sum_pre = float(_jax_state_synced[19]) if _jax_state_synced.shape[0] > 19 else 0.0
+                        _jx_slow_count_pre = float(_jax_state_synced[25]) if _jax_state_synced.shape[0] > 25 else 0.0
+                        _jx_slow_ptr_pre = float(_jax_state_synced[26]) if _jax_state_synced.shape[0] > 26 else 0.0
+                        _jx_contact = float(_inp_d.get('contact_valid', -1)) if '_inp_d' in dir() else -1.0
+                        print(f"  TAU_COMP@{step}: max_diff={_diff:.6e} act[{_first_divergent}]")
+                        print(f"    PY: tau_p={_py_tau_p:.10f} tau_pr={_py_tau_pr:.10f} tau_sv={_py_tau_sv:.10f} tau_spv={_py_tau_spv:.10f} tau_pos={_py_tau_pos:.10f} tau_wl={_py_tau_wl:.10f} tau_wr={_py_tau_wr:.10f}")
+                        print(f"    JX: tau_p={_diag_d['tau_pitch']:.10f} tau_pr={_diag_d['tau_pitch_rate']:.10f} tau_sv={_diag_d['tau_sagittal_velocity']:.10f} tau_spv={_diag_d['tau_support_velocity']:.10f} tau_pos={_diag_d['tau_position']:.10f} tau_wl={_diag_d['tau_wheel_vel_left']:.10f} tau_wr={_diag_d['tau_wheel_vel_right']:.10f}")
+                        print(f"    ABS: py_trim={_py_abs_trim:.10f} py_zc={_py_zc} py_guard={_py_guard} jx_trim_pre={_jx_abs_trim:.10f} jx_trim_post={_jx_abs_trim_post:.10f} jx_zc={_jx_zc:.1f} jx_guard={_jx_guard:.1f} jx_zc_cnt={_jx_zc_buf_count:.1f} jx_slow_sum={_jx_slow_sum_pre:.10f} jx_slow_cnt={_jx_slow_count_pre:.1f} jx_slow_ptr={_jx_slow_ptr_pre:.1f} jx_contact={_jx_contact:.1f}")
+                        print(f"    JX_sag: tau[4]={_diag_d['tau_sag_4']:.10f} tau[9]={_diag_d['tau_sag_9']:.10f}")
+                        print(f"    FINAL: tau[4]={_diag_d['tau_final_4']:.10f} tau[9]={_diag_d['tau_final_9']:.10f}")
+                        _inp_d = k2_jax_input_flat_to_dict(_jax_input)
+                        print(f"    JX_IN: contact_valid={_inp_d.get('contact_valid', -1):.1f} height_ref={_inp_d['commanded_height_ref_m']:.6f} sag_pos_err={_inp_d['sagittal_position_error_m']:.10f}")
+                        # Phase 0: Detailed ABS compute intermediates (JAX vs Python)
+                        if hasattr(_sag, '_py_abs_trim_trace') and _sag._py_abs_trim_trace:
+                            _pt = _sag._py_abs_trim_trace  # Python ABS trace dict
+                            print(f"    ABS_TRACE: py_signed_err={_pt.get('signed_error',0):.10e} jx_signed_err={_inp_d.get('sagittal_position_error_m',0):.10e}")
+                            print(f"    ABS_TRACE: py_mean_err={_pt.get('mean_err',0):.10e} jx_slow_mean={_diag_d.get('abs_slow_mean',0):.10e}")
+                            print(f"    ABS_TRACE: py_fast_mean={_pt.get('fast_mean_err',0):.10e} jx_fast_mean={_diag_d.get('abs_fast_mean',0):.10e}")
+                            print(f"    ABS_TRACE: py_sign_err={_pt.get('sign_err',0):.1f} jx_sign_err={_diag_d.get('abs_sign_err',0):.1f}")
+                            print(f"    ABS_TRACE: py_max_tau={_pt.get('max_tau_current',0):.10e} py_max_tau_g={_pt.get('max_tau_g',0):.10e}")
+                            print(f"    ABS_TRACE: py_guard_scale={_pt.get('guard_scale',1):.4f}")
+                            print(f"    ABS_TRACE: py_raw_target={_pt.get('raw_target',0):.10e} jx_raw_target={_diag_d.get('abs_raw_target',0):.10e}")
+                            print(f"    ABS_TRACE: py_clipped_target={_pt.get('clipped_target',0):.10e} jx_clipped={_diag_d.get('abs_clipped',0):.10e}")
+                            print(f"    ABS_TRACE: py_is_decay={_pt.get('is_decay',0)} py_rate={_pt.get('rate',0):.10e} jx_is_decay={_diag_d.get('abs_is_decay',0):.1f} jx_rate={_diag_d.get('abs_rate',0):.10e}")
+                            print(f"    ABS_TRACE: py_trim_delta={_pt.get('trim_delta',0):.10e} jx_trim_delta={_diag_d.get('abs_trim_delta',0):.10e}")
+                            print(f"    ABS_TRACE: py_new_trim={_pt.get('new_trim',0):.10e} jx_new_trim={_diag_d.get('abs_new_trim',0):.10e}")
+                            print(f"    ABS_TRACE: py_safety={_pt.get('safety_pass',0)} jx_safety={_diag_d.get('abs_safety_pass',0):.1f}")
+                            print(f"    ABS_TRACE: py_trim_to_apply={_pt.get('trim_to_apply',0):.10e} jx_trim_to_apply={_diag_d.get('external_position_trim',0):.10e}")
+                            print(f"    ABS_TRACE: py_tau_position_before={_pt.get('tau_position_before_trim',0):.10e} jx_tau_pos={_diag_d.get('tau_position',0):.10e}")
+                            print(f"    ABS_TRACE: py_tau_pos_raw={_pt.get('tau_position_raw',0):.10e} py_eff_max={_pt.get('effective_max_position_tau',0):.10e}")
+                            print(f"    ABS_TRACE: py_hold_steps={_pt.get('hold_steps',0)} jx_hold={_diag_d.get('abs_hold_steps',0):.1f}")
+                            print(f"    ABS_TRACE: py_err_sign_changed={_pt.get('err_sign_changed',0)}")
+                            print(f"    ABS_TRACE: py_sign_rev_blocked={_pt.get('sign_rev_blocked',0)}")
+                            print(f"    ABS_TRACE: py_near_zero={_pt.get('near_zero',0)}")
+                            print(f"    ABS_TRACE: py_in_hysteresis={_pt.get('in_hysteresis',0)}")
+                            print(f"    ABS_TRACE: py_zc_guard_active={_pt.get('zc_guard_active',0)}")
+                            # Phase 0: safety gate component diagnostics
+                            print(f"    SAFETY_GATE: py_contact={_pt.get('safety_contact_ok','?')} py_upright={_pt.get('safety_upright_ok','?')} py_hy={_pt.get('safety_hy_ok','?')} py_abs_err={_pt.get('safety_abs_error_ok','?')}")
+                            print(f"    SAFETY_GATE: py_pitch={_pt.get('safety_pitch_deg',0):.4f}deg py_roll={_pt.get('safety_roll_deg',0):.4f}deg jx_safety={_diag_d.get('abs_safety_pass',0):.1f}")
+                        # Phase 0: Ring buffer state diagnostic
+                        if _print_synced:
+                            _jxs = _jax_state_synced
+                            # Packed (pre-step) ring buffer state
+                            _rb_slow_sum = float(_jxs[19]) if _jxs.shape[0] > 19 else 0.0
+                            _rb_fast_sum = float(_jxs[20]) if _jxs.shape[0] > 20 else 0.0
+                            _rb_slow_cnt = float(_jxs[25]) if _jxs.shape[0] > 25 else 0.0
+                            _rb_slow_ptr = float(_jxs[26]) if _jxs.shape[0] > 26 else 0.0
+                            _rb_zc_cnt = float(_jxs[328]) if _jxs.shape[0] > 328 else 0.0
+                            _rb_zc_ptr = float(_jxs[329]) if _jxs.shape[0] > 329 else 0.0
+                            # Post-step ring buffer state
+                            _jxn = _jax_new_state
+                            _rb2_slow_sum = float(_jxn[19]) if _jxn.shape[0] > 19 else 0.0
+                            _rb2_slow_cnt = float(_jxn[25]) if _jxn.shape[0] > 25 else 0.0
+                            _rb2_slow_ptr = float(_jxn[26]) if _jxn.shape[0] > 26 else 0.0
+                            _rb2_fast_sum = float(_jxn[20]) if _jxn.shape[0] > 20 else 0.0
+                            _rb2_zc_cnt = float(_jxn[328]) if _jxn.shape[0] > 328 else 0.0
+                            _rb2_zc_ptr = float(_jxn[329]) if _jxn.shape[0] > 329 else 0.0
+                            # Python ABS histories (also from capture)
+                            _py_slow = _py_state_snap.get("abs_slow_error_history", [])
+                            _py_fast = _py_state_snap.get("abs_fast_error_history", [])
+                            _py_zc_h = _py_state_snap.get("abs_zc_error_history", [])
+                            # First and last 10 values for comparison
+                            _ps_first10 = str([float(x) for x in _py_slow[:10]])
+                            _ps_last10 = str([float(x) for x in _py_slow[-10:]])
+                            _pf_first10 = str([float(x) for x in _py_fast[:10]])
+                            _pf_last10 = str([float(x) for x in _py_fast[-10:]])
+                            _pz_first10 = str([float(x) for x in _py_zc_h[:10]])
+                            _pz_last10 = str([float(x) for x in _py_zc_h[-10:]])
+                            # JAX ring buffer first/last 10 values
+                            _jx_buf_start = 28
+                            _jx_buf_first10 = str([float(_jxs[_jx_buf_start + i]) for i in range(min(10, 300)) if _jx_buf_start + i < _jxs.shape[0]])
+                            _jx_buf_last10_start = max(0, _jx_buf_start + 290)
+                            _jx_buf_last10 = str([float(_jxs[_jx_buf_last10_start + i]) for i in range(min(10, 300)) if _jx_buf_last10_start + i < _jxs.shape[0]])
+                            print(f"    RING_BUF[{step}]: PRE: slow_sum={_rb_slow_sum:.10e} fast_sum={_rb_fast_sum:.10e} slow_cnt={_rb_slow_cnt:.0f} slow_ptr={_rb_slow_ptr:.0f} zc_cnt={_rb_zc_cnt:.0f} zc_ptr={_rb_zc_ptr:.0f}")
+                            print(f"    RING_BUF[{step}]: POST: slow_sum={_rb2_slow_sum:.10e} fast_sum={_rb2_fast_sum:.10e} slow_cnt={_rb2_slow_cnt:.0f} slow_ptr={_rb2_slow_ptr:.0f} zc_cnt={_rb2_zc_cnt:.0f} zc_ptr={_rb2_zc_ptr:.0f}")
+                            print(f"    RING_BUF[{step}]: PY_slow_len={len(_py_slow)} py_slow_first10={_ps_first10}")
+                            print(f"    RING_BUF[{step}]: py_slow_last10={_ps_last10}")
+                            print(f"    RING_BUF[{step}]: PY_fast_len={len(_py_fast)} py_fast_last10={_pf_last10}")
+                            print(f"    RING_BUF[{step}]: PY_zc_len={len(_py_zc_h)} py_zc_last10={_pz_last10}")
+                            print(f"    RING_BUF[{step}]: JX_buf_first10={_jx_buf_first10}")
+                            print(f"    RING_BUF[{step}]: JX_buf_last10={_jx_buf_last10}")
+
+                    # Track worst diff for final report
+                    if step == 0:
+                        _both_synced_max_diff = _diff
+                        _both_synced_max_diff_step = 0
+                        _both_synced_max_diff_actuator = _first_divergent
+                    elif _diff > _both_synced_max_diff:
+                        _both_synced_max_diff = _diff
+                        _both_synced_max_diff_step = step
+                        _both_synced_max_diff_actuator = _first_divergent
+
+                    # Keep Python torque for physics (teacher-forcing — Python drives robot)
+                    tau_total_clipped = _jax_tau  # for telemetry only
+                else:
+                    # Existing jax/both path (unchanged)
+                    _jax_tau, _jax_state, _jax_diag = _jax_step_fn(_jax_state, _jax_input, _jax_params)
+                if _stage7_enabled:
+                    # block_until_ready forces synchronization — measures true JAX compute time
+                    _ = _jax_tau.block_until_ready()
+                    _stage7_jit_dt = time.perf_counter() - _stage7_t_jit
+
+                # Stage 7B: Empirical support feedforward is now included inside the JAX
+                # controller's tau_sum (k2_jax_empirical_support_ff), so composer clips
+                # knee torque to max_position_tau. No post-hoc FF needed.
+                if _stage7_enabled:
+                    _stage7_ff_dt = 0.0  # zero — handled inside JAX controller
+
+                # Stage 7: diag mapping timing
+                _stage7_t_diag = time.perf_counter() if _stage7_enabled else 0.0
+
+                if _both_enabled or _both_synced_enabled:
+                    # Teacher-forcing: compare JAX vs Python torque on same physics state.
+                    _py_tau = balance_core_result.tau_final
+                    _diff = jnp.max(jnp.abs(_jax_tau - _py_tau))
+                    if _both_enabled and step < 20:
+                        _mi = int(jnp.argmax(jnp.abs(_jax_tau - _py_tau)))
+                        print(f"[BOTH@{step}] max_tau_diff={_diff:.6e} at[{_mi}] PY={float(_py_tau[_mi]):.8f} JX={float(_jax_tau[_mi]):.8f}")
+                        # Print full torque vectors
+                        _pt_vec = [float(_py_tau[i]) for i in range(10)]
+                        _jt_vec = [float(_jax_tau[i]) for i in range(10)]
+                        print(f"  PY_tau={_pt_vec}")
+                        print(f"  JX_tau={_jt_vec}")
+                        # Print per-actuator diff for hip-yaw [1,6] and hip-roll [0,5]
+                        print(f"  DIFF[0]={_jt_vec[0]-_pt_vec[0]:.8f} DIFF[1]={_jt_vec[1]-_pt_vec[1]:.8f} DIFF[5]={_jt_vec[5]-_pt_vec[5]:.8f} DIFF[6]={_jt_vec[6]-_pt_vec[6]:.8f}")
+                        # Enhanced: input fields for hip-yaw relevant inputs
+                        _inp_d = k2_jax_input_flat_to_dict(_jax_input)
+                        print(f"  IN: yaw_err={_inp_d['yaw_error_rad']:.8f} yaw_rate={_inp_d['yaw_rate_rad_s']:.8f} hy_div_err={_inp_d['hip_yaw_div_error']:.8f} hy_div_rate={_inp_d['hip_yaw_div_rate']:.8f}")
+                        print(f"  IN: q_hy_l={_inp_d['q_hip_yaw_l']:.8f} q_hy_r={_inp_d['q_hip_yaw_r']:.8f} qref_hy_l={_inp_d['q_ref_hip_yaw_l']:.8f} qref_hy_r={_inp_d['q_ref_hip_yaw_r']:.8f}")
+                        print(f"  IN: qd_hy_l={_inp_d['qd_hip_yaw_l']:.8f} qd_hy_r={_inp_d['qd_hip_yaw_r']:.8f} roll={_inp_d['roll_y_rad']:.8f} roll_rate={_inp_d['roll_rate_y_rad_s']:.8f}")
+                        print(f"  IN: height_ref={_inp_d['commanded_height_ref_m']:.6f} com_z={_inp_d['com_z_m']:.6f} support_pos_err={_inp_d['support_position_error_m']:.8f}")
+                        # JAX internal state relevant to hip-yaw
+                        _js_pt1 = float(_jax_state[5]); _js_pt6 = float(_jax_state[10])
+                        _js_fcz = float(_jax_state[14]); _js_pse = float(_jax_state[15])
+                        _js_opr = float(_jax_state[16]); _js_ops = float(_jax_state[17])
+                        _js_osr = float(_jax_state[18])
+                        _js_nx1 = float(_jax_state[0]); _js_nx2 = float(_jax_state[1])
+                        _js_ny1 = float(_jax_state[2]); _js_ny2 = float(_jax_state[3])
+                        # ABS guard state
+                        _js_guard = float(_jax_state[25]) if _jax_state.shape[0] > 25 else 0.0
+                        print(f"  JS: prev_tau[1]={_js_pt1:.10f} prev_tau[6]={_js_pt6:.10f} guard_trigger={_js_guard:.4f}")
+                        print(f"  JS: notch=[{_js_nx1:.10f},{_js_nx2:.10f},{_js_ny1:.10f},{_js_ny2:.10f}]")
+                        print(f"  JS: filt_com_z={_js_fcz:.6f} prev_support_err={_js_pse:.10f} ol_pitch_ref={_js_opr:.10f} ol_prev={_js_ops:.10f} ol_rate={_js_osr:.10f}")
+                        # Diag: final torques + counts
+                        _diag_d = k2_jax_diag_flat_to_dict(_jax_diag)
+                        print(f"  DIAG: pitch={_diag_d['tau_pitch']:.4f} pitch_rate={_diag_d['tau_pitch_rate']:.4f} position={_diag_d['tau_position']:.4f} wheel_L={_diag_d['tau_wheel_vel_left']:.4f} wheel_R={_diag_d['tau_wheel_vel_right']:.4f}")
+                        print(f"  DIAG: clip_sat={_diag_d['clip_saturation_count']} rate_lim={_diag_d['rate_limit_active_count']}")
+                        # === TEMPORARY CORRECTNESS AUDIT INSTRUMENTATION ===
+                        # Print all 41 input fields for boundary audit
+                        print(f"  IN_FULL: pitch_x={_inp_d['pitch_x_rad']:.12f} pitch_rate={_inp_d['pitch_rate_x_rad_s']:.12f} roll_y={_inp_d['roll_y_rad']:.12f} roll_rate={_inp_d['roll_rate_y_rad_s']:.12f}")
+                        print(f"  IN_FULL: yaw_err={_inp_d['yaw_error_rad']:.12f} yaw_rate={_inp_d['yaw_rate_rad_s']:.12f} com_z={_inp_d['com_z_m']:.12f} com_vy={_inp_d['com_vy_m_s']:.12f}")
+                        print(f"  IN_FULL: sag_vel={_inp_d['sagittal_velocity_m_s']:.12f} sag_pos_err={_inp_d['sagittal_position_error_m']:.12f} wheel_vel_l={_inp_d['wheel_vel_left_rad_s']:.12f} wheel_vel_r={_inp_d['wheel_vel_right_rad_s']:.12f}")
+                        print(f"  IN_FULL: support_vel={_inp_d['support_velocity_m_s']:.12f} height_ref={_inp_d['commanded_height_ref_m']:.12f} hy_div_err={_inp_d['hip_yaw_div_error']:.12f} hy_div_rate={_inp_d['hip_yaw_div_rate']:.12f}")
+                        print(f"  IN_FULL: support_pos_err={_inp_d['support_position_error_m']:.12f}")
+                        # Print PY source torques (per-source)
+                        _py_shape = [float(balance_core_result.tau_shape_posture[i]) for i in range(10)]
+                        _py_support = [float(balance_core_result.tau_support_feedforward[i]) for i in range(10)]
+                        _py_sagittal = [float(balance_core_result.tau_sagittal_wheel_balance[i]) for i in range(10)]
+                        _py_lateral = [float(balance_core_result.tau_lateral_roll_balance[i]) for i in range(10)]
+                        print(f"  PY_SRC: shape={_py_shape}")
+                        print(f"  PY_SRC: support_ff={_py_support}")
+                        print(f"  PY_SRC: sagittal={_py_sagittal}")
+                        print(f"  PY_SRC: lateral={_py_lateral}")
+                        # Print JAX source torques (from diag — sagittal only; others reconstructed)
+                        print(f"  JX_DIAG: tau_pitch={_diag_d['tau_pitch']:.10f} tau_pitch_rate={_diag_d['tau_pitch_rate']:.10f} tau_sag_vel={_diag_d['tau_sagittal_velocity']:.10f} tau_support_vel={_diag_d['tau_support_velocity']:.10f}")
+                        print(f"  JX_DIAG: tau_position={_diag_d['tau_position']:.10f} tau_wheel_vel_L={_diag_d['tau_wheel_vel_left']:.10f} tau_wheel_vel_R={_diag_d['tau_wheel_vel_right']:.10f}")
+                        print(f"  JX_DIAG: notch_out={_diag_d['notch_output']:.10f} notch_gate={_diag_d['notch_height_gate']:.10f}")
+                        print(f"  JX_DIAG: calib_kp={_diag_d['calib_kp']:.10f} calib_kd={_diag_d['calib_kd']:.10f} calib_theta={_diag_d['calib_theta_max']:.10f} calib_db={_diag_d['calib_deadband']:.10f}")
+                        print(f"  JX_DIAG: physics_ff_tau={_diag_d['physics_ff_tau']:.10f} low_band_pitch_ref={_diag_d['low_band_pitch_ref']:.10f}")
+                        # Print JAX ABS state
+                        if _jax_state.shape[0] >= 28:
+                            _js_abs_slow_sum = float(_jax_state[19]); _js_abs_fast_sum = float(_jax_state[20])
+                            _js_abs_trim = float(_jax_state[21]); _js_abs_hold = float(_jax_state[22])
+                            _js_abs_prev_sign = float(_jax_state[23]); _js_abs_zc = float(_jax_state[24])
+                            _js_abs_count = float(_jax_state[25]); _js_abs_ptr = float(_jax_state[26])
+                            _js_abs_guard = float(_jax_state[27])
+                            print(f"  JS_ABS: slow_sum={_js_abs_slow_sum:.10f} fast_sum={_js_abs_fast_sum:.10f} trim={_js_abs_trim:.10f} hold={_js_abs_hold:.0f} prev_sign={_js_abs_prev_sign:.0f} zc={_js_abs_zc:.0f} count={_js_abs_count:.0f} ptr={_js_abs_ptr:.0f} guard={_js_abs_guard:.0f}")
+                        # Print per-actuator diff for ALL 10 joints
+                        _all_diffs = [_jt_vec[i] - _pt_vec[i] for i in range(10)]
+                        _diffs_formatted = ", ".join(f"{v:.8e}" for v in _all_diffs)
+                        print(f"  DIFF_ALL: [{_diffs_formatted}]")
+                        # Print wheel-specific diff
+                        print(f"  WHEEL: PY[4]={_pt_vec[4]:.10f} JX[4]={_jt_vec[4]:.10f} diff[4]={_all_diffs[4]:.10e}")
+                        print(f"  WHEEL: PY[9]={_pt_vec[9]:.10f} JX[9]={_jt_vec[9]:.10f} diff[9]={_all_diffs[9]:.10e}")
+                        # === PHASE 1: NOTCH-BLEND / PITCH-RATE DIAGNOSTICS ===
+                        _py_pr_raw = float(sagittal_diag.get("pitch_rate_raw", 0.0))
+                        _py_pr_notched = float(sagittal_diag.get("pitch_rate_notched", 0.0))
+                        _py_pr_eff = float(sagittal_diag.get("pitch_rate_effective", 0.0))
+                        _py_notch_gate = float(sagittal_diag.get("wip_notch_height_gate", 0.0))
+                        _py_notch_blend = float(sagittal_diag.get("wip_notch_filter_blend", 0.0))
+                        _py_eff_kd = float(sagittal_diag.get("effective_kd_pitch", 10.0))
+                        _py_tau_pr = float(sagittal_diag.get("tau_pitch_rate", 0.0)) if "tau_pitch_rate" in sagittal_diag else _py_eff_kd * _py_pr_eff
+                        _jx_pr_raw = _inp_d['pitch_rate_x_rad_s']
+                        _jx_notch_out = _diag_d['notch_output']
+                        _jx_notch_gate = _diag_d['notch_height_gate']
+                        _jx_pr_eff = (1.0 - _jx_notch_gate) * _jx_pr_raw + _jx_notch_gate * _jx_notch_out
+                        _jx_tau_pr = _diag_d['tau_pitch_rate']
+                        _nf_snap = (_py_state_snap["notch_x1"], _py_state_snap["notch_x2"],
+                                    _py_state_snap["notch_y1"], _py_state_snap["notch_y2"])
+                        _jx_nx1 = float(_jax_state_synced[0]); _jx_nx2 = float(_jax_state_synced[1])
+                        _jx_ny1 = float(_jax_state_synced[2]); _jx_ny2 = float(_jax_state_synced[3])
+                        print(f"  NOTCH_BLEND: PY_pitch_rate_raw={_py_pr_raw:.12f} JX_pitch_rate={_jx_pr_raw:.12f} DIFF={_jx_pr_raw-_py_pr_raw:.6e}")
+                        print(f"  NOTCH_BLEND: PY_notch_out={_py_pr_notched:.12f} JX_notch_out={_jx_notch_out:.12f} DIFF={_jx_notch_out-_py_pr_notched:.6e}")
+                        print(f"  NOTCH_BLEND: PY_notch_gate={_py_notch_gate:.12f} JX_notch_gate={_jx_notch_gate:.12f} DIFF={_jx_notch_gate-_py_notch_gate:.6e}")
+                        print(f"  NOTCH_BLEND: PY_notch_blend={_py_notch_blend:.12f}  (JAX implicit=1.0)")
+                        print(f"  NOTCH_BLEND: PY_pitch_rate_eff={_py_pr_eff:.12f} JX_pitch_rate_eff={_jx_pr_eff:.12f} DIFF={_jx_pr_eff-_py_pr_eff:.6e}")
+                        print(f"  NOTCH_BLEND: PY_tau_pitch_rate={_py_tau_pr:.12f} JX_tau_pitch_rate={_jx_tau_pr:.12f} DIFF={_jx_tau_pr-_py_tau_pr:.6e}")
+                        print(f"  NOTCH_BLEND: PY_eff_kd={_py_eff_kd:.6f}")
+                        print(f"  NOTCH_STATE: PY_snap=[{_nf_snap[0]:.12f},{_nf_snap[1]:.12f},{_nf_snap[2]:.12f},{_nf_snap[3]:.12f}]")
+                        print(f"  NOTCH_STATE: JX_init=[{_jx_nx1:.12f},{_jx_nx2:.12f},{_jx_ny1:.12f},{_jx_ny2:.12f}]")
+                        print(f"  NOTCH_STATE: DIFF=[{_jx_nx1-_nf_snap[0]:.6e},{_jx_nx2-_nf_snap[1]:.6e},{_jx_ny1-_nf_snap[2]:.6e},{_jx_ny2-_nf_snap[3]:.6e}]")
+                        # === PHASE 3: SAGITTAL VELOCITY DIAGNOSTICS ===
+                        _py_com_vy = float(sagittal_diag.get("sagittal_velocity_m_s", 0.0))
+                        _py_eff_kv = float(sagittal_diag.get("effective_k_velocity", 15.0))
+                        _py_eff_kv = float(sagittal_diag.get("effective_k_velocity", 15.0))
+                        _py_eff_vds = float(sagittal_diag.get("effective_velocity_damping_scale", 1.0))
+                        _py_eff_kwv = float(sagittal_diag.get("effective_k_wheel_velocity", 1.0))
+                        _py_tau_sv = float(sagittal_diag.get("tau_sagittal_velocity", 0.0))
+                        _py_tau_cvy = float(sagittal_diag.get("tau_com_vy", 0.0))
+                        _jx_com_vy = _inp_d['sagittal_velocity_m_s']
+                        _jx_tau_sv = _diag_d['tau_sagittal_velocity']
+                        # JAX diag doesn't include tau_com_vy; compute from formula
+                        _jx_tau_cvy = -5.0 * _jx_com_vy  # kd_com_vy=5.0 in JAX
+                        _py_product = _py_eff_kv * _py_eff_vds  # effective coefficient
+                        _jx_product = 15.0 * 1.0  # JAX hardcoded
+                        print(f"  SAG_VEL: PY_eff_k_vel={_py_eff_kv:.6f} PY_eff_vd_scale={_py_eff_vds:.6f} PY_product={_py_product:.6f}")
+                        print(f"  SAG_VEL: JX_eff_k_vel=15.000000 JX_eff_vd_scale=1.000000 JX_product={_jx_product:.6f}")
+                        print(f"  SAG_VEL: PY_com_vy={_py_com_vy:.12f} JX_sag_vel={_jx_com_vy:.12f} DIFF={_jx_com_vy-_py_com_vy:.6e}")
+                        print(f"  SAG_VEL: PY_tau_sag_vel={_py_tau_sv:.12f} JX_tau_sag_vel={_jx_tau_sv:.12f} DIFF={_jx_tau_sv-_py_tau_sv:.6e}")
+                        print(f"  SAG_VEL: PY_tau_com_vy={_py_tau_cvy:.12f} JX_tau_com_vy={_jx_tau_cvy:.12f} DIFF={_jx_tau_cvy-_py_tau_cvy:.6e}")
+                        # Print sagittal inputs from Python side
+                        _has_px = 'pitch_x_error' in dir()
+                        _has_pr = 'pitch_rate_for_control_boosted' in dir()
+                        if _has_px:
+                            print(f"  PY_SAG_IN: pitch_x_error={float(pitch_x_error):.12f}")
+                        if _has_pr:
+                            print(f"  PY_SAG_IN: pitch_rate_boosted={float(pitch_rate_for_control_boosted):.12f}")
+                        # === END TEMPORARY INSTRUMENTATION ===
+                    # Keep Python torque for physics
+                    tau_total_clipped = _jax_tau  # for telemetry
+                else:
+                    tau_smooth = _jax_tau
+                    tau_total_clipped = _jax_tau
+                    tau_prev = tau_smooth
                 if _profile_enabled:
                     _dt_jax = (time.perf_counter() - _t_jax_start) * 1000.0
                     _profile_timing["jax_step_ms"] = _profile_timing.get("jax_step_ms", 0.0) + _dt_jax
+
+                if _stage7_enabled:
+                    _stage7_diag_dt = time.perf_counter() - _stage7_t_diag
 
             # Apply wheel yaw torque POST-composer to tau_smooth directly.
             # This does NOT compete with sagittal balance torque budget since
@@ -6633,7 +7497,7 @@ def main():
         ]
         support_ratio_mean = float(np.mean(support_ratios))
 
-        if step < 10 and not args.visual:
+        if step < 10 and not args.visual and not _quiet:
             print(f"[EARLY SUPPORT][step={step}] tau_wbc={np.array(tau_wbc)}")
             print(f"[EARLY SUPPORT][step={step}] tau_wbc_scaled={np.array(tau_wbc_scaled)}")
             print(f"[EARLY SUPPORT][step={step}] tau_total_raw={np.array(tau_total_raw)}")
@@ -6699,6 +7563,9 @@ def main():
         # Step D: apply scheduled push disturbance (xfrc_applied on torso body 1).
         _apply_pending_push()
 
+        # Stage 7: physics step timing
+        _stage7_phys_t0 = time.perf_counter() if _stage7_enabled else 0.0
+
         # POINT 5: After first mj_step (only on step 0)
         if step == 0:
             # Step simulation once to get constraint forces
@@ -6725,20 +7592,39 @@ def main():
             for _ in range(n_substeps):
                 mujoco.mj_step(mj_model, mj_data)
 
+        if _stage7_enabled:
+            _stage7_phys_dt = time.perf_counter() - _stage7_phys_t0
+
         # Re-estimate centroidal/contact state after physics stepping for logging.
         # Do NOT overwrite prev_control_com_pos from logging sample.
+        # In production JAX with telemetry off/decimated-skip, reuse the
+        # control-time estimate instead of paying ~5 ms for a second estimate.
+        # Compute telemetry-population intent early (before termination check,
+        # which depends on the estimate). The final _do_populate_telemetry
+        # is computed below with termination-aware logic.
+        _populate_early = True
+        if _telemetry_off:
+            _populate_early = False
+        elif _telemetry_decimated:
+            _populate_early = (step % _telemetry_decimation == 0)
         _t_log0 = time.perf_counter() if _profile_enabled else 0.0
-        centroidal_state_log, logged_com_pos = centroidal_estimator.estimate(
-            jnp.zeros(42), mj_data, control_com_pos
-        )
+        _use_log_estimate = not (_jax_fast_path and not _populate_early)
+        if _use_log_estimate:
+            centroidal_state_log, logged_com_pos = centroidal_estimator.estimate(
+                jnp.zeros(42), mj_data, control_com_pos
+            )
+            centroidal_state_log = capture_estimator.update(centroidal_state_log)
+        else:
+            # Fast path: reuse control-time estimate for termination/contact checks.
+            centroidal_state_log = centroidal_state_control
+            logged_com_pos = control_com_pos
         _t_log1 = time.perf_counter() if _profile_enabled else 0.0
-        centroidal_state_log = capture_estimator.update(centroidal_state_log)
-        _t_log2 = time.perf_counter() if _profile_enabled else 0.0
+        _t_log2 = _t_log1  # No separate capture timing on fast path
         if _profile_enabled:
             _profile_timing["centroidal_log_ms"] += (_t_log1 - _t_log0) * 1000.0
             _profile_timing["capture_log_ms"] += (_t_log2 - _t_log1) * 1000.0
 
-        if step < 20 and not args.visual:
+        if step < 20 and not args.visual and not _quiet:
             prev_ctrl_txt = (
                 "None"
                 if prev_control_before_estimate is None
@@ -6804,914 +7690,1014 @@ def main():
         correction_wrench_norm = float(qp_diagnostics.get("correction_wrench_norm", full_wrench_norm))
 
         _t_telem_start = time.perf_counter() if _profile_enabled else 0.0
-        telemetry["source_step_index"].append(step)
-        telemetry["time"].append(step * control_dt)
 
-        # Profile identity telemetry (Phase 1 fix for T6F sign correctness investigation)
-        if is_balance_core_mode(args):
-            telemetry["controller_mode"].append("balance-core")
-            telemetry["sagittal_controller"].append(getattr(args, "sagittal_controller", "baseline"))
-            telemetry["vd_sagittal_authority_profile"].append(getattr(args, "vd_sagittal_authority_profile", "baseline"))
-            height_setup_name = getattr(args, "height_variant_setup", None)
-            if height_setup_name and isinstance(height_setup_name, str) and not height_setup_name.endswith(".json"):
-                telemetry["height_variant_setup_name"].append(height_setup_name)
-            elif height_setup_name:
-                # Extract name from path
-                setup_name = Path(height_setup_name).stem if height_setup_name else ""
-                telemetry["height_variant_setup_name"].append(setup_name)
+        # Telemetry population control: when in off/decimated-skip mode,
+        # replace the telemetry dict with a no-op proxy that silently
+        # discards .append() calls. This avoids modifying 1000+ lines
+        # of per-field telemetry population while still achieving
+        # near-zero overhead on skipped steps.
+        _do_populate_telemetry = True
+        if _telemetry_off:
+            _do_populate_telemetry = False
+        elif _telemetry_decimated:
+            _do_populate_telemetry = should_keep_main_telemetry_row(step, terminated)
+
+        # Essential fields always populated in summary mode, always populated
+        # for decimated-keep/full, and skipped otherwise.
+        _TELEM_SUMMARY_FIELDS = frozenset({
+            "source_step_index", "time",
+            "com_x", "com_y", "com_z", "com_height",
+            "euler_pitch_y", "euler_roll_x",
+            "robot_pitch_x", "robot_roll_y",
+            "pitch_x_error",
+            "terminated", "fall_event",
+            "max_torque", "max_pitch_x_deg", "max_roll_y_deg",
+            "tau_smooth_0", "tau_smooth_1", "tau_smooth_2", "tau_smooth_3", "tau_smooth_4",
+            "tau_smooth_5", "tau_smooth_6", "tau_smooth_7", "tau_smooth_8", "tau_smooth_9",
+            "controller_mode", "sagittal_controller", "vd_sagittal_authority_profile",
+            "height_variant_setup_name",
+            "commanded_height_ref_m",
+        })
+
+        class _TelemProxy:
+            """Proxy dict that silently no-ops .append() and .setdefault()
+            when telemetry population is disabled."""
+            def __init__(self, real):
+                self._real = real
+
+            def __getitem__(self, key):
+                return self._real[key]
+
+            def __setitem__(self, key, value):
+                self._real[key] = value
+
+            def __contains__(self, key):
+                return key in self._real
+
+            def __iter__(self):
+                return iter(self._real)
+
+            def keys(self):
+                return self._real.keys()
+
+            def values(self):
+                return self._real.values()
+
+            def items(self):
+                return self._real.items()
+
+            def get(self, key, default=None):
+                return self._real.get(key, default)
+
+            def setdefault(self, key, default=None):
+                return self._real.setdefault(key, default)
+
+        class _NoOpTelemProxy(_TelemProxy):
+            """Silently discards .append() calls for skipped steps."""
+            def __getitem__(self, key):
+                return _noop_list
+
+        class _SummaryTelemProxy(_TelemProxy):
+            """Only passes through .append() for essential summary fields."""
+            def __getitem__(self, key):
+                if key in _TELEM_SUMMARY_FIELDS:
+                    return self._real[key]
+                return _noop_list
+
+        class _NoOpList:
+            """A list-like object that silently discards .append()."""
+            def append(self, value):
+                pass
+            def __setitem__(self, key, value):
+                pass
+            def __len__(self):
+                return 0
+            def __bool__(self):
+                return False
+            def __iter__(self):
+                return iter([])
+
+        _noop_list = _NoOpList()
+
+        # Save real telemetry dict reference before potential swap
+        _real_telemetry = telemetry
+        if not _do_populate_telemetry:
+            telemetry = _NoOpTelemProxy(telemetry)
+        elif _telemetry_summary:
+            telemetry = _SummaryTelemProxy(telemetry)
+
+        if _do_populate_telemetry or _telemetry_summary:
+            telemetry["source_step_index"].append(step)
+            telemetry["time"].append(step * control_dt)
+
+            # Profile identity telemetry (Phase 1 fix for T6F sign correctness investigation)
+            if is_balance_core_mode(args):
+                telemetry["controller_mode"].append("balance-core")
+                telemetry["sagittal_controller"].append(getattr(args, "sagittal_controller", "baseline"))
+                telemetry["vd_sagittal_authority_profile"].append(getattr(args, "vd_sagittal_authority_profile", "baseline"))
+                height_setup_name = getattr(args, "height_variant_setup", None)
+                if height_setup_name and isinstance(height_setup_name, str) and not height_setup_name.endswith(".json"):
+                    telemetry["height_variant_setup_name"].append(height_setup_name)
+                elif height_setup_name:
+                    # Extract name from path
+                    setup_name = Path(height_setup_name).stem if height_setup_name else ""
+                    telemetry["height_variant_setup_name"].append(setup_name)
+                else:
+                    telemetry["height_variant_setup_name"].append("")
             else:
+                telemetry["controller_mode"].append("legacy")
+                telemetry["sagittal_controller"].append("")
+                telemetry["vd_sagittal_authority_profile"].append("")
                 telemetry["height_variant_setup_name"].append("")
-        else:
-            telemetry["controller_mode"].append("legacy")
-            telemetry["sagittal_controller"].append("")
-            telemetry["vd_sagittal_authority_profile"].append("")
-            telemetry["height_variant_setup_name"].append("")
 
-        telemetry["mass_kg"].append(robot_mass)
-        telemetry["weight_N"].append(robot_mass * gravity)
-        telemetry["com_x"].append(float(centroidal_state_log.com_pos[0]))
-        telemetry["com_y"].append(float(centroidal_state_log.com_pos[1]))
-        telemetry["com_z"].append(com_height)
-        telemetry["com_vx"].append(float(centroidal_state_log.com_vel[0]))
-        telemetry["com_vy"].append(float(centroidal_state_log.com_vel[1]))
-        telemetry["com_vz"].append(float(centroidal_state_log.com_vel[2]))
-        telemetry["cp_x"].append(float(centroidal_state_log.capture_point[0]))
-        telemetry["cp_y"].append(float(centroidal_state_log.capture_point[1]))
-        telemetry["tau_wbc_max"].append(float(jnp.max(jnp.abs(tau_wbc))))
-        # Track actual wheel torques at indices [4, 9] from applied torque (tau_smooth)
-        wheel_indices = jnp.array([4, 9])
-        tau_wheel_actual = jnp.max(jnp.abs(tau_smooth[wheel_indices]))
-        telemetry["tau_wheel_actual_max"].append(float(tau_wheel_actual))
-        # Stage 2: Log max of tau_static_posture if enabled, otherwise tau_posture
-        if static_posture_controller is not None:
-            telemetry["tau_posture_max"].append(float(jnp.max(jnp.abs(tau_static_posture))))
-        else:
-            telemetry["tau_posture_max"].append(float(jnp.max(jnp.abs(tau_posture))))
-        telemetry["tau_total_max"].append(float(jnp.max(jnp.abs(tau_smooth))))
-        # Euler angles (world-frame, for reference only)
-        telemetry["euler_roll_x"].append(euler_roll_x)
-        telemetry["euler_pitch_y"].append(euler_pitch_y)
-        telemetry["euler_yaw_z"].append(euler_yaw_z)
-        # Robot-frame orientation (used for control and termination)
-        telemetry["robot_pitch_x"].append(robot_pitch_x)
-        telemetry["robot_roll_y"].append(robot_roll_y)
-        telemetry["robot_yaw_z"].append(robot_yaw_z)
-        telemetry["roll_rate_rad_s"].append(float(centroidal_state_log.roll_rate))
-        telemetry["pitch_rate_rad_s"].append(float(centroidal_state_log.pitch_rate))
-        telemetry["yaw_rate_rad_s"].append(float(centroidal_state_log.yaw_rate))
-        telemetry["height_cmd"].append(height_cmd)  # Log adaptive height command
-        telemetry["left_contact_active"].append(bool(centroidal_state_log.left_wheel_contact))
-        telemetry["right_contact_active"].append(bool(centroidal_state_log.right_wheel_contact))
-        telemetry["active_wheels"].append(int(active_wheels))
-        telemetry["left_wheel_floor_contact"].append(bool(contact_class["left_wheel_floor_contact"]))
-        telemetry["right_wheel_floor_contact"].append(bool(contact_class["right_wheel_floor_contact"]))
-        telemetry["non_wheel_floor_contacts"].append(int(contact_class["non_wheel_floor_contacts"]))
-        telemetry["total_wheel_floor_fz"].append(float(contact_class["total_wheel_floor_fz"]))
-        telemetry["n_contacts"].append(int(mj_data.ncon))
-        telemetry["contact_force_valid"].append(bool(centroidal_state_log.contact_force_valid))
-        telemetry["left_contact_force_world_x"].append(float(centroidal_state_log.left_contact_force_world[0]))
-        telemetry["left_contact_force_world_y"].append(float(centroidal_state_log.left_contact_force_world[1]))
-        telemetry["left_contact_force_world_z"].append(float(centroidal_state_log.left_contact_force_world[2]))
-        telemetry["right_contact_force_world_x"].append(float(centroidal_state_log.right_contact_force_world[0]))
-        telemetry["right_contact_force_world_y"].append(float(centroidal_state_log.right_contact_force_world[1]))
-        telemetry["right_contact_force_world_z"].append(float(centroidal_state_log.right_contact_force_world[2]))
-        telemetry["total_contact_force_z"].append(float(centroidal_state_log.total_contact_force_z))
-        telemetry["joint_pos"].append(",".join(f"{x:.4f}" for x in np.array(joint_pos)))
-        telemetry["joint_vel"].append(
-            ",".join(f"{x:.4f}" for x in np.array(mj_data.qvel[6:16]))
-        )
-        telemetry["terminated"].append(terminated)
-        telemetry["termination_reason"].append(termination_reason or "")
-        # QP metrics
-        telemetry["qp_solve_time_ms"].append(qp_diagnostics["solve_time_ms"])
-        telemetry["qp_converged"].append(
-            1
-        )  # Will be updated with actual convergence status
-        telemetry["qp_error"].append(0.0)  # Will be updated with actual error
-        telemetry["wrench_error_norm"].append(qp_diagnostics["wrench_error_norm"])
-        telemetry["f_left_z"].append(qp_diagnostics["f_left_z"])
-        telemetry["f_right_z"].append(qp_diagnostics["f_right_z"])
-        telemetry["force_distribution_feasible"].append(qp_diagnostics["force_distribution_feasible"])
-        telemetry["force_distribution_reason"].append(qp_diagnostics["force_distribution_reason"])
-        telemetry["distributed_left_fx"].append(qp_diagnostics["distributed_left_fx"])
-        telemetry["distributed_left_fy"].append(qp_diagnostics["distributed_left_fy"])
-        telemetry["distributed_left_fz"].append(qp_diagnostics["distributed_left_fz"])
-        telemetry["distributed_right_fx"].append(qp_diagnostics["distributed_right_fx"])
-        telemetry["distributed_right_fy"].append(qp_diagnostics["distributed_right_fy"])
-        telemetry["distributed_right_fz"].append(qp_diagnostics["distributed_right_fz"])
-        telemetry["tau_saturation_rate"].append(tau_saturation_rate)
-        # Desired wrench components
-        telemetry["desired_wrench_Fx"].append(qp_diagnostics["desired_wrench_Fx"])
-        telemetry["desired_wrench_Fy"].append(qp_diagnostics["desired_wrench_Fy"])
-        telemetry["desired_wrench_Fz"].append(qp_diagnostics["desired_wrench_Fz"])
-        telemetry["desired_wrench_Mx"].append(qp_diagnostics["desired_wrench_Mx"])
-        telemetry["desired_wrench_My"].append(qp_diagnostics["desired_wrench_My"])
-        telemetry["desired_wrench_Mz"].append(qp_diagnostics["desired_wrench_Mz"])
-        telemetry["correction_wrench_norm"].append(correction_wrench_norm)
-        telemetry["correction_wrench_Fx"].append(float(qp_diagnostics.get("correction_wrench_Fx", qp_diagnostics["desired_wrench_Fx"])))
-        telemetry["correction_wrench_Fy"].append(float(qp_diagnostics.get("correction_wrench_Fy", qp_diagnostics["desired_wrench_Fy"])))
-        telemetry["correction_wrench_Fz"].append(float(qp_diagnostics.get("correction_wrench_Fz", qp_diagnostics["desired_wrench_Fz"])))
-        telemetry["correction_wrench_Mx"].append(float(qp_diagnostics.get("correction_wrench_Mx", 0.0)))
-        telemetry["correction_wrench_My"].append(float(qp_diagnostics.get("correction_wrench_My", qp_diagnostics["desired_wrench_My"])))
-        telemetry["correction_wrench_Mz"].append(float(qp_diagnostics.get("correction_wrench_Mz", 0.0)))
-        telemetry["ablation_mode"].append(mode)
-        # B500 drift audit fields (use control state, not log state)
-        telemetry["pitch_x"].append(float(pitch_x_rad))
-        telemetry["pitch_rate_x"].append(float(centroidal_state_control.pitch_rate_x))
-        telemetry["roll_y"].append(float(roll_y_rad))
-        telemetry["roll_rate_y"].append(float(centroidal_state_control.roll_rate_y))
-        telemetry["yaw_z"].append(float(centroidal_state_control.yaw_z))
-        telemetry["hip_roll_left_rad"].append(float(joint_pos[0]))
-        telemetry["hip_roll_right_rad"].append(float(joint_pos[5]))
-        hip_roll_common_component = 0.5 * float(joint_pos[0] + joint_pos[5])
-        hip_roll_symmetric_component = 0.5 * float(joint_pos[0] - joint_pos[5])
-        telemetry["hip_roll_common_component_rad"].append(hip_roll_common_component)
-        telemetry["hip_roll_symmetric_component_rad"].append(hip_roll_symmetric_component)
-        telemetry["hip_roll_abs_max_rad"].append(max(abs(float(joint_pos[0])), abs(float(joint_pos[5]))))
-        telemetry["hip_roll_ref_left_rad"].append(float(equilibrium_joint_pos[0]))
-        telemetry["hip_roll_ref_right_rad"].append(float(equilibrium_joint_pos[5]))
-        telemetry["hip_roll_error_left_rad"].append(float(equilibrium_joint_pos[0] - joint_pos[0]))
-        telemetry["hip_roll_error_right_rad"].append(float(equilibrium_joint_pos[5] - joint_pos[5]))
-        telemetry["yaw_drift_from_initial_rad"].append(float(centroidal_state_control.yaw_z) - initial_yaw_z)
+            telemetry["mass_kg"].append(robot_mass)
+            telemetry["weight_N"].append(robot_mass * gravity)
+            telemetry["com_x"].append(float(centroidal_state_log.com_pos[0]))
+            telemetry["com_y"].append(float(centroidal_state_log.com_pos[1]))
+            telemetry["com_z"].append(com_height)
+            telemetry["com_vx"].append(float(centroidal_state_log.com_vel[0]))
+            telemetry["com_vy"].append(float(centroidal_state_log.com_vel[1]))
+            telemetry["com_vz"].append(float(centroidal_state_log.com_vel[2]))
+            telemetry["cp_x"].append(float(centroidal_state_log.capture_point[0]))
+            telemetry["cp_y"].append(float(centroidal_state_log.capture_point[1]))
+            telemetry["tau_wbc_max"].append(float(jnp.max(jnp.abs(tau_wbc))))
+            # Track actual wheel torques at indices [4, 9] from applied torque (tau_smooth)
+            wheel_indices = jnp.array([4, 9])
+            tau_wheel_actual = jnp.max(jnp.abs(tau_smooth[wheel_indices]))
+            telemetry["tau_wheel_actual_max"].append(float(tau_wheel_actual))
+            # Stage 2: Log max of tau_static_posture if enabled, otherwise tau_posture
+            if static_posture_controller is not None:
+                telemetry["tau_posture_max"].append(float(jnp.max(jnp.abs(tau_static_posture))))
+            else:
+                telemetry["tau_posture_max"].append(float(jnp.max(jnp.abs(tau_posture))))
+            telemetry["tau_total_max"].append(float(jnp.max(jnp.abs(tau_smooth))))
+            # Euler angles (world-frame, for reference only)
+            telemetry["euler_roll_x"].append(euler_roll_x)
+            telemetry["euler_pitch_y"].append(euler_pitch_y)
+            telemetry["euler_yaw_z"].append(euler_yaw_z)
+            # Robot-frame orientation (used for control and termination)
+            telemetry["robot_pitch_x"].append(robot_pitch_x)
+            telemetry["robot_roll_y"].append(robot_roll_y)
+            telemetry["robot_yaw_z"].append(robot_yaw_z)
+            telemetry["roll_rate_rad_s"].append(float(centroidal_state_log.roll_rate))
+            telemetry["pitch_rate_rad_s"].append(float(centroidal_state_log.pitch_rate))
+            telemetry["yaw_rate_rad_s"].append(float(centroidal_state_log.yaw_rate))
+            telemetry["height_cmd"].append(height_cmd)  # Log adaptive height command
+            telemetry["left_contact_active"].append(bool(centroidal_state_log.left_wheel_contact))
+            telemetry["right_contact_active"].append(bool(centroidal_state_log.right_wheel_contact))
+            telemetry["active_wheels"].append(int(active_wheels))
+            telemetry["left_wheel_floor_contact"].append(bool(contact_class["left_wheel_floor_contact"]))
+            telemetry["right_wheel_floor_contact"].append(bool(contact_class["right_wheel_floor_contact"]))
+            telemetry["non_wheel_floor_contacts"].append(int(contact_class["non_wheel_floor_contacts"]))
+            telemetry["total_wheel_floor_fz"].append(float(contact_class["total_wheel_floor_fz"]))
+            telemetry["n_contacts"].append(int(mj_data.ncon))
+            telemetry["contact_force_valid"].append(bool(centroidal_state_log.contact_force_valid))
+            telemetry["left_contact_force_world_x"].append(float(centroidal_state_log.left_contact_force_world[0]))
+            telemetry["left_contact_force_world_y"].append(float(centroidal_state_log.left_contact_force_world[1]))
+            telemetry["left_contact_force_world_z"].append(float(centroidal_state_log.left_contact_force_world[2]))
+            telemetry["right_contact_force_world_x"].append(float(centroidal_state_log.right_contact_force_world[0]))
+            telemetry["right_contact_force_world_y"].append(float(centroidal_state_log.right_contact_force_world[1]))
+            telemetry["right_contact_force_world_z"].append(float(centroidal_state_log.right_contact_force_world[2]))
+            telemetry["total_contact_force_z"].append(float(centroidal_state_log.total_contact_force_z))
+            telemetry["joint_pos"].append(",".join(f"{x:.4f}" for x in np.array(joint_pos)))
+            telemetry["joint_vel"].append(
+                ",".join(f"{x:.4f}" for x in np.array(mj_data.qvel[6:16]))
+            )
+            telemetry["terminated"].append(terminated)
+            telemetry["termination_reason"].append(termination_reason or "")
+            # QP metrics
+            telemetry["qp_solve_time_ms"].append(qp_diagnostics["solve_time_ms"])
+            telemetry["qp_converged"].append(
+                1
+            )  # Will be updated with actual convergence status
+            telemetry["qp_error"].append(0.0)  # Will be updated with actual error
+            telemetry["wrench_error_norm"].append(qp_diagnostics["wrench_error_norm"])
+            telemetry["f_left_z"].append(qp_diagnostics["f_left_z"])
+            telemetry["f_right_z"].append(qp_diagnostics["f_right_z"])
+            telemetry["force_distribution_feasible"].append(qp_diagnostics["force_distribution_feasible"])
+            telemetry["force_distribution_reason"].append(qp_diagnostics["force_distribution_reason"])
+            telemetry["distributed_left_fx"].append(qp_diagnostics["distributed_left_fx"])
+            telemetry["distributed_left_fy"].append(qp_diagnostics["distributed_left_fy"])
+            telemetry["distributed_left_fz"].append(qp_diagnostics["distributed_left_fz"])
+            telemetry["distributed_right_fx"].append(qp_diagnostics["distributed_right_fx"])
+            telemetry["distributed_right_fy"].append(qp_diagnostics["distributed_right_fy"])
+            telemetry["distributed_right_fz"].append(qp_diagnostics["distributed_right_fz"])
+            telemetry["tau_saturation_rate"].append(tau_saturation_rate)
+            # Desired wrench components
+            telemetry["desired_wrench_Fx"].append(qp_diagnostics["desired_wrench_Fx"])
+            telemetry["desired_wrench_Fy"].append(qp_diagnostics["desired_wrench_Fy"])
+            telemetry["desired_wrench_Fz"].append(qp_diagnostics["desired_wrench_Fz"])
+            telemetry["desired_wrench_Mx"].append(qp_diagnostics["desired_wrench_Mx"])
+            telemetry["desired_wrench_My"].append(qp_diagnostics["desired_wrench_My"])
+            telemetry["desired_wrench_Mz"].append(qp_diagnostics["desired_wrench_Mz"])
+            telemetry["correction_wrench_norm"].append(correction_wrench_norm)
+            telemetry["correction_wrench_Fx"].append(float(qp_diagnostics.get("correction_wrench_Fx", qp_diagnostics["desired_wrench_Fx"])))
+            telemetry["correction_wrench_Fy"].append(float(qp_diagnostics.get("correction_wrench_Fy", qp_diagnostics["desired_wrench_Fy"])))
+            telemetry["correction_wrench_Fz"].append(float(qp_diagnostics.get("correction_wrench_Fz", qp_diagnostics["desired_wrench_Fz"])))
+            telemetry["correction_wrench_Mx"].append(float(qp_diagnostics.get("correction_wrench_Mx", 0.0)))
+            telemetry["correction_wrench_My"].append(float(qp_diagnostics.get("correction_wrench_My", qp_diagnostics["desired_wrench_My"])))
+            telemetry["correction_wrench_Mz"].append(float(qp_diagnostics.get("correction_wrench_Mz", 0.0)))
+            telemetry["ablation_mode"].append(mode)
+            # B500 drift audit fields (use control state, not log state)
+            telemetry["pitch_x"].append(float(pitch_x_rad))
+            telemetry["pitch_rate_x"].append(float(centroidal_state_control.pitch_rate_x))
+            telemetry["roll_y"].append(float(roll_y_rad))
+            telemetry["roll_rate_y"].append(float(centroidal_state_control.roll_rate_y))
+            telemetry["yaw_z"].append(float(centroidal_state_control.yaw_z))
+            telemetry["hip_roll_left_rad"].append(float(joint_pos[0]))
+            telemetry["hip_roll_right_rad"].append(float(joint_pos[5]))
+            hip_roll_common_component = 0.5 * float(joint_pos[0] + joint_pos[5])
+            hip_roll_symmetric_component = 0.5 * float(joint_pos[0] - joint_pos[5])
+            telemetry["hip_roll_common_component_rad"].append(hip_roll_common_component)
+            telemetry["hip_roll_symmetric_component_rad"].append(hip_roll_symmetric_component)
+            telemetry["hip_roll_abs_max_rad"].append(max(abs(float(joint_pos[0])), abs(float(joint_pos[5]))))
+            telemetry["hip_roll_ref_left_rad"].append(float(equilibrium_joint_pos[0]))
+            telemetry["hip_roll_ref_right_rad"].append(float(equilibrium_joint_pos[5]))
+            telemetry["hip_roll_error_left_rad"].append(float(equilibrium_joint_pos[0] - joint_pos[0]))
+            telemetry["hip_roll_error_right_rad"].append(float(equilibrium_joint_pos[5] - joint_pos[5]))
+            telemetry["yaw_drift_from_initial_rad"].append(float(centroidal_state_control.yaw_z) - initial_yaw_z)
 
-        # Control-time vs post-step orientation/rate telemetry
-        telemetry["control_pitch_x"].append(float(centroidal_state_control.body_pitch_x))
-        telemetry["control_pitch_rate_x"].append(float(centroidal_state_control.body_pitch_rate_x))
-        telemetry["control_roll_y"].append(float(centroidal_state_control.body_roll_y))
-        telemetry["control_roll_rate_y"].append(float(centroidal_state_control.body_roll_rate_y))
-        telemetry["log_pitch_x"].append(float(centroidal_state_log.body_pitch_x))
-        telemetry["log_pitch_rate_x"].append(float(centroidal_state_log.body_pitch_rate_x))
-        telemetry["log_roll_y"].append(float(centroidal_state_log.body_roll_y))
-        telemetry["log_roll_rate_y"].append(float(centroidal_state_log.body_roll_rate_y))
+            # Control-time vs post-step orientation/rate telemetry
+            telemetry["control_pitch_x"].append(float(centroidal_state_control.body_pitch_x))
+            telemetry["control_pitch_rate_x"].append(float(centroidal_state_control.body_pitch_rate_x))
+            telemetry["control_roll_y"].append(float(centroidal_state_control.body_roll_y))
+            telemetry["control_roll_rate_y"].append(float(centroidal_state_control.body_roll_rate_y))
+            telemetry["log_pitch_x"].append(float(centroidal_state_log.body_pitch_x))
+            telemetry["log_pitch_rate_x"].append(float(centroidal_state_log.body_pitch_rate_x))
+            telemetry["log_roll_y"].append(float(centroidal_state_log.body_roll_y))
+            telemetry["log_roll_rate_y"].append(float(centroidal_state_log.body_roll_rate_y))
 
-        # Compute finite-difference rates from logged orientation
-        if prev_log_pitch_x is not None:
-            fd_pitch_rate_x = (float(centroidal_state_log.body_pitch_x) - prev_log_pitch_x) / control_dt
-            fd_roll_rate_y = (float(centroidal_state_log.body_roll_y) - prev_log_roll_y) / control_dt
-        else:
-            fd_pitch_rate_x = 0.0
-            fd_roll_rate_y = 0.0
-        telemetry["fd_pitch_rate_x"].append(fd_pitch_rate_x)
-        telemetry["fd_roll_rate_y"].append(fd_roll_rate_y)
+            # Compute finite-difference rates from logged orientation
+            if prev_log_pitch_x is not None:
+                fd_pitch_rate_x = (float(centroidal_state_log.body_pitch_x) - prev_log_pitch_x) / control_dt
+                fd_roll_rate_y = (float(centroidal_state_log.body_roll_y) - prev_log_roll_y) / control_dt
+            else:
+                fd_pitch_rate_x = 0.0
+                fd_roll_rate_y = 0.0
+            telemetry["fd_pitch_rate_x"].append(fd_pitch_rate_x)
+            telemetry["fd_roll_rate_y"].append(fd_roll_rate_y)
 
-        # Update previous logged orientation for next step
-        prev_log_pitch_x = float(centroidal_state_log.body_pitch_x)
-        prev_log_roll_y = float(centroidal_state_log.body_roll_y)
+            # Update previous logged orientation for next step
+            prev_log_pitch_x = float(centroidal_state_log.body_pitch_x)
+            prev_log_roll_y = float(centroidal_state_log.body_roll_y)
 
-        # Sagittal controller input telemetry
-        telemetry["sagittal_controller_input_pitch_x"].append(sagittal_controller_input_pitch_x)
-        telemetry["sagittal_controller_input_pitch_rate_x"].append(sagittal_controller_input_pitch_rate_x)
-        telemetry["sagittal_controller_input_cp_y"].append(sagittal_controller_input_cp_y)
-        telemetry["sagittal_controller_input_com_y"].append(sagittal_controller_input_com_y)
-        telemetry["sagittal_controller_input_com_vy"].append(sagittal_controller_input_com_vy)
-        telemetry["sagittal_position_error_m"].append(sagittal_diag.get("sagittal_position_error_m", 0.0))
-        telemetry["sagittal_velocity_m_s"].append(sagittal_diag.get("sagittal_velocity_m_s", 0.0))
-        telemetry["support_position_velocity_m_s"].append(sagittal_diag.get("support_position_velocity_m_s", 0.0))
-        telemetry["tau_position"].append(sagittal_diag.get("tau_position", 0.0))
-        telemetry["tau_position_raw"].append(sagittal_diag.get("tau_position_raw", 0.0))
-        telemetry["position_integral_error"].append(sagittal_diag.get("position_integral_error", 0.0))
-        telemetry["tau_position_integral"].append(sagittal_diag.get("tau_position_integral", 0.0))
-        telemetry["integral_active"].append(sagittal_diag.get("integral_active", False))
-        telemetry["integral_gate_reason"].append(sagittal_diag.get("integral_gate_reason", "disabled"))
-        telemetry["integral_saturation_flag"].append(sagittal_diag.get("integral_saturation_flag", False))
-        telemetry["tau_position_p"].append(sagittal_diag.get("tau_position_p", 0.0))
-        telemetry["tau_position_i"].append(sagittal_diag.get("tau_position_i", 0.0))
-        telemetry["tau_position_total"].append(sagittal_diag.get("tau_position_total", 0.0))
-        telemetry["tau_position_clipped"].append(sagittal_diag.get("tau_position_clipped", 0.0))
-        telemetry["tau_support_velocity"].append(sagittal_diag.get("tau_support_velocity", 0.0))
-        telemetry["tau_pitch"].append(sagittal_diag.get("tau_pitch", 0.0))
-        telemetry["tau_pitch_raw"].append(sagittal_diag.get("tau_pitch_raw", sagittal_diag.get("tau_pitch", 0.0)))
-        telemetry["tau_pitch_scheduled"].append(sagittal_diag.get("tau_pitch_scheduled", sagittal_diag.get("tau_pitch", 0.0)))
-        telemetry["tau_pitch_clipped"].append(sagittal_diag.get("tau_pitch_clipped", sagittal_diag.get("tau_pitch", 0.0)))
-        telemetry["tau_pitch_to_position_ratio"].append(sagittal_diag.get("tau_pitch_to_position_ratio", 0.0))
-        telemetry["sagittal_schedule_profile"].append(sagittal_diag.get("sagittal_schedule_profile", "baseline"))
-        telemetry["high_height_schedule_active"].append(sagittal_diag.get("high_height_schedule_active", False))
-        telemetry["effective_max_position_tau"].append(sagittal_diag.get("effective_max_position_tau", sagittal_diag.get("max_position_tau", 0.0)))
-        telemetry["effective_pitch_scale"].append(sagittal_diag.get("effective_pitch_scale", 1.0))
-        telemetry["effective_pitch_tau_cap"].append(sagittal_diag.get("effective_pitch_tau_cap", "none"))
-        telemetry["effective_velocity_damping_scale"].append(sagittal_diag.get("effective_velocity_damping_scale", 1.0))
-        telemetry["effective_support_velocity_scale"].append(sagittal_diag.get("effective_support_velocity_scale", 1.0))
-        # Phase 6 continuous schedule telemetry
-        telemetry["low_height_sagittal_schedule_active"].append(sagittal_diag.get("low_height_sagittal_schedule_active", False))
-        telemetry["effective_k_position"].append(sagittal_diag.get("effective_k_position", sagittal_diag.get("k_position", 40.0)))
-        telemetry["effective_k_velocity"].append(sagittal_diag.get("effective_k_velocity", 15.0))
-        telemetry["sagittal_schedule_height_reference_m"].append(sagittal_diag.get("schedule_height_reference_m", 0.4))
-        telemetry["sagittal_schedule_height_source"].append(sagittal_diag.get("schedule_height_source", "unknown"))
-        telemetry["sagittal_schedule_u"].append(sagittal_diag.get("k_position_schedule_u", 0.0))
-        telemetry["sagittal_schedule_smoothstep"].append(sagittal_diag.get("k_position_schedule_smoothstep", 0.0))
-        telemetry["tau_pitch_rate"].append(sagittal_diag.get("tau_pitch_rate", 0.0))
-        telemetry["tau_pitch_rate_raw_signal"].append(sagittal_diag.get("tau_pitch_rate_raw_signal", 0.0))
-        telemetry["tau_pitch_rate_filtered_signal"].append(sagittal_diag.get("tau_pitch_rate_filtered_signal", 0.0))
-        telemetry["pitch_rate_raw_rad_s"].append(sagittal_diag.get("pitch_rate_raw", 0.0))
-        telemetry["pitch_rate_notched_rad_s"].append(sagittal_diag.get("pitch_rate_notched", 0.0))
-        telemetry["pitch_rate_effective_rad_s"].append(sagittal_diag.get("pitch_rate_effective", 0.0))
-        telemetry["wip_notch_height_gate"].append(sagittal_diag.get("wip_notch_height_gate", 0.0))
-        telemetry["wip_notch_filter_valid"].append(sagittal_diag.get("wip_notch_filter_valid", False))
-        telemetry["dynamic_height_active"].append(dynamic_height_active)
-        telemetry["dynamic_height_target_m"].append(dynamic_height_target_m if dynamic_height_active else 0.0)
-        telemetry["notch_height_gate_from_traj"].append(dynamic_height_notch_gate if dynamic_height_active else 0.0)
-        telemetry["tau_sagittal_velocity"].append(sagittal_diag.get("tau_sagittal_velocity", 0.0))
-        telemetry["tau_wheel_velocity_left"].append(sagittal_diag.get("tau_wheel_velocity_left", 0.0))
-        telemetry["tau_wheel_velocity_right"].append(sagittal_diag.get("tau_wheel_velocity_right", 0.0))
-        telemetry["max_position_tau"].append(sagittal_diag.get("max_position_tau", 0.0))
-        telemetry["tau_position_saturation_flag"].append(sagittal_diag.get("tau_position_saturation_flag", False))
-        telemetry["tau_position_saturation_reason"].append(sagittal_diag.get("tau_position_saturation_reason", "none"))
-        telemetry["tau_balance_before_position"].append(sagittal_diag.get("tau_balance_before_position", 0.0))
-        telemetry["tau_position_budget_available"].append(sagittal_diag.get("tau_position_budget_available", 0.0))
-        telemetry["tau_position_budget_allowed"].append(sagittal_diag.get("tau_position_budget_allowed", 0.0))
-        telemetry["tau_position_budget_cap"].append(sagittal_diag.get("tau_position_budget_cap", 0.0))
-        telemetry["pitch_reserve_tau"].append(sagittal_diag.get("pitch_reserve_tau", 0.0))
-        telemetry["tau_pitch_reserve_applied"].append(sagittal_diag.get("tau_pitch_reserve_applied", 0.0))
-        telemetry["enable_torque_budget_aware_position"].append(sagittal_diag.get("enable_torque_budget_aware_position", False))
-        telemetry["tau_position_lower_bound"].append(sagittal_diag.get("tau_position_lower_bound", 0.0))
-        telemetry["tau_position_upper_bound"].append(sagittal_diag.get("tau_position_upper_bound", 0.0))
-        telemetry["tau_position_total_bound_clipped"].append(sagittal_diag.get("tau_position_total_bound_clipped", False))
-        telemetry["position_authority_mode"].append(sagittal_diag.get("position_authority_mode", "none"))
-        telemetry["position_authority_reason"].append(sagittal_diag.get("position_authority_reason", "none"))
-        telemetry["tau_total_unclipped"].append(sagittal_diag.get("tau_total_unclipped", 0.0))
-        telemetry["tau_total_clipped"].append(sagittal_diag.get("tau_total_clipped", 0.0))
-        telemetry["tau_total_before_final_clip"].append(sagittal_diag.get("tau_total_before_final_clip", 0.0))
-        telemetry["tau_total_after_final_clip"].append(sagittal_diag.get("tau_total_after_final_clip", 0.0))
-        telemetry["final_wheel_torque_margin"].append(sagittal_diag.get("final_wheel_torque_margin", 0.0))
-        telemetry["k_support_velocity"].append(sagittal_diag.get("k_support_velocity", 0.0))
-        telemetry["support_position_error_m"].append(sagittal_diag.get("support_position_error_m", 0.0))
-        telemetry["com_position_error_sagittal_m"].append(sagittal_diag.get("com_position_error_sagittal_m", 0.0))
-        telemetry["pitch_x_ref_rad"].append(sagittal_diag.get("pitch_x_ref_rad", 0.0))
-        telemetry["pitch_x_error_rad"].append(sagittal_diag.get("pitch_x_error_rad", 0.0))
+            # Sagittal controller input telemetry
+            telemetry["sagittal_controller_input_pitch_x"].append(sagittal_controller_input_pitch_x)
+            telemetry["sagittal_controller_input_pitch_rate_x"].append(sagittal_controller_input_pitch_rate_x)
+            telemetry["sagittal_controller_input_cp_y"].append(sagittal_controller_input_cp_y)
+            telemetry["sagittal_controller_input_com_y"].append(sagittal_controller_input_com_y)
+            telemetry["sagittal_controller_input_com_vy"].append(sagittal_controller_input_com_vy)
+            telemetry["sagittal_position_error_m"].append(sagittal_diag.get("sagittal_position_error_m", 0.0))
+            telemetry["sagittal_velocity_m_s"].append(sagittal_diag.get("sagittal_velocity_m_s", 0.0))
+            telemetry["support_position_velocity_m_s"].append(sagittal_diag.get("support_position_velocity_m_s", 0.0))
+            telemetry["tau_position"].append(sagittal_diag.get("tau_position", 0.0))
+            telemetry["tau_position_raw"].append(sagittal_diag.get("tau_position_raw", 0.0))
+            telemetry["position_integral_error"].append(sagittal_diag.get("position_integral_error", 0.0))
+            telemetry["tau_position_integral"].append(sagittal_diag.get("tau_position_integral", 0.0))
+            telemetry["integral_active"].append(sagittal_diag.get("integral_active", False))
+            telemetry["integral_gate_reason"].append(sagittal_diag.get("integral_gate_reason", "disabled"))
+            telemetry["integral_saturation_flag"].append(sagittal_diag.get("integral_saturation_flag", False))
+            telemetry["tau_position_p"].append(sagittal_diag.get("tau_position_p", 0.0))
+            telemetry["tau_position_i"].append(sagittal_diag.get("tau_position_i", 0.0))
+            telemetry["tau_position_total"].append(sagittal_diag.get("tau_position_total", 0.0))
+            telemetry["tau_position_clipped"].append(sagittal_diag.get("tau_position_clipped", 0.0))
+            telemetry["tau_support_velocity"].append(sagittal_diag.get("tau_support_velocity", 0.0))
+            telemetry["tau_pitch"].append(sagittal_diag.get("tau_pitch", 0.0))
+            telemetry["tau_pitch_raw"].append(sagittal_diag.get("tau_pitch_raw", sagittal_diag.get("tau_pitch", 0.0)))
+            telemetry["tau_pitch_scheduled"].append(sagittal_diag.get("tau_pitch_scheduled", sagittal_diag.get("tau_pitch", 0.0)))
+            telemetry["tau_pitch_clipped"].append(sagittal_diag.get("tau_pitch_clipped", sagittal_diag.get("tau_pitch", 0.0)))
+            telemetry["tau_pitch_to_position_ratio"].append(sagittal_diag.get("tau_pitch_to_position_ratio", 0.0))
+            telemetry["sagittal_schedule_profile"].append(sagittal_diag.get("sagittal_schedule_profile", "baseline"))
+            telemetry["high_height_schedule_active"].append(sagittal_diag.get("high_height_schedule_active", False))
+            telemetry["effective_max_position_tau"].append(sagittal_diag.get("effective_max_position_tau", sagittal_diag.get("max_position_tau", 0.0)))
+            telemetry["effective_pitch_scale"].append(sagittal_diag.get("effective_pitch_scale", 1.0))
+            telemetry["effective_pitch_tau_cap"].append(sagittal_diag.get("effective_pitch_tau_cap", "none"))
+            telemetry["effective_velocity_damping_scale"].append(sagittal_diag.get("effective_velocity_damping_scale", 1.0))
+            telemetry["effective_support_velocity_scale"].append(sagittal_diag.get("effective_support_velocity_scale", 1.0))
+            # Phase 6 continuous schedule telemetry
+            telemetry["low_height_sagittal_schedule_active"].append(sagittal_diag.get("low_height_sagittal_schedule_active", False))
+            telemetry["effective_k_position"].append(sagittal_diag.get("effective_k_position", sagittal_diag.get("k_position", 40.0)))
+            telemetry["effective_k_velocity"].append(sagittal_diag.get("effective_k_velocity", 15.0))
+            telemetry["sagittal_schedule_height_reference_m"].append(sagittal_diag.get("schedule_height_reference_m", 0.4))
+            telemetry["sagittal_schedule_height_source"].append(sagittal_diag.get("schedule_height_source", "unknown"))
+            telemetry["sagittal_schedule_u"].append(sagittal_diag.get("k_position_schedule_u", 0.0))
+            telemetry["sagittal_schedule_smoothstep"].append(sagittal_diag.get("k_position_schedule_smoothstep", 0.0))
+            telemetry["tau_pitch_rate"].append(sagittal_diag.get("tau_pitch_rate", 0.0))
+            telemetry["tau_pitch_rate_raw_signal"].append(sagittal_diag.get("tau_pitch_rate_raw_signal", 0.0))
+            telemetry["tau_pitch_rate_filtered_signal"].append(sagittal_diag.get("tau_pitch_rate_filtered_signal", 0.0))
+            telemetry["pitch_rate_raw_rad_s"].append(sagittal_diag.get("pitch_rate_raw", 0.0))
+            telemetry["pitch_rate_notched_rad_s"].append(sagittal_diag.get("pitch_rate_notched", 0.0))
+            telemetry["pitch_rate_effective_rad_s"].append(sagittal_diag.get("pitch_rate_effective", 0.0))
+            telemetry["wip_notch_height_gate"].append(sagittal_diag.get("wip_notch_height_gate", 0.0))
+            telemetry["wip_notch_filter_valid"].append(sagittal_diag.get("wip_notch_filter_valid", False))
+            telemetry["dynamic_height_active"].append(dynamic_height_active)
+            telemetry["dynamic_height_target_m"].append(dynamic_height_target_m if dynamic_height_active else 0.0)
+            telemetry["notch_height_gate_from_traj"].append(dynamic_height_notch_gate if dynamic_height_active else 0.0)
+            telemetry["tau_sagittal_velocity"].append(sagittal_diag.get("tau_sagittal_velocity", 0.0))
+            telemetry["tau_wheel_velocity_left"].append(sagittal_diag.get("tau_wheel_velocity_left", 0.0))
+            telemetry["tau_wheel_velocity_right"].append(sagittal_diag.get("tau_wheel_velocity_right", 0.0))
+            telemetry["max_position_tau"].append(sagittal_diag.get("max_position_tau", 0.0))
+            telemetry["tau_position_saturation_flag"].append(sagittal_diag.get("tau_position_saturation_flag", False))
+            telemetry["tau_position_saturation_reason"].append(sagittal_diag.get("tau_position_saturation_reason", "none"))
+            telemetry["tau_balance_before_position"].append(sagittal_diag.get("tau_balance_before_position", 0.0))
+            telemetry["tau_position_budget_available"].append(sagittal_diag.get("tau_position_budget_available", 0.0))
+            telemetry["tau_position_budget_allowed"].append(sagittal_diag.get("tau_position_budget_allowed", 0.0))
+            telemetry["tau_position_budget_cap"].append(sagittal_diag.get("tau_position_budget_cap", 0.0))
+            telemetry["pitch_reserve_tau"].append(sagittal_diag.get("pitch_reserve_tau", 0.0))
+            telemetry["tau_pitch_reserve_applied"].append(sagittal_diag.get("tau_pitch_reserve_applied", 0.0))
+            telemetry["enable_torque_budget_aware_position"].append(sagittal_diag.get("enable_torque_budget_aware_position", False))
+            telemetry["tau_position_lower_bound"].append(sagittal_diag.get("tau_position_lower_bound", 0.0))
+            telemetry["tau_position_upper_bound"].append(sagittal_diag.get("tau_position_upper_bound", 0.0))
+            telemetry["tau_position_total_bound_clipped"].append(sagittal_diag.get("tau_position_total_bound_clipped", False))
+            telemetry["position_authority_mode"].append(sagittal_diag.get("position_authority_mode", "none"))
+            telemetry["position_authority_reason"].append(sagittal_diag.get("position_authority_reason", "none"))
+            telemetry["tau_total_unclipped"].append(sagittal_diag.get("tau_total_unclipped", 0.0))
+            telemetry["tau_total_clipped"].append(sagittal_diag.get("tau_total_clipped", 0.0))
+            telemetry["tau_total_before_final_clip"].append(sagittal_diag.get("tau_total_before_final_clip", 0.0))
+            telemetry["tau_total_after_final_clip"].append(sagittal_diag.get("tau_total_after_final_clip", 0.0))
+            telemetry["final_wheel_torque_margin"].append(sagittal_diag.get("final_wheel_torque_margin", 0.0))
+            telemetry["k_support_velocity"].append(sagittal_diag.get("k_support_velocity", 0.0))
+            telemetry["support_position_error_m"].append(sagittal_diag.get("support_position_error_m", 0.0))
+            telemetry["com_position_error_sagittal_m"].append(sagittal_diag.get("com_position_error_sagittal_m", 0.0))
+            telemetry["pitch_x_ref_rad"].append(sagittal_diag.get("pitch_x_ref_rad", 0.0))
+            telemetry["pitch_x_error_rad"].append(sagittal_diag.get("pitch_x_error_rad", 0.0))
 
-        # Phase B support-position outer-loop telemetry (zeros / "disabled" for legacy profiles)
-        telemetry["outer_loop_active"].append(sagittal_diag.get("outer_loop_active", False))
-        telemetry["outer_loop_support_error_m"].append(sagittal_diag.get("outer_loop_support_error_m", 0.0))
-        telemetry["outer_loop_support_error_rate_mps"].append(sagittal_diag.get("outer_loop_support_error_rate_mps", 0.0))
-        telemetry["outer_loop_pitch_ref_dynamic_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_dynamic_deg", 0.0))
-        telemetry["outer_loop_pitch_ref_total_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_total_deg", 0.0))
-        telemetry["outer_loop_pitch_ref_limited_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_limited_deg", 0.0))
-        telemetry["outer_loop_pitch_ref_rate_limited_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_rate_limited_deg", 0.0))
-        telemetry["outer_loop_integral_m_s"].append(sagittal_diag.get("outer_loop_integral_m_s", 0.0))
-        telemetry["outer_loop_gate_pass"].append(sagittal_diag.get("outer_loop_gate_pass", False))
-        telemetry["outer_loop_block_reason"].append(sagittal_diag.get("outer_loop_block_reason", "disabled"))
-        telemetry["outer_loop_sign_selected"].append(sagittal_diag.get("outer_loop_sign_selected", "none"))
-        telemetry["support_outer_loop_height_scale"].append(sagittal_diag.get("support_outer_loop_height_scale", 0.0))
-        telemetry["support_outer_loop_kp_effective"].append(sagittal_diag.get("support_outer_loop_kp_effective", 0.0))
-        telemetry["support_outer_loop_kd_effective"].append(sagittal_diag.get("support_outer_loop_kd_effective", 0.0))
-        telemetry["support_outer_loop_pitch_ref_offset_deg"].append(sagittal_diag.get("support_outer_loop_pitch_ref_offset_deg", 0.0))
-        telemetry["support_outer_loop_pitch_ref_contrib"].append(sagittal_diag.get("support_outer_loop_pitch_ref_contrib", 0.0))
-        telemetry["support_outer_loop_cap_active"].append(sagittal_diag.get("support_outer_loop_cap_active", False))
-        telemetry["pitch_ref_offset_scheduled_deg"].append(sagittal_diag.get("pitch_ref_offset_scheduled_deg", 0.0))
-        telemetry["pitch_ref_total_after_outer_loop_deg"].append(sagittal_diag.get("pitch_ref_total_after_outer_loop_deg", 0.0))
-        telemetry["pitch_x_error_after_outer_loop_rad"].append(sagittal_diag.get("pitch_x_error_after_outer_loop_rad", 0.0))
-        # Calibrated outer-loop telemetry (Phase B calibration)
-        telemetry.setdefault("calibrated_outer_loop_active", []).append(sagittal_diag.get("calibrated_outer_loop_active", False))
-        telemetry.setdefault("calibrated_function_profile_name", []).append(sagittal_diag.get("calibrated_function_profile_name", ""))
-        telemetry.setdefault("calibrated_height_m", []).append(sagittal_diag.get("calibrated_height_m", 0.0))
-        telemetry.setdefault("calibrated_kp_deg_per_m", []).append(sagittal_diag.get("calibrated_kp_deg_per_m", 0.0))
-        telemetry.setdefault("calibrated_kd_deg_per_mps", []).append(sagittal_diag.get("calibrated_kd_deg_per_mps", 0.0))
-        telemetry.setdefault("calibrated_ki_deg_per_m_s", []).append(sagittal_diag.get("calibrated_ki_deg_per_m_s", 0.0))
-        telemetry.setdefault("calibrated_theta_ref_max_deg", []).append(sagittal_diag.get("calibrated_theta_ref_max_deg", 0.0))
-        telemetry.setdefault("calibrated_deadband_m", []).append(sagittal_diag.get("calibrated_deadband_m", 0.0))
-        telemetry.setdefault("calibrated_rate_limit_deg_per_step", []).append(sagittal_diag.get("calibrated_rate_limit_deg_per_step", 0.0))
-        telemetry.setdefault("calibrated_lowpass_alpha", []).append(sagittal_diag.get("calibrated_lowpass_alpha", 0.0))
-        telemetry.setdefault("calibrated_integral_active", []).append(sagittal_diag.get("calibrated_integral_active", False))
-        telemetry.setdefault("calibrated_integral_value", []).append(sagittal_diag.get("calibrated_integral_value", 0.0))
-        # Physics-based equilibrium feedforward telemetry (Phase D)
-        telemetry.setdefault("physics_ff_enabled", []).append(sagittal_diag.get("physics_ff_enabled", False))
-        telemetry.setdefault("physics_ff_height_m", []).append(sagittal_diag.get("physics_ff_height_m", 0.0))
-        telemetry.setdefault("physics_ff_tau_eq_each_wheel_nm", []).append(sagittal_diag.get("physics_ff_tau_eq_each_wheel_nm", 0.0))
-        telemetry.setdefault("physics_ff_pitch_eq_no_off_deg", []).append(sagittal_diag.get("physics_ff_pitch_eq_no_off_deg", 0.0))
-        telemetry.setdefault("physics_ff_function_version", []).append(sagittal_diag.get("physics_ff_function_version", ""))
-        telemetry.setdefault("physics_ff_clamped", []).append(sagittal_diag.get("physics_ff_clamped", False))
-        telemetry.setdefault("physics_ff_applied_each_wheel_nm", []).append(sagittal_diag.get("physics_ff_applied_each_wheel_nm", 0.0))
-        telemetry.setdefault("physics_ff_final_wheel_tau_with_ff", []).append(sagittal_diag.get("physics_ff_final_wheel_tau_with_ff", 0.0))
-        telemetry.setdefault("physics_ff_final_wheel_tau_without_ff", []).append(sagittal_diag.get("physics_ff_final_wheel_tau_without_ff", 0.0))
-        telemetry.setdefault("physics_ff_active_this_step", []).append(sagittal_diag.get("physics_ff_active_this_step", False))
-        telemetry.setdefault("empirical_pitch_ref_offset_disabled", []).append(sagittal_diag.get("empirical_pitch_ref_offset_disabled", False))
-        telemetry.setdefault("physics_equivalent_pitch_ref_deg", []).append(sagittal_diag.get("physics_equivalent_pitch_ref_deg", 0.0))
+            # Phase B support-position outer-loop telemetry (zeros / "disabled" for legacy profiles)
+            telemetry["outer_loop_active"].append(sagittal_diag.get("outer_loop_active", False))
+            telemetry["outer_loop_support_error_m"].append(sagittal_diag.get("outer_loop_support_error_m", 0.0))
+            telemetry["outer_loop_support_error_rate_mps"].append(sagittal_diag.get("outer_loop_support_error_rate_mps", 0.0))
+            telemetry["outer_loop_pitch_ref_dynamic_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_dynamic_deg", 0.0))
+            telemetry["outer_loop_pitch_ref_total_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_total_deg", 0.0))
+            telemetry["outer_loop_pitch_ref_limited_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_limited_deg", 0.0))
+            telemetry["outer_loop_pitch_ref_rate_limited_deg"].append(sagittal_diag.get("outer_loop_pitch_ref_rate_limited_deg", 0.0))
+            telemetry["outer_loop_integral_m_s"].append(sagittal_diag.get("outer_loop_integral_m_s", 0.0))
+            telemetry["outer_loop_gate_pass"].append(sagittal_diag.get("outer_loop_gate_pass", False))
+            telemetry["outer_loop_block_reason"].append(sagittal_diag.get("outer_loop_block_reason", "disabled"))
+            telemetry["outer_loop_sign_selected"].append(sagittal_diag.get("outer_loop_sign_selected", "none"))
+            telemetry["support_outer_loop_height_scale"].append(sagittal_diag.get("support_outer_loop_height_scale", 0.0))
+            telemetry["support_outer_loop_kp_effective"].append(sagittal_diag.get("support_outer_loop_kp_effective", 0.0))
+            telemetry["support_outer_loop_kd_effective"].append(sagittal_diag.get("support_outer_loop_kd_effective", 0.0))
+            telemetry["support_outer_loop_pitch_ref_offset_deg"].append(sagittal_diag.get("support_outer_loop_pitch_ref_offset_deg", 0.0))
+            telemetry["support_outer_loop_pitch_ref_contrib"].append(sagittal_diag.get("support_outer_loop_pitch_ref_contrib", 0.0))
+            telemetry["support_outer_loop_cap_active"].append(sagittal_diag.get("support_outer_loop_cap_active", False))
+            telemetry["pitch_ref_offset_scheduled_deg"].append(sagittal_diag.get("pitch_ref_offset_scheduled_deg", 0.0))
+            telemetry["pitch_ref_total_after_outer_loop_deg"].append(sagittal_diag.get("pitch_ref_total_after_outer_loop_deg", 0.0))
+            telemetry["pitch_x_error_after_outer_loop_rad"].append(sagittal_diag.get("pitch_x_error_after_outer_loop_rad", 0.0))
+            # Calibrated outer-loop telemetry (Phase B calibration)
+            telemetry.setdefault("calibrated_outer_loop_active", []).append(sagittal_diag.get("calibrated_outer_loop_active", False))
+            telemetry.setdefault("calibrated_function_profile_name", []).append(sagittal_diag.get("calibrated_function_profile_name", ""))
+            telemetry.setdefault("calibrated_height_m", []).append(sagittal_diag.get("calibrated_height_m", 0.0))
+            telemetry.setdefault("calibrated_kp_deg_per_m", []).append(sagittal_diag.get("calibrated_kp_deg_per_m", 0.0))
+            telemetry.setdefault("calibrated_kd_deg_per_mps", []).append(sagittal_diag.get("calibrated_kd_deg_per_mps", 0.0))
+            telemetry.setdefault("calibrated_ki_deg_per_m_s", []).append(sagittal_diag.get("calibrated_ki_deg_per_m_s", 0.0))
+            telemetry.setdefault("calibrated_theta_ref_max_deg", []).append(sagittal_diag.get("calibrated_theta_ref_max_deg", 0.0))
+            telemetry.setdefault("calibrated_deadband_m", []).append(sagittal_diag.get("calibrated_deadband_m", 0.0))
+            telemetry.setdefault("calibrated_rate_limit_deg_per_step", []).append(sagittal_diag.get("calibrated_rate_limit_deg_per_step", 0.0))
+            telemetry.setdefault("calibrated_lowpass_alpha", []).append(sagittal_diag.get("calibrated_lowpass_alpha", 0.0))
+            telemetry.setdefault("calibrated_integral_active", []).append(sagittal_diag.get("calibrated_integral_active", False))
+            telemetry.setdefault("calibrated_integral_value", []).append(sagittal_diag.get("calibrated_integral_value", 0.0))
+            # Physics-based equilibrium feedforward telemetry (Phase D)
+            telemetry.setdefault("physics_ff_enabled", []).append(sagittal_diag.get("physics_ff_enabled", False))
+            telemetry.setdefault("physics_ff_height_m", []).append(sagittal_diag.get("physics_ff_height_m", 0.0))
+            telemetry.setdefault("physics_ff_tau_eq_each_wheel_nm", []).append(sagittal_diag.get("physics_ff_tau_eq_each_wheel_nm", 0.0))
+            telemetry.setdefault("physics_ff_pitch_eq_no_off_deg", []).append(sagittal_diag.get("physics_ff_pitch_eq_no_off_deg", 0.0))
+            telemetry.setdefault("physics_ff_function_version", []).append(sagittal_diag.get("physics_ff_function_version", ""))
+            telemetry.setdefault("physics_ff_clamped", []).append(sagittal_diag.get("physics_ff_clamped", False))
+            telemetry.setdefault("physics_ff_applied_each_wheel_nm", []).append(sagittal_diag.get("physics_ff_applied_each_wheel_nm", 0.0))
+            telemetry.setdefault("physics_ff_final_wheel_tau_with_ff", []).append(sagittal_diag.get("physics_ff_final_wheel_tau_with_ff", 0.0))
+            telemetry.setdefault("physics_ff_final_wheel_tau_without_ff", []).append(sagittal_diag.get("physics_ff_final_wheel_tau_without_ff", 0.0))
+            telemetry.setdefault("physics_ff_active_this_step", []).append(sagittal_diag.get("physics_ff_active_this_step", False))
+            telemetry.setdefault("empirical_pitch_ref_offset_disabled", []).append(sagittal_diag.get("empirical_pitch_ref_offset_disabled", False))
+            telemetry.setdefault("physics_equivalent_pitch_ref_deg", []).append(sagittal_diag.get("physics_equivalent_pitch_ref_deg", 0.0))
 
-        # Auto-forward all K1 augmented telemetry fields from controller diagnostics to CSV
-        for _k1_field in K1_AUGMENTED_TELEMETRY_FIELDS:
-            telemetry.setdefault(_k1_field, []).append(sagittal_diag.get(_k1_field, 0.0))
+            # Auto-forward all K1 augmented telemetry fields from controller diagnostics to CSV
+            for _k1_field in K1_AUGMENTED_TELEMETRY_FIELDS:
+                telemetry.setdefault(_k1_field, []).append(sagittal_diag.get(_k1_field, 0.0))
 
-        # Capture gate telemetry (velocity-damped controller only)
-        telemetry["capture_gate_enabled"].append(sagittal_diag.get("capture_gate_enabled", False))
-        telemetry["capture_gate_required_direction"].append(sagittal_diag.get("capture_gate_required_direction", 0.0))
-        telemetry["capture_gate_tau_position_direction"].append(sagittal_diag.get("capture_gate_tau_position_direction", 0.0))
-        telemetry["capture_gate_position_opposes_capture"].append(sagittal_diag.get("capture_gate_position_opposes_capture", False))
-        telemetry["capture_gate_factor"].append(sagittal_diag.get("capture_gate_factor", 1.0))
-        telemetry["capture_gate_active"].append(sagittal_diag.get("capture_gate_active", False))
-        telemetry["capture_gate_reason"].append(sagittal_diag.get("capture_gate_reason", "N/A"))
-        telemetry["capture_gate_pitch_reversal"].append(sagittal_diag.get("capture_gate_pitch_reversal", False))
-        telemetry["capture_gate_capture_recovery"].append(sagittal_diag.get("capture_gate_capture_recovery", False))
-        telemetry["capture_gate_tau_position_gated"].append(sagittal_diag.get("capture_gate_tau_position_gated", 0.0))
-        telemetry["capture_gate_cp_relative_to_support_m"].append(sagittal_diag.get("capture_gate_cp_relative_to_support_m", 0.0))
-        telemetry["capture_gate_com_support_error_m"].append(sagittal_diag.get("capture_gate_com_support_error_m", 0.0))
+            # Capture gate telemetry (velocity-damped controller only)
+            telemetry["capture_gate_enabled"].append(sagittal_diag.get("capture_gate_enabled", False))
+            telemetry["capture_gate_required_direction"].append(sagittal_diag.get("capture_gate_required_direction", 0.0))
+            telemetry["capture_gate_tau_position_direction"].append(sagittal_diag.get("capture_gate_tau_position_direction", 0.0))
+            telemetry["capture_gate_position_opposes_capture"].append(sagittal_diag.get("capture_gate_position_opposes_capture", False))
+            telemetry["capture_gate_factor"].append(sagittal_diag.get("capture_gate_factor", 1.0))
+            telemetry["capture_gate_active"].append(sagittal_diag.get("capture_gate_active", False))
+            telemetry["capture_gate_reason"].append(sagittal_diag.get("capture_gate_reason", "N/A"))
+            telemetry["capture_gate_pitch_reversal"].append(sagittal_diag.get("capture_gate_pitch_reversal", False))
+            telemetry["capture_gate_capture_recovery"].append(sagittal_diag.get("capture_gate_capture_recovery", False))
+            telemetry["capture_gate_tau_position_gated"].append(sagittal_diag.get("capture_gate_tau_position_gated", 0.0))
+            telemetry["capture_gate_cp_relative_to_support_m"].append(sagittal_diag.get("capture_gate_cp_relative_to_support_m", 0.0))
+            telemetry["capture_gate_com_support_error_m"].append(sagittal_diag.get("capture_gate_com_support_error_m", 0.0))
 
-        # Pitch-aware position scaling telemetry (if enabled)
-        telemetry["pitch_aware_position_scaling_enabled"].append(sagittal_diag.get("pitch_aware_position_scaling_enabled", False))
-        telemetry["pitch_aware_position_scale"].append(sagittal_diag.get("pitch_aware_position_scale", 1.0))
-        telemetry["pitch_aware_active"].append(sagittal_diag.get("pitch_aware_active", False))
-        telemetry["pitch_soft_start"].append(sagittal_diag.get("pitch_soft_start", 0.06))
-        telemetry["pitch_hard_limit"].append(sagittal_diag.get("pitch_hard_limit", 0.10))
-        telemetry["min_pitch_scale"].append(sagittal_diag.get("min_pitch_scale", 0.7))
-        telemetry["tau_position_before_pitch_scale"].append(sagittal_diag.get("tau_position_before_pitch_scale", 0.0))
-        telemetry["tau_position_after_pitch_scale"].append(sagittal_diag.get("tau_position_after_pitch_scale", 0.0))
+            # Pitch-aware position scaling telemetry (if enabled)
+            telemetry["pitch_aware_position_scaling_enabled"].append(sagittal_diag.get("pitch_aware_position_scaling_enabled", False))
+            telemetry["pitch_aware_position_scale"].append(sagittal_diag.get("pitch_aware_position_scale", 1.0))
+            telemetry["pitch_aware_active"].append(sagittal_diag.get("pitch_aware_active", False))
+            telemetry["pitch_soft_start"].append(sagittal_diag.get("pitch_soft_start", 0.06))
+            telemetry["pitch_hard_limit"].append(sagittal_diag.get("pitch_hard_limit", 0.10))
+            telemetry["min_pitch_scale"].append(sagittal_diag.get("min_pitch_scale", 0.7))
+            telemetry["tau_position_before_pitch_scale"].append(sagittal_diag.get("tau_position_before_pitch_scale", 0.0))
+            telemetry["tau_position_after_pitch_scale"].append(sagittal_diag.get("tau_position_after_pitch_scale", 0.0))
 
-        # Phase-aware recenter telemetry (F1_strategy - if enabled)
-        telemetry["phase_recenter_enabled"].append(sagittal_diag.get("phase_recenter_enabled", False))
-        telemetry["phase_recenter_active"].append(sagittal_diag.get("phase_recenter_active", False))
-        telemetry["phase_recenter_gate_safe"].append(sagittal_diag.get("phase_recenter_gate_safe", False))
-        telemetry["phase_recenter_signed_error_m"].append(sagittal_diag.get("phase_recenter_signed_error_m", 0.0))
-        telemetry["phase_recenter_raw_tau"].append(sagittal_diag.get("phase_recenter_raw_tau", 0.0))
-        telemetry["phase_recenter_tau"].append(sagittal_diag.get("phase_recenter_tau", 0.0))
-        telemetry["phase_recenter_tau_clipped"].append(sagittal_diag.get("phase_recenter_tau_clipped", 0.0))
-        telemetry["phase_recenter_smooth_alpha"].append(sagittal_diag.get("phase_recenter_smooth_alpha", 0.0))
-        telemetry["phase_recenter_gate_reason"].append(str(sagittal_diag.get("phase_recenter_gate_reason", "unknown")))
-        telemetry["phase_recenter_pitch_safe"].append(sagittal_diag.get("phase_recenter_pitch_safe", False))
-        telemetry["phase_recenter_pitch_danger"].append(sagittal_diag.get("phase_recenter_pitch_danger", False))
-        telemetry["phase_recenter_contact_safe"].append(sagittal_diag.get("phase_recenter_contact_safe", True))
-        telemetry["phase_recenter_height_safe"].append(sagittal_diag.get("phase_recenter_height_safe", True))
-        telemetry["phase_recenter_deadband_active"].append(sagittal_diag.get("phase_recenter_deadband_active", False))
+            # Phase-aware recenter telemetry (F1_strategy - if enabled)
+            telemetry["phase_recenter_enabled"].append(sagittal_diag.get("phase_recenter_enabled", False))
+            telemetry["phase_recenter_active"].append(sagittal_diag.get("phase_recenter_active", False))
+            telemetry["phase_recenter_gate_safe"].append(sagittal_diag.get("phase_recenter_gate_safe", False))
+            telemetry["phase_recenter_signed_error_m"].append(sagittal_diag.get("phase_recenter_signed_error_m", 0.0))
+            telemetry["phase_recenter_raw_tau"].append(sagittal_diag.get("phase_recenter_raw_tau", 0.0))
+            telemetry["phase_recenter_tau"].append(sagittal_diag.get("phase_recenter_tau", 0.0))
+            telemetry["phase_recenter_tau_clipped"].append(sagittal_diag.get("phase_recenter_tau_clipped", 0.0))
+            telemetry["phase_recenter_smooth_alpha"].append(sagittal_diag.get("phase_recenter_smooth_alpha", 0.0))
+            telemetry["phase_recenter_gate_reason"].append(str(sagittal_diag.get("phase_recenter_gate_reason", "unknown")))
+            telemetry["phase_recenter_pitch_safe"].append(sagittal_diag.get("phase_recenter_pitch_safe", False))
+            telemetry["phase_recenter_pitch_danger"].append(sagittal_diag.get("phase_recenter_pitch_danger", False))
+            telemetry["phase_recenter_contact_safe"].append(sagittal_diag.get("phase_recenter_contact_safe", True))
+            telemetry["phase_recenter_height_safe"].append(sagittal_diag.get("phase_recenter_height_safe", True))
+            telemetry["phase_recenter_deadband_active"].append(sagittal_diag.get("phase_recenter_deadband_active", False))
 
-        # Hysteresis recenter telemetry (F2_strategy - if enabled)
-        telemetry["hysteresis_recenter_enabled"].append(sagittal_diag.get("hysteresis_recenter_enabled", False))
-        telemetry["hysteresis_recenter_state"].append(str(sagittal_diag.get("hysteresis_recenter_state", "NEUTRAL")))
-        telemetry["hysteresis_recenter_state_id"].append(sagittal_diag.get("hysteresis_recenter_state_id", 0))
-        telemetry["hysteresis_recenter_outer_enter_m"].append(sagittal_diag.get("hysteresis_recenter_outer_enter_m", 0.10))
-        telemetry["hysteresis_recenter_exit_target_m"].append(sagittal_diag.get("hysteresis_recenter_exit_target_m", 0.00))
-        telemetry["hysteresis_recenter_signed_error_m"].append(sagittal_diag.get("hysteresis_recenter_signed_error_m", 0.0))
-        telemetry["hysteresis_recenter_target_error_m"].append(sagittal_diag.get("hysteresis_recenter_target_error_m", 0.0))
-        telemetry["hysteresis_recenter_raw_tau"].append(sagittal_diag.get("hysteresis_recenter_raw_tau", 0.0))
-        telemetry["hysteresis_recenter_tau"].append(sagittal_diag.get("hysteresis_recenter_tau", 0.0))
-        telemetry["hysteresis_recenter_tau_clipped"].append(sagittal_diag.get("hysteresis_recenter_tau_clipped", 0.0))
-        telemetry["hysteresis_recenter_active"].append(sagittal_diag.get("hysteresis_recenter_active", False))
-        telemetry["hysteresis_recenter_state_entry_count"].append(sagittal_diag.get("hysteresis_recenter_state_entry_count", 0))
-        telemetry["hysteresis_recenter_state_exit_count"].append(sagittal_diag.get("hysteresis_recenter_state_exit_count", 0))
-        telemetry["hysteresis_recenter_safety_override"].append(sagittal_diag.get("hysteresis_recenter_safety_override", False))
-        telemetry["hysteresis_recenter_gate_reason"].append(str(sagittal_diag.get("hysteresis_recenter_gate_reason", "unknown")))
+            # Hysteresis recenter telemetry (F2_strategy - if enabled)
+            telemetry["hysteresis_recenter_enabled"].append(sagittal_diag.get("hysteresis_recenter_enabled", False))
+            telemetry["hysteresis_recenter_state"].append(str(sagittal_diag.get("hysteresis_recenter_state", "NEUTRAL")))
+            telemetry["hysteresis_recenter_state_id"].append(sagittal_diag.get("hysteresis_recenter_state_id", 0))
+            telemetry["hysteresis_recenter_outer_enter_m"].append(sagittal_diag.get("hysteresis_recenter_outer_enter_m", 0.10))
+            telemetry["hysteresis_recenter_exit_target_m"].append(sagittal_diag.get("hysteresis_recenter_exit_target_m", 0.00))
+            telemetry["hysteresis_recenter_signed_error_m"].append(sagittal_diag.get("hysteresis_recenter_signed_error_m", 0.0))
+            telemetry["hysteresis_recenter_target_error_m"].append(sagittal_diag.get("hysteresis_recenter_target_error_m", 0.0))
+            telemetry["hysteresis_recenter_raw_tau"].append(sagittal_diag.get("hysteresis_recenter_raw_tau", 0.0))
+            telemetry["hysteresis_recenter_tau"].append(sagittal_diag.get("hysteresis_recenter_tau", 0.0))
+            telemetry["hysteresis_recenter_tau_clipped"].append(sagittal_diag.get("hysteresis_recenter_tau_clipped", 0.0))
+            telemetry["hysteresis_recenter_active"].append(sagittal_diag.get("hysteresis_recenter_active", False))
+            telemetry["hysteresis_recenter_state_entry_count"].append(sagittal_diag.get("hysteresis_recenter_state_entry_count", 0))
+            telemetry["hysteresis_recenter_state_exit_count"].append(sagittal_diag.get("hysteresis_recenter_state_exit_count", 0))
+            telemetry["hysteresis_recenter_safety_override"].append(sagittal_diag.get("hysteresis_recenter_safety_override", False))
+            telemetry["hysteresis_recenter_gate_reason"].append(str(sagittal_diag.get("hysteresis_recenter_gate_reason", "unknown")))
 
-        # APCR (Active Pitch Crossing Recovery) telemetry
-        # Captured from sagittal_diag generated by SagittalVelocityDampedBalanceController.compute()
-        # Added 2026-06-08 to fix APCR telemetry validation gap
-        telemetry["active_pitch_crossing_enabled"].append(sagittal_diag.get("active_pitch_crossing_enabled", False))
-        telemetry["active_pitch_crossing_recovery_gate_mode"].append(sagittal_diag.get("active_pitch_crossing_recovery_gate_mode", False))
-        telemetry["active_pitch_crossing_state"].append(str(sagittal_diag.get("active_pitch_crossing_state", "DISABLED")))
-        telemetry["active_pitch_crossing_state_id"].append(int(sagittal_diag.get("active_pitch_crossing_state_id", 0)))
-        telemetry["active_pitch_crossing_active"].append(sagittal_diag.get("active_pitch_crossing_active", False))
-        telemetry["active_pitch_crossing_signed_error_m"].append(float(sagittal_diag.get("active_pitch_crossing_signed_error_m", 0.0)))
-        telemetry["active_pitch_crossing_pitch_x"].append(float(sagittal_diag.get("active_pitch_crossing_pitch_x", 0.0)))
-        telemetry["active_pitch_crossing_pitch_rate"].append(float(sagittal_diag.get("active_pitch_crossing_pitch_rate", 0.0)))
-        telemetry["active_pitch_crossing_raw_tau"].append(float(sagittal_diag.get("active_pitch_crossing_raw_tau", 0.0)))
-        telemetry["active_pitch_crossing_tau"].append(float(sagittal_diag.get("active_pitch_crossing_tau", 0.0)))
-        telemetry["active_pitch_crossing_tau_clipped"].append(float(sagittal_diag.get("active_pitch_crossing_tau_clipped", 0.0)))
-        telemetry["active_pitch_crossing_target_direction"].append(str(sagittal_diag.get("active_pitch_crossing_target_direction", "none")))
-        telemetry["active_pitch_crossing_outer_enter_m"].append(float(sagittal_diag.get("active_pitch_crossing_outer_enter_m", 0.0)))
-        telemetry["active_pitch_crossing_inner_exit_m"].append(float(sagittal_diag.get("active_pitch_crossing_inner_exit_m", 0.0)))
-        telemetry["active_pitch_crossing_pitch_hard_stop_rad"].append(float(sagittal_diag.get("active_pitch_crossing_pitch_hard_stop_rad", 0.0)))
-        telemetry["active_pitch_crossing_hard_safety_gate"].append(sagittal_diag.get("active_pitch_crossing_hard_safety_gate", False))
-        telemetry["active_pitch_crossing_recovery_gate"].append(sagittal_diag.get("active_pitch_crossing_recovery_gate", False))
-        telemetry["active_pitch_crossing_gate_reason"].append(str(sagittal_diag.get("active_pitch_crossing_gate_reason", "unknown")))
-        telemetry["active_pitch_crossing_state_entry_count"].append(int(sagittal_diag.get("active_pitch_crossing_state_entry_count", 0)))
-        telemetry["active_pitch_crossing_state_exit_count"].append(int(sagittal_diag.get("active_pitch_crossing_state_exit_count", 0)))
-        telemetry["active_pitch_crossing_safety_override"].append(sagittal_diag.get("active_pitch_crossing_safety_override", False))
-        telemetry["active_pitch_crossing_contact_safe"].append(sagittal_diag.get("active_pitch_crossing_contact_safe", True))
-        telemetry["active_pitch_crossing_height_safe"].append(sagittal_diag.get("active_pitch_crossing_height_safe", True))
-        telemetry["active_pitch_crossing_roll_safe"].append(sagittal_diag.get("active_pitch_crossing_roll_safe", True))
-        telemetry["active_pitch_crossing_pitch_safe"].append(sagittal_diag.get("active_pitch_crossing_pitch_safe", True))
-        telemetry["active_pitch_crossing_pitch_danger"].append(sagittal_diag.get("active_pitch_crossing_pitch_danger", False))
-        telemetry["active_pitch_crossing_max_tau"].append(float(sagittal_diag.get("active_pitch_crossing_max_tau", 0.0)))
-        telemetry["active_pitch_crossing_smooth_alpha"].append(float(sagittal_diag.get("active_pitch_crossing_smooth_alpha", 0.0)))
-        # APCR1i hysteresis recenter telemetry
-        telemetry["active_pitch_crossing_hysteresis_enabled"].append(sagittal_diag.get("active_pitch_crossing_hysteresis_enabled", False))
-        telemetry["active_pitch_crossing_hysteresis_state"].append(str(sagittal_diag.get("active_pitch_crossing_hysteresis_state", "NEUTRAL")))
-        telemetry["active_pitch_crossing_hysteresis_state_id"].append(int(sagittal_diag.get("active_pitch_crossing_hysteresis_state_id", 0)))
-        telemetry["active_pitch_crossing_hysteresis_entry_e"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_entry_e", 0.0)))
-        telemetry["active_pitch_crossing_hysteresis_exit_e"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_exit_e", 0.0)))
-        telemetry["active_pitch_crossing_hysteresis_entry_count"].append(int(sagittal_diag.get("active_pitch_crossing_hysteresis_entry_count", 0)))
-        telemetry["active_pitch_crossing_hysteresis_exit_count"].append(int(sagittal_diag.get("active_pitch_crossing_hysteresis_exit_count", 0)))
-        telemetry["active_pitch_crossing_hysteresis_inner_exit_m"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_inner_exit_m", 0.0)))
-        telemetry["active_pitch_crossing_hysteresis_opposite_release_m"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_opposite_release_m", 0.0)))
-        telemetry["active_pitch_crossing_hysteresis_emergency_active"].append(sagittal_diag.get("active_pitch_crossing_hysteresis_emergency_active", False))
-        telemetry["final_wheel_tau_with_apc"].append(float(sagittal_diag.get("final_wheel_tau_with_apc", 0.0)))
-        telemetry["final_wheel_tau_without_apc"].append(float(sagittal_diag.get("final_wheel_tau_without_apc", 0.0)))
+            # APCR (Active Pitch Crossing Recovery) telemetry
+            # Captured from sagittal_diag generated by SagittalVelocityDampedBalanceController.compute()
+            # Added 2026-06-08 to fix APCR telemetry validation gap
+            telemetry["active_pitch_crossing_enabled"].append(sagittal_diag.get("active_pitch_crossing_enabled", False))
+            telemetry["active_pitch_crossing_recovery_gate_mode"].append(sagittal_diag.get("active_pitch_crossing_recovery_gate_mode", False))
+            telemetry["active_pitch_crossing_state"].append(str(sagittal_diag.get("active_pitch_crossing_state", "DISABLED")))
+            telemetry["active_pitch_crossing_state_id"].append(int(sagittal_diag.get("active_pitch_crossing_state_id", 0)))
+            telemetry["active_pitch_crossing_active"].append(sagittal_diag.get("active_pitch_crossing_active", False))
+            telemetry["active_pitch_crossing_signed_error_m"].append(float(sagittal_diag.get("active_pitch_crossing_signed_error_m", 0.0)))
+            telemetry["active_pitch_crossing_pitch_x"].append(float(sagittal_diag.get("active_pitch_crossing_pitch_x", 0.0)))
+            telemetry["active_pitch_crossing_pitch_rate"].append(float(sagittal_diag.get("active_pitch_crossing_pitch_rate", 0.0)))
+            telemetry["active_pitch_crossing_raw_tau"].append(float(sagittal_diag.get("active_pitch_crossing_raw_tau", 0.0)))
+            telemetry["active_pitch_crossing_tau"].append(float(sagittal_diag.get("active_pitch_crossing_tau", 0.0)))
+            telemetry["active_pitch_crossing_tau_clipped"].append(float(sagittal_diag.get("active_pitch_crossing_tau_clipped", 0.0)))
+            telemetry["active_pitch_crossing_target_direction"].append(str(sagittal_diag.get("active_pitch_crossing_target_direction", "none")))
+            telemetry["active_pitch_crossing_outer_enter_m"].append(float(sagittal_diag.get("active_pitch_crossing_outer_enter_m", 0.0)))
+            telemetry["active_pitch_crossing_inner_exit_m"].append(float(sagittal_diag.get("active_pitch_crossing_inner_exit_m", 0.0)))
+            telemetry["active_pitch_crossing_pitch_hard_stop_rad"].append(float(sagittal_diag.get("active_pitch_crossing_pitch_hard_stop_rad", 0.0)))
+            telemetry["active_pitch_crossing_hard_safety_gate"].append(sagittal_diag.get("active_pitch_crossing_hard_safety_gate", False))
+            telemetry["active_pitch_crossing_recovery_gate"].append(sagittal_diag.get("active_pitch_crossing_recovery_gate", False))
+            telemetry["active_pitch_crossing_gate_reason"].append(str(sagittal_diag.get("active_pitch_crossing_gate_reason", "unknown")))
+            telemetry["active_pitch_crossing_state_entry_count"].append(int(sagittal_diag.get("active_pitch_crossing_state_entry_count", 0)))
+            telemetry["active_pitch_crossing_state_exit_count"].append(int(sagittal_diag.get("active_pitch_crossing_state_exit_count", 0)))
+            telemetry["active_pitch_crossing_safety_override"].append(sagittal_diag.get("active_pitch_crossing_safety_override", False))
+            telemetry["active_pitch_crossing_contact_safe"].append(sagittal_diag.get("active_pitch_crossing_contact_safe", True))
+            telemetry["active_pitch_crossing_height_safe"].append(sagittal_diag.get("active_pitch_crossing_height_safe", True))
+            telemetry["active_pitch_crossing_roll_safe"].append(sagittal_diag.get("active_pitch_crossing_roll_safe", True))
+            telemetry["active_pitch_crossing_pitch_safe"].append(sagittal_diag.get("active_pitch_crossing_pitch_safe", True))
+            telemetry["active_pitch_crossing_pitch_danger"].append(sagittal_diag.get("active_pitch_crossing_pitch_danger", False))
+            telemetry["active_pitch_crossing_max_tau"].append(float(sagittal_diag.get("active_pitch_crossing_max_tau", 0.0)))
+            telemetry["active_pitch_crossing_smooth_alpha"].append(float(sagittal_diag.get("active_pitch_crossing_smooth_alpha", 0.0)))
+            # APCR1i hysteresis recenter telemetry
+            telemetry["active_pitch_crossing_hysteresis_enabled"].append(sagittal_diag.get("active_pitch_crossing_hysteresis_enabled", False))
+            telemetry["active_pitch_crossing_hysteresis_state"].append(str(sagittal_diag.get("active_pitch_crossing_hysteresis_state", "NEUTRAL")))
+            telemetry["active_pitch_crossing_hysteresis_state_id"].append(int(sagittal_diag.get("active_pitch_crossing_hysteresis_state_id", 0)))
+            telemetry["active_pitch_crossing_hysteresis_entry_e"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_entry_e", 0.0)))
+            telemetry["active_pitch_crossing_hysteresis_exit_e"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_exit_e", 0.0)))
+            telemetry["active_pitch_crossing_hysteresis_entry_count"].append(int(sagittal_diag.get("active_pitch_crossing_hysteresis_entry_count", 0)))
+            telemetry["active_pitch_crossing_hysteresis_exit_count"].append(int(sagittal_diag.get("active_pitch_crossing_hysteresis_exit_count", 0)))
+            telemetry["active_pitch_crossing_hysteresis_inner_exit_m"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_inner_exit_m", 0.0)))
+            telemetry["active_pitch_crossing_hysteresis_opposite_release_m"].append(float(sagittal_diag.get("active_pitch_crossing_hysteresis_opposite_release_m", 0.0)))
+            telemetry["active_pitch_crossing_hysteresis_emergency_active"].append(sagittal_diag.get("active_pitch_crossing_hysteresis_emergency_active", False))
+            telemetry["final_wheel_tau_with_apc"].append(float(sagittal_diag.get("final_wheel_tau_with_apc", 0.0)))
+            telemetry["final_wheel_tau_without_apc"].append(float(sagittal_diag.get("final_wheel_tau_without_apc", 0.0)))
 
-        # APCR1l pitch suppression telemetry
-        telemetry["apcr1l_pitch_suppress_active"].append(sagittal_diag.get("apcr1l_pitch_suppress_active", False))
-        telemetry["apcr1l_recenter_state"].append(str(sagittal_diag.get("apcr1l_recenter_state", "NEUTRAL")))
-        telemetry["apcr1l_tau_pitch_before_suppress"].append(float(sagittal_diag.get("apcr1l_tau_pitch_before_suppress", 0.0)))
+            # APCR1l pitch suppression telemetry
+            telemetry["apcr1l_pitch_suppress_active"].append(sagittal_diag.get("apcr1l_pitch_suppress_active", False))
+            telemetry["apcr1l_recenter_state"].append(str(sagittal_diag.get("apcr1l_recenter_state", "NEUTRAL")))
+            telemetry["apcr1l_tau_pitch_before_suppress"].append(float(sagittal_diag.get("apcr1l_tau_pitch_before_suppress", 0.0)))
 
-        # APCR1m conditional pitch blend telemetry
-        telemetry["apcr1m_pitch_blend_active"].append(sagittal_diag.get("apcr1m_pitch_blend_active", False))
-        telemetry["apcr1m_pitch_blend_scale"].append(float(sagittal_diag.get("apcr1m_pitch_blend_scale", 1.0)))
-        telemetry["apcr1m_pitch_blend_block_reason"].append(str(sagittal_diag.get("apcr1m_pitch_blend_block_reason", "none")))
-        telemetry["apcr1m_tau_pitch_before_blend"].append(float(sagittal_diag.get("apcr1m_tau_pitch_before_blend", 0.0)))
-        telemetry["apcr1m_tau_pitch_after_blend"].append(float(sagittal_diag.get("apcr1m_tau_pitch_after_blend", 0.0)))
-        telemetry["apcr1m_startup_guard_active"].append(sagittal_diag.get("apcr1m_startup_guard_active", False))
-        telemetry["apcr1m_recenter_active"].append(sagittal_diag.get("apcr1m_recenter_active", False))
-        telemetry["apcr1m_pitch_safe"].append(sagittal_diag.get("apcr1m_pitch_safe", True))
-        telemetry["apcr1m_height_safe"].append(sagittal_diag.get("apcr1m_height_safe", True))
-        telemetry["apcr1m_contact_safe"].append(sagittal_diag.get("apcr1m_contact_safe", True))
-        telemetry["apcr1m_roll_safe"].append(sagittal_diag.get("apcr1m_roll_safe", True))
-        telemetry["apcr1m_pitch_rate_safe"].append(sagittal_diag.get("apcr1m_pitch_rate_safe", True))
+            # APCR1m conditional pitch blend telemetry
+            telemetry["apcr1m_pitch_blend_active"].append(sagittal_diag.get("apcr1m_pitch_blend_active", False))
+            telemetry["apcr1m_pitch_blend_scale"].append(float(sagittal_diag.get("apcr1m_pitch_blend_scale", 1.0)))
+            telemetry["apcr1m_pitch_blend_block_reason"].append(str(sagittal_diag.get("apcr1m_pitch_blend_block_reason", "none")))
+            telemetry["apcr1m_tau_pitch_before_blend"].append(float(sagittal_diag.get("apcr1m_tau_pitch_before_blend", 0.0)))
+            telemetry["apcr1m_tau_pitch_after_blend"].append(float(sagittal_diag.get("apcr1m_tau_pitch_after_blend", 0.0)))
+            telemetry["apcr1m_startup_guard_active"].append(sagittal_diag.get("apcr1m_startup_guard_active", False))
+            telemetry["apcr1m_recenter_active"].append(sagittal_diag.get("apcr1m_recenter_active", False))
+            telemetry["apcr1m_pitch_safe"].append(sagittal_diag.get("apcr1m_pitch_safe", True))
+            telemetry["apcr1m_height_safe"].append(sagittal_diag.get("apcr1m_height_safe", True))
+            telemetry["apcr1m_contact_safe"].append(sagittal_diag.get("apcr1m_contact_safe", True))
+            telemetry["apcr1m_roll_safe"].append(sagittal_diag.get("apcr1m_roll_safe", True))
+            telemetry["apcr1m_pitch_rate_safe"].append(sagittal_diag.get("apcr1m_pitch_rate_safe", True))
 
-        # APCR1n recenter priority telemetry
-        telemetry["apcr1n_recenter_priority_active"].append(sagittal_diag.get("apcr1n_recenter_priority_active", False))
-        telemetry["apcr1n_startup_guard_active"].append(sagittal_diag.get("apcr1n_startup_guard_active", True))
-        telemetry["apcr1n_wheel_damping_override_active"].append(sagittal_diag.get("apcr1n_wheel_damping_override_active", False))
-        telemetry["apcr1n_wheel_damping_scale"].append(float(sagittal_diag.get("apcr1n_wheel_damping_scale", 1.0)))
-        telemetry["apcr1n_wheel_damping_before"].append(float(sagittal_diag.get("apcr1n_wheel_damping_before", 0.0)))
-        telemetry["apcr1n_wheel_damping_after"].append(float(sagittal_diag.get("apcr1n_wheel_damping_after", 0.0)))
-        telemetry["apcr1n_wheel_damping_fights_drift"].append(sagittal_diag.get("apcr1n_wheel_damping_fights_drift", False))
-        telemetry["apcr1n_position_cap_boost_active"].append(sagittal_diag.get("apcr1n_position_cap_boost_active", False))
-        telemetry["apcr1n_position_cap_current"].append(float(sagittal_diag.get("apcr1n_position_cap_current", 3.0)))
-        telemetry["apcr1n_tau_position_raw"].append(float(sagittal_diag.get("apcr1n_tau_position_raw", 0.0)))
-        telemetry["apcr1n_tau_position_after_cap"].append(float(sagittal_diag.get("apcr1n_tau_position_after_cap", 0.0)))
-        telemetry["apcr1n_position_saturated"].append(sagittal_diag.get("apcr1n_position_saturated", False))
-        telemetry["apcr1n_safety_gate_pass"].append(sagittal_diag.get("apcr1n_safety_gate_pass", True))
-        telemetry["apcr1n_final_torque_direction_correct"].append(sagittal_diag.get("apcr1n_final_torque_direction_correct", True))
-        telemetry["apcr1n_final_torque_fights_drift"].append(sagittal_diag.get("apcr1n_final_torque_fights_drift", False))
-        telemetry["apcr1n_physical_drift_column_used"].append(str(sagittal_diag.get("apcr1n_physical_drift_column_used", "unknown")))
+            # APCR1n recenter priority telemetry
+            telemetry["apcr1n_recenter_priority_active"].append(sagittal_diag.get("apcr1n_recenter_priority_active", False))
+            telemetry["apcr1n_startup_guard_active"].append(sagittal_diag.get("apcr1n_startup_guard_active", True))
+            telemetry["apcr1n_wheel_damping_override_active"].append(sagittal_diag.get("apcr1n_wheel_damping_override_active", False))
+            telemetry["apcr1n_wheel_damping_scale"].append(float(sagittal_diag.get("apcr1n_wheel_damping_scale", 1.0)))
+            telemetry["apcr1n_wheel_damping_before"].append(float(sagittal_diag.get("apcr1n_wheel_damping_before", 0.0)))
+            telemetry["apcr1n_wheel_damping_after"].append(float(sagittal_diag.get("apcr1n_wheel_damping_after", 0.0)))
+            telemetry["apcr1n_wheel_damping_fights_drift"].append(sagittal_diag.get("apcr1n_wheel_damping_fights_drift", False))
+            telemetry["apcr1n_position_cap_boost_active"].append(sagittal_diag.get("apcr1n_position_cap_boost_active", False))
+            telemetry["apcr1n_position_cap_current"].append(float(sagittal_diag.get("apcr1n_position_cap_current", 3.0)))
+            telemetry["apcr1n_tau_position_raw"].append(float(sagittal_diag.get("apcr1n_tau_position_raw", 0.0)))
+            telemetry["apcr1n_tau_position_after_cap"].append(float(sagittal_diag.get("apcr1n_tau_position_after_cap", 0.0)))
+            telemetry["apcr1n_position_saturated"].append(sagittal_diag.get("apcr1n_position_saturated", False))
+            telemetry["apcr1n_safety_gate_pass"].append(sagittal_diag.get("apcr1n_safety_gate_pass", True))
+            telemetry["apcr1n_final_torque_direction_correct"].append(sagittal_diag.get("apcr1n_final_torque_direction_correct", True))
+            telemetry["apcr1n_final_torque_fights_drift"].append(sagittal_diag.get("apcr1n_final_torque_fights_drift", False))
+            telemetry["apcr1n_physical_drift_column_used"].append(str(sagittal_diag.get("apcr1n_physical_drift_column_used", "unknown")))
 
-        # APCR1nD direct support recenter telemetry
-        telemetry["apcr1nd_direct_recenter_priority_active"].append(bool(sagittal_diag.get("apcr1nd_direct_recenter_priority_active", False)))
-        telemetry["apcr1nd_direct_recenter_eligible"].append(bool(sagittal_diag.get("apcr1nd_direct_recenter_eligible", False)))
-        telemetry["apcr1nd_direct_recenter_block_reason"].append(str(sagittal_diag.get("apcr1nd_direct_recenter_block_reason", "")))
-        telemetry["apcr1nd_moving_away"].append(bool(sagittal_diag.get("apcr1nd_moving_away", False)))
-        telemetry["apcr1nd_abs_error"].append(float(sagittal_diag.get("apcr1nd_abs_error", 0.0)))
-        telemetry["apcr1nd_error_rate"].append(float(sagittal_diag.get("apcr1nd_error_rate", 0.0)))
+            # APCR1nD direct support recenter telemetry
+            telemetry["apcr1nd_direct_recenter_priority_active"].append(bool(sagittal_diag.get("apcr1nd_direct_recenter_priority_active", False)))
+            telemetry["apcr1nd_direct_recenter_eligible"].append(bool(sagittal_diag.get("apcr1nd_direct_recenter_eligible", False)))
+            telemetry["apcr1nd_direct_recenter_block_reason"].append(str(sagittal_diag.get("apcr1nd_direct_recenter_block_reason", "")))
+            telemetry["apcr1nd_moving_away"].append(bool(sagittal_diag.get("apcr1nd_moving_away", False)))
+            telemetry["apcr1nd_abs_error"].append(float(sagittal_diag.get("apcr1nd_abs_error", 0.0)))
+            telemetry["apcr1nd_error_rate"].append(float(sagittal_diag.get("apcr1nd_error_rate", 0.0)))
 
-        # Append all remaining sagittal diagnostics fields (including tuned telemetry)
-        # Use setdefault to dynamically create columns for new fields
-        if is_balance_core_mode(args):
-            for key, value in sagittal_diag.items():
-                # Skip fields already explicitly handled above
-                if key not in telemetry or len(telemetry[key]) < step:
-                    if isinstance(value, (int, float, bool, str)):
-                        telemetry.setdefault(key, []).append(value)
-                    else:
-                        # Convert other types to string for CSV compatibility
-                        telemetry.setdefault(key, []).append(str(value))
+            # Append all remaining sagittal diagnostics fields (including tuned telemetry)
+            # Use setdefault to dynamically create columns for new fields
+            if is_balance_core_mode(args):
+                for key, value in sagittal_diag.items():
+                    # Skip fields already explicitly handled above
+                    if key not in telemetry or len(telemetry[key]) < step:
+                        if isinstance(value, (int, float, bool, str)):
+                            telemetry.setdefault(key, []).append(value)
+                        else:
+                            # Convert other types to string for CSV compatibility
+                            telemetry.setdefault(key, []).append(str(value))
 
-        # Pitch rate consistency estimator telemetry (velocity-damped controller only)
-        telemetry["sagittal_axis_y_initial"].append(float(sagittal_diag.get("sagittal_axis_y_initial", sagittal_axis_xy_initial[1])))
-        telemetry["raw_com_vx"].append(float(sagittal_diag.get("raw_com_vx", centroidal_state_control.com_vel[0])))
-        telemetry["raw_com_vy"].append(float(sagittal_diag.get("raw_com_vy", centroidal_state_control.com_vel[1])))
-        telemetry["projected_sagittal_velocity_m_s"].append(float(sagittal_diag.get("projected_sagittal_velocity_m_s", 0.0)))
-        telemetry["actual_sagittal_velocity_passed_to_controller_m_s"].append(float(sagittal_diag.get("actual_sagittal_velocity_passed_to_controller_m_s", sagittal_diag.get("sagittal_velocity_m_s", 0.0))))
-        telemetry["tau_wheel_total_raw_left"].append(float(sagittal_diag.get("tau_left", 0.0)))
-        telemetry["tau_wheel_total_raw_right"].append(float(sagittal_diag.get("tau_right", 0.0)))
-        telemetry["tau_wheel_total_clipped_left"].append(float(tau_total_clipped[4]))
-        telemetry["tau_wheel_total_clipped_right"].append(float(tau_total_clipped[9]))
-        telemetry["wheel_torque_margin_left"].append(float(torque_limit[4] - abs(float(tau_total_raw[4]))))
-        telemetry["wheel_torque_margin_right"].append(float(torque_limit[9] - abs(float(tau_total_raw[9]))))
-        telemetry["wheel_torque_rate_limit_active_left"].append(bool(rate_flags_vec[4]))
-        telemetry["wheel_torque_rate_limit_active_right"].append(bool(rate_flags_vec[9]))
+            # Pitch rate consistency estimator telemetry (velocity-damped controller only)
+            telemetry["sagittal_axis_y_initial"].append(float(sagittal_diag.get("sagittal_axis_y_initial", sagittal_axis_xy_initial[1])))
+            telemetry["raw_com_vx"].append(float(sagittal_diag.get("raw_com_vx", centroidal_state_control.com_vel[0])))
+            telemetry["raw_com_vy"].append(float(sagittal_diag.get("raw_com_vy", centroidal_state_control.com_vel[1])))
+            telemetry["projected_sagittal_velocity_m_s"].append(float(sagittal_diag.get("projected_sagittal_velocity_m_s", 0.0)))
+            telemetry["actual_sagittal_velocity_passed_to_controller_m_s"].append(float(sagittal_diag.get("actual_sagittal_velocity_passed_to_controller_m_s", sagittal_diag.get("sagittal_velocity_m_s", 0.0))))
+            telemetry["tau_wheel_total_raw_left"].append(float(sagittal_diag.get("tau_left", 0.0)))
+            telemetry["tau_wheel_total_raw_right"].append(float(sagittal_diag.get("tau_right", 0.0)))
+            telemetry["tau_wheel_total_clipped_left"].append(float(tau_total_clipped[4]))
+            telemetry["tau_wheel_total_clipped_right"].append(float(tau_total_clipped[9]))
+            telemetry["wheel_torque_margin_left"].append(float(torque_limit[4] - abs(float(tau_total_raw[4]))))
+            telemetry["wheel_torque_margin_right"].append(float(torque_limit[9] - abs(float(tau_total_raw[9]))))
+            telemetry["wheel_torque_rate_limit_active_left"].append(bool(rate_flags_vec[4]))
+            telemetry["wheel_torque_rate_limit_active_right"].append(bool(rate_flags_vec[9]))
 
-        l_hip_yaw_pos = float(joint_pos[1])
-        r_hip_yaw_pos = float(joint_pos[6])
-        l_hip_yaw_ref = float(equilibrium_joint_pos[1])
-        r_hip_yaw_ref = float(equilibrium_joint_pos[6])
-        l_hip_yaw_error = l_hip_yaw_ref - l_hip_yaw_pos
-        r_hip_yaw_error = r_hip_yaw_ref - r_hip_yaw_pos
-        l_hip_yaw_vel = float(joint_vel[1])
-        r_hip_yaw_vel = float(joint_vel[6])
-        l_hip_yaw_tau_raw = l_hip_yaw_error * balance_core_controllers["shape_posture"].kp_hip_yaw - l_hip_yaw_vel * balance_core_controllers["shape_posture"].kd_hip_yaw if is_balance_core_mode(args) else 0.0
-        r_hip_yaw_tau_raw = r_hip_yaw_error * balance_core_controllers["shape_posture"].kp_hip_yaw - r_hip_yaw_vel * balance_core_controllers["shape_posture"].kd_hip_yaw if is_balance_core_mode(args) else 0.0
-        telemetry["l_hip_yaw_pos"].append(l_hip_yaw_pos)
-        telemetry["r_hip_yaw_pos"].append(r_hip_yaw_pos)
-        telemetry["l_hip_yaw_ref"].append(l_hip_yaw_ref)
-        telemetry["r_hip_yaw_ref"].append(r_hip_yaw_ref)
-        telemetry["l_hip_yaw_error"].append(l_hip_yaw_error)
-        telemetry["r_hip_yaw_error"].append(r_hip_yaw_error)
-        telemetry["l_hip_yaw_vel"].append(l_hip_yaw_vel)
-        telemetry["r_hip_yaw_vel"].append(r_hip_yaw_vel)
-        telemetry["hip_yaw_error_rms"].append(float(np.sqrt(0.5 * (l_hip_yaw_error**2 + r_hip_yaw_error**2))))
-        telemetry["l_hip_yaw_tau_shape_raw"].append(l_hip_yaw_tau_raw)
-        telemetry["r_hip_yaw_tau_shape_raw"].append(r_hip_yaw_tau_raw)
-        telemetry["l_hip_yaw_tau_shape_final"].append(float(tau_shape_posture[1]) if is_balance_core_mode(args) else 0.0)
-        telemetry["r_hip_yaw_tau_shape_final"].append(float(tau_shape_posture[6]) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_torque_sign_correct_left"].append(abs(l_hip_yaw_error) < 1e-9 or l_hip_yaw_error * (float(tau_shape_posture[1]) if is_balance_core_mode(args) else 0.0) >= 0.0)
-        telemetry["hip_yaw_torque_sign_correct_right"].append(abs(r_hip_yaw_error) < 1e-9 or r_hip_yaw_error * (float(tau_shape_posture[6]) if is_balance_core_mode(args) else 0.0) >= 0.0)
-        telemetry["hip_yaw_torque_saturation_flag_left"].append(bool(sat_flags_vec[1]))
-        telemetry["hip_yaw_torque_saturation_flag_right"].append(bool(sat_flags_vec[6]))
-        telemetry["hip_yaw_torque_margin_left"].append(float(torque_limit[1] - abs(float(tau_total_raw[1]))))
-        telemetry["hip_yaw_torque_margin_right"].append(float(torque_limit[6] - abs(float(tau_total_raw[6]))))
+            l_hip_yaw_pos = float(joint_pos[1])
+            r_hip_yaw_pos = float(joint_pos[6])
+            l_hip_yaw_ref = float(equilibrium_joint_pos[1])
+            r_hip_yaw_ref = float(equilibrium_joint_pos[6])
+            l_hip_yaw_error = l_hip_yaw_ref - l_hip_yaw_pos
+            r_hip_yaw_error = r_hip_yaw_ref - r_hip_yaw_pos
+            l_hip_yaw_vel = float(joint_vel[1])
+            r_hip_yaw_vel = float(joint_vel[6])
+            l_hip_yaw_tau_raw = l_hip_yaw_error * balance_core_controllers["shape_posture"].kp_hip_yaw - l_hip_yaw_vel * balance_core_controllers["shape_posture"].kd_hip_yaw if is_balance_core_mode(args) else 0.0
+            r_hip_yaw_tau_raw = r_hip_yaw_error * balance_core_controllers["shape_posture"].kp_hip_yaw - r_hip_yaw_vel * balance_core_controllers["shape_posture"].kd_hip_yaw if is_balance_core_mode(args) else 0.0
+            telemetry["l_hip_yaw_pos"].append(l_hip_yaw_pos)
+            telemetry["r_hip_yaw_pos"].append(r_hip_yaw_pos)
+            telemetry["l_hip_yaw_ref"].append(l_hip_yaw_ref)
+            telemetry["r_hip_yaw_ref"].append(r_hip_yaw_ref)
+            telemetry["l_hip_yaw_error"].append(l_hip_yaw_error)
+            telemetry["r_hip_yaw_error"].append(r_hip_yaw_error)
+            telemetry["l_hip_yaw_vel"].append(l_hip_yaw_vel)
+            telemetry["r_hip_yaw_vel"].append(r_hip_yaw_vel)
+            telemetry["hip_yaw_error_rms"].append(float(np.sqrt(0.5 * (l_hip_yaw_error**2 + r_hip_yaw_error**2))))
+            telemetry["l_hip_yaw_tau_shape_raw"].append(l_hip_yaw_tau_raw)
+            telemetry["r_hip_yaw_tau_shape_raw"].append(r_hip_yaw_tau_raw)
+            telemetry["l_hip_yaw_tau_shape_final"].append(float(tau_shape_posture[1]) if is_balance_core_mode(args) else 0.0)
+            telemetry["r_hip_yaw_tau_shape_final"].append(float(tau_shape_posture[6]) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_torque_sign_correct_left"].append(abs(l_hip_yaw_error) < 1e-9 or l_hip_yaw_error * (float(tau_shape_posture[1]) if is_balance_core_mode(args) else 0.0) >= 0.0)
+            telemetry["hip_yaw_torque_sign_correct_right"].append(abs(r_hip_yaw_error) < 1e-9 or r_hip_yaw_error * (float(tau_shape_posture[6]) if is_balance_core_mode(args) else 0.0) >= 0.0)
+            telemetry["hip_yaw_torque_saturation_flag_left"].append(bool(sat_flags_vec[1]))
+            telemetry["hip_yaw_torque_saturation_flag_right"].append(bool(sat_flags_vec[6]))
+            telemetry["hip_yaw_torque_margin_left"].append(float(torque_limit[1] - abs(float(tau_total_raw[1]))))
+            telemetry["hip_yaw_torque_margin_right"].append(float(torque_limit[6] - abs(float(tau_total_raw[6]))))
 
-        # HY-FF: Hip-yaw support-error feedforward compensation telemetry
-        telemetry["hip_yaw_comp_active"].append(shape_diag.get("hip_yaw_comp_active", False) if is_balance_core_mode(args) else False)
-        telemetry["hip_yaw_comp_height_gate"].append(shape_diag.get("hip_yaw_comp_height_gate", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_comp_support_error_m"].append(shape_diag.get("hip_yaw_comp_support_error_m", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_comp_tau_left"].append(shape_diag.get("hip_yaw_comp_tau_left", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_comp_tau_right"].append(shape_diag.get("hip_yaw_comp_tau_right", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_comp_tau_left_clipped"].append(shape_diag.get("hip_yaw_comp_tau_left_clipped", False) if is_balance_core_mode(args) else False)
-        telemetry["hip_yaw_comp_tau_right_clipped"].append(shape_diag.get("hip_yaw_comp_tau_right_clipped", False) if is_balance_core_mode(args) else False)
-        telemetry["hip_yaw_comp_sign"].append(shape_diag.get("hip_yaw_comp_sign", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_comp_k_support"].append(shape_diag.get("hip_yaw_comp_k_support", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_comp_tau_max"].append(shape_diag.get("hip_yaw_comp_tau_max", 0.0) if is_balance_core_mode(args) else 0.0)
+            # HY-FF: Hip-yaw support-error feedforward compensation telemetry
+            telemetry["hip_yaw_comp_active"].append(shape_diag.get("hip_yaw_comp_active", False) if is_balance_core_mode(args) else False)
+            telemetry["hip_yaw_comp_height_gate"].append(shape_diag.get("hip_yaw_comp_height_gate", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_comp_support_error_m"].append(shape_diag.get("hip_yaw_comp_support_error_m", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_comp_tau_left"].append(shape_diag.get("hip_yaw_comp_tau_left", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_comp_tau_right"].append(shape_diag.get("hip_yaw_comp_tau_right", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_comp_tau_left_clipped"].append(shape_diag.get("hip_yaw_comp_tau_left_clipped", False) if is_balance_core_mode(args) else False)
+            telemetry["hip_yaw_comp_tau_right_clipped"].append(shape_diag.get("hip_yaw_comp_tau_right_clipped", False) if is_balance_core_mode(args) else False)
+            telemetry["hip_yaw_comp_sign"].append(shape_diag.get("hip_yaw_comp_sign", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_comp_k_support"].append(shape_diag.get("hip_yaw_comp_k_support", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_comp_tau_max"].append(shape_diag.get("hip_yaw_comp_tau_max", 0.0) if is_balance_core_mode(args) else 0.0)
 
-        # HY2-DIV: Hip-yaw divergence damping telemetry
-        telemetry["hip_yaw_div_enabled"].append(shape_diag.get("hip_yaw_div_enabled", False) if is_balance_core_mode(args) else False)
-        telemetry["hip_yaw_div_gate_active"].append(shape_diag.get("hip_yaw_div_gate_active", False) if is_balance_core_mode(args) else False)
-        telemetry["hip_yaw_div_active"].append(shape_diag.get("hip_yaw_div_active", False) if is_balance_core_mode(args) else False)
-        telemetry["hip_yaw_div_height_gate"].append(shape_diag.get("hip_yaw_div_height_gate", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_div_effective_k"].append(shape_diag.get("hip_yaw_div_effective_k", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_div_effective_kd"].append(shape_diag.get("hip_yaw_div_effective_kd", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_div_effective_tau_max"].append(shape_diag.get("hip_yaw_div_effective_tau_max", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_div_left"].append(shape_diag.get("hip_yaw_div_left", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_div_right"].append(shape_diag.get("hip_yaw_div_right", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_div_left_clipped"].append(shape_diag.get("hip_yaw_div_left_clipped", False) if is_balance_core_mode(args) else False)
-        telemetry["hip_yaw_div_right_clipped"].append(shape_diag.get("hip_yaw_div_right_clipped", False) if is_balance_core_mode(args) else False)
-        telemetry["hip_yaw_div_k_divergence"].append(shape_diag.get("hip_yaw_div_k_divergence", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_div_k_divergence_rate"].append(shape_diag.get("hip_yaw_div_k_divergence_rate", 0.0) if is_balance_core_mode(args) else 0.0)
-        # Mode-Based Hip-Yaw Divergence Controller telemetry (opt-in)
-        telemetry["mode_hip_yaw_div_enabled"].append(bool(mode_hip_yaw_div_enabled))
-        telemetry["mode_hip_yaw_div_kp"].append(float(getattr(args, "mode_hip_yaw_div_kp", 0.0)))
-        telemetry["mode_hip_yaw_div_kd"].append(float(getattr(args, "mode_hip_yaw_div_kd", 0.0)))
-        telemetry["mode_hip_yaw_div_max_torque"].append(float(getattr(args, "mode_hip_yaw_div_max_torque", 0.0)))
-        telemetry["mode_hip_yaw_div_soft_limit_rad"].append(float(getattr(args, "mode_hip_yaw_div_soft_limit_rad", 0.0)))
-        telemetry["mode_hip_yaw_div_soft_gain"].append(float(getattr(args, "mode_hip_yaw_div_soft_gain", 0.0)))
-        telemetry["mode_hip_yaw_div_ref_source"].append(str(getattr(args, "mode_hip_yaw_div_ref_source", "target")))
-        telemetry["mode_hip_yaw_div_height_gate"].append(float(mode_div_height_gate))
-        telemetry["mode_hip_yaw_div_tau_left"].append(float(mode_div_tau_left))
-        telemetry["mode_hip_yaw_div_tau_right"].append(float(mode_div_tau_right))
-        telemetry["mode_hip_yaw_div_tau_left_raw"].append(float(mode_div_tau_left_raw))
-        telemetry["mode_hip_yaw_div_tau_right_raw"].append(float(mode_div_tau_right_raw))
-        telemetry["mode_hip_yaw_div_tau_left_sat"].append(bool(mode_div_tau_left_sat))
-        telemetry["mode_hip_yaw_div_tau_right_sat"].append(bool(mode_div_tau_right_sat))
-        telemetry["mode_hip_yaw_div_torque_margin_left"].append(
-            float(args.mode_hip_yaw_div_max_torque) - abs(float(mode_div_tau_left_raw))
-            if mode_hip_yaw_div_enabled else 0.0
-        )
-        telemetry["mode_hip_yaw_div_torque_margin_right"].append(
-            float(args.mode_hip_yaw_div_max_torque) - abs(float(mode_div_tau_right_raw))
-            if mode_hip_yaw_div_enabled else 0.0
-        )
-        telemetry["mode_hip_yaw_div_error"].append(float(mode_div_error))
-        telemetry["mode_hip_yaw_div_rate"].append(float(mode_div_rate))
-        telemetry["mode_hip_yaw_div_ref"].append(float(mode_div_ref))
-        # Support-aware mode-div gating telemetry
-        telemetry["mode_hip_yaw_div_support_gate_enabled"].append(
-            bool(getattr(args, "mode_hip_yaw_div_support_enabled", False))
-        )
-        telemetry["mode_hip_yaw_div_support_error_m"].append(
-            float(mode_div_support_error_val) if mode_hip_yaw_div_enabled else 0.0
-        )
-        telemetry["mode_hip_yaw_div_support_error_rate_mps"].append(
-            float(mode_div_support_error_rate_val) if mode_hip_yaw_div_enabled else 0.0
-        )
-        telemetry["mode_hip_yaw_div_support_error_gate"].append(float(mode_div_support_error_gate))
-        telemetry["mode_hip_yaw_div_support_rate_gate"].append(float(mode_div_support_rate_gate))
-        telemetry["mode_hip_yaw_div_effective_support_gate"].append(float(mode_div_effective_support_gate))
-        telemetry["mode_hip_yaw_div_combined_gate"].append(float(mode_div_combined_gate))
-        telemetry["hip_yaw_mode_ownership_violation"].append(int(mode_ownership_violation))
-        telemetry["hip_yaw_div_tau_max"].append(shape_diag.get("hip_yaw_div_tau_max", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_div_z_low"].append(shape_diag.get("hip_yaw_div_z_low", 0.0) if is_balance_core_mode(args) else 0.0)
-        telemetry["hip_yaw_div_z_high"].append(shape_diag.get("hip_yaw_div_z_high", 0.0) if is_balance_core_mode(args) else 0.0)
+            # HY2-DIV: Hip-yaw divergence damping telemetry
+            telemetry["hip_yaw_div_enabled"].append(shape_diag.get("hip_yaw_div_enabled", False) if is_balance_core_mode(args) else False)
+            telemetry["hip_yaw_div_gate_active"].append(shape_diag.get("hip_yaw_div_gate_active", False) if is_balance_core_mode(args) else False)
+            telemetry["hip_yaw_div_active"].append(shape_diag.get("hip_yaw_div_active", False) if is_balance_core_mode(args) else False)
+            telemetry["hip_yaw_div_height_gate"].append(shape_diag.get("hip_yaw_div_height_gate", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_div_effective_k"].append(shape_diag.get("hip_yaw_div_effective_k", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_div_effective_kd"].append(shape_diag.get("hip_yaw_div_effective_kd", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_div_effective_tau_max"].append(shape_diag.get("hip_yaw_div_effective_tau_max", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_div_left"].append(shape_diag.get("hip_yaw_div_left", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_div_right"].append(shape_diag.get("hip_yaw_div_right", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_div_left_clipped"].append(shape_diag.get("hip_yaw_div_left_clipped", False) if is_balance_core_mode(args) else False)
+            telemetry["hip_yaw_div_right_clipped"].append(shape_diag.get("hip_yaw_div_right_clipped", False) if is_balance_core_mode(args) else False)
+            telemetry["hip_yaw_div_k_divergence"].append(shape_diag.get("hip_yaw_div_k_divergence", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_div_k_divergence_rate"].append(shape_diag.get("hip_yaw_div_k_divergence_rate", 0.0) if is_balance_core_mode(args) else 0.0)
+            # Mode-Based Hip-Yaw Divergence Controller telemetry (opt-in)
+            telemetry["mode_hip_yaw_div_enabled"].append(bool(mode_hip_yaw_div_enabled))
+            telemetry["mode_hip_yaw_div_kp"].append(float(getattr(args, "mode_hip_yaw_div_kp", 0.0)))
+            telemetry["mode_hip_yaw_div_kd"].append(float(getattr(args, "mode_hip_yaw_div_kd", 0.0)))
+            telemetry["mode_hip_yaw_div_max_torque"].append(float(getattr(args, "mode_hip_yaw_div_max_torque", 0.0)))
+            telemetry["mode_hip_yaw_div_soft_limit_rad"].append(float(getattr(args, "mode_hip_yaw_div_soft_limit_rad", 0.0)))
+            telemetry["mode_hip_yaw_div_soft_gain"].append(float(getattr(args, "mode_hip_yaw_div_soft_gain", 0.0)))
+            telemetry["mode_hip_yaw_div_ref_source"].append(str(getattr(args, "mode_hip_yaw_div_ref_source", "target")))
+            telemetry["mode_hip_yaw_div_height_gate"].append(float(mode_div_height_gate))
+            telemetry["mode_hip_yaw_div_tau_left"].append(float(mode_div_tau_left))
+            telemetry["mode_hip_yaw_div_tau_right"].append(float(mode_div_tau_right))
+            telemetry["mode_hip_yaw_div_tau_left_raw"].append(float(mode_div_tau_left_raw))
+            telemetry["mode_hip_yaw_div_tau_right_raw"].append(float(mode_div_tau_right_raw))
+            telemetry["mode_hip_yaw_div_tau_left_sat"].append(bool(mode_div_tau_left_sat))
+            telemetry["mode_hip_yaw_div_tau_right_sat"].append(bool(mode_div_tau_right_sat))
+            telemetry["mode_hip_yaw_div_torque_margin_left"].append(
+                float(args.mode_hip_yaw_div_max_torque) - abs(float(mode_div_tau_left_raw))
+                if mode_hip_yaw_div_enabled else 0.0
+            )
+            telemetry["mode_hip_yaw_div_torque_margin_right"].append(
+                float(args.mode_hip_yaw_div_max_torque) - abs(float(mode_div_tau_right_raw))
+                if mode_hip_yaw_div_enabled else 0.0
+            )
+            telemetry["mode_hip_yaw_div_error"].append(float(mode_div_error))
+            telemetry["mode_hip_yaw_div_rate"].append(float(mode_div_rate))
+            telemetry["mode_hip_yaw_div_ref"].append(float(mode_div_ref))
+            # Support-aware mode-div gating telemetry
+            telemetry["mode_hip_yaw_div_support_gate_enabled"].append(
+                bool(getattr(args, "mode_hip_yaw_div_support_enabled", False))
+            )
+            telemetry["mode_hip_yaw_div_support_error_m"].append(
+                float(mode_div_support_error_val) if mode_hip_yaw_div_enabled else 0.0
+            )
+            telemetry["mode_hip_yaw_div_support_error_rate_mps"].append(
+                float(mode_div_support_error_rate_val) if mode_hip_yaw_div_enabled else 0.0
+            )
+            telemetry["mode_hip_yaw_div_support_error_gate"].append(float(mode_div_support_error_gate))
+            telemetry["mode_hip_yaw_div_support_rate_gate"].append(float(mode_div_support_rate_gate))
+            telemetry["mode_hip_yaw_div_effective_support_gate"].append(float(mode_div_effective_support_gate))
+            telemetry["mode_hip_yaw_div_combined_gate"].append(float(mode_div_combined_gate))
+            telemetry["hip_yaw_mode_ownership_violation"].append(int(mode_ownership_violation))
+            telemetry["hip_yaw_div_tau_max"].append(shape_diag.get("hip_yaw_div_tau_max", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_div_z_low"].append(shape_diag.get("hip_yaw_div_z_low", 0.0) if is_balance_core_mode(args) else 0.0)
+            telemetry["hip_yaw_div_z_high"].append(shape_diag.get("hip_yaw_div_z_high", 0.0) if is_balance_core_mode(args) else 0.0)
 
-        # HY-FF debug telemetry
-        if is_balance_core_mode(args):
-            telemetry["hy_ff_height_passed_to_shape"].append(hy_ff_height_input)
-            telemetry["hy_ff_support_error_passed_to_shape"].append(hy_ff_support_error_input)
-            telemetry["hy_ff_support_error_from_sagittal"].append(sagittal_diag.get("support_position_error_m", 0.0))
-            telemetry["hy_ff_prev_support_error"].append(prev_support_error)
-            telemetry["hy_ff_setup_target_com_z_m"].append(hy_ff_setup_target)
-            telemetry["hy_ff_setup_achieved_com_z_m"].append(hy_ff_setup_achieved)
-            telemetry["hy_ff_root_z_m"].append(hy_ff_root_z)
-            telemetry["hy_ff_current_com_z_m"].append(hy_ff_current_com_z)
-        else:
-            telemetry["hy_ff_height_passed_to_shape"].append(0.0)
-            telemetry["hy_ff_support_error_passed_to_shape"].append(0.0)
-            telemetry["hy_ff_support_error_from_sagittal"].append(0.0)
-            telemetry["hy_ff_prev_support_error"].append(0.0)
-            telemetry["hy_ff_setup_target_com_z_m"].append(0.0)
-            telemetry["hy_ff_setup_achieved_com_z_m"].append(0.0)
-            telemetry["hy_ff_root_z_m"].append(0.0)
-            telemetry["hy_ff_current_com_z_m"].append(0.0)
+            # HY-FF debug telemetry
+            if is_balance_core_mode(args):
+                telemetry["hy_ff_height_passed_to_shape"].append(hy_ff_height_input)
+                telemetry["hy_ff_support_error_passed_to_shape"].append(hy_ff_support_error_input)
+                telemetry["hy_ff_support_error_from_sagittal"].append(sagittal_diag.get("support_position_error_m", 0.0))
+                telemetry["hy_ff_prev_support_error"].append(prev_support_error)
+                telemetry["hy_ff_setup_target_com_z_m"].append(hy_ff_setup_target)
+                telemetry["hy_ff_setup_achieved_com_z_m"].append(hy_ff_setup_achieved)
+                telemetry["hy_ff_root_z_m"].append(hy_ff_root_z)
+                telemetry["hy_ff_current_com_z_m"].append(hy_ff_current_com_z)
+            else:
+                telemetry["hy_ff_height_passed_to_shape"].append(0.0)
+                telemetry["hy_ff_support_error_passed_to_shape"].append(0.0)
+                telemetry["hy_ff_support_error_from_sagittal"].append(0.0)
+                telemetry["hy_ff_prev_support_error"].append(0.0)
+                telemetry["hy_ff_setup_target_com_z_m"].append(0.0)
+                telemetry["hy_ff_setup_achieved_com_z_m"].append(0.0)
+                telemetry["hy_ff_root_z_m"].append(0.0)
+                telemetry["hy_ff_current_com_z_m"].append(0.0)
 
-        # Yaw-position coupling diagnostic telemetry
-        root_yaw_z = float(mj_data.qpos[6]) if len(mj_data.qpos) > 6 else 0.0  # qpos[6] = torso yaw (approximate)
-        yaw_z = float(centroidal_state_control.body_yaw_z) if hasattr(centroidal_state_control, 'body_yaw_z') else 0.0
-        yaw_error_eq = yaw_z - initial_yaw_z
-        l_hip_yaw_err_val = l_hip_yaw_error
-        r_hip_yaw_err_val = r_hip_yaw_error
-        hip_yaw_asym = abs(l_hip_yaw_err_val + r_hip_yaw_err_val)
-        hip_yaw_div = abs(l_hip_yaw_err_val - r_hip_yaw_err_val)
-        telemetry["root_yaw_z_rad"].append(root_yaw_z)
-        telemetry["yaw_z_rad"].append(yaw_z)
-        telemetry["yaw_error_from_equilibrium_rad"].append(yaw_error_eq)
-        telemetry["hip_yaw_asymmetry"].append(hip_yaw_asym)
-        telemetry["hip_yaw_divergence"].append(hip_yaw_div)
+            # Yaw-position coupling diagnostic telemetry
+            root_yaw_z = float(mj_data.qpos[6]) if len(mj_data.qpos) > 6 else 0.0  # qpos[6] = torso yaw (approximate)
+            yaw_z = float(centroidal_state_control.body_yaw_z) if hasattr(centroidal_state_control, 'body_yaw_z') else 0.0
+            yaw_error_eq = yaw_z - initial_yaw_z
+            l_hip_yaw_err_val = l_hip_yaw_error
+            r_hip_yaw_err_val = r_hip_yaw_error
+            hip_yaw_asym = abs(l_hip_yaw_err_val + r_hip_yaw_err_val)
+            hip_yaw_div = abs(l_hip_yaw_err_val - r_hip_yaw_err_val)
+            telemetry["root_yaw_z_rad"].append(root_yaw_z)
+            telemetry["yaw_z_rad"].append(yaw_z)
+            telemetry["yaw_error_from_equilibrium_rad"].append(yaw_error_eq)
+            telemetry["hip_yaw_asymmetry"].append(hip_yaw_asym)
+            telemetry["hip_yaw_divergence"].append(hip_yaw_div)
 
-        # Yaw-induced position error estimation
-        # When hip yaw drifts by angle theta, the support center appears to shift
-        # by approximately d * sin(theta) where d is half the axle-to-axle distance
-        # in the sagittal direction. Use wheel separation as approximate d.
-        l_wheel_pos = np.array([float(mj_data.xpos[l_wheel_body_id][i]) for i in range(3)])
-        r_wheel_pos = np.array([float(mj_data.xpos[r_wheel_body_id][i]) for i in range(3)])
-        wheel_sep_y = abs(l_wheel_pos[1] - r_wheel_pos[1])
-        mean_yaw_error = 0.5 * (l_hip_yaw_err_val + r_hip_yaw_err_val)
-        yaw_induced_x = wheel_sep_y * np.sin(mean_yaw_error)
-        yaw_induced_y = wheel_sep_y * (1.0 - np.cos(mean_yaw_error))
-        yaw_induced_norm = np.sqrt(yaw_induced_x**2 + yaw_induced_y**2)
-        telemetry["yaw_induced_position_error_x_m"].append(float(yaw_induced_x))
-        telemetry["yaw_induced_position_error_y_m"].append(float(yaw_induced_y))
-        telemetry["yaw_induced_position_error_norm_m"].append(float(yaw_induced_norm))
+            # Yaw-induced position error estimation
+            # When hip yaw drifts by angle theta, the support center appears to shift
+            # by approximately d * sin(theta) where d is half the axle-to-axle distance
+            # in the sagittal direction. Use wheel separation as approximate d.
+            l_wheel_pos = np.array([float(mj_data.xpos[l_wheel_body_id][i]) for i in range(3)])
+            r_wheel_pos = np.array([float(mj_data.xpos[r_wheel_body_id][i]) for i in range(3)])
+            wheel_sep_y = abs(l_wheel_pos[1] - r_wheel_pos[1])
+            mean_yaw_error = 0.5 * (l_hip_yaw_err_val + r_hip_yaw_err_val)
+            yaw_induced_x = wheel_sep_y * np.sin(mean_yaw_error)
+            yaw_induced_y = wheel_sep_y * (1.0 - np.cos(mean_yaw_error))
+            yaw_induced_norm = np.sqrt(yaw_induced_x**2 + yaw_induced_y**2)
+            telemetry["yaw_induced_position_error_x_m"].append(float(yaw_induced_x))
+            telemetry["yaw_induced_position_error_y_m"].append(float(yaw_induced_y))
+            telemetry["yaw_induced_position_error_norm_m"].append(float(yaw_induced_norm))
 
-        # Yaw-aware compensation telemetry — populated by profile system
-        variant_name_for_telem = height_variant_setup.get("variant_name") if height_variant_setup else None
-        fix_active = boundary_fix.is_active(variant_name_for_telem)
-        yaw_aware_active = boundary_fix.uses_yaw_aware_compensation() and fix_active
-        boundary_profile_name = boundary_fix.profile
-        effective_kp_val = boundary_fix.get_effective_hip_yaw_kp(
-            balance_core_controllers["shape_posture"].kp_hip_yaw, variant_name_for_telem
-        ) if is_balance_core_mode(args) else 0.0
-        effective_kd_val = boundary_fix.get_effective_hip_yaw_kd(
-            balance_core_controllers["shape_posture"].kd_hip_yaw, variant_name_for_telem
-        ) if is_balance_core_mode(args) else 0.0
-        telemetry["yaw_aware_position_compensation_active"].append(yaw_aware_active)
-        telemetry["yaw_aware_sagittal_error_compensated_m"].append(float(sagittal_diag.get("support_position_error_scaled_m", sagittal_diag.get("sagittal_position_error_m", 0.0))))
-        telemetry["yaw_aware_lateral_error_compensated_m"].append(compensated_lateral_error if yaw_aware_active else 0.0)
-        telemetry["effective_kp_hip_yaw"].append(float(effective_kp_val))
-        telemetry["effective_kd_hip_yaw"].append(float(effective_kd_val))
-        telemetry["hip_yaw_integral_active"].append(boundary_fix.uses_integral() and fix_active)
-        telemetry["hip_yaw_integral_clamp"].append(1.0 if (boundary_fix.uses_integral() and boundary_fix.integral_error_left >= boundary_fix.integral_max) else 0.0)
-        telemetry["hip_yaw_integral_error_left"].append(float(boundary_fix.integral_error_left))
-        telemetry["hip_yaw_integral_error_right"].append(float(boundary_fix.integral_error_right))
-        telemetry["hip_yaw_bias_tau_left"].append(float(boundary_fix.bias_tau_left))
-        telemetry["hip_yaw_bias_tau_right"].append(float(boundary_fix.bias_tau_right))
-        telemetry["hip_yaw_bias_active"].append(boundary_fix.uses_integral() and fix_active)
-        telemetry["tau_position_yaw_compensated_raw"].append(float(sagittal_diag.get("tau_position_raw", 0.0)))
-        telemetry["tau_position_yaw_compensated_clipped"].append(float(sagittal_diag.get("tau_position", 0.0)))
-        telemetry["boundary_yaw_position_profile"].append(boundary_profile_name)
-        telemetry["boundary_profile_active"].append(fix_active)
-        telemetry["hip_yaw_abs_max_tracking"].append(float(max(abs(l_hip_yaw_pos), abs(r_hip_yaw_pos))))
-        telemetry["hip_yaw_abs_max_threshold"].append(0.07)
+            # Yaw-aware compensation telemetry — populated by profile system
+            variant_name_for_telem = height_variant_setup.get("variant_name") if height_variant_setup else None
+            fix_active = boundary_fix.is_active(variant_name_for_telem)
+            yaw_aware_active = boundary_fix.uses_yaw_aware_compensation() and fix_active
+            boundary_profile_name = boundary_fix.profile
+            effective_kp_val = boundary_fix.get_effective_hip_yaw_kp(
+                balance_core_controllers["shape_posture"].kp_hip_yaw, variant_name_for_telem
+            ) if is_balance_core_mode(args) else 0.0
+            effective_kd_val = boundary_fix.get_effective_hip_yaw_kd(
+                balance_core_controllers["shape_posture"].kd_hip_yaw, variant_name_for_telem
+            ) if is_balance_core_mode(args) else 0.0
+            telemetry["yaw_aware_position_compensation_active"].append(yaw_aware_active)
+            telemetry["yaw_aware_sagittal_error_compensated_m"].append(float(sagittal_diag.get("support_position_error_scaled_m", sagittal_diag.get("sagittal_position_error_m", 0.0))))
+            telemetry["yaw_aware_lateral_error_compensated_m"].append(compensated_lateral_error if yaw_aware_active else 0.0)
+            telemetry["effective_kp_hip_yaw"].append(float(effective_kp_val))
+            telemetry["effective_kd_hip_yaw"].append(float(effective_kd_val))
+            telemetry["hip_yaw_integral_active"].append(boundary_fix.uses_integral() and fix_active)
+            telemetry["hip_yaw_integral_clamp"].append(1.0 if (boundary_fix.uses_integral() and boundary_fix.integral_error_left >= boundary_fix.integral_max) else 0.0)
+            telemetry["hip_yaw_integral_error_left"].append(float(boundary_fix.integral_error_left))
+            telemetry["hip_yaw_integral_error_right"].append(float(boundary_fix.integral_error_right))
+            telemetry["hip_yaw_bias_tau_left"].append(float(boundary_fix.bias_tau_left))
+            telemetry["hip_yaw_bias_tau_right"].append(float(boundary_fix.bias_tau_right))
+            telemetry["hip_yaw_bias_active"].append(boundary_fix.uses_integral() and fix_active)
+            telemetry["tau_position_yaw_compensated_raw"].append(float(sagittal_diag.get("tau_position_raw", 0.0)))
+            telemetry["tau_position_yaw_compensated_clipped"].append(float(sagittal_diag.get("tau_position", 0.0)))
+            telemetry["boundary_yaw_position_profile"].append(boundary_profile_name)
+            telemetry["boundary_profile_active"].append(fix_active)
+            telemetry["hip_yaw_abs_max_tracking"].append(float(max(abs(l_hip_yaw_pos), abs(r_hip_yaw_pos))))
+            telemetry["hip_yaw_abs_max_threshold"].append(0.07)
 
-        # Wheel yaw stabilizer telemetry (populated from yaw_diag)
-        is_wheel_yaw = yaw_diag.get("wheel_yaw_enabled", False)
-        telemetry["wheel_yaw_enabled"].append(is_wheel_yaw)
-        if is_wheel_yaw:
-            telemetry["wheel_yaw_error"].append(yaw_diag.get("wheel_yaw_error", 0.0))
-            telemetry["wheel_yaw_rate"].append(yaw_diag.get("wheel_yaw_rate", 0.0))
-            telemetry["wheel_yaw_tau_left"].append(yaw_diag.get("wheel_yaw_tau_left", 0.0))
-            telemetry["wheel_yaw_tau_right"].append(yaw_diag.get("wheel_yaw_tau_right", 0.0))
-            telemetry["wheel_yaw_saturated"].append(yaw_diag.get("wheel_yaw_saturated", False))
-            telemetry["wheel_yaw_profile_activated"].append(yaw_diag.get("wheel_yaw_profile_activated", False))
-            telemetry["wheel_yaw_kp"].append(yaw_diag.get("wheel_yaw_kp", 0.0))
-            telemetry["wheel_yaw_kd"].append(yaw_diag.get("wheel_yaw_kd", 0.0))
-            telemetry["wheel_yaw_max_torque"].append(yaw_diag.get("wheel_yaw_max_torque", 0.0))
-            telemetry["wheel_yaw_height_gate"].append(yaw_diag.get("wheel_yaw_height_gate", 0.0))
-            telemetry["wheel_yaw_use_numerical_rate"].append(yaw_diag.get("wheel_yaw_use_numerical_rate", False))
-            tl = yaw_diag.get("wheel_yaw_tau_left", 0.0)
-            tr = yaw_diag.get("wheel_yaw_tau_right", 0.0)
-            telemetry["wheel_yaw_tau_diff"].append(float(tl - tr))
-        else:
-            telemetry["wheel_yaw_error"].append(0.0)
-            telemetry["wheel_yaw_rate"].append(0.0)
-            telemetry["wheel_yaw_tau_left"].append(0.0)
-            telemetry["wheel_yaw_tau_right"].append(0.0)
-            telemetry["wheel_yaw_saturated"].append(False)
-            telemetry["wheel_yaw_profile_activated"].append(False)
-            telemetry["wheel_yaw_kp"].append(0.0)
-            telemetry["wheel_yaw_kd"].append(0.0)
-            telemetry["wheel_yaw_max_torque"].append(0.0)
-            telemetry["wheel_yaw_height_gate"].append(0.0)
-            telemetry["wheel_yaw_use_numerical_rate"].append(False)
-            telemetry["wheel_yaw_tau_diff"].append(0.0)
+            # Wheel yaw stabilizer telemetry (populated from yaw_diag)
+            is_wheel_yaw = yaw_diag.get("wheel_yaw_enabled", False)
+            telemetry["wheel_yaw_enabled"].append(is_wheel_yaw)
+            if is_wheel_yaw:
+                telemetry["wheel_yaw_error"].append(yaw_diag.get("wheel_yaw_error", 0.0))
+                telemetry["wheel_yaw_rate"].append(yaw_diag.get("wheel_yaw_rate", 0.0))
+                telemetry["wheel_yaw_tau_left"].append(yaw_diag.get("wheel_yaw_tau_left", 0.0))
+                telemetry["wheel_yaw_tau_right"].append(yaw_diag.get("wheel_yaw_tau_right", 0.0))
+                telemetry["wheel_yaw_saturated"].append(yaw_diag.get("wheel_yaw_saturated", False))
+                telemetry["wheel_yaw_profile_activated"].append(yaw_diag.get("wheel_yaw_profile_activated", False))
+                telemetry["wheel_yaw_kp"].append(yaw_diag.get("wheel_yaw_kp", 0.0))
+                telemetry["wheel_yaw_kd"].append(yaw_diag.get("wheel_yaw_kd", 0.0))
+                telemetry["wheel_yaw_max_torque"].append(yaw_diag.get("wheel_yaw_max_torque", 0.0))
+                telemetry["wheel_yaw_height_gate"].append(yaw_diag.get("wheel_yaw_height_gate", 0.0))
+                telemetry["wheel_yaw_use_numerical_rate"].append(yaw_diag.get("wheel_yaw_use_numerical_rate", False))
+                tl = yaw_diag.get("wheel_yaw_tau_left", 0.0)
+                tr = yaw_diag.get("wheel_yaw_tau_right", 0.0)
+                telemetry["wheel_yaw_tau_diff"].append(float(tl - tr))
+            else:
+                telemetry["wheel_yaw_error"].append(0.0)
+                telemetry["wheel_yaw_rate"].append(0.0)
+                telemetry["wheel_yaw_tau_left"].append(0.0)
+                telemetry["wheel_yaw_tau_right"].append(0.0)
+                telemetry["wheel_yaw_saturated"].append(False)
+                telemetry["wheel_yaw_profile_activated"].append(False)
+                telemetry["wheel_yaw_kp"].append(0.0)
+                telemetry["wheel_yaw_kd"].append(0.0)
+                telemetry["wheel_yaw_max_torque"].append(0.0)
+                telemetry["wheel_yaw_height_gate"].append(0.0)
+                telemetry["wheel_yaw_use_numerical_rate"].append(False)
+                telemetry["wheel_yaw_tau_diff"].append(0.0)
 
-        # Body yaw and hip-yaw ownership telemetry
-        # body_yaw_owner: "wheel_yaw_stabilizer" when enabled, else "yaw_controller"
-        telemetry["body_yaw_owner"].append(
-            "wheel_yaw_stabilizer" if is_wheel_yaw else "yaw_controller"
-        )
-        # hip_yaw_divergence_owner: "mode_based_divergence" when enabled, else "shape_posture"
-        telemetry["hip_yaw_divergence_owner"].append(
-            "mode_based_divergence" if mode_hip_yaw_div_enabled else "shape_posture"
-        )
-        # Yaw controller hip-yaw torque contribution (present regardless of wheel_yaw)
-        telemetry["yaw_controller_tau_hip_yaw_left"].append(
-            yaw_diag.get("tau_yaw_left", 0.0)
-        )
-        telemetry["yaw_controller_tau_hip_yaw_right"].append(
-            yaw_diag.get("tau_yaw_right", 0.0)
-        )
+            # Body yaw and hip-yaw ownership telemetry
+            # body_yaw_owner: "wheel_yaw_stabilizer" when enabled, else "yaw_controller"
+            telemetry["body_yaw_owner"].append(
+                "wheel_yaw_stabilizer" if is_wheel_yaw else "yaw_controller"
+            )
+            # hip_yaw_divergence_owner: "mode_based_divergence" when enabled, else "shape_posture"
+            telemetry["hip_yaw_divergence_owner"].append(
+                "mode_based_divergence" if mode_hip_yaw_div_enabled else "shape_posture"
+            )
+            # Yaw controller hip-yaw torque contribution (present regardless of wheel_yaw)
+            telemetry["yaw_controller_tau_hip_yaw_left"].append(
+                yaw_diag.get("tau_yaw_left", 0.0)
+            )
+            telemetry["yaw_controller_tau_hip_yaw_right"].append(
+                yaw_diag.get("tau_yaw_right", 0.0)
+            )
 
-        # Hip-yaw mode decomposition telemetry
-        l_hip_yaw_err_rad = l_hip_yaw_error
-        r_hip_yaw_err_rad = r_hip_yaw_error
-        hip_yaw_common = 0.5 * (l_hip_yaw_err_rad + r_hip_yaw_err_rad)
-        hip_yaw_divergence = l_hip_yaw_err_rad - r_hip_yaw_err_rad
-        hip_yaw_common_sum_abs = abs(l_hip_yaw_err_rad + r_hip_yaw_err_rad)
-        hip_yaw_asymmetry = abs(l_hip_yaw_err_rad - r_hip_yaw_err_rad)
-        div_common_ratio = (
-            hip_yaw_asymmetry / (abs(hip_yaw_common) + 1e-12)
-            if abs(hip_yaw_common) > 1e-12
-            else float('inf')
-        )
-        telemetry["hip_yaw_common_error_rad"].append(float(hip_yaw_common))
-        telemetry["hip_yaw_common_error_sum_abs_rad"].append(float(hip_yaw_common_sum_abs))
-        telemetry["hip_yaw_divergence_error_rad"].append(float(hip_yaw_divergence))
-        telemetry["hip_yaw_asymmetry_abs_rad"].append(float(hip_yaw_asymmetry))
-        telemetry["hip_yaw_div_common_ratio"].append(float(div_common_ratio))
-        telemetry["variant_name"].append(height_variant_setup.get("variant_name", "nominal_keyframe") if height_variant_setup else "nominal_keyframe")
-        telemetry["height_variant_target_com_z_m"].append(float(height_variant_setup.get("target_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
-        telemetry["height_variant_achieved_com_z_m"].append(float(height_variant_setup.get("achieved_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
-        telemetry["height_variant_root_z_m"].append(float(height_variant_setup.get("calibrated_root_z_m", mj_data.qpos[2])) if height_variant_setup else float(mj_data.qpos[2]))
-        telemetry["height_variant_hip_pitch_ref"].append(float(height_variant_setup.get("hip_pitch_ref", equilibrium_joint_pos[2])) if height_variant_setup else float(equilibrium_joint_pos[2]))
-        telemetry["height_variant_knee_ref"].append(float(height_variant_setup.get("knee_ref", equilibrium_joint_pos[3])) if height_variant_setup else float(equilibrium_joint_pos[3]))
-        telemetry["shape_posture_reference_source"].append("height_variant_equilibrium_joint_pos" if height_variant_setup else "nominal_equilibrium_joint_pos")
-        telemetry["equilibrium_capture_after_variant_applied"].append(bool(height_variant_setup is not None))
+            # Hip-yaw mode decomposition telemetry
+            l_hip_yaw_err_rad = l_hip_yaw_error
+            r_hip_yaw_err_rad = r_hip_yaw_error
+            hip_yaw_common = 0.5 * (l_hip_yaw_err_rad + r_hip_yaw_err_rad)
+            hip_yaw_divergence = l_hip_yaw_err_rad - r_hip_yaw_err_rad
+            hip_yaw_common_sum_abs = abs(l_hip_yaw_err_rad + r_hip_yaw_err_rad)
+            hip_yaw_asymmetry = abs(l_hip_yaw_err_rad - r_hip_yaw_err_rad)
+            div_common_ratio = (
+                hip_yaw_asymmetry / (abs(hip_yaw_common) + 1e-12)
+                if abs(hip_yaw_common) > 1e-12
+                else float('inf')
+            )
+            telemetry["hip_yaw_common_error_rad"].append(float(hip_yaw_common))
+            telemetry["hip_yaw_common_error_sum_abs_rad"].append(float(hip_yaw_common_sum_abs))
+            telemetry["hip_yaw_divergence_error_rad"].append(float(hip_yaw_divergence))
+            telemetry["hip_yaw_asymmetry_abs_rad"].append(float(hip_yaw_asymmetry))
+            telemetry["hip_yaw_div_common_ratio"].append(float(div_common_ratio))
+            telemetry["variant_name"].append(height_variant_setup.get("variant_name", "nominal_keyframe") if height_variant_setup else "nominal_keyframe")
+            telemetry["height_variant_target_com_z_m"].append(float(height_variant_setup.get("target_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
+            telemetry["height_variant_achieved_com_z_m"].append(float(height_variant_setup.get("achieved_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
+            telemetry["height_variant_root_z_m"].append(float(height_variant_setup.get("calibrated_root_z_m", mj_data.qpos[2])) if height_variant_setup else float(mj_data.qpos[2]))
+            telemetry["height_variant_hip_pitch_ref"].append(float(height_variant_setup.get("hip_pitch_ref", equilibrium_joint_pos[2])) if height_variant_setup else float(equilibrium_joint_pos[2]))
+            telemetry["height_variant_knee_ref"].append(float(height_variant_setup.get("knee_ref", equilibrium_joint_pos[3])) if height_variant_setup else float(equilibrium_joint_pos[3]))
+            telemetry["shape_posture_reference_source"].append("height_variant_equilibrium_joint_pos" if height_variant_setup else "nominal_equilibrium_joint_pos")
+            telemetry["equilibrium_capture_after_variant_applied"].append(bool(height_variant_setup is not None))
 
-        telemetry["com_error_x"].append(float(qp_diagnostics.get("com_error_x", 0.0)))
-        telemetry["com_error_y"].append(float(qp_diagnostics.get("com_error_y", 0.0)))
-        telemetry["com_error_z"].append(float(qp_diagnostics.get("com_error_z", 0.0)))
-        telemetry["cp_error_x"].append(float(qp_diagnostics.get("cp_error_x", 0.0)))
-        telemetry["cp_error_y"].append(float(qp_diagnostics.get("cp_error_y", 0.0)))
-        telemetry["pitch_error"].append(float(qp_diagnostics.get("pitch_error", 0.0)))
-        telemetry["roll_error"].append(float(qp_diagnostics.get("roll_error", 0.0)))
-        telemetry["height_error"].append(float(qp_diagnostics.get("height_error", 0.0)))
-        telemetry["target_com_z_m"].append(float(height_variant_setup.get("achieved_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
-        telemetry["current_com_z_m"].append(float(centroidal_state_control.com_pos[2]))
-        telemetry["height_error_m"].append(float(centroidal_state_control.com_pos[2]) - (float(height_variant_setup.get("achieved_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd)))
-        telemetry["root_z_m"].append(float(mj_data.qpos[2]))
-        telemetry["support_center_ref_x"].append(float(support_center_eq_xy[0]))
-        telemetry["support_center_ref_y"].append(float(support_center_eq_xy[1]))
-        telemetry["support_center_x"].append(float(sagittal_diag.get("support_center_x", support_center_eq_xy[0])))
-        telemetry["support_center_y"].append(float(sagittal_diag.get("support_center_y", support_center_eq_xy[1])))
-        telemetry["support_position_reference_source"].append("height_variant_equilibrium_support_center" if height_variant_setup else "nominal_equilibrium_support_center")
-        telemetry["support_reference_captured_after_variant"].append(bool(height_variant_setup is not None))
-        telemetry["left_fz_actual"].append(float(centroidal_state_log.left_contact_force_world[2]))
-        telemetry["right_fz_actual"].append(float(centroidal_state_log.right_contact_force_world[2]))
-        telemetry["fz_asymmetry_actual"].append(float(centroidal_state_log.left_contact_force_world[2] - centroidal_state_log.right_contact_force_world[2]))
-        telemetry["contact_dist_min"].append(float(contact_class["contact_dist_min"]))
-        telemetry["contact_dist_max"].append(float(contact_class["contact_dist_max"]))
-        telemetry["correction_Fy_com"].append(float(qp_diagnostics.get("correction_Fy_com", 0.0)))
-        telemetry["correction_Fy_cp"].append(float(qp_diagnostics.get("correction_Fy_cp", 0.0)))
-        telemetry["correction_Fy_pitch"].append(float(qp_diagnostics.get("correction_Fy_pitch", 0.0)))
-        telemetry["correction_My_roll"].append(float(qp_diagnostics.get("correction_My_roll", 0.0)))
-        telemetry["distributor_f_left"].append(",".join(f"{x:.4f}" for x in np.array(qp_diagnostics.get("f_left", jnp.zeros(3)))))
-        telemetry["distributor_f_right"].append(",".join(f"{x:.4f}" for x in np.array(qp_diagnostics.get("f_right", jnp.zeros(3)))))
-        telemetry["tau_hip_roll"].append(",".join(f"{x:.4f}" for x in np.array(qp_diagnostics.get("tau_hip_roll", jnp.zeros(2)))))
-        tau_contact_val = jnp.zeros(10)  # Placeholder if not available
-        telemetry["tau_contact"].append(",".join(f"{x:.4f}" for x in np.array(tau_contact_val)))
+            telemetry["com_error_x"].append(float(qp_diagnostics.get("com_error_x", 0.0)))
+            telemetry["com_error_y"].append(float(qp_diagnostics.get("com_error_y", 0.0)))
+            telemetry["com_error_z"].append(float(qp_diagnostics.get("com_error_z", 0.0)))
+            telemetry["cp_error_x"].append(float(qp_diagnostics.get("cp_error_x", 0.0)))
+            telemetry["cp_error_y"].append(float(qp_diagnostics.get("cp_error_y", 0.0)))
+            telemetry["pitch_error"].append(float(qp_diagnostics.get("pitch_error", 0.0)))
+            telemetry["roll_error"].append(float(qp_diagnostics.get("roll_error", 0.0)))
+            telemetry["height_error"].append(float(qp_diagnostics.get("height_error", 0.0)))
+            telemetry["target_com_z_m"].append(float(height_variant_setup.get("achieved_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd))
+            telemetry["current_com_z_m"].append(float(centroidal_state_control.com_pos[2]))
+            telemetry["height_error_m"].append(float(centroidal_state_control.com_pos[2]) - (float(height_variant_setup.get("achieved_com_z_m", height_cmd)) if height_variant_setup else float(height_cmd)))
+            telemetry["root_z_m"].append(float(mj_data.qpos[2]))
+            telemetry["support_center_ref_x"].append(float(support_center_eq_xy[0]))
+            telemetry["support_center_ref_y"].append(float(support_center_eq_xy[1]))
+            telemetry["support_center_x"].append(float(sagittal_diag.get("support_center_x", support_center_eq_xy[0])))
+            telemetry["support_center_y"].append(float(sagittal_diag.get("support_center_y", support_center_eq_xy[1])))
+            telemetry["support_position_reference_source"].append("height_variant_equilibrium_support_center" if height_variant_setup else "nominal_equilibrium_support_center")
+            telemetry["support_reference_captured_after_variant"].append(bool(height_variant_setup is not None))
+            telemetry["left_fz_actual"].append(float(centroidal_state_log.left_contact_force_world[2]))
+            telemetry["right_fz_actual"].append(float(centroidal_state_log.right_contact_force_world[2]))
+            telemetry["fz_asymmetry_actual"].append(float(centroidal_state_log.left_contact_force_world[2] - centroidal_state_log.right_contact_force_world[2]))
+            telemetry["contact_dist_min"].append(float(contact_class["contact_dist_min"]))
+            telemetry["contact_dist_max"].append(float(contact_class["contact_dist_max"]))
+            telemetry["correction_Fy_com"].append(float(qp_diagnostics.get("correction_Fy_com", 0.0)))
+            telemetry["correction_Fy_cp"].append(float(qp_diagnostics.get("correction_Fy_cp", 0.0)))
+            telemetry["correction_Fy_pitch"].append(float(qp_diagnostics.get("correction_Fy_pitch", 0.0)))
+            telemetry["correction_My_roll"].append(float(qp_diagnostics.get("correction_My_roll", 0.0)))
+            telemetry["distributor_f_left"].append(",".join(f"{x:.4f}" for x in np.array(qp_diagnostics.get("f_left", jnp.zeros(3)))))
+            telemetry["distributor_f_right"].append(",".join(f"{x:.4f}" for x in np.array(qp_diagnostics.get("f_right", jnp.zeros(3)))))
+            telemetry["tau_hip_roll"].append(",".join(f"{x:.4f}" for x in np.array(qp_diagnostics.get("tau_hip_roll", jnp.zeros(2)))))
+            tau_contact_val = jnp.zeros(10)  # Placeholder if not available
+            telemetry["tau_contact"].append(",".join(f"{x:.4f}" for x in np.array(tau_contact_val)))
 
-        # Legacy compatibility fields: in balance-core mode, reflect balance-core torques or zeros
-        if is_balance_core_mode(args):
-            telemetry["tau_wbc_correction"].append(",".join(f"{x:.4f}" for x in np.zeros(10)))
-            telemetry["tau_wbc_after_authority_clip"].append(",".join(f"{x:.4f}" for x in np.zeros(10)))
-            telemetry["tau_static_feedforward"].append(",".join(f"{x:.4f}" for x in np.array(tau_support_feedforward)))
-            telemetry["tau_static_posture"].append(",".join(f"{x:.4f}" for x in np.array(tau_shape_posture)))
-        else:
-            telemetry["tau_wbc_correction"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc_correction)))
-            telemetry["tau_wbc_after_authority_clip"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc)))
-            telemetry["tau_static_feedforward"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_feedforward)))
-            telemetry["tau_static_posture"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_posture)))
-        torque_rate_saturation_rate = float(np.mean(rate_flags_vec))
-        hidden_torque_norm_value = float(
-            np.linalg.norm(np.array(tau_wheel_balance))
-            + np.linalg.norm(np.array(tau_hip_roll_centering))
-            + np.linalg.norm(np.array(tau_static_posture if static_posture_controller is not None else tau_posture))
-            + np.linalg.norm(np.array(tau_leg_position))
-        )
-        contact_state_value = "legacy"
-        if is_balance_core_mode(args):
-            contact_state_value = str(contact_output.state.value)
-        elif static_posture_controller is not None:
-            contact_state_value = "stage2_static_posture"
+            # Legacy compatibility fields: in balance-core mode, reflect balance-core torques or zeros
+            if is_balance_core_mode(args):
+                telemetry["tau_wbc_correction"].append(",".join(f"{x:.4f}" for x in np.zeros(10)))
+                telemetry["tau_wbc_after_authority_clip"].append(",".join(f"{x:.4f}" for x in np.zeros(10)))
+                telemetry["tau_static_feedforward"].append(",".join(f"{x:.4f}" for x in np.array(tau_support_feedforward)))
+                telemetry["tau_static_posture"].append(",".join(f"{x:.4f}" for x in np.array(tau_shape_posture)))
+            else:
+                telemetry["tau_wbc_correction"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc_correction)))
+                telemetry["tau_wbc_after_authority_clip"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc)))
+                telemetry["tau_static_feedforward"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_feedforward)))
+                telemetry["tau_static_posture"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_posture)))
+            torque_rate_saturation_rate = float(np.mean(rate_flags_vec))
+            hidden_torque_norm_value = float(
+                np.linalg.norm(np.array(tau_wheel_balance))
+                + np.linalg.norm(np.array(tau_hip_roll_centering))
+                + np.linalg.norm(np.array(tau_static_posture if static_posture_controller is not None else tau_posture))
+                + np.linalg.norm(np.array(tau_leg_position))
+            )
+            contact_state_value = "legacy"
+            if is_balance_core_mode(args):
+                contact_state_value = str(contact_output.state.value)
+            elif static_posture_controller is not None:
+                contact_state_value = "stage2_static_posture"
 
-        update_full_rate_summary(
-            pitch_x_value=float(pitch_x_rad),
-            roll_y_value=float(roll_y_rad),
-            com_z_value=com_height,
-            wheel_vel_mean_value=float(0.5 * (float(joint_vel[4]) + float(joint_vel[9]))),
-            ownership_violation_count_value=int(balance_core_result.ownership_violation_count) if is_balance_core_mode(args) else 0,
-            hidden_torque_norm_value=hidden_torque_norm_value,
-            tau_wbc_norm_value=tau_wbc_norm,
-            torque_saturation_rate_value=tau_saturation_rate,
-            torque_rate_saturation_rate_value=torque_rate_saturation_rate,
-            contact_state_value=contact_state_value,
-        )
+            update_full_rate_summary(
+                pitch_x_value=float(pitch_x_rad),
+                roll_y_value=float(roll_y_rad),
+                com_z_value=com_height,
+                wheel_vel_mean_value=float(0.5 * (float(joint_vel[4]) + float(joint_vel[9]))),
+                ownership_violation_count_value=int(balance_core_result.ownership_violation_count) if is_balance_core_mode(args) else 0,
+                hidden_torque_norm_value=hidden_torque_norm_value,
+                tau_wbc_norm_value=tau_wbc_norm,
+                torque_saturation_rate_value=tau_saturation_rate,
+                torque_rate_saturation_rate_value=torque_rate_saturation_rate,
+                contact_state_value=contact_state_value,
+            )
 
-        telemetry["saturation_flags"].append(",".join(f"{x}" for x in sat_flags_vec))
-        telemetry["rate_limit_flags"].append(",".join(f"{x}" for x in rate_flags_vec))
-        telemetry["wheel_torque_saturation_left"].append(bool(sat_flags_vec[4]))
-        telemetry["wheel_torque_saturation_right"].append(bool(sat_flags_vec[9]))
-        telemetry["wheel_torque_rate_saturation_left"].append(bool(rate_flags_vec[4]))
-        telemetry["wheel_torque_rate_saturation_right"].append(bool(rate_flags_vec[9]))
+            telemetry["saturation_flags"].append(",".join(f"{x}" for x in sat_flags_vec))
+            telemetry["rate_limit_flags"].append(",".join(f"{x}" for x in rate_flags_vec))
+            telemetry["wheel_torque_saturation_left"].append(bool(sat_flags_vec[4]))
+            telemetry["wheel_torque_saturation_right"].append(bool(sat_flags_vec[9]))
+            telemetry["wheel_torque_rate_saturation_left"].append(bool(rate_flags_vec[4]))
+            telemetry["wheel_torque_rate_saturation_right"].append(bool(rate_flags_vec[9]))
 
-        # Motor tracking diagnostics
-        telemetry["target_joint_pos"].append(",".join(f"{x:.4f}" for x in np.array(target_joint_pos)))
-        telemetry["joint_pos_error"].append(",".join(f"{x:.4f}" for x in np.array(joint_pos_error)))
-        telemetry["joint_pos_error_norm"].append(joint_pos_error_norm)
-        telemetry["joint_vel_norm"].append(joint_vel_norm)
-        telemetry["tau_wbc_norm"].append(tau_wbc_norm)
-        telemetry["tau_posture_norm"].append(tau_posture_norm)
-        telemetry["tau_inverse_dynamics_norm"].append(tau_inverse_dynamics_norm)
-        telemetry["tau_total_norm"].append(tau_total_norm)
-        telemetry["tau_rate_unlimited"].append(tau_rate_unlimited)
-        telemetry["tau_rate_limited"].append(tau_rate_limited)
-        telemetry["tau_wbc_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc)))
-        telemetry["tau_wbc_scaled_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc_scaled)))
-        telemetry["tau_hip_roll_centering_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_hip_roll_centering)))
-        # Stage 2: Log tau_static_posture if enabled, otherwise tau_posture
-        if static_posture_controller is not None:
-            telemetry["tau_posture_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_posture)))
-        else:
-            telemetry["tau_posture_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_posture)))
-        # Stage 2B: Log tau_static_feedforward
-        telemetry["tau_static_feedforward_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_feedforward)))
-        telemetry["feedforward_enabled"].append(static_feedforward_controller is not None)
-        telemetry["feedforward_norm"].append(float(jnp.linalg.norm(tau_static_feedforward)))
-        telemetry["tau_leg_position_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_leg_position)))
-        telemetry["tau_wheel_balance_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wheel_balance)))
-        telemetry["tau_total_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_smooth)))
-        telemetry["tau_total_raw_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_total_raw)))
-        telemetry["tau_total_clipped_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_total_clipped)))
-        telemetry["tau_smooth_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_smooth)))
-        telemetry["support_ratio_support_joints"].append(",".join(f"{x:.4f}" for x in support_ratios))
-        telemetry["support_ratio_mean"].append(support_ratio_mean)
-        telemetry["torque_rate_limit_enabled"].append(not args.disable_torque_rate_limit)
-        telemetry["per_actuator_wbc_authority_enabled"].append(args.use_per_actuator_wbc_authority)
-        telemetry["wbc_joint_scaling_enabled"].append(not args.disable_wbc_joint_scale)
-        telemetry["initialize_tau_prev_from_wbc_enabled"].append(args.initialize_tau_prev_from_wbc)
-        telemetry["hip_roll_abs_max"].append(step1_diagnostics["hip_roll_abs_max"])
-        telemetry["hip_yaw_abs_max"].append(step1_diagnostics["hip_yaw_abs_max"])
-        # Push disturbance telemetry
-        telemetry["push_active"].append(push_active_now)
-        telemetry["push_force_x"].append(push_fx_now)
-        telemetry["push_force_y"].append(push_fy_now)
-        telemetry["push_schedule_entries"].append(len(push_schedule))
-        telemetry["hip_pitch_error_max"].append(step1_diagnostics["hip_pitch_error_max"])
-        telemetry["knee_error_max"].append(step1_diagnostics["knee_error_max"])
-        telemetry["wheel_balance_torque"].append(step1_diagnostics["wheel_balance_torque"])
-        telemetry["control_mode"].append(step1_diagnostics["control_mode"])
-        # Wheel torque pipeline telemetry
-        telemetry["tau_stage2b_sagittal_wheel_l"].append(float(tau_stage2b_sagittal_wheel[4]))
-        telemetry["tau_stage2b_sagittal_wheel_r"].append(float(tau_stage2b_sagittal_wheel[9]))
-        telemetry["tau_total_raw_l_wheel"].append(float(tau_total_raw[4]))
-        telemetry["tau_total_raw_r_wheel"].append(float(tau_total_raw[9]))
-        telemetry["tau_total_clipped_l_wheel"].append(float(tau_total_clipped[4]))
-        telemetry["tau_total_clipped_r_wheel"].append(float(tau_total_clipped[9]))
-        telemetry["tau_smooth_l_wheel"].append(float(tau_smooth[4]))
-        telemetry["tau_smooth_r_wheel"].append(float(tau_smooth[9]))
-        telemetry["ctrl_l_wheel"].append(float(mj_data.ctrl[4]))
-        telemetry["ctrl_r_wheel"].append(float(mj_data.ctrl[9]))
-        telemetry["qvel_l_wheel"].append(float(mj_data.qvel[10]))  # l_wheel joint velocity
-        telemetry["qvel_r_wheel"].append(float(mj_data.qvel[15]))  # r_wheel joint velocity
-        telemetry["sagittal_term_pitch"].append(sagittal_diag.get("term_pitch", sagittal_diag.get("tau_pitch", 0.0)))
-        telemetry["sagittal_term_pitch_rate"].append(sagittal_diag.get("term_pitch_rate", sagittal_diag.get("tau_pitch_rate", 0.0)))
-        telemetry["sagittal_term_cp"].append(sagittal_diag.get("term_cp", 0.0))
-        telemetry["sagittal_term_com_vy"].append(sagittal_diag.get("term_com_vy", sagittal_diag.get("tau_sagittal_velocity", 0.0)))
-        telemetry["sagittal_term_wheel_vel_left"].append(sagittal_diag.get("term_wheel_vel_left", sagittal_diag.get("tau_wheel_velocity_left", 0.0)))
-        telemetry["sagittal_term_wheel_vel_right"].append(sagittal_diag.get("term_wheel_vel_right", sagittal_diag.get("tau_wheel_velocity_right", 0.0)))
-        telemetry["sagittal_balance_torque_raw"].append(sagittal_diag.get("balance_torque_raw", sagittal_diag.get("tau_common_unclipped", 0.0)))
-        telemetry["sagittal_balance_torque_clipped"].append(sagittal_diag.get("balance_torque_raw", sagittal_diag.get("tau_common_clipped", 0.0)))
-        telemetry["sagittal_balance_torque_final"].append(0.5 * (sagittal_diag.get("tau_left", 0.0) + sagittal_diag.get("tau_right", 0.0)))
-        telemetry["sagittal_pitch_error"].append(sagittal_wheel_diagnostics.get("pitch_error", 0.0))
-        telemetry["sagittal_cp_error_y"].append(sagittal_wheel_diagnostics.get("cp_error_y", 0.0))
-        telemetry["sagittal_tau_wheel_cmd"].append(sagittal_wheel_diagnostics.get("tau_wheel_cmd", 0.0))
-        telemetry["sagittal_saturated"].append(sagittal_wheel_diagnostics.get("saturated", False))
-        # Stage 2C telemetry
-        telemetry["stage2c_pitch_error"].append(stage2c_diagnostics.get("pitch_error", 0.0))
-        telemetry["stage2c_pitch_rate_x"].append(stage2c_diagnostics.get("pitch_rate_x", 0.0))
-        telemetry["stage2c_com_y_error"].append(stage2c_diagnostics.get("com_y_error", 0.0))
-        telemetry["stage2c_com_vy"].append(stage2c_diagnostics.get("com_vy", 0.0))
-        telemetry["stage2c_cp_y_error"].append(stage2c_diagnostics.get("cp_y_error", 0.0))
-        telemetry["stage2c_wheel_vel_left"].append(stage2c_diagnostics.get("wheel_vel_left", 0.0))
-        telemetry["stage2c_wheel_vel_right"].append(stage2c_diagnostics.get("wheel_vel_right", 0.0))
-        telemetry["stage2c_wheel_vel_mean"].append(stage2c_diagnostics.get("wheel_vel_mean", 0.0))
-        telemetry["stage2c_term_pitch"].append(stage2c_diagnostics.get("term_pitch", 0.0))
-        telemetry["stage2c_term_pitch_rate"].append(stage2c_diagnostics.get("term_pitch_rate", 0.0))
-        telemetry["stage2c_term_com_y"].append(stage2c_diagnostics.get("term_com_y", 0.0))
-        telemetry["stage2c_term_com_vy"].append(stage2c_diagnostics.get("term_com_vy", 0.0))
-        telemetry["stage2c_term_cp_y"].append(stage2c_diagnostics.get("term_cp_y", 0.0))
-        telemetry["stage2c_term_wheel_vel"].append(stage2c_diagnostics.get("term_wheel_vel", 0.0))
-        telemetry["stage2c_tau_wheel_raw"].append(stage2c_diagnostics.get("tau_wheel_raw", 0.0))
-        telemetry["stage2c_tau_wheel_clipped"].append(stage2c_diagnostics.get("tau_wheel_clipped", 0.0))
-        telemetry["stage2c_saturated"].append(stage2c_diagnostics.get("saturated", False))
-        # Stage 2D telemetry
-        telemetry["stage2d_pitch_x"].append(stage2d_diagnostics.get("pitch_x", 0.0))
-        telemetry["stage2d_pitch_rate_x"].append(stage2d_diagnostics.get("pitch_rate_x", 0.0))
-        telemetry["stage2d_cp_error_y"].append(stage2d_diagnostics.get("cp_error_y", 0.0))
-        telemetry["stage2d_com_vy"].append(stage2d_diagnostics.get("com_vy", 0.0))
-        telemetry["stage2d_wheel_vel_mean"].append(stage2d_diagnostics.get("wheel_vel_mean", 0.0))
-        telemetry["stage2d_u_raw"].append(stage2d_diagnostics.get("u_raw", 0.0))
-        telemetry["stage2d_u_clipped"].append(stage2d_diagnostics.get("u_clipped", 0.0))
-        telemetry["stage2d_saturated"].append(stage2d_diagnostics.get("saturated", False))
-        telemetry["stage2d_contrib_pitch_x"].append(stage2d_diagnostics.get("contrib_pitch_x", 0.0))
-        telemetry["stage2d_contrib_pitch_rate_x"].append(stage2d_diagnostics.get("contrib_pitch_rate_x", 0.0))
-        telemetry["stage2d_contrib_cp_error_y"].append(stage2d_diagnostics.get("contrib_cp_error_y", 0.0))
-        telemetry["stage2d_contrib_com_vy"].append(stage2d_diagnostics.get("contrib_com_vy", 0.0))
-        telemetry["stage2d_contrib_wheel_vel_mean"].append(stage2d_diagnostics.get("contrib_wheel_vel_mean", 0.0))
-        telemetry["stage2d_config"].append(stage2d_diagnostics.get("config", ""))
-        telemetry["initial_root_z_perturbation_m"].append(perturbation_metadata["initial_root_z_perturbation_m"])
-        telemetry["nominal_equilibrium_com_z_m"].append(perturbation_metadata["nominal_equilibrium_com_z_m"])
-        telemetry["initial_com_z_m_after_perturbation"].append(perturbation_metadata["initial_com_z_m_after_perturbation"])
-        telemetry["perturbation_applied_after_equilibrium_capture"].append(
-            perturbation_metadata["perturbation_applied_after_equilibrium_capture"]
-        )
+            # Motor tracking diagnostics
+            telemetry["target_joint_pos"].append(",".join(f"{x:.4f}" for x in np.array(target_joint_pos)))
+            telemetry["joint_pos_error"].append(",".join(f"{x:.4f}" for x in np.array(joint_pos_error)))
+            telemetry["joint_pos_error_norm"].append(joint_pos_error_norm)
+            telemetry["joint_vel_norm"].append(joint_vel_norm)
+            telemetry["tau_wbc_norm"].append(tau_wbc_norm)
+            telemetry["tau_posture_norm"].append(tau_posture_norm)
+            telemetry["tau_inverse_dynamics_norm"].append(tau_inverse_dynamics_norm)
+            telemetry["tau_total_norm"].append(tau_total_norm)
+            telemetry["tau_rate_unlimited"].append(tau_rate_unlimited)
+            telemetry["tau_rate_limited"].append(tau_rate_limited)
+            telemetry["tau_wbc_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc)))
+            telemetry["tau_wbc_scaled_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wbc_scaled)))
+            telemetry["tau_hip_roll_centering_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_hip_roll_centering)))
+            # Stage 2: Log tau_static_posture if enabled, otherwise tau_posture
+            if static_posture_controller is not None:
+                telemetry["tau_posture_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_posture)))
+            else:
+                telemetry["tau_posture_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_posture)))
+            # Stage 2B: Log tau_static_feedforward
+            telemetry["tau_static_feedforward_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_static_feedforward)))
+            telemetry["feedforward_enabled"].append(static_feedforward_controller is not None)
+            telemetry["feedforward_norm"].append(float(jnp.linalg.norm(tau_static_feedforward)))
+            telemetry["tau_leg_position_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_leg_position)))
+            telemetry["tau_wheel_balance_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_wheel_balance)))
+            telemetry["tau_total_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_smooth)))
+            telemetry["tau_total_raw_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_total_raw)))
+            telemetry["tau_total_clipped_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_total_clipped)))
+            telemetry["tau_smooth_per_joint"].append(",".join(f"{x:.4f}" for x in np.array(tau_smooth)))
+            telemetry["support_ratio_support_joints"].append(",".join(f"{x:.4f}" for x in support_ratios))
+            telemetry["support_ratio_mean"].append(support_ratio_mean)
+            telemetry["torque_rate_limit_enabled"].append(not args.disable_torque_rate_limit)
+            telemetry["per_actuator_wbc_authority_enabled"].append(args.use_per_actuator_wbc_authority)
+            telemetry["wbc_joint_scaling_enabled"].append(not args.disable_wbc_joint_scale)
+            telemetry["initialize_tau_prev_from_wbc_enabled"].append(args.initialize_tau_prev_from_wbc)
+            telemetry["hip_roll_abs_max"].append(step1_diagnostics["hip_roll_abs_max"])
+            telemetry["hip_yaw_abs_max"].append(step1_diagnostics["hip_yaw_abs_max"])
+            # Push disturbance telemetry
+            telemetry["push_active"].append(push_active_now)
+            telemetry["push_force_x"].append(push_fx_now)
+            telemetry["push_force_y"].append(push_fy_now)
+            telemetry["push_schedule_entries"].append(len(push_schedule))
+            telemetry["hip_pitch_error_max"].append(step1_diagnostics["hip_pitch_error_max"])
+            telemetry["knee_error_max"].append(step1_diagnostics["knee_error_max"])
+            telemetry["wheel_balance_torque"].append(step1_diagnostics["wheel_balance_torque"])
+            telemetry["control_mode"].append(step1_diagnostics["control_mode"])
+            # Wheel torque pipeline telemetry
+            telemetry["tau_stage2b_sagittal_wheel_l"].append(float(tau_stage2b_sagittal_wheel[4]))
+            telemetry["tau_stage2b_sagittal_wheel_r"].append(float(tau_stage2b_sagittal_wheel[9]))
+            telemetry["tau_total_raw_l_wheel"].append(float(tau_total_raw[4]))
+            telemetry["tau_total_raw_r_wheel"].append(float(tau_total_raw[9]))
+            telemetry["tau_total_clipped_l_wheel"].append(float(tau_total_clipped[4]))
+            telemetry["tau_total_clipped_r_wheel"].append(float(tau_total_clipped[9]))
+            telemetry["tau_smooth_l_wheel"].append(float(tau_smooth[4]))
+            telemetry["tau_smooth_r_wheel"].append(float(tau_smooth[9]))
+            telemetry["ctrl_l_wheel"].append(float(mj_data.ctrl[4]))
+            telemetry["ctrl_r_wheel"].append(float(mj_data.ctrl[9]))
+            telemetry["qvel_l_wheel"].append(float(mj_data.qvel[10]))  # l_wheel joint velocity
+            telemetry["qvel_r_wheel"].append(float(mj_data.qvel[15]))  # r_wheel joint velocity
+            telemetry["sagittal_term_pitch"].append(sagittal_diag.get("term_pitch", sagittal_diag.get("tau_pitch", 0.0)))
+            telemetry["sagittal_term_pitch_rate"].append(sagittal_diag.get("term_pitch_rate", sagittal_diag.get("tau_pitch_rate", 0.0)))
+            telemetry["sagittal_term_cp"].append(sagittal_diag.get("term_cp", 0.0))
+            telemetry["sagittal_term_com_vy"].append(sagittal_diag.get("term_com_vy", sagittal_diag.get("tau_sagittal_velocity", 0.0)))
+            telemetry["sagittal_term_wheel_vel_left"].append(sagittal_diag.get("term_wheel_vel_left", sagittal_diag.get("tau_wheel_velocity_left", 0.0)))
+            telemetry["sagittal_term_wheel_vel_right"].append(sagittal_diag.get("term_wheel_vel_right", sagittal_diag.get("tau_wheel_velocity_right", 0.0)))
+            telemetry["sagittal_balance_torque_raw"].append(sagittal_diag.get("balance_torque_raw", sagittal_diag.get("tau_common_unclipped", 0.0)))
+            telemetry["sagittal_balance_torque_clipped"].append(sagittal_diag.get("balance_torque_raw", sagittal_diag.get("tau_common_clipped", 0.0)))
+            telemetry["sagittal_balance_torque_final"].append(0.5 * (sagittal_diag.get("tau_left", 0.0) + sagittal_diag.get("tau_right", 0.0)))
+            telemetry["sagittal_pitch_error"].append(sagittal_wheel_diagnostics.get("pitch_error", 0.0))
+            telemetry["sagittal_cp_error_y"].append(sagittal_wheel_diagnostics.get("cp_error_y", 0.0))
+            telemetry["sagittal_tau_wheel_cmd"].append(sagittal_wheel_diagnostics.get("tau_wheel_cmd", 0.0))
+            telemetry["sagittal_saturated"].append(sagittal_wheel_diagnostics.get("saturated", False))
+            # Stage 2C telemetry
+            telemetry["stage2c_pitch_error"].append(stage2c_diagnostics.get("pitch_error", 0.0))
+            telemetry["stage2c_pitch_rate_x"].append(stage2c_diagnostics.get("pitch_rate_x", 0.0))
+            telemetry["stage2c_com_y_error"].append(stage2c_diagnostics.get("com_y_error", 0.0))
+            telemetry["stage2c_com_vy"].append(stage2c_diagnostics.get("com_vy", 0.0))
+            telemetry["stage2c_cp_y_error"].append(stage2c_diagnostics.get("cp_y_error", 0.0))
+            telemetry["stage2c_wheel_vel_left"].append(stage2c_diagnostics.get("wheel_vel_left", 0.0))
+            telemetry["stage2c_wheel_vel_right"].append(stage2c_diagnostics.get("wheel_vel_right", 0.0))
+            telemetry["stage2c_wheel_vel_mean"].append(stage2c_diagnostics.get("wheel_vel_mean", 0.0))
+            telemetry["stage2c_term_pitch"].append(stage2c_diagnostics.get("term_pitch", 0.0))
+            telemetry["stage2c_term_pitch_rate"].append(stage2c_diagnostics.get("term_pitch_rate", 0.0))
+            telemetry["stage2c_term_com_y"].append(stage2c_diagnostics.get("term_com_y", 0.0))
+            telemetry["stage2c_term_com_vy"].append(stage2c_diagnostics.get("term_com_vy", 0.0))
+            telemetry["stage2c_term_cp_y"].append(stage2c_diagnostics.get("term_cp_y", 0.0))
+            telemetry["stage2c_term_wheel_vel"].append(stage2c_diagnostics.get("term_wheel_vel", 0.0))
+            telemetry["stage2c_tau_wheel_raw"].append(stage2c_diagnostics.get("tau_wheel_raw", 0.0))
+            telemetry["stage2c_tau_wheel_clipped"].append(stage2c_diagnostics.get("tau_wheel_clipped", 0.0))
+            telemetry["stage2c_saturated"].append(stage2c_diagnostics.get("saturated", False))
+            # Stage 2D telemetry
+            telemetry["stage2d_pitch_x"].append(stage2d_diagnostics.get("pitch_x", 0.0))
+            telemetry["stage2d_pitch_rate_x"].append(stage2d_diagnostics.get("pitch_rate_x", 0.0))
+            telemetry["stage2d_cp_error_y"].append(stage2d_diagnostics.get("cp_error_y", 0.0))
+            telemetry["stage2d_com_vy"].append(stage2d_diagnostics.get("com_vy", 0.0))
+            telemetry["stage2d_wheel_vel_mean"].append(stage2d_diagnostics.get("wheel_vel_mean", 0.0))
+            telemetry["stage2d_u_raw"].append(stage2d_diagnostics.get("u_raw", 0.0))
+            telemetry["stage2d_u_clipped"].append(stage2d_diagnostics.get("u_clipped", 0.0))
+            telemetry["stage2d_saturated"].append(stage2d_diagnostics.get("saturated", False))
+            telemetry["stage2d_contrib_pitch_x"].append(stage2d_diagnostics.get("contrib_pitch_x", 0.0))
+            telemetry["stage2d_contrib_pitch_rate_x"].append(stage2d_diagnostics.get("contrib_pitch_rate_x", 0.0))
+            telemetry["stage2d_contrib_cp_error_y"].append(stage2d_diagnostics.get("contrib_cp_error_y", 0.0))
+            telemetry["stage2d_contrib_com_vy"].append(stage2d_diagnostics.get("contrib_com_vy", 0.0))
+            telemetry["stage2d_contrib_wheel_vel_mean"].append(stage2d_diagnostics.get("contrib_wheel_vel_mean", 0.0))
+            telemetry["stage2d_config"].append(stage2d_diagnostics.get("config", ""))
+            telemetry["initial_root_z_perturbation_m"].append(perturbation_metadata["initial_root_z_perturbation_m"])
+            telemetry["nominal_equilibrium_com_z_m"].append(perturbation_metadata["nominal_equilibrium_com_z_m"])
+            telemetry["initial_com_z_m_after_perturbation"].append(perturbation_metadata["initial_com_z_m_after_perturbation"])
+            telemetry["perturbation_applied_after_equilibrium_capture"].append(
+                perturbation_metadata["perturbation_applied_after_equilibrium_capture"]
+            )
+
+            # Restore real telemetry dict (may have been swapped with no-op proxy)
+        telemetry = _real_telemetry
 
         # Save the current telemetry row for failure window and decimation
         # Guard against empty telemetry (should not happen, but be defensive)
-        if telemetry["source_step_index"]:
+        if _do_populate_telemetry and telemetry["source_step_index"]:
             current_row = snapshot_last_telemetry_row()
             last_full_rate_row = dict(current_row)
             last_full_rate_step = step
@@ -7725,7 +8711,7 @@ def main():
             last_full_rate_row = None
             last_full_rate_step = step
 
-        if step < 20 and static_feedforward_controller is not None and not args.visual:
+        if step < 20 and static_feedforward_controller is not None and not args.visual and not _quiet:
             idx = [2, 3, 7, 8]
             sat_flags = np.abs(np.array(tau_total_raw)) > np.array(torque_limit)
             rate_flags = np.abs(np.array(tau_rate_vec)) > max_torque_rate
@@ -7802,22 +8788,25 @@ def main():
             )
 
         # Progress updates with orientation feedback
-        # In visual mode, reduce print frequency to avoid I/O stutter
-        _progress_interval = 100 if args.visual else 10
-        if (step + 1) % _progress_interval == 0 or step < 5:
-            elapsed = time.time() - start_time
-            # Show what controller is sensing using unified orientation computation
-            gravity_body = obs[0:3]
-            pitch_x_sensed, roll_y_sensed = compute_orientation_from_gravity(gravity_body)
-            pitch_sensed = float(pitch_x_sensed) * 57.3
-            roll_sensed = float(roll_y_sensed) * 57.3
-            print(
-                f"Step {step + 1}: h={com_height:.3f}m, "
-                f"euler_pitch={euler_pitch_y*57.3:.1f}deg (sensed={pitch_sensed:.1f}deg), "
-                f"euler_roll={euler_roll_x*57.3:.1f}deg (sensed={roll_sensed:.1f}deg), "
-                f"robot_pitch_x={robot_pitch_x*57.3:.1f}deg, robot_roll_y={robot_roll_y*57.3:.1f}deg, "
-                f"gravity=[{obs[0]:.3f}, {obs[1]:.3f}, {obs[2]:.3f}]"
-            )
+        # In production quiet mode, suppress all per-step progress prints.
+        # In non-quiet production JAX, use a much larger interval (500 steps)
+        # to reduce terminal I/O overhead while still showing liveness.
+        _progress_interval = 100 if args.visual else (500 if _jax_fast_path else 10)
+        if not _quiet:
+            if (step + 1) % _progress_interval == 0 or step < 5 or step == max_steps - 1:
+                elapsed = time.time() - start_time
+                # Show what controller is sensing using unified orientation computation
+                gravity_body = obs[0:3]
+                pitch_x_sensed, roll_y_sensed = compute_orientation_from_gravity(gravity_body)
+                pitch_sensed = float(pitch_x_sensed) * 57.3
+                roll_sensed = float(roll_y_sensed) * 57.3
+                print(
+                    f"Step {step + 1}: h={com_height:.3f}m, "
+                    f"euler_pitch={euler_pitch_y*57.3:.1f}deg (sensed={pitch_sensed:.1f}deg), "
+                    f"euler_roll={euler_roll_x*57.3:.1f}deg (sensed={roll_sensed:.1f}deg), "
+                    f"robot_pitch_x={robot_pitch_x*57.3:.1f}deg, robot_roll_y={robot_roll_y*57.3:.1f}deg, "
+                    f"gravity=[{obs[0]:.3f}, {obs[1]:.3f}, {obs[2]:.3f}]"
+                )
 
         if terminated:
             print(f"\n[TERMINATED] at step {step + 1}: {termination_reason}")
@@ -7829,6 +8818,30 @@ def main():
             _profile_timing["step_count"] += 1
 
         step += 1
+
+        # Stage 7: per-step timing recording (measured window only)
+        if _stage7_enabled and step > _stage7_warmup_steps and (step - _stage7_warmup_steps) <= _stage7_measured_steps:
+            _t_now = time.perf_counter()
+            _total_dt = _t_now - _stage7_t_step_top
+            _channels = {"total_step_s": _total_dt, "physics_step_s": _stage7_phys_dt}
+            if _jax_enabled:
+                _channels["jax_pack_input_s"] = _stage7_pack_dt
+                _channels["jax_jit_step_s"] = _stage7_jit_dt
+                _channels["jax_support_ff_s"] = _stage7_ff_dt
+                _channels["jax_diag_map_s"] = _stage7_diag_dt
+                _channels["jax_total_s"] = _stage7_pack_dt + _stage7_jit_dt + _stage7_ff_dt + _stage7_diag_dt
+            for _ch, _val in _channels.items():
+                if _ch not in _stage7_timing_lists:
+                    _stage7_timing_lists[_ch] = []
+                _stage7_timing_lists[_ch].append(_val)
+            # Track safety/validation signals during measured window
+            if jnp.any(~jnp.isfinite(_jax_tau)) if _jax_enabled else False:
+                _stage7_nan_detected = True
+            if jnp.any(jnp.abs(tau_smooth) > jnp.asarray(torque_limit, dtype=jnp.float64)):
+                _stage7_actuator_violation_count += 1
+            _hy = float(abs(joint_pos[1] - joint_pos[6]))
+            if _hy > _stage7_max_hip_yaw_rad:
+                _stage7_max_hip_yaw_rad = _hy
         return True
 
     # ---- Visual realtime pacing configuration ---- #
@@ -8006,6 +9019,131 @@ def main():
         print(f"[PROFILE] Duplicate capture update (log):    {_profile_report['timing_mean_ms']['capture_log']:.4f} ms/step")
         print(f"[PROFILE] Total duplicate overhead:           {_profile_report['duplicate_call_analysis']['estimated_savings_if_removed_ms']:.4f} ms/step")
 
+    # Stage 7: Emit benchmark report
+    if _stage7_enabled:
+        _s7_dir = Path("outputs/benchmark")
+        _s7_dir.mkdir(parents=True, exist_ok=True)
+        _s7_path = _s7_dir / f"stage7_{_stage7_tag}_{_backend}.json"
+
+        def _s7_stats(vals):
+            """Compute mean, median, p95, p99, max from list of floats (in seconds → report ms)."""
+            if not vals:
+                return {"mean_ms": None, "median_ms": None, "p95_ms": None, "p99_ms": None, "max_ms": None, "count": 0}
+            import statistics as _stat
+            a = sorted(vals)
+            n = len(a)
+            return {
+                "mean_ms": round(_stat.mean(a) * 1000.0, 6),
+                "median_ms": round(_stat.median(a) * 1000.0, 6),
+                "p95_ms": round(a[int(n * 0.95)] * 1000.0, 6) if n > 1 else round(a[0] * 1000.0, 6),
+                "p99_ms": round(a[int(n * 0.99)] * 1000.0, 6) if n > 1 else round(a[0] * 1000.0, 6),
+                "max_ms": round(a[-1] * 1000.0, 6),
+                "count": n,
+            }
+
+        _s7_timing_stats = {_ch: _s7_stats(_vals) for _ch, _vals in _stage7_timing_lists.items()}
+        _s7_measured_count = max((len(_v) for _v in _stage7_timing_lists.values()), default=0)
+        _s7_elapsed = time.time() - start_time
+        _s7_achieved_hz = _s7_measured_count / max(_s7_elapsed - (_stage7_warmup_steps * control_dt), 1e-6) if _s7_measured_count > 0 else 0.0
+        _s7_realtime_factor = (_s7_measured_count * control_dt) / max(_s7_elapsed - (_stage7_warmup_steps * control_dt), 1e-6) if _s7_measured_count > 0 else 0.0
+
+        # Environment metadata
+        import platform as _platform, sys as _sys
+        _s7_env = {
+            "python_version": _sys.version.split()[0],
+            "platform": _platform.platform(),
+            "cpu": _platform.processor() or "unknown",
+        }
+        try:
+            import jax as _jax_meta
+            _s7_env["jax_version"] = str(_jax_meta.__version__)
+        except Exception:
+            _s7_env["jax_version"] = "unknown"
+        try:
+            import jaxlib as _jaxlib_meta
+            _s7_env["jaxlib_version"] = str(_jaxlib_meta.__version__)
+        except Exception:
+            _s7_env["jaxlib_version"] = "unknown"
+        try:
+            import mujoco as _mj_meta
+            _s7_env["mujoco_version"] = str(getattr(_mj_meta, "__version__", "unknown"))
+        except Exception:
+            _s7_env["mujoco_version"] = "unknown"
+        # X64 status
+        try:
+            import jax as _jx
+            _s7_env["jax_x64_enabled"] = bool(_jx.config.read("jax_enable_x64") if hasattr(_jx.config, "read") else getattr(_jx.config, "jax_enable_x64", True))
+        except Exception:
+            _s7_env["jax_x64_enabled"] = True
+
+        # Recompilation audit
+        _s7_recomp_audit = {
+            "recompilation_count": _stage7_recompile_count,
+            "input_flat_shape": [int(K2_JAX_INPUT_SIZE)] if _jax_enabled else [],
+            "state_flat_shape": list(int(s) for s in _jax_state.shape) if _jax_enabled else [],
+            "params_flat_shape": list(int(s) for s in _jax_params.shape) if _jax_enabled else [],
+            "diag_flat_shape": [int(K2_JAX_DIAG_SIZE)] if _jax_enabled else [],
+            "static_args": "none (params, state, input all passed as traced arrays)",
+            "dynamic_height_recompiles": "none expected — target height passed in input_flat each step",
+            "telemetry_mode_recompiles": "none — telemetry decimation does not affect JIT shapes",
+            "headless_vs_visual": "unchanged — same input/state/params shapes in both modes",
+        }
+
+        _s7_report = {
+            "stage": "stage7",
+            "scenario_tag": _stage7_tag,
+            "backend": _backend,
+            "config": {
+                "warmup_steps": _stage7_warmup_steps,
+                "measured_steps": _s7_measured_count,
+                "control_dt_s": control_dt,
+                "controller_mode": getattr(args, "controller_mode", "unknown"),
+                "sagittal_profile": getattr(args, "vd_sagittal_authority_profile", "unknown"),
+                "height_variant": height_variant_setup.get("variant_name", "none") if height_variant_setup else "none",
+                "dynamic_height": dynamic_height_traj["profile_name"] if dynamic_height_traj else "none",
+            },
+            "environment": _s7_env,
+            "compile": {
+                "jit_compile_time_s": round(_jax_compile_time_s, 4) if _jax_enabled else 0.0,
+                "warmup_steps": _stage7_warmup_steps,
+                "recompilation_audit": _s7_recomp_audit,
+            },
+            "timing_stats_ms": _s7_timing_stats,
+            "summary": {
+                "total_wall_time_s": round(_s7_elapsed, 3),
+                "hot_jax_step_mean_ms": _s7_timing_stats.get("jax_jit_step_s", {}).get("mean_ms") if _jax_enabled else None,
+                "hot_jax_step_p95_ms": _s7_timing_stats.get("jax_jit_step_s", {}).get("p95_ms") if _jax_enabled else None,
+                "hot_total_step_mean_ms": _s7_timing_stats.get("total_step_s", {}).get("mean_ms"),
+                "achieved_hz": round(_s7_achieved_hz, 2),
+                "realtime_factor": round(_s7_realtime_factor, 4),
+                "meets_10ms_budget": bool(
+                    (_s7_timing_stats.get("jax_jit_step_s", {}).get("mean_ms") or 999) < 10.0
+                ) if _jax_enabled else None,
+            },
+            "validation": {
+                "completed_steps": int(step),
+                "fell": bool(terminated and termination_reason and "height" in str(termination_reason).lower()),
+                "termination_reason": str(termination_reason) if termination_reason else None,
+                "nan_detected": bool(_stage7_nan_detected),
+                "actuator_limit_violation_count": int(_stage7_actuator_violation_count),
+                "max_abs_hip_yaw_rad": float(_stage7_max_hip_yaw_rad),
+                "hidden_torque_flag": bool(_stage7_hidden_torque_flag),
+                "wbc_flag": bool(_stage7_wbc_flag),
+            },
+            "command_line": " ".join(_sys.argv),
+        }
+        with open(_s7_path, "w") as _f:
+            json.dump(_s7_report, _f, indent=2)
+        print(f"\n[STAGE7 BENCHMARK] Report saved to: {_s7_path}")
+        print(f"[STAGE7 BENCHMARK] Backend: {_backend} | Measured steps: {_s7_measured_count}")
+        if _jax_enabled:
+            _hot_mean = _s7_timing_stats.get("jax_jit_step_s", {}).get("mean_ms")
+            _hot_p95 = _s7_timing_stats.get("jax_jit_step_s", {}).get("p95_ms")
+            print(f"[STAGE7 BENCHMARK] JAX hot-step mean: {_hot_mean:.3f} ms | p95: {_hot_p95:.3f} ms | compile: {_jax_compile_time_s:.2f}s")
+        if "total_step_s" in _s7_timing_stats:
+            _ts_mean = _s7_timing_stats["total_step_s"]["mean_ms"]
+            print(f"[STAGE7 BENCHMARK] Total step mean: {_ts_mean:.3f} ms | achieved: {_s7_achieved_hz:.1f} Hz | realtime factor: {_s7_realtime_factor:.2f}")
+
     elapsed_time = time.time() - start_time
     simulated_steps = int(full_rate_summary["actual_steps"])
     finalized_summary_metrics = finalize_full_rate_summary()
@@ -8016,47 +9154,54 @@ def main():
     ):
         append_telemetry_row(last_full_rate_row)
 
-    # Save telemetry to CSV
-    csv_path = output_dir / f"telemetry_{int(time.time())}.csv"
+    # Save telemetry to CSV (skip if --output-dir none)
+    if _skip_output:
+        csv_path = None
+        n_rows = 0
+        populated_cols = {}
+        empty_cols = []
+    else:
+        csv_path = output_dir / f"telemetry_{int(time.time())}.csv"
 
-    # Add validation-compatible telemetry fields
-    add_validation_telemetry_fields(
-        telemetry,
-        control_dt,
-        csv_path,
-        survival_steps_override=simulated_steps,
-    )
+        # Normalize balance-core owner names if in balance-core mode
+        if is_balance_core_mode(args):
+            normalize_balance_core_owner_names(telemetry)
 
-    # Normalize balance-core owner names if in balance-core mode
-    if is_balance_core_mode(args):
-        normalize_balance_core_owner_names(telemetry)
+        # Add validation-compatible telemetry fields (full mode only)
+        if _telemetry_full:
+            add_validation_telemetry_fields(
+                telemetry,
+                control_dt,
+                csv_path,
+                survival_steps_override=simulated_steps,
+            )
 
-    # Check telemetry state before writing CSV
-    # Calculate n_rows from non-empty columns only (empty columns have 0 entries)
-    non_empty_cols = [v for v in telemetry.values() if len(v) > 0]
-    n_rows = min(len(v) for v in non_empty_cols) if non_empty_cols else 0
-    populated_cols = {k: len(v) for k, v in telemetry.items() if len(v) > 0}
-    empty_cols = [k for k, v in telemetry.items() if len(v) == 0]
+        # Check telemetry state before writing CSV
+        # Calculate n_rows from non-empty columns only (empty columns have 0 entries)
+        non_empty_cols = [v for v in telemetry.values() if len(v) > 0]
+        n_rows = min(len(v) for v in non_empty_cols) if non_empty_cols else 0
+        populated_cols = {k: len(v) for k, v in telemetry.items() if len(v) > 0}
+        empty_cols = [k for k, v in telemetry.items() if len(v) == 0]
 
-    print(f"[TELEMETRY] Columns: total={len(telemetry)}, populated={len(populated_cols)}, empty={len(empty_cols)}")
-    print(f"[TELEMETRY] Data rows (n_rows): {n_rows}")
-    if empty_cols:
-        print(f"[TELEMETRY] First 10 empty columns: {empty_cols[:10]}")
+        print(f"[TELEMETRY] Columns: total={len(telemetry)}, populated={len(populated_cols)}, empty={len(empty_cols)}")
+        print(f"[TELEMETRY] Data rows (n_rows): {n_rows}")
+        if empty_cols:
+            print(f"[TELEMETRY] First 10 empty columns: {empty_cols[:10]}")
 
-    with open(csv_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(telemetry.keys())
-        # Write rows safely - only include columns that have data for each row
-        for i in range(n_rows):
-            row = []
-            for k in telemetry.keys():
-                if len(telemetry[k]) > i:
-                    row.append(telemetry[k][i])
-                else:
-                    row.append(None)  # Missing data for this row
-            writer.writerow(row)
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(telemetry.keys())
+            # Write rows safely - only include columns that have data for each row
+            for i in range(n_rows):
+                row = []
+                for k in telemetry.keys():
+                    if len(telemetry[k]) > i:
+                        row.append(telemetry[k][i])
+                    else:
+                        row.append(None)  # Missing data for this row
+                writer.writerow(row)
 
-    if terminated and failure_window_steps > 0 and len(failure_window_buffer) > 0:
+    if not _skip_output and terminated and failure_window_steps > 0 and len(failure_window_buffer) > 0:
         failure_window_path = output_dir / f"failure_window_{simulated_steps}.csv"
         failure_window_telemetry = {key: [] for key in failure_window_buffer[0].keys()}
         for row in failure_window_buffer:
@@ -8076,7 +9221,7 @@ def main():
             for i in range(len(failure_window_telemetry["time"])):
                 writer.writerow([failure_window_telemetry[k][i] for k in failure_window_telemetry.keys()])
 
-    if write_run_summary_sidecar:
+    if not _skip_output and write_run_summary_sidecar:
         sidecar_path = output_dir / f"telemetry_{simulated_steps}.summary.json"
         sidecar_payload = {
             "requested_steps": max_steps,
@@ -8118,6 +9263,26 @@ def main():
         with open(sidecar_path, "w", encoding="utf-8") as f:
             json.dump(sidecar_payload, f, indent=2)
 
+    # Print state-synced teacher-forcing summary (Phase 2/3)
+    if _both_synced_enabled:
+        print("\n" + "=" * 80)
+        print("[BOTH-SYNCED] State-Synced Teacher-Forcing Summary")
+        print("=" * 80)
+        print(f"Total comparison steps: {simulated_steps}")
+        print(f"Worst max_abs_diff: {_both_synced_max_diff:.6e}")
+        print(f"  at step {_both_synced_max_diff_step}, actuator index {_both_synced_max_diff_actuator}")
+        if _both_synced_max_diff < 1e-12:
+            print("[PASS] BIT-IDENTICAL - JAX produces identical torque from identical state+input")
+        elif _both_synced_max_diff < 1e-8:
+            print("[PASS] NUMERICALLY ZERO - diff < 1e-8, floating-point noise only")
+        elif _both_synced_max_diff < 1e-5:
+            print("[PASS] STRICT PARITY PASS - diff < 1e-5, within strict parity threshold")
+        elif _both_synced_max_diff < 1e-3:
+            print("[WARN] NEAR PARITY - diff < 1e-3, small formula/rounding differences")
+        else:
+            print("[FAIL] PARITY FAILED - diff >= 1e-3, formula mismatch suspected")
+        print(f"Classification: {'K2_JAX_STATE_SYNCED_PARITY_PASS' if _both_synced_max_diff < 1e-5 else 'K2_JAX_STATE_SYNCED_PARITY_FAIL_WITH_ROOT_CAUSE'}")
+
     # Print summary
     print("\n" + "=" * 80)
     print("Simulation Summary")
@@ -8136,7 +9301,7 @@ def main():
         target_rf = visual_realtime_factor if not visual_disable_pacing else float("inf")
 
         print(f"\n--- Visual Realtime Pacing ---")
-        print(f"Target realtime factor: {'∞ (no pacing)' if visual_disable_pacing else f'{target_rf:.2f}x'}")
+        print(f"Target realtime factor: {'inf (no pacing)' if visual_disable_pacing else f'{target_rf:.2f}x'}")
         print(f"Achieved realtime factor: {achieved_rf:.3f}x")
         if achieved_rf < 0.95 * target_rf and not visual_disable_pacing:
             bottleneck_ratio = target_rf / max(achieved_rf, 1e-6)
@@ -8194,16 +9359,19 @@ def main():
     )
 
     print(f"\nMax torques (wheeled biped architecture):")
-    max_hip_roll = max(telemetry["tau_wbc_max"])
-    max_wheels = max(telemetry["tau_wheel_actual_max"])
-    max_legs = max(telemetry["tau_posture_max"])
-    max_total = max(telemetry["tau_total_max"])
+    max_hip_roll = max(telemetry["tau_wbc_max"]) if telemetry.get("tau_wbc_max") else 0.0
+    max_wheels = max(telemetry["tau_wheel_actual_max"]) if telemetry.get("tau_wheel_actual_max") else 0.0
+    max_legs = max(telemetry["tau_posture_max"]) if telemetry.get("tau_posture_max") else 0.0
+    max_total = max(telemetry["tau_total_max"]) if telemetry.get("tau_total_max") else 0.0
     print(f"  Hip roll: {max_hip_roll:.2f} Nm")
     print(f"  Wheels: {max_wheels:.2f} Nm")
     print(f"  Legs: {max_legs:.2f} Nm")
     print(f"  Total: {max_total:.2f} Nm")
 
-    print(f"\nTelemetry saved to: {csv_path}")
+    if csv_path is not None:
+        print(f"\nTelemetry saved to: {csv_path}")
+    else:
+        print(f"\nTelemetry: skipped (--output-dir none)")
     print("=" * 80)
 
 

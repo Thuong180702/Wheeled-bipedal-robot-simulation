@@ -148,17 +148,42 @@ class TestStateFieldAudit:
             "outer_loop_pitch_ref_smoothed_deg": "simulate_hierarchical_controller.py:4942",
             "outer_loop_prev_support_error_m": "simulate_hierarchical_controller.py:4940",
             "outer_loop_support_error_rate_smoothed": "simulate_hierarchical_controller.py:4941",
-            "abs_slow_ema": "sagittal_velocity_damped_balance_controller.py:4228 (_adaptive_bias_slow_error_history EMA)",
-            "abs_fast_ema": "sagittal_velocity_damped_balance_controller.py:4229 (_adaptive_bias_fast_error_history EMA)",
+            "abs_slow_sum": "sagittal_velocity_damped_balance_controller.py:4228 (running sum of _adaptive_bias_slow_error_history)",
+            "abs_fast_sum": "sagittal_velocity_damped_balance_controller.py:4229 (running sum of _adaptive_bias_fast_error_history)",
             "abs_trim_tau": "sagittal_velocity_damped_balance_controller.py:4226 (_adaptive_bias_trim_tau)",
             "abs_hold_steps": "sagittal_velocity_damped_balance_controller.py:4235 (_adaptive_bias_hold_steps)",
             "abs_prev_err_sign": "sagittal_velocity_damped_balance_controller.py:4234 (_adaptive_bias_prev_error_sign)",
             "abs_zc_count": "sagittal_velocity_damped_balance_controller.py:4231 (_adaptive_bias_crossing_count)",
+            "abs_slow_count": "k2_jax_controller.py (ring buffer valid entry count)",
+            "abs_slow_ptr": "k2_jax_controller.py (ring buffer write pointer)",
+            "abs_guard_trigger": "k2_jax_controller.py (ZC guard trigger counter)",
+            # Phase 6M: ZC ring buffer fields
+            "abs_zc_buf_count": "k2_jax_controller.py (ZC ring buffer valid entry count)",
+            "abs_zc_buf_ptr": "k2_jax_controller.py (ZC ring buffer write pointer)",
+            # APCR1ND gating state (Phase 4+ full port)
+            "apcr1nd_step_counter": "sagittal_velocity_damped_balance_controller.py:4256 (_apcr1nd_step_counter)",
+            "apcr1nd_prev_error": "sagittal_velocity_damped_balance_controller.py:4257 (_apcr1nd_prev_error)",
+            "apcr1nd_tuned_converging_steps": "sagittal_velocity_damped_balance_controller.py:4263 (_apcr1nd_tuned_converging_steps)",
+            "apcr1nd_tuned_recenter_held": "sagittal_velocity_damped_balance_controller.py:4264 (_apcr1nd_tuned_recenter_held)",
+            # Phase 7: Python's runtime effective_max_position_tau (T6F/T6I-raised)
+            "effective_max_position_tau_py": "sagittal_velocity_damped_balance_controller.py:5786 (sagittal_diag['effective_max_position_tau'], captured from Python both-synced)",
+            # Phase 0: APCR1ND wheel damping override active flag (-1=Python-skipped, 0=standalone, 1=Python-applied)
+            "py_wd_override_active": "sagittal_velocity_damped_balance_controller.py:8982/8991 (sagittal_diag['apcr1n_wheel_damping_override_active'], captured from Python both-synced)",
         }
         for field in K2_JAX_STATE_FIELDS:
-            # Generic check for prev_tau_N
+            # Generic check for prev_tau_N and abs_buf_N
             if field.startswith("prev_tau_"):
                 base = "prev_tau_0"
+            elif field.startswith("abs_buf_"):
+                # Ring buffer entries — known, from sliding window implementation
+                base = "abs_buf_0"
+                if "abs_buf_0" not in sources:
+                    sources["abs_buf_0"] = "k2_jax_controller.py (ABS ring buffer entry)"
+            elif field.startswith("abs_zc_buf_"):
+                # Phase 6M: ZC ring buffer entries — separate 500-entry ZC buffer
+                base = "abs_zc_buf_0"
+                if "abs_zc_buf_0" not in sources:
+                    sources["abs_zc_buf_0"] = "k2_jax_controller.py (ZC ring buffer entry, matches Python _adaptive_bias_zero_crossing_history)"
             else:
                 base = field
             assert base in sources or field in sources, (

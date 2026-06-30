@@ -100,7 +100,13 @@ class BiquadNotchFilter:
         self._y2 = 0.0
 
     def _compute_coefficients(self) -> None:
-        """Compute biquad notch coefficients (RBJ / Audio EQ Cookbook)."""
+        """Compute biquad notch coefficients (RBJ / Audio EQ Cookbook).
+
+        Uses the same coefficient computation as the standalone
+        ``biquad_notch_coefficients()`` function, with a single ``denom``
+        variable to guarantee bit-exact parity between the class-based Python
+        path and the shared/JAX path.
+        """
         w0 = 2.0 * math.pi * self.fc_hz / self.fs_hz
         alpha = math.sin(w0) / (2.0 * self.Q)
         cos_w0 = math.cos(w0)
@@ -108,11 +114,12 @@ class BiquadNotchFilter:
         # Notch: b0 = b2 = 1, b1 = -2 * cos(w0)
         #        a0 = 1 + alpha, a1 = -2 * cos(w0), a2 = 1 - alpha
         # Normalised by a0:
-        self._b0 = 1.0 / (1.0 + alpha)
-        self._b1 = -2.0 * cos_w0 / (1.0 + alpha)
-        self._b2 = 1.0 / (1.0 + alpha)
-        self._a1 = -2.0 * cos_w0 / (1.0 + alpha)
-        self._a2 = (1.0 - alpha) / (1.0 + alpha)
+        denom = 1.0 + alpha
+        self._b0 = 1.0 / denom
+        self._b1 = -2.0 * cos_w0 / denom
+        self._b2 = 1.0 / denom
+        self._a1 = -2.0 * cos_w0 / denom
+        self._a2 = (1.0 - alpha) / denom
 
         # Stability check: pole magnitude should be < 1
         # For a notch with alpha > 0, poles are inside the unit circle.

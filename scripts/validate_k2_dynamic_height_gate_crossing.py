@@ -565,12 +565,13 @@ def main():
                               f"pitch={m.get('pitch_rms_deg','?'):.2f} fell={m.get('fell','?')}")
 
             if args.profile in ("k2", "both"):
-                tel = run_dynamic_scenario(sname, info, K2_PROFILE, "K2", args.controller_backend)
+                _tag = f"K2_{args.controller_backend.upper()}"
+                tel = run_dynamic_scenario(sname, info, K2_PROFILE, _tag, args.controller_backend)
                 if tel:
-                    m = analyze_dynamic_telemetry(sname, tel, "K2")
+                    m = analyze_dynamic_telemetry(sname, tel, _tag)
                     if m:
                         k2_data.append(m)
-                        print(f"  [K2] hy={m.get('hip_yaw_abs_max','?'):.4f} "
+                        print(f"  [{_tag}] hy={m.get('hip_yaw_abs_max','?'):.4f} "
                               f"pitch={m.get('pitch_rms_deg','?'):.2f} fell={m.get('fell','?')}")
     else:
         for sname in scenarios:

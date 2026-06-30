@@ -30,6 +30,7 @@ from wheeled_biped.controllers.k2_jax_controller import (
     K2_JAX_STATE_SIZE_STAGE2,
     K2_JAX_PARAMS_FIELDS_STAGE2,
     K2_JAX_PARAMS_SIZE_STAGE2,
+    K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE,
     pack_state_stage2,
     unpack_state_stage2,
     pack_params_stage2,
@@ -528,10 +529,16 @@ class TestParamsPackUnpackStage2:
         assert unpacked["notch_a2"] == pytest.approx(cls_a2, abs=1e-15)
 
     def test_params_size_consistent(self):
-        """Params size matches field count."""
+        """Params size matches field count + extension constants.
+
+        K2_JAX_PARAMS_SIZE_STAGE2 (41) = base fields in K2_JAX_PARAMS_FIELDS_STAGE2.
+        K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE (54) = base + EXT(+7) + STANDALONE(+6).
+        pack_params_stage2() returns the full EXT_STANDALONE size because it includes
+        APCR1ND position cap boost params and standalone equilibrium constants.
+        """
         assert K2_JAX_PARAMS_SIZE_STAGE2 == len(K2_JAX_PARAMS_FIELDS_STAGE2)
         params = pack_params_stage2()
-        assert params.shape == (K2_JAX_PARAMS_SIZE_STAGE2,)
+        assert params.shape == (K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE,)
 
     def test_params_fields_unique(self):
         """No duplicate param field names."""
@@ -679,7 +686,8 @@ class TestCalibratedOuterLoopParity:
 
     @pytest.fixture(scope="class")
     def pchip_refs(self):
-        from wheeled_biped.controllers.calibrated_outer_loop_functions import (
+        # D12 bugfix: JAX uses v2 calibrated outer loop functions (matches K2 profile).
+        from wheeled_biped.controllers.calibrated_outer_loop_functions_v2 import (
             calibrated_kp_deg_per_m,
             calibrated_kd_deg_per_mps,
             calibrated_theta_ref_max_deg,
@@ -1053,3 +1061,268 @@ class TestRateLimitLowpassParity:
             jx = float(_jax_apply_lowpass(
                 jnp.array(prev), jnp.array(target), alpha))
             assert jx == pytest.approx(py, abs=1e-15)
+
+
+# ===========================================================================
+# Phase 5: APCR1ND gate parity tests
+# ===========================================================================
+
+
+class TestAPCR1NDGateParity:
+    """JAX APCR1ND gate matches Python source-of-truth behavior."""
+
+    @staticmethod
+    def _gate(sag_pos_err, prev_error=0.0, step_counter=25.0, converging_steps=0.0,
+              recenter_held=0.0, pitch_x=0.02, roll_y=0.02, com_z=0.50, contact_valid=1.0,
+              startup_guard=20, safe_com_z=0.35, safe_roll=0.3, safe_pitch=0.3,
+              soft_enter=0.05, direct_enter=0.06, desired_band=0.08,
+              release_inner=0.03, hold_outside=0.0, converging_release=15):
+        """Helper to call k2_jax_apcr1nd_compute_gate with defaults."""
+        from wheeled_biped.controllers.k2_jax_controller import k2_jax_apcr1nd_compute_gate
+        active, _, _, new_conv, new_held = k2_jax_apcr1nd_compute_gate(
+            sagittal_position_error_m=jnp.array(sag_pos_err, dtype=jnp.float64),
+            prev_error=jnp.array(prev_error, dtype=jnp.float64),
+            step_counter=jnp.array(step_counter, dtype=jnp.float64),
+            converging_steps=jnp.array(converging_steps, dtype=jnp.float64),
+            recenter_held=jnp.array(recenter_held, dtype=jnp.float64),
+            pitch_x_rad=jnp.array(pitch_x, dtype=jnp.float64),
+            roll_y_rad=jnp.array(roll_y, dtype=jnp.float64),
+            com_z_m=jnp.array(com_z, dtype=jnp.float64),
+            contact_valid=jnp.array(contact_valid > 0.5, dtype=jnp.bool_),
+            startup_guard_steps=startup_guard,
+            safe_min_com_z=safe_com_z,
+            safe_roll_rad=safe_roll,
+            safe_pitch_rad=safe_pitch,
+            soft_enter_m=soft_enter,
+            direct_enter_m=direct_enter,
+            desired_band_m=desired_band,
+            release_inner_m=release_inner,
+            hold_outside_band=jnp.array(hold_outside, dtype=jnp.float64),
+            converging_release_steps=converging_release,
+        )
+        return bool(active), float(new_conv), float(new_held)
+
+    # ---- Safety gate tests ----
+
+    def test_safety_includes_contact_valid(self):
+        """When contact_valid=False, safety_pass must fail → gate inactive."""
+        # With contact_valid=True, direct_entry at 0.07m (>= 0.06) + moving_away
+        active, _, _ = self._gate(0.07, prev_error=0.02, contact_valid=1.0)
+        assert active, "Gate should activate with contact_valid=True and large error"
+
+        # With contact_valid=False, safety fails → gate must NOT activate
+        active2, _, _ = self._gate(0.07, prev_error=0.02, contact_valid=0.0)
+        assert not active2, "Gate must NOT activate when contact_valid=False"
+
+    def test_safety_includes_pitch(self):
+        """Excessive pitch must fail safety gate."""
+        active, _, _ = self._gate(0.07, prev_error=0.02, pitch_x=0.5)  # 0.5 rad > safe_pitch=0.3
+        assert not active, "Gate must NOT activate when pitch exceeds safe limit"
+
+    def test_safety_includes_roll(self):
+        """Excessive roll must fail safety gate."""
+        active, _, _ = self._gate(0.07, prev_error=0.02, roll_y=0.5)
+        assert not active, "Gate must NOT activate when roll exceeds safe limit"
+
+    def test_safety_includes_com_z(self):
+        """Low CoM height must fail safety gate."""
+        active, _, _ = self._gate(0.07, prev_error=0.02, com_z=0.30)  # < safe_com_z=0.35
+        assert not active, "Gate must NOT activate when CoM is too low"
+
+    # ---- Converging steps gated by safety ----
+
+    def test_converging_steps_reset_on_safety_fail(self):
+        """Converging steps must NOT update when safety fails (matches Python)."""
+        # With safety passing and converging, steps should increment
+        _, conv1, _ = self._gate(0.03, prev_error=0.04, converging_steps=5.0)
+        assert conv1 == 6.0, f"Converging steps should increment: got {conv1}"
+
+        # With safety failing (pitch too high), converging steps should stay at 5
+        _, conv2, _ = self._gate(0.03, prev_error=0.04, converging_steps=5.0, pitch_x=0.5)
+        assert conv2 == 5.0, f"Converging steps must NOT change on safety fail: got {conv2}"
+
+    def test_converging_steps_reset_when_not_converging(self):
+        """Converging steps reset to 0 when not converging and safety passes."""
+        _, conv, _ = self._gate(0.03, prev_error=0.02, converging_steps=10.0)
+        assert conv == 0.0, f"Converging steps should reset to 0 when moving_away: got {conv}"
+
+    # ---- Recenter held reset on safety fail ----
+
+    def test_recenter_held_resets_on_safety_fail(self):
+        """recenter_held must reset to 0 when safety fails (matches Python)."""
+        # With safety passing and direct_entry, held should go to 1
+        _, _, held1 = self._gate(0.07, prev_error=0.02, recenter_held=0.0)
+        assert held1 == 1.0, "Held should activate on direct_entry"
+
+        # With safety failing, held must reset to 0 (even if previously held)
+        _, _, held2 = self._gate(0.07, prev_error=0.02, recenter_held=1.0, pitch_x=0.5)
+        assert held2 == 0.0, f"Held must reset on safety fail: got {held2}"
+
+    # ---- Entry condition tests ----
+
+    def test_direct_enter_activates(self):
+        """abs_error >= direct_enter_m AND moving_away → activate."""
+        active, _, held = self._gate(0.07, prev_error=0.02)
+        assert active, "Direct entry should activate at 0.07m with moving_away"
+        assert held == 1.0
+
+    def test_soft_enter_activates(self):
+        """abs_error in [soft_enter, direct_enter) AND moving_away → activate."""
+        active, _, held = self._gate(0.055, prev_error=0.02)
+        assert active, "Soft entry should activate at 0.055m with moving_away"
+        assert held == 1.0
+
+    def test_emergency_entry_activates(self):
+        """abs_error >= desired_band_m → activate regardless of moving_away."""
+        # Even when converging (not moving_away), emergency entry should activate
+        active, _, held = self._gate(0.10, prev_error=0.12)
+        assert active, "Emergency entry should activate at 0.10m regardless"
+        assert held == 1.0
+
+    def test_no_activation_below_threshold(self):
+        """Below soft_enter_m and no prior held → no activation."""
+        active, _, held = self._gate(0.02, prev_error=0.01)
+        assert not active, "Should not activate below threshold"
+        assert held == 0.0
+
+    # ---- Hold condition ----
+
+    def test_hold_condition_with_prev_active(self):
+        """When previously active (held=1), stay active if abs_error > release_inner."""
+        active, _, held = self._gate(0.04, prev_error=0.02, recenter_held=1.0)
+        assert active, "Hold condition should keep active"
+        assert held == 1.0
+
+    # ---- Release condition tests ----
+
+    def test_release_by_inner_band(self):
+        """When abs_error <= release_inner_m, release the gate."""
+        active, _, held = self._gate(0.02, prev_error=0.02, recenter_held=1.0)
+        assert not active, "Should release when within inner band"
+        assert held == 0.0
+
+    def test_converging_release(self):
+        """After enough converging steps, release even above inner band."""
+        active, _, held = self._gate(
+            0.05, prev_error=0.06, recenter_held=1.0,
+            converging_steps=16.0)  # >= converging_release_steps=15
+        assert not active, "Should release after enough converging steps"
+        assert held == 0.0
+
+    def test_converging_release_too_few_steps(self):
+        """Not enough converging steps → no release."""
+        active, _, held = self._gate(
+            0.05, prev_error=0.06, recenter_held=1.0,
+            converging_steps=10.0)  # < converging_release_steps=15
+        assert active, "Should NOT release with too few converging steps"
+
+    # ---- Startup guard ----
+
+    def test_startup_guard_blocks_activation(self):
+        """Before startup guard expires, gate must not activate."""
+        active, _, _ = self._gate(0.07, prev_error=0.02, step_counter=5.0, startup_guard=20)
+        assert not active, "Startup guard should block activation"
+
+    def test_startup_guard_passed_allows_activation(self):
+        """After startup guard, gate may activate."""
+        active, _, _ = self._gate(0.07, prev_error=0.02, step_counter=25.0, startup_guard=20)
+        assert active, "Should activate after startup guard expires"
+
+    # ---- Prev error always updated ----
+
+    def test_prev_error_always_updated(self):
+        """prev_error is always set to current sagittal_position_error_m."""
+        # The function returns new_prev_error as part of the returned tuple
+        from wheeled_biped.controllers.k2_jax_controller import k2_jax_apcr1nd_compute_gate
+        _, _, new_prev, _, _ = k2_jax_apcr1nd_compute_gate(
+            sagittal_position_error_m=jnp.array(0.07, dtype=jnp.float64),
+            prev_error=jnp.array(0.02, dtype=jnp.float64),
+            step_counter=jnp.array(25.0, dtype=jnp.float64),
+            converging_steps=jnp.array(0.0, dtype=jnp.float64),
+            recenter_held=jnp.array(0.0, dtype=jnp.float64),
+            pitch_x_rad=jnp.array(0.02, dtype=jnp.float64),
+            roll_y_rad=jnp.array(0.02, dtype=jnp.float64),
+            com_z_m=jnp.array(0.50, dtype=jnp.float64),
+            contact_valid=jnp.array(True, dtype=jnp.bool_),
+            startup_guard_steps=20, safe_min_com_z=0.35, safe_roll_rad=0.3,
+            safe_pitch_rad=0.3, soft_enter_m=0.05, direct_enter_m=0.06,
+            desired_band_m=0.08, release_inner_m=0.03,
+            hold_outside_band=jnp.array(0.0, dtype=jnp.float64),
+            converging_release_steps=15,
+        )
+        assert float(new_prev) == 0.07, "prev_error must be set to current sag_pos_err"
+
+    # ---- Position cap gated by recenter_active ----
+
+    def test_position_cap_boost_inactive_when_gate_off(self):
+        """When APCR1ND gate is inactive, boosted_cap should return normal (3.5)."""
+        from wheeled_biped.controllers.k2_jax_controller import k2_jax_compute_boosted_position_cap
+        cap = float(k2_jax_compute_boosted_position_cap(
+            abs_error=jnp.array(0.15, dtype=jnp.float64),
+            safety_gate_pass=jnp.array(True, dtype=jnp.bool_),
+            boost_enabled=jnp.array(1.0, dtype=jnp.float64),
+            apcr1nd_tuned_enabled=jnp.array(1.0, dtype=jnp.float64),
+            soft_enter_m=jnp.array(0.05, dtype=jnp.float64),
+            hard_band_m=jnp.array(0.10, dtype=jnp.float64),
+            emergency_band_m=jnp.array(0.12, dtype=jnp.float64),
+            desired_band_m=jnp.array(0.08, dtype=jnp.float64),
+            cap_normal=jnp.array(3.5, dtype=jnp.float64),
+            cap_soft=jnp.array(4.0, dtype=jnp.float64),
+            cap_desired=jnp.array(5.0, dtype=jnp.float64),
+            cap_hard=jnp.array(6.0, dtype=jnp.float64),
+            cap_emergency=jnp.array(7.0, dtype=jnp.float64),
+        ))
+        assert cap == 7.0, f"Emergency band with safety → cap_emergency=7.0, got {cap}"
+
+    def test_position_cap_boost_no_safety(self):
+        """When safety fails, boosted_cap should return cap_normal (3.5) regardless of error."""
+        from wheeled_biped.controllers.k2_jax_controller import k2_jax_compute_boosted_position_cap
+        cap = float(k2_jax_compute_boosted_position_cap(
+            abs_error=jnp.array(0.15, dtype=jnp.float64),
+            safety_gate_pass=jnp.array(False, dtype=jnp.bool_),
+            boost_enabled=jnp.array(1.0, dtype=jnp.float64),
+            apcr1nd_tuned_enabled=jnp.array(1.0, dtype=jnp.float64),
+            soft_enter_m=jnp.array(0.05, dtype=jnp.float64),
+            hard_band_m=jnp.array(0.10, dtype=jnp.float64),
+            emergency_band_m=jnp.array(0.12, dtype=jnp.float64),
+            desired_band_m=jnp.array(0.08, dtype=jnp.float64),
+            cap_normal=jnp.array(3.5, dtype=jnp.float64),
+            cap_soft=jnp.array(4.0, dtype=jnp.float64),
+            cap_desired=jnp.array(5.0, dtype=jnp.float64),
+            cap_hard=jnp.array(6.0, dtype=jnp.float64),
+            cap_emergency=jnp.array(7.0, dtype=jnp.float64),
+        ))
+        assert cap == 3.5, f"Safety fail → cap_normal=3.5, got {cap}"
+
+    # ---- Wheel damping override gated by recenter_active ----
+
+    def test_wheel_damping_override_inactive_when_gate_off(self):
+        """When recenter_active=False, wheel damping override must NOT apply."""
+        from wheeled_biped.controllers.k2_jax_controller import k2_jax_apcr1nd_wheel_damping_override
+        tau_l, tau_r = k2_jax_apcr1nd_wheel_damping_override(
+            tau_wheel_vel_left=jnp.array(5.0, dtype=jnp.float64),
+            tau_wheel_vel_right=jnp.array(5.0, dtype=jnp.float64),
+            wheel_vel_left_rad_s=jnp.array(2.0, dtype=jnp.float64),
+            wheel_vel_right_rad_s=jnp.array(2.0, dtype=jnp.float64),
+            sagittal_position_error_m=jnp.array(0.10, dtype=jnp.float64),
+            recenter_active=jnp.array(False, dtype=jnp.bool_),
+        )
+        assert float(tau_l) == 5.0, "WD override must NOT apply when gate off"
+        assert float(tau_r) == 5.0
+
+    def test_wheel_damping_override_active_when_gate_on(self):
+        """When recenter_active=True and error in hard band, damping scale should apply."""
+        from wheeled_biped.controllers.k2_jax_controller import k2_jax_apcr1nd_wheel_damping_override, _K2_APCR_SCALE_HARD
+        tau_l, tau_r = k2_jax_apcr1nd_wheel_damping_override(
+            tau_wheel_vel_left=jnp.array(5.0, dtype=jnp.float64),
+            tau_wheel_vel_right=jnp.array(5.0, dtype=jnp.float64),
+            wheel_vel_left_rad_s=jnp.array(2.0, dtype=jnp.float64),
+            wheel_vel_right_rad_s=jnp.array(2.0, dtype=jnp.float64),
+            sagittal_position_error_m=jnp.array(0.10, dtype=jnp.float64),  # hard band
+            recenter_active=jnp.array(True, dtype=jnp.bool_),
+        )
+        # Damping fights drift (both positive same sign) → scale from profile
+        # K2 profile: scale_hard=0.15 → 5.0*0.15=0.75
+        expected = 5.0 * float(_K2_APCR_SCALE_HARD)
+        assert float(tau_l) == pytest.approx(expected, abs=0.01), f"WD scale {float(_K2_APCR_SCALE_HARD)} → {expected}, got {float(tau_l)}"
+        assert float(tau_r) == pytest.approx(expected, abs=0.01)
