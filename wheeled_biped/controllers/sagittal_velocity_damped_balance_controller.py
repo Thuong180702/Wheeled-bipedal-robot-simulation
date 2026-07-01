@@ -810,6 +810,64 @@ class SagittalAuthoritySchedule:
     drift_pgate_low: float = 0.15        # drift distance (m) below which pos_gate ≈ 0.0
     drift_pgate_high: float = 0.80       # drift distance (m) above which pos_gate ≈ 1.0
 
+    # ── Heading hip-yaw stabilizer (low-authority soft heading impedance) ──
+    # Acts on hip-yaw joints [1,6] with very low authority smooth bounded torque.
+    # Corrects slow yaw drift without wheel differential. Yields to poor
+    # stability, fast height motion, and hip-yaw divergence.
+    enable_heading_hip_yaw: bool = False
+    heading_hy_kp: float = 0.15          # Nm/rad — very low proportional gain
+    heading_hy_kd: float = 0.05          # Nm/(rad/s) — mild damping
+    heading_hy_max_tau: float = 0.8      # Nm per-joint smooth tanh bound
+
+    # ── Anti-twist damping (reduce excessive hip-yaw divergence) ──────────
+    # Applies opposing torques to hip-yaw joints [1,6] to damp left/right
+    # asymmetry. Mild gains, smooth bounds. Does not lock legs.
+    enable_anti_twist: bool = False
+    anti_twist_kp: float = 0.3           # Nm/rad anti-twist proportional
+    anti_twist_kd: float = 0.1           # Nm/(rad/s) anti-twist damping
+    anti_twist_max_tau: float = 0.6      # Nm per-joint smooth tanh bound
+
+    # ── Hip-yaw mean centering (weak return toward neutral) ────────────────
+    # Gently brings both legs back toward zero-mean after disturbances.
+    # Very weak authority. Yields under poor balance, divergence, and height motion.
+    hy_mean_center_kp: float = 0.5        # Nm/rad weak centering proportional
+    hy_mean_center_max_tau: float = 0.4   # Nm per-joint smooth tanh bound
+
+    # ── Anti-twist divergence guard thresholds (V5 parameterization) ───────
+    # Progressive kp boost when hip-yaw divergence enters the guard region.
+    # guard_start: divergence at which boost begins (V3: 0.22, V4: 0.18)
+    # guard_strong: divergence at which boost saturates (V3: 0.32, V4: 0.30)
+    # guard_boost_max: maximum kp multiplier (V3: 3.5, V4: 5.0)
+    anti_twist_guard_start_rad: float = 0.22
+    anti_twist_guard_strong_rad: float = 0.32
+    anti_twist_guard_boost_max: float = 3.5
+    # V5 two-layer emergency guard: separate tanh cap for guard extra torque
+    anti_twist_emergency_max_tau: float = 0.25  # Nm per-joint, separate from base
+
+    # ── Heading twist yield gate thresholds (V5 parameterization) ──────────
+    # Reduces heading authority as hip-yaw divergence grows.
+    # yield_start: divergence at which heading yield begins (V3: 0.35 disabled, V4: 0.18)
+    # yield_zero: divergence at which heading is fully suppressed (V3/V4: 0.35)
+    # When yield_start >= yield_zero, the yield gate is disabled (always 1.0).
+    heading_twist_yield_start_rad: float = 0.35
+    heading_twist_yield_zero_rad: float = 0.35
+
+    # ── Dynamic q_ref blend alpha (V5 parameterization) ─────────────────────
+    # Fraction of dynamic (two-point-smooth) q_ref vs static equilibrium anchor.
+    # Only applies to multi-segment dynamic cycles. V3: 0.40, V4: 0.60
+    dynamic_q_ref_blend_alpha: float = 0.40
+
+    # ── Split height gates for drift controller ───────────────────────────
+    # Per-component height motion sensitivity. Wider gates = more active during
+    # height transitions. Narrower gates = more suppressed.
+    drift_hgate_vel_low: float = 0.05        # CoM z-vel (m/s) below which height_gate_vel ≈ 1.0
+    drift_hgate_vel_high: float = 0.25       # CoM z-vel (m/s) above which height_gate_vel ≈ 0.0
+    drift_hgate_heading_low: float = 0.02    # CoM z-vel (m/s) below which height_gate_heading ≈ 1.0
+    drift_hgate_heading_high: float = 0.10   # CoM z-vel (m/s) above which height_gate_heading ≈ 0.0
+
+    # ── Height trajectory speed (transition duration control) ─────────────
+    height_transition_duration_s: float = 8.0  # Target duration for full height ramp
+
     # T6F Architecture Fix: Budget Cap Raise
     # Conditionally raises upstream max_position_tau cap during safe high-height emergency recenter
     # Addresses upstream 4.0 Nm clipping that prevents tuned cap authority from reaching wheels
@@ -3260,6 +3318,462 @@ K2_JAX_DEDICATED_DEFAULT_V2 = replace(
     drift_hgate_high=0.15,         # CoM z-vel above 0.15 m/s → height_gate ≈ 0.0
     drift_pgate_low=0.15,          # drift distance below 0.15m → pos_gate ≈ 0.0
     drift_pgate_high=0.80,         # drift distance above 0.80m → pos_gate ≈ 1.0
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE
+#
+# Built on V2 (velocity-only drift damping). Adds:
+#   - Low-authority hip-yaw heading stabilizer (no wheel differential)
+#   - Anti-twist damping (reduce hip-yaw divergence)
+#   - Split height gates (vel stays active during height transitions)
+#   - Height transition speed control (5-10s target via S-curve)
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate",
+    # ── Heading hip-yaw stabilizer ──────────────────────────────────────────
+    enable_heading_hip_yaw=True,
+    heading_hy_kp=0.15,             # Nm/rad — very low, soft impedance
+    heading_hy_kd=0.05,             # Nm/(rad/s) — mild damping
+    heading_hy_max_tau=0.8,         # Nm per-joint smooth tanh bound
+    # ── Anti-twist damping ──────────────────────────────────────────────────
+    enable_anti_twist=True,
+    anti_twist_kp=0.3,              # Nm/rad
+    anti_twist_kd=0.1,              # Nm/(rad/s)
+    anti_twist_max_tau=0.6,         # Nm per-joint
+    # ── Split height gates ──────────────────────────────────────────────────
+    # Velocity gate: WIDER — stays active during controlled height motion
+    drift_hgate_vel_low=0.05,       # below 0.05 m/s → gate ≈ 1.0
+    drift_hgate_vel_high=0.25,      # above 0.25 m/s → gate ≈ 0.0
+    # Heading gate: NARROWER — reduces quickly during height transitions
+    drift_hgate_heading_low=0.02,   # below 0.02 m/s → gate ≈ 1.0
+    drift_hgate_heading_high=0.10,  # above 0.10 m/s → gate ≈ 0.0
+    # Height transition speed
+    height_transition_duration_s=8.0,
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2
+#
+# Built on HHT Candidate with structural fixes from long telemetry diagnosis:
+#   - TASK 1: Differential hip-yaw heading torque (left=+tau, right=-tau)
+#            instead of symmetric (non-functional) torque.
+#   - TASK 2: Reduced anti-twist authority to avoid fighting heading correction:
+#            kp: 0.30→0.15, max_tau: 0.6→0.3 Nm
+#   - TASK 3: Added weak hip-yaw mean centering to prevent outward leg drift
+#   - TASK 4: (runtime-only) Multi-segment dynamic cycle q_ref fix
+#   - TASK 5: Drift gates retuned after conflict resolution
+#
+# Hard principles:
+#   - Velocity-only drift damping (V2). No wheel-differential heading.
+#   - Continuous gates only. No discrete height buckets.
+#   - No scenario-specific hacks. No silent profile fallback.
+#   - Balance priority > drift/heading/yaw. No excessive leg twisting.
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v2",
+    # ── TASK 1: Stronger heading hip-yaw with differential torque ──────────
+    # Sign convention: left=+tau, right=-tau → CW yaw moment (validated via
+    # controlled yaw-error injection test).
+    enable_heading_hip_yaw=True,
+    heading_hy_kp=0.40,             # Nm/rad — increased from 0.15 for authority
+    heading_hy_kd=0.10,             # Nm/(rad/s) — increased from 0.05
+    heading_hy_max_tau=1.5,         # Nm per-joint — increased from 0.8
+    # ── TASK 2: Reduced anti-twist authority ───────────────────────────────
+    # Anti-twist should damp excessive divergence, not fight yaw correction.
+    enable_anti_twist=True,
+    anti_twist_kp=0.15,             # Nm/rad — reduced from 0.30
+    anti_twist_kd=0.1,              # Nm/(rad/s) — unchanged (conservative)
+    anti_twist_max_tau=0.3,         # Nm per-joint — reduced from 0.6
+    # ── TASK 3: Weak hip-yaw mean centering ────────────────────────────────
+    hy_mean_center_kp=0.5,          # Nm/rad — very weak centering
+    hy_mean_center_max_tau=0.4,     # Nm per-joint smooth tanh bound
+    # ── TASK 5: Slightly widened velocity gate (was over-gated 3-8x) ──────
+    # After heading/anti-twist conflict fix, velocity damping can breathe.
+    # Heading and position gates remain conservative. No wheel-diff heading.
+    drift_hgate_vel_low=0.08,       # widened from 0.05
+    drift_hgate_vel_high=0.35,      # widened from 0.25
+    drift_hgate_heading_low=0.02,   # conservative (unchanged)
+    drift_hgate_heading_high=0.10,  # conservative (unchanged)
+    # Height transition speed
+    height_transition_duration_s=8.0,
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3
+#
+# Built on V2 Candidate with three structural fixes from V2 telemetry:
+#   - TASK 1: Widened heading stability gate (pitch full-gate 0.07 rad instead
+#            of 0.035 rad) so heading torque can activate during normal balance.
+#            Twist gate widened (full-gate 0.10 instead of 0.04 rad) so heading
+#            can operate at typical divergence levels.
+#   - TASK 2: Differential heading sign validated via telemetry correlation.
+#   - TASK 3: (runtime-only) Multi-segment q_ref boundary blending.
+#   - TASK 4: Soft divergence guard added to anti-twist damping.
+#            Progressive boost (up to 3.5x) at divergence 0.22→0.32 rad.
+#
+# All V2 values preserved except heading gate thresholds and divergence guard.
+# Drift gains unchanged (Task 5).
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3",
+    # ── TASK 1: Same heading gains, gate thresholds relaxed at call site ─────
+    # (heading_hy_kp/kd/max_tau unchanged from V2: 0.40, 0.10, 1.5)
+    # (anti_twist_kp/kd/max_tau unchanged from V2: 0.15, 0.1, 0.3)
+    # (hy_mean_center_kp/max_tau unchanged from V2: 0.5, 0.4)
+    # (drift_hgate values unchanged from V2: vel 0.08/0.35, heading 0.02/0.10)
+    # (height_transition_duration_s unchanged: 8.0)
+    # The heading gate threshold changes are at the JAX call site in
+    # k2_jax_controller.py, not parameterized in the profile.
+    #
+    # Pitch stability gate: full at 0.07 rad (was 0.035), zero at 0.21 rad
+    # Roll stability gate: full at 0.035 rad (was 0.017), zero at 0.122 rad
+    # Twist gate in heading: full at 0.10 rad (was 0.04), zero at 0.30 rad
+    # Divergence guard boost: activates at 0.22 rad, 3.5x at 0.32 rad
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4
+#
+# Built on V3 Candidate with two structural fixes from V3 telemetry:
+#   - TASK 1: Dynamic cycle q_ref blend retuned from 40% dynamic/60% static
+#            to 60% dynamic/40% static for better height tracking.
+#            Boundary blending (60-step smoothstep) preserved.
+#   - TASK 2: Divergence guard strengthened:
+#            * Activation lowered from 0.22 rad to 0.18 rad
+#            * Full boost increased from 3.5x to 5.0x at 0.30 rad (was 0.32)
+#            * Heading twist yield gate added: yields heading at 0.18→0.35 rad
+#   - TASK 3: Heading fix preserved — same gains, same differential sign.
+#   - TASK 4: Realtime verified with no-telemetry runs.
+#
+# All V3 values preserved: heading gains (0.40, 0.10, 1.5), anti-twist base
+# (0.15, 0.1, 0.3), mean centering (0.5, 0.4), drift gates unchanged.
+# Divergence guard thresholds changed at JAX call site in k2_jax_controller.py.
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v4",
+    # ── TASK 1: Dynamic cycle blend retuned ─────────────────────────────────
+    dynamic_q_ref_blend_alpha=0.60,  # 60% dynamic, 40% static (was 0.40 in V3)
+    # ── TASK 2: Divergence guard strengthened ──────────────────────────────
+    # Guard activation: 0.18 rad (was 0.22 rad in V3)
+    # Guard boost: 5.0x max (was 3.5x in V3), full at 0.30 rad (was 0.32 in V3)
+    anti_twist_guard_start_rad=0.18,
+    anti_twist_guard_strong_rad=0.30,
+    anti_twist_guard_boost_max=5.0,
+    # Heading twist yield: active at 0.18→0.35 rad (was disabled in V3)
+    heading_twist_yield_start_rad=0.18,
+    heading_twist_yield_zero_rad=0.35,
+    # ── TASK 3: Heading fix preserved ─────────────────────────────────────
+    # Same gains, same differential sign, same gate thresholds as V3
+    # (heading_hy_kp/kd/max_tau unchanged: 0.40, 0.10, 1.5)
+    # (anti_twist_kp/kd/max_tau unchanged: 0.15, 0.1, 0.3)
+    # (hy_mean_center_kp/max_tau unchanged: 0.5, 0.4)
+    # (drift_hgate values unchanged from V2: vel 0.08/0.35, heading 0.02/0.10)
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 1 ABLATION PROFILES — HHT V4 Regression Root-Cause Analysis
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Ablation A: HHT_ABLATE_V3_BASE ─────────────────────────────────────────
+# Exact V3 behavior. All V3 guard thresholds, no heading twist yield, 40% blend.
+# Purpose: baseline reference for ablation comparison.
+HHT_ABLATE_V3_BASE = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="hht_ablate_v3_base",
+    # V3 guard: 0.22→0.32 rad, 3.5x boost
+    anti_twist_guard_start_rad=0.22,
+    anti_twist_guard_strong_rad=0.32,
+    anti_twist_guard_boost_max=3.5,
+    # V3: no heading twist yield (disabled)
+    heading_twist_yield_start_rad=0.35,
+    heading_twist_yield_zero_rad=0.35,
+    # V3: 40% dynamic blend
+    dynamic_q_ref_blend_alpha=0.40,
+)
+
+# ── Ablation B: HHT_ABLATE_V3_PLUS_60_40_BLEND ────────────────────────────
+# V3 behavior + only the 60/40 q_ref blend change.
+# No divergence guard changes, no heading twist yield changes.
+# Purpose: determine whether 60/40 blend is safe by itself.
+HHT_ABLATE_V3_PLUS_60_40_BLEND = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="hht_ablate_v3_plus_60_40_blend",
+    # V3 guard: 0.22→0.32 rad, 3.5x boost
+    anti_twist_guard_start_rad=0.22,
+    anti_twist_guard_strong_rad=0.32,
+    anti_twist_guard_boost_max=3.5,
+    # V3: no heading twist yield (disabled)
+    heading_twist_yield_start_rad=0.35,
+    heading_twist_yield_zero_rad=0.35,
+    # V4: 60% dynamic blend (only V4 change applied)
+    dynamic_q_ref_blend_alpha=0.60,
+)
+
+# ── Ablation C: HHT_ABLATE_V4_NO_GUARD_CHANGE ─────────────────────────────
+# V4 but with divergence guard rolled back to V3 values.
+# Keeps 60/40 blend and heading twist yield.
+# Purpose: check whether strengthened divergence guard caused push fall.
+HHT_ABLATE_V4_NO_GUARD_CHANGE = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4,
+    profile_name="hht_ablate_v4_no_guard_change",
+    # Rollback guard to V3: 0.22→0.32 rad, 3.5x boost
+    anti_twist_guard_start_rad=0.22,
+    anti_twist_guard_strong_rad=0.32,
+    anti_twist_guard_boost_max=3.5,
+    # Keep V4 heading twist yield
+    # Keep V4 60/40 blend
+)
+
+# ── Ablation D: HHT_ABLATE_V4_NO_HEADING_TWIST_YIELD ─────────────────────
+# V4 but with heading twist yield gate disabled (set to V3 behavior).
+# Keeps 60/40 blend and V4 guard.
+# Purpose: check whether heading yield during high twist caused push regression.
+HHT_ABLATE_V4_NO_HEADING_TWIST_YIELD = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4,
+    profile_name="hht_ablate_v4_no_heading_twist_yield",
+    # Disable heading twist yield (V3 behavior: start >= zero)
+    heading_twist_yield_start_rad=0.35,
+    heading_twist_yield_zero_rad=0.35,
+    # Keep V4 guard: 0.18→0.30, 5.0x
+    # Keep V4 60/40 blend
+)
+
+# ── Ablation E: HHT_ABLATE_GUARD_CAP_TEST ────────────────────────────────
+# V4 guard thresholds/boost, but increase anti_twist_max_tau from 0.3→0.45 Nm.
+# Tests the theory that the 0.3 Nm tanh cap bottleneck prevents guard from working.
+# Purpose: check if raising the torque cap allows the guard boost to take effect.
+HHT_ABLATE_GUARD_CAP_TEST = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4,
+    profile_name="hht_ablate_guard_cap_test",
+    # V4 guard: 0.18→0.30, 5.0x
+    # V4 heading twist yield
+    # V4 60/40 blend
+    # Increased anti-twist torque cap
+    anti_twist_max_tau=0.45,  # was 0.3 in V4/V3
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V5
+#
+# Built on V3 base + ablation-proven improvements:
+#   - TASK 1: 60/40 dynamic q_ref blend (proven safe by ablation B:
+#             +3.2 cm height, -55% displacement, -0.033 rad div, -0.2° pitch RMS).
+#             Will test 65/35 and 70/30 blends for further tracking gains.
+#   - TASK 2: Two-layer divergence guard (fixes V4 bottleneck):
+#             * Layer 1: V3 base anti-twist (kp=0.15, max_tau=0.3, own tanh channel)
+#             * Layer 2: Emergency guard at 0.28→0.34 rad, boost 3.5x, separate
+#               tanh cap 0.25 Nm — never squeezed by Layer 1 cap.
+#             * Do NOT multiply base kp into same tanh cap (V4 bottleneck).
+#   - TASK 3: Push regression investigation — V4 fall was non-deterministic.
+#             V5's delayed heading yield (0.30→0.38 rad, not 0.18→0.35) avoids
+#             suppressing heading torque during normal push recovery.
+#   - TASK 4: Heading sign/gate from V3 preserved. No gain increase.
+#
+# Hard principles: V3 base, 60/40 blend, two-layer emergency guard (0.28→0.34),
+# heading yield delayed to 0.30→0.38 rad, no heading gain increase.
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V5 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v5",
+    # ── TASK 1: 60/40 dynamic q_ref blend (proven safe) ────────────────────
+    dynamic_q_ref_blend_alpha=0.60,  # 60% dynamic, 40% static
+    # ── TASK 2: Two-layer guard (V3 base + emergency extra) ───────────────
+    # Layer 1: V3 guard behavior — boost kp at 0.22→0.32 rad, 3.5x, tanh 0.3 Nm
+    # Layer 2: Emergency extra on separate tanh channel — never squeezed by base cap
+    # The guard gate controls BOTH boost multiplier and emergency extra activation.
+    anti_twist_guard_start_rad=0.22,    # V3 guard activation (was 0.28 — left gap)
+    anti_twist_guard_strong_rad=0.32,   # V3 guard full (was 0.34)
+    anti_twist_guard_boost_max=3.5,     # 3.5x extra kp at full gate
+    anti_twist_emergency_max_tau=0.25,  # Nm — separate tanh cap for emergency extra
+    # ── TASK 3: Delayed heading twist yield ───────────────────────────────
+    # Heading yields only after divergence enters emergency region (0.30 rad),
+    # fully suppressed at 0.38 rad. Maintains heading torque during normal recovery.
+    heading_twist_yield_start_rad=0.30,  # rad — yield activation (was 0.18 in V4)
+    heading_twist_yield_zero_rad=0.38,   # rad — fully suppressed (was 0.35 in V4)
+    # ── TASK 4: Heading fix preserved ─────────────────────────────────────
+    # Same gains, same differential sign: heading_hy_kp=0.40, kd=0.10, max_tau=1.5
+    # anti_twist_kp=0.15, kd=0.1, max_tau=0.3, hy_mean_center_kp=0.5, max_tau=0.4
+    # drift_hgate unchanged: vel 0.08/0.35, heading 0.02/0.10
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3 AUDIT FIX CANDIDATE — evidence-backed fixes from V3 root-cause analysis
+#
+# Root Cause #1: Drift height gate uses position error (cm) but compares against
+# thresholds 0.08-0.35 cm (0.8-3.5 mm). At typical height errors of 0.5-2 cm,
+# the gate is always zero → drift velocity damping disabled for >99.8% of steps.
+# Fix: Widen thresholds to 2-12 cm so gate stays open during normal tracking.
+#
+# Root Cause #2: Heading kp=0.40 generates <0.03 Nm peak torque at 5° yaw error.
+# Fix: Increase heading kp modestly to 1.0 (2.5x) so heading generates meaningful
+# correction without over-authority. Keep kd and max_tau unchanged.
+#
+# Root Cause #3: Dynamic q_ref blend 40/60 (V3) limits height tracking to 0.404 m
+# with 0.48 m target. V4's 60/40 blend fixed this without safety regression.
+# Fix: Adopt 60/40 blend (proven safe in HHT_ABLATE_V3_PLUS_60_40_BLEND tests).
+#
+# No other changes from V3. All gates remain continuous.
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3_audit_fix",
+    # ── Fix #1: Drift height gate thresholds widened for position-error units ──
+    # com_z_vel_abs in drift controller = |height_error| * 100 (cm).
+    # Old: hgate_vel 0.08→0.35 cm (0.8→3.5 mm) — always zero.
+    # New: hgate_vel 2.0→12.0 cm (2→12 cm) — gate open during normal tracking.
+    drift_hgate_vel_low=2.0,        # full gate below 2 cm height error
+    drift_hgate_vel_high=12.0,      # zero gate above 12 cm height error
+    # ── Fix #2: Stronger heading hip-yaw gain ──────────────────────────────────
+    heading_hy_kp=1.0,              # Nm/rad — 2.5x V3 (0.40→1.0)
+    # heading_hy_kd=0.10 unchanged — conservative
+    # heading_hy_max_tau=1.5 unchanged — already sufficient
+    # ── Fix #3: 60/40 dynamic q_ref blend for height tracking ─────────────────
+    dynamic_q_ref_blend_alpha=0.60,  # 60% dynamic, 40% static (V4-proven value)
+    # ── All other V3 parameters preserved ──────────────────────────────────────
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3 AUDIT FIX V2 — heading gain midpoint to address lateral drift regression
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUDIT_FIX_V2 builds from AUDIT_FIX with one change: heading_hy_kp=0.70
+# (midpoint between V3's 0.40 and AUDIT_FIX's 1.0).
+#
+# Rationale: AUDIT_FIX (kp=1.0) showed lateral drift regression (+311%)
+# and push yaw worsening (+15%). Stronger differential hip-yaw heading
+# torque may be injecting lateral/yaw-side forces. kp=0.70 tests whether
+# the regression scales proportionally with gain.
+#
+# Preserved from AUDIT_FIX:
+#   drift_hgate_vel_low  = 2.0
+#   drift_hgate_vel_high = 12.0
+#   dynamic_q_ref_blend_alpha = 0.60
+#
+# No other changes. All gates remain continuous, no scenario hacks.
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3_audit_fix_v2",
+    # ── Fix #1: Drift height gate thresholds widened for position-error units ──
+    drift_hgate_vel_low=2.0,        # full gate below 2 cm height error
+    drift_hgate_vel_high=12.0,      # zero gate above 12 cm height error
+    # ── Fix #2: Heading hip-yaw gain at midpoint (0.70 vs V3=0.40, AUDIT_FIX=1.0)
+    heading_hy_kp=0.70,             # Nm/rad — 1.75x V3, 0.70x AUDIT_FIX
+    # heading_hy_kd=0.10 unchanged
+    # heading_hy_max_tau=1.5 unchanged
+    # ── Fix #3: 60/40 dynamic q_ref blend for height tracking ─────────────────
+    dynamic_q_ref_blend_alpha=0.60,  # 60% dynamic, 40% static
+    # ── All other V3 parameters preserved ──────────────────────────────────────
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3 AUDIT FIX V2 FINAL — promote candidate from 5-point micro-ablation
+# ═══════════════════════════════════════════════════════════════════════════════
+# Micro-ablation across kp ∈ {0.40, 0.55, 0.70, 0.85, 1.00} revealed that kp=0.55
+# achieves near-zero yaw error (-0.50° at fixed 0.400 m) with lateral drift
+# nearly identical to V3 (-0.030 m vs -0.028 m). This is NON-MONOTONIC — kp=0.70
+# is WORSE than both kp=0.55 and kp=0.85 for fixed-height yaw.
+#
+# Three evidence-backed changes from V3:
+#   1. drift_hgate_vel_low/high:  0.08/0.35 → 2.0/12.0  (fix disabled drift gate)
+#   2. heading_hy_kp:             0.40       → 0.55       (optimal from 5-pt sweep)
+#   3. dynamic_q_ref_blend_alpha: 0.40       → 0.60       (better height tracking)
+#
+# All other V3 parameters preserved.
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2_FINAL = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3_audit_fix_v2_final",
+    # ── Fix #1: Drift height gate thresholds widened for position-error units ──
+    drift_hgate_vel_low=2.0,        # full gate below 2 cm height error
+    drift_hgate_vel_high=12.0,      # zero gate above 12 cm height error
+    # ── Fix #2: Heading hip-yaw gain — optimal from 5-point micro-ablation ─────
+    heading_hy_kp=0.55,             # Nm/rad — 1.375x V3, near-zero yaw at fixed ht
+    # heading_hy_kd=0.10 unchanged
+    # heading_hy_max_tau=1.5 unchanged
+    # ── Fix #3: 60/40 dynamic q_ref blend for height tracking ─────────────────
+    dynamic_q_ref_blend_alpha=0.60,  # 60% dynamic, 40% static
+    # ── All other V3 parameters preserved ──────────────────────────────────────
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V3 — OFFICIAL DEFAULT (promoted 2026-07-01)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Promoted from V3_AUDIT_FIX_V2_FINAL after comprehensive validation:
+#   - 5-point heading-gain micro-ablation identified kp=0.55 as optimal
+#   - 37/37 validation scenarios survive, 0 falls, 0 SAFETY_FAIL
+#   - Fixed-height yaw: -0.50° vs V2/V3's 5.27° (NEAR-ZERO)
+#   - Lateral drift at mid height: -0.030m (nearly identical to V3's -0.028m)
+#   - Dynamic height: 0.436m max vs V3's 0.404m (+8%)
+#   - Dynamic displacement: 1.37m vs V3's 3.09m (-56%)
+#   - Drift height gate: 100% operational vs V3's 0.2%
+#   - Performance: 121-127 Hz without telemetry
+#
+# Three evidence-backed changes from V3:
+#   1. drift_hgate_vel_low/high:  0.08/0.35 → 2.0/12.0  (fix disabled drift gate)
+#   2. heading_hy_kp:             0.40       → 0.55       (optimal from 5-pt sweep)
+#   3. dynamic_q_ref_blend_alpha: 0.40       → 0.60       (better height tracking)
+#
+# Rollback: use --profile K2_JAX_DEDICATED_DEFAULT_V2
+K2_JAX_DEDICATED_DEFAULT_V3 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2_FINAL,
+    profile_name="k2_jax_dedicated_default_v3",
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3 AUDIT FIX V2 MICRO-ABLATIONS — heading gain sweep for tradeoff mapping
+# ═══════════════════════════════════════════════════════════════════════════════
+# Two micro-ablation profiles to fit the heading-gain tradeoff curve:
+#  - kp=0.55 between V3(0.40) and V2(0.70)
+#  - kp=0.85 between V2(0.70) and FIX(1.0)
+# Used only if kp=0.70 push yaw is worse than both extremes.
+# All other AUDIT_FIX corrections preserved.
+V3_AUDIT_FIX_KP_055 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX,
+    profile_name="v3_audit_fix_kp_055",
+    heading_hy_kp=0.55,              # Nm/rad — 1.375x V3, ~midpoint V3↔V2
+)
+V3_AUDIT_FIX_KP_085 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX,
+    profile_name="v3_audit_fix_kp_085",
+    heading_hy_kp=0.85,              # Nm/rad — ~midpoint V2↔FIX
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3 AUDIT ABLATIONS — single-factor changes for root-cause validation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# A: Disable heading hip-yaw (isolate heading contribution to yaw/twist)
+V3_AUDIT_HEADING_OFF = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="v3_audit_heading_off",
+    enable_heading_hip_yaw=False,
+)
+
+# D: Heading gate always open under normal pitch/roll (test if heading torque
+#    is effective when not gated by the twist/error sub-gates)
+V3_AUDIT_HEADING_GATE_OPEN = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="v3_audit_heading_gate_open",
+    # Use V3 base with inherently more open gates — the gate thresholds
+    # are at the JAX call site; this profile variant exists for runner
+    # identification. Actual changes in k2_jax_controller.py call site.
+)
+
+# F: Dynamic q_ref 100% static (test whether static anchor causes height tracking failure)
+V3_AUDIT_QREF_STATIC = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="v3_audit_qref_static",
+    dynamic_q_ref_blend_alpha=0.0,  # 100% static equilibrium anchor
+)
+
+# G: Dynamic q_ref 100% dynamic (test whether dynamic-only q_ref is stable)
+V3_AUDIT_QREF_DYNAMIC = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="v3_audit_qref_dynamic",
+    dynamic_q_ref_blend_alpha=1.0,  # 100% dynamic q_ref
 )
 
 # ── K2 JAX Dedicated Default V1 + Drift Controller ────────────────────────────

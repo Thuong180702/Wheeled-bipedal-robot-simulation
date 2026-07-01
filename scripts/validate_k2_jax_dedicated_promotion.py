@@ -225,7 +225,7 @@ def extract_metrics_from_summary(summary_path: Path) -> Dict[str, Any]:
     }
 
 
-def run_step_e(output_dir: Path, quiet: bool = False) -> List[Dict]:
+def run_step_e(output_dir: Path, quiet: bool = False, profile: str = "k2_jax_dedicated_default_v1") -> List[Dict]:
     """Run all Step E fixed-height scenarios."""
     results = []
     for sc in STEP_E_SCENARIOS:
@@ -238,6 +238,7 @@ def run_step_e(output_dir: Path, quiet: bool = False) -> List[Dict]:
         out = output_dir / "step_e" / sc["id"]
         out.mkdir(parents=True, exist_ok=True)
         args = [
+            "--profile", profile,
             "--height-setup", str(setup_path),
             "--steps", str(sc["steps"]),
             "--telemetry", "summary",
@@ -261,7 +262,7 @@ def run_step_e(output_dir: Path, quiet: bool = False) -> List[Dict]:
     return results
 
 
-def run_step_d(output_dir: Path, quiet: bool = False) -> List[Dict]:
+def run_step_d(output_dir: Path, quiet: bool = False, profile: str = "k2_jax_dedicated_default_v1") -> List[Dict]:
     """Run all Step D push matrix scenarios."""
     results = []
     for sc in STEP_D_SCENARIOS:
@@ -283,6 +284,7 @@ def run_step_d(output_dir: Path, quiet: bool = False) -> List[Dict]:
         out = output_dir / "step_d" / sc["id"]
         out.mkdir(parents=True, exist_ok=True)
         args = [
+            "--profile", profile,
             "--height-setup", str(setup_path),
             "--push-seq", str(push_path),
             "--steps", str(sc["steps"]),
@@ -307,7 +309,7 @@ def run_step_d(output_dir: Path, quiet: bool = False) -> List[Dict]:
     return results
 
 
-def run_dynamic_height(output_dir: Path, quiet: bool = False) -> List[Dict]:
+def run_dynamic_height(output_dir: Path, quiet: bool = False, profile: str = "k2_jax_dedicated_default_v1") -> List[Dict]:
     """Run all dynamic height scenarios."""
     results = []
     for sc in DYNAMIC_HEIGHT_SCENARIOS:
@@ -330,6 +332,7 @@ def run_dynamic_height(output_dir: Path, quiet: bool = False) -> List[Dict]:
         out.mkdir(parents=True, exist_ok=True)
         qref_mode = sc.get("qref_mode", "original-k2-exact")
         args = [
+            "--profile", profile,
             "--height-setup", str(setup_path),
             "--dynamic-height-trajectory", str(traj_path),
             "--dynamic-qref-mode", qref_mode,
@@ -355,7 +358,7 @@ def run_dynamic_height(output_dir: Path, quiet: bool = False) -> List[Dict]:
     return results
 
 
-def run_long_run(output_dir: Path, quiet: bool = False) -> List[Dict]:
+def run_long_run(output_dir: Path, quiet: bool = False, profile: str = "k2_jax_dedicated_default_v1") -> List[Dict]:
     """Run all long-run equilibrium scenarios."""
     results = []
     for sc in LONG_RUN_SCENARIOS:
@@ -368,6 +371,7 @@ def run_long_run(output_dir: Path, quiet: bool = False) -> List[Dict]:
         out = output_dir / "long_run" / sc["id"]
         out.mkdir(parents=True, exist_ok=True)
         args = [
+            "--profile", profile,
             "--height-setup", str(setup_path),
             "--steps", str(sc["steps"]),
             "--telemetry", "summary",
@@ -391,7 +395,7 @@ def run_long_run(output_dir: Path, quiet: bool = False) -> List[Dict]:
     return results
 
 
-def run_step_c(output_dir: Path, quiet: bool = False) -> List[Dict]:
+def run_step_c(output_dir: Path, quiet: bool = False, profile: str = "k2_jax_dedicated_default_v1") -> List[Dict]:
     """Run all Step C scenarios (ladder/random dwell + focused fixed-height)."""
     results = []
     for sc in STEP_C_SCENARIOS:
@@ -415,6 +419,7 @@ def run_step_c(output_dir: Path, quiet: bool = False) -> List[Dict]:
                 continue
             qref_mode = sc.get("qref_mode", "original-k2-exact")
             args = [
+                "--profile", profile,
                 "--height-setup", str(setup_path),
                 "--dynamic-height-trajectory", str(traj_path),
                 "--dynamic-qref-mode", qref_mode,
@@ -425,6 +430,7 @@ def run_step_c(output_dir: Path, quiet: bool = False) -> List[Dict]:
         else:
             # Fixed-height focused scenario
             args = [
+                "--profile", profile,
                 "--height-setup", str(setup_path),
                 "--steps", str(sc["steps"]),
                 "--telemetry", "summary",
@@ -583,15 +589,15 @@ def _run(args):
         results = []
         if not args.classify_only:
             if scope == "step_c":
-                results = run_step_c(output_dir, quiet=args.quiet)
+                results = run_step_c(output_dir, quiet=args.quiet, profile=args.profile)
             elif scope == "step_e":
-                results = run_step_e(output_dir, quiet=args.quiet)
+                results = run_step_e(output_dir, quiet=args.quiet, profile=args.profile)
             elif scope == "step_d":
-                results = run_step_d(output_dir, quiet=args.quiet)
+                results = run_step_d(output_dir, quiet=args.quiet, profile=args.profile)
             elif scope == "dynamic_height":
-                results = run_dynamic_height(output_dir, quiet=args.quiet)
+                results = run_dynamic_height(output_dir, quiet=args.quiet, profile=args.profile)
             elif scope == "long_run":
-                results = run_long_run(output_dir, quiet=args.quiet)
+                results = run_long_run(output_dir, quiet=args.quiet, profile=args.profile)
         else:
             # Classify-only: load existing results from raw_results.json
             raw_path = output_dir / scope / "raw_results.json"
@@ -654,6 +660,8 @@ def main():
                    help="Suppress dedicated runner output")
     p.add_argument("--classify-only", action="store_true", default=False,
                    help="Only classify existing results, don't re-run")
+    p.add_argument("--profile", type=str, default="k2_jax_dedicated_default_v1",
+                   help="K2 JAX profile to use (default: k2_jax_dedicated_default_v1)")
     return _run(p.parse_args())
 
 

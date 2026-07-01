@@ -169,6 +169,15 @@ class TestStateFieldAudit:
             "effective_max_position_tau_py": "sagittal_velocity_damped_balance_controller.py:5786 (sagittal_diag['effective_max_position_tau'], captured from Python both-synced)",
             # Phase 0: APCR1ND wheel damping override active flag (-1=Python-skipped, 0=standalone, 1=Python-applied)
             "py_wd_override_active": "sagittal_velocity_damped_balance_controller.py:8982/8991 (sagittal_diag['apcr1n_wheel_damping_override_active'], captured from Python both-synced)",
+            # Drift controller state (K2 JAX drift controller)
+            "drift_ref_world_x": "k2_jax_controller.py:2233 (drift reference latch)",
+            "drift_ref_world_y": "k2_jax_controller.py:2233 (drift reference latch)",
+            "drift_ref_yaw": "k2_jax_controller.py:2235 (drift reference latch)",
+            "drift_ref_latched": "k2_jax_controller.py:2223 (drift latch flag)",
+            # Heading hip-yaw stabilizer state
+            "heading_hy_ref_yaw": "k2_jax_controller.py:2067 (heading reference latch)",
+            "heading_hy_ref_latched": "k2_jax_controller.py:2066 (heading latch flag)",
+            "heading_hy_integral": "k2_jax_controller.py:2078 (heading leaky integral)",
         }
         for field in K2_JAX_STATE_FIELDS:
             # Generic check for prev_tau_N and abs_buf_N

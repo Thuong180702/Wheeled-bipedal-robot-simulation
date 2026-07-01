@@ -1,0 +1,1000 @@
+[
+  {
+    "scenario": "focused_low_0p320",
+    "steps": 2000,
+    "conflicts": {
+      "hip_yaw": {
+        "joints": "l_hip_yaw, r_hip_yaw",
+        "components": [
+          "posture",
+          "yaw",
+          "mode_div"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 1.0,
+          "yaw": 0.0,
+          "mode_div": 0.0
+        },
+        "sign_opposition_frac": 0.5444264943457189,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_roll": {
+        "joints": "l_hip_roll, r_hip_roll",
+        "components": [
+          "posture",
+          "lateral"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 0.0,
+          "lateral": 1.0
+        },
+        "sign_opposition_frac": 0.0,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_pitch": {
+        "joints": "l_hip_pitch, r_hip_pitch",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 3.4222271606070733,
+        "cancellation_peak_nm": 7.23277099219809,
+        "cancellation_total_nm": 6820.937763329463,
+        "authority_share": {
+          "posture": 0.3191713191783712,
+          "emp_support_ff": 0.6808286808216287
+        },
+        "sign_opposition_frac": 1.0,
+        "cancellation_mean_nm": 3.4104688816647317,
+        "cancel_steps_frac": 0.999
+      },
+      "knee": {
+        "joints": "l_knee, r_knee",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 0.05305961987842797,
+          "emp_support_ff": 0.946940380121572
+        },
+        "sign_opposition_frac": 0.0015060240963855422,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "online_cancellation": {
+        "cancel_hip_yaw": {
+          "mean": 0.43371801083384315,
+          "rms": 0.7273564351239643,
+          "peak": 2.335950012826096,
+          "total": 867.4360216676863
+        },
+        "cancel_hip_roll": {
+          "mean": 0.0,
+          "rms": 0.0,
+          "peak": 0.0,
+          "total": 0.0
+        },
+        "cancel_hip_pitch": {
+          "mean": 3.410456557940713,
+          "rms": 3.4219822359838554,
+          "peak": 6.9938864649126256,
+          "total": 6820.913115881426
+        },
+        "cancel_knee": {
+          "mean": 0.00018101167329770718,
+          "rms": 0.004641404657636438,
+          "peak": 0.14022449513746338,
+          "total": 0.36202334659541435
+        },
+        "cancel_total": {
+          "mean": 3.8443555804478544,
+          "rms": 3.8916910425690086,
+          "peak": 6.995701908708971,
+          "total": 7688.711160895708
+        }
+      }
+    },
+    "cross_coupling": {
+      "balance_vs_support_error_corr": 0.25652396869819566,
+      "support_ff_vs_pitch_corr": 0.0,
+      "support_ff_vs_pitch_rate_corr": 0.0,
+      "yaw_torque_vs_sagittal_vel_corr": 0.0,
+      "mode_div_vs_sagittal_vel_corr": 0.0,
+      "lateral_vs_hip_yaw_div_corr": -0.39686648170615324,
+      "posture_balance_power_ratio": 4.845463448154508,
+      "posture_power_nm": 2.568830711829923,
+      "balance_power_nm": 0.5301517056760203,
+      "torque_when_good_contact": 0.2905047340855952,
+      "torque_when_poor_contact": 2.500355786863572
+    },
+    "saturation": {
+      "wheel_clip_rms_nm": 0.0,
+      "wheel_clip_peak_nm": 0.0,
+      "wheel_clip_fraction": 0.0,
+      "sat_attr_sagittal_total": 0.0,
+      "sat_attr_sagittal_frac": 0.0,
+      "sat_attr_posture_total": 0.0,
+      "sat_attr_posture_frac": 0.0,
+      "sat_attr_yaw_total": 0.0,
+      "sat_attr_yaw_frac": 0.0,
+      "sat_attr_lateral_total": 0.0,
+      "sat_attr_lateral_frac": 0.0,
+      "rate_attr_balance_total": 0.0,
+      "rate_attr_balance_frac": 0.0,
+      "rate_attr_posture_total": 4.0,
+      "rate_attr_posture_frac": 0.001
+    },
+    "height_phase": {
+      "by_height": {
+        "low": {
+          "cancel_total_mean": 3.8443555804478544,
+          "cancel_hip_yaw_mean": 0.43371801083384315,
+          "cancel_hip_roll_mean": 0.0,
+          "cancel_hip_pitch_mean": 3.410456557940713,
+          "cancel_knee_mean": 0.00018101167329770718
+        }
+      },
+      "by_pitch_phase": {
+        "forward": {
+          "cancel_total_mean": 3.928786402334083,
+          "cancel_hip_yaw_mean": 0.3578187712457606,
+          "cancel_hip_pitch_mean": 3.5709676310883225
+        },
+        "backward": {
+          "cancel_total_mean": 3.818157686712865,
+          "cancel_hip_yaw_mean": 0.4934071647546561,
+          "cancel_hip_pitch_mean": 3.324449588170516
+        },
+        "neutral": {
+          "cancel_total_mean": 3.7311328173609692,
+          "cancel_hip_yaw_mean": 0.2953085048643452,
+          "cancel_hip_pitch_mean": 3.4358243124966235
+        }
+      }
+    }
+  },
+  {
+    "scenario": "gate_dwell",
+    "steps": 6000,
+    "conflicts": {
+      "hip_yaw": {
+        "joints": "l_hip_yaw, r_hip_yaw",
+        "components": [
+          "posture",
+          "yaw",
+          "mode_div"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 1.0,
+          "yaw": 0.0,
+          "mode_div": 0.0
+        },
+        "sign_opposition_frac": 0.831120820030247,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_roll": {
+        "joints": "l_hip_roll, r_hip_roll",
+        "components": [
+          "posture",
+          "lateral"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 0.0,
+          "lateral": 1.0
+        },
+        "sign_opposition_frac": 0.0,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_pitch": {
+        "joints": "l_hip_pitch, r_hip_pitch",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 5.535448297438266,
+        "cancellation_peak_nm": 7.300000000000001,
+        "cancellation_total_nm": 32213.76586529229,
+        "authority_share": {
+          "posture": 0.44364704683548617,
+          "emp_support_ff": 0.5563529531645139
+        },
+        "sign_opposition_frac": 1.0,
+        "cancellation_mean_nm": 5.368960977548715,
+        "cancel_steps_frac": 0.9998333333333334
+      },
+      "knee": {
+        "joints": "l_knee, r_knee",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 11.400415322200146,
+        "cancellation_peak_nm": 14.115867461728735,
+        "cancellation_total_nm": 67982.145633226,
+        "authority_share": {
+          "posture": 0.26698694453860844,
+          "emp_support_ff": 0.7330130554613916
+        },
+        "sign_opposition_frac": 0.9998333055509252,
+        "cancellation_mean_nm": 11.330357605537666,
+        "cancel_steps_frac": 0.9996666666666667
+      },
+      "online_cancellation": {
+        "cancel_hip_yaw": {
+          "mean": 10.109332222165062,
+          "rms": 13.112048716389253,
+          "peak": 20.000000000000004,
+          "total": 60655.99333299037
+        },
+        "cancel_hip_roll": {
+          "mean": 0.0,
+          "rms": 0.0,
+          "peak": 0.0,
+          "total": 0.0
+        },
+        "cancel_hip_pitch": {
+          "mean": 5.358667529324701,
+          "rms": 5.52206599409365,
+          "peak": 7.300000000000001,
+          "total": 32152.00517594821
+        },
+        "cancel_knee": {
+          "mean": 11.330357605537666,
+          "rms": 11.400415322200146,
+          "peak": 14.115867461728735,
+          "total": 67982.145633226
+        },
+        "cancel_total": {
+          "mean": 26.798357357027427,
+          "rms": 27.821531996326076,
+          "peak": 37.714807679634006,
+          "total": 160790.14414216456
+        }
+      }
+    },
+    "cross_coupling": {
+      "balance_vs_support_error_corr": -0.298723588888945,
+      "support_ff_vs_pitch_corr": 0.0,
+      "support_ff_vs_pitch_rate_corr": 0.0,
+      "yaw_torque_vs_sagittal_vel_corr": 0.0,
+      "mode_div_vs_sagittal_vel_corr": 0.0,
+      "lateral_vs_hip_yaw_div_corr": -0.25310274214254763,
+      "posture_balance_power_ratio": 5.786691771481177,
+      "posture_power_nm": 2.8925310383629617,
+      "balance_power_nm": 0.4998591859719153,
+      "torque_when_good_contact": 0.2777478584225197,
+      "torque_when_poor_contact": 4.99832109046782
+    },
+    "saturation": {
+      "wheel_clip_rms_nm": 0.0,
+      "wheel_clip_peak_nm": 0.0,
+      "wheel_clip_fraction": 0.0,
+      "sat_attr_sagittal_total": 0.0,
+      "sat_attr_sagittal_frac": 0.0,
+      "sat_attr_posture_total": 0.0,
+      "sat_attr_posture_frac": 0.0,
+      "sat_attr_yaw_total": 0.0,
+      "sat_attr_yaw_frac": 0.0,
+      "sat_attr_lateral_total": 0.0,
+      "sat_attr_lateral_frac": 0.0,
+      "rate_attr_balance_total": 0.0,
+      "rate_attr_balance_frac": 0.0,
+      "rate_attr_posture_total": 4.0,
+      "rate_attr_posture_frac": 0.0003333333333333333
+    },
+    "height_phase": {
+      "by_height": {
+        "high": {
+          "cancel_total_mean": 26.798357357027427,
+          "cancel_hip_yaw_mean": 10.109332222165062,
+          "cancel_hip_roll_mean": 0.0,
+          "cancel_hip_pitch_mean": 5.358667529324701,
+          "cancel_knee_mean": 11.330357605537666
+        }
+      },
+      "by_pitch_phase": {
+        "forward": {
+          "cancel_total_mean": 26.390325316558513,
+          "cancel_hip_yaw_mean": 9.438949800001764,
+          "cancel_hip_pitch_mean": 5.4688765134227655
+        },
+        "backward": {
+          "cancel_total_mean": 30.4856194306343,
+          "cancel_hip_yaw_mean": 16.48342365157649,
+          "cancel_hip_pitch_mean": 4.190498730632092
+        },
+        "neutral": {
+          "cancel_total_mean": 30.824901152059912,
+          "cancel_hip_yaw_mean": 16.234719567514958,
+          "cancel_hip_pitch_mean": 4.538194024233018
+        }
+      }
+    }
+  },
+  {
+    "scenario": "high_0p430",
+    "steps": 2000,
+    "conflicts": {
+      "hip_yaw": {
+        "joints": "l_hip_yaw, r_hip_yaw",
+        "components": [
+          "posture",
+          "yaw",
+          "mode_div"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 1.0,
+          "yaw": 0.0,
+          "mode_div": 0.0
+        },
+        "sign_opposition_frac": 0.5646723646723647,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_roll": {
+        "joints": "l_hip_roll, r_hip_roll",
+        "components": [
+          "posture",
+          "lateral"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 0.0,
+          "lateral": 1.0
+        },
+        "sign_opposition_frac": 0.0,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_pitch": {
+        "joints": "l_hip_pitch, r_hip_pitch",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 4.277282253253235,
+        "cancellation_peak_nm": 5.319722045660049,
+        "cancellation_total_nm": 8541.483232420414,
+        "authority_share": {
+          "posture": 0.36945477873715243,
+          "emp_support_ff": 0.6305452212628476
+        },
+        "sign_opposition_frac": 1.0,
+        "cancellation_mean_nm": 4.270741616210207,
+        "cancel_steps_frac": 0.9995
+      },
+      "knee": {
+        "joints": "l_knee, r_knee",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 5.147447533840173,
+        "cancellation_peak_nm": 5.692985887513283,
+        "cancellation_total_nm": 10270.190337070966,
+        "authority_share": {
+          "posture": 0.1412936857675213,
+          "emp_support_ff": 0.8587063142324787
+        },
+        "sign_opposition_frac": 0.9984992496248124,
+        "cancellation_mean_nm": 5.135095168535483,
+        "cancel_steps_frac": 0.998
+      },
+      "online_cancellation": {
+        "cancel_hip_yaw": {
+          "mean": 0.1832657017414431,
+          "rms": 0.2977563559766166,
+          "peak": 0.9709843339167232,
+          "total": 366.5314034828862
+        },
+        "cancel_hip_roll": {
+          "mean": 0.0,
+          "rms": 0.0,
+          "peak": 0.0,
+          "total": 0.0
+        },
+        "cancel_hip_pitch": {
+          "mean": 4.270741616210207,
+          "rms": 4.277282253253235,
+          "peak": 5.319722045660049,
+          "total": 8541.483232420414
+        },
+        "cancel_knee": {
+          "mean": 5.135095168535483,
+          "rms": 5.147447533840173,
+          "peak": 5.692985887513283,
+          "total": 10270.190337070966
+        },
+        "cancel_total": {
+          "mean": 9.589102486487132,
+          "rms": 9.604103735476526,
+          "peak": 11.811000686514408,
+          "total": 19178.204972974265
+        }
+      }
+    },
+    "cross_coupling": {
+      "balance_vs_support_error_corr": -0.4764738499480424,
+      "support_ff_vs_pitch_corr": 0.0,
+      "support_ff_vs_pitch_rate_corr": 0.0,
+      "yaw_torque_vs_sagittal_vel_corr": 0.0,
+      "mode_div_vs_sagittal_vel_corr": 0.0,
+      "lateral_vs_hip_yaw_div_corr": 0.11310033177349134,
+      "posture_balance_power_ratio": 1.2340858084400759,
+      "posture_power_nm": 0.46536885694977376,
+      "balance_power_nm": 0.37709602830455924,
+      "torque_when_good_contact": 0.18295644511153297,
+      "torque_when_poor_contact": 4.188651310245813
+    },
+    "saturation": {
+      "wheel_clip_rms_nm": 0.0,
+      "wheel_clip_peak_nm": 0.0,
+      "wheel_clip_fraction": 0.0,
+      "sat_attr_sagittal_total": 0.0,
+      "sat_attr_sagittal_frac": 0.0,
+      "sat_attr_posture_total": 0.0,
+      "sat_attr_posture_frac": 0.0,
+      "sat_attr_yaw_total": 0.0,
+      "sat_attr_yaw_frac": 0.0,
+      "sat_attr_lateral_total": 0.0,
+      "sat_attr_lateral_frac": 0.0,
+      "rate_attr_balance_total": 2.0,
+      "rate_attr_balance_frac": 0.0005,
+      "rate_attr_posture_total": 4.0,
+      "rate_attr_posture_frac": 0.001
+    },
+    "height_phase": {
+      "by_height": {
+        "mid": {
+          "cancel_total_mean": 4.608880147569223,
+          "cancel_hip_yaw_mean": 0.036524788249592384,
+          "cancel_hip_roll_mean": 0.0,
+          "cancel_hip_pitch_mean": 2.597265137351393,
+          "cancel_knee_mean": 1.9750902219682371
+        },
+        "high": {
+          "cancel_total_mean": 9.616645194243844,
+          "cancel_hip_yaw_mean": 0.18407724022732058,
+          "cancel_hip_roll_mean": 0.0,
+          "cancel_hip_pitch_mean": 4.279996639471868,
+          "cancel_knee_mean": 5.152571314544654
+        }
+      },
+      "by_pitch_phase": {
+        "forward": {
+          "cancel_total_mean": 9.624551811740725,
+          "cancel_hip_yaw_mean": 0.1500782534277681,
+          "cancel_hip_pitch_mean": 4.264165599231332
+        },
+        "backward": {
+          "cancel_total_mean": 9.256111137761724,
+          "cancel_hip_yaw_mean": 0.39191490311065086,
+          "cancel_hip_pitch_mean": 4.191398445490058
+        },
+        "neutral": {
+          "cancel_total_mean": 9.614024209250669,
+          "cancel_hip_yaw_mean": 0.26140163835750996,
+          "cancel_hip_pitch_mean": 4.405005029270098
+        }
+      }
+    }
+  },
+  {
+    "scenario": "high_0p450",
+    "steps": 2000,
+    "conflicts": {
+      "hip_yaw": {
+        "joints": "l_hip_yaw, r_hip_yaw",
+        "components": [
+          "posture",
+          "yaw",
+          "mode_div"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 1.0,
+          "yaw": 0.0,
+          "mode_div": 0.0
+        },
+        "sign_opposition_frac": 0.2984201287302516,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_roll": {
+        "joints": "l_hip_roll, r_hip_roll",
+        "components": [
+          "posture",
+          "lateral"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 0.0,
+          "lateral": 1.0
+        },
+        "sign_opposition_frac": 0.0,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_pitch": {
+        "joints": "l_hip_pitch, r_hip_pitch",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 4.305611796220713,
+        "cancellation_peak_nm": 5.271642059528123,
+        "cancellation_total_nm": 8599.483849379902,
+        "authority_share": {
+          "posture": 0.3709939529101607,
+          "emp_support_ff": 0.6290060470898392
+        },
+        "sign_opposition_frac": 1.0,
+        "cancellation_mean_nm": 4.29974192468995,
+        "cancel_steps_frac": 0.9995
+      },
+      "knee": {
+        "joints": "l_knee, r_knee",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 7.262392595906412,
+        "cancellation_peak_nm": 7.85015679632323,
+        "cancellation_total_nm": 14493.91305059944,
+        "authority_share": {
+          "posture": 0.1883774339075081,
+          "emp_support_ff": 0.811622566092492
+        },
+        "sign_opposition_frac": 0.9989994997498749,
+        "cancellation_mean_nm": 7.24695652529972,
+        "cancel_steps_frac": 0.9985
+      },
+      "online_cancellation": {
+        "cancel_hip_yaw": {
+          "mean": 0.07578937804611593,
+          "rms": 0.15605259638305521,
+          "peak": 0.631425629389669,
+          "total": 151.57875609223186
+        },
+        "cancel_hip_roll": {
+          "mean": 0.0,
+          "rms": 0.0,
+          "peak": 0.0,
+          "total": 0.0
+        },
+        "cancel_hip_pitch": {
+          "mean": 4.299741924689951,
+          "rms": 4.305611796220713,
+          "peak": 5.271642059528124,
+          "total": 8599.483849379903
+        },
+        "cancel_knee": {
+          "mean": 7.246967333634026,
+          "rms": 7.262392857904693,
+          "peak": 7.85015679632323,
+          "total": 14493.934667268051
+        },
+        "cancel_total": {
+          "mean": 11.622498636370093,
+          "rms": 11.642901407212621,
+          "peak": 13.372325088387225,
+          "total": 23244.997272740187
+        }
+      }
+    },
+    "cross_coupling": {
+      "balance_vs_support_error_corr": -0.364450338967481,
+      "support_ff_vs_pitch_corr": 0.0,
+      "support_ff_vs_pitch_rate_corr": 0.0,
+      "yaw_torque_vs_sagittal_vel_corr": 0.0,
+      "mode_div_vs_sagittal_vel_corr": 0.0,
+      "lateral_vs_hip_yaw_div_corr": 0.2972962559786555,
+      "posture_balance_power_ratio": 3.1019726960276386,
+      "posture_power_nm": 1.4847101440920916,
+      "balance_power_nm": 0.47863417559845045,
+      "torque_when_good_contact": 0.25751064147018754,
+      "torque_when_poor_contact": 6.4162634153985465
+    },
+    "saturation": {
+      "wheel_clip_rms_nm": 0.0,
+      "wheel_clip_peak_nm": 0.0,
+      "wheel_clip_fraction": 0.0,
+      "sat_attr_sagittal_total": 0.0,
+      "sat_attr_sagittal_frac": 0.0,
+      "sat_attr_posture_total": 0.0,
+      "sat_attr_posture_frac": 0.0,
+      "sat_attr_yaw_total": 0.0,
+      "sat_attr_yaw_frac": 0.0,
+      "sat_attr_lateral_total": 0.0,
+      "sat_attr_lateral_frac": 0.0,
+      "rate_attr_balance_total": 4.0,
+      "rate_attr_balance_frac": 0.001,
+      "rate_attr_posture_total": 4.0,
+      "rate_attr_posture_frac": 0.001
+    },
+    "height_phase": {
+      "by_height": {
+        "high": {
+          "cancel_total_mean": 11.622498636370093,
+          "cancel_hip_yaw_mean": 0.07578937804611593,
+          "cancel_hip_roll_mean": 0.0,
+          "cancel_hip_pitch_mean": 4.299741924689951,
+          "cancel_knee_mean": 7.246967333634026
+        }
+      },
+      "by_pitch_phase": {
+        "forward": {
+          "cancel_total_mean": 11.726762473296063,
+          "cancel_hip_yaw_mean": 0.07055010126469789,
+          "cancel_hip_pitch_mean": 4.3294317116540695
+        },
+        "neutral": {
+          "cancel_total_mean": 10.861502415819139,
+          "cancel_hip_yaw_mean": 0.11402957662916288,
+          "cancel_hip_pitch_mean": 4.083043438092919
+        }
+      }
+    }
+  },
+  {
+    "scenario": "low_0p380",
+    "steps": 2000,
+    "conflicts": {
+      "hip_yaw": {
+        "joints": "l_hip_yaw, r_hip_yaw",
+        "components": [
+          "posture",
+          "yaw",
+          "mode_div"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 1.0,
+          "yaw": 0.0,
+          "mode_div": 0.0
+        },
+        "sign_opposition_frac": 0.78586609989373,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_roll": {
+        "joints": "l_hip_roll, r_hip_roll",
+        "components": [
+          "posture",
+          "lateral"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 0.0,
+          "lateral": 1.0
+        },
+        "sign_opposition_frac": 0.0,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_pitch": {
+        "joints": "l_hip_pitch, r_hip_pitch",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 4.387688739478012,
+        "cancellation_peak_nm": 5.269967219609014,
+        "cancellation_total_nm": 8760.84008262469,
+        "authority_share": {
+          "posture": 0.3754111558992434,
+          "emp_support_ff": 0.6245888441007565
+        },
+        "sign_opposition_frac": 1.0,
+        "cancellation_mean_nm": 4.3804200413123455,
+        "cancel_steps_frac": 0.9995
+      },
+      "knee": {
+        "joints": "l_knee, r_knee",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 1.68607597344107,
+        "cancellation_peak_nm": 2.140663711170088,
+        "cancellation_total_nm": 3298.822219201373,
+        "authority_share": {
+          "posture": 0.051508372109345654,
+          "emp_support_ff": 0.9484916278906543
+        },
+        "sign_opposition_frac": 0.9969984992496248,
+        "cancellation_mean_nm": 1.6494111096006865,
+        "cancel_steps_frac": 0.9965
+      },
+      "online_cancellation": {
+        "cancel_hip_yaw": {
+          "mean": 0.7598228348166425,
+          "rms": 1.065574338110955,
+          "peak": 2.907878159687389,
+          "total": 1519.645669633285
+        },
+        "cancel_hip_roll": {
+          "mean": 0.0,
+          "rms": 0.0,
+          "peak": 0.0,
+          "total": 0.0
+        },
+        "cancel_hip_pitch": {
+          "mean": 4.3804200413123455,
+          "rms": 4.387688739478012,
+          "peak": 5.269967219609014,
+          "total": 8760.84008262469
+        },
+        "cancel_knee": {
+          "mean": 1.6831046548215778,
+          "rms": 1.7134943392123685,
+          "peak": 2.140663711170088,
+          "total": 3366.2093096431554
+        },
+        "cancel_total": {
+          "mean": 6.8233475309505645,
+          "rms": 6.882551139501826,
+          "peak": 9.715170318489218,
+          "total": 13646.69506190113
+        }
+      }
+    },
+    "cross_coupling": {
+      "balance_vs_support_error_corr": -0.29675945767371215,
+      "support_ff_vs_pitch_corr": 0.0,
+      "support_ff_vs_pitch_rate_corr": 0.0,
+      "yaw_torque_vs_sagittal_vel_corr": 0.0,
+      "mode_div_vs_sagittal_vel_corr": 0.0,
+      "lateral_vs_hip_yaw_div_corr": 0.7801474075421322,
+      "posture_balance_power_ratio": 2.873731553537075,
+      "posture_power_nm": 1.3800223435825474,
+      "balance_power_nm": 0.48021964399700956,
+      "torque_when_good_contact": 0.26659652829896735,
+      "torque_when_poor_contact": 4.426839194215017
+    },
+    "saturation": {
+      "wheel_clip_rms_nm": 0.0,
+      "wheel_clip_peak_nm": 0.0,
+      "wheel_clip_fraction": 0.0,
+      "sat_attr_sagittal_total": 0.0,
+      "sat_attr_sagittal_frac": 0.0,
+      "sat_attr_posture_total": 0.0,
+      "sat_attr_posture_frac": 0.0,
+      "sat_attr_yaw_total": 0.0,
+      "sat_attr_yaw_frac": 0.0,
+      "sat_attr_lateral_total": 0.0,
+      "sat_attr_lateral_frac": 0.0,
+      "rate_attr_balance_total": 2.0,
+      "rate_attr_balance_frac": 0.0005,
+      "rate_attr_posture_total": 4.0,
+      "rate_attr_posture_frac": 0.001
+    },
+    "height_phase": {
+      "by_height": {
+        "mid": {
+          "cancel_total_mean": 6.8233475309505645,
+          "cancel_hip_yaw_mean": 0.7598228348166425,
+          "cancel_hip_roll_mean": 0.0,
+          "cancel_hip_pitch_mean": 4.3804200413123455,
+          "cancel_knee_mean": 1.6831046548215778
+        }
+      },
+      "by_pitch_phase": {
+        "forward": {
+          "cancel_total_mean": 6.755581091233716,
+          "cancel_hip_yaw_mean": 0.6671496230180165,
+          "cancel_hip_pitch_mean": 4.392214421962276
+        },
+        "backward": {
+          "cancel_total_mean": 8.936839089539019,
+          "cancel_hip_yaw_mean": 2.788924640409133,
+          "cancel_hip_pitch_mean": 4.354782637652702
+        },
+        "neutral": {
+          "cancel_total_mean": 7.641908758984737,
+          "cancel_hip_yaw_mean": 1.990596160400648,
+          "cancel_hip_pitch_mean": 4.193703348382797
+        }
+      }
+    }
+  },
+  {
+    "scenario": "ramp_down",
+    "steps": 5000,
+    "conflicts": {
+      "hip_yaw": {
+        "joints": "l_hip_yaw, r_hip_yaw",
+        "components": [
+          "posture",
+          "yaw",
+          "mode_div"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 1.0,
+          "yaw": 0.0,
+          "mode_div": 0.0
+        },
+        "sign_opposition_frac": 0.7501006036217304,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_roll": {
+        "joints": "l_hip_roll, r_hip_roll",
+        "components": [
+          "posture",
+          "lateral"
+        ],
+        "cancellation_rms_nm": 0.0,
+        "cancellation_peak_nm": 0.0,
+        "cancellation_total_nm": 0.0,
+        "authority_share": {
+          "posture": 0.0,
+          "lateral": 1.0
+        },
+        "sign_opposition_frac": 0.0,
+        "cancellation_mean_nm": 0.0,
+        "cancel_steps_frac": 0.0
+      },
+      "hip_pitch": {
+        "joints": "l_hip_pitch, r_hip_pitch",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 4.203566279740832,
+        "cancellation_peak_nm": 5.209143866052294,
+        "cancellation_total_nm": 20997.482814224357,
+        "authority_share": {
+          "posture": 0.36541418352531413,
+          "emp_support_ff": 0.6345858164746858
+        },
+        "sign_opposition_frac": 1.0,
+        "cancellation_mean_nm": 4.199496562844871,
+        "cancel_steps_frac": 0.9998
+      },
+      "knee": {
+        "joints": "l_knee, r_knee",
+        "components": [
+          "posture",
+          "emp_support_ff"
+        ],
+        "cancellation_rms_nm": 10.557914800263324,
+        "cancellation_peak_nm": 11.31026937326676,
+        "cancellation_total_nm": 52751.744899114026,
+        "authority_share": {
+          "posture": 0.25223915133527963,
+          "emp_support_ff": 0.7477608486647204
+        },
+        "sign_opposition_frac": 0.9995999199839968,
+        "cancellation_mean_nm": 10.550348979822806,
+        "cancel_steps_frac": 0.9994
+      },
+      "online_cancellation": {
+        "cancel_hip_yaw": {
+          "mean": 3.353451711271151,
+          "rms": 4.585969253016324,
+          "peak": 8.140294566931653,
+          "total": 16767.258556355755
+        },
+        "cancel_hip_roll": {
+          "mean": 0.0,
+          "rms": 0.0,
+          "peak": 0.0,
+          "total": 0.0
+        },
+        "cancel_hip_pitch": {
+          "mean": 4.199496562844871,
+          "rms": 4.203566279740832,
+          "peak": 5.209143866052294,
+          "total": 20997.482814224357
+        },
+        "cancel_knee": {
+          "mean": 10.550348979822806,
+          "rms": 10.557914800263324,
+          "peak": 11.31026937326676,
+          "total": 52751.744899114026
+        },
+        "cancel_total": {
+          "mean": 18.103297253938827,
+          "rms": 18.388062115470404,
+          "peak": 23.150031325267534,
+          "total": 90516.48626969414
+        }
+      }
+    },
+    "cross_coupling": {
+      "balance_vs_support_error_corr": -0.2498619121034885,
+      "support_ff_vs_pitch_corr": 0.0,
+      "support_ff_vs_pitch_rate_corr": 0.0,
+      "yaw_torque_vs_sagittal_vel_corr": 0.0,
+      "mode_div_vs_sagittal_vel_corr": 0.0,
+      "lateral_vs_hip_yaw_div_corr": -0.015036705176362108,
+      "posture_balance_power_ratio": 8.068592595359739,
+      "posture_power_nm": 3.178670108642897,
+      "balance_power_nm": 0.39395595589631766,
+      "torque_when_good_contact": 0.17684987650287343,
+      "torque_when_poor_contact": 4.6711977558137265
+    },
+    "saturation": {
+      "wheel_clip_rms_nm": 0.0,
+      "wheel_clip_peak_nm": 0.0,
+      "wheel_clip_fraction": 0.0,
+      "sat_attr_sagittal_total": 0.0,
+      "sat_attr_sagittal_frac": 0.0,
+      "sat_attr_posture_total": 0.0,
+      "sat_attr_posture_frac": 0.0,
+      "sat_attr_yaw_total": 0.0,
+      "sat_attr_yaw_frac": 0.0,
+      "sat_attr_lateral_total": 0.0,
+      "sat_attr_lateral_frac": 0.0,
+      "rate_attr_balance_total": 0.0,
+      "rate_attr_balance_frac": 0.0,
+      "rate_attr_posture_total": 4.0,
+      "rate_attr_posture_frac": 0.0004
+    },
+    "height_phase": {
+      "by_height": {
+        "high": {
+          "cancel_total_mean": 18.103297253938827,
+          "cancel_hip_yaw_mean": 3.353451711271151,
+          "cancel_hip_roll_mean": 0.0,
+          "cancel_hip_pitch_mean": 4.199496562844871,
+          "cancel_knee_mean": 10.550348979822806
+        }
+      },
+      "by_pitch_phase": {
+        "forward": {
+          "cancel_total_mean": 18.3797895585,
+          "cancel_hip_yaw_mean": 3.534254627757388,
+          "cancel_hip_pitch_mean": 4.228706589325093
+        },
+        "backward": {
+          "cancel_total_mean": 15.79601850858056,
+          "cancel_hip_yaw_mean": 2.0021687840213866,
+          "cancel_hip_pitch_mean": 3.9106538179049735
+        },
+        "neutral": {
+          "cancel_total_mean": 14.993449113290467,
+          "cancel_hip_yaw_mean": 1.1111832461504816,
+          "cancel_hip_pitch_mean": 3.9307069002162858
+        }
+      }
+    }
+  }
+]

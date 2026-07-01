@@ -165,6 +165,45 @@ _IDX_SUPPORT_CENTER_EQ_X = K2_JAX_PARAMS_SIZE_STAGE2_EXT + 2  # 50
 _IDX_SUPPORT_CENTER_EQ_Y = K2_JAX_PARAMS_SIZE_STAGE2_EXT + 3  # 51
 _IDX_SAGITTAL_AXIS_X = K2_JAX_PARAMS_SIZE_STAGE2_EXT + 4  # 52
 _IDX_SAGITTAL_AXIS_Y = K2_JAX_PARAMS_SIZE_STAGE2_EXT + 5  # 53
+# Drift controller params (+7, indices 54-60)
+_IDX_DRIFT_K_VEL = 54
+_IDX_DRIFT_K_POS = 55
+_IDX_DRIFT_K_HEADING = 56
+_IDX_DRIFT_K_HEADING_RATE = 57
+_IDX_DRIFT_PUSH_DAMP_MULT = 58
+_IDX_DRIFT_MAX_TAU = 59
+_IDX_DRIFT_ENABLED = 60
+_IDX_DRIFT_HGATE_LOW = 61        # CoM z-vel below this: height_gate ≈ 1.0
+_IDX_DRIFT_HGATE_HIGH = 62       # CoM z-vel above this: height_gate ≈ 0.0
+_IDX_DRIFT_PGATE_LOW = 63        # drift distance below this: pos_gate ≈ 0.0
+_IDX_DRIFT_PGATE_HIGH = 64       # drift distance above this: pos_gate ≈ 1.0
+# Heading hip-yaw stabilizer params (+4, indices 65-68)
+_IDX_HEADING_HY_KP = 65          # Nm/rad proportional gain (very low)
+_IDX_HEADING_HY_KD = 66          # Nm/(rad/s) damping gain
+_IDX_HEADING_HY_MAX_TAU = 67     # Nm per-joint smooth tanh bound
+_IDX_HEADING_HY_ENABLED = 68     # 0.0=disabled, 1.0=enabled
+# Anti-twist damping params (+3, indices 69-71)
+_IDX_ANTI_TWIST_KP = 69          # Nm/rad anti-twist proportional
+_IDX_ANTI_TWIST_KD = 70          # Nm/(rad/s) anti-twist damping
+_IDX_ANTI_TWIST_MAX_TAU = 71     # Nm per-joint smooth tanh bound
+# Split height gate params for drift controller (+4, indices 72-75)
+_IDX_DRIFT_HGATE_VEL_LOW = 72
+_IDX_DRIFT_HGATE_VEL_HIGH = 73
+_IDX_DRIFT_HGATE_HEADING_LOW = 74
+_IDX_DRIFT_HGATE_HEADING_HIGH = 75
+# Hip-yaw mean centering params (+2, indices 76-77)
+_IDX_HY_MEAN_CENTER_KP = 76       # Nm/rad weak centering proportional
+_IDX_HY_MEAN_CENTER_MAX_TAU = 77  # Nm per-joint smooth tanh bound
+# Anti-twist divergence guard params (+3, indices 78-80) — V5 parameterization
+_IDX_ANTI_TWIST_GUARD_START = 78     # rad — guard activation threshold (V3: 0.22, V4: 0.18)
+_IDX_ANTI_TWIST_GUARD_STRONG = 79    # rad — full guard threshold (V3: 0.32, V4: 0.30)
+_IDX_ANTI_TWIST_GUARD_BOOST_MAX = 80 # scalar — max kp multiplier (V3: 3.5, V4: 5.0)
+# Heading twist yield gate params (+2, indices 81-82) — V5 parameterization
+_IDX_HEADING_TWIST_YIELD_START = 81  # rad — yield activation (V3: 0.35 disabled, V4: 0.18)
+_IDX_HEADING_TWIST_YIELD_ZERO = 82   # rad — fully suppressed (V3/V4: 0.35)
+# V5 two-layer emergency guard param (+1, index 83)
+_IDX_ANTI_TWIST_EMERGENCY_MAX_TAU = 83  # Nm — separate tanh cap for emergency guard extra
+K2_JAX_PARAMS_SIZE_DRIFT = K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE + 30  # 84 (was 78)
 
 # Index constants for fast params access inside JIT
 _IDX_NOTCH_B0 = 0
@@ -219,38 +258,57 @@ def pack_params_stage2(
     support_center_eq_y_m: float = 0.0,
     sagittal_axis_x: float = 0.0,
     sagittal_axis_y: float = 0.0,
+    # Drift controller params
+    drift_k_vel: float = 6.0,
+    drift_k_pos: float = 1.5,
+    drift_k_heading: float = 3.0,
+    drift_k_heading_rate: float = 0.8,
+    drift_push_damp_mult: float = 1.5,
+    drift_max_tau: float = 5.0,
+    drift_enabled: bool = False,
+    # Drift gate threshold params (smoothstep transition regions)
+    drift_hgate_low: float = 0.03,       # CoM z-vel (m/s) below which height_gate ≈ 1.0
+    drift_hgate_high: float = 0.15,      # CoM z-vel (m/s) above which height_gate ≈ 0.0
+    drift_pgate_low: float = 0.15,       # drift distance (m) below which pos_gate ≈ 0.0
+    drift_pgate_high: float = 0.80,      # drift distance (m) above which pos_gate ≈ 1.0
+    # Heading hip-yaw stabilizer params
+    heading_hy_kp: float = 0.15,         # Nm/rad — very low proportional gain
+    heading_hy_kd: float = 0.05,         # Nm/(rad/s) — mild damping
+    heading_hy_max_tau: float = 0.8,     # Nm per-joint smooth tanh bound
+    heading_hy_enabled: bool = False,    # Enable heading hip-yaw stabilizer
+    # Anti-twist damping params
+    anti_twist_kp: float = 0.3,          # Nm/rad anti-twist proportional
+    anti_twist_kd: float = 0.1,          # Nm/(rad/s) anti-twist damping
+    anti_twist_max_tau: float = 0.6,     # Nm per-joint smooth tanh bound
+    # Split height gate params for drift controller
+    drift_hgate_vel_low: float = 0.05,        # CoM z-vel (m/s) below which height_gate_vel ≈ 1.0
+    drift_hgate_vel_high: float = 0.25,       # CoM z-vel (m/s) above which height_gate_vel ≈ 0.0
+    drift_hgate_heading_low: float = 0.02,    # CoM z-vel (m/s) below which height_gate_heading ≈ 1.0
+    drift_hgate_heading_high: float = 0.10,   # CoM z-vel (m/s) above which height_gate_heading ≈ 0.0
+    # Hip-yaw mean centering params
+    hy_mean_center_kp: float = 0.5,           # Nm/rad weak centering proportional
+    hy_mean_center_max_tau: float = 0.4,      # Nm per-joint smooth tanh bound
+    # Anti-twist divergence guard params (V5 parameterization)
+    anti_twist_guard_start_rad: float = 0.22,     # rad — guard activation threshold
+    anti_twist_guard_strong_rad: float = 0.32,    # rad — full guard threshold
+    anti_twist_guard_boost_max: float = 3.5,      # scalar — max kp multiplier (actual = 1 + (boost-1)*gate)
+    # Heading twist yield gate params (V5 parameterization)
+    heading_twist_yield_start_rad: float = 0.35,  # rad — yield activation (>= zero_rad disables)
+    heading_twist_yield_zero_rad: float = 0.35,   # rad — fully suppressed
+    # V5 two-layer emergency guard
+    anti_twist_emergency_max_tau: float = 0.25,   # Nm — separate tanh cap for guard extra
 ) -> jnp.ndarray:
-    """Pack K2 controller params into flat JAX params array (Stage 2 layout).
+    """Pack K2 controller params into flat JAX params array (Stage 2 + drift + heading layout).
 
     Computes biquad coefficients from (fs_hz, fc_hz, Q) automatically.
 
-    Args:
-        fs_hz: Sample rate (default 100 Hz)
-        fc_hz: Notch centre frequency (default 2.5 Hz)
-        Q: Notch quality factor (default 2.0 for K2)
-        torque_limit: Per-joint torque limits, shape (10,)
-        max_torque_rate: Per-joint max torque rate, shape (10,)
-        control_dt: Control timestep in seconds
-        mode_div_soft_gain: Mode-div soft gain height band [m] (default 0.80 — K2 runtime)
-        mode_div_ref_source: "target" (0) or "zero_only_for_debug" (1)
-        k_velocity: Sagittal velocity damping gain [Nm/(m/s)] (default 15.0)
-        velocity_damping_scale: Additional velocity damping scale (default 1.0;
-            K2 profile uses 1.10 via ADAPTIVE_SUPPORT_CENTERING_TRIM)
-        apcr1nd_*: APCR1ND gating params (defaults match K2_NOTCH_LOW_Q_V1)
-        standalone_mode: If True, JAX computes sag_pos_err/sag_vel/support_vel/pitch_x_error
-            from raw state inputs instead of using Python-computed values.
-        pitch_x_eq_rad: Equilibrium body pitch from gravity vector (rad)
-        support_center_eq_x_m, support_center_eq_y_m: Equilibrium support center (m)
-        sagittal_axis_x, sagittal_axis_y: Sagittal heading unit vector components
-
     Returns:
-        Flat params array, shape (54 if standalone else 48), dtype float64
+        Flat params array, shape (84), dtype float64
     """
     b0, b1, b2, a1, a2 = _python_biquad_notch_coefficients(fs_hz, fc_hz, Q)
 
-    # Always allocate full standalone size to avoid JAX out-of-bounds tracing errors.
-    # standalone_mode flag controls whether JAX uses the raw-input preprocessing path.
-    _param_size = K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE  # 54
+    # Always allocate full drift size to avoid JAX out-of-bounds tracing errors.
+    _param_size = K2_JAX_PARAMS_SIZE_DRIFT  # 84
     params = jnp.zeros(_param_size, dtype=jnp.float64)
     params = params.at[_IDX_NOTCH_B0].set(float(b0))
     params = params.at[_IDX_NOTCH_B1].set(float(b1))
@@ -271,16 +329,14 @@ def pack_params_stage2(
         )
     params = params.at[_IDX_CONTROL_DT].set(float(control_dt))
 
-    # D2/D3 bugfix: mode_div soft_gain and ref_source
     params = params.at[_IDX_MODE_DIV_SOFT_GAIN].set(float(mode_div_soft_gain))
     _ref_src_int = 0 if mode_div_ref_source == "target" else (2 if mode_div_ref_source == "disabled" else 1)
     params = params.at[_IDX_MODE_DIV_REF_SOURCE].set(float(_ref_src_int))
 
-    # Phase 4 parity fix: sagittal velocity damping config (K2 profile values)
     params = params.at[_IDX_K_VELOCITY].set(float(k_velocity))
     params = params.at[_IDX_VELOCITY_DAMPING_SCALE].set(float(velocity_damping_scale))
 
-    # Phase 4+ APCR1ND gating params
+    # APCR1ND gating params
     params = params.at[_IDX_APCR1ND_STARTUP_GUARD].set(float(apcr1nd_startup_guard_steps))
     params = params.at[_IDX_APCR1ND_SAFE_COM_Z].set(float(apcr1nd_safe_min_com_z))
     params = params.at[_IDX_APCR1ND_SAFE_ROLL].set(float(apcr1nd_safe_roll_rad))
@@ -290,7 +346,7 @@ def pack_params_stage2(
     params = params.at[_IDX_APCR1ND_HOLD_OUTSIDE].set(1.0 if apcr1nd_hold_outside_band else 0.0)
     params = params.at[_IDX_APCR1ND_CONVERGING_RELEASE].set(float(apcr1nd_converging_release_steps))
 
-    # Phase 3 standalone: always set these fields (params array is always full size)
+    # Phase 3 standalone
     params = params.at[_IDX_STANDALONE_MODE].set(1.0 if standalone_mode else 0.0)
     params = params.at[_IDX_PITCH_X_EQ_RAD].set(float(pitch_x_eq_rad))
     params = params.at[_IDX_SUPPORT_CENTER_EQ_X].set(float(support_center_eq_x_m))
@@ -298,15 +354,62 @@ def pack_params_stage2(
     params = params.at[_IDX_SAGITTAL_AXIS_X].set(float(sagittal_axis_x))
     params = params.at[_IDX_SAGITTAL_AXIS_Y].set(float(sagittal_axis_y))
 
+    # Drift controller params
+    params = params.at[_IDX_DRIFT_K_VEL].set(float(drift_k_vel))
+    params = params.at[_IDX_DRIFT_K_POS].set(float(drift_k_pos))
+    params = params.at[_IDX_DRIFT_K_HEADING].set(float(drift_k_heading))
+    params = params.at[_IDX_DRIFT_K_HEADING_RATE].set(float(drift_k_heading_rate))
+    params = params.at[_IDX_DRIFT_PUSH_DAMP_MULT].set(float(drift_push_damp_mult))
+    params = params.at[_IDX_DRIFT_MAX_TAU].set(float(drift_max_tau))
+    params = params.at[_IDX_DRIFT_ENABLED].set(1.0 if drift_enabled else 0.0)
+    params = params.at[_IDX_DRIFT_HGATE_LOW].set(float(drift_hgate_low))
+    params = params.at[_IDX_DRIFT_HGATE_HIGH].set(float(drift_hgate_high))
+    params = params.at[_IDX_DRIFT_PGATE_LOW].set(float(drift_pgate_low))
+    params = params.at[_IDX_DRIFT_PGATE_HIGH].set(float(drift_pgate_high))
+
+    # Heading hip-yaw stabilizer params
+    params = params.at[_IDX_HEADING_HY_KP].set(float(heading_hy_kp))
+    params = params.at[_IDX_HEADING_HY_KD].set(float(heading_hy_kd))
+    params = params.at[_IDX_HEADING_HY_MAX_TAU].set(float(heading_hy_max_tau))
+    params = params.at[_IDX_HEADING_HY_ENABLED].set(1.0 if heading_hy_enabled else 0.0)
+
+    # Anti-twist damping params
+    params = params.at[_IDX_ANTI_TWIST_KP].set(float(anti_twist_kp))
+    params = params.at[_IDX_ANTI_TWIST_KD].set(float(anti_twist_kd))
+    params = params.at[_IDX_ANTI_TWIST_MAX_TAU].set(float(anti_twist_max_tau))
+
+    # Split height gate params for drift controller
+    params = params.at[_IDX_DRIFT_HGATE_VEL_LOW].set(float(drift_hgate_vel_low))
+    params = params.at[_IDX_DRIFT_HGATE_VEL_HIGH].set(float(drift_hgate_vel_high))
+    params = params.at[_IDX_DRIFT_HGATE_HEADING_LOW].set(float(drift_hgate_heading_low))
+    params = params.at[_IDX_DRIFT_HGATE_HEADING_HIGH].set(float(drift_hgate_heading_high))
+
+    # Hip-yaw mean centering params
+    params = params.at[_IDX_HY_MEAN_CENTER_KP].set(float(hy_mean_center_kp))
+    params = params.at[_IDX_HY_MEAN_CENTER_MAX_TAU].set(float(hy_mean_center_max_tau))
+
+    # Anti-twist divergence guard params (V5 parameterization)
+    params = params.at[_IDX_ANTI_TWIST_GUARD_START].set(float(anti_twist_guard_start_rad))
+    params = params.at[_IDX_ANTI_TWIST_GUARD_STRONG].set(float(anti_twist_guard_strong_rad))
+    params = params.at[_IDX_ANTI_TWIST_GUARD_BOOST_MAX].set(float(anti_twist_guard_boost_max))
+
+    # Heading twist yield gate params (V5 parameterization)
+    params = params.at[_IDX_HEADING_TWIST_YIELD_START].set(float(heading_twist_yield_start_rad))
+    params = params.at[_IDX_HEADING_TWIST_YIELD_ZERO].set(float(heading_twist_yield_zero_rad))
+
+    # V5 two-layer emergency guard param
+    params = params.at[_IDX_ANTI_TWIST_EMERGENCY_MAX_TAU].set(float(anti_twist_emergency_max_tau))
+
     return params
 
 
 def unpack_params_stage2(params_flat: jnp.ndarray) -> dict:
-    """Unpack flat JAX params array into Python dict (Stage 2 layout)."""
+    """Unpack flat JAX params array into Python dict (Stage 2 + drift layout)."""
     p = np.asarray(params_flat, dtype=np.float64)
     _ref_src_int = int(p[_IDX_MODE_DIV_REF_SOURCE])
     _ref_src = "target" if _ref_src_int == 0 else ("disabled" if _ref_src_int == 2 else "zero_only_for_debug")
-    return {
+    _has_drift = len(p) >= K2_JAX_PARAMS_SIZE_DRIFT
+    result = {
         "notch_b0": float(p[_IDX_NOTCH_B0]),
         "notch_b1": float(p[_IDX_NOTCH_B1]),
         "notch_b2": float(p[_IDX_NOTCH_B2]),
@@ -331,6 +434,51 @@ def unpack_params_stage2(params_flat: jnp.ndarray) -> dict:
         "apcr1nd_hold_outside_band": bool(p[_IDX_APCR1ND_HOLD_OUTSIDE] > 0.5),
         "apcr1nd_converging_release_steps": float(p[_IDX_APCR1ND_CONVERGING_RELEASE]),
     }
+    if _has_drift:
+        result["drift_k_vel"] = float(p[_IDX_DRIFT_K_VEL])
+        result["drift_k_pos"] = float(p[_IDX_DRIFT_K_POS])
+        result["drift_k_heading"] = float(p[_IDX_DRIFT_K_HEADING])
+        result["drift_k_heading_rate"] = float(p[_IDX_DRIFT_K_HEADING_RATE])
+        result["drift_push_damp_mult"] = float(p[_IDX_DRIFT_PUSH_DAMP_MULT])
+        result["drift_max_tau"] = float(p[_IDX_DRIFT_MAX_TAU])
+        result["drift_enabled"] = bool(p[_IDX_DRIFT_ENABLED] > 0.5)
+        _has_gate_params = len(p) > _IDX_DRIFT_HGATE_HIGH
+        result["drift_hgate_low"] = float(p[_IDX_DRIFT_HGATE_LOW]) if _has_gate_params else 0.005
+        result["drift_hgate_high"] = float(p[_IDX_DRIFT_HGATE_HIGH]) if _has_gate_params else 0.03
+        result["drift_pgate_low"] = float(p[_IDX_DRIFT_PGATE_LOW]) if _has_gate_params else 0.02
+        result["drift_pgate_high"] = float(p[_IDX_DRIFT_PGATE_HIGH]) if _has_gate_params else 0.20
+    # Heading hip-yaw stabilizer params
+    _has_heading = len(p) > _IDX_HEADING_HY_KP
+    result["heading_hy_kp"] = float(p[_IDX_HEADING_HY_KP]) if _has_heading else 0.15
+    result["heading_hy_kd"] = float(p[_IDX_HEADING_HY_KD]) if _has_heading else 0.05
+    result["heading_hy_max_tau"] = float(p[_IDX_HEADING_HY_MAX_TAU]) if _has_heading else 0.8
+    result["heading_hy_enabled"] = bool(p[_IDX_HEADING_HY_ENABLED] > 0.5) if _has_heading else False
+    # Anti-twist params
+    result["anti_twist_kp"] = float(p[_IDX_ANTI_TWIST_KP]) if _has_heading else 0.3
+    result["anti_twist_kd"] = float(p[_IDX_ANTI_TWIST_KD]) if _has_heading else 0.1
+    result["anti_twist_max_tau"] = float(p[_IDX_ANTI_TWIST_MAX_TAU]) if _has_heading else 0.6
+    # Split height gate params
+    result["drift_hgate_vel_low"] = float(p[_IDX_DRIFT_HGATE_VEL_LOW]) if _has_heading else 0.05
+    result["drift_hgate_vel_high"] = float(p[_IDX_DRIFT_HGATE_VEL_HIGH]) if _has_heading else 0.25
+    result["drift_hgate_heading_low"] = float(p[_IDX_DRIFT_HGATE_HEADING_LOW]) if _has_heading else 0.02
+    result["drift_hgate_heading_high"] = float(p[_IDX_DRIFT_HGATE_HEADING_HIGH]) if _has_heading else 0.10
+    # Mean centering params
+    _has_mean_center = len(p) > _IDX_HY_MEAN_CENTER_KP
+    result["hy_mean_center_kp"] = float(p[_IDX_HY_MEAN_CENTER_KP]) if _has_mean_center else 0.5
+    result["hy_mean_center_max_tau"] = float(p[_IDX_HY_MEAN_CENTER_MAX_TAU]) if _has_mean_center else 0.4
+    # Anti-twist guard params (V5 parameterization)
+    _has_guard = len(p) > _IDX_ANTI_TWIST_GUARD_START
+    result["anti_twist_guard_start_rad"] = float(p[_IDX_ANTI_TWIST_GUARD_START]) if _has_guard else 0.22
+    result["anti_twist_guard_strong_rad"] = float(p[_IDX_ANTI_TWIST_GUARD_STRONG]) if _has_guard else 0.32
+    result["anti_twist_guard_boost_max"] = float(p[_IDX_ANTI_TWIST_GUARD_BOOST_MAX]) if _has_guard else 3.5
+    # Heading twist yield params (V5 parameterization)
+    _has_yield = len(p) > _IDX_HEADING_TWIST_YIELD_START
+    result["heading_twist_yield_start_rad"] = float(p[_IDX_HEADING_TWIST_YIELD_START]) if _has_yield else 0.35
+    result["heading_twist_yield_zero_rad"] = float(p[_IDX_HEADING_TWIST_YIELD_ZERO]) if _has_yield else 0.35
+    # V5 emergency guard max tau
+    _has_emergency = len(p) > _IDX_ANTI_TWIST_EMERGENCY_MAX_TAU
+    result["anti_twist_emergency_max_tau"] = float(p[_IDX_ANTI_TWIST_EMERGENCY_MAX_TAU]) if _has_emergency else 0.25
+    return result
 
 
 # ===========================================================================
@@ -1254,7 +1402,22 @@ K2_JAX_STATE_FIELDS = K2_JAX_STATE_FIELDS + _POS_CAP_STATE_FIELDS
 # Phase 0: APCR1ND wheel damping override active flag — match Python gate parity
 _APCR1ND_WD_OVERRIDE_FIELDS = ("py_wd_override_active",)
 K2_JAX_STATE_FIELDS = K2_JAX_STATE_FIELDS + _APCR1ND_WD_OVERRIDE_FIELDS
-K2_JAX_STATE_SIZE: int = len(K2_JAX_STATE_FIELDS)  # 836 (= 835 + 1)
+# Drift controller state (+4)
+_DRIFT_STATE_FIELDS = (
+    "drift_ref_world_x",      # initial world x latched at step 0
+    "drift_ref_world_y",      # initial world y latched at step 0
+    "drift_ref_yaw",          # initial yaw latched at step 0
+    "drift_ref_latched",      # 0.0 → 1.0 after first latch
+)
+K2_JAX_STATE_FIELDS = K2_JAX_STATE_FIELDS + _DRIFT_STATE_FIELDS
+# Heading hip-yaw stabilizer state (+3)
+_HEADING_HY_STATE_FIELDS = (
+    "heading_hy_ref_yaw",        # initial yaw reference (rad)
+    "heading_hy_ref_latched",    # 0.0 → 1.0 after first latch
+    "heading_hy_integral",       # soft integrator for heading correction (rad·s)
+)
+K2_JAX_STATE_FIELDS = K2_JAX_STATE_FIELDS + _HEADING_HY_STATE_FIELDS
+K2_JAX_STATE_SIZE: int = len(K2_JAX_STATE_FIELDS)  # 843
 
 # Index constants for core state (unchanged)
 _S_NOTCH_X1, _S_NOTCH_X2, _S_NOTCH_Y1, _S_NOTCH_Y2 = 0, 1, 2, 3
@@ -1276,6 +1439,15 @@ _S_APCR1ND_CONVERGING_STEPS = 832
 _S_APCR1ND_RECENTER_HELD = 833
 _S_EFFECTIVE_MAX_POSITION_TAU_PY = 834  # Phase 7: Python's runtime effective_max_position_tau
 _S_PY_WD_OVERRIDE_ACTIVE = 835  # Phase 0: Python's APCR1ND wheel damping override active flag
+# Drift controller state indices (836-839)
+_S_DRIFT_REF_WORLD_X = 836
+_S_DRIFT_REF_WORLD_Y = 837
+_S_DRIFT_REF_YAW = 838
+_S_DRIFT_REF_LATCHED = 839
+# Heading hip-yaw stabilizer state indices (840-842)
+_S_HEADING_HY_REF_YAW = 840
+_S_HEADING_HY_REF_LATCHED = 841
+_S_HEADING_HY_INTEGRAL = 842
 
 
 def pack_state_k2(
@@ -1287,8 +1459,17 @@ def pack_state_k2(
     apcr1nd_prev_error=0.0,
     apcr1nd_tuned_converging_steps=0.0,
     apcr1nd_tuned_recenter_held=0.0,
+    # Drift controller state (default: zero, not yet latched)
+    drift_ref_world_x=0.0,
+    drift_ref_world_y=0.0,
+    drift_ref_yaw=0.0,
+    drift_ref_latched=0.0,
+    # Heading hip-yaw stabilizer state (default: zero, not yet latched)
+    heading_hy_ref_yaw=0.0,
+    heading_hy_ref_latched=0.0,
+    heading_hy_integral=0.0,
 ):
-    """Pack all K2 state into flat JAX array (now 332 with ring buffer + APCR1ND)."""
+    """Pack all K2 state into flat JAX array (843 with ring buffer + APCR1ND + drift + heading)."""
     s = jnp.zeros(K2_JAX_STATE_SIZE, dtype=jnp.float64)
     s = s.at[_S_NOTCH_X1].set(notch_x1)
     s = s.at[_S_NOTCH_X2].set(notch_x2)
@@ -1306,6 +1487,15 @@ def pack_state_k2(
     s = s.at[_S_APCR1ND_PREV_ERROR].set(apcr1nd_prev_error)
     s = s.at[_S_APCR1ND_CONVERGING_STEPS].set(apcr1nd_tuned_converging_steps)
     s = s.at[_S_APCR1ND_RECENTER_HELD].set(apcr1nd_tuned_recenter_held)
+    # Drift controller state
+    s = s.at[_S_DRIFT_REF_WORLD_X].set(drift_ref_world_x)
+    s = s.at[_S_DRIFT_REF_WORLD_Y].set(drift_ref_world_y)
+    s = s.at[_S_DRIFT_REF_YAW].set(drift_ref_yaw)
+    s = s.at[_S_DRIFT_REF_LATCHED].set(drift_ref_latched)
+    # Heading hip-yaw stabilizer state
+    s = s.at[_S_HEADING_HY_REF_YAW].set(heading_hy_ref_yaw)
+    s = s.at[_S_HEADING_HY_REF_LATCHED].set(heading_hy_ref_latched)
+    s = s.at[_S_HEADING_HY_INTEGRAL].set(heading_hy_integral)
     # ABS fields initialized to zero by default (zeros array)
     return s
 
@@ -1330,10 +1520,17 @@ K2_JAX_INPUT_FIELDS: tuple[str, ...] = (
     "q_ref_knee_l", "q_ref_knee_r", "q_ref_hip_roll_l", "q_ref_hip_roll_r",
     "support_position_error_m",
     "contact_valid",  # Phase 6M: contact state for ABS trim safety gate parity
+    # Drift controller estimator inputs (+6)
+    "est_world_x_m",          # estimated world x position
+    "est_world_y_m",          # estimated world y position
+    "est_yaw_rad",            # estimated world yaw
+    "est_world_vx_m_s",       # estimated world x velocity
+    "est_world_vy_m_s",       # estimated world y velocity
+    "est_yaw_rate_rad_s",     # estimated world yaw rate
 )
-# Unified input size: always 45 elements (42 base + 3 standalone).
-# Old 42-element inputs are padded with zeros at indices 42-44.
-K2_JAX_INPUT_SIZE: int = 45
+# Unified input size: always 51 elements (42 base + 3 standalone + 6 drift estimator).
+# Old 42-element inputs are padded with zeros at indices 42-50.
+K2_JAX_INPUT_SIZE: int = 51
 
 _I_PITCH_X, _I_PITCH_RATE, _I_ROLL_Y, _I_ROLL_RATE = 0, 1, 2, 3
 _I_YAW_ERR, _I_YAW_RATE, _I_COM_Z, _I_COM_VY = 4, 5, 6, 7
@@ -1347,6 +1544,13 @@ _I_CONTACT_VALID = 41
 _I_COM_VX = 42         # com_vx for sagittal velocity projection
 _I_SUPPORT_CENTER_X = 43  # wheel support center X (world frame)
 _I_SUPPORT_CENTER_Y = 44  # wheel support center Y (world frame)
+# Drift controller estimator inputs (indices 45-50)
+_I_EST_WORLD_X = 45
+_I_EST_WORLD_Y = 46
+_I_EST_YAW = 47
+_I_EST_WORLD_VX = 48
+_I_EST_WORLD_VY = 49
+_I_EST_YAW_RATE = 50
 K2_JAX_INPUT_SIZE_STANDALONE = K2_JAX_INPUT_SIZE  # same unified size
 
 
@@ -1416,8 +1620,15 @@ def pack_input_k2_standalone(
     joint_pos, joint_vel, q_ref,
     support_center_x_m, support_center_y_m,
     contact_valid=1.0,
+    # Drift controller estimator inputs
+    est_world_x_m=0.0,
+    est_world_y_m=0.0,
+    est_yaw_rad=0.0,
+    est_world_vx_m_s=0.0,
+    est_world_vy_m_s=0.0,
+    est_yaw_rate_rad_s=0.0,
 ):
-    """Pack raw-state K2 inputs into flat JAX array (45-element standalone contract).
+    """Pack raw-state K2 inputs into flat JAX array (51-element standalone + drift contract).
 
     Unlike pack_input_k2(), this accepts ONLY raw sensor/state values.
     No Python-computed sagittal outputs (pitch_x_error, sag_pos_error,
@@ -1429,6 +1640,8 @@ def pack_input_k2_standalone(
       - pitch_rate_x_rad_s: RAW body pitch rate (NOT boosted/filtered)
       - com_vx_m_s, com_vy_m_s: RAW COM velocity for sagittal projection
       - support_center_x_m, support_center_y_m: wheel midpoint from mj_data.xpos
+      - est_world_*: Estimated world pose/velocity from state estimator.
+        In simulation: from MuJoCo. On hardware: from IMU + odometry.
       - All other fields: same as pack_input_k2 (raw state/config)
     """
     import numpy as _np
@@ -1475,6 +1688,13 @@ def pack_input_k2_standalone(
     inp[_I_COM_VX] = float(com_vx_m_s)
     inp[_I_SUPPORT_CENTER_X] = float(support_center_x_m)
     inp[_I_SUPPORT_CENTER_Y] = float(support_center_y_m)
+    # Drift controller estimator fields
+    inp[_I_EST_WORLD_X] = float(est_world_x_m)
+    inp[_I_EST_WORLD_Y] = float(est_world_y_m)
+    inp[_I_EST_YAW] = float(est_yaw_rad)
+    inp[_I_EST_WORLD_VX] = float(est_world_vx_m_s)
+    inp[_I_EST_WORLD_VY] = float(est_world_vy_m_s)
+    inp[_I_EST_YAW_RATE] = float(est_yaw_rate_rad_s)
     return jnp.asarray(inp)
 
 
@@ -1517,8 +1737,80 @@ K2_JAX_DIAG_FIELDS: tuple[str, ...] = (
     "apcr1nd_safety_pass",       # JAX safety gate (com_z & roll & pitch, NO contact_valid)
     "apcr1nd_apply_wd_override", # JAX wheel damping override applied (bool)
     "apcr1nd_wd_scale",          # JAX wheel damping scale
+    # ── Phase 3: Per-component torque telemetry for conflict audit ──────────
+    # Posture PD torques at each leg joint (shape posture controller output)
+    "tau_posture_hr_l",   # hip_roll left  [0] — competes with lateral
+    "tau_posture_hy_l",   # hip_yaw left   [1] — competes with yaw, mode_div
+    "tau_posture_hp_l",   # hip_pitch left [2] — competes with support_ff
+    "tau_posture_kn_l",   # knee left      [3] — competes with support_ff
+    "tau_posture_hr_r",   # hip_roll right [5] — competes with lateral
+    "tau_posture_hy_r",   # hip_yaw right  [6] — competes with yaw, mode_div
+    "tau_posture_hp_r",   # hip_pitch right[7] — competes with support_ff
+    "tau_posture_kn_r",   # knee right     [8] — competes with support_ff
+    # Yaw controller torques at hip_yaw (antisymmetric)
+    "tau_yaw_l",           # yaw torque at left hip_yaw [1]
+    "tau_yaw_r",           # yaw torque at right hip_yaw [6]
+    # Mode-div controller torques at hip_yaw (antisymmetric)
+    "tau_mode_div_l",      # mode-div torque at left hip_yaw [1]
+    "tau_mode_div_r",      # mode-div torque at right hip_yaw [6]
+    # Lateral roll controller torques at hip_roll (antisymmetric)
+    "tau_lateral_l",       # lateral torque at left hip_roll [0]
+    "tau_lateral_r",       # lateral torque at right hip_roll [5]
+    # Support feedforward torques at hip_pitch/knee (from k2_jax_support_feedforward_compute)
+    "tau_support_ff_hp_l", # support FF at left hip_pitch [2] — height-gated
+    "tau_support_ff_hp_r", # support FF at right hip_pitch [7] — height-gated
+    "tau_support_ff_hy_l", # support FF at left hip_yaw [1] — EXCLUDED from tau_sum
+    "tau_support_ff_hy_r", # support FF at right hip_yaw [6] — EXCLUDED from tau_sum
+    # Empirical support FF (constant torque vector: hip_pitch/knee only)
+    "tau_emp_support_hp_l",  # empirical FF at left hip_pitch [2]
+    "tau_emp_support_hp_r",  # empirical FF at right hip_pitch [7]
+    "tau_emp_support_kn_l",  # empirical FF at left knee [3]
+    "tau_emp_support_kn_r",  # empirical FF at right knee [8]
+    # ── Pre/post-composer full torque vectors (10 joints each) ──────────────
+    "tau_preclip_0", "tau_preclip_1", "tau_preclip_2", "tau_preclip_3", "tau_preclip_4",
+    "tau_preclip_5", "tau_preclip_6", "tau_preclip_7", "tau_preclip_8", "tau_preclip_9",
+    "tau_postclip_0", "tau_postclip_1", "tau_postclip_2", "tau_postclip_3", "tau_postclip_4",
+    "tau_postclip_5", "tau_postclip_6", "tau_postclip_7", "tau_postclip_8", "tau_postclip_9",
+    # ── Online cancellation metrics ─────────────────────────────────────────
+    "cancel_hip_yaw",     # |posture| + |yaw| + |mode_div| - |sum| at hip_yaw [1,6]
+    "cancel_hip_roll",    # |posture| + |lateral| - |sum| at hip_roll [0,5]
+    "cancel_hip_pitch",   # |posture| + |support_ff| + |emp_ff| - |sum| at hip_pitch [2,7]
+    "cancel_knee",        # |posture| + |emp_ff| - |sum| at knee [3,8]
+    "cancel_total",       # total cancellation across all conflict joints
+    # ── Saturation attribution ──────────────────────────────────────────────
+    "sat_attr_sagittal",  # saturation count attributed to sagittal (wheel joints)
+    "sat_attr_posture",   # saturation count attributed to posture (leg joints)
+    "sat_attr_yaw",       # saturation count attributed to yaw/mode-div (hip_yaw)
+    "sat_attr_lateral",   # saturation count attributed to lateral (hip_roll)
+    "rate_attr_balance",  # rate-limit count attributed to balance (wheels)
+    "rate_attr_posture",  # rate-limit count attributed to posture (leg joints)
+    # ── Drift controller diagnostics (+15) ─────────────────────────────────
+    "drift_world_x_m",        "drift_world_y_m",
+    "drift_body_x_m",         "drift_body_y_m",
+    "drift_distance_m",       "drift_velocity_m_s",
+    "yaw_error_drift_rad",
+    "drift_stability_gate",   "drift_heading_gate",
+    "drift_position_gate",    "drift_height_gate",
+    "tau_drift_raw_l_nm",     "tau_drift_raw_r_nm",
+    "tau_drift_bounded_l_nm", "tau_drift_bounded_r_nm",
+    # ── Heading hip-yaw stabilizer diagnostics (+4) ─────────────────────────
+    "tau_heading_hip_yaw_l_nm", "tau_heading_hip_yaw_r_nm",
+    "heading_hip_yaw_error_rad", "heading_gate",
+    # ── Anti-twist damping diagnostics (+3) ─────────────────────────────────
+    "tau_anti_twist_l_nm", "tau_anti_twist_r_nm", "twist_gate",
+    # ── Split height gate diagnostics (+3) ──────────────────────────────────
+    "drift_height_gate_vel", "drift_height_gate_heading", "drift_height_gate_pos",
+    # ── Hip-yaw mean centering diagnostics (+4) ─────────────────────────────
+    "tau_center_l_nm", "tau_center_r_nm", "center_gate", "hip_yaw_mean_rad",
+    # ── Heading sub-gate diagnostics (V3, +7) ────────────────────────────────
+    "heading_pitch_gate", "heading_roll_gate", "heading_contact_gate",
+    "heading_twist_gate", "heading_height_gate",
+    "tau_heading_raw_nm", "tau_heading_bounded_nm",
+    # ── Divergence guard diagnostics (V4, +5) ────────────────────────────────
+    "hy_div_guard_gate", "hy_div_guard_boost", "heading_twist_yield_gate",
+    "tau_hy_div_guard_l_nm", "tau_hy_div_guard_r_nm",
 )
-K2_JAX_DIAG_SIZE: int = len(K2_JAX_DIAG_FIELDS)  # 53
+K2_JAX_DIAG_SIZE: int = len(K2_JAX_DIAG_FIELDS)  # 147
 
 _D_NOTCH_OUT, _D_NOTCH_GATE = 0, 1
 _D_TAU_PITCH, _D_TAU_PITCH_RATE, _D_TAU_SAG_VEL = 2, 3, 4
@@ -1547,6 +1839,87 @@ _D_APCR1ND_NEW_HELD = 49
 _D_APCR1ND_SAFETY = 50
 _D_APCR1ND_WD_APPLY = 51
 _D_APCR1ND_WD_SCALE = 52
+# ── Phase 3: Per-component torque telemetry indices ───────────────────────
+# Posture PD at each leg joint (indices 53-60)
+_D_POSTURE_HR_L, _D_POSTURE_HY_L, _D_POSTURE_HP_L, _D_POSTURE_KN_L = 53, 54, 55, 56
+_D_POSTURE_HR_R, _D_POSTURE_HY_R, _D_POSTURE_HP_R, _D_POSTURE_KN_R = 57, 58, 59, 60
+# Yaw controller at hip_yaw (61-62)
+_D_YAW_L, _D_YAW_R = 61, 62
+# Mode-div controller at hip_yaw (63-64)
+_D_MODE_DIV_L, _D_MODE_DIV_R = 63, 64
+# Lateral roll at hip_roll (65-66)
+_D_LATERAL_L, _D_LATERAL_R = 65, 66
+# Support FF (height-gated hip_yaw) (67-70)
+_D_SUPPORT_FF_HP_L, _D_SUPPORT_FF_HP_R = 67, 68
+_D_SUPPORT_FF_HY_L, _D_SUPPORT_FF_HY_R = 69, 70
+# Empirical support FF (constant vector: hip_pitch/knee) (71-74)
+_D_EMP_SUPPORT_HP_L, _D_EMP_SUPPORT_HP_R = 71, 72
+_D_EMP_SUPPORT_KN_L, _D_EMP_SUPPORT_KN_R = 73, 74
+# Pre-composer sum (tau_sum before clipping) (75-84)
+_D_PRECLIP_START = 75
+# Post-clip (tau_clipped, before rate-limit) (85-94)
+_D_POSTCLIP_START = 85
+# Online cancellation metrics (95-99)
+_D_CANCEL_HIP_YAW = 95
+_D_CANCEL_HIP_ROLL = 96
+_D_CANCEL_HIP_PITCH = 97
+_D_CANCEL_KNEE = 98
+_D_CANCEL_TOTAL = 99
+# Saturation/rate-limit attribution (100-105)
+_D_SAT_ATTR_SAGITTAL = 100
+_D_SAT_ATTR_POSTURE = 101
+_D_SAT_ATTR_YAW = 102
+_D_SAT_ATTR_LATERAL = 103
+_D_RATE_ATTR_BALANCE = 104
+_D_RATE_ATTR_POSTURE = 105
+# Drift controller diag indices (106-120)
+_D_DRIFT_WORLD_X = 106
+_D_DRIFT_WORLD_Y = 107
+_D_DRIFT_BODY_X = 108
+_D_DRIFT_BODY_Y = 109
+_D_DRIFT_DISTANCE = 110
+_D_DRIFT_VELOCITY = 111
+_D_YAW_ERROR_DRIFT = 112
+_D_DRIFT_STABILITY_GATE = 113
+_D_DRIFT_HEADING_GATE = 114
+_D_DRIFT_POSITION_GATE = 115
+_D_DRIFT_HEIGHT_GATE = 116
+_D_TAU_DRIFT_RAW_L = 117
+_D_TAU_DRIFT_RAW_R = 118
+_D_TAU_DRIFT_BOUNDED_L = 119
+_D_TAU_DRIFT_BOUNDED_R = 120
+# Heading hip-yaw stabilizer diag indices (121-124)
+_D_TAU_HEADING_HY_L = 121
+_D_TAU_HEADING_HY_R = 122
+_D_HEADING_HY_ERROR = 123
+_D_HEADING_GATE = 124
+# Anti-twist damping diag indices (125-127)
+_D_TAU_ANTI_TWIST_L = 125
+_D_TAU_ANTI_TWIST_R = 126
+_D_TWIST_GATE = 127
+# Split height gate diag indices (128-130)
+_D_DRIFT_HGATE_VEL = 128
+_D_DRIFT_HGATE_HEADING = 129
+_D_DRIFT_HGATE_POS = 130
+# Hip-yaw mean centering diag indices (131-134)
+_D_TAU_CENTER_L = 131
+_D_TAU_CENTER_R = 132
+_D_CENTER_GATE = 133
+_D_HY_MEAN_RAD = 134
+# Heading sub-gate diagnostics (V3, indices 135-141)
+_D_HEADING_PITCH_GATE = 135
+_D_HEADING_ROLL_GATE = 136
+_D_HEADING_CONTACT_GATE = 137
+_D_HEADING_TWIST_GATE = 138
+_D_HEADING_HEIGHT_GATE = 139
+_D_TAU_HEADING_RAW = 140
+_D_TAU_HEADING_BOUNDED = 141
+# V4: Divergence guard diagnostics (142-146)
+_D_HY_DIV_GUARD_GATE = 142
+_D_HY_DIV_GUARD_BOOST = 143
+_D_HEADING_TWIST_YIELD_GATE = 144
+_D_TAU_HY_DIV_GUARD_L = 145
+_D_TAU_HY_DIV_GUARD_R = 146
 
 
 def k2_jax_diag_flat_to_dict(diag_flat):
@@ -1735,12 +2108,499 @@ def pack_state_from_python_k2(
 
 
 # ===========================================================================
+# Heading hip-yaw stabilizer — low-authority soft heading impedance
+# ===========================================================================
+
+
+def _jax_smoothstep01(x):
+    """Smoothstep s(x): s(0)=0, s(1)=1, s'(0)=s'(1)=0. Input clamped to [0,1]."""
+    xc = jnp.clip(x, 0.0, 1.0)
+    return xc * xc * (3.0 - 2.0 * xc)
+
+
+def k2_jax_heading_hip_yaw_stabilizer(
+    state_flat: jnp.ndarray,
+    params_flat: jnp.ndarray,
+    est_yaw_rad: jnp.ndarray,
+    est_yaw_rate_rad_s: jnp.ndarray,
+    pitch_gate: jnp.ndarray,
+    roll_gate: jnp.ndarray,
+    contact_gate: jnp.ndarray,
+    height_motion_gate: jnp.ndarray,
+    hip_yaw_div: jnp.ndarray,
+    hip_yaw_mean: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray,
+           jnp.ndarray, jnp.ndarray, jnp.ndarray,
+           jnp.ndarray, jnp.ndarray, jnp.ndarray,
+           jnp.ndarray, jnp.ndarray]:
+    """Low-authority hip-yaw heading stabilizer with soft impedance.
+
+    Applies gentle torque to hip-yaw joints [1, 6] to correct slow yaw drift.
+    Yields to: poor stability, fast height motion, hip-yaw divergence, large twist.
+
+    V3: Relaxed stability gate thresholds (pitch full-gate at 0.07 rad instead of
+    0.035 rad), widened twist gate (full-gate at 0.10 rad instead of 0.04 rad).
+    Individual gate components returned for telemetry diagnostics.
+
+    Returns:
+        tau_heading_l: Torque at left hip-yaw [1] (smooth tanh bounded)
+        tau_heading_r: Torque at right hip-yaw [6] (smooth tanh bounded)
+        tau_raw: Raw heading torque before tanh bounding
+        tau_bounded: Heading torque after tanh bounding (before differential split)
+        new_state: Updated state with reference latch
+        heading_error_rad: Current heading error for telemetry
+        heading_gate: Composite gate value for telemetry
+        pitch_gate: Echoed pitch sub-gate for telemetry
+        roll_gate: Echoed roll sub-gate for telemetry
+        contact_gate: Echoed contact sub-gate for telemetry
+        twist_gate: Twist sub-gate for telemetry
+        height_motion_gate: Echoed height motion sub-gate for telemetry
+        heading_twist_yield_gate: V4 yield gate (0.18→0.35 rad) for telemetry
+    """
+    # ── Unpack params ──
+    kp = params_flat[_IDX_HEADING_HY_KP]
+    kd = params_flat[_IDX_HEADING_HY_KD]
+    max_tau = params_flat[_IDX_HEADING_HY_MAX_TAU]
+    enabled = params_flat[_IDX_HEADING_HY_ENABLED] > 0.5
+
+    # ── Latch reference yaw at step 0 ──
+    ref_latched = state_flat[_S_HEADING_HY_REF_LATCHED]
+    do_latch = ref_latched < 0.5
+    ref_yaw = jnp.where(do_latch, est_yaw_rad, state_flat[_S_HEADING_HY_REF_YAW])
+
+    new_state = state_flat.at[_S_HEADING_HY_REF_YAW].set(ref_yaw)
+    new_state = new_state.at[_S_HEADING_HY_REF_LATCHED].set(1.0)
+
+    # ── Heading error (wrapped to [-pi, pi]) ──
+    heading_error = est_yaw_rad - ref_yaw
+    heading_error = jnp.arctan2(jnp.sin(heading_error), jnp.cos(heading_error))
+
+    # ── Soft integral (leaky, bounded) ──
+    integral = state_flat[_S_HEADING_HY_INTEGRAL]
+    integral = 0.995 * integral + 0.005 * heading_error  # ≈200-step time constant
+    integral = jnp.clip(integral, -0.3, 0.3)  # ±17 deg·s max accumulation
+    new_state = new_state.at[_S_HEADING_HY_INTEGRAL].set(integral)
+
+    # ═════════════════════════════════════════════════════════════════════
+    # Heading gate: composite of stability, height motion, and twist gates
+    # V3: widened twist gate — heading yields above 0.30 rad divergence
+    #     instead of the V2 threshold of 0.12 rad which suppressed all output.
+    # ═════════════════════════════════════════════════════════════════════
+
+    # Twist gate: yield when hip-yaw divergence is large
+    # V3: full gate up to 0.10 rad, progressive yield up to 0.30 rad
+    twist_gate = 1.0 - _jax_smoothstep01((hip_yaw_div - 0.10) / (0.30 - 0.10))
+
+    # V5 parameterized: Heading twist yield gate — further yield when divergence is high.
+    # Reads yield thresholds from params. When yield_start >= yield_zero, gate = 1.0 (disabled).
+    # V3 default (disabled): yield_start=0.35, yield_zero=0.35
+    # V4 default (active): yield_start=0.18, yield_zero=0.35
+    _yield_start = params_flat[_IDX_HEADING_TWIST_YIELD_START]
+    _yield_zero = params_flat[_IDX_HEADING_TWIST_YIELD_ZERO]
+    _yield_range = jnp.maximum(_yield_zero - _yield_start, 1e-8)
+    heading_twist_yield_gate = 1.0 - _jax_smoothstep01((hip_yaw_div - _yield_start) / _yield_range)
+
+    # Error deadband gate: only activate when yaw error is meaningful
+    heading_error_abs = jnp.abs(heading_error)
+    error_gate = _jax_smoothstep01((heading_error_abs - 0.02) / (0.08 - 0.02))
+
+    # Composite stability gate
+    stability_gate = pitch_gate * roll_gate * contact_gate
+
+    # Composite heading gate
+    heading_gate = (
+        stability_gate
+        * height_motion_gate
+        * twist_gate
+        * heading_twist_yield_gate
+        * error_gate
+    )
+
+    # ── Torque computation ──
+    # PD + soft integral: counter-steer toward reference yaw
+    # Differential hip-yaw torque: left=+tau, right=-tau creates CW yaw moment.
+    # Positive heading_error = robot has turned CCW → need CW correction.
+    #   +kp*heading_error → positive tau → CW yaw (counter-steer) ✓
+    #   -kd*yaw_rate → opposes current rotation direction ✓
+    # Sign convention: to be validated by V3 telemetry (Task 2).
+    tau_raw = (kp * heading_error - kd * est_yaw_rate_rad_s + 0.05 * kp * integral) * heading_gate
+
+    # Smooth tanh bound
+    tau_bounded = max_tau * jnp.tanh(tau_raw / jnp.maximum(max_tau, 1e-6))
+
+    # Apply only when enabled
+    tau_bounded = jnp.where(enabled, tau_bounded, 0.0)
+
+    # ═════════════════════════════════════════════════════════════════════
+    # Differential hip-yaw torque for heading correction
+    #
+    # Positive heading_error = robot has turned CCW relative to reference.
+    # To turn CW (reduce heading error):
+    #   - left hip-yaw: +tau (push left leg forward, CW yaw moment)
+    #   - right hip-yaw: -tau (push right leg backward, CW yaw moment)
+    #
+    # Sign convention: validated by V3 telemetry — if heading_sign_check > 0,
+    # the torque reduces yaw error (correct sign). If < 0, convention is wrong.
+    # ═════════════════════════════════════════════════════════════════════
+    tau_heading_l = tau_bounded    # Left hip-yaw [1]: +tau → CW yaw
+    tau_heading_r = -tau_bounded   # Right hip-yaw [6]: -tau → CW yaw
+
+    return (tau_heading_l, tau_heading_r, tau_raw, tau_bounded,
+            new_state, heading_error, heading_gate,
+            pitch_gate, roll_gate, contact_gate,
+            twist_gate, height_motion_gate, heading_twist_yield_gate)
+
+
+def k2_jax_anti_twist_damping(
+    params_flat: jnp.ndarray,
+    hip_yaw_l_rad: jnp.ndarray,
+    hip_yaw_r_rad: jnp.ndarray,
+    hip_yaw_vel_l: jnp.ndarray,
+    hip_yaw_vel_r: jnp.ndarray,
+    stability_gate_twist: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray,
+           jnp.ndarray, jnp.ndarray,
+           jnp.ndarray, jnp.ndarray]:
+    """V5 two-layer anti-twist damping: base + emergency guard.
+
+    Layer 1 — base anti-twist (V3 baseline):
+      Always active. Uses kp=0.15, kd=0.1, max_tau=0.3 Nm.
+      Single tanh channel — never squeezed by guard boost.
+
+    Layer 2 — emergency divergence guard (V5):
+      Activates only when divergence exceeds guard_start (V5: 0.28 rad).
+      Ramps to full by guard_strong (V5: 0.34 rad).
+      Separate tanh channel with its own cap (emergency_max_tau, default 0.25 Nm).
+      Does NOT share the base tanh cap — this was the V4 bottleneck.
+
+    Returns:
+        tau_twist_l: Anti-twist torque at left hip-yaw [1]
+        tau_twist_r: Anti-twist torque at right hip-yaw [6]
+        twist_gate: Composite gate value for telemetry
+        div_guard_gate: Emergency guard gate value (0→1) for telemetry
+        div_guard_boost: Guard boost multiplier for telemetry
+        tau_guard_extra_l: Emergency extra torque at left hip-yaw for telemetry
+        tau_guard_extra_r: Emergency extra torque at right hip-yaw for telemetry
+    """
+    # ── Unpack params ──
+    kp = params_flat[_IDX_ANTI_TWIST_KP]
+    kd = params_flat[_IDX_ANTI_TWIST_KD]
+    max_tau = params_flat[_IDX_ANTI_TWIST_MAX_TAU]  # Layer 1 cap (V3: 0.3 Nm)
+
+    # ── Divergence from neutral ──
+    hip_yaw_diff = hip_yaw_l_rad - hip_yaw_r_rad
+    hip_yaw_vel_diff = hip_yaw_vel_l - hip_yaw_vel_r
+
+    # ── Twist gate ──
+    twist_mag = jnp.abs(hip_yaw_diff)
+    twist_gate = _jax_smoothstep01((twist_mag - 0.03) / (0.10 - 0.03))
+
+    # Composite gate
+    gate = stability_gate_twist * twist_gate
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Layer 1: Base anti-twist (V3 behavior, own tanh channel)
+    # ═══════════════════════════════════════════════════════════════════════
+    tau_base_raw = -(kp * hip_yaw_diff + kd * hip_yaw_vel_diff) * gate
+    tau_base_bounded = max_tau * jnp.tanh(tau_base_raw / jnp.maximum(max_tau, 1e-6))
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Layer 2: Emergency divergence guard (V5, separate tanh channel)
+    # ═══════════════════════════════════════════════════════════════════════
+    _guard_start = params_flat[_IDX_ANTI_TWIST_GUARD_START]
+    _guard_strong = params_flat[_IDX_ANTI_TWIST_GUARD_STRONG]
+    _guard_boost_max = params_flat[_IDX_ANTI_TWIST_GUARD_BOOST_MAX]
+    _emergency_max_tau = params_flat[_IDX_ANTI_TWIST_EMERGENCY_MAX_TAU]
+
+    _guard_range = jnp.maximum(_guard_strong - _guard_start, 1e-8)
+    div_guard_gate = _jax_smoothstep01((twist_mag - _guard_start) / _guard_range)
+    div_guard_boost = 1.0 + (_guard_boost_max - 1.0) * div_guard_gate  # for telemetry
+
+    # Emergency extra: proportional to divergence × effective kp, SEPARATE tanh cap.
+    # Uses the extra kp beyond base: kp * (_guard_boost_max - 1.0) * gate.
+    # This ensures emergency only adds torque, never replaces base torque,
+    # and is NOT squeezed by the Layer 1 max_tau cap.
+    _emergency_kp = kp * (_guard_boost_max - 1.0)  # extra kp beyond base
+    emergency_raw = -(_emergency_kp * hip_yaw_diff) * gate * div_guard_gate
+    emergency_bounded = _emergency_max_tau * jnp.tanh(
+        emergency_raw / jnp.maximum(_emergency_max_tau, 1e-6)
+    )
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Final: base + emergency (each bounded independently)
+    # ═══════════════════════════════════════════════════════════════════════
+    tau_twist_l = tau_base_bounded + emergency_bounded
+    tau_twist_r = -(tau_base_bounded + emergency_bounded)
+
+    # Guard-extra torque for telemetry decomposition
+    tau_guard_extra_l = emergency_bounded
+    tau_guard_extra_r = -emergency_bounded
+
+    return (tau_twist_l, tau_twist_r, gate,
+            div_guard_gate, div_guard_boost,
+            tau_guard_extra_l, tau_guard_extra_r)
+
+
+def k2_jax_hy_mean_centering(
+    params_flat: jnp.ndarray,
+    hip_yaw_mean: jnp.ndarray,
+    hip_yaw_div: jnp.ndarray,
+    stability_gate: jnp.ndarray,
+    height_motion_gate: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Weak hip-yaw mean centering: gently bring both legs back toward neutral.
+
+    Purpose:
+      - Bring both hip-yaw joints back toward zero-mean after disturbances.
+      - Reduce outward visual leg twist over long runs.
+      - Prevent both hip-yaws from drifting outward together.
+
+    Rules:
+      - Very weak authority (kp=0.5, max_tau=0.4 Nm).
+      - Smooth tanh bounded.
+      - Yields under poor balance/contact.
+      - Yields when hip-yaw divergence is high.
+      - Yields during aggressive height motion.
+      - Does not fight necessary support behavior.
+
+    Returns:
+        tau_center_l: Mean-centering torque at left hip-yaw [1]
+        tau_center_r: Mean-centering torque at right hip-yaw [6]
+        center_gate: Composite gate value for telemetry
+    """
+    # ── Unpack params ──
+    kp = params_flat[_IDX_HY_MEAN_CENTER_KP]
+    max_tau = params_flat[_IDX_HY_MEAN_CENTER_MAX_TAU]
+
+    # ── Mean-centering torque ──
+    # If mean > 0 (both legs outward/forward), apply negative torque to bring back.
+    # Both legs get the SAME torque (symmetric centering, not differential).
+    tau_raw = -kp * hip_yaw_mean
+
+    # ── Divergence gate: yield when hip-yaw divergence is high ──
+    # High divergence means legs are spread apart — centering should not fight this.
+    div_abs = jnp.abs(hip_yaw_div)
+    div_gate = 1.0 - _jax_smoothstep01((div_abs - 0.06) / (0.15 - 0.06))
+
+    # ── Composite gate ──
+    center_gate = stability_gate * height_motion_gate * div_gate
+
+    # Apply gate
+    tau_raw = tau_raw * center_gate
+
+    # Smooth tanh bound
+    tau_bounded = max_tau * jnp.tanh(tau_raw / jnp.maximum(max_tau, 1e-6))
+
+    # Symmetric torque: both legs get the same centering torque
+    tau_center_l = tau_bounded
+    tau_center_r = tau_bounded
+
+    return tau_center_l, tau_center_r, center_gate
+
+
+# ===========================================================================
+# Drift controller — coordinated wheel-torque drift correction
+# ===========================================================================
+
+
+def k2_jax_drift_controller(
+    state_flat: jnp.ndarray,    # full state (for reference latch)
+    input_flat: jnp.ndarray,    # full input (for estimator pose)
+    params_flat: jnp.ndarray,   # full params (for drift gains)
+    pitch_abs: jnp.ndarray,
+    pitch_rate_abs: jnp.ndarray,
+    roll_abs: jnp.ndarray,
+    contact_quality: jnp.ndarray,
+    com_z_vel_abs: jnp.ndarray,
+    hip_yaw_div: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Coordinated drift controller with continuous state-dependent gating.
+
+    Applies drift correction through wheel torques [4, 9] only.
+    No hard thresholds. No scenario flags. No lateral pseudo-force.
+
+    Returns:
+        tau_drift_l: Drift torque at left wheel [4] (smooth tanh bounded)
+        tau_drift_r: Drift torque at right wheel [9] (smooth tanh bounded)
+        new_state_flat: State with reference latch updated
+        drift_diag: (14,) drift diagnostics array
+    """
+    # ── Unpack drift params ──
+    k_vel = params_flat[_IDX_DRIFT_K_VEL]
+    k_pos = params_flat[_IDX_DRIFT_K_POS]
+    k_heading = params_flat[_IDX_DRIFT_K_HEADING]
+    k_heading_rate = params_flat[_IDX_DRIFT_K_HEADING_RATE]
+    push_damp_mult = params_flat[_IDX_DRIFT_PUSH_DAMP_MULT]
+    max_tau = params_flat[_IDX_DRIFT_MAX_TAU]
+    drift_enabled = params_flat[_IDX_DRIFT_ENABLED]
+    hgate_low = params_flat[_IDX_DRIFT_HGATE_LOW]
+    hgate_high = params_flat[_IDX_DRIFT_HGATE_HIGH]
+    pgate_low = params_flat[_IDX_DRIFT_PGATE_LOW]
+    pgate_high = params_flat[_IDX_DRIFT_PGATE_HIGH]
+    # Split height gate params (fall back to legacy hgate if not set)
+    hgate_vel_low = jnp.where(params_flat[_IDX_DRIFT_HGATE_VEL_LOW] > 0.0,
+                              params_flat[_IDX_DRIFT_HGATE_VEL_LOW], hgate_low)
+    hgate_vel_high = jnp.where(params_flat[_IDX_DRIFT_HGATE_VEL_HIGH] > 0.0,
+                               params_flat[_IDX_DRIFT_HGATE_VEL_HIGH], hgate_high)
+    hgate_heading_low = jnp.where(params_flat[_IDX_DRIFT_HGATE_HEADING_LOW] > 0.0,
+                                  params_flat[_IDX_DRIFT_HGATE_HEADING_LOW], hgate_low)
+    hgate_heading_high = jnp.where(params_flat[_IDX_DRIFT_HGATE_HEADING_HIGH] > 0.0,
+                                   params_flat[_IDX_DRIFT_HGATE_HEADING_HIGH], hgate_high)
+
+    # ── Latch reference pose at step 0 ──
+    ref_latched = state_flat[_S_DRIFT_REF_LATCHED]
+    do_latch = ref_latched < 0.5
+
+    est_world_x = input_flat[_I_EST_WORLD_X]
+    est_world_y = input_flat[_I_EST_WORLD_Y]
+    est_yaw = input_flat[_I_EST_YAW]
+    est_world_vx = input_flat[_I_EST_WORLD_VX]
+    est_world_vy = input_flat[_I_EST_WORLD_VY]
+    est_yaw_rate = input_flat[_I_EST_YAW_RATE]
+
+    ref_x = jnp.where(do_latch, est_world_x, state_flat[_S_DRIFT_REF_WORLD_X])
+    ref_y = jnp.where(do_latch, est_world_y, state_flat[_S_DRIFT_REF_WORLD_Y])
+    ref_yaw = jnp.where(do_latch, est_yaw, state_flat[_S_DRIFT_REF_YAW])
+
+    # Update state with latched reference
+    new_state = state_flat.at[_S_DRIFT_REF_WORLD_X].set(ref_x)
+    new_state = new_state.at[_S_DRIFT_REF_WORLD_Y].set(ref_y)
+    new_state = new_state.at[_S_DRIFT_REF_YAW].set(ref_yaw)
+    new_state = new_state.at[_S_DRIFT_REF_LATCHED].set(1.0)
+
+    # ── World-frame drift ──
+    world_drift_x = est_world_x - ref_x
+    world_drift_y = est_world_y - ref_y
+    yaw_error = est_yaw - ref_yaw
+
+    # ── Rotate into body frame ──
+    cos_yaw = jnp.cos(est_yaw)
+    sin_yaw = jnp.sin(est_yaw)
+    body_drift_x = cos_yaw * world_drift_x + sin_yaw * world_drift_y   # +forward
+    body_drift_y = -sin_yaw * world_drift_x + cos_yaw * world_drift_y  # +left
+    body_drift_vx = cos_yaw * est_world_vx + sin_yaw * est_world_vy    # sagittal velocity
+
+    drift_distance = jnp.sqrt(body_drift_x ** 2 + body_drift_y ** 2)
+    drift_vel_mag = jnp.sqrt(body_drift_vx ** 2 + (
+        -sin_yaw * est_world_vx + cos_yaw * est_world_vy) ** 2)
+    yaw_error_abs = jnp.abs(yaw_error)
+
+    # ═════════════════════════════════════════════════════════════════════
+    # Continuous authority gates (smoothstep — no hard thresholds)
+    # ═════════════════════════════════════════════════════════════════════
+
+    def _smoothstep01(x):
+        xc = jnp.clip(x, 0.0, 1.0)
+        return xc * xc * (3.0 - 2.0 * xc)
+
+    # Stability gate: 1.0 = perfectly stable, 0.0 = falling
+    stability_gate = (
+        _smoothstep01((0.21 - pitch_abs) / (0.21 - 0.035))           # pitch 2→12 deg
+        * _smoothstep01((0.262 - pitch_rate_abs) / (0.262 - 0.035))  # pitch_rate 2→15 deg/s
+        * _smoothstep01((0.087 - roll_abs) / (0.087 - 0.017))        # roll 1→5 deg
+        * contact_quality                                               # already 0→1
+    )
+
+    # ── Split height gates: per-component sensitivity to CoM z-velocity ──
+    # Velocity gate: wider — stays active during controlled height motion
+    height_gate_vel = 1.0 - _smoothstep01((com_z_vel_abs - hgate_vel_low) / (hgate_vel_high - hgate_vel_low))
+    # Heading gate: narrower — reduces quickly during height transitions
+    height_gate_heading = 1.0 - _smoothstep01((com_z_vel_abs - hgate_heading_low) / (hgate_heading_high - hgate_heading_low))
+    # Position gate: legacy — uses original hgate (tight)
+    height_gate_pos = 1.0 - _smoothstep01((com_z_vel_abs - hgate_low) / (hgate_high - hgate_low))
+
+    # Velocity damping gate: wider height gate → stays active during slow height motion
+    vel_gate = stability_gate * height_gate_vel
+
+    # Push inference: continuous — high drift velocity + high pitch rate
+    push_inference = (
+        _smoothstep01((drift_vel_mag - 0.05) / (0.30 - 0.05))
+        * _smoothstep01((pitch_rate_abs - 0.087) / (0.35 - 0.087))
+    )
+    vel_damping_mult = 1.0 + push_damp_mult * push_inference  # 1.0→(1.0+push_damp_mult)
+
+    # Heading gate: reduce if hip-yaw diverging; uses narrower height gate
+    heading_gate = (
+        stability_gate
+        * height_gate_heading
+        * _smoothstep01((yaw_error_abs - 0.03) / (0.15 - 0.03))
+        * (1.0 - _smoothstep01((hip_yaw_div - 0.05) / (0.15 - 0.05)))
+    )
+
+    # Position gate: weak, heavily gated (configurable smoothstep region); tightest height gate
+    position_gate = (
+        stability_gate
+        * height_gate_pos
+        * _smoothstep01((drift_distance - pgate_low) / (pgate_high - pgate_low))
+    )
+    # Further reduce when velocity is high (prioritize damping first)
+    position_gate *= (1.0 - 0.5 * _smoothstep01((drift_vel_mag - 0.02) / (0.15 - 0.02)))
+
+    # ═════════════════════════════════════════════════════════════════════
+    # Torque computation
+    # ═════════════════════════════════════════════════════════════════════
+
+    # Component 1: Sagittal velocity damping (symmetric)
+    # Negative body_drift_vx = drifting backward → positive torque = forward recovery
+    tau_drift_vel = -k_vel * body_drift_vx * vel_gate * vel_damping_mult
+
+    # Component 3: Heading hold (antisymmetric)
+    # Positive yaw_error = turned CCW → negative diff torque = turn CW back
+    heading_torque = (
+        -k_heading * yaw_error
+        - k_heading_rate * est_yaw_rate
+    ) * heading_gate
+
+    # Component 4: Position return (symmetric, very weak)
+    tau_drift_pos = -k_pos * body_drift_x * position_gate
+
+    # Assemble wheel torques
+    tau_wheel_symmetric = tau_drift_vel + tau_drift_pos
+    tau_wheel_antisymmetric = heading_torque
+
+    tau_drift_raw_l = tau_wheel_symmetric + tau_wheel_antisymmetric   # index 4
+    tau_drift_raw_r = tau_wheel_symmetric - tau_wheel_antisymmetric   # index 9
+
+    # Smooth tanh bound (NOT hard clip — final safety clip belongs to composer)
+    tau_drift_bounded_l = max_tau * jnp.tanh(tau_drift_raw_l / max_tau)
+    tau_drift_bounded_r = max_tau * jnp.tanh(tau_drift_raw_r / max_tau)
+
+    # Ablation flag: zero out drift torques when disabled
+    do_drift = drift_enabled > 0.5
+    tau_drift_bounded_l = jnp.where(do_drift, tau_drift_bounded_l, 0.0)
+    tau_drift_bounded_r = jnp.where(do_drift, tau_drift_bounded_r, 0.0)
+
+    # ── Pack drift diagnostics (18 fields) ──
+    drift_diag = jnp.zeros(18, dtype=jnp.float64)
+    drift_diag = drift_diag.at[0].set(world_drift_x)
+    drift_diag = drift_diag.at[1].set(world_drift_y)
+    drift_diag = drift_diag.at[2].set(body_drift_x)
+    drift_diag = drift_diag.at[3].set(body_drift_y)
+    drift_diag = drift_diag.at[4].set(drift_distance)
+    drift_diag = drift_diag.at[5].set(drift_vel_mag)
+    drift_diag = drift_diag.at[6].set(yaw_error)
+    drift_diag = drift_diag.at[7].set(stability_gate)
+    drift_diag = drift_diag.at[8].set(heading_gate)
+    drift_diag = drift_diag.at[9].set(position_gate)
+    drift_diag = drift_diag.at[10].set(height_gate_vel)     # was height_gate
+    drift_diag = drift_diag.at[11].set(tau_drift_raw_l)
+    drift_diag = drift_diag.at[12].set(tau_drift_raw_r)
+    drift_diag = drift_diag.at[13].set(tau_drift_bounded_l)
+    drift_diag = drift_diag.at[14].set(tau_drift_bounded_r)
+    drift_diag = drift_diag.at[15].set(height_gate_heading)  # new
+    drift_diag = drift_diag.at[16].set(height_gate_pos)      # new
+    drift_diag = drift_diag.at[17].set(height_gate_vel)      # duplicate at 17 for backward compat telemetry
+
+    return tau_drift_bounded_l, tau_drift_bounded_r, new_state, drift_diag
+
+
+# ===========================================================================
 # Stage 4: Full K2 JAX controller step (JIT-compatible)
 # ===========================================================================
 
 def k2_jax_controller_step(
-    state_flat: jnp.ndarray,   # (332,) — K2_JAX_STATE_SIZE
-    input_flat: jnp.ndarray,   # (41,) — K2_JAX_INPUT_SIZE
+    state_flat: jnp.ndarray,   # (840,) — K2_JAX_STATE_SIZE
+    input_flat: jnp.ndarray,   # (51,) — K2_JAX_INPUT_SIZE
     params_flat: jnp.ndarray,  # (41,) — K2_JAX_PARAMS_SIZE_STAGE2
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """Full K2 balance-core controller step — pure JAX function.
@@ -2171,6 +3031,122 @@ def k2_jax_controller_step(
     tau_support_ff = k2_jax_support_feedforward_compute(
         support_pos_err, schedule_h)
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Phase 4 Candidate E: Continuous pitch-damping enhancement
+    #
+    # Phase 3 audit found: the controller has zero torque saturation and unused
+    # headroom. Phase 4 experiments proved that reducing ANY existing component
+    # authority causes instability.
+    #
+    # Instead, add a small continuous pitch-rate-dependent wheel damping term
+    # that only activates during pitch oscillations (>2 deg/s). It provides
+    # additional pitch damping WITHOUT affecting steady-state behavior.
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Phase 4 Final Candidate: Continuous pitch-damping enhancement
+    #
+    # Adds a small pitch-rate-dependent wheel damping term that only activates
+    # during pitch oscillations (>2 deg/s). Zero effect at steady-state.
+    # Height-velocity gate prevents fighting natural pitch during transitions.
+    #
+    # This is the ONLY safe type of improvement found across all Phase 4
+    # experiments: minimal, additive, zero steady-state effect.
+    # ═══════════════════════════════════════════════════════════════════════════
+    _pitch_rate_abs = jnp.abs(pitch_rate_eff)
+    _pr_boost = _jax_smoothstep01((_pitch_rate_abs - 0.035) / (0.262 - 0.035))  # 2→15 deg/s
+    _com_z_vel_abs = jnp.abs(com_z - schedule_h) * 100.0
+    _ht_gate = 1.0 - _jax_smoothstep01((_com_z_vel_abs - 0.005) / (0.03 - 0.005))
+    _kd_pitch_boost = 3.0 * _ht_gate  # Nm/(rad/s)
+    _tau_pitch_damp_boost = -_kd_pitch_boost * pitch_rate_eff * _pr_boost
+    tau_sag = tau_sag.at[4].add(_tau_pitch_damp_boost)
+    tau_sag = tau_sag.at[9].add(_tau_pitch_damp_boost)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Step 9.5: Coordinated drift controller
+    #
+    # Inserted after pitch damping boost, before torque composer.
+    # Applies drift correction through wheel torques only.
+    # Continuous state-dependent gating — no hard thresholds.
+    # ═══════════════════════════════════════════════════════════════════════════
+    _pitch_abs = jnp.abs(effective_pitch_x)
+    _pitch_rate_abs_drift = jnp.abs(pitch_rate_eff)
+    _roll_abs = jnp.abs(roll_y)
+    _com_z_vel_abs_drift = jnp.abs(com_z - schedule_h) * 100.0  # cm/s → m/s
+
+    _tau_drift_l, _tau_drift_r, state_flat, _drift_diag = k2_jax_drift_controller(
+        state_flat, input_flat, params_flat,
+        _pitch_abs, _pitch_rate_abs_drift, _roll_abs,
+        input_flat[_I_CONTACT_VALID],
+        _com_z_vel_abs_drift,
+        jnp.abs(hy_div_err),
+    )
+
+    # Add drift torques to sagittal (wheels) BEFORE composer
+    tau_sag = tau_sag.at[4].add(_tau_drift_l)
+    tau_sag = tau_sag.at[9].add(_tau_drift_r)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Step 9.6: Heading hip-yaw stabilizer (low-authority soft heading impedance)
+    #
+    # Acts on hip-yaw joints [1,6] with very low authority. Corrects slow yaw
+    # drift using smooth bounded torque. Yields to poor stability, fast height
+    # motion, and hip-yaw divergence. No wheel differential — purely hip-yaw based.
+    # V3: WIDENED pitch gate (full activation at 0.07 rad instead of 0.035 rad)
+    #     and widened roll gate. Individual sub-gates returned for telemetry.
+    # ═══════════════════════════════════════════════════════════════════════════
+    _heading_pitch_gate = _jax_smoothstep01((0.21 - _pitch_abs) / (0.21 - 0.07))
+    _heading_roll_gate = _jax_smoothstep01((0.122 - _roll_abs) / (0.122 - 0.035))
+    _heading_contact_gate = input_flat[_I_CONTACT_VALID]
+    # V3 FIX: _com_z_vel_abs_drift = |com_z - schedule_h| * 100 is in cm (height
+    # position error), not m/s. Use cm-scale thresholds: full gate below 2 cm error,
+    # progressive yield up to 12 cm error. Matches drift controller's height-gate
+    # semantics where hgate_vel_low=0.08 means 8 cm and hgate_vel_high=0.35 means 35 cm.
+    _heading_height_gate = 1.0 - _jax_smoothstep01(
+        (_com_z_vel_abs_drift - 2.0) / (12.0 - 2.0))
+    _hy_div = jnp.abs(hy_div_err)
+    _hy_mean = 0.5 * (q_hy_l + q_hy_r)
+
+    (_tau_heading_l, _tau_heading_r, _tau_heading_raw, _tau_heading_bounded,
+     state_flat, _heading_error, _heading_gate_val,
+     _heading_pitch_gate_out, _heading_roll_gate_out, _heading_contact_gate_out,
+     _heading_twist_gate_val, _heading_height_gate_out,
+     _heading_twist_yield_gate_val) = \
+        k2_jax_heading_hip_yaw_stabilizer(
+            state_flat, params_flat,
+            input_flat[_I_EST_YAW], input_flat[_I_EST_YAW_RATE],
+            _heading_pitch_gate, _heading_roll_gate, _heading_contact_gate,
+            _heading_height_gate, _hy_div, _hy_mean,
+        )
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Step 9.7: Anti-twist damping (reduce excessive hip-yaw divergence)
+    #
+    # Applies opposing torques to hip-yaw joints to damp left/right asymmetry.
+    # Mild gains, smooth bounds. Does not lock legs or reduce co-contraction.
+    # ═══════════════════════════════════════════════════════════════════════════
+    _twist_stability = (
+        _jax_smoothstep01((0.21 - _pitch_abs) / (0.21 - 0.035))
+        * _jax_smoothstep01((0.087 - _roll_abs) / (0.087 - 0.017))
+        * input_flat[_I_CONTACT_VALID]
+    )
+    (_tau_twist_l, _tau_twist_r, _twist_gate_val,
+     _div_guard_gate, _div_guard_boost,
+     _tau_guard_extra_l, _tau_guard_extra_r) = k2_jax_anti_twist_damping(
+        params_flat, q_hy_l, q_hy_r, qd_hy_l, qd_hy_r, _twist_stability)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Step 9.8: Hip-yaw mean centering (weak return toward neutral)
+    #
+    # Gently brings both legs back toward zero-mean after disturbances.
+    # Very weak authority — yields to poor balance, high divergence, and height
+    # motion. Does not fight support behavior or heading correction.
+    # ═══════════════════════════════════════════════════════════════════════════
+    _center_stability = _twist_stability  # Reuse same stability gate
+    _tau_center_l, _tau_center_r, _center_gate_val = k2_jax_hy_mean_centering(
+        params_flat, _hy_mean, _hy_div,
+        _center_stability, _heading_height_gate)
+
     # === Step 10: Sum and compose (active K2 mechanism) ===
     # Yaw and mode_div are added to posture BEFORE composer,
     # matching the Python simulation order where all torque sources
@@ -2186,6 +3162,15 @@ def k2_jax_controller_step(
     tau_posture_with_yaw = tau_posture_with_yaw.at[6].add(tau_yaw[6])
     tau_posture_with_yaw = tau_posture_with_yaw.at[1].add(tau_mode_div[1])
     tau_posture_with_yaw = tau_posture_with_yaw.at[6].add(tau_mode_div[6])
+    # Add heading hip-yaw stabilizer torques (differential: left=+tau, right=-tau)
+    tau_posture_with_yaw = tau_posture_with_yaw.at[1].add(_tau_heading_l)
+    tau_posture_with_yaw = tau_posture_with_yaw.at[6].add(_tau_heading_r)
+    # Add anti-twist damping torques (opposing on [1,6])
+    tau_posture_with_yaw = tau_posture_with_yaw.at[1].add(_tau_twist_l)
+    tau_posture_with_yaw = tau_posture_with_yaw.at[6].add(_tau_twist_r)
+    # Add mean centering torques (symmetric on [1,6])
+    tau_posture_with_yaw = tau_posture_with_yaw.at[1].add(_tau_center_l)
+    tau_posture_with_yaw = tau_posture_with_yaw.at[6].add(_tau_center_r)
 
     tau_sum = tau_sag + tau_posture_with_yaw + tau_lateral + k2_jax_empirical_support_ff()
 
@@ -2290,6 +3275,168 @@ def k2_jax_controller_step(
     )
     diag = diag.at[_D_APCR1ND_WD_APPLY].set(jnp.where(_apcr1nd_wd_applied, 1.0, 0.0))
     diag = diag.at[_D_APCR1ND_WD_SCALE].set(_apcr1nd_wd_scale)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Phase 3: Per-component torque telemetry for conflict audit
+    # Zero behavior change — diag writes only.
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    # ── Posture PD torques at each leg joint ──────────────────────────────────
+    diag = diag.at[_D_POSTURE_HR_L].set(tau_posture[0])
+    diag = diag.at[_D_POSTURE_HY_L].set(tau_posture[1])
+    diag = diag.at[_D_POSTURE_HP_L].set(tau_posture[2])
+    diag = diag.at[_D_POSTURE_KN_L].set(tau_posture[3])
+    diag = diag.at[_D_POSTURE_HR_R].set(tau_posture[5])
+    diag = diag.at[_D_POSTURE_HY_R].set(tau_posture[6])
+    diag = diag.at[_D_POSTURE_HP_R].set(tau_posture[7])
+    diag = diag.at[_D_POSTURE_KN_R].set(tau_posture[8])
+
+    # ── Yaw controller at hip_yaw ────────────────────────────────────────────
+    diag = diag.at[_D_YAW_L].set(tau_yaw[1])
+    diag = diag.at[_D_YAW_R].set(tau_yaw[6])
+
+    # ── Mode-div controller at hip_yaw ───────────────────────────────────────
+    diag = diag.at[_D_MODE_DIV_L].set(tau_mode_div[1])
+    diag = diag.at[_D_MODE_DIV_R].set(tau_mode_div[6])
+
+    # ── Lateral roll at hip_roll ─────────────────────────────────────────────
+    diag = diag.at[_D_LATERAL_L].set(tau_lateral[0])
+    diag = diag.at[_D_LATERAL_R].set(tau_lateral[5])
+
+    # ── Support feedforward (height-gated, hip_yaw joints) ───────────────────
+    # NOTE: tau_support_ff is COMPUTED but EXCLUDED from tau_sum.
+    # Recording it reveals what torque WOULD have been applied if included.
+    diag = diag.at[_D_SUPPORT_FF_HY_L].set(tau_support_ff[1])
+    diag = diag.at[_D_SUPPORT_FF_HY_R].set(tau_support_ff[6])
+    # Support FF hip_pitch components (usually zero, recorded for completeness)
+    diag = diag.at[_D_SUPPORT_FF_HP_L].set(tau_support_ff[2])
+    diag = diag.at[_D_SUPPORT_FF_HP_R].set(tau_support_ff[7])
+
+    # ── Empirical support FF (constant vector: hip_pitch/knee, INCLUDED in sum) ─
+    _emp_ff = k2_jax_empirical_support_ff()
+    diag = diag.at[_D_EMP_SUPPORT_HP_L].set(_emp_ff[2])
+    diag = diag.at[_D_EMP_SUPPORT_HP_R].set(_emp_ff[7])
+    diag = diag.at[_D_EMP_SUPPORT_KN_L].set(_emp_ff[3])
+    diag = diag.at[_D_EMP_SUPPORT_KN_R].set(_emp_ff[8])
+
+    # ── Pre-composer sum (tau_sum before clipping) ───────────────────────────
+    diag = diag.at[_D_PRECLIP_START:_D_PRECLIP_START + 10].set(tau_sum)
+
+    # ── Post-clip (tau_clipped, after clipping, before rate-limit) ───────────
+    diag = diag.at[_D_POSTCLIP_START:_D_POSTCLIP_START + 10].set(tau_clipped)
+
+    # ── Online cancellation metrics ──────────────────────────────────────────
+    # Cancellation at hip_yaw [1,6]: sum(|each component|) - |sum|
+    _abs_posture_hy = jnp.abs(tau_posture[1]) + jnp.abs(tau_posture[6])
+    _abs_yaw = jnp.abs(tau_yaw[1]) + jnp.abs(tau_yaw[6])
+    _abs_mode_div = jnp.abs(tau_mode_div[1]) + jnp.abs(tau_mode_div[6])
+    _abs_sum_hy = jnp.abs(tau_posture_with_yaw[1]) + jnp.abs(tau_posture_with_yaw[6])
+    _cancel_hy = _abs_posture_hy + _abs_yaw + _abs_mode_div - _abs_sum_hy
+
+    # Cancellation at hip_roll [0,5]: sum(|posture| + |lateral|) - |sum|
+    _abs_posture_hr = jnp.abs(tau_posture[0]) + jnp.abs(tau_posture[5])
+    _abs_lateral = jnp.abs(tau_lateral[0]) + jnp.abs(tau_lateral[5])
+    _abs_sum_hr = jnp.abs(tau_posture[0] + tau_lateral[0]) + jnp.abs(tau_posture[5] + tau_lateral[5])
+    _cancel_hr = _abs_posture_hr + _abs_lateral - _abs_sum_hr
+
+    # Cancellation at hip_pitch [2,7]: sum(|posture| + |emp_ff|) - |sum with emp_ff|
+    _abs_posture_hp = jnp.abs(tau_posture[2]) + jnp.abs(tau_posture[7])
+    _abs_emp_hp = jnp.abs(_emp_ff[2]) + jnp.abs(_emp_ff[7])
+    _sum_hp_l = tau_posture[2] + _emp_ff[2]
+    _sum_hp_r = tau_posture[7] + _emp_ff[7]
+    _abs_sum_hp = jnp.abs(_sum_hp_l) + jnp.abs(_sum_hp_r)
+    _cancel_hp = _abs_posture_hp + _abs_emp_hp - _abs_sum_hp
+
+    # Cancellation at knee [3,8]: sum(|posture| + |emp_ff|) - |sum|
+    _abs_posture_kn = jnp.abs(tau_posture[3]) + jnp.abs(tau_posture[8])
+    _abs_emp_kn = jnp.abs(_emp_ff[3]) + jnp.abs(_emp_ff[8])
+    _sum_kn_l = tau_posture[3] + _emp_ff[3]
+    _sum_kn_r = tau_posture[8] + _emp_ff[8]
+    _abs_sum_kn = jnp.abs(_sum_kn_l) + jnp.abs(_sum_kn_r)
+    _cancel_kn = _abs_posture_kn + _abs_emp_kn - _abs_sum_kn
+
+    diag = diag.at[_D_CANCEL_HIP_YAW].set(_cancel_hy)
+    diag = diag.at[_D_CANCEL_HIP_ROLL].set(_cancel_hr)
+    diag = diag.at[_D_CANCEL_HIP_PITCH].set(_cancel_hp)
+    diag = diag.at[_D_CANCEL_KNEE].set(_cancel_kn)
+    diag = diag.at[_D_CANCEL_TOTAL].set(_cancel_hy + _cancel_hr + _cancel_hp + _cancel_kn)
+
+    # ── Saturation/rate-limit attribution ────────────────────────────────────
+    # sat_mask and rate_mask are boolean arrays (10,) from torque composer
+    # Convert to float for safe JAX arithmetic
+    _sat_f = sat_mask.astype(jnp.float64)
+    _rate_f = rate_mask.astype(jnp.float64)
+    # Sagittal: wheels [4,9]
+    diag = diag.at[_D_SAT_ATTR_SAGITTAL].set(_sat_f[4] + _sat_f[9])
+    # Posture leg joints: [0,1,2,3,5,6,7,8]
+    _sat_legs = _sat_f[0] + _sat_f[1] + _sat_f[2] + _sat_f[3] + _sat_f[5] + _sat_f[6] + _sat_f[7] + _sat_f[8]
+    diag = diag.at[_D_SAT_ATTR_POSTURE].set(_sat_legs)
+    # Yaw: hip_yaw [1,6]
+    diag = diag.at[_D_SAT_ATTR_YAW].set(_sat_f[1] + _sat_f[6])
+    # Lateral: hip_roll [0,5]
+    diag = diag.at[_D_SAT_ATTR_LATERAL].set(_sat_f[0] + _sat_f[5])
+    # Rate-limit: balance (wheels) vs posture (legs)
+    _rate_legs = _rate_f[0] + _rate_f[1] + _rate_f[2] + _rate_f[3] + _rate_f[5] + _rate_f[6] + _rate_f[7] + _rate_f[8]
+    diag = diag.at[_D_RATE_ATTR_BALANCE].set(_rate_f[4] + _rate_f[9])
+    diag = diag.at[_D_RATE_ATTR_POSTURE].set(_rate_legs)
+
+    # ── Drift controller diagnostics ──────────────────────────────────────────
+    diag = diag.at[_D_DRIFT_WORLD_X].set(_drift_diag[0])
+    diag = diag.at[_D_DRIFT_WORLD_Y].set(_drift_diag[1])
+    diag = diag.at[_D_DRIFT_BODY_X].set(_drift_diag[2])
+    diag = diag.at[_D_DRIFT_BODY_Y].set(_drift_diag[3])
+    diag = diag.at[_D_DRIFT_DISTANCE].set(_drift_diag[4])
+    diag = diag.at[_D_DRIFT_VELOCITY].set(_drift_diag[5])
+    diag = diag.at[_D_YAW_ERROR_DRIFT].set(_drift_diag[6])
+    diag = diag.at[_D_DRIFT_STABILITY_GATE].set(_drift_diag[7])
+    diag = diag.at[_D_DRIFT_HEADING_GATE].set(_drift_diag[8])
+    diag = diag.at[_D_DRIFT_POSITION_GATE].set(_drift_diag[9])
+    diag = diag.at[_D_DRIFT_HEIGHT_GATE].set(_drift_diag[10])
+    diag = diag.at[_D_TAU_DRIFT_RAW_L].set(_drift_diag[11])
+    diag = diag.at[_D_TAU_DRIFT_RAW_R].set(_drift_diag[12])
+    diag = diag.at[_D_TAU_DRIFT_BOUNDED_L].set(_drift_diag[13])
+    diag = diag.at[_D_TAU_DRIFT_BOUNDED_R].set(_drift_diag[14])
+    # Split height gate diags from drift controller
+    diag = diag.at[_D_DRIFT_HGATE_VEL].set(_drift_diag[10])      # height_gate_vel
+    diag = diag.at[_D_DRIFT_HGATE_HEADING].set(_drift_diag[15])  # height_gate_heading
+    diag = diag.at[_D_DRIFT_HGATE_POS].set(_drift_diag[16])      # height_gate_pos
+
+    # ── Heading hip-yaw stabilizer diagnostics ────────────────────────────
+    diag = diag.at[_D_TAU_HEADING_HY_L].set(_tau_heading_l)
+    diag = diag.at[_D_TAU_HEADING_HY_R].set(_tau_heading_r)
+    diag = diag.at[_D_HEADING_HY_ERROR].set(_heading_error)
+    diag = diag.at[_D_HEADING_GATE].set(_heading_gate_val)
+    # V3: Heading sub-gate diagnostics
+    diag = diag.at[_D_HEADING_PITCH_GATE].set(_heading_pitch_gate_out)
+    diag = diag.at[_D_HEADING_ROLL_GATE].set(_heading_roll_gate_out)
+    diag = diag.at[_D_HEADING_CONTACT_GATE].set(_heading_contact_gate_out)
+    diag = diag.at[_D_HEADING_TWIST_GATE].set(_heading_twist_gate_val)
+    diag = diag.at[_D_HEADING_HEIGHT_GATE].set(_heading_height_gate_out)
+    diag = diag.at[_D_TAU_HEADING_RAW].set(_tau_heading_raw)
+    diag = diag.at[_D_TAU_HEADING_BOUNDED].set(_tau_heading_bounded)
+    # V4: Heading twist yield gate (divergence guard entry gate for heading)
+    diag = diag.at[_D_HEADING_TWIST_YIELD_GATE].set(_heading_twist_yield_gate_val)
+
+    # ── Anti-twist damping diagnostics ────────────────────────────────────
+    diag = diag.at[_D_TAU_ANTI_TWIST_L].set(_tau_twist_l)
+    diag = diag.at[_D_TAU_ANTI_TWIST_R].set(_tau_twist_r)
+    diag = diag.at[_D_TWIST_GATE].set(_twist_gate_val)
+    # V4: Divergence guard diagnostics
+    diag = diag.at[_D_HY_DIV_GUARD_GATE].set(_div_guard_gate)
+    diag = diag.at[_D_HY_DIV_GUARD_BOOST].set(_div_guard_boost)
+    diag = diag.at[_D_TAU_HY_DIV_GUARD_L].set(_tau_guard_extra_l)
+    diag = diag.at[_D_TAU_HY_DIV_GUARD_R].set(_tau_guard_extra_r)
+
+    # ── Hip-yaw mean centering diagnostics ─────────────────────────────────
+    diag = diag.at[_D_TAU_CENTER_L].set(_tau_center_l)
+    diag = diag.at[_D_TAU_CENTER_R].set(_tau_center_r)
+    diag = diag.at[_D_CENTER_GATE].set(_center_gate_val)
+    diag = diag.at[_D_HY_MEAN_RAD].set(_hy_mean)
+
+    # ── Copy heading state to new_state ───────────────────────────────────
+    new_state = new_state.at[_S_HEADING_HY_REF_YAW].set(state_flat[_S_HEADING_HY_REF_YAW])
+    new_state = new_state.at[_S_HEADING_HY_REF_LATCHED].set(state_flat[_S_HEADING_HY_REF_LATCHED])
+    new_state = new_state.at[_S_HEADING_HY_INTEGRAL].set(state_flat[_S_HEADING_HY_INTEGRAL])
 
     return tau_final, new_state, diag
 

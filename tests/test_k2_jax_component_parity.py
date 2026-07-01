@@ -31,6 +31,7 @@ from wheeled_biped.controllers.k2_jax_controller import (
     K2_JAX_PARAMS_FIELDS_STAGE2,
     K2_JAX_PARAMS_SIZE_STAGE2,
     K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE,
+    K2_JAX_PARAMS_SIZE_DRIFT,
     pack_state_stage2,
     unpack_state_stage2,
     pack_params_stage2,
@@ -533,12 +534,13 @@ class TestParamsPackUnpackStage2:
 
         K2_JAX_PARAMS_SIZE_STAGE2 (41) = base fields in K2_JAX_PARAMS_FIELDS_STAGE2.
         K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE (54) = base + EXT(+7) + STANDALONE(+6).
-        pack_params_stage2() returns the full EXT_STANDALONE size because it includes
-        APCR1ND position cap boost params and standalone equilibrium constants.
+        K2_JAX_PARAMS_SIZE_DRIFT (78) = EXT_STANDALONE + drift(+8) + heading(+4) +
+            anti-twist(+3) + split-gate(+4) + mean-center(+2) + misc(+1).
+        pack_params_stage2() returns the full DRIFT size.
         """
         assert K2_JAX_PARAMS_SIZE_STAGE2 == len(K2_JAX_PARAMS_FIELDS_STAGE2)
         params = pack_params_stage2()
-        assert params.shape == (K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE,)
+        assert params.shape == (K2_JAX_PARAMS_SIZE_DRIFT,)
 
     def test_params_fields_unique(self):
         """No duplicate param field names."""

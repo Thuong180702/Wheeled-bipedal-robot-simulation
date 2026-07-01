@@ -17,6 +17,20 @@ Usage:
   # Push recovery headless
   python scripts/run_k2_jax_realtime.py --height-setup .../setup.json --push-seq .../push.json --steps 3000
 
+  # Random single-push (test-only) — generate + save config
+  python scripts/run_k2_jax_realtime.py --height-setup .../mid_0p400_setup.json \
+    --steps 7000 --profile K2_JAX_DEDICATED_DEFAULT_V3 \
+    --random-single-push --push-seed 101 --push-step-min 300 --push-step-max 500 \
+    --push-force-min 50 --push-force-max 100 --push-duration-steps 8 \
+    --save-random-push-config outputs/diag/k2_v3_random_single_push/trial_101/push_config.json \
+    --telemetry full --output-dir outputs/diag/k2_v3_random_single_push/trial_101
+
+  # Visual replay from saved random push config
+  python scripts/run_k2_jax_realtime.py --height-setup .../mid_0p400_setup.json \
+    --steps 7000 --profile K2_JAX_DEDICATED_DEFAULT_V3 \
+    --visual --load-random-push-config outputs/diag/k2_v3_random_single_push/trial_101/push_config.json \
+    --telemetry full --output-dir outputs/visual/k2_v3_random_single_push/trial_101
+
   # Visual realtime (default: realtime factor 1.0, hold viewer after sim)
   python scripts/run_k2_jax_realtime.py --height-setup .../setup.json \
     --push-seq .../push.json --steps 10000 --visual --telemetry summary
@@ -75,8 +89,34 @@ from wheeled_biped.controllers.orientation_utils import compute_robot_frame_orie
 from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import (
     K2_NOTCH_LOW_Q_V1,
     K2_JAX_DEDICATED_DEFAULT_V1,
-    K2_JAX_DEDICATED_DEFAULT_V2 as _K2_AUTH_SCHED,
+    K2_JAX_DEDICATED_DEFAULT_V2 as _K2_AUTH_SCHED,  # V2 rollback alias
+    K2_JAX_DEDICATED_DEFAULT_V3 as _K3_AUTH_SCHED,   # V3 — OFFICIAL DEFAULT (promoted 2026-07-01)
     K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE,
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2,
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4,
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V5,
+    # V3 audit fix candidate (2026-07-01)
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX,
+    # V3 audit fix V2 — heading gain midpoint (2026-07-01)
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2,
+    # V3 audit fix V2 FINAL — promote candidate from 5-point micro-ablation (2026-07-01)
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2_FINAL,
+    # V3 audit fix V2 micro-ablations — heading gain sweep (2026-07-01)
+    V3_AUDIT_FIX_KP_055,
+    V3_AUDIT_FIX_KP_085,
+    # V3 audit ablation profiles (2026-07-01)
+    V3_AUDIT_HEADING_OFF,
+    V3_AUDIT_HEADING_GATE_OPEN,
+    V3_AUDIT_QREF_STATIC,
+    V3_AUDIT_QREF_DYNAMIC,
+    # Phase 1 ablation profiles (V4 regression root-cause analysis)
+    HHT_ABLATE_V3_BASE,
+    HHT_ABLATE_V3_PLUS_60_40_BLEND,
+    HHT_ABLATE_V4_NO_GUARD_CHANGE,
+    HHT_ABLATE_V4_NO_HEADING_TWIST_YIELD,
+    HHT_ABLATE_GUARD_CAP_TEST,
     DRIFT_ITER2_VEL_ONLY_WIDE_GATE,
     DRIFT_ITER2_VEL_HEADING_WIDE_GATE,
     DRIFT_ITER2_VEL_HEADING_LATE_POSITION,
@@ -123,7 +163,7 @@ FULL_CSV_COLUMNS = [
     # Hip yaw divergence
     "hip_yaw_div_error", "hip_yaw_div_rate",
     # Push
-    "push_fx", "push_fy",
+    "push_fx", "push_fy", "push_fz",
     # Contact
     "contact_valid", "contact_left", "contact_right",
     # Termination
@@ -162,6 +202,30 @@ FULL_CSV_COLUMNS = [
     "drift_position_gate", "drift_height_gate",
     "tau_drift_raw_l_nm", "tau_drift_raw_r_nm",
     "tau_drift_bounded_l_nm", "tau_drift_bounded_r_nm",
+    # Heading hip-yaw stabilizer telemetry (V2+)
+    "tau_heading_hip_yaw_l_nm", "tau_heading_hip_yaw_r_nm",
+    "heading_hip_yaw_error_rad", "heading_gate",
+    # Anti-twist damping telemetry (V2+)
+    "tau_anti_twist_l_nm", "tau_anti_twist_r_nm", "twist_gate",
+    # Split height gate telemetry (V2+)
+    "drift_height_gate_vel", "drift_height_gate_heading", "drift_height_gate_pos",
+    # Hip-yaw mean centering telemetry (V2+)
+    "tau_center_l_nm", "tau_center_r_nm", "center_gate", "hip_yaw_mean_rad",
+    # Heading sub-gate diagnostics (V3)
+    "heading_pitch_gate", "heading_roll_gate", "heading_contact_gate",
+    "heading_twist_gate", "heading_height_gate",
+    "tau_heading_raw_nm", "tau_heading_bounded_nm",
+    # Sign validation (V3)
+    "heading_sign_check",
+    # Divergence guard diagnostics (V4)
+    "hy_div_guard_gate", "hy_div_guard_boost", "heading_twist_yield_gate",
+    "tau_hy_div_guard_l_nm", "tau_hy_div_guard_r_nm",
+    # Dynamic q_ref blend diagnostics (V4)
+    "q_ref_blend_dynamic_alpha", "q_ref_blend_static_alpha",
+    "q_ref_boundary_blend_gate", "active_height_segment_index",
+    "active_segment_start_m", "active_segment_end_m",
+    "active_segment_progress", "height_target_m", "height_error_m",
+    "height_reached_target",
 ]
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
@@ -202,10 +266,32 @@ def parse_args():
                    help="Delay in seconds after viewer launch before advancing simulation (default: 0.5)")
     p.add_argument("--push-seq", type=str, default=None,
                    help="Path to push sequence JSON file")
-    p.add_argument("--profile", type=str, default="k2_jax_dedicated_default_v2",
-                   help="Sagittal authority profile name (default: k2_jax_dedicated_default_v2)")
+    # ── Random single-push flags (test-only, 2026-07-01) ─────────────────
+    p.add_argument("--random-single-push", action="store_true", default=False,
+                   help="Enable random single-push mode (test-only)")
+    p.add_argument("--push-seed", type=int, default=None,
+                   help="Random seed for push generation (deterministic)")
+    p.add_argument("--push-step-min", type=int, default=300,
+                   help="Minimum push start step (default: 300)")
+    p.add_argument("--push-step-max", type=int, default=500,
+                   help="Maximum push start step (default: 500)")
+    p.add_argument("--push-force-min", type=float, default=50.0,
+                   help="Minimum push force magnitude N (default: 50)")
+    p.add_argument("--push-force-max", type=float, default=100.0,
+                   help="Maximum push force magnitude N (default: 100)")
+    p.add_argument("--push-duration-steps", type=int, default=8,
+                   help="Push duration in steps (default: 8)")
+    p.add_argument("--save-random-push-config", type=str, default=None,
+                   help="Save generated push config to JSON file")
+    p.add_argument("--load-random-push-config", type=str, default=None,
+                   help="Load push config from JSON file (for exact replay)")
+    p.add_argument("--profile", type=str, default="k2_jax_dedicated_default_v3",
+                   help="Sagittal authority profile name (default: k2_jax_dedicated_default_v3)")
     p.add_argument("--dynamic-height-trajectory", type=str, default=None,
                    help="Path to dynamic height trajectory JSON")
+    p.add_argument("--dynamic-height-scurve", type=str, default=None,
+                   help="Generate S-curve height trajectory: start_m,end_m,duration_s "
+                        "(e.g. 0.33,0.48,8.0)")
     p.add_argument("--dump-k2-params", type=str, default=None,
                    help="Write all control-affecting JAX params and equilibrium constants to JSON file")
     p.add_argument("--enable-mode-hip-yaw-divergence", action="store_true", default=True,
@@ -215,7 +301,7 @@ def parse_args():
                    dest="enable_mode_hip_yaw_divergence",
                    help="Disable mode-based hip-yaw divergence controller (for ablation/debug)")
     p.add_argument("--dynamic-qref-mode", type=str, default="original-k2-exact",
-                   choices=["original-k2-exact", "setup-interp-debug"],
+                   choices=["original-k2-exact", "setup-interp-debug", "two-point-smooth"],
                    help="Dynamic height q_ref mode: 'original-k2-exact' uses static q_ref matching "
                         "canonical K2 JAX path (DEFAULT for promotion); 'setup-interp-debug' uses "
                         "height-setup-file interpolation (APPROXIMATE, debug/ablation only, NOT for promotion)")
@@ -232,7 +318,16 @@ def load_json(path):
 
 
 def load_push_sequence(path):
-    """Load push sequence JSON. Returns list of (start_step, end_step, fx, fy)."""
+    """Load push sequence JSON.
+
+    Supports two formats:
+      OLD (4-element): [start_step, fx, fy, duration]
+          → fz=0.0, body_id=1 (torso)
+      EXTENDED (6-element): [start_step, fx, fy, fz, duration, body_name_or_id]
+          → fz and body as specified
+
+    Returns list of (start_step, end_step, fx, fy, fz, body_id_or_name).
+    """
     if path is None:
         return []
     data = load_json(path)
@@ -244,9 +339,144 @@ def load_push_sequence(path):
         entries = data
     schedule = []
     for entry in entries:
-        s, fx, fy, dur = entry
-        schedule.append((int(s), int(s) + int(dur), float(fx), float(fy)))
+        if len(entry) >= 6:
+            s, fx, fy, fz, dur, body = entry[0], entry[1], entry[2], entry[3], entry[4], entry[5]
+        elif len(entry) >= 5:
+            s, fx, fy, fz, dur = entry[0], entry[1], entry[2], entry[3], entry[4]
+            body = 1  # default torso
+        else:
+            s, fx, fy, dur = entry[0], entry[1], entry[2], entry[3]
+            fz = 0.0
+            body = 1  # default torso
+        schedule.append((int(s), int(s) + int(dur), float(fx), float(fy), float(fz), body))
     return schedule
+
+
+# ── Random single-push helpers (test-only, 2026-07-01) ─────────────────────
+
+# Valid body targets for random push application.
+# Subset of MuJoCo body names that are physically meaningful to push:
+# torso and upper/lower leg segments. Excludes hip links (unnatural) and
+# wheel links (tiny mass, force goes into ground contact).
+RANDOM_PUSH_BODY_TARGETS = [
+    "torso",
+    "l_thigh",
+    "r_thigh",
+    "l_knee_link",
+    "r_knee_link",
+]
+
+
+def generate_random_push(seed, step_min=300, step_max=500,
+                         force_min=50.0, force_max=100.0,
+                         duration_steps=8, body_list=None,
+                         profile="K2_JAX_DEDICATED_DEFAULT_V3"):
+    """Generate a deterministic random single-push configuration.
+
+    Uses Python's random module seeded per trial for reproducibility.
+    All parameters are logged for exact replay.
+
+    Returns a push_config dict (saveable as JSON).
+    """
+    import random as _random
+    rng = _random.Random(seed)
+
+    if body_list is None:
+        body_list = RANDOM_PUSH_BODY_TARGETS
+
+    push_step = rng.randint(step_min, step_max)
+    force_N = rng.uniform(force_min, force_max)
+
+    # Random 3D direction with limited vertical component
+    x = rng.uniform(-1.0, 1.0)
+    y = rng.uniform(-1.0, 1.0)
+    z = rng.uniform(-0.25, 0.25)
+    norm = (x * x + y * y + z * z) ** 0.5
+    if norm < 1e-10:
+        # Degenerate case: default to forward push
+        x, y, z = 0.0, -1.0, 0.0
+        norm = 1.0
+    direction = [x / norm, y / norm, z / norm]
+
+    # Compute force components
+    fx = direction[0] * force_N
+    fy = direction[1] * force_N
+    fz = direction[2] * force_N
+
+    target_body = rng.choice(body_list)
+
+    # MuJoCo xfrc_applied applies at COM only — document limitation
+    application_point_local = [0.0, 0.0, 0.0]
+
+    config = {
+        "seed": seed,
+        "profile": profile,
+        "push_step": push_step,
+        "push_duration_steps": duration_steps,
+        "force_N": round(force_N, 4),
+        "direction_world": [round(v, 6) for v in direction],
+        "fx": round(fx, 4),
+        "fy": round(fy, 4),
+        "fz": round(fz, 4),
+        "target_body": target_body,
+        "application_point_local": application_point_local,
+        "_note_application_point": (
+            "MuJoCo xfrc_applied applies force at body COM only. "
+            "application_point_local is always [0,0,0] for this runner."
+        ),
+        "_body_targets_available": body_list,
+        "_sampling_ranges": {
+            "push_step": [step_min, step_max],
+            "force_N": [force_min, force_max],
+            "direction_xy": "Uniform(-1, 1)",
+            "direction_z": "Uniform(-0.25, 0.25)",
+            "duration_steps": duration_steps,
+        },
+    }
+    return config
+
+
+def save_push_config(config, path):
+    """Save push config to JSON file."""
+    import os as _os
+    _os.makedirs(_os.path.dirname(path) if _os.path.dirname(path) else ".", exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(config, f, indent=2)
+
+
+def load_push_config_from_json(path):
+    """Load push config from JSON file. Returns config dict or None."""
+    data = load_json(path)
+    if data is None:
+        return None
+    return data
+
+
+def push_config_to_schedule(config, mj_model=None):
+    """Convert a push_config dict to internal schedule format.
+
+    Returns list of (start_step, end_step, fx, fy, fz, body_id_or_name).
+
+    If mj_model is provided, resolves body name strings to IDs.
+    Otherwise keeps the name string for later resolution.
+    """
+    push_step = int(config["push_step"])
+    duration = int(config["push_duration_steps"])
+    fx = float(config["fx"])
+    fy = float(config["fy"])
+    fz = float(config.get("fz", 0.0))
+    body = config["target_body"]
+
+    # Resolve body name to ID if model available
+    if mj_model is not None and isinstance(body, str):
+        try:
+            body_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, body)
+            body = body_id
+        except Exception:
+            # Keep as string, resolve later
+            pass
+
+    return [(push_step, push_step + duration, fx, fy, fz, body)]
 
 
 def load_dynamic_height_trajectory(path):
@@ -272,6 +502,62 @@ def load_dynamic_height_trajectory(path):
     return {"profile_name": data.get("height_profile_name", "dynamic"), "interp_fn": interp_fn}
 
 
+def generate_smooth_height_trajectory(
+    start_height_m: float,
+    end_height_m: float,
+    transition_duration_s: float = 8.0,
+    hold_start_s: float = 2.0,
+    hold_end_s: float = 2.0,
+    control_dt: float = 0.01,
+) -> dict:
+    """Generate an S-curve (smoothstep) height trajectory.
+
+    Uses smoothstep interpolation for smooth acceleration and deceleration
+    with zero velocity at endpoints. The trajectory has three phases:
+    1. Hold at start height (hold_start_s seconds)
+    2. S-curve transition (transition_duration_s seconds)
+    3. Hold at end height (hold_end_s seconds)
+
+    Args:
+        start_height_m: Initial height (m)
+        end_height_m: Target height (m)
+        transition_duration_s: Duration of the actual ramp (seconds)
+        hold_start_s: Hold time at start before transition (seconds)
+        hold_end_s: Hold time at end after transition (seconds)
+        control_dt: Control timestep (seconds)
+
+    Returns:
+        Dict with 'interp_fn' and 'profile_name', same format as
+        load_dynamic_height_trajectory.
+    """
+    hold_start_steps = int(hold_start_s / control_dt)
+    transition_steps = int(transition_duration_s / control_dt)
+    hold_end_steps = int(hold_end_s / control_dt)
+    total_steps = hold_start_steps + transition_steps + hold_end_steps
+
+    def smoothstep(t):
+        """Smoothstep on [0,1]: s(0)=0, s(1)=1, s'(0)=s'(1)=0."""
+        t = max(0.0, min(1.0, t))
+        return t * t * (3.0 - 2.0 * t)
+
+    def interp_fn(step):
+        if step < hold_start_steps:
+            return start_height_m
+        elif step < hold_start_steps + transition_steps:
+            t = (step - hold_start_steps) / max(transition_steps, 1)
+            s = smoothstep(t)
+            return start_height_m + s * (end_height_m - start_height_m)
+        else:
+            return end_height_m
+
+    return {
+        "profile_name": f"smoothstep_{start_height_m:.3f}_to_{end_height_m:.3f}",
+        "interp_fn": interp_fn,
+        "total_steps": total_steps,
+        "transition_steps": transition_steps,
+    }
+
+
 def compute_velocity_damping_scale(variant_name):
     """Compute effective velocity damping scale for K2 profile + variant.
 
@@ -281,6 +567,73 @@ def compute_velocity_damping_scale(variant_name):
     if variant_name and _auth.is_active_for_variant(variant_name):
         return float(_auth.velocity_damping_scale)
     return 1.0
+
+
+def build_two_point_qref_interpolator(
+    height_start_m: float,
+    height_end_m: float,
+    setup_dir: str = "outputs/physical_target_height_setups",
+):
+    """Build a simple two-point q_ref interpolator from start and end height setups.
+
+    Unlike build_height_qref_interpolator which loads ALL setups and can produce
+    discontinuities, this only loads the start and end height setups and linearly
+    blends between them. This is more robust and produces predictable posture
+    changes during height transitions.
+
+    Args:
+        height_start_m: Starting CoM height (m)
+        height_end_m: Ending CoM height (m)
+        setup_dir: Directory containing height setup JSON files
+
+    Returns:
+        interp_fn(z_m: float) -> np.ndarray[10]: Interpolated joint positions.
+        None if either setup file is missing.
+    """
+    import numpy as np
+
+    def _find_setup(h):
+        """Find the closest setup file for height h."""
+        # Format height as 0pXXX (e.g., 0.330 -> 0p330) to match file naming
+        h_str = f"{h:.3f}".replace(".", "p")
+        for prefix in ["low", "mid", "high"]:
+            path = Path(setup_dir) / f"{prefix}_{h_str}_setup.json"
+            if path.exists():
+                return str(path)
+        return None
+
+    _start_path = _find_setup(height_start_m)
+    _end_path = _find_setup(height_end_m)
+
+    if _start_path is None or _end_path is None:
+        return None
+
+    _start_data = load_json(_start_path)
+    _end_data = load_json(_end_path)
+
+    _start_q = np.array(_start_data.get("equilibrium_joint_pos", [0]*10), dtype=np.float64)
+    _end_q = np.array(_end_data.get("equilibrium_joint_pos", [0]*10), dtype=np.float64)
+
+    # Verify the heights match expectations
+    _start_z = float(_start_data.get("target_com_z_m", height_start_m))
+    _end_z = float(_end_data.get("target_com_z_m", height_end_m))
+
+    if abs(_start_z - _end_z) < 1e-6:
+        # Same height — return constant
+        def const_fn(z_m):
+            return _start_q.copy()
+        return const_fn
+
+    def interp_fn(z_m):
+        """Blend q_ref linearly between start and end postures based on current height_ref."""
+        # Clamp to the transition range
+        t = (z_m - _start_z) / (_end_z - _start_z)
+        t = max(0.0, min(1.0, t))
+        # Smoothstep for smoother posture changes
+        s = t * t * (3.0 - 2.0 * t)
+        return _start_q + s * (_end_q - _start_q)
+
+    return interp_fn
 
 
 def build_height_qref_interpolator(setup_dir="outputs/physical_target_height_setups"):
@@ -296,7 +649,7 @@ def build_height_qref_interpolator(setup_dir="outputs/physical_target_height_set
     NEVER use for promotion validation.
 
     Loads all available height setup files and builds per-joint linear
-    interpolation from target_com_z_m → calibrated joint positions.
+    interpolation from target_com_z_m -> calibrated joint positions.
 
     Returns:
         interp_fn(z_m: float) -> np.ndarray[10]: Interpolated joint positions.
@@ -446,13 +799,67 @@ def main():
     t_compile = time.perf_counter()
 
     # Profile lookup: exact string-matched keys, no fallback ambiguity.
-    # K2_JAX_DEDICATED_DEFAULT_V2 is the OFFICIAL default.
-    # K2_JAX_DEDICATED_DEFAULT_V1 is kept as historical rollback baseline.
+    # K2_JAX_DEDICATED_DEFAULT_V3 is the OFFICIAL default (promoted 2026-07-01).
+    # K2_JAX_DEDICATED_DEFAULT_V2 is kept as rollback baseline.
+    # K2_JAX_DEDICATED_DEFAULT_V1 is kept as historical reference.
     _PROFILE_MAP = {
         "k2_notch_low_q_v1": K2_NOTCH_LOW_Q_V1,
-        # Default V2 (CURRENT — promoted 2026-06-30)
+        # Default V3 (CURRENT — promoted 2026-07-01 from V3_AUDIT_FIX_V2_FINAL)
+        "k2_jax_dedicated_default_v3": _K3_AUTH_SCHED,  # K2_JAX_DEDICATED_DEFAULT_V3
+        "K2_JAX_DEDICATED_DEFAULT_V3": _K3_AUTH_SCHED,
+        # Default V2 (rollback — promoted 2026-06-30)
         "k2_jax_dedicated_default_v2": _K2_AUTH_SCHED,  # K2_JAX_DEDICATED_DEFAULT_V2
         "K2_JAX_DEDICATED_DEFAULT_V2": _K2_AUTH_SCHED,
+        # V2 Heading/Height/Twist Candidate (experimental — 2026-06-30)
+        "k2_jax_dedicated_default_v2_heading_height_twist_candidate": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE,
+        "K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE,
+        "k2_jax_dedicated_default_v2_heading_height_twist_candidate_v2": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2,
+        "K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2,
+        # V3 Heading/Height/Twist Candidate (experimental — 2026-06-30)
+        # Widened heading gates, divergence guard, no drift gain changes
+        "k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+        "K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+        # V4 Heading/Height/Twist Candidate (experimental — 2026-06-30)
+        # Strengthened divergence guard, retuned dynamic cycle blend
+        "k2_jax_dedicated_default_v2_heading_height_twist_candidate_v4": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4,
+        "K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4,
+        # V5 Heading/Height/Twist Candidate (two-layer guard — 2026-06-30)
+        "k2_jax_dedicated_default_v2_heading_height_twist_candidate_v5": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V5,
+        "K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V5": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V5,
+        # V3 Audit Fix Candidate (evidence-backed fixes — 2026-07-01)
+        "k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3_audit_fix": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX,
+        "K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX,
+        # V3 Audit Fix V2 — heading gain midpoint (2026-07-01)
+        "k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3_audit_fix_v2": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2,
+        "K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2,
+        # V3 Audit Fix V2 FINAL — promote candidate (2026-07-01)
+        "k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3_audit_fix_v2_final": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2_FINAL,
+        "K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2_FINAL": K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2_FINAL,
+        # V3 Audit Fix V2 micro-ablations — heading gain sweep (2026-07-01)
+        "v3_audit_fix_kp_055": V3_AUDIT_FIX_KP_055,
+        "V3_AUDIT_FIX_KP_055": V3_AUDIT_FIX_KP_055,
+        "v3_audit_fix_kp_085": V3_AUDIT_FIX_KP_085,
+        "V3_AUDIT_FIX_KP_085": V3_AUDIT_FIX_KP_085,
+        # V3 Audit Ablation profiles (2026-07-01)
+        "v3_audit_heading_off": V3_AUDIT_HEADING_OFF,
+        "V3_AUDIT_HEADING_OFF": V3_AUDIT_HEADING_OFF,
+        "v3_audit_heading_gate_open": V3_AUDIT_HEADING_GATE_OPEN,
+        "V3_AUDIT_HEADING_GATE_OPEN": V3_AUDIT_HEADING_GATE_OPEN,
+        "v3_audit_qref_static": V3_AUDIT_QREF_STATIC,
+        "V3_AUDIT_QREF_STATIC": V3_AUDIT_QREF_STATIC,
+        "v3_audit_qref_dynamic": V3_AUDIT_QREF_DYNAMIC,
+        "V3_AUDIT_QREF_DYNAMIC": V3_AUDIT_QREF_DYNAMIC,
+        # Phase 1 ablation profiles (V4 regression root-cause analysis)
+        "hht_ablate_v3_base": HHT_ABLATE_V3_BASE,
+        "HHT_ABLATE_V3_BASE": HHT_ABLATE_V3_BASE,
+        "hht_ablate_v3_plus_60_40_blend": HHT_ABLATE_V3_PLUS_60_40_BLEND,
+        "HHT_ABLATE_V3_PLUS_60_40_BLEND": HHT_ABLATE_V3_PLUS_60_40_BLEND,
+        "hht_ablate_v4_no_guard_change": HHT_ABLATE_V4_NO_GUARD_CHANGE,
+        "HHT_ABLATE_V4_NO_GUARD_CHANGE": HHT_ABLATE_V4_NO_GUARD_CHANGE,
+        "hht_ablate_v4_no_heading_twist_yield": HHT_ABLATE_V4_NO_HEADING_TWIST_YIELD,
+        "HHT_ABLATE_V4_NO_HEADING_TWIST_YIELD": HHT_ABLATE_V4_NO_HEADING_TWIST_YIELD,
+        "hht_ablate_guard_cap_test": HHT_ABLATE_GUARD_CAP_TEST,
+        "HHT_ABLATE_GUARD_CAP_TEST": HHT_ABLATE_GUARD_CAP_TEST,
         # Default V1 (ROLLBACK — historical baseline)
         "k2_jax_dedicated_default_v1": K2_JAX_DEDICATED_DEFAULT_V1,
         "K2_JAX_DEDICATED_DEFAULT_V1": K2_JAX_DEDICATED_DEFAULT_V1,
@@ -530,6 +937,32 @@ def main():
         drift_hgate_high=getattr(_auth, "drift_hgate_high", 0.15),
         drift_pgate_low=getattr(_auth, "drift_pgate_low", 0.15),
         drift_pgate_high=getattr(_auth, "drift_pgate_high", 0.80),
+        # Heading hip-yaw stabilizer params
+        heading_hy_kp=getattr(_auth, "heading_hy_kp", 0.15),
+        heading_hy_kd=getattr(_auth, "heading_hy_kd", 0.05),
+        heading_hy_max_tau=getattr(_auth, "heading_hy_max_tau", 0.8),
+        heading_hy_enabled=getattr(_auth, "enable_heading_hip_yaw", False),
+        # Anti-twist damping params
+        anti_twist_kp=getattr(_auth, "anti_twist_kp", 0.3),
+        anti_twist_kd=getattr(_auth, "anti_twist_kd", 0.1),
+        anti_twist_max_tau=getattr(_auth, "anti_twist_max_tau", 0.6),
+        # Split height gate params for drift controller
+        drift_hgate_vel_low=getattr(_auth, "drift_hgate_vel_low", 0.05),
+        drift_hgate_vel_high=getattr(_auth, "drift_hgate_vel_high", 0.25),
+        drift_hgate_heading_low=getattr(_auth, "drift_hgate_heading_low", 0.02),
+        drift_hgate_heading_high=getattr(_auth, "drift_hgate_heading_high", 0.10),
+        # Hip-yaw mean centering params
+        hy_mean_center_kp=getattr(_auth, "hy_mean_center_kp", 0.5),
+        hy_mean_center_max_tau=getattr(_auth, "hy_mean_center_max_tau", 0.4),
+        # Anti-twist divergence guard params (V5 parameterization)
+        anti_twist_guard_start_rad=getattr(_auth, "anti_twist_guard_start_rad", 0.22),
+        anti_twist_guard_strong_rad=getattr(_auth, "anti_twist_guard_strong_rad", 0.32),
+        anti_twist_guard_boost_max=getattr(_auth, "anti_twist_guard_boost_max", 3.5),
+        # Heading twist yield gate params (V5 parameterization)
+        heading_twist_yield_start_rad=getattr(_auth, "heading_twist_yield_start_rad", 0.35),
+        heading_twist_yield_zero_rad=getattr(_auth, "heading_twist_yield_zero_rad", 0.35),
+        # V5 two-layer emergency guard
+        anti_twist_emergency_max_tau=getattr(_auth, "anti_twist_emergency_max_tau", 0.25),
     )
     jax_state = pack_state_k2()
     jax_step_fn = jax.jit(k2_jax_controller_step)
@@ -597,7 +1030,62 @@ def main():
             print(f"K2 params dumped to: {_dump_path}")
 
     # ── 7. Dynamic height trajectory ─────────────────────────────────────
-    dyn_height = load_dynamic_height_trajectory(args.dynamic_height_trajectory)
+    dyn_height = None
+    dyn_height_segments = []  # Multi-segment support (Task 4)
+    if args.dynamic_height_trajectory:
+        dyn_height = load_dynamic_height_trajectory(args.dynamic_height_trajectory)
+    elif args.dynamic_height_scurve:
+        # Support multi-segment cycles with semicolon separator
+        # e.g., "0.33,0.48,8.0,3.0;0.48,0.33,8.0,3.0"
+        _segment_strs = args.dynamic_height_scurve.split(";")
+        _all_segments = []
+        _cumulative_steps = 0
+        for _seg_str in _segment_strs:
+            _seg_str = _seg_str.strip()
+            if not _seg_str:
+                continue
+            parts = _seg_str.split(",")
+            if len(parts) >= 3:
+                _start_h = float(parts[0])
+                _end_h = float(parts[1])
+                _dur_s = float(parts[2])
+                _hold_s = float(parts[3]) if len(parts) >= 4 else 2.0
+                _seg_traj = generate_smooth_height_trajectory(
+                    _start_h, _end_h, _dur_s, hold_start_s=_hold_s,
+                    hold_end_s=_hold_s, control_dt=CONTROL_DT)
+                _seg_traj["segment_start_h"] = _start_h
+                _seg_traj["segment_end_h"] = _end_h
+                _seg_traj["segment_start_step"] = _cumulative_steps
+                _seg_traj["segment_end_step"] = _cumulative_steps + _seg_traj["transition_steps"]
+                _cumulative_steps += _seg_traj["transition_steps"]
+                _all_segments.append(_seg_traj)
+        if _all_segments:
+            # Build unified trajectory from all segments
+            if len(_all_segments) == 1:
+                dyn_height = _all_segments[0]
+            else:
+                # Multi-segment: stitch together
+                dyn_height = _all_segments[0].copy()
+                dyn_height["transition_steps"] = _cumulative_steps
+                dyn_height["segments"] = _all_segments
+                # Build composite interpolation function
+                def _multi_segment_interp(step):
+                    for _seg in _all_segments:
+                        if step < _seg["segment_end_step"]:
+                            _local_step = step - _seg["segment_start_step"]
+                            return _seg["interp_fn"](_local_step)
+                    # Past all segments: hold at last segment's end
+                    _last = _all_segments[-1]
+                    return _last["interp_fn"](_last["transition_steps"] - 1)
+                dyn_height["interp_fn"] = _multi_segment_interp
+                dyn_height["profile_name"] = "multi_segment_cycle"
+            dyn_height_segments = _all_segments
+            if not args.quiet:
+                _desc = " -> ".join(
+                    f"{s['segment_start_h']:.3f}->{s['segment_end_h']:.3f} ({s['transition_steps']} steps)"
+                    for s in _all_segments)
+                print(f"Multi-segment S-curve: {_desc} "
+                      f"(total {_cumulative_steps} steps, {len(_all_segments)} segments)")
     dyn_height_active = dyn_height is not None
 
     # ── 7b. Dynamic height q_ref mode ────────────────────────────────────
@@ -609,6 +1097,10 @@ def main():
     # 'setup-interp-debug': APPROXIMATE interpolation from height setup files.
     # Produces WORSE hip-yaw divergence (ramp_down hy=0.3728 > 0.35 SAFETY_FAIL).
     # ONLY for ablation/debug. NEVER for promotion validation.
+    #
+    # 'two-point-smooth': NEW — loads start+end height setups and blends q_ref
+    # smoothly with the height trajectory. Enables actual CoM tracking during
+    # height transitions while staying close to calibrated postures.
     qref_interp = None
     _qref_mode = getattr(args, "dynamic_qref_mode", "original-k2-exact")
     if dyn_height_active:
@@ -616,13 +1108,139 @@ def main():
             qref_interp = build_height_qref_interpolator()
             if qref_interp is not None and not args.quiet:
                 print("Dynamic q_ref mode: setup-interp-debug (APPROXIMATE — NOT for promotion)")
+        elif _qref_mode == "two-point-smooth":
+            # Build two-point or multi-segment q_ref interpolator
+            _setup_dir = Path("outputs/physical_target_height_setups")
+            if dyn_height_segments and len(dyn_height_segments) > 1:
+                # MULTI-SEGMENT: build per-segment q_ref interpolators
+                _seg_interps = []
+                for _seg in dyn_height_segments:
+                    _h_s = float(_seg.get("segment_start_h", target_com_z))
+                    _h_e = float(_seg.get("segment_end_h", target_com_z))
+                    _interp = build_two_point_qref_interpolator(
+                        _h_s, _h_e, setup_dir=str(_setup_dir))
+                    if _interp is not None:
+                        _seg_interps.append({
+                            "start_step": _seg["segment_start_step"],
+                            "end_step": _seg["segment_end_step"],
+                            "start_h": _h_s,
+                            "end_h": _h_e,
+                            "interp": _interp,
+                        })
+                if _seg_interps:
+                    # Boundary blend window: smooth q_ref transition at segment edges
+                    _BLEND_WINDOW = 60  # steps (0.6s at 100Hz)
+                    def _multi_qref_interp(z_m, step=None):
+                        """Multi-segment q_ref with boundary blending (V3).
+
+                        At segment boundaries, blends the outgoing segment's q_ref
+                        with the incoming segment's q_ref over BLEND_WINDOW steps
+                        to avoid torque spikes from abrupt q_ref switches.
+                        """
+                        n_segs = len(_seg_interps)
+                        if step is not None:
+                            for i, _si in enumerate(_seg_interps):
+                                if _si["start_step"] <= step < _si["end_step"]:
+                                    q_out = _si["interp"](z_m)
+                                    # Incoming blend from previous segment
+                                    dist_from_start = step - _si["start_step"]
+                                    if dist_from_start < _BLEND_WINDOW and i > 0:
+                                        alpha = float(dist_from_start) / float(_BLEND_WINDOW)
+                                        alpha_s = alpha * alpha * (3.0 - 2.0 * alpha)  # smoothstep
+                                        q_prev = _seg_interps[i - 1]["interp"](z_m)
+                                        return (1.0 - alpha_s) * q_prev + alpha_s * q_out
+                                    # Outgoing blend toward next segment
+                                    dist_to_end = _si["end_step"] - step
+                                    if dist_to_end < _BLEND_WINDOW and i + 1 < n_segs:
+                                        alpha = 1.0 - float(dist_to_end) / float(_BLEND_WINDOW)
+                                        alpha_s = alpha * alpha * (3.0 - 2.0 * alpha)
+                                        q_next = _seg_interps[i + 1]["interp"](z_m)
+                                        return (1.0 - alpha_s) * q_out + alpha_s * q_next
+                                    return q_out
+                        # Fallback: height-based routing (no step info)
+                        if z_m <= _seg_interps[0]["end_h"]:
+                            return _seg_interps[0]["interp"](z_m)
+                        return _seg_interps[-1]["interp"](z_m)
+                    qref_interp = _multi_qref_interp
+                    if not args.quiet:
+                        _desc = " -> ".join(
+                            f"{s['start_h']:.3f}->{s['end_h']:.3f}"
+                            for s in _seg_interps)
+                        print(f"Dynamic q_ref mode: two-point-smooth multi-segment + boundary blend "
+                              f"({_desc}, {len(_seg_interps)} segments, blend={_BLEND_WINDOW} steps)")
+                else:
+                    if not args.quiet:
+                        print("Dynamic q_ref mode: two-point-smooth multi-segment FAILED "
+                              "(missing setup files), falling back to original-k2-exact")
+            else:
+                # SINGLE SEGMENT: original two-point behavior
+                if dyn_height.get("profile_name", "").startswith("smoothstep"):
+                    import re as _re
+                    _match = _re.match(r"smoothstep_(\d+\.\d+)_to_(\d+\.\d+)",
+                                       dyn_height["profile_name"])
+                    if _match:
+                        _h_start = float(_match.group(1))
+                        _h_end = float(_match.group(2))
+                    else:
+                        _h_start = float(target_com_z)
+                        _h_end = float(target_com_z)
+                else:
+                    _h_start = float(target_com_z)
+                    _h_end = float(target_com_z)
+                qref_interp = build_two_point_qref_interpolator(
+                    _h_start, _h_end, setup_dir=str(_setup_dir))
+                if qref_interp is not None and not args.quiet:
+                    print(f"Dynamic q_ref mode: two-point-smooth "
+                          f"(blend {_h_start:.3f}->{_h_end:.3f} m)")
+                elif not args.quiet and qref_interp is None:
+                    print("Dynamic q_ref mode: two-point-smooth FAILED "
+                          "(missing setup files), falling back to original-k2-exact")
         else:
             # original-k2-exact: use static q_ref from equilibrium_joint_pos
             if not args.quiet:
-                print("Dynamic q_ref mode: original-k2-exact (static q_ref, matching canonical K2 JAX path)")
+                print("Dynamic q_ref mode: original-k2-exact "
+                      "(static q_ref, matching canonical K2 JAX path)")
 
     # ── 8. Push sequence ─────────────────────────────────────────────────
     push_schedule = load_push_sequence(args.push_seq)
+
+    # ── 8b. Random single-push (test-only) ────────────────────────────────
+    random_push_config = None
+    if args.load_random_push_config:
+        random_push_config = load_push_config_from_json(args.load_random_push_config)
+        if random_push_config is None:
+            print(f"ERROR: Could not load push config from {args.load_random_push_config}")
+            return 1
+        push_schedule = push_config_to_schedule(random_push_config, mj_model=mj_model)
+        if not args.quiet:
+            _pc = random_push_config
+            print(f"Random push loaded: seed={_pc['seed']} step={_pc['push_step']} "
+                  f"force={_pc['force_N']:.1f}N dir={_pc['direction_world']} "
+                  f"body={_pc['target_body']}")
+    elif args.random_single_push:
+        if args.push_seed is None:
+            print("ERROR: --random-single-push requires --push-seed")
+            return 1
+        random_push_config = generate_random_push(
+            seed=args.push_seed,
+            step_min=args.push_step_min,
+            step_max=args.push_step_max,
+            force_min=args.push_force_min,
+            force_max=args.push_force_max,
+            duration_steps=args.push_duration_steps,
+            profile=args.profile,
+        )
+        push_schedule = push_config_to_schedule(random_push_config, mj_model=mj_model)
+        if not args.quiet:
+            _pc = random_push_config
+            print(f"Random push generated: seed={_pc['seed']} step={_pc['push_step']} "
+                  f"force={_pc['force_N']:.1f}N dir={_pc['direction_world']} "
+                  f"body={_pc['target_body']}")
+        if args.save_random_push_config:
+            save_push_config(random_push_config, args.save_random_push_config)
+            if not args.quiet:
+                print(f"  Push config saved: {args.save_random_push_config}")
+
     if push_schedule and not args.quiet:
         print(f"Push events: {len(push_schedule)}")
 
@@ -631,7 +1249,20 @@ def main():
     # post-push window = steps 305-805 (500 steps).
     push_end_step = 0
     if push_schedule:
-        push_end_step = max(s1 for _, s1, _, _ in push_schedule)
+        push_end_step = max(s1 for _, s1, _, _, _, _ in push_schedule)
+
+    # Resolve string body names to integer body IDs for hot-loop efficiency.
+    _resolved = []
+    for _s0, _s1, _fx, _fy, _fz, _body in push_schedule:
+        if isinstance(_body, str):
+            try:
+                _body = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, _body)
+            except Exception:
+                print(f"WARNING: Unknown body name '{_body}', defaulting to torso (1)")
+                _body = 1
+        _resolved.append((_s0, _s1, _fx, _fy, _fz, int(_body)))
+    push_schedule = _resolved
+
     POST_PUSH_WINDOW = 500
 
     # ── 9. Telemetry setup ───────────────────────────────────────────────
@@ -734,15 +1365,36 @@ def main():
         if viewer is not None and not viewer.is_running():
             break
 
+        # ── V4: Blend diagnostic defaults ──────────────────────────────────
+        _blend_dynamic = 1.0    # 100% dynamic (static height or single-segment)
+        _blend_static = 0.0
+        _blend_boundary = 0.0   # not in boundary blend
+        _active_seg_idx = -1.0  # no active dynamic segment
+        _active_seg_start = float(target_com_z)
+        _active_seg_end = float(target_com_z)
+        _active_seg_progress = 0.0
+        _height_target_tol = 0.02  # 2 cm tolerance for "reached target"
+
         # ── Apply push forces ────────────────────────────────────────────
         fx_tot = 0.0
         fy_tot = 0.0
-        for s0, s1, fx, fy in push_schedule:
+        fz_tot = 0.0
+        # Accumulate per-body to handle multiple simultaneous pushes
+        _body_forces = {}  # body_id -> [fx, fy, fz]
+        for s0, s1, fx, fy, fz, body_id in push_schedule:
             if s0 <= step < s1:
                 fx_tot += fx
                 fy_tot += fy
-        mj_data.xfrc_applied[1, 0] = fx_tot
-        mj_data.xfrc_applied[1, 1] = fy_tot
+                fz_tot += fz
+                if body_id not in _body_forces:
+                    _body_forces[body_id] = [0.0, 0.0, 0.0]
+                _body_forces[body_id][0] += fx
+                _body_forces[body_id][1] += fy
+                _body_forces[body_id][2] += fz
+        for body_id, (fx_b, fy_b, fz_b) in _body_forces.items():
+            mj_data.xfrc_applied[body_id, 0] = fx_b
+            mj_data.xfrc_applied[body_id, 1] = fy_b
+            mj_data.xfrc_applied[body_id, 2] = fz_b
 
         # ── Dynamic height ───────────────────────────────────────────────
         if dyn_height_active:
@@ -750,15 +1402,47 @@ def main():
             if height_setup is not None:
                 height_setup["target_com_z_m"] = height_ref
             # Update q_ref: interpolate all joint positions based on height_ref
+            # V3: For multi-segment, pass step for active segment routing
             if qref_interp is not None and step > 0:
-                eq_joint = qref_interp(height_ref)
-            # IMPORTANT: Do NOT update height_floor dynamically.
-            # The canonical monolithic JAX path (simulate_hierarchical_controller.py)
-            # uses a FIXED termination floor (achieved_com_z - 0.05) that is never
-            # updated during dynamic height. Dynamic floors that track height_ref
-            # cause premature termination when CoM cannot follow the rising target
-            # (static q_ref anchors posture near initial height).
-            # Phase 5/6 fix: match monolithic behavior — use fixed floor.
+                try:
+                    eq_joint = qref_interp(height_ref, step=step)
+                except TypeError:
+                    eq_joint = qref_interp(height_ref)
+                # V4: Stabilizing base blend for multi-segment cycles.
+                # Blend dynamic q_ref (60%) with static equilibrium anchor (40%)
+                # to balance height tracking (dynamic) against stability (static).
+                # V3's 40% dynamic was too conservative — suppressed height tracking.
+                # Single-segment ramps use 100% dynamic (proven safe in V2).
+                _is_multi = dyn_height_segments and len(dyn_height_segments) > 1
+                if _is_multi and _qref_mode == "two-point-smooth":
+                    _blend_alpha = getattr(_auth, "dynamic_q_ref_blend_alpha", 0.40)
+                    eq_joint = (1.0 - _blend_alpha) * equilibrium_joint_pos + _blend_alpha * eq_joint
+                    _blend_dynamic = _blend_alpha
+                    _blend_static = 1.0 - _blend_alpha
+                # V4: Active segment tracking for blend diagnostics
+                if dyn_height_segments:
+                    _BLEND_WINDOW = 60
+                    for _si_idx, _si in enumerate(dyn_height_segments):
+                        _s_start = _si["segment_start_step"]
+                        _s_end = _si["segment_end_step"]
+                        if _s_start <= step < _s_end:
+                            _active_seg_idx = float(_si_idx)
+                            _active_seg_start = float(_si.get("segment_start_h", target_com_z))
+                            _active_seg_end = float(_si.get("segment_end_h", target_com_z))
+                            _seg_len = float(_s_end - _s_start)
+                            _active_seg_progress = (float(step) - float(_s_start)) / max(_seg_len, 1.0)
+                            # Check boundary blend: near start or end of segment
+                            _dist_start = step - _s_start
+                            _dist_end = _s_end - step
+                            if (_dist_start < _BLEND_WINDOW and _si_idx > 0) or \
+                               (_dist_end < _BLEND_WINDOW and _si_idx + 1 < len(dyn_height_segments)):
+                                _blend_boundary = 1.0
+                            break
+            # Dynamic height floor: use the LOWER of (initial_floor, height_ref - 0.12m).
+            # This prevents premature termination during downward ramps while keeping
+            # the original tight floor for upward ramps (where CoM stays near initial
+            # height due to static q_ref). The -0.12 margin gives ~12cm descent room.
+            height_floor = min(achieved_com_z - 0.05, height_ref - 0.12)
 
         # ── State extraction ─────────────────────────────────────────────
         joint_pos = mj_data.qpos[7:17]
@@ -980,7 +1664,7 @@ def main():
                     "max_leg_tau": float(np.max(abs_tau[[0, 1, 2, 3, 5, 6, 7, 8]])),
                     "hip_yaw_div_error": hip_yaw_div_err,
                     "hip_yaw_div_rate": hip_yaw_div_rt,
-                    "push_fx": fx_tot, "push_fy": fy_tot,
+                    "push_fx": fx_tot, "push_fy": fy_tot, "push_fz": fz_tot,
                     "contact_valid": contact_valid,
                     "contact_left": contact_l, "contact_right": contact_r,
                     "fall": int(terminated), "terminated": int(terminated),
@@ -1012,6 +1696,50 @@ def main():
                     "drift_position_gate": float(jax_diag[115]), "drift_height_gate": float(jax_diag[116]),
                     "tau_drift_raw_l_nm": float(jax_diag[117]), "tau_drift_raw_r_nm": float(jax_diag[118]),
                     "tau_drift_bounded_l_nm": float(jax_diag[119]), "tau_drift_bounded_r_nm": float(jax_diag[120]),
+                    # Heading hip-yaw stabilizer telemetry
+                    "tau_heading_hip_yaw_l_nm": float(jax_diag[121]), "tau_heading_hip_yaw_r_nm": float(jax_diag[122]),
+                    "heading_hip_yaw_error_rad": float(jax_diag[123]), "heading_gate": float(jax_diag[124]),
+                    # Anti-twist damping telemetry
+                    "tau_anti_twist_l_nm": float(jax_diag[125]), "tau_anti_twist_r_nm": float(jax_diag[126]),
+                    "twist_gate": float(jax_diag[127]),
+                    # Split height gate telemetry
+                    "drift_height_gate_vel": float(jax_diag[128]),
+                    "drift_height_gate_heading": float(jax_diag[129]),
+                    "drift_height_gate_pos": float(jax_diag[130]),
+                    # Hip-yaw mean centering telemetry (Task 3)
+                    "tau_center_l_nm": float(jax_diag[131]), "tau_center_r_nm": float(jax_diag[132]),
+                    "center_gate": float(jax_diag[133]), "hip_yaw_mean_rad": float(jax_diag[134]),
+                    # V3: Heading sub-gate diagnostics
+                    "heading_pitch_gate": float(jax_diag[135]),
+                    "heading_roll_gate": float(jax_diag[136]),
+                    "heading_contact_gate": float(jax_diag[137]),
+                    "heading_twist_gate": float(jax_diag[138]),
+                    "heading_height_gate": float(jax_diag[139]),
+                    "tau_heading_raw_nm": float(jax_diag[140]),
+                    "tau_heading_bounded_nm": float(jax_diag[141]),
+                    # Sign validation: heading_error vs heading torque correlation
+                    # Positive → torque reduces error (correct differential sign)
+                    # Negative → torque increases error (wrong sign convention)
+                    "heading_sign_check": float(
+                        jax_diag[123] * jax_diag[121]
+                    ),
+                    # V4: Divergence guard diagnostics
+                    "hy_div_guard_gate": float(jax_diag[142]),
+                    "hy_div_guard_boost": float(jax_diag[143]),
+                    "heading_twist_yield_gate": float(jax_diag[144]),
+                    "tau_hy_div_guard_l_nm": float(jax_diag[145]),
+                    "tau_hy_div_guard_r_nm": float(jax_diag[146]),
+                    # V4: Dynamic q_ref blend diagnostics
+                    "q_ref_blend_dynamic_alpha": _blend_dynamic,
+                    "q_ref_blend_static_alpha": _blend_static,
+                    "q_ref_boundary_blend_gate": _blend_boundary,
+                    "active_height_segment_index": _active_seg_idx,
+                    "active_segment_start_m": _active_seg_start,
+                    "active_segment_end_m": _active_seg_end,
+                    "active_segment_progress": _active_seg_progress,
+                    "height_target_m": height_ref,
+                    "height_error_m": height_err,
+                    "height_reached_target": float(abs(height_err) < _height_target_tol),
                 })
 
         step += 1
@@ -1151,8 +1879,26 @@ def main():
             # Contact
             "contact_loss_steps": sm["contact_loss_steps"],
         }
+        # Append random push config info if available
+        if random_push_config is not None:
+            summary["random_push"] = {
+                "seed": random_push_config["seed"],
+                "push_step": random_push_config["push_step"],
+                "push_duration_steps": random_push_config["push_duration_steps"],
+                "force_N": random_push_config["force_N"],
+                "direction_world": random_push_config["direction_world"],
+                "target_body": random_push_config["target_body"],
+                "application_point_local": random_push_config["application_point_local"],
+            }
         with open(out_dir / "summary.json", "w") as f:
             json.dump(summary, f, indent=2)
+
+        # Save push config for replay
+        if random_push_config is not None:
+            _pc_path = out_dir / "push_config.json"
+            save_push_config(random_push_config, str(_pc_path))
+            if not args.quiet:
+                print(f"  Push config: {_pc_path}")
 
         if telemetry_rows:
             # Use appropriate column list based on mode
