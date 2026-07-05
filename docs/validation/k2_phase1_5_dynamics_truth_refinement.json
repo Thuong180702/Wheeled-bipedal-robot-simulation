@@ -1,0 +1,151 @@
+{
+  "phase": "1.5",
+  "timestamp": "2026-07-02T04:42:58.507679+00:00",
+  "model_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\assets\\robot\\wheeled_biped_real.xml",
+  "verdict": "READY_FOR_PHASE_2A_JAX_KINEMATICS_PORT",
+  "dimensions": {
+    "nq": 17,
+    "nv": 16,
+    "nu": 10,
+    "nbody": 12,
+    "njnt": 11
+  },
+  "body_mapping_ok": true,
+  "jacobian_fd_verdicts": {
+    "torso": "PASS",
+    "l_wheel_link": "PASS",
+    "r_wheel_link": "PASS",
+    "l_knee_link": "PASS",
+    "r_knee_link": "PASS"
+  },
+  "torque_sign_outcomes": {
+    "l_hip_roll": "MEASURED",
+    "l_hip_yaw": "MEASURED",
+    "l_hip_pitch": "MEASURED",
+    "l_knee": "MEASURED",
+    "l_wheel": "MEASURED",
+    "r_hip_roll": "MEASURED",
+    "r_hip_yaw": "MEASURED",
+    "r_hip_pitch": "MEASURED",
+    "r_knee": "MEASURED",
+    "r_wheel": "MEASURED"
+  },
+  "torque_sign_details": {
+    "l_hip_roll": {
+      "outcome": "MEASURED",
+      "probe_torque_requested": 10.0,
+      "probe_torque_used": 7.5,
+      "qacc_zero": -159.40824192282903,
+      "delta_plus": 183.12180187562316,
+      "delta_minus": -183.12180187562316,
+      "delta_pair": 366.2436037512463,
+      "sign_consistent_delta": true,
+      "measured_convention": "positive_ctrl_increases_joint_acceleration"
+    },
+    "l_hip_yaw": {
+      "outcome": "MEASURED",
+      "probe_torque_requested": 10.0,
+      "probe_torque_used": 7.5,
+      "qacc_zero": -13.369164933181601,
+      "delta_plus": 63.79725158438065,
+      "delta_minus": -63.797251584380966,
+      "delta_pair": 127.59450316876162,
+      "sign_consistent_delta": true,
+      "measured_convention": "positive_ctrl_increases_joint_acceleration"
+    },
+    "l_hip_pitch": {
+      "outcome": "MEASURED",
+      "probe_torque_requested": 10.0,
+      "probe_torque_used": 10.0,
+      "qacc_zero": 301.6036017671538,
+      "delta_plus": 178.37969716658137,
+      "delta_minus": -178.37969716658068,
+      "delta_pair": 356.75939433316205,
+      "sign_consistent_delta": true,
+      "measured_convention": "positive_ctrl_increases_joint_acceleration"
+    },
+    "l_knee": {
+      "outcome": "MEASURED",
+      "probe_torque_requested": 10.0,
+      "probe_torque_used": 10.0,
+      "qacc_zero": 1559.869056127821,
+      "delta_plus": 54.152308193746876,
+      "delta_minus": -54.152308193746194,
+      "delta_pair": 108.30461638749307,
+      "sign_consistent_delta": true,
+      "measured_convention": "positive_ctrl_increases_joint_acceleration"
+    },
+    "l_wheel": {
+      "outcome": "MEASURED",
+      "probe_torque_requested": 10.0,
+      "probe_torque_used": 7.5,
+      "qacc_zero": -697.7589300165157,
+      "delta_plus": 760.8539797376633,
+      "delta_minus": -760.8539797376629,
+      "delta_pair": 1521.707959475326,
+      "sign_consistent_delta": true,
+      "measured_convention": "positive_ctrl_increases_joint_acceleration"
+    },
+    "r_hip_roll": {
+      "outcome": "MEASURED",
+      "probe_torque_requested": 10.0,
+      "probe_torque_used": 7.5,
+      "qacc_zero": 158.9963586767078,
+      "delta_plus": 183.120656867249,
+      "delta_minus": -183.12065686724907,
+      "delta_pair": 366.2413137344981,
+      "sign_consistent_delta": true,
+      "measured_convention": "positive_ctrl_increases_joint_acceleration"
+    },
+    "r_hip_yaw": {
+      "outcome": "MEASURED",
+      "probe_torque_requested": 10.0,
+      "probe_torque_used": 7.5,
+      "qacc_zero": 15.796255626668577,
+      "delta_plus": 63.79888580222009,
+      "delta_minus": -63.79888580222057,
+      "delta_pair": 127.59777160444065,
+      "sign_consistent_delta": true,
+      "measured_convention": "positive_ctrl_increases_joint_acceleration"
+    },
+    "r_hip_pitch": {
+      "outcome": "MEASURED",
+      "probe_torque_requested": 10.0,
+      "probe_torque_used": 10.0,
+      "qacc_zero": 293.42232191459135,
+      "delta_plus": 178.37183507530995,
+      "delta_minus": -178.3718350753104,
+      "delta_pair": 356.74367015062035,
+      "sign_consistent_delta": true,
+      "measured_convention": "positive_ctrl_increases_joint_acceleration"
+    },
+    "r_knee": {
+      "outcome": "MEASURED",
+      "probe_torque_requested": 10.0,
+      "probe_torque_used": 10.0,
+      "qacc_zero": 1542.0351085064153,
+      "delta_plus": 54.15266130580517,
+      "delta_minus": -54.15266130580471,
+      "delta_pair": 108.30532261160988,
+      "sign_consistent_delta": true,
+      "measured_convention": "positive_ctrl_increases_joint_acceleration"
+    },
+    "r_wheel": {
+      "outcome": "MEASURED",
+      "probe_torque_requested": 10.0,
+      "probe_torque_used": 7.5,
+      "qacc_zero": -689.4378516348467,
+      "delta_plus": 760.7603792938473,
+      "delta_minus": -760.7603792938474,
+      "delta_pair": 1521.520758587695,
+      "sign_consistent_delta": true,
+      "measured_convention": "positive_ctrl_increases_joint_acceleration"
+    }
+  },
+  "n_measured": 10,
+  "n_ambiguous": 0,
+  "actuator_limits_zero_not_in_range_fixed": true,
+  "mass_matrix_available_cpu": true,
+  "contacts_detected": 2,
+  "issues": []
+}

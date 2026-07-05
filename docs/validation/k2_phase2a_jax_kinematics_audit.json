@@ -1,0 +1,54 @@
+{
+  "phase": "2A",
+  "timestamp": "2026-07-02T01:22:16.110538+00:00",
+  "model_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\assets\\robot\\wheeled_biped_real.xml",
+  "verdict": "READY_FOR_PHASE_2B_MASS_MATRIX_CRBA_PORT",
+  "fk_position_verdicts": {
+    "torso": "PASS",
+    "l_wheel_link": "PASS",
+    "r_wheel_link": "PASS",
+    "l_knee_link": "PASS",
+    "r_knee_link": "PASS",
+    "l_thigh": "PASS",
+    "r_thigh": "PASS",
+    "l_hip_roll_link": "PASS",
+    "r_hip_roll_link": "PASS",
+    "l_hip_yaw_link": "PASS",
+    "r_hip_yaw_link": "PASS"
+  },
+  "max_fk_position_error": 6.867956653389129e-08,
+  "com_error": 2.5648752899343208e-08,
+  "com_verdict": "PASS",
+  "jacobian_verdicts": {
+    "torso": "PASS",
+    "l_wheel_link": "PASS",
+    "r_wheel_link": "PASS",
+    "l_knee_link": "PASS",
+    "r_knee_link": "PASS",
+    "l_thigh": "PASS",
+    "r_thigh": "PASS"
+  },
+  "max_jacobian_abs_error": 2.9802322387695312e-08,
+  "jit_compatibility": {
+    "fk": {
+      "jitted": true,
+      "max_pos_error_vs_cpu": 6.867956653389129e-08
+    },
+    "com": {
+      "jitted": true,
+      "error_vs_cpu": 2.5648752899343208e-08
+    },
+    "jacobian": {
+      "jitted": true,
+      "jac_actuated_finite": true
+    }
+  },
+  "controller_modified": false,
+  "limitations": [
+    "Free-joint Jacobian columns (v[0:6]) not validated \u2014 requires quaternion-to-angular-velocity conversion",
+    "Rotational Jacobians not implemented \u2014 only translational Jacobians ported",
+    "Mass matrix / CRBA not implemented (targeted for Phase 2B)",
+    "Contact force port not implemented",
+    "vmap / batch Jacobian not tested"
+  ]
+}

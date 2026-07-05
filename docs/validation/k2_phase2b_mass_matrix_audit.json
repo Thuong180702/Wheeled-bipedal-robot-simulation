@@ -1,0 +1,49 @@
+{
+  "phase": "2B",
+  "timestamp": "2026-07-02T02:40:35.765344+00:00",
+  "model_path": "F:\\ROBOTCUATAO\\Wheeled-bipedal-robot-simulation\\assets\\robot\\wheeled_biped_real.xml",
+  "verdict": "READY_FOR_PHASE_2C_BIAS_FORCES_PORT",
+  "full_mass_matrix_implemented": true,
+  "full_matrix_verdicts": {
+    "keyframe": "PASS",
+    "low_height": "PASS",
+    "mid_height": "PASS",
+    "high_height": "PASS",
+    "random_1": "PASS",
+    "random_2": "PASS",
+    "random_3": "PASS",
+    "random_4": "PASS",
+    "random_5": "PASS"
+  },
+  "actuated_block_verdicts": {
+    "keyframe": "PASS",
+    "low_height": "PASS",
+    "mid_height": "PASS",
+    "high_height": "PASS",
+    "random_1": "PASS",
+    "random_2": "PASS",
+    "random_3": "PASS",
+    "random_4": "PASS",
+    "random_5": "PASS"
+  },
+  "max_full_abs_error": 3.8146972691777137e-07,
+  "max_actuated_abs_error": 9.394126007644665e-08,
+  "max_symmetry_error": 0.0,
+  "condition_number_range": [
+    997.9136352539062,
+    1014.0418701171875
+  ],
+  "jit_compatible": true,
+  "controller_modified": false,
+  "limitations": [
+    "Mass matrix includes dof_armature (reflected rotor inertias) to match MuJoCo convention",
+    "Kinetic energy Hessian method used (not CRBA) \u2014 mathematically equivalent",
+    "Free-joint Jacobian columns validated indirectly through mass matrix matching",
+    "Rotational Jacobians validated indirectly through mass matrix matching",
+    "No contact-consistent dynamics port (targeted for Phase 2C)"
+  ],
+  "num_poses": 9,
+  "full_pass_threshold": 0.001,
+  "actuated_pass_threshold": 0.001,
+  "symmetry_pass_threshold": 1e-06
+}
