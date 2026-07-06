@@ -128,11 +128,12 @@ def generate_case_state(model, mj_data, case_name):
     return qpos, qvel
 
 
-def _get_or_build_rolling_constants(constants):
-    """Ensure rolling_constants are available in the constants dict."""
-    if constants.get("_rolling_constants") is None:
-        constants["_rolling_constants"] = constants["rolling_constants"]
-    return constants
+def _resolve_qp_constants(constants):
+    """Extract qp_constants from three-arm eval constants and ensure rolling constants."""
+    qp_c = constants.get("qp_constants", constants)
+    if qp_c.get("_rolling_constants") is None:
+        qp_c["_rolling_constants"] = constants.get("rolling_constants", {})
+    return qp_c
 
 
 def compare_case(model, mj_data, constants, case_name):
@@ -175,10 +176,10 @@ def compare_case(model, mj_data, constants, case_name):
     max_abs_qdd_diff = float(np.max(np.abs(qdd_full - qdd_incr)))
 
     # ── P / A staleness check (fresh full rebuild vs cached workspace) ─────
-    qp_constants = _get_or_build_rolling_constants(constants)
-    snapshot = prepare_phase3b_snapshot("audit", qpos, qvel, contacts, qp_constants)
+    qp_c = _resolve_qp_constants(constants)
+    snapshot = prepare_phase3b_snapshot("audit", qpos, qvel, contacts, qp_c)
     sqp_fresh = build_structured_qp_from_phase3c_snapshot(
-        snapshot, TASK_MODE, ROLLING_MODE, qp_constants,
+        snapshot, TASK_MODE, ROLLING_MODE, qp_c,
         padded_contacts=True, max_contacts=4,
         return_block_metadata=False,
     )
