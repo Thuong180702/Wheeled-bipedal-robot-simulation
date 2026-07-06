@@ -25,6 +25,12 @@ try:
 except ImportError:
     HAS_OSQP = False
 
+try:
+    import mujoco  # noqa: F401
+    HAS_MUJOCO = True
+except ImportError:
+    HAS_MUJOCO = False
+
 from wheeled_biped.wbc.qp_solver_backends import OSQP_INFTY
 
 
@@ -544,3 +550,56 @@ class TestQPBlockMetadata:
         assert "lambda" in bm.q_indices
         assert bm.q_indices["qdd"].stop - bm.q_indices["qdd"].start == 6
         assert bm.q_indices["tau"].stop - bm.q_indices["tau"].start == 4
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Test 4: IncrementalQPWorkspace initialization
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.skipif(not HAS_MUJOCO, reason="MuJoCo not available")
+@pytest.mark.skipif(not HAS_OSQP, reason="OSQP not installed")
+class TestIncrementalQPWorkspaceInit:
+    """Tests for IncrementalQPWorkspace initialization."""
+
+    def test_workspace_initializes_from_keyframe(self):
+        from wheeled_biped.wbc.phase3d3_incremental_qp import (
+            initialize_incremental_qp_workspace,
+        )
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            build_three_arm_eval_constants,
+        )
+        from wheeled_biped.wbc.offline_qp_wbc import build_qp_wbc_constants
+        from wheeled_biped.wbc.offline_rolling_constraints import (
+            build_wheel_rolling_constants,
+        )
+        from wheeled_biped.utils.config import get_model_path
+        import mujoco as _mj
+
+        model = _mj.MjModel.from_xml_path(str(get_model_path()))
+        mj_data = _mj.MjData(model)
+
+        qp_c = build_qp_wbc_constants(model)
+        rolling_c = build_wheel_rolling_constants(model)
+        constants = build_three_arm_eval_constants(model, qp_c, rolling_c)
+
+        qpos = mj_data.qpos.copy()
+        qvel = np.zeros(model.nv)
+        contacts = []
+
+        workspace = initialize_incremental_qp_workspace(
+            model, qpos, qvel, contacts,
+            task_mode="balanced_default",
+            rolling_mode="full_rolling_soft",
+            constants=constants,
+            max_contacts=4,
+        )
+
+        assert workspace.structured_qp is not None
+        assert workspace.block_metadata is not None
+        assert workspace.backend is not None
+        assert workspace.x_warm is not None
+        assert workspace.setup_count == 1
+        assert workspace.last_update_mode == "full_rebuild"
+        assert workspace.structure_signature["max_contacts"] == 4
+
+        workspace.backend.close()
