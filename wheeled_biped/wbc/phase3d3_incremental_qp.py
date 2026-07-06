@@ -28,6 +28,11 @@ from .phase3b_cached_stack import prepare_phase3b_snapshot
 from .structured_qp_problem import (
     build_structured_qp_from_phase3c_snapshot,
 )
+from .qp_solver_backends import extract_solution_components
+from .phase3d2_fast_solver import (
+    _compute_hard_constraint_residuals,
+    _compute_rolling_residuals_post_solve,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -296,3 +301,386 @@ def _compute_sparsity_hash(mat) -> str:
     indices_bytes = mat.indices.tobytes()
     combined = indptr_bytes + indices_bytes
     return hashlib.sha256(combined).hexdigest()[:16]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# update_incremental_qp_workspace
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def update_incremental_qp_workspace(
+    workspace: IncrementalQPWorkspace,
+    qpos: np.ndarray,
+    qvel: np.ndarray,
+    contacts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Update workspace numeric values for a new state without full rebuild.
+
+    Verifies contact topology is within bounds, builds a fresh snapshot
+    and structured QP for the new state, checks CSC sparsity compatibility
+    against the cached workspace, then patches numeric data arrays into
+    the cached ``structured_qp`` and calls ``backend.update()``.
+
+    On any structural mismatch (dimension change, sparsity change, or
+    contact-count overflow), sets ``workspace.workspace_reinit_required``
+    to ``True`` and returns with ``reinit_triggered=True``.
+
+    Args:
+        workspace: ``IncrementalQPWorkspace`` with cached structure.
+        qpos: (nq,) generalized positions.
+        qvel: (nv,) generalized velocities.
+        contacts: list of active contact dicts.
+
+    Returns:
+        dict with timing diagnostics and ``reinit_triggered`` flag.
+    """
+    t0 = time.perf_counter()
+    diag: dict[str, Any] = {
+        "reinit_triggered": False,
+        "num_contacts": len(contacts),
+        "snapshot_time_s": 0.0,
+        "build_time_s": 0.0,
+        "csc_patch_time_s": 0.0,
+        "osqp_update_time_s": 0.0,
+    }
+
+    # ── 1. Contact topology check ──────────────────────────────────────────
+    if len(contacts) > workspace.max_contacts:
+        _log.warning(
+            "Contact count %d exceeds max_contacts=%d — reinit required",
+            len(contacts), workspace.max_contacts,
+        )
+        workspace.workspace_reinit_required = True
+        workspace.reinit_count += 1
+        diag["reinit_triggered"] = True
+        return diag
+
+    # ── 2. Resolve QP constants ────────────────────────────────────────────
+    qp_c = workspace.constants.get("qp_constants", workspace.constants)
+
+    # ── 3. Ensure rolling constants are present ────────────────────────────
+    if qp_c.get("_rolling_constants") is None:
+        from .offline_rolling_constants import build_wheel_rolling_constants
+        from .offline_qp_wbc import _ensure_contact_constants
+        _ensure_contact_constants(qp_c)
+        rolling_c = build_wheel_rolling_constants(
+            workspace.model,
+            contact_constants=qp_c.get("_contact_constants"),
+        )
+        from .offline_rolling_constants import _ensure_kinematics_for_rolling
+        _ensure_kinematics_for_rolling(rolling_c)
+        qp_c["_rolling_constants"] = rolling_c
+
+    # ── 4. Build fresh snapshot ────────────────────────────────────────────
+    t_snap = time.perf_counter()
+    snapshot = prepare_phase3b_snapshot(
+        "wbc_update", qpos, qvel, contacts, qp_c,
+        max_contacts=workspace.max_contacts,
+    )
+    diag["snapshot_time_s"] = time.perf_counter() - t_snap
+
+    # ── 5. Build fresh StructuredQPProblem (no metadata — already cached) ──
+    t_build = time.perf_counter()
+    sqp_new = build_structured_qp_from_phase3c_snapshot(
+        snapshot, workspace.task_mode, workspace.rolling_mode, qp_c,
+        padded_contacts=True, max_contacts=workspace.max_contacts,
+        return_block_metadata=False,
+    )
+    diag["build_time_s"] = time.perf_counter() - t_build
+
+    # ── 6. Verify dimension match ──────────────────────────────────────────
+    if sqp_new.nx != workspace.structured_qp.nx or sqp_new.nc != workspace.structured_qp.nc:
+        _log.warning(
+            "QP dimensions changed: (%d,%d) -> (%d,%d) — reinit required",
+            workspace.structured_qp.nx, workspace.structured_qp.nc,
+            sqp_new.nx, sqp_new.nc,
+        )
+        workspace.workspace_reinit_required = True
+        workspace.reinit_count += 1
+        diag["reinit_triggered"] = True
+        return diag
+
+    # ── 7. Verify CSC sparsity compatibility ───────────────────────────────
+    try:
+        _verify_csc_compatible(workspace.structured_qp.P, sqp_new.P, "P")
+        _verify_csc_compatible(workspace.structured_qp.A, sqp_new.A, "A")
+    except ValueError:
+        _log.warning(
+            "CSC sparsity structure changed — reinit required",
+            exc_info=True,
+        )
+        workspace.workspace_reinit_required = True
+        workspace.reinit_count += 1
+        diag["reinit_triggered"] = True
+        return diag
+
+    # ── 8. Patch CSC data arrays ───────────────────────────────────────────
+    t_patch = time.perf_counter()
+    workspace.structured_qp.P.data[:] = sqp_new.P.data
+    workspace.structured_qp.A.data[:] = sqp_new.A.data
+    workspace.structured_qp.q[:] = sqp_new.q
+    workspace.structured_qp.l[:] = sqp_new.l
+    workspace.structured_qp.u[:] = sqp_new.u
+    workspace.structured_qp.lb[:] = sqp_new.lb
+    workspace.structured_qp.ub[:] = sqp_new.ub
+    diag["csc_patch_time_s"] = time.perf_counter() - t_patch
+
+    # ── 9. Update backend numeric values ───────────────────────────────────
+    t_osqp = time.perf_counter()
+    workspace.backend.update(
+        q=workspace.structured_qp.q,
+        l=workspace.structured_qp.l,
+        u=workspace.structured_qp.u,
+        Px=workspace.structured_qp.P.data,
+        Ax=workspace.structured_qp.A.data,
+    )
+    diag["osqp_update_time_s"] = time.perf_counter() - t_osqp
+
+    # ── 10. Update state tracking and counters ─────────────────────────────
+    workspace.previous_qpos = qpos.copy()
+    workspace.previous_qvel = qvel.copy()
+    workspace.previous_contacts = list(contacts) if contacts is not None else []
+    workspace.last_active_contact_slots = snapshot.contact_stack.num_contacts
+    workspace.last_update_mode = "csc_patch"
+    workspace.update_count += 1
+
+    # ── 11. Accumulate timing ──────────────────────────────────────────────
+    workspace.cumulative_snapshot_time_s += diag["snapshot_time_s"]
+    workspace.cumulative_csc_patch_time_s += diag["csc_patch_time_s"]
+    workspace.cumulative_osqp_update_time_s += diag["osqp_update_time_s"]
+
+    total_step = time.perf_counter() - t0
+    diag["total_step_time_s"] = total_step
+    workspace.cumulative_full_step_time_s += total_step
+
+    return diag
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# solve_incremental_qp
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def solve_incremental_qp(
+    workspace: IncrementalQPWorkspace,
+    *,
+    warm_start: bool = True,
+) -> dict[str, Any]:
+    """Solve the cached QP using the persistent backend with optional warm-start.
+
+    Applies the stored primal warm-start vector, runs the solver, extracts
+    solution components, computes hard constraint and rolling residuals, and
+    stores the solution as the warm-start for the next call.
+
+    The return dict has the same keys as ``compute_wbc_torque_for_state``
+    plus incremental-specific diagnostics.
+
+    Args:
+        workspace: ``IncrementalQPWorkspace`` with updated numeric values.
+        warm_start: if True and ``x_warm`` is available, apply warm-start.
+
+    Returns:
+        dict with keys:
+          - tau_wbc, qdd_wbc, lambda_wbc
+          - solve_success, solve_status, solve_time_s
+          - max_dynamics_residual, max_contact_accel_residual,
+            max_friction_violation, max_torque_violation,
+            max_rolling_residual
+          - max_abs_qdd, max_abs_tau, max_abs_lambda
+          - finite_solution
+          - backend_diagnostics, workspace_update_count,
+            workspace_reinit_count
+    """
+    t0 = time.perf_counter()
+
+    # ── 1. Apply warm-start ────────────────────────────────────────────────
+    if warm_start and workspace.x_warm is not None:
+        try:
+            workspace.backend.warm_start(x=workspace.x_warm, y=workspace.y_warm)
+        except Exception:
+            _log.warning("Warm-start application failed", exc_info=True)
+
+    # ── 2. Solve ───────────────────────────────────────────────────────────
+    result = workspace.backend.solve()
+
+    # ── 3. Increment counters ──────────────────────────────────────────────
+    workspace.solve_count += 1
+    solve_time_s = time.perf_counter() - t0
+    workspace.cumulative_osqp_solve_time_s += solve_time_s
+
+    # ── 4. Store warm-start for next call ──────────────────────────────────
+    workspace.x_warm = result.x.copy()
+    # Dual warm-start is not directly available from QPSolution;
+    # set y_warm to zeros of correct shape if None
+    if workspace.y_warm is None:
+        workspace.y_warm = np.zeros(workspace.structured_qp.nc, dtype=np.float64)
+
+    # ── 5. Extract solution components ─────────────────────────────────────
+    components = extract_solution_components(workspace.structured_qp, result)
+
+    tau_wbc = components.get("tau", np.zeros(
+        workspace.structured_qp.variable_slices["tau"][1]
+        - workspace.structured_qp.variable_slices["tau"][0],
+        dtype=np.float64,
+    ))
+    qdd_wbc = components.get("qdd", np.zeros(
+        workspace.structured_qp.variable_slices["qdd"][1]
+        - workspace.structured_qp.variable_slices["qdd"][0],
+        dtype=np.float64,
+    ))
+    lam_wbc = components.get("lambda", np.zeros(0, dtype=np.float64))
+
+    # ── 6. Compute residuals ───────────────────────────────────────────────
+    hard_residuals = _compute_hard_constraint_residuals(workspace.structured_qp, result)
+
+    # Build a minimal snapshot-like object for rolling residuals if available
+    rolling_residuals = _compute_rolling_residuals_post_solve(
+        None,  # snapshot not needed if we pass sqp directly
+        result,
+        workspace.rolling_mode,
+        workspace.structured_qp,
+    )
+    # Override with sqp-based computation; snapshot=None means the function
+    # won't attempt snapshot-specific attributes.
+    max_rolling_residual = rolling_residuals.get("max_rolling_eq_residual", 0.0)
+
+    # ── 7. Assemble return dict ────────────────────────────────────────────
+    return {
+        "tau_wbc": tau_wbc,
+        "qdd_wbc": qdd_wbc,
+        "lambda_wbc": lam_wbc,
+        "solve_success": result.success,
+        "solve_status": result.status,
+        "solve_time_s": solve_time_s,
+        "max_dynamics_residual": hard_residuals.get("max_dynamics_residual", float("nan")),
+        "max_contact_accel_residual": hard_residuals.get("max_contact_accel_residual", float("nan")),
+        "max_friction_violation": hard_residuals.get("max_friction_violation", float("nan")),
+        "max_torque_violation": hard_residuals.get("max_torque_violation", float("nan")),
+        "max_rolling_residual": max_rolling_residual,
+        "max_abs_qdd": hard_residuals.get("max_abs_qdd", 0.0),
+        "max_abs_tau": hard_residuals.get("max_abs_tau", 0.0),
+        "max_abs_lambda": hard_residuals.get("max_abs_lambda", 0.0),
+        "finite_solution": hard_residuals.get("finite_solution", False),
+        "backend_diagnostics": workspace.backend.diagnostics,
+        "workspace_update_count": workspace.update_count,
+        "workspace_reinit_count": workspace.reinit_count,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# compute_wbc_torque_incremental_for_state
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_wbc_torque_incremental_for_state(
+    mj_data: Any,
+    model: Any,
+    workspace: IncrementalQPWorkspace,
+    constants: dict[str, Any],
+    controller_context: dict[str, Any],
+) -> dict[str, Any]:
+    """Drop-in replacement for ``compute_wbc_torque_for_state``.
+
+    On the first solve or when ``workspace.workspace_reinit_required`` is set,
+    falls back to a full rebuild via ``compute_wbc_torque_for_state`` from
+    ``offline_three_arm_counterfactual``.  Otherwise, runs the incremental
+    update + solve pipeline.
+
+    All fallback paths increment ``workspace.fallback_full_rebuild_count``.
+    Any exception triggers the fail-closed fallback.
+
+    Args:
+        mj_data: MuJoCo ``MjData`` instance (provides qpos, qvel).
+        model: MuJoCo ``MjModel`` instance.
+        workspace: ``IncrementalQPWorkspace`` with cached structure.
+        constants: dict from ``build_three_arm_eval_constants``.
+        controller_context: dict with at least a ``"contacts"`` key
+            containing the list of active contact dicts.
+
+    Returns:
+        dict with the same keys as ``compute_wbc_torque_for_state``,
+        plus incremental diagnostics when the incremental path is used.
+    """
+    # ── Extract state ──────────────────────────────────────────────────────
+    qpos = mj_data.qpos.copy()
+    qvel = mj_data.qvel.copy()
+    contacts = controller_context.get("contacts", [])
+
+    # ── Determine whether to use incremental or full-rebuild path ───────────
+    use_full_rebuild = (
+        workspace.workspace_reinit_required
+        or workspace.solve_count == 0
+    )
+
+    # ── Fast path: incremental update + solve ──────────────────────────────
+    if not use_full_rebuild:
+        try:
+            update_diag = update_incremental_qp_workspace(
+                workspace, qpos, qvel, contacts,
+            )
+
+            if update_diag.get("reinit_triggered", False):
+                # Update signalled a structural change mid-stream;
+                # fall back to full rebuild (fail-closed).
+                _log.info("Update triggered reinit — falling back to full rebuild")
+                workspace.fallback_full_rebuild_count += 1
+                return _fallback_full_rebuild(
+                    mj_data, model, workspace, constants, controller_context,
+                )
+
+            result = solve_incremental_qp(workspace, warm_start=True)
+            return result
+
+        except Exception:
+            _log.exception(
+                "Incremental QP failed — falling back to full rebuild (fail-closed)"
+            )
+            workspace.fallback_full_rebuild_count += 1
+            return _fallback_full_rebuild(
+                mj_data, model, workspace, constants, controller_context,
+            )
+
+    # ── Slow path: full rebuild ────────────────────────────────────────────
+    workspace.fallback_full_rebuild_count += 1
+    return _fallback_full_rebuild(
+        mj_data, model, workspace, constants, controller_context,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Internal: _fallback_full_rebuild
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _fallback_full_rebuild(
+    mj_data: Any,
+    model: Any,  # unused but kept for interface symmetry
+    workspace: IncrementalQPWorkspace,
+    constants: dict[str, Any],
+    controller_context: dict[str, Any],
+) -> dict[str, Any]:
+    """Full rebuild via ``compute_wbc_torque_for_state``.
+
+    After a successful rebuild, resets ``workspace.workspace_reinit_required``
+    to ``False`` so the next step can use the incremental path again.
+    """
+    from .offline_three_arm_counterfactual import compute_wbc_torque_for_state
+
+    qpos = mj_data.qpos.copy()
+    qvel = mj_data.qvel.copy()
+    contacts = controller_context.get("contacts", [])
+
+    result = compute_wbc_torque_for_state(
+        qpos=qpos,
+        qvel=qvel,
+        contacts=contacts,
+        task_mode=workspace.task_mode,
+        rolling_mode=workspace.rolling_mode,
+        constants=constants,
+        max_contacts=workspace.max_contacts,
+    )
+
+    # On success, clear the reinit flag so the next step can use incremental.
+    # Also ensure solve_count is at least 1 so the "first solve" gate is
+    # cleared; otherwise every call would continue to fall back.
+    if result.get("solve_success", False):
+        workspace.workspace_reinit_required = False
+        workspace.solve_count = max(workspace.solve_count, 1)
+
+    return result

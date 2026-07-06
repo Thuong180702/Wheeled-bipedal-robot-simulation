@@ -603,3 +603,171 @@ class TestIncrementalQPWorkspaceInit:
         assert workspace.structure_signature["max_contacts"] == 4
 
         workspace.backend.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Test 5: IncrementalQP Update + Solve
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.skipif(not HAS_MUJOCO, reason="MuJoCo not available")
+@pytest.mark.skipif(not HAS_OSQP, reason="OSQP not installed")
+class TestIncrementalQPUpdateSolve:
+    """Tests for incremental update and solve."""
+
+    def test_update_then_solve_returns_finite_tau(self):
+        from wheeled_biped.wbc.phase3d3_incremental_qp import (
+            initialize_incremental_qp_workspace,
+            update_incremental_qp_workspace,
+            solve_incremental_qp,
+        )
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            build_three_arm_eval_constants,
+        )
+        from wheeled_biped.wbc.offline_qp_wbc import build_qp_wbc_constants
+        from wheeled_biped.wbc.offline_rolling_constraints import (
+            build_wheel_rolling_constants,
+        )
+        from wheeled_biped.utils.config import get_model_path
+        import mujoco as _mj
+
+        model = _mj.MjModel.from_xml_path(str(get_model_path()))
+        mj_data = _mj.MjData(model)
+
+        qp_c = build_qp_wbc_constants(model)
+        rolling_c = build_wheel_rolling_constants(model)
+        constants = build_three_arm_eval_constants(model, qp_c, rolling_c)
+
+        qpos = mj_data.qpos.copy()
+        qvel = np.zeros(model.nv)
+        contacts = []
+
+        workspace = initialize_incremental_qp_workspace(
+            model, qpos, qvel, contacts,
+            task_mode="balanced_default",
+            rolling_mode="full_rolling_soft",
+            constants=constants, max_contacts=4,
+        )
+
+        # Update with same state
+        update_diag = update_incremental_qp_workspace(workspace, qpos, qvel, contacts)
+        assert not update_diag.get("reinit_triggered", True)
+
+        result = solve_incremental_qp(workspace, warm_start=True)
+        assert result["finite_solution"]
+        assert result["tau_wbc"].shape == (10,)
+        assert result["qdd_wbc"].shape == (model.nv,)
+        assert workspace.solve_count >= 1
+
+        workspace.backend.close()
+
+    def test_warm_start_used_after_first_step(self):
+        from wheeled_biped.wbc.phase3d3_incremental_qp import (
+            initialize_incremental_qp_workspace,
+            update_incremental_qp_workspace,
+            solve_incremental_qp,
+        )
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            build_three_arm_eval_constants,
+        )
+        from wheeled_biped.wbc.offline_qp_wbc import build_qp_wbc_constants
+        from wheeled_biped.wbc.offline_rolling_constraints import (
+            build_wheel_rolling_constants,
+        )
+        from wheeled_biped.utils.config import get_model_path
+        import mujoco as _mj
+
+        model = _mj.MjModel.from_xml_path(str(get_model_path()))
+        mj_data = _mj.MjData(model)
+
+        qp_c = build_qp_wbc_constants(model)
+        rolling_c = build_wheel_rolling_constants(model)
+        constants = build_three_arm_eval_constants(model, qp_c, rolling_c)
+
+        qpos = mj_data.qpos.copy()
+        qvel = np.zeros(model.nv)
+        contacts = []
+
+        workspace = initialize_incremental_qp_workspace(
+            model, qpos, qvel, contacts,
+            task_mode="balanced_default",
+            rolling_mode="full_rolling_soft",
+            constants=constants, max_contacts=4,
+        )
+
+        # First solve on initial state (populates explicit warm-start)
+        update_diag0 = update_incremental_qp_workspace(workspace, qpos, qvel, contacts)
+        assert not update_diag0.get("reinit_triggered", True)
+        result0 = solve_incremental_qp(workspace, warm_start=True)
+        assert result0["finite_solution"]
+        assert workspace.solve_count == 1
+
+        # Small perturbation on second step
+        qvel2 = qvel.copy()
+        qvel2[6:10] = 0.01
+
+        update_diag = update_incremental_qp_workspace(workspace, qpos, qvel2, contacts)
+        assert not update_diag.get("reinit_triggered", True)
+
+        result = solve_incremental_qp(workspace, warm_start=True)
+        assert result["finite_solution"]
+        assert workspace.solve_count == 2
+
+        diag = workspace.backend.diagnostics
+        assert diag["last_solve_used_warm_start_primal"] == True
+
+        workspace.backend.close()
+
+    def test_compute_wbc_torque_incremental_returns_compatible_dict(self):
+        from wheeled_biped.wbc.phase3d3_incremental_qp import (
+            initialize_incremental_qp_workspace,
+            compute_wbc_torque_incremental_for_state,
+        )
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            build_three_arm_eval_constants,
+        )
+        from wheeled_biped.wbc.offline_qp_wbc import build_qp_wbc_constants
+        from wheeled_biped.wbc.offline_rolling_constraints import (
+            build_wheel_rolling_constants,
+        )
+        from wheeled_biped.utils.config import get_model_path
+        import mujoco as _mj
+
+        model = _mj.MjModel.from_xml_path(str(get_model_path()))
+        mj_data = _mj.MjData(model)
+
+        qp_c = build_qp_wbc_constants(model)
+        rolling_c = build_wheel_rolling_constants(model)
+        constants = build_three_arm_eval_constants(model, qp_c, rolling_c)
+
+        qpos = mj_data.qpos.copy()
+        qvel = np.zeros(model.nv)
+        contacts = []
+
+        workspace = initialize_incremental_qp_workspace(
+            model, qpos, qvel, contacts,
+            task_mode="balanced_default",
+            rolling_mode="full_rolling_soft",
+            constants=constants, max_contacts=4,
+        )
+
+        ctx = {"contacts": contacts}
+        result = compute_wbc_torque_incremental_for_state(
+            mj_data, model, workspace, constants, ctx,
+        )
+
+        # Check all required keys are present (same as compute_wbc_torque_for_state)
+        required_keys = [
+            "tau_wbc", "qdd_wbc", "lambda_wbc",
+            "solve_success", "solve_status", "solve_time_s",
+            "max_dynamics_residual", "max_contact_accel_residual",
+            "max_friction_violation", "max_torque_violation",
+            "max_rolling_residual", "max_abs_qdd", "max_abs_tau",
+            "max_abs_lambda", "finite_solution",
+        ]
+        for key in required_keys:
+            assert key in result, f"Missing key: {key}"
+
+        assert result["tau_wbc"].shape == (10,)
+        assert result["qdd_wbc"].shape == (model.nv,)
+
+        workspace.backend.close()
