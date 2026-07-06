@@ -38,6 +38,22 @@ OSQP_INFTY = 1e30
 OSQP_NEG_INFTY = -1e30
 
 
+# ── Phase 3B QP cache (deduplicate builds within one structured QP call) ─────
+
+_QP3B_CACHE: dict[int, Any] = {}
+
+
+def _build_phase3b_qp_cached(snapshot: Any, constants: dict[str, Any]) -> dict[str, Any]:
+    """Build Phase 3B QP from snapshot once and cache by snapshot id."""
+    snap_id = id(snapshot)
+    if snap_id not in _QP3B_CACHE:
+        from .phase3b_cached_stack import build_phase3b_qp_from_snapshot
+        _QP3B_CACHE[snap_id] = build_phase3b_qp_from_snapshot(
+            snapshot, "feasibility_only", constants,
+        )
+    return _QP3B_CACHE[snap_id]
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # StructuredQPProblem
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -141,12 +157,16 @@ def build_structured_qp_from_phase3c_snapshot(
         "slack": (nv + nu + n_lambda, nx),
     }
 
+    # ── Build Phase 3B QP once, reuse for both objective and constraints ──
+    qp_3b = _build_phase3b_qp_cached(snapshot, constants)
+
     # ── 1. Build quadratic cost: H_base + H_task + H_rolling_soft → P ────
     P_dense, q_vec, per_task = _build_sparse_objective(
         snapshot, task_mode, rolling_mode, constants,
         nv, nu, _max_c, n_lambda, nx, k, var_slices,
         k_lat=k_lat, k_roll=k_roll,
         rolling_soft_weight=rolling_soft_weight,
+        qp_3b=qp_3b,
     )
 
     # ── 2. Build unified constraints: A, l, u ────────────────────────────
@@ -154,6 +174,7 @@ def build_structured_qp_from_phase3c_snapshot(
         snapshot, rolling_mode, constants,
         nv, nu, _max_c, n_lambda, nx, k, var_slices,
         k_lat=k_lat, k_roll=k_roll,
+        qp_3b=qp_3b,
     )
 
     # ── 3. Build variable bounds: lb, ub ─────────────────────────────────
@@ -206,11 +227,12 @@ def _build_sparse_objective(
     snapshot, task_mode, rolling_mode, constants,
     nv, nu, max_c, n_lambda, nx, k, var_slices,
     k_lat=5.0, k_roll=5.0, rolling_soft_weight=100.0,
+    qp_3b=None,
 ):
     """Build P (dense → will be CSC) and q vector."""
     # Start with base regularization from Phase 3B
-    from .phase3b_cached_stack import build_phase3b_qp_from_snapshot
-    qp_3b = build_phase3b_qp_from_snapshot(snapshot, task_mode, constants)
+    if qp_3b is None:
+        qp_3b = _build_phase3b_qp_cached(snapshot, constants)
 
     H_total = qp_3b["H"].copy()
     g_total = qp_3b["g"].copy()
@@ -255,6 +277,7 @@ def _build_unified_constraints(
     snapshot, rolling_mode, constants,
     nv, nu, max_c, n_lambda, nx, k, var_slices,
     k_lat=5.0, k_roll=5.0,
+    qp_3b=None,
 ):
     """Build A, l, u from hard constraints (dynamics, contact, friction, rolling).
 
@@ -264,8 +287,8 @@ def _build_unified_constraints(
         u: (nc,) upper bounds.
         constraint_slices: dict mapping group → (start, end).
     """
-    from .phase3b_cached_stack import build_phase3b_qp_from_snapshot
-    qp_3b = build_phase3b_qp_from_snapshot(snapshot, task_mode="feasibility_only", constants=constants)
+    if qp_3b is None:
+        qp_3b = _build_phase3b_qp_cached(snapshot, constants)
 
     rows = []
     l_vals = []
