@@ -506,3 +506,41 @@ class TestStalePA:
         assert sol2.success, f"Second solve failed: {sol2.status}"
 
         backend.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Test 3: QPBlockMetadata
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.skipif(not HAS_OSQP, reason="OSQP not installed")
+class TestQPBlockMetadata:
+    """Tests for QPBlockMetadata extraction."""
+
+    def test_metadata_from_minimal_qp(self):
+        """Block metadata extracts correctly from a minimal QP."""
+        # Dynamic import to avoid top-level dependency
+        from wheeled_biped.wbc.structured_qp_problem import (
+            QPBlockMetadata, _extract_block_metadata,
+        )
+        qp = _make_minimal_structured_qp()
+        bm = _extract_block_metadata(qp, max_contacts=4)
+
+        assert bm.nx == qp.nx
+        assert bm.nc == qp.nc
+        assert bm.nv == 6
+        assert bm.nu == 4
+        assert bm.n_lambda == 12
+        assert bm.p_nnz > 0
+        assert bm.a_nnz > 0
+        assert len(bm.A_blocks) >= 1
+
+    def test_q_indices_cover_variable_groups(self):
+        from wheeled_biped.wbc.structured_qp_problem import _extract_block_metadata
+        qp = _make_minimal_structured_qp()
+        bm = _extract_block_metadata(qp, max_contacts=4)
+
+        assert "qdd" in bm.q_indices
+        assert "tau" in bm.q_indices
+        assert "lambda" in bm.q_indices
+        assert bm.q_indices["qdd"].stop - bm.q_indices["qdd"].start == 6
+        assert bm.q_indices["tau"].stop - bm.q_indices["tau"].start == 4

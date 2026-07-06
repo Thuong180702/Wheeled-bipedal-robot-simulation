@@ -101,6 +101,44 @@ class StructuredQPProblem:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# QPBlockMetadata
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class QPBlockMetadata:
+    """Records where each semantic block lands in the CSC data arrays.
+
+    Enables direct per-step numeric patching without rebuilding the full
+    QP structure. Constructed from known row/column coordinate ranges
+    at QP build time — NOT probe-based.
+
+    Attributes:
+        P_blocks: dict block_name -> {row_start, row_end, col_start, col_end, nnz}
+        A_blocks: dict block_name -> {row_start, row_end, nnz}
+        q_indices: dict block_name -> slice
+        l_indices: dict block_name -> slice
+        u_indices: dict block_name -> slice
+        nx, nc, nv, nu, n_lambda, k_slack: problem dimensions
+        max_contacts: padded contact count
+        p_nnz, a_nnz: CSC nonzero counts
+    """
+    P_blocks: dict = field(default_factory=dict)
+    A_blocks: dict = field(default_factory=dict)
+    q_indices: dict = field(default_factory=dict)
+    l_indices: dict = field(default_factory=dict)
+    u_indices: dict = field(default_factory=dict)
+    nx: int = 0
+    nc: int = 0
+    nv: int = 0
+    nu: int = 0
+    n_lambda: int = 0
+    k_slack: int = 0
+    max_contacts: int = 4
+    p_nnz: int = 0
+    a_nnz: int = 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Task 1: build_structured_qp_from_phase3c_snapshot
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -115,6 +153,7 @@ def build_structured_qp_from_phase3c_snapshot(
     k_lat: float = 5.0,
     k_roll: float = 5.0,
     rolling_soft_weight: float = 100.0,
+    return_block_metadata: bool = False,
 ) -> StructuredQPProblem:
     """Build the exact same QP as Phase 3C but in sparse structured standard form.
 
@@ -205,7 +244,7 @@ def build_structured_qp_from_phase3c_snapshot(
         "rolling_soft_weight": rolling_soft_weight,
     }
 
-    return StructuredQPProblem(
+    sqp = StructuredQPProblem(
         P=sp.csc_matrix(P_dense),
         q=q_vec,
         A=sp.csc_matrix(A_rows) if A_rows.shape[0] > 0 else sp.csc_matrix((0, nx)),
@@ -216,6 +255,87 @@ def build_structured_qp_from_phase3c_snapshot(
         variable_slices=var_slices,
         constraint_slices=c_slices,
         metadata=metadata,
+    )
+
+    if return_block_metadata:
+        bm = _extract_block_metadata(sqp, _max_c)
+        return sqp, bm
+
+    return sqp
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Block metadata extraction
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _extract_block_metadata(
+    sqp: StructuredQPProblem,
+    max_contacts: int,
+) -> QPBlockMetadata:
+    """Extract block metadata from a freshly-built StructuredQPProblem.
+
+    Uses known row/col coordinate ranges from variable_slices and
+    constraint_slices — NOT probe-based.
+    """
+    P = sqp.P.tocoo()
+    A = sqp.A.tocoo()
+    vs = sqp.variable_slices
+    cs = sqp.constraint_slices
+
+    nv = vs["qdd"][1] - vs["qdd"][0]
+    nu = vs["tau"][1] - vs["tau"][0]
+    n_lambda = vs["lambda"][1] - vs["lambda"][0]
+    k = vs["slack"][1] - vs["slack"][0] if "slack" in vs else 0
+
+    # Map P blocks: use row/col ranges
+    P_blocks = {}
+    qdd_s, qdd_e = vs["qdd"]
+    P_dyn_mask = (
+        (P.row >= qdd_s) & (P.row < qdd_e) &
+        (P.col >= qdd_s) & (P.col < qdd_e)
+    )
+    if np.any(P_dyn_mask):
+        P_blocks["dynamics"] = {
+            "row_start": int(qdd_s), "row_end": int(qdd_e),
+            "col_start": int(qdd_s), "col_end": int(qdd_e),
+            "nnz": int(np.sum(P_dyn_mask)),
+        }
+
+    # Map A blocks: use row ranges from constraint_slices
+    A_blocks = {}
+    for block_name in ["dynamics", "contact_normal", "friction",
+                        "rolling_hard", "torque_bounds"]:
+        if block_name in cs:
+            s, e = cs[block_name]
+            if e > s:
+                block_mask = (A.row >= s) & (A.row < e)
+                if np.any(block_mask):
+                    A_blocks[block_name] = {
+                        "row_start": int(s), "row_end": int(e),
+                        "nnz": int(np.sum(block_mask)),
+                    }
+
+    # Map l/u indices from constraint_slices
+    l_indices = {name: slice(int(s), int(e))
+                 for name, (s, e) in cs.items() if e > s}
+    u_indices = {name: slice(int(s), int(e))
+                 for name, (s, e) in cs.items() if e > s}
+
+    # Map q indices from variable_slices
+    q_indices = {
+        "qdd": slice(int(qdd_s), int(qdd_e)),
+        "tau": slice(int(vs["tau"][0]), int(vs["tau"][1])),
+        "lambda": slice(int(vs["lambda"][0]), int(vs["lambda"][1])),
+        "slack": slice(int(vs["slack"][0]), int(vs["slack"][1])) if "slack" in vs else slice(0, 0),
+    }
+
+    return QPBlockMetadata(
+        P_blocks=P_blocks, A_blocks=A_blocks,
+        q_indices=q_indices, l_indices=l_indices, u_indices=u_indices,
+        nx=sqp.nx, nc=sqp.nc, nv=nv, nu=nu,
+        n_lambda=n_lambda, k_slack=k,
+        max_contacts=max_contacts,
+        p_nnz=P.nnz, a_nnz=A.nnz,
     )
 
 
