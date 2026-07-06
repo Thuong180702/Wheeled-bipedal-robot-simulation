@@ -35,7 +35,7 @@ from wheeled_biped.wbc.offline_three_arm_counterfactual import (
     build_three_arm_eval_constants,
 )
 from wheeled_biped.wbc.offline_qp_wbc import build_qp_wbc_constants
-from wheeled_biped.wbc.offline_rolling_constants import build_wheel_rolling_constants
+from wheeled_biped.wbc.offline_rolling_constraints import build_wheel_rolling_constants
 from wheeled_biped.wbc.phase3d3_incremental_qp import (
     initialize_incremental_qp_workspace,
     update_incremental_qp_workspace,
