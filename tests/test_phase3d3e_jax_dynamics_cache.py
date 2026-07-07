@@ -493,3 +493,88 @@ class TestContactJacobianCorrectness:
         ]
         with pytest.raises(ValueError, match="exceeds max_contacts"):
             contacts_to_padded_arrays(contacts_5, max_contacts=4)
+
+
+class TestFullCachedSnapshot:
+    """Verify prepare_phase3b_snapshot_cached matches original."""
+
+    @pytest.fixture(scope="module")
+    def cache_and_refs(self, test_model_and_constants):
+        model, constants = test_model_and_constants
+        import mujoco
+        cache = initialize_jax_dynamics_cache(model, constants, warmup=True)
+
+        try:
+            kf = model.keyframe("standing")
+        except Exception:
+            kf = model.keyframe("default")
+        qpos0 = np.array(kf.qpos, dtype=np.float64)
+        qvel0 = np.zeros(model.nv, dtype=np.float64)
+
+        # Contact extraction (same pattern as other tests)
+        data = mujoco.MjData(model)
+        data.qpos[:] = qpos0
+        mujoco.mj_forward(model, data)
+        contact_c = constants["_contact_constants"]
+        wids = set(int(v) for v in contact_c.get("wheel_body_ids", {}).values() if v >= 0)
+        contacts = []
+        for ci in range(data.ncon):
+            c = data.contact[ci]
+            g1, g2 = int(c.geom1), int(c.geom2)
+            b1, b2 = int(model.geom_bodyid[g1]), int(model.geom_bodyid[g2])
+            wb = b1 if b1 in wids else (b2 if b2 in wids else None)
+            if wb is None:
+                continue
+            pos = np.array(c.pos, dtype=np.float64)
+            fr = np.array(c.frame, dtype=np.float64).reshape(3, 3)
+            bx = np.array(data.xpos[wb], dtype=np.float64)
+            bm = np.array(data.xmat[wb], dtype=np.float64).reshape(3, 3)
+            lp = bm.T @ (pos - bx)
+            contacts.append({
+                "body_id": int(wb), "position": pos,
+                "frame": fr, "local_point": lp,
+            })
+        return cache, constants, model, qpos0, qvel0, contacts
+
+    def test_full_snapshot_matches_original(self, cache_and_refs):
+        cache, constants, model, qpos0, qvel0, contacts = cache_and_refs
+
+        from wheeled_biped.wbc.phase3b_cached_stack import prepare_phase3b_snapshot
+        from wheeled_biped.wbc.phase3d3e_jax_dynamics_cache import prepare_phase3b_snapshot_cached
+
+        snap_orig = prepare_phase3b_snapshot("test", qpos0, qvel0, contacts, constants)
+        snap_cache = prepare_phase3b_snapshot_cached(
+            cache, "test", qpos0, qvel0, contacts, constants,
+        )
+
+        # Compare M and h (exact match expected — same jax_mass_matrix_fk_arrays)
+        assert np.max(np.abs(snap_orig.M - snap_cache.M)) < 1e-6, "M mismatch"
+        assert np.max(np.abs(snap_orig.h - snap_cache.h)) < 1e-6, "h mismatch"
+
+        # Compare COM Jacobian
+        assert np.max(np.abs(snap_orig.Jcom - snap_cache.Jcom)) < 1e-6, "Jcom mismatch"
+
+        # Compare COM Jdot*qdot (float32 FD tolerance)
+        assert np.max(np.abs(snap_orig.jdq_com - snap_cache.jdq_com)) < 1e-2, \
+            f"jdq_com mismatch: {np.max(np.abs(snap_orig.jdq_com - snap_cache.jdq_com))}"
+
+        # Compare torso Jacobian
+        assert np.max(np.abs(snap_orig.Jr - snap_cache.Jr)) < 1e-6, "Jr mismatch"
+
+        # Compare orientation error
+        assert np.max(np.abs(snap_orig.e_R - snap_cache.e_R)) < 1e-6, "e_R mismatch"
+        assert np.max(np.abs(snap_orig.current_rpy - snap_cache.current_rpy)) < 1e-6, "rpy mismatch"
+
+        # Contact count
+        assert snap_orig.m == snap_cache.m, f"contact count: {snap_orig.m} vs {snap_cache.m}"
+
+        # Contact Jdot*qdot (float32 FD tolerance)
+        if snap_orig.m > 0:
+            jdq_orig = snap_orig.jdot_qdot[:3*snap_orig.m]
+            jdq_cache = snap_cache.jdot_qdot[:3*snap_cache.m]
+            max_jdq_diff = np.max(np.abs(jdq_orig - jdq_cache))
+            assert max_jdq_diff < 1e-2, f"contact jdot_qdot mismatch: {max_jdq_diff}"
+
+        # Mass info
+        assert abs(snap_orig.total_mass - snap_cache.total_mass) < 1e-10
+        assert abs(snap_orig.robot_weight - snap_cache.robot_weight) < 1e-10

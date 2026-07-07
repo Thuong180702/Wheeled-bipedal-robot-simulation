@@ -203,6 +203,37 @@ def _torso_orientation_error_jax(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Qpos-to-qvel Jacobian conversion
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _qpos_jac_to_qvel_jac_static(J_qpos: np.ndarray, qpos: np.ndarray) -> np.ndarray:
+    """Convert qpos-space Jacobian to qvel-space. NumPy, outside JIT.
+
+    J_qpos: (rows, 17) — Jacobian in qpos coordinates
+    qpos: (17,) — generalized positions (for torso quaternion)
+
+    Returns: (rows, 16) — Jacobian in qvel coordinates
+
+    Conversion:
+      qvel[0:3] (world lin vel) → qpos[0:3] (world pos) via identity
+      qvel[3:6] (world ang vel) → qpos[3:7] (quat) via 0.5 * G(q)
+      qvel[6:16] (hinge vel) → qpos[7:17] (hinge pos) via identity
+    """
+    rows = J_qpos.shape[0]
+    J_qvel = np.zeros((rows, 16), dtype=np.float64)
+    # Position: identity
+    J_qvel[:, 0:3] = J_qpos[:, 0:3]
+    # Quaternion → angular velocity: J_qvel[:, 3:6] = J_qpos[:, 3:7] @ (0.5 * G(q))
+    q_torso = qpos[3:7]
+    w, x, y, z = q_torso[0], q_torso[1], q_torso[2], q_torso[3]
+    G = np.array([[-x, -y, -z], [w, -z, y], [z, w, -x], [-y, x, w]], dtype=np.float64)
+    J_qvel[:, 3:6] = J_qpos[:, 3:7] @ (0.5 * G)
+    # Hinge joints: identity
+    J_qvel[:, 6:16] = J_qpos[:, 7:17]
+    return J_qvel
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Velocity-to-qpos-derivative helper
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -588,3 +619,208 @@ def _warmup_cache(cache: JAXDynamicsCache) -> None:
 
     # Force JAX to finish async dispatch
     _ = jax.block_until_ready(dummy_qpos)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Cached snapshot preparation (drop-in replacement)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def prepare_phase3b_snapshot_cached(
+    cache: JAXDynamicsCache,
+    scenario_name: str,
+    qpos: np.ndarray,
+    qvel: np.ndarray,
+    contacts: list[dict[str, Any]],
+    constants: dict[str, Any],
+    *,
+    max_contacts: int = DEFAULT_MAX_CONTACTS,
+):
+    """Drop-in cached/precompiled replacement for prepare_phase3b_snapshot().
+
+    Uses precompiled JAX functions from cache instead of re-tracing
+    JAX operations on every call.
+
+    Returns Phase3BSnapshot with same structure as the original.
+    """
+    from wheeled_biped.wbc.phase3b_cached_stack import Phase3BSnapshot, PaddedContactStack
+
+    t0 = time.perf_counter()
+
+    nv = cache.nv
+    nu = cache.nu
+    m = len(contacts)
+
+    # ── Convert to JAX arrays ────────────────────────────────────────
+    qpos_jax = jnp.array(qpos, dtype=jnp.float32)
+    qvel_jax = jnp.array(qvel, dtype=jnp.float32)
+
+    # ── Mass matrix and bias forces (jitted) ─────────────────────────
+    M = np.array(cache.mass_matrix_jit(qpos_jax), dtype=np.float64)
+    h = np.array(cache.bias_forces_jit(qpos_jax, qvel_jax), dtype=np.float64)
+
+    # ── Actuator selection matrix ────────────────────────────────────
+    S_raw = constants.get("S", None)
+    if S_raw is not None:
+        S_np = np.array(S_raw, dtype=np.float64)
+    else:
+        from wheeled_biped.wbc.offline_qp_wbc import build_actuator_selection_matrix_from_dims
+        S_np = build_actuator_selection_matrix_from_dims(nv, nu)
+    if S_np.shape != (nv, nu):
+        from wheeled_biped.wbc.offline_qp_wbc import build_actuator_selection_matrix_from_dims
+        S_np = build_actuator_selection_matrix_from_dims(nv, nu)
+
+    # ── Padded contact stack ─────────────────────────────────────────
+    contact_c = constants.get("_contact_constants", getattr(cache, '_contact_constants', None))
+
+    if m > 0:
+        Jp = np.zeros((max_contacts, 3, nv), dtype=np.float64)
+        Jr = np.zeros((max_contacts, 3, nv), dtype=np.float64)
+        JcT = np.zeros((nv, 3 * max_contacts), dtype=np.float64)
+        frames = np.zeros((max_contacts, 3, 3), dtype=np.float64)
+        local_points = np.zeros((max_contacts, 3), dtype=np.float64)
+        body_ids = np.zeros(max_contacts, dtype=np.int32)
+        normals = np.zeros((max_contacts, 3), dtype=np.float64)
+        positions_world = np.zeros((max_contacts, 3), dtype=np.float64)
+        active_mask = np.zeros(max_contacts, dtype=bool)
+
+        for i in range(m):
+            c = contacts[i]
+            bid = int(c["body_id"])
+            lp_jax = jnp.array(c["local_point"], dtype=jnp.float32)
+            fr = np.array(c["frame"], dtype=np.float64)
+            pos = np.array(c["position"], dtype=np.float64)
+
+            # Jitted per-contact Jacobian
+            Jp_i = np.array(
+                cache._contact_jacobian_single_jit(qpos_jax, bid, lp_jax),
+                dtype=np.float64,
+            )
+            n_world = fr[:, 0].copy()
+            JcT_i = Jp_i.T @ fr
+
+            Jp[i, :, :] = Jp_i
+            JcT[:, 3*i:3*i+3] = JcT_i
+            frames[i, :, :] = fr
+            local_points[i, :] = np.array(c["local_point"], dtype=np.float64)
+            body_ids[i] = bid
+            normals[i, :] = n_world
+            positions_world[i, :] = pos
+            active_mask[i] = True
+
+        contact_stack = PaddedContactStack(
+            Jp=Jp, Jr=Jr, JcT=JcT, frame=frames,
+            local_point=local_points, body_id=body_ids,
+            normal=normals, position_world=positions_world,
+            active_mask=active_mask, num_contacts=m,
+        )
+    else:
+        contact_stack = PaddedContactStack(
+            Jp=np.zeros((max_contacts, 3, nv), dtype=np.float64),
+            Jr=np.zeros((max_contacts, 3, nv), dtype=np.float64),
+            JcT=np.zeros((nv, 3 * max_contacts), dtype=np.float64),
+            frame=np.zeros((max_contacts, 3, 3), dtype=np.float64),
+            local_point=np.zeros((max_contacts, 3), dtype=np.float64),
+            body_id=np.zeros(max_contacts, dtype=np.int32),
+            normal=np.zeros((max_contacts, 3), dtype=np.float64),
+            position_world=np.zeros((max_contacts, 3), dtype=np.float64),
+            active_mask=np.zeros(max_contacts, dtype=bool),
+            num_contacts=0,
+        )
+
+    # ── Contact Jdot*qdot ────────────────────────────────────────────
+    if m > 0 and cache._contact_jdot_qdot_single_jit is not None:
+        jdot_qdot = np.zeros(3 * max_contacts, dtype=np.float64)
+        for i in range(m):
+            c = contacts[i]
+            bid = int(c["body_id"])
+            lp_jax = jnp.array(c["local_point"], dtype=jnp.float32)
+            jdq_i = np.array(
+                cache._contact_jdot_qdot_single_jit(qpos_jax, qvel_jax, bid, lp_jax),
+                dtype=np.float64,
+            )
+            jdot_qdot[3*i:3*i+3] = jdq_i
+    elif m > 0:
+        # Fallback to original
+        from wheeled_biped.wbc.offline_qp_wbc import compute_contact_jdot_qdot
+        jdot_qdot_raw = compute_contact_jdot_qdot(qpos, qvel, contacts, contact_c)
+        jdot_qdot = np.zeros(3 * max_contacts, dtype=np.float64)
+        jdot_qdot[:3*m] = jdot_qdot_raw
+        cache.fallback_count += 1
+    else:
+        jdot_qdot = np.zeros(3 * max_contacts, dtype=np.float64)
+
+    # ── COM Jacobian and Jdot_qdot ───────────────────────────────────
+    Jcom_qpos = np.array(cache.com_jacobian_jit(qpos_jax), dtype=np.float64)  # (3, 17)
+    Jcom = _qpos_jac_to_qvel_jac_static(Jcom_qpos, qpos)  # (3, 16)
+
+    if cache.com_jdot_qdot_jit is not None:
+        jdq_com = np.array(cache.com_jdot_qdot_jit(qpos_jax, qvel_jax), dtype=np.float64)
+    else:
+        kc = constants.get("_kinematics_constants")
+        from wheeled_biped.wbc.offline_task_stack import compute_com_jdot_qdot
+        jdq_com = compute_com_jdot_qdot(qpos, qvel, kc)
+        cache.fallback_count += 1
+
+    # ── COM current position ─────────────────────────────────────────
+    com_pos = np.array(
+        _compute_com_fk_arrays(
+            qpos_jax, cache.fk_arrays,
+            jnp.array(cache.body_mass), jnp.array(cache.body_ipos),
+        ),
+        dtype=np.float64,
+    )
+
+    # ── Torso orientation ────────────────────────────────────────────
+    Jquat_qpos = np.array(cache.torso_ang_vel_jacobian_jit(qpos_jax), dtype=np.float64)
+    Jquat_qvel = _qpos_jac_to_qvel_jac_static(Jquat_qpos, qpos)  # (4, 16)
+
+    q_torso = qpos[3:7]
+    w, x, y, z = q_torso[0], q_torso[1], q_torso[2], q_torso[3]
+    G = np.array([[-x,-y,-z],[w,-z,y],[z,w,-x],[-y,x,w]], dtype=np.float64)
+    Jr = 2.0 * G.T @ Jquat_qvel  # (3, 16)
+
+    if cache.torso_jdotw_qdot_jit is not None:
+        jdw_torso_quat = np.array(cache.torso_jdotw_qdot_jit(qpos_jax, qvel_jax), dtype=np.float64)
+        jdw_torso = 2.0 * G.T @ jdw_torso_quat  # (3,)
+    else:
+        kc = constants.get("_kinematics_constants")
+        from wheeled_biped.wbc.offline_task_stack import compute_torso_jdotw_qdot
+        jdw_torso = compute_torso_jdotw_qdot(qpos, qvel, kc)
+        cache.fallback_count += 1
+
+    orient_result = cache.torso_orientation_error_jit(qpos_jax)
+    e_R = np.array(orient_result["e_R"], dtype=np.float64)
+    current_rpy = np.array(orient_result["current_rpy"], dtype=np.float64)
+
+    qvel_np = np.array(qvel, dtype=np.float64)
+    omega_current = Jr @ qvel_np
+
+    # ── Torque limits ────────────────────────────────────────────────
+    tau_min = np.array(constants.get("tau_min", np.full(nu, -60.0)), dtype=np.float64)
+    tau_max = np.array(constants.get("tau_max", np.full(nu, 60.0)), dtype=np.float64)
+
+    # ── Robot mass info ──────────────────────────────────────────────
+    body_mass_arr = constants.get("body_mass", np.ones(1, dtype=np.float32))
+    total_mass = float(np.sum(np.array(body_mass_arr)))
+    g_val = float(np.array(constants.get("gravity", jnp.array([0, 0, -9.81], dtype=jnp.float32))[2]))
+    robot_weight = total_mass * abs(g_val)
+
+    # ── Friction coefficient ─────────────────────────────────────────
+    mu = float(constants.get("mu", 0.8))
+
+    snapshot_time = time.perf_counter() - t0
+    cache.call_count += 1
+
+    return Phase3BSnapshot(
+        scenario_name=scenario_name,
+        qpos=qpos.copy(),
+        qvel=qvel.copy(),
+        M=M, h=h, S=S_np,
+        contact_stack=contact_stack, jdot_qdot=jdot_qdot, mu=mu,
+        Jcom=Jcom, jdq_com=jdq_com, com_position=com_pos,
+        Jr=Jr, jdw_torso=jdw_torso,
+        e_R=e_R, omega_current=omega_current, current_rpy=current_rpy,
+        tau_min=tau_min, tau_max=tau_max,
+        total_mass=total_mass, robot_weight=robot_weight,
+        snapshot_time_s=snapshot_time,
+    )
