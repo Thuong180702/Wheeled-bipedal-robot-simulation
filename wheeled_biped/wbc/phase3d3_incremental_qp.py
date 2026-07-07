@@ -77,6 +77,10 @@ class IncrementalQPWorkspace:
     fallback_full_rebuild_count: int = 0
     workspace_reinit_required: bool = False
 
+    # JAX dynamics cache (Phase 3D.3-E)
+    jax_dynamics_cache: Any = None
+    jax_dynamics_cache_enabled: bool = False
+
     # State diagnostics
     last_active_contact_slots: int = 0
     last_update_mode: str = "none"
@@ -141,6 +145,7 @@ def initialize_incremental_qp_workspace(
     eps_abs: float = 1e-5, eps_rel: float = 1e-5, max_iter: int = 4000,
     k_lat: float = 5.0, k_roll: float = 5.0,
     rolling_soft_weight: float = 100.0,
+    jax_dynamics_cache: Any = None,
 ) -> IncrementalQPWorkspace:
     """One-time full QP build and persistent backend setup.
 
@@ -195,10 +200,17 @@ def initialize_incremental_qp_workspace(
         qp_c["_rolling_constants"] = rolling_c
 
     # ── 3. Build snapshot ────────────────────────────────────────────────
-    snapshot = prepare_phase3b_snapshot(
-        "wbc_init", qpos0, qvel0, contacts0, qp_c,
-        max_contacts=max_contacts,
-    )
+    if jax_dynamics_cache is not None:
+        from .phase3d3e_jax_dynamics_cache import prepare_phase3b_snapshot_cached
+        snapshot = prepare_phase3b_snapshot_cached(
+            jax_dynamics_cache, "wbc_init", qpos0, qvel0, contacts0, qp_c,
+            max_contacts=max_contacts,
+        )
+    else:
+        snapshot = prepare_phase3b_snapshot(
+            "wbc_init", qpos0, qvel0, contacts0, qp_c,
+            max_contacts=max_contacts,
+        )
 
     # ── 4. Build StructuredQPProblem with block metadata ─────────────────
     sqp, bm = build_structured_qp_from_phase3c_snapshot(
@@ -270,6 +282,8 @@ def initialize_incremental_qp_workspace(
         p_sparsity_signature=p_sig,
         a_sparsity_signature=a_sig,
         cumulative_full_step_time_s=build_time,
+        jax_dynamics_cache=jax_dynamics_cache,
+        jax_dynamics_cache_enabled=(jax_dynamics_cache is not None),
     )
 
     _log.info(
@@ -372,10 +386,17 @@ def update_incremental_qp_workspace(
 
     # ── 4. Build fresh snapshot ────────────────────────────────────────────
     t_snap = time.perf_counter()
-    snapshot = prepare_phase3b_snapshot(
-        "wbc_update", qpos, qvel, contacts, qp_c,
-        max_contacts=workspace.max_contacts,
-    )
+    if workspace.jax_dynamics_cache is not None:
+        from .phase3d3e_jax_dynamics_cache import prepare_phase3b_snapshot_cached
+        snapshot = prepare_phase3b_snapshot_cached(
+            workspace.jax_dynamics_cache, "wbc_update", qpos, qvel, contacts, qp_c,
+            max_contacts=workspace.max_contacts,
+        )
+    else:
+        snapshot = prepare_phase3b_snapshot(
+            "wbc_update", qpos, qvel, contacts, qp_c,
+            max_contacts=workspace.max_contacts,
+        )
     diag["snapshot_time_s"] = time.perf_counter() - t_snap
 
     # ── 5. Build fresh StructuredQPProblem (no metadata — already cached) ──
