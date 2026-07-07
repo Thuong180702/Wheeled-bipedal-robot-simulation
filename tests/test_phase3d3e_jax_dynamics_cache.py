@@ -7,6 +7,7 @@ import jax.numpy as jnp
 from wheeled_biped.wbc.phase3d3e_jax_dynamics_cache import (
     JAXDynamicsCache,
     initialize_jax_dynamics_cache,
+    contacts_to_padded_arrays,
     DEFAULT_MAX_CONTACTS,
 )
 
@@ -367,3 +368,128 @@ class TestCOMTorsoJdotQdotCorrectness:
             )
             max_diff = np.max(np.abs(jdq_orig - jdq_cache))
             assert max_diff < 1e-2, f"Trial {trial}: COM Jdot*qdot max diff: {max_diff}"
+
+
+class TestContactJacobianCorrectness:
+    """Verify jitted contact Jacobian and Jdot*qdot match originals."""
+
+    @pytest.fixture(scope="module")
+    def cache_and_contacts(self, test_model_and_constants):
+        model, constants = test_model_and_constants
+        import mujoco
+        cache = initialize_jax_dynamics_cache(model, constants, warmup=True)
+
+        # Extract contacts at default pose
+        try:
+            kf = model.keyframe("standing")
+        except Exception:
+            kf = model.keyframe("default")
+        qpos0 = np.array(kf.qpos, dtype=np.float64)
+        data = mujoco.MjData(model)
+        data.qpos[:] = qpos0
+        mujoco.mj_forward(model, data)
+        contact_c = constants["_contact_constants"]
+        wheel_body_ids = contact_c.get("wheel_body_ids", {})
+        wheel_ids_set = set(int(v) for v in wheel_body_ids.values() if v >= 0)
+        contacts = []
+        for contact_id in range(data.ncon):
+            c = data.contact[contact_id]
+            g1, g2 = int(c.geom1), int(c.geom2)
+            b1, b2 = int(model.geom_bodyid[g1]), int(model.geom_bodyid[g2])
+            wheel_body = b1 if b1 in wheel_ids_set else (b2 if b2 in wheel_ids_set else None)
+            if wheel_body is None:
+                continue
+            pos = np.array(c.pos, dtype=np.float64)
+            frame = np.array(c.frame, dtype=np.float64).reshape(3, 3)
+            body_xpos = np.array(data.xpos[wheel_body], dtype=np.float64)
+            body_xmat = np.array(data.xmat[wheel_body], dtype=np.float64).reshape(3, 3)
+            local_point = body_xmat.T @ (pos - body_xpos)
+            contacts.append({
+                "body_id": int(wheel_body), "position": pos,
+                "frame": frame, "local_point": local_point,
+            })
+        return cache, constants, model, contacts, qpos0
+
+    def test_contact_jacobian_single_matches_original(self, cache_and_contacts):
+        cache, constants, model, contacts, qpos0 = cache_and_contacts
+        import jax.numpy as jnp
+        from wheeled_biped.dynamics.jax_contact_dynamics import contact_point_translational_jacobian
+
+        qpos_jax = jnp.array(qpos0, dtype=jnp.float32)
+        contact_c = constants["_contact_constants"]
+
+        for i, c in enumerate(contacts[:4]):  # test all contacts
+            bid = int(c["body_id"])
+            lp = jnp.array(c["local_point"], dtype=jnp.float32)
+
+            Jp_orig = np.array(
+                contact_point_translational_jacobian(qpos_jax, bid, lp, contact_c),
+                dtype=np.float64,
+            )
+            Jp_cache = np.array(
+                cache._contact_jacobian_single_jit(qpos_jax, bid, lp),
+                dtype=np.float64,
+            )
+
+            max_diff = np.max(np.abs(Jp_orig - Jp_cache))
+            assert max_diff < 1e-6, f"Contact {i}: Jp max diff: {max_diff}"
+            assert Jp_orig.shape == (3, 16)
+
+    def test_contact_jdot_qdot_single_matches_original(self, cache_and_contacts):
+        cache, constants, model, contacts, qpos0 = cache_and_contacts
+        import jax.numpy as jnp
+        from wheeled_biped.wbc.offline_qp_wbc import compute_contact_jdot_qdot
+
+        contact_c = constants["_contact_constants"]
+        rng = np.random.RandomState(42)
+        qvel_p = rng.randn(16) * 0.1
+
+        # Original: computes all contacts at once
+        jdq_all_orig = compute_contact_jdot_qdot(qpos0, qvel_p, contacts, contact_c)
+
+        qpos_jax = jnp.array(qpos0, dtype=jnp.float32)
+        qvel_jax = jnp.array(qvel_p, dtype=jnp.float32)
+
+        for i, c in enumerate(contacts[:4]):
+            bid = int(c["body_id"])
+            lp = jnp.array(c["local_point"], dtype=jnp.float32)
+
+            jdq_cache = np.array(
+                cache._contact_jdot_qdot_single_jit(qpos_jax, qvel_jax, bid, lp),
+                dtype=np.float64,
+            )
+            jdq_orig = jdq_all_orig[3*i:3*i+3]
+
+            max_diff = np.max(np.abs(jdq_orig - jdq_cache))
+            # Float32 FD noise floor: ~1e-3 to 5e-3
+            assert max_diff < 1e-2, f"Contact {i}: Jdot*qdot max diff: {max_diff}"
+
+    def test_padded_contact_array_shape(self):
+        """Verify contacts_to_padded_arrays produces correct shapes."""
+        # Empty contacts
+        empty = contacts_to_padded_arrays([], max_contacts=4)
+        assert empty["active"].shape == (4,)
+        assert empty["body_id"].shape == (4,)
+        assert empty["local_point"].shape == (4, 3)
+        assert empty["frame"].shape == (4, 3, 3)
+        assert empty["num_contacts"] == 0
+        assert np.all(empty["active"] == 0)
+
+        # 2 contacts
+        contacts_2 = [
+            {"body_id": 5, "local_point": [1.0, 2.0, 3.0], "frame": np.eye(3), "position": [0.0, 0.0, 0.0]},
+            {"body_id": 8, "local_point": [4.0, 5.0, 6.0], "frame": np.eye(3), "position": [1.0, 1.0, 1.0]},
+        ]
+        padded = contacts_to_padded_arrays(contacts_2, max_contacts=4)
+        assert padded["num_contacts"] == 2
+        assert np.all(padded["active"][:2] == 1)
+        assert np.all(padded["active"][2:] == 0)
+
+    def test_too_many_contacts_raises(self):
+        """Verify ValueError when contact count exceeds max_contacts."""
+        contacts_5 = [
+            {"body_id": i, "local_point": [0,0,0], "frame": np.eye(3), "position": [0,0,0]}
+            for i in range(5)
+        ]
+        with pytest.raises(ValueError, match="exceeds max_contacts"):
+            contacts_to_padded_arrays(contacts_5, max_contacts=4)

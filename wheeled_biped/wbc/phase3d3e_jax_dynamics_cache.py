@@ -277,6 +277,60 @@ def _integrate_qpos_jax(qpos_arr: Array, qvel_arr: Array, dt: float) -> Array:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Contact utilities
+# ═══════════════════════════════════════════════════════════════════════════
+
+def contacts_to_padded_arrays(
+    contacts: list[dict[str, Any]],
+    max_contacts: int = DEFAULT_MAX_CONTACTS,
+) -> dict[str, np.ndarray]:
+    """Convert a list of contact dicts to fixed-shape padded arrays.
+
+    All arrays have first dimension = max_contacts.
+    Inactive slots are zeroed.
+
+    Args:
+        contacts: list of contact dicts with keys body_id, local_point,
+                  frame, position.
+        max_contacts: maximum number of contacts to pad to.
+
+    Returns:
+        dict with: active (max_contacts,), body_id (max_contacts,),
+        local_point (max_contacts, 3), frame (max_contacts, 3, 3),
+        position (max_contacts, 3), num_contacts (int).
+
+    Raises:
+        ValueError: if len(contacts) > max_contacts.
+    """
+    m = len(contacts)
+    if m > max_contacts:
+        raise ValueError(f"Contact count {m} exceeds max_contacts {max_contacts}")
+
+    active = np.zeros(max_contacts, dtype=np.int32)
+    body_id = np.zeros(max_contacts, dtype=np.int32)
+    local_point = np.zeros((max_contacts, 3), dtype=np.float64)
+    frame = np.zeros((max_contacts, 3, 3), dtype=np.float64)
+    position = np.zeros((max_contacts, 3), dtype=np.float64)
+
+    for i in range(m):
+        c = contacts[i]
+        active[i] = 1
+        body_id[i] = int(c["body_id"])
+        local_point[i, :] = np.array(c["local_point"], dtype=np.float64)
+        frame[i, :, :] = np.array(c["frame"], dtype=np.float64)
+        position[i, :] = np.array(c["position"], dtype=np.float64)
+
+    return {
+        "active": active,
+        "body_id": body_id,
+        "local_point": local_point,
+        "frame": frame,
+        "position": position,
+        "num_contacts": m,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Initialization
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -441,11 +495,48 @@ def initialize_jax_dynamics_cache(
         )
     )
 
-    # Contact Jacobian batch — placeholder (Stage E4)
-    cache.contact_jacobian_batch_jit = None
+    # ── Contact Jacobian — per-contact, jitted ────────────────────────
+    # We use a Python loop over padded contacts calling this jitted function.
+    # body_id is Python int (static), local_point is JAX array.
 
-    # Contact Jdot*qdot batch — placeholder (Stage E4)
-    cache.contact_jdot_qdot_batch_jit = None
+    from wheeled_biped.dynamics.jax_contact_dynamics import contact_point_translational_jacobian
+    contact_c = constants["_contact_constants"]
+    cache._contact_constants = contact_c
+
+    @functools.partial(jax.jit, static_argnums=(1,))  # body_id is static
+    def _contact_jacobian_single_jit(qpos_arr, body_id_int, local_point_arr):
+        """Jitted single-contact translational Jacobian. Returns (3, 16)."""
+        return contact_point_translational_jacobian(
+            qpos_arr, body_id_int, local_point_arr, contact_c,
+        )
+
+    cache._contact_jacobian_single_jit = _contact_jacobian_single_jit
+
+    # ── Contact Jdot*qdot — per-contact, jitted ──────────────────────
+    # Already have _integrate_qpos_jax from E3. Reuse it.
+    # jacfwd over contact_point_translational_jacobian would be ideal
+    # but the function takes (qpos, body_id, local_point, constants)
+    # where body_id is static int and constants is a dict.
+    # Instead, use central FD: (J(q+eps*dqdt) - J(q-eps*dqdt)) @ dqdt / (2*eps)
+
+    # NOTE: contact_point_translational_jacobian returns (3, 16) = (3, nv)
+    # in qvel-space, so the product is with qvel (16,), NOT dq/dt (17,).
+    # This matches the original compute_contact_jdot_qdot in offline_qp_wbc.
+
+    @functools.partial(jax.jit, static_argnums=(2,))  # body_id is static (index 2)
+    def _contact_jdot_qdot_single_jit(qpos_arr, qvel_arr, body_id_int, local_point_arr, eps=1e-5):
+        """Jitted single-contact Jdot*qdot via central FD. Returns (3,)."""
+        # Use _integrate_qpos_jax from the module scope
+        q_plus = _integrate_qpos_jax(qpos_arr, qvel_arr, eps)
+        q_minus = _integrate_qpos_jax(qpos_arr, qvel_arr, -eps)
+
+        Jp_plus = contact_point_translational_jacobian(q_plus, body_id_int, local_point_arr, contact_c)
+        Jp_minus = contact_point_translational_jacobian(q_minus, body_id_int, local_point_arr, contact_c)
+
+        # Jacobian is (3, 16) in qvel-space, product with qvel (16,)→(3,)
+        return (Jp_plus - Jp_minus) @ qvel_arr / (2.0 * eps)
+
+    cache._contact_jdot_qdot_single_jit = _contact_jdot_qdot_single_jit
 
     compile_time = time.perf_counter() - t0
     cache.compile_time_s = compile_time
@@ -486,7 +577,14 @@ def _warmup_cache(cache: JAXDynamicsCache) -> None:
     if cache.torso_jdotw_qdot_jit is not None:
         _ = cache.torso_jdotw_qdot_jit(dummy_qpos, dummy_qvel)
 
-    # Contact Jdot functions warmed up when implemented
+    # Contact Jacobian warmup (with a dummy body_id)
+    if cache._contact_jacobian_single_jit is not None and cache.max_contacts > 0:
+        dummy_lp = jnp.zeros(3, dtype=jnp.float32)
+        _ = cache._contact_jacobian_single_jit(dummy_qpos, 1, dummy_lp)
+
+    if cache._contact_jdot_qdot_single_jit is not None and cache.max_contacts > 0:
+        dummy_lp = jnp.zeros(3, dtype=jnp.float32)
+        _ = cache._contact_jdot_qdot_single_jit(dummy_qpos, dummy_qvel, 1, dummy_lp)
 
     # Force JAX to finish async dispatch
     _ = jax.block_until_ready(dummy_qpos)
