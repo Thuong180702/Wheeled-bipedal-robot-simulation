@@ -203,6 +203,80 @@ def _torso_orientation_error_jax(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Velocity-to-qpos-derivative helper
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _qvel_to_dqdt(qpos_arr: Array, qvel_arr: Array) -> Array:
+    """Convert qvel (16,) to qpos time derivative dq/dt (17,).
+
+    qvel structure: [v_world(3); omega_world(3); qvel_hinge(10)]
+    dq/dt structure: [v_world(3); dquat/dt(4); qvel_hinge(10)]
+
+    dquat/dt = 0.5 * G(q) @ omega_world
+    where G is the 4x3 quaternion rate matrix.
+    """
+    w, x, y, z = qpos_arr[3], qpos_arr[4], qpos_arr[5], qpos_arr[6]
+    G = jnp.array([
+        [-x, -y, -z],
+        [ w, -z,  y],
+        [ z,  w, -x],
+        [-y,  x,  w],
+    ])
+    dquat_dt = 0.5 * G @ qvel_arr[3:6]
+    return jnp.concatenate([
+        qvel_arr[0:3],       # world-frame linear velocity → position derivative
+        dquat_dt,             # quaternion derivative
+        qvel_arr[6:16],       # hinge joint velocities
+    ])  # (17,)
+
+
+def _integrate_qpos_jax(qpos_arr: Array, qvel_arr: Array, dt: float) -> Array:
+    """Integrate qpos forward by dt using qvel, matching MuJoCo mj_integratePos.
+
+    Uses proper quaternion multiplication for the free-joint orientation,
+    identical to ``integrate_qpos`` in offline_qp_wbc.
+
+    Args:
+        qpos_arr: (17,) generalized positions.
+        qvel_arr: (16,) generalized velocities.
+        dt: integration step size (small for FD).
+
+    Returns:
+        (17,) integrated qpos.
+    """
+    qpos_out = qpos_arr.at[0:3].add(qvel_arr[0:3] * dt)
+
+    # Free joint: orientation via quaternion Hamilton product
+    omega_body = qvel_arr[3:6]
+    angle = jnp.linalg.norm(omega_body) * dt
+
+    def _nonzero_case():
+        axis = omega_body / jnp.linalg.norm(omega_body)
+        dq_w = jnp.cos(angle / 2.0)
+        dq_xyz = axis * jnp.sin(angle / 2.0)
+        # Hamilton product: q_new = q_current * dq
+        w0, x0, y0, z0 = qpos_arr[3], qpos_arr[4], qpos_arr[5], qpos_arr[6]
+        w1, x1, y1, z1 = dq_w, dq_xyz[0], dq_xyz[1], dq_xyz[2]
+        return jnp.array([
+            w0 * w1 - x0 * x1 - y0 * y1 - z0 * z1,
+            w0 * x1 + x0 * w1 + y0 * z1 - z0 * y1,
+            w0 * y1 - x0 * z1 + y0 * w1 + z0 * x1,
+            w0 * z1 + x0 * y1 - y0 * x1 + z0 * w1,
+        ])
+
+    def _zero_case():
+        return qpos_arr[3:7]
+
+    new_quat = jax.lax.cond(angle > 1e-15, _nonzero_case, _zero_case)
+    qpos_out = qpos_out.at[3:7].set(new_quat)
+
+    # Hinge joints
+    qpos_out = qpos_out.at[7:17].set(qpos_arr[7:17] + qvel_arr[6:16] * dt)
+
+    return qpos_out
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Initialization
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -306,12 +380,31 @@ def initialize_jax_dynamics_cache(
 
     # COM Jacobian = jacfwd of COM position (constructed ONCE outside jit)
     _com_jac_fn = jax.jacfwd(_compute_com_fk_arrays, argnums=0)
+    cache._com_jac_fn = _com_jac_fn  # store for Jdot*qdot reuse
     cache.com_jacobian_jit = jax.jit(
         lambda qpos_arr: _com_jac_fn(qpos_arr, fk_a, bm_jax, bipos_jax)
     )
 
-    # COM Jdot*qdot via FD — placeholder (Stage E3)
-    cache.com_jdot_qdot_jit = None
+    # COM Jdot*qdot via FD — jacfwd captured from outer scope (already built above)
+    @functools.partial(jax.jit, static_argnums=())
+    def _com_jdot_qdot_jit(qpos_arr, qvel_arr, eps=1e-5):
+        """Jdot_com @ qvel via central FD.
+
+        Uses proper quaternion integration (_integrate_qpos_jax) matching
+        the original integrate_qpos for q_plus/q_minus, then central FD
+        of the qpos-space COM Jacobian multiplied by dq_dt.
+        """
+        dq_dt = _qvel_to_dqdt(qpos_arr, qvel_arr)  # (17,)
+        q_plus = _integrate_qpos_jax(qpos_arr, qvel_arr, +eps)
+        q_minus = _integrate_qpos_jax(qpos_arr, qvel_arr, -eps)
+
+        # _com_jac_fn is the pre-constructed jacfwd (already built above in this function)
+        J_plus = _com_jac_fn(q_plus, fk_a, bm_jax, bipos_jax)    # (3, 17)
+        J_minus = _com_jac_fn(q_minus, fk_a, bm_jax, bipos_jax)  # (3, 17)
+
+        return (J_plus - J_minus) @ dq_dt / (2.0 * eps)  # (3,)
+
+    cache.com_jdot_qdot_jit = _com_jdot_qdot_jit
 
     # Torso angular velocity Jacobian via jacfwd (constructed ONCE here)
     _torso_quat_jac_fn = jax.jacfwd(_get_torso_quat_fk_arrays, argnums=0)
@@ -320,8 +413,26 @@ def initialize_jax_dynamics_cache(
         lambda qpos_arr: _torso_quat_jac_fn(qpos_arr, fk_a, torso_id)
     )
 
-    # Torso Jdotw*qdot via FD — placeholder (Stage E3)
-    cache.torso_jdotw_qdot_jit = None
+    # Torso Jdotw*qdot via FD — jacfwd captured from outer scope (already built above)
+    @functools.partial(jax.jit, static_argnums=())
+    def _torso_jdotw_qdot_jit(qpos_arr, qvel_arr, eps=1e-5):
+        """Jdot_w_torso @ qvel via central FD.
+
+        Uses proper quaternion integration matching the original integrate_qpos.
+        Returns torso quaternion-space Jdot*qdot (4,).
+        Convert to angular acceleration: alpha = 2 * G(q)^T @ result.
+        """
+        dq_dt = _qvel_to_dqdt(qpos_arr, qvel_arr)  # (17,)
+        q_plus = _integrate_qpos_jax(qpos_arr, qvel_arr, +eps)
+        q_minus = _integrate_qpos_jax(qpos_arr, qvel_arr, -eps)
+
+        # _torso_quat_jac_fn is the pre-constructed jacfwd (already built above)
+        J_plus = _torso_quat_jac_fn(q_plus, fk_a, torso_id)    # (4, 17)
+        J_minus = _torso_quat_jac_fn(q_minus, fk_a, torso_id)  # (4, 17)
+
+        return (J_plus - J_minus) @ dq_dt / (2.0 * eps)  # (4,)
+
+    cache.torso_jdotw_qdot_jit = _torso_jdotw_qdot_jit
 
     # Torso orientation error
     cache.torso_orientation_error_jit = jax.jit(
@@ -369,7 +480,13 @@ def _warmup_cache(cache: JAXDynamicsCache) -> None:
     if cache.torso_orientation_error_jit is not None:
         _ = cache.torso_orientation_error_jit(dummy_qpos)
 
-    # Contact and Jdot functions warmed up when implemented
+    if cache.com_jdot_qdot_jit is not None:
+        _ = cache.com_jdot_qdot_jit(dummy_qpos, dummy_qvel)
+
+    if cache.torso_jdotw_qdot_jit is not None:
+        _ = cache.torso_jdotw_qdot_jit(dummy_qpos, dummy_qvel)
+
+    # Contact Jdot functions warmed up when implemented
 
     # Force JAX to finish async dispatch
     _ = jax.block_until_ready(dummy_qpos)

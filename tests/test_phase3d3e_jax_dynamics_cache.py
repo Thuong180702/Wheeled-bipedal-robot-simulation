@@ -238,3 +238,132 @@ class TestMassMatrixBiasForcesCorrectness:
         # No reinit should have been triggered
         assert cached.recompile_count == 0
         assert cached.fallback_count == 0
+
+
+class TestCOMTorsoJdotQdotCorrectness:
+    """Verify jitted COM and torso Jdot*qdot functions match originals."""
+
+    @pytest.fixture(scope="module")
+    def cache_and_refs(self, test_model_and_constants):
+        model, constants = test_model_and_constants
+        cache = initialize_jax_dynamics_cache(model, constants, warmup=True)
+        return cache, constants
+
+    def _get_default_qpos_qvel(self, test_model_and_constants):
+        model, _ = test_model_and_constants
+        try:
+            kf = model.keyframe("standing")
+        except Exception:
+            kf = model.keyframe("default")
+        qpos0 = np.array(kf.qpos, dtype=np.float64)
+        qvel0 = np.zeros(model.nv, dtype=np.float64)
+        return qpos0, qvel0
+
+    def test_com_jdot_qdot_compiled(self, cache_and_refs):
+        """Verify com_jdot_qdot_jit is compiled and returns correct shape."""
+        cache, _ = cache_and_refs
+        assert cache.com_jdot_qdot_jit is not None
+
+        qpos = jnp.zeros(17, dtype=jnp.float32)
+        qvel = jnp.zeros(16, dtype=jnp.float32)
+        result = cache.com_jdot_qdot_jit(qpos, qvel)
+        assert result.shape == (3,), f"Expected (3,), got {result.shape}"
+
+    def test_torso_jdotw_qdot_compiled(self, cache_and_refs):
+        """Verify torso_jdotw_qdot_jit is compiled and returns correct shape."""
+        cache, _ = cache_and_refs
+        assert cache.torso_jdotw_qdot_jit is not None
+
+        qpos = jnp.zeros(17, dtype=jnp.float32)
+        qvel = jnp.zeros(16, dtype=jnp.float32)
+        result = cache.torso_jdotw_qdot_jit(qpos, qvel)
+        assert result.shape == (4,), f"Expected (4,), got {result.shape}"
+
+    def test_com_jdot_qdot_matches_original(self, cache_and_refs, test_model_and_constants):
+        """COM Jdot*qdot agreement with original (float32 FD tolerance).
+
+        The jitted cache uses float32 precision for qpos integration
+        (_integrate_qpos_jax), while the original uses float64.
+        This ~1e-7 qpos difference propagates through the finite-
+        difference: error ~ 1e-7 / (2*1e-5) ~ 5e-3.  A 1e-2 tolerance
+        accounts for the worst-case float32 FD noise.
+        """
+        cache, constants = cache_and_refs
+        qpos0, _ = self._get_default_qpos_qvel(test_model_and_constants)
+
+        from wheeled_biped.wbc.offline_task_stack import compute_com_jdot_qdot
+
+        rng = np.random.RandomState(42)
+        qvel_p = rng.randn(16) * 0.1
+        kc = constants["_kinematics_constants"]
+
+        jdq_orig = compute_com_jdot_qdot(qpos0, qvel_p, kc)  # (3,)
+        jdq_cache = np.array(
+            cache.com_jdot_qdot_jit(
+                jnp.array(qpos0, dtype=jnp.float32),
+                jnp.array(qvel_p, dtype=jnp.float32),
+            ),
+            dtype=np.float64,
+        )
+        assert jdq_cache.shape == (3,), f"Expected (3,), got {jdq_cache.shape}"
+
+        max_diff = np.max(np.abs(jdq_orig - jdq_cache))
+        assert max_diff < 1e-2, f"COM Jdot*qdot max diff: {max_diff}"
+
+    def test_torso_jdotw_qdot_matches_original(self, cache_and_refs, test_model_and_constants):
+        cache, constants = cache_and_refs
+        qpos0, _ = self._get_default_qpos_qvel(test_model_and_constants)
+
+        from wheeled_biped.wbc.offline_task_stack import compute_torso_jdotw_qdot
+
+        rng = np.random.RandomState(42)
+        qvel_p = rng.randn(16) * 0.1
+        kc = constants["_kinematics_constants"]
+
+        jdw_orig = compute_torso_jdotw_qdot(qpos0, qvel_p, kc)  # (3,) — angular acceleration
+        jdw_cache_quat = np.array(
+            cache.torso_jdotw_qdot_jit(
+                jnp.array(qpos0, dtype=jnp.float32),
+                jnp.array(qvel_p, dtype=jnp.float32),
+            ),
+            dtype=np.float64,
+        )  # (4,) — quaternion-space
+        assert jdw_cache_quat.shape == (4,), f"Expected (4,), got {jdw_cache_quat.shape}"
+
+        # Convert quat-space to angular: alpha = 2 * G(q)^T @ jdw_quat
+        q_torso = qpos0[3:7]
+        w, x, y, z = q_torso[0], q_torso[1], q_torso[2], q_torso[3]
+        G = np.array([[-x, -y, -z], [w, -z, y], [z, w, -x], [-y, x, w]], dtype=np.float64)
+        jdw_cache_ang = 2.0 * G.T @ jdw_cache_quat  # (3,)
+
+        max_diff = np.max(np.abs(jdw_orig - jdw_cache_ang))
+        assert max_diff < 1e-6, f"Torso Jdotw*qdot max diff: {max_diff}"
+
+    def test_com_jdot_qdot_multiple_poses(self, cache_and_refs, test_model_and_constants):
+        """Verify COM Jdot*qdot agrees across 5 random poses and velocities.
+
+        Uses float32 FD tolerance (1e-2) — see
+        test_com_jdot_qdot_matches_original for rationale.
+        """
+        cache, constants = cache_and_refs
+        qpos0, _ = self._get_default_qpos_qvel(test_model_and_constants)
+
+        from wheeled_biped.wbc.offline_task_stack import compute_com_jdot_qdot
+        kc = constants["_kinematics_constants"]
+
+        rng = np.random.RandomState(123)
+        for trial in range(5):
+            qpos_p = qpos0.copy()
+            qpos_p[7:17] += rng.randn(10) * 0.05
+            qvel_p = rng.randn(16) * 0.2
+
+            jdq_orig = compute_com_jdot_qdot(qpos_p, qvel_p, kc)
+            jdq_cache = np.array(
+                cache.com_jdot_qdot_jit(
+                    jnp.array(qpos_p, dtype=jnp.float32),
+                    jnp.array(qvel_p, dtype=jnp.float32),
+                ),
+                dtype=np.float64,
+            )
+            max_diff = np.max(np.abs(jdq_orig - jdq_cache))
+            assert max_diff < 1e-2, f"Trial {trial}: COM Jdot*qdot max diff: {max_diff}"
