@@ -706,16 +706,17 @@ def initialize_jax_dynamics_cache(
     _com_jac_fn = jax.jacfwd(_compute_com_fk_arrays, argnums=0)
     cache.com_jacobian_jit = jax.jit(lambda qpos_arr: _com_jac_fn(qpos_arr, fk_a, bm_jax, bipos_jax))
 
-    # COM Jdot*qdot via FD (Stage E3 will implement; placeholder for now)
+    # COM Jdot*qdot via FD — jacfwd constructed ONCE outside jit (Stage E3)
     cache.com_jdot_qdot_jit = None  # populated in Task 4
 
-    # Torso angular velocity Jacobian via jacfwd
+    # Torso angular velocity Jacobian via jacfwd (constructed ONCE here)
     _torso_quat_jac_fn = jax.jacfwd(_get_torso_quat_fk_arrays, argnums=0)
+    cache._torso_quat_jac_fn = _torso_quat_jac_fn  # store for Jdot*qdot reuse
     cache.torso_ang_vel_jacobian_jit = jax.jit(
         lambda qpos_arr: _torso_quat_jac_fn(qpos_arr, fk_a, torso_id)
     )
 
-    # Torso Jdotw*qdot via FD (Stage E3 will implement; placeholder for now)
+    # Torso Jdotw*qdot via FD — jacfwd constructed ONCE outside jit (Stage E3)
     cache.torso_jdotw_qdot_jit = None  # populated in Task 4
 
     # Torso orientation error
@@ -1092,81 +1093,76 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 In `initialize_jax_dynamics_cache()`, after the existing COM Jacobian setup, replace the placeholder lines with:
 
 ```python
-    # COM Jdot*qdot via FD (central finite difference on COM Jacobian)
+    # ── Build jacfwd functions ONCE (outside any jit) ──────────────
+    # These are captured by closure in the jitted FD functions below.
+    # CRITICAL: Do NOT create jax.jacfwd inside a jitted function body.
+    _com_jac_fn = jax.jacfwd(_compute_com_fk_arrays, argnums=0)
+    _torso_quat_jac_fn_local = jax.jacfwd(_get_torso_quat_fk_arrays, argnums=0)
+
+    # ── Helper: qvel → dq/dt (qpos time derivative) ───────────────
+    # qvel (16,) → dq_dt (17,): [v_world(3); dquat/dt(4); qvel_hinge(10)]
+    # dquat/dt = 0.5 * G(q) @ omega, where G is the 4×3 quaternion rate matrix
+    def _qvel_to_dqdt(qpos_arr, qvel_arr):
+        """Convert qvel (16,) to qpos time derivative dq/dt (17,)."""
+        w, x, y, z = qpos_arr[3], qpos_arr[4], qpos_arr[5], qpos_arr[6]
+        G = jnp.array([
+            [-x, -y, -z],
+            [ w, -z,  y],
+            [ z,  w, -x],
+            [-y,  x,  w],
+        ])
+        dquat_dt = 0.5 * G @ qvel_arr[3:6]
+        dq_dt = jnp.concatenate([
+            qvel_arr[0:3],       # world-frame linear velocity
+            dquat_dt,             # quaternion derivative
+            qvel_arr[6:16],       # hinge joint velocities
+        ])
+        return dq_dt  # (17,)
+
+    # ── qpos integration helper (JAX, for FD) ─────────────────────
+    def _integrate_qpos_jax(qpos_arr, qvel_arr, dt):
+        """Integrate qpos by qvel * dt. JAX-compatible."""
+        dq_dt = _qvel_to_dqdt(qpos_arr, qvel_arr)
+        return qpos_arr + dq_dt * dt
+
+    # ── COM Jdot*qdot via FD (jacfwd captured from outer scope) ───
     @functools.partial(jax.jit, static_argnums=())
     def _com_jdot_qdot_jit(qpos_arr, qvel_arr, eps=1e-5):
-        """Jdot_com @ qvel via central FD.
+        """Jdot_com @ qvel via central FD of COM Jacobian.
 
-        Integrates qpos ± eps*qvel, computes COM Jacobian at each,
-        returns (Jcom(q_plus) - Jcom(q_minus)) @ qvel / (2*eps).
+        Uses qpos-space Jacobians and dq/dt for correct dimension matching:
+          (J(q+eps*dqdt) - J(q-eps*dqdt)) @ dqdt / (2*eps)
+        where dqdt = qvel_to_dqdt(qpos, qvel).
         """
-        # Helper: integrate qpos by qvel * dt
-        # (inline to stay JIT-compatible; matches integrate_qpos logic)
-        def _integrate(q, v, dt):
-            q_out = q.copy()
-            # Position
-            q_out = q_out.at[0:3].set(q[0:3] + v[0:3] * dt)
-            # Orientation (simplified: axis-angle for small dt*eps)
-            omega = v[3:6] * dt
-            angle = jnp.sqrt(jnp.sum(omega**2))
-            safe_angle = jnp.where(angle > 1e-15, angle, 1.0)
-            axis = jnp.where(angle > 1e-15, omega / safe_angle, jnp.array([1.0, 0.0, 0.0]))
-            half = 0.5 * safe_angle
-            s = jnp.sin(half)
-            dq = jnp.array([jnp.cos(half), axis[0]*s, axis[1]*s, axis[2]*s])
-            # Hamilton product: q_new = q_current * dq
-            w0, x0, y0, z0 = q[3], q[4], q[5], q[6]
-            w1, x1, y1, z1 = dq[0], dq[1], dq[2], dq[3]
-            q_out = q_out.at[3].set(w0*w1 - x0*x1 - y0*y1 - z0*z1)
-            q_out = q_out.at[4].set(w0*x1 + x0*w1 + y0*z1 - z0*y1)
-            q_out = q_out.at[5].set(w0*y1 - x0*z1 + y0*w1 + z0*x1)
-            q_out = q_out.at[6].set(w0*z1 + x0*y1 - y0*x1 + z0*w1)
-            # Hinge joints
-            q_out = q_out.at[7:17].set(q[7:17] + v[6:16] * dt)
-            return q_out
+        dq_dt = _qvel_to_dqdt(qpos_arr, qvel_arr)  # (17,)
+        q_plus = qpos_arr + dq_dt * eps
+        q_minus = qpos_arr - dq_dt * eps
 
-        q_plus = _integrate(qpos_arr, qvel_arr, eps)
-        q_minus = _integrate(qpos_arr, qvel_arr, -eps)
+        # _com_jac_fn is the pre-constructed jacfwd (captured from outer scope)
+        J_plus = _com_jac_fn(q_plus, fk_a, bm_jax, bipos_jax)    # (3, 17)
+        J_minus = _com_jac_fn(q_minus, fk_a, bm_jax, bipos_jax)  # (3, 17)
 
-        _com_jac_fn_local = jax.jacfwd(_compute_com_fk_arrays, argnums=0)
-        J_plus = _com_jac_fn_local(q_plus, fk_a, bm_jax, bipos_jax)
-        J_minus = _com_jac_fn_local(q_minus, fk_a, bm_jax, bipos_jax)
-
-        return (J_plus - J_minus) @ qvel_arr / (2.0 * eps)
+        return (J_plus - J_minus) @ dq_dt / (2.0 * eps)  # (3,)
 
     cache.com_jdot_qdot_jit = _com_jdot_qdot_jit
 
-    # Torso Jdotw*qdot via FD
+    # ── Torso Jdotw*qdot via FD (jacfwd captured from outer scope) ──
     @functools.partial(jax.jit, static_argnums=())
     def _torso_jdotw_qdot_jit(qpos_arr, qvel_arr, eps=1e-5):
-        """Jdot_w_torso @ qvel via central FD."""
-        def _integrate(q, v, dt):
-            q_out = q.copy()
-            q_out = q_out.at[0:3].set(q[0:3] + v[0:3] * dt)
-            omega = v[3:6] * dt
-            angle = jnp.sqrt(jnp.sum(omega**2))
-            safe_angle = jnp.where(angle > 1e-15, angle, 1.0)
-            axis = jnp.where(angle > 1e-15, omega / safe_angle, jnp.array([1.0, 0.0, 0.0]))
-            half = 0.5 * safe_angle
-            s = jnp.sin(half)
-            dq = jnp.array([jnp.cos(half), axis[0]*s, axis[1]*s, axis[2]*s])
-            w0, x0, y0, z0 = q[3], q[4], q[5], q[6]
-            w1, x1, y1, z1 = dq[0], dq[1], dq[2], dq[3]
-            q_out = q_out.at[3].set(w0*w1 - x0*x1 - y0*y1 - z0*z1)
-            q_out = q_out.at[4].set(w0*x1 + x0*w1 + y0*z1 - z0*y1)
-            q_out = q_out.at[5].set(w0*y1 - x0*z1 + y0*w1 + z0*x1)
-            q_out = q_out.at[6].set(w0*z1 + x0*y1 - y0*x1 + z0*w1)
-            q_out = q_out.at[7:17].set(q[7:17] + v[6:16] * dt)
-            return q_out
+        """Jdot_w_torso @ qvel via central FD of torso quaternion Jacobian.
 
-        q_plus = _integrate(qpos_arr, qvel_arr, eps)
-        q_minus = _integrate(qpos_arr, qvel_arr, -eps)
+        Returns torso quaternion-space Jdot*qdot (4,).
+        Convert to angular acceleration via: alpha = 2*G(q)^T @ result.
+        """
+        dq_dt = _qvel_to_dqdt(qpos_arr, qvel_arr)  # (17,)
+        q_plus = qpos_arr + dq_dt * eps
+        q_minus = qpos_arr - dq_dt * eps
 
-        _torso_quat_jac_fn_local = jax.jacfwd(_get_torso_quat_fk_arrays, argnums=0)
-        J_plus = _torso_quat_jac_fn_local(q_plus, fk_a, torso_id)
-        J_minus = _torso_quat_jac_fn_local(q_minus, fk_a, torso_id)
+        # _torso_quat_jac_fn_local is pre-constructed jacfwd (captured from outer scope)
+        J_plus = _torso_quat_jac_fn_local(q_plus, fk_a, torso_id)    # (4, 17)
+        J_minus = _torso_quat_jac_fn_local(q_minus, fk_a, torso_id)  # (4, 17)
 
-        return (J_plus - J_minus) @ qvel_arr / (2.0 * eps)
+        return (J_plus - J_minus) @ dq_dt / (2.0 * eps)  # (4,)
 
     cache.torso_jdotw_qdot_jit = _torso_jdotw_qdot_jit
 ```
@@ -1308,26 +1304,17 @@ class TestCOMTorsoCorrectness:
         kc = constants["_kinematics_constants"]
 
         jdq_orig = compute_com_jdot_qdot(qpos0, qvel_p, kc)  # (3,)
-        jdq_cache_raw = np.array(
+        # Jitted returns (3,) — uses dq/dt internally for correct dimension matching
+        jdq_cache = np.array(
             cache.com_jdot_qdot_jit(
                 jnp.array(qpos0, dtype=jnp.float32),
                 jnp.array(qvel_p, dtype=jnp.float32),
             ),
             dtype=np.float64,
-        )  # (3, 17) in qpos space — need to convert
+        )
+        assert jdq_cache.shape == (3,), f"Expected (3,), got {jdq_cache.shape}"
 
-        # The jitted function returns in qpos space (3, 17).
-        # Convert to qvel space for comparison.
-        jdq_cache = self._qpos_jac_to_qvel_jac(
-            jdq_cache_raw.reshape(3, 17), qpos0
-        ).reshape(3)  # Actually this isn't right — jdq from FD is already (3,).
-        # The jitted FD returns (J_qpos(q_plus) - J_qpos(q_minus)) @ qvel / 2eps,
-        # which is already the qpos-space result. Compare directly.
-        # Actually jacfwd returns a (3, 17) Jacobian, and (J_plus - J_minus) @ qvel
-        # gives (3,) — let's verify shape.
-        assert jdq_cache_raw.shape == (3,), f"Expected (3,), got {jdq_cache_raw.shape}"
-
-        max_diff = np.max(np.abs(jdq_orig - jdq_cache_raw))
+        max_diff = np.max(np.abs(jdq_orig - jdq_cache))
         assert max_diff < 1e-6, f"COM Jdot*qdot max diff: {max_diff}"
 
     def test_torso_jdotw_qdot_matches_original(self, cache_and_refs, test_model_and_constants):
@@ -1343,21 +1330,21 @@ class TestCOMTorsoCorrectness:
         kc = constants["_kinematics_constants"]
 
         jdw_orig = compute_torso_jdotw_qdot(qpos0, qvel_p, kc)  # (3,)
-        jdw_cache = np.array(
+        # Jitted returns torso quat-space Jdot*qdot (4,)
+        jdw_cache_quat = np.array(
             cache.torso_jdotw_qdot_jit(
                 jnp.array(qpos0, dtype=jnp.float32),
                 jnp.array(qvel_p, dtype=jnp.float32),
             ),
             dtype=np.float64,
-        )  # (4,) — torso quat space
-        # The FD returns (J_quat_plus - J_quat_minus) @ qvel / 2eps = (4,)
-        assert jdw_cache.shape == (4,), f"Expected (4,), got {jdw_cache.shape}"
+        )
+        assert jdw_cache_quat.shape == (4,), f"Expected (4,), got {jdw_cache_quat.shape}"
 
-        # Convert to angular acceleration via Jr = 2*G^T @ J_quat_qvel
+        # Convert to angular acceleration: alpha = 2 * G(q)^T @ jdw_quat
         q_torso = qpos0[3:7]
         w, x, y, z = q_torso[0], q_torso[1], q_torso[2], q_torso[3]
-        G = np.array([[-x,-y,-z],[w,-z,y],[z,w,-x],[-y,x,w]])
-        jdw_cache_ang = 2.0 * G.T @ jdw_cache  # (3,)
+        G = np.array([[-x,-y,-z],[w,-z,y],[z,w,-x],[-y,x,w]], dtype=np.float64)
+        jdw_cache_ang = 2.0 * G.T @ jdw_cache_quat  # (3,)
 
         max_diff = np.max(np.abs(jdw_orig - jdw_cache_ang))
         assert max_diff < 1e-6, f"Torso Jdotw*qdot max diff: {max_diff}"
@@ -1853,11 +1840,11 @@ def prepare_phase3b_snapshot_cached(
     Jcom = _qpos_jac_to_qvel_jac_static(Jcom_qpos, qpos)  # (3, 16)
 
     if cache.com_jdot_qdot_jit is not None:
-        jdq_com_raw = np.array(
+        # Returns (3,) — uses dq/dt internally for correct dimension matching
+        jdq_com = np.array(
             cache.com_jdot_qdot_jit(qpos_jax, qvel_jax),
             dtype=np.float64,
-        )  # (3,)
-        jdq_com = jdq_com_raw
+        )
     else:
         from wheeled_biped.wbc.offline_task_stack import compute_com_jdot_qdot
         jdq_com = compute_com_jdot_qdot(qpos, qvel, kc)
@@ -1885,11 +1872,13 @@ def prepare_phase3b_snapshot_cached(
     Jr = 2.0 * G.T @ Jquat_qvel  # (3, 16)
 
     if cache.torso_jdotw_qdot_jit is not None:
-        jdw_torso_raw = np.array(
+        # Returns torso quat-space Jdot*qdot (4,)
+        # Convert to angular acceleration: alpha = 2 * G(q)^T @ result
+        jdw_torso_quat = np.array(
             cache.torso_jdotw_qdot_jit(qpos_jax, qvel_jax),
             dtype=np.float64,
-        )  # (4,)
-        jdw_torso = 2.0 * G.T @ jdw_torso_raw  # (3,)
+        )
+        jdw_torso = 2.0 * G.T @ jdw_torso_quat  # (3,)
     else:
         from wheeled_biped.wbc.offline_task_stack import compute_torso_jdotw_qdot
         jdw_torso = compute_torso_jdotw_qdot(qpos, qvel, kc)
