@@ -1885,7 +1885,7 @@ def main():
     parser.add_argument("--benchmark-incremental-qp", action="store_true",
         help="Run incremental QP benchmark alongside three-arm evaluation")
 
-    # ── JAX Dynamics Cache flags (Phase 3D.3-E) ──────────────────────────
+    # ── JAX Dynamics Cache flags (Phase 3D.3-E / 3D.3-F) ─────────────────
     parser.add_argument("--use-jax-dynamics-cache", action="store_true",
         help="Use precompiled JAX dynamics cache for snapshot preparation")
     parser.add_argument("--jax-dynamics-cache-max-contacts", type=int, default=4)
@@ -1896,6 +1896,9 @@ def main():
         help="Skip JAX dynamics cache warmup")
     parser.add_argument("--jax-dynamics-diagnostic", action="store_true",
         help="Print JAX dynamics cache diagnostics")
+    parser.add_argument("--jax-dynamics-fd-precision", type=str, default="float64",
+        choices=["float64", "float32", "auto"],
+        help="FD precision for cached contact Jdot*qdot (default: float64)")
 
     # Misc
     parser.add_argument("--skip-truth-check", action="store_true",
@@ -1964,7 +1967,7 @@ def main():
     print(f"Steps per case: {args.steps}")
     print()
 
-    # ── JAX Dynamics Cache (Phase 3D.3-E) ────────────────────────────────
+    # ── JAX Dynamics Cache (Phase 3D.3-E / 3D.3-F) ──────────────────────
     jax_dynamics_cache = None
     if args.use_jax_dynamics_cache:
         try:
@@ -1972,20 +1975,23 @@ def main():
         except ImportError:
             print("ERROR: --use-jax-dynamics-cache requires wheeled_biped.wbc.phase3d3e_jax_dynamics_cache")
             sys.exit(1)
-        print("Initializing JAX dynamics cache...")
+        print(f"Initializing JAX dynamics cache (fd_precision={args.jax_dynamics_fd_precision})...")
         jax_dynamics_cache = initialize_jax_dynamics_cache(
             model, qp_c,
             max_contacts=args.jax_dynamics_cache_max_contacts,
+            fd_precision=args.jax_dynamics_fd_precision,
             warmup=args.jax_dynamics_warmup,
         )
         print(f"  Cache ready: {jax_dynamics_cache.compile_time_s:.1f}s compile "
               f"+ {jax_dynamics_cache.warmup_time_s:.1f}s warmup")
         if args.jax_dynamics_diagnostic:
-            print(f"  Platform:       {jax_dynamics_cache.jax_platform}")
-            print(f"  x64 enabled:    {jax_dynamics_cache.jax_enable_x64}")
-            print(f"  Device kind:    {jax_dynamics_cache.device_kind}")
-            print(f"  Max contacts:   {jax_dynamics_cache.max_contacts}")
-            print(f"  Initialized:    {jax_dynamics_cache.initialized}")
+            print(f"  Platform:          {jax_dynamics_cache.jax_platform}")
+            print(f"  x64 enabled:       {jax_dynamics_cache.jax_enable_x64}")
+            print(f"  fd_precision:      {jax_dynamics_cache.fd_precision}")
+            print(f"  precision_mode:    {jax_dynamics_cache.contact_jdot_precision_mode}")
+            print(f"  Device kind:       {jax_dynamics_cache.device_kind}")
+            print(f"  Max contacts:      {jax_dynamics_cache.max_contacts}")
+            print(f"  Initialized:       {jax_dynamics_cache.initialized}")
         print()
 
     # ── Incremental QP workspace (Phase 3D.3) ────────────────────────────
@@ -2138,6 +2144,9 @@ def main():
             incremental_qp_config["jax_dynamics_compile_time_s"] = jax_dynamics_cache.compile_time_s
             incremental_qp_config["jax_dynamics_recompile_count"] = jax_dynamics_cache.recompile_count
             incremental_qp_config["jax_dynamics_fallback_count"] = jax_dynamics_cache.fallback_count
+            incremental_qp_config["jax_dynamics_fd_precision"] = jax_dynamics_cache.fd_precision
+            incremental_qp_config["jax_dynamics_contact_jdot_precision_mode"] = jax_dynamics_cache.contact_jdot_precision_mode
+            incremental_qp_config["jax_dynamics_enable_x64"] = jax_dynamics_cache.jax_enable_x64
 
     # ── Generate reports ────────────────────────────────────────────────────
     if all_results:

@@ -1,4 +1,4 @@
-"""Phase 3D.3-E — JAX Dynamics Cache.
+"""Phase 3D.3-E / 3D.3-F — JAX Dynamics Cache.
 
 Precompiles and caches JAX dynamics/Jacobian functions so that
 prepare_phase3b_snapshot_cached() does not trace/recompile on every call.
@@ -14,6 +14,12 @@ Design:
   - Expose prepare_phase3b_snapshot_cached() as drop-in replacement
   - Keep Python contact parsing outside JIT
   - Use fixed-shape padded contact arrays (max_contacts=4)
+
+Phase 3D.3-F additions:
+  - fd_precision parameter controls contact Jdot*qdot FD dtype
+  - fd_precision="float64" enables jax_enable_x64 and uses float64 FD
+  - fd_precision="float32" preserves legacy behavior
+  - contact_jdot_precision_mode records actual FD dtype used
 
 All functions are offline only. No realtime integration.
 No controller coupling. No torque injection.
@@ -64,6 +70,10 @@ class JAXDynamicsCache:
     nq: int = 17
     max_contacts: int = DEFAULT_MAX_CONTACTS
     dtype_str: str = "float64"
+
+    # ── Phase 3D.3-F: FD precision control ──────────────────────────────
+    fd_precision: str = "float64"
+    contact_jdot_precision_mode: str = "float32"
 
     # ── Jitted functions (set during initialize) ───────────────────────
     mass_matrix_jit: Callable | None = None
@@ -362,6 +372,22 @@ def contacts_to_padded_arrays(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# JAX x64 detection
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _jax_x64_available() -> bool:
+    """Check whether jax_enable_x64 is currently enabled.
+
+    Returns True if JAX float64 operations will actually use 64-bit precision,
+    False if float64 is silently downgraded to float32.
+    """
+    try:
+        return bool(jax.config.read("jax_enable_x64"))
+    except Exception:
+        return False
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Initialization
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -371,6 +397,7 @@ def initialize_jax_dynamics_cache(
     *,
     max_contacts: int = DEFAULT_MAX_CONTACTS,
     dtype: str = "float64",
+    fd_precision: str = "float64",
     warmup: bool = True,
 ) -> JAXDynamicsCache:
     """Build and warm up all JAX dynamics/Jacobian functions once.
@@ -382,14 +409,55 @@ def initialize_jax_dynamics_cache(
                    _contact_constants, _kinematics_constants).
         max_contacts: maximum contact count for padding.
         dtype: output dtype for snapshot arrays ("float64" or "float32").
+        fd_precision: finite-difference precision for contact Jdot*qdot.
+            "float64": use float64 FD (requires jax_enable_x64).
+            "float32": legacy behavior, float32 FD.
+            "auto": use float64 if x64 is available, else float32 with warning.
         warmup: if True, run a dummy call through all jitted functions.
 
     Returns:
         JAXDynamicsCache with all functions precompiled and diagnostics populated.
+
+    Raises:
+        RuntimeError: if fd_precision="float64" but jax_enable_x64 cannot
+            be enabled.
     """
+    # ── Handle fd_precision and JAX x64 ─────────────────────────────
+    if fd_precision == "float64":
+        if not _jax_x64_available():
+            jax.config.update("jax_enable_x64", True)
+        if not _jax_x64_available():
+            raise RuntimeError(
+                "fd_precision=float64 requested but jax_enable_x64 "
+                "could not be enabled. Enable jax_enable_x64 before "
+                "calling initialize_jax_dynamics_cache."
+            )
+        actual_fd_precision = "float64"
+    elif fd_precision == "auto":
+        if _jax_x64_available():
+            actual_fd_precision = "float64"
+        else:
+            actual_fd_precision = "float32"
+            import warnings
+            warnings.warn(
+                "fd_precision='auto' but jax_enable_x64 is disabled. "
+                "Contact Jdot*qdot FD will use float32. "
+                "To use float64 FD, enable jax_enable_x64 before "
+                "calling initialize_jax_dynamics_cache."
+            )
+    else:
+        actual_fd_precision = "float32"
+
+    x64_enabled_now = _jax_x64_available()
+
     t0 = time.perf_counter()
 
-    cache = JAXDynamicsCache(max_contacts=max_contacts, dtype_str=dtype)
+    cache = JAXDynamicsCache(
+        max_contacts=max_contacts,
+        dtype_str=dtype,
+        fd_precision=fd_precision,
+        contact_jdot_precision_mode=actual_fd_precision,
+    )
 
     # ── Record environment ───────────────────────────────────────────
     try:
@@ -399,7 +467,7 @@ def initialize_jax_dynamics_cache(
             cache.jax_backend = str(get_backend().platform)
         except ImportError:
             cache.jax_backend = str(jax.lib.xla_bridge.get_backend().platform)
-        cache.jax_enable_x64 = bool(jax.config.read("jax_enable_x64"))
+        cache.jax_enable_x64 = x64_enabled_now
         cache.device_count = jax.device_count()
         cache.device_kind = str(jax.devices()[0].device_kind) if jax.device_count() > 0 else "none"
     except Exception:
@@ -554,6 +622,7 @@ def initialize_jax_dynamics_cache(
     # in qvel-space, so the product is with qvel (16,), NOT dq/dt (17,).
     # This matches the original compute_contact_jdot_qdot in offline_qp_wbc.
 
+    # -- float32 path (always built, for diagnostics/comparison) --
     @functools.partial(jax.jit, static_argnums=(2,))  # body_id is static (index 2)
     def _contact_jdot_qdot_single_jit(qpos_arr, qvel_arr, body_id_int, local_point_arr, eps=1e-5):
         """Jitted single-contact Jdot*qdot via central FD. Returns (3,)."""
@@ -568,6 +637,33 @@ def initialize_jax_dynamics_cache(
         return (Jp_plus - Jp_minus) @ qvel_arr / (2.0 * eps)
 
     cache._contact_jdot_qdot_single_jit = _contact_jdot_qdot_single_jit
+
+    # -- float64 path (Phase 3D.3-F: only built when x64 is enabled) --
+    if actual_fd_precision == "float64":
+        @functools.partial(jax.jit, static_argnums=(2,))  # body_id is static
+        def _contact_jdot_qdot_single_jit_f64(qpos_arr, qvel_arr, body_id_int, local_point_arr, eps=1e-5):
+            """Jitted single-contact Jdot*qdot via central FD in float64.
+
+            Explicitly casts all inputs to float64 before FD computation.
+            Requires jax_enable_x64=True; otherwise float64 silently downgrades.
+            """
+            qpos64 = qpos_arr.astype(jnp.float64)
+            qvel64 = qvel_arr.astype(jnp.float64)
+            lp64 = local_point_arr.astype(jnp.float64)
+            eps64 = jnp.asarray(eps, dtype=jnp.float64)
+
+            q_plus = _integrate_qpos_jax(qpos64, qvel64, eps64)
+            q_minus = _integrate_qpos_jax(qpos64, qvel64, -eps64)
+
+            Jp_plus = contact_point_translational_jacobian(q_plus, body_id_int, lp64, contact_c)
+            Jp_minus = contact_point_translational_jacobian(q_minus, body_id_int, lp64, contact_c)
+
+            return (Jp_plus - Jp_minus) @ qvel64 / (2.0 * eps64)
+
+        cache._contact_jdot_qdot_single_jit_f64 = _contact_jdot_qdot_single_jit_f64
+    else:
+        # Always set a reference for safe attribute access
+        cache._contact_jdot_qdot_single_jit_f64 = None
 
     compile_time = time.perf_counter() - t0
     cache.compile_time_s = compile_time
@@ -616,6 +712,17 @@ def _warmup_cache(cache: JAXDynamicsCache) -> None:
     if cache._contact_jdot_qdot_single_jit is not None and cache.max_contacts > 0:
         dummy_lp = jnp.zeros(3, dtype=jnp.float32)
         _ = cache._contact_jdot_qdot_single_jit(dummy_qpos, dummy_qvel, 1, dummy_lp)
+
+    # Phase 3D.3-F: float64 contact Jdot*qdot warmup
+    if (cache._contact_jdot_qdot_single_jit_f64 is not None
+            and cache.max_contacts > 0
+            and cache.contact_jdot_precision_mode == "float64"):
+        dummy_qpos_f64 = jnp.zeros(cache.nq, dtype=jnp.float64)
+        dummy_qvel_f64 = jnp.zeros(cache.nv, dtype=jnp.float64)
+        dummy_lp_f64 = jnp.zeros(3, dtype=jnp.float64)
+        _ = cache._contact_jdot_qdot_single_jit_f64(
+            dummy_qpos_f64, dummy_qvel_f64, 1, dummy_lp_f64,
+        )
 
     # Force JAX to finish async dispatch
     _ = jax.block_until_ready(dummy_qpos)
@@ -728,7 +835,22 @@ def prepare_phase3b_snapshot_cached(
         )
 
     # ── Contact Jdot*qdot ────────────────────────────────────────────
-    if m > 0 and cache._contact_jdot_qdot_single_jit is not None:
+    if m > 0 and cache.contact_jdot_precision_mode == "float64" and cache._contact_jdot_qdot_single_jit_f64 is not None:
+        # Phase 3D.3-F: float64 FD path
+        qpos_f64 = jnp.array(qpos, dtype=jnp.float64)
+        qvel_f64 = jnp.array(qvel, dtype=jnp.float64)
+        jdot_qdot = np.zeros(3 * max_contacts, dtype=np.float64)
+        for i in range(m):
+            c = contacts[i]
+            bid = int(c["body_id"])
+            lp_f64 = jnp.array(c["local_point"], dtype=jnp.float64)
+            jdq_i = np.array(
+                cache._contact_jdot_qdot_single_jit_f64(qpos_f64, qvel_f64, bid, lp_f64),
+                dtype=np.float64,
+            )
+            jdot_qdot[3*i:3*i+3] = jdq_i
+    elif m > 0 and cache._contact_jdot_qdot_single_jit is not None:
+        # Legacy float32 FD path
         jdot_qdot = np.zeros(3 * max_contacts, dtype=np.float64)
         for i in range(m):
             c = contacts[i]
