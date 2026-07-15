@@ -119,6 +119,39 @@ def solve_phase3c_fast(
     # Validate structured QP
     validation = validate_structured_qp(sqp)
 
+    # ── NaN/Inf guard — skip solve if QP matrices are degenerate ─────────
+    _has_nan = (
+        not np.all(np.isfinite(sqp.P.data))
+        or not np.all(np.isfinite(sqp.q))
+        or not np.all(np.isfinite(sqp.A.data))
+        or not np.all(np.isfinite(sqp.l))
+        or not np.all(np.isfinite(sqp.u))
+    )
+    if _has_nan:
+        _nx = sqp.nx
+        _n_qdd = sqp.variable_slices["qdd"][1] - sqp.variable_slices["qdd"][0]
+        _n_tau = sqp.variable_slices["tau"][1] - sqp.variable_slices["tau"][0]
+        return {
+            "solution": QPSolution(
+                x=np.zeros(_nx), success=False, status="nan_inf_skipped",
+                objective_value=float("nan"), iterations=0,
+                solve_time_s=0.0, setup_time_s=0.0,
+            ),
+            "structured_qp": sqp,
+            "components": {
+                "qdd": np.zeros(_n_qdd), "tau": np.zeros(_n_tau),
+                "lambda": np.zeros(0), "slack": np.zeros(0),
+            },
+            "structured_qp_valid": False,
+            "structured_qp_validation": {"valid": False, "nan_inf_detected": True},
+            "hard_constraint_residuals": {"finite_solution": False},
+            "rolling_residuals": {},
+            "solve_time_s": 0.0,
+            "setup_time_s": 0.0,
+            "build_time_s": build_time,
+            "total_time_s": build_time,
+        }
+
     # ── Create backend ───────────────────────────────────────────────────
     if backend is None:
         backend = make_backend(backend_name, eps_abs=eps_abs, eps_rel=eps_rel, max_iter=max_iter)
