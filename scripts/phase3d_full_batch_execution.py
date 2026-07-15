@@ -2100,9 +2100,7 @@ def main():
             print(f"  Cached path pre-warmed: {(time.perf_counter() - _t_warm):.1f}s")
         print(f"  Total pre-warm: {(time.perf_counter() - _t_warm):.1f}s")
 
-        del _fake_contact, _fake_contacts_2, _fake_contacts_4s_2, _fake_contacts_4
-        print(f"  JAX dynamics pre-warmed: {(time.perf_counter() - _t_warm):.1f}s")
-        del _fake_contact
+        del _fake_contact, _fake_contacts_2, _fake_contacts_4
 
         contacts0: list = []
         incremental_workspace = initialize_incremental_qp_workspace(
