@@ -546,6 +546,7 @@ def compute_wbc_torque_for_state(
     import time
 
     t0 = time.perf_counter()
+    _timings = {}  # Detailed timing breakdown
 
     qp_c = constants["qp_constants"]
 
@@ -554,6 +555,7 @@ def compute_wbc_torque_for_state(
         qp_c["_rolling_constants"] = constants["rolling_constants"]
 
     # Build snapshot
+    _t_snap = time.perf_counter()
     from wheeled_biped.wbc.phase3b_cached_stack import prepare_phase3b_snapshot
 
     try:
@@ -577,7 +579,10 @@ def compute_wbc_torque_for_state(
             "finite_solution": False,
         }
 
+    _timings["snapshot"] = time.perf_counter() - _t_snap
+
     # Build Phase 3C QP
+    _t_qp_build = time.perf_counter()
     try:
         from wheeled_biped.wbc.phase3c_rolling_qp import (
             build_phase3c_qp_from_snapshot,
@@ -679,6 +684,23 @@ def compute_wbc_torque_for_state(
         rolling_info.get("max_post_roll_residual", 0.0),
     )
 
+    total_elapsed = time.perf_counter() - t0
+    _timings["qp_build"] = time.perf_counter() - _t_qp_build - solve_time_s
+    _timings["qp_solve"] = solve_time_s
+    _timings["validation"] = total_elapsed - _timings["snapshot"] - _timings["qp_build"] - _timings["qp_solve"]
+
+    # ── WARNING: log if any step takes >1s (slow path detection) ──────────
+    if total_elapsed > 1.0:
+        import sys as _sys
+        _msg = (f"[QP-SLOW] compute_wbc_torque_for_state: {total_elapsed:.1f}s total | "
+                f"snapshot={_timings['snapshot']:.2f}s "
+                f"qp_build={_timings['qp_build']:.2f}s "
+                f"qp_solve={_timings['qp_solve']:.2f}s "
+                f"validation={_timings['validation']:.2f}s "
+                f"n_contacts={len(contacts)} "
+                f"success={solve_success}")
+        print(_msg, file=_sys.stderr, flush=True)
+
     return {
         "tau_wbc": tau_wbc,
         "qdd_wbc": qdd_wbc,
@@ -695,6 +717,7 @@ def compute_wbc_torque_for_state(
         "max_abs_tau": float(np.max(np.abs(tau_wbc))),
         "max_abs_lambda": float(np.max(np.abs(lam_wbc))) if len(lam_wbc) > 0 else 0.0,
         "finite_solution": bool(np.all(np.isfinite(qdd_wbc)) and np.all(np.isfinite(tau_wbc))),
+        "_timings": _timings,
     }
 
 

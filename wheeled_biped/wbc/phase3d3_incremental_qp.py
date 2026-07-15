@@ -671,18 +671,29 @@ def compute_wbc_torque_incremental_for_state(
     # ── Fast path: incremental update + solve ──────────────────────────────
     if not use_full_rebuild:
         try:
+            _t_upd = time.perf_counter()
             update_diag = update_incremental_qp_workspace(
                 workspace, qpos, qvel, contacts,
             )
+            _upd_elapsed = time.perf_counter() - _t_upd
 
             if update_diag.get("reinit_triggered", False):
-                # Update signalled a structural change mid-stream;
-                # fall back to full rebuild (fail-closed).
+                if _upd_elapsed > 0.5:
+                    print(f"[QP-SLOW] update_incremental_qp_workspace (reinit): {_upd_elapsed:.2f}s "
+                          f"snapshot={update_diag.get('snapshot_time_s', 0):.2f}s "
+                          f"build={update_diag.get('build_time_s', 0):.2f}s",
+                          file=sys.stderr, flush=True)
                 _log.info("Update triggered reinit — falling back to full rebuild")
                 workspace.fallback_full_rebuild_count += 1
                 return _fallback_full_rebuild(
                     mj_data, model, workspace, constants, controller_context,
                 )
+
+            if _upd_elapsed > 0.5:
+                print(f"[QP-SLOW] update_incremental_qp_workspace: {_upd_elapsed:.2f}s "
+                      f"snapshot={update_diag.get('snapshot_time_s', 0):.2f}s "
+                      f"build={update_diag.get('build_time_s', 0):.2f}s",
+                      file=sys.stderr, flush=True)
 
             result = solve_incremental_qp(workspace, warm_start=True)
             return result
@@ -719,6 +730,8 @@ def _fallback_full_rebuild(
     After a successful rebuild, resets ``workspace.workspace_reinit_required``
     to ``False`` so the next step can use the incremental path again.
     """
+    import time as _time
+    _t0 = _time.perf_counter()
     from .offline_three_arm_counterfactual import compute_wbc_torque_for_state
 
     qpos = mj_data.qpos.copy()
@@ -735,9 +748,19 @@ def _fallback_full_rebuild(
         max_contacts=workspace.max_contacts,
     )
 
+    _elapsed = _time.perf_counter() - _t0
+    if _elapsed > 1.0:
+        import sys as _sys
+        _timings = result.get("_timings", {})
+        _msg = (f"[QP-SLOW] _fallback_full_rebuild: {_elapsed:.1f}s total | "
+                f"snapshot={_timings.get('snapshot', 0):.2f}s "
+                f"qp_build={_timings.get('qp_build', 0):.2f}s "
+                f"qp_solve={_timings.get('qp_solve', 0):.2f}s "
+                f"fallback_count={workspace.fallback_full_rebuild_count} "
+                f"reinit={workspace.workspace_reinit_required}")
+        print(_msg, file=_sys.stderr, flush=True)
+
     # On success, clear the reinit flag so the next step can use incremental.
-    # Also ensure solve_count is at least 1 so the "first solve" gate is
-    # cleared; otherwise every call would continue to fall back.
     if result.get("solve_success", False):
         workspace.workspace_reinit_required = False
         workspace.solve_count = max(workspace.solve_count, 1)
