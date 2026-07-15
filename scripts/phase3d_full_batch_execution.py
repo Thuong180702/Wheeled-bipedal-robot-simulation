@@ -2055,9 +2055,11 @@ def main():
             print("ERROR: --use-incremental-qp requires wheeled_biped.wbc.phase3d3_incremental_qp")
             sys.exit(1)
 
-        # ── Pre-warm ALL JAX dynamics (all contact counts, avoids JIT recompile during rollouts) ──
-        print("Pre-warming JAX dynamics (0, 2, 4 contacts — this will take ~60-90s once)...")
+        # ── Pre-warm ALL JAX dynamics (both cached AND non-cached paths, all contact counts) ──
+        print("Pre-warming JAX dynamics (cached + non-cached, 0/2/4 contacts — this will take 2-3 min)...")
         _t_warm = time.perf_counter()
+
+        # Non-cached path (prepare_phase3b_snapshot)
         from wheeled_biped.wbc.phase3b_cached_stack import prepare_phase3b_snapshot
         from wheeled_biped.wbc.offline_qp_wbc import (
             _ensure_dynamics_constants,
@@ -2066,27 +2068,27 @@ def main():
         _ensure_dynamics_constants(qp_c)
         _ensure_contact_constants(qp_c)
 
-        # Fake contacts for pre-warming (matching the wheel body IDs)
         _wheel_bids = qp_c["_contact_constants"].get("wheel_body_ids", {})
         _l_wheel_id = int(_wheel_bids.get("l_wheel_link", 0))
         _r_wheel_id = int(_wheel_bids.get("r_wheel_link", 0))
-
-        # 0 contacts
-        _ = prepare_phase3b_snapshot("pw0", data.qpos.copy(), np.zeros(model.nv), [], qp_c, max_contacts=4)
-        print(f"  Pre-warmed 0 contacts: {(time.perf_counter() - _t_warm):.1f}s")
-
-        # 2 contacts (both wheels)
         _fake_contact = lambda bid: {"body_id": bid, "position": np.zeros(3), "frame": np.eye(3), "local_point": np.zeros(3), "distance": 0.0}
         _fake_contacts_2 = [_fake_contact(_l_wheel_id), _fake_contact(_r_wheel_id)]
-        _ = prepare_phase3b_snapshot("pw2", data.qpos.copy(), np.zeros(model.nv), _fake_contacts_2, qp_c, max_contacts=4)
-        print(f"  Pre-warmed 2 contacts: {(time.perf_counter() - _t_warm):.1f}s")
-
-        # 4 contacts (padded)
         _fake_contacts_4 = [_fake_contact(_l_wheel_id), _fake_contact(_r_wheel_id), _fake_contact(_l_wheel_id), _fake_contact(_r_wheel_id)]
-        _ = prepare_phase3b_snapshot("pw4", data.qpos.copy(), np.zeros(model.nv), _fake_contacts_4, qp_c, max_contacts=4)
-        print(f"  Pre-warmed 4 contacts: {(time.perf_counter() - _t_warm):.1f}s")
 
-        del _fake_contacts_2, _fake_contacts_4
+        # Non-cached: 0, 2, 4 contacts
+        for _label, _cts in [("nc0", []), ("nc2", _fake_contacts_2), ("nc4", _fake_contacts_4)]:
+            _ = prepare_phase3b_snapshot(_label, data.qpos.copy(), np.zeros(model.nv), _cts, qp_c, max_contacts=4)
+        print(f"  Non-cached path pre-warmed: {(time.perf_counter() - _t_warm):.1f}s")
+
+        # Cached path (prepare_phase3b_snapshot_cached — used by incremental QP during rollout)
+        if jax_dynamics_cache is not None:
+            from wheeled_biped.wbc.phase3d3e_jax_dynamics_cache import prepare_phase3b_snapshot_cached
+            for _label, _cts in [("c0", []), ("c2", _fake_contacts_2), ("c4", _fake_contacts_4)]:
+                _ = prepare_phase3b_snapshot_cached(jax_dynamics_cache, _label, data.qpos.copy(), np.zeros(model.nv), _cts, qp_c, max_contacts=4)
+            print(f"  Cached path pre-warmed: {(time.perf_counter() - _t_warm):.1f}s")
+        print(f"  Total pre-warm: {(time.perf_counter() - _t_warm):.1f}s")
+
+        del _fake_contact, _fake_contacts_2, _fake_contacts_4s_2, _fake_contacts_4
         print(f"  JAX dynamics pre-warmed: {(time.perf_counter() - _t_warm):.1f}s")
         del _fake_contact
 
