@@ -719,7 +719,19 @@ def run_three_arm_rollout(
             "push_active": push_active,
         })
 
-        full_step_times.append(time.perf_counter() - step_t0)
+        _step_elapsed = time.perf_counter() - step_t0
+        full_step_times.append(_step_elapsed)
+
+        # ── Per-step timing (stderr, every step) ───────────────────────────
+        _wbc_ok = wbc_result.get("solve_success", False) if not single_arm else None
+        _timings_detail = wbc_result.get("_timings", {}) if not single_arm else {}
+        print(f"[STEP {step:4d}] {_step_elapsed*1000:7.1f}ms | "
+              f"V3={_step_elapsed*1000 if single_arm else 0:5.0f}ms "
+              f"WBC_ok={_wbc_ok} "
+              f"snap={_timings_detail.get('snapshot', 0):.2f}s "
+              f"qp_build={_timings_detail.get('qp_build', 0):.2f}s "
+              f"qp_solve={_timings_detail.get('qp_solve', 0):.2f}s",
+              file=sys.stderr, flush=True)
 
         # Early termination if all three arms have fallen
         if not single_arm and v3_metrics["fall"] and wbc_metrics["fall"] and assist_metrics["fall"]:

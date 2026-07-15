@@ -704,8 +704,15 @@ def _build_task_costs_from_snapshot(
         b_torso = alpha_des - jdw_torso
 
         W_torso = np.diag([w_torso, w_torso, w_torso])
-        H_task += A_torso.T @ W_torso @ A_torso
-        g_task += -(A_torso.T @ W_torso @ b_torso).flatten()
+        # Skip torso task if Jr is degenerate (produces NaN Hessian)
+        _jr_max = float(np.max(np.abs(Jr)))
+        if _jr_max > 1e6 or not np.all(np.isfinite(Jr)):
+            import sys as _sys2
+            print(f"[WARN] Torso task SKIPPED: Jr max_abs={_jr_max:.1f} finite={np.all(np.isfinite(Jr))}",
+                  file=_sys2.stderr, flush=True)
+        else:
+            H_task += A_torso.T @ W_torso @ A_torso
+            g_task += -(A_torso.T @ W_torso @ b_torso).flatten()
 
         per_task["torso_orientation"] = {
             "A": A_torso, "b": b_torso, "weight": w_torso,
