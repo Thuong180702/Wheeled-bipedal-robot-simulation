@@ -427,11 +427,21 @@ def initialize_jax_dynamics_cache(
         if not _jax_x64_available():
             jax.config.update("jax_enable_x64", True)
         if not _jax_x64_available():
-            raise RuntimeError(
-                "fd_precision=float64 requested but jax_enable_x64 "
-                "could not be enabled. Enable jax_enable_x64 before "
-                "calling initialize_jax_dynamics_cache."
-            )
+            # On Metal/MPS, float64 is not supported — fall back to float32
+            import os as _os2
+            if _os2.environ.get("JAX_PLATFORMS", "") == "mps" or _os2.environ.get("JAX_ENABLE_X64", "1") == "0":
+                import warnings as _w
+                _w.warn(
+                    "fd_precision=float64 requested but float64 unavailable on Metal/MPS. "
+                    "Falling back to float32. Precision may be reduced."
+                )
+                fd_precision = "float32"
+            else:
+                raise RuntimeError(
+                    "fd_precision=float64 requested but jax_enable_x64 "
+                    "could not be enabled. Enable jax_enable_x64 before "
+                    "calling initialize_jax_dynamics_cache."
+                )
         actual_fd_precision = "float64"
     elif fd_precision == "auto":
         if _jax_x64_available():

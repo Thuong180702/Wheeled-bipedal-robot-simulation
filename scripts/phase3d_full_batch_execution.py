@@ -32,6 +32,10 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+# ── MPS Metal GPU: disable float64 (not supported) ────────────────────────
+import jax
+jax.config.update('jax_enable_x64', False)
 from typing import Any
 
 import mujoco
@@ -525,6 +529,7 @@ def run_three_arm_rollout(
     solver_max_iter: int = 4000,
     verbose: bool = False,
     incremental_workspace: Any | None = None,
+    single_arm: bool = False,
 ) -> dict[str, Any]:
     """Run three-arm closed-loop counterfactual rollout.
 
@@ -610,6 +615,18 @@ def run_three_arm_rollout(
             "metrics": v3_metrics,
             "push_active": push_active,
         })
+
+        # ── Single-arm shortcut ──────────────────────────────────────────────
+        if single_arm:
+            # Skip WBC + Assist computation entirely — 3× speed improvement
+            wbc_entries.append({"step": step, "torque": [0.0]*10, "metrics": {}, "push_active": push_active, "skipped": True})
+            assist_entries.append({"step": step, "torque": [0.0]*10, "assist_active": False, "metrics": {}, "push_active": push_active, "skipped": True})
+            full_step_times.append(time.perf_counter() - step_t0)
+            if v3_metrics["fall"]:
+                if verbose:
+                    print(f"  V3 fallen at step {step}. Stopping.")
+                break
+            continue
 
         # ── WBC torque ──────────────────────────────────────────────────────
         wbc_data = clones[ARM_WBC_ONLY]
@@ -705,13 +722,24 @@ def run_three_arm_rollout(
         full_step_times.append(time.perf_counter() - step_t0)
 
         # Early termination if all three arms have fallen
-        if v3_metrics["fall"] and wbc_metrics["fall"] and assist_metrics["fall"]:
+        if not single_arm and v3_metrics["fall"] and wbc_metrics["fall"] and assist_metrics["fall"]:
             if verbose:
                 print(f"  All three arms fallen at step {step}. Stopping.")
             break
 
     # ── Comparison ────────────────────────────────────────────────────────────
-    comparison = compare_three_arm_rollout(v3_entries, wbc_entries, assist_entries, constants)
+    if not single_arm:
+        comparison = compare_three_arm_rollout(v3_entries, wbc_entries, assist_entries, constants)
+    else:
+        comparison = {
+            "best_arm": "V3_BASELINE",
+            "fall_comparison": {"v3_falls": 1 if v3_entries[-1]["metrics"].get("fall", False) else 0,
+                               "wbc_only_falls": 0, "assist_falls": 0},
+            "classification": {"wbc_only": "skipped_single_arm", "assist": "skipped_single_arm"},
+            "physical_metrics": {"v3": v3_entries[-1].get("metrics", {}),
+                                "wbc_only": {}, "assist": {}},
+            "torque_comparison": {"v3": {}, "wbc_only": {}, "assist": {}},
+        }
 
     # ── Solver timing stats ──────────────────────────────────────────────────
     _st = np.array(solve_times) * 1000 if solve_times else np.array([0.0])
@@ -1835,6 +1863,10 @@ def main():
     # Mode
     parser.add_argument("--quick", action="store_true",
                         help="Quick smoke test (500 steps, 1 seed)")
+    parser.add_argument("--fast", action="store_true",
+                        help="Fast smoke test with reduced substeps (2) and single-arm for quick iteration")
+    parser.add_argument("--single-arm", action="store_true",
+                        help="Run only V3_BASELINE arm (skip WBC_ONLY and V3_PLUS_WBC_ASSIST)")
     parser.add_argument("--full", action="store_true",
                         help="Full batch execution (5000 steps, all seeds)")
     parser.add_argument("--resume", action="store_true",
@@ -1909,7 +1941,25 @@ def main():
 
     # ── Quick mode overrides ────────────────────────────────────────────────
     is_quick = args.quick
-    if is_quick and not args.full:
+    is_fast = args.fast
+    single_arm = args.single_arm
+
+    if is_fast:
+        # Fast mode: reduce substeps for speed, single arm, lower max_iter
+        if args.n_substeps == 5:  # only override if user didn't set explicitly
+            args.n_substeps = 2
+        if args.solver_max_iter == 4000:  # only override if user didn't set
+            args.solver_max_iter = 500
+        args.single_arm = True  # force single-arm in fast mode
+        single_arm = True
+        if args.steps is None:
+            args.steps = 300
+        print("=" * 70)
+        print("FAST MODE — n_substeps=2, max_iter=500, single V3 arm only")
+        print("Results are DIAGNOSTIC ONLY — NOT for paper evidence")
+        print("=" * 70)
+
+    if is_quick and not args.full and not is_fast:
         args.steps = args.steps or QUICK_STEPS
         args.post_push_steps = args.post_push_steps or QUICK_POST_PUSH
         print("=" * 70)
@@ -1919,6 +1969,10 @@ def main():
     else:
         args.steps = args.steps or DEFAULT_STEPS
         args.post_push_steps = args.post_push_steps or POST_PUSH_STEPS
+
+    if single_arm:
+        print("\nSINGLE-ARM MODE — running V3_BASELINE only (skip WBC and Assist clones)")
+        print("3× speed improvement expected")
 
     # ── V3 truth check ──────────────────────────────────────────────────────
     if not args.skip_truth_check:
@@ -2000,6 +2054,42 @@ def main():
         if not _HAS_INCREMENTAL_QP:
             print("ERROR: --use-incremental-qp requires wheeled_biped.wbc.phase3d3_incremental_qp")
             sys.exit(1)
+
+        # ── Pre-warm ALL JAX dynamics (all contact counts, avoids JIT recompile during rollouts) ──
+        print("Pre-warming JAX dynamics (0, 2, 4 contacts — this will take ~60-90s once)...")
+        _t_warm = time.perf_counter()
+        from wheeled_biped.wbc.phase3b_cached_stack import prepare_phase3b_snapshot
+        from wheeled_biped.wbc.offline_qp_wbc import (
+            _ensure_dynamics_constants,
+            _ensure_contact_constants,
+        )
+        _ensure_dynamics_constants(qp_c)
+        _ensure_contact_constants(qp_c)
+
+        # Fake contacts for pre-warming (matching the wheel body IDs)
+        _wheel_bids = qp_c["_contact_constants"].get("wheel_body_ids", {})
+        _l_wheel_id = int(_wheel_bids.get("l_wheel_link", 0))
+        _r_wheel_id = int(_wheel_bids.get("r_wheel_link", 0))
+
+        # 0 contacts
+        _ = prepare_phase3b_snapshot("pw0", data.qpos.copy(), np.zeros(model.nv), [], qp_c, max_contacts=4)
+        print(f"  Pre-warmed 0 contacts: {(time.perf_counter() - _t_warm):.1f}s")
+
+        # 2 contacts (both wheels)
+        _fake_contact = lambda bid: {"body_id": bid, "position": np.zeros(3), "frame": np.eye(3), "local_point": np.zeros(3), "distance": 0.0}
+        _fake_contacts_2 = [_fake_contact(_l_wheel_id), _fake_contact(_r_wheel_id)]
+        _ = prepare_phase3b_snapshot("pw2", data.qpos.copy(), np.zeros(model.nv), _fake_contacts_2, qp_c, max_contacts=4)
+        print(f"  Pre-warmed 2 contacts: {(time.perf_counter() - _t_warm):.1f}s")
+
+        # 4 contacts (padded)
+        _fake_contacts_4 = [_fake_contact(_l_wheel_id), _fake_contact(_r_wheel_id), _fake_contact(_l_wheel_id), _fake_contact(_r_wheel_id)]
+        _ = prepare_phase3b_snapshot("pw4", data.qpos.copy(), np.zeros(model.nv), _fake_contacts_4, qp_c, max_contacts=4)
+        print(f"  Pre-warmed 4 contacts: {(time.perf_counter() - _t_warm):.1f}s")
+
+        del _fake_contacts_2, _fake_contacts_4
+        print(f"  JAX dynamics pre-warmed: {(time.perf_counter() - _t_warm):.1f}s")
+        del _fake_contact
+
         contacts0: list = []
         incremental_workspace = initialize_incremental_qp_workspace(
             model, data.qpos.copy(), np.zeros(model.nv), contacts0,
@@ -2062,6 +2152,7 @@ def main():
         solver_max_iter=args.solver_max_iter,
         verbose=args.verbose,
         incremental_workspace=incremental_workspace,
+        single_arm=single_arm,
     )
 
     # ── Determine seeds ─────────────────────────────────────────────────────

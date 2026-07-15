@@ -17,7 +17,10 @@ from __future__ import annotations
 
 import jax
 
-jax.config.update("jax_enable_x64", True)
+import os as _os
+if _os.environ.get("JAX_ENABLE_X64", "1") != "0":
+    jax.config.update("jax_enable_x64", True)
+# On Metal/MPS, float64 is unsupported; respect JAX_ENABLE_X64=0 to stay float32
 
 import jax.numpy as jnp
 import numpy as np

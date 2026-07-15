@@ -686,6 +686,13 @@ def _build_task_costs_from_snapshot(
         e_R = snapshot.e_R
         omega_current = snapshot.omega_current
 
+        # NaN guard: clamp degenerate Jacobian values before matmul
+        Jr = np.nan_to_num(Jr, nan=0.0, posinf=1e3, neginf=-1e3)
+        Jr = np.clip(Jr, -1e4, 1e4)
+        jdw_torso = np.nan_to_num(jdw_torso, nan=0.0, posinf=1e3, neginf=-1e3)
+        e_R = np.nan_to_num(e_R, nan=0.0, posinf=1.0, neginf=-1.0)
+        omega_current = np.nan_to_num(omega_current, nan=0.0, posinf=1e2, neginf=-1e2)
+
         kp_R = DEFAULT_KP_R
         kd_R = DEFAULT_KD_R
         omega_target = np.zeros(3, dtype=np.float64)
@@ -772,6 +779,10 @@ def _build_task_costs_from_snapshot(
             "A": A_force, "b": b_force, "weight": w_force,
             "fn_ref": fn_ref, "lambda_ref": lambda_ref,
         }
+
+    # ── Hessian regularization (prevents singularity from degenerate Jacobians) ──
+    REG_EPS = 1e-4
+    H_task += REG_EPS * np.eye(nz, dtype=np.float64)
 
     return H_task, g_task, per_task
 

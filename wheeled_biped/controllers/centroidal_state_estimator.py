@@ -4,6 +4,7 @@ import chex
 import jax.numpy as jnp
 import mujoco
 import numpy as np
+from dataclasses import field
 from jax import Array
 
 from wheeled_biped.controllers.orientation_utils import (
@@ -45,8 +46,8 @@ class CentroidalState:
     right_wheel_contact: bool
     left_wheel_force: float
     right_wheel_force: float
-    base_quat: Array = jnp.array([1.0, 0.0, 0.0, 0.0])
-    base_ang_vel: Array = jnp.zeros(3)
+    base_quat: Array = field(default_factory=lambda: jnp.array([1.0, 0.0, 0.0, 0.0]))
+    base_ang_vel: Array = field(default_factory=lambda: jnp.zeros(3))
     roll: float = 0.0
     pitch: float = 0.0
     yaw: float = 0.0
@@ -65,8 +66,8 @@ class CentroidalState:
     pitch_rate_x: float = 0.0
     roll_rate_y: float = 0.0
     yaw_rate_z: float = 0.0
-    left_contact_force_world: Array = jnp.zeros(3)
-    right_contact_force_world: Array = jnp.zeros(3)
+    left_contact_force_world: Array = field(default_factory=lambda: jnp.zeros(3))
+    right_contact_force_world: Array = field(default_factory=lambda: jnp.zeros(3))
     total_contact_force_z: float = 0.0
     contact_force_valid: bool = False
 

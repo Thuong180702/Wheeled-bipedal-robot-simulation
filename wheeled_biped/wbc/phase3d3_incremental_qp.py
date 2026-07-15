@@ -512,29 +512,67 @@ def solve_incremental_qp(
     """
     t0 = time.perf_counter()
 
-    # ── 1. Apply warm-start ────────────────────────────────────────────────
+    # ── 1. NaN/Inf guard — skip solve if any matrix is degenerate ──────────
+    sqp = workspace.structured_qp
+    nan_mask_p = not np.all(np.isfinite(sqp.P.data))
+    nan_mask_q = not np.all(np.isfinite(sqp.q))
+    nan_mask_a = not np.all(np.isfinite(sqp.A.data))
+    nan_mask_l = not np.all(np.isfinite(sqp.l))
+    nan_mask_u = not np.all(np.isfinite(sqp.u))
+    has_nan_inf = nan_mask_p or nan_mask_q or nan_mask_a or nan_mask_l or nan_mask_u
+
+    if has_nan_inf:
+        _log.warning(
+            "NaN/Inf detected in QP matrices (P=%s q=%s A=%s l=%s u=%s) — skipping solve",
+            nan_mask_p, nan_mask_q, nan_mask_a, nan_mask_l, nan_mask_u,
+        )
+        solve_time_s = time.perf_counter() - t0
+        nx = sqp.nx
+        nc = sqp.nc
+        return {
+            "tau_wbc": np.zeros(10, dtype=np.float64),
+            "qdd_wbc": np.zeros(16, dtype=np.float64),
+            "lambda_wbc": np.zeros(max(0, nx - 26), dtype=np.float64),
+            "solve_success": False,
+            "solve_status": "nan_inf_skipped",
+            "solve_time_s": solve_time_s,
+            "max_dynamics_residual": float("nan"),
+            "max_contact_accel_residual": float("nan"),
+            "max_friction_violation": float("nan"),
+            "max_torque_violation": float("nan"),
+            "max_rolling_residual": float("nan"),
+            "max_abs_qdd": 0.0,
+            "max_abs_tau": 0.0,
+            "max_abs_lambda": 0.0,
+            "finite_solution": False,
+            "backend_diagnostics": {"nan_inf_detected": True},
+            "workspace_update_count": workspace.update_count,
+            "workspace_reinit_count": workspace.reinit_count,
+        }
+
+    # ── 2. Apply warm-start ────────────────────────────────────────────────
     if warm_start and workspace.x_warm is not None:
         try:
             workspace.backend.warm_start(x=workspace.x_warm, y=workspace.y_warm)
         except Exception:
             _log.warning("Warm-start application failed", exc_info=True)
 
-    # ── 2. Solve ───────────────────────────────────────────────────────────
+    # ── 3. Solve ───────────────────────────────────────────────────────────
     result = workspace.backend.solve()
 
-    # ── 3. Increment counters ──────────────────────────────────────────────
+    # ── 4. Increment counters ──────────────────────────────────────────────
     workspace.solve_count += 1
     solve_time_s = time.perf_counter() - t0
     workspace.cumulative_osqp_solve_time_s += solve_time_s
 
-    # ── 4. Store warm-start for next call ──────────────────────────────────
+    # ── 5. Store warm-start for next call ──────────────────────────────────
     workspace.x_warm = result.x.copy()
     # Dual warm-start is not directly available from QPSolution;
     # set y_warm to zeros of correct shape if None
     if workspace.y_warm is None:
         workspace.y_warm = np.zeros(workspace.structured_qp.nc, dtype=np.float64)
 
-    # ── 5. Extract solution components ─────────────────────────────────────
+    # ── 6. Extract solution components ─────────────────────────────────────
     components = extract_solution_components(workspace.structured_qp, result)
 
     tau_wbc = components.get("tau", np.zeros(
@@ -549,7 +587,7 @@ def solve_incremental_qp(
     ))
     lam_wbc = components.get("lambda", np.zeros(0, dtype=np.float64))
 
-    # ── 6. Compute residuals ───────────────────────────────────────────────
+    # ── 7. Compute residuals ───────────────────────────────────────────────
     hard_residuals = _compute_hard_constraint_residuals(workspace.structured_qp, result)
 
     # Build a minimal snapshot-like object for rolling residuals if available
@@ -563,7 +601,7 @@ def solve_incremental_qp(
     # won't attempt snapshot-specific attributes.
     max_rolling_residual = rolling_residuals.get("max_rolling_eq_residual", 0.0)
 
-    # ── 7. Assemble return dict ────────────────────────────────────────────
+    # ── 8. Assemble return dict ────────────────────────────────────────────
     return {
         "tau_wbc": tau_wbc,
         "qdd_wbc": qdd_wbc,
