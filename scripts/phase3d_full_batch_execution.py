@@ -808,7 +808,16 @@ def _build_v3_controller_context(
     height_ref: float | None = None,
     initial_yaw_z: float | None = None,
 ) -> dict[str, Any]:
-    """Build the controller context dict for compute_v3_torque_for_state."""
+    """Build the controller context dict for compute_v3_torque_for_state.
+
+    Creates a real CentroidalStateEstimator (same as production V3 path)
+    so the V3 controller receives accurate pitch/roll/CoM feedback.
+    """
+    from wheeled_biped.controllers.centroidal_state_estimator import (
+        CentroidalStateEstimator,
+        CentroidalStateEstimatorConfig,
+    )
+
     if eq_joint is None:
         eq_joint = _default_eq_joint()
     if height_ref is None:
@@ -820,8 +829,17 @@ def _build_v3_controller_context(
     l_wheel_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
     r_wheel_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
 
+    # Real state estimator — same as production V3 path.
+    robot_mass = float(np.sum(model.body_mass))
+    torso_inertia = np.array(model.body_inertia[1], dtype=np.float64)
+    centroidal_config = CentroidalStateEstimatorConfig(
+        robot_mass=robot_mass,
+        torso_inertia=torso_inertia,
+    )
+    centroidal_estimator = CentroidalStateEstimator(centroidal_config, mj_model=model)
+
     return {
-        "centroidal_estimator": None,
+        "centroidal_estimator": centroidal_estimator,
         "initial_yaw_z": initial_yaw_z,
         "l_wheel_id": l_wheel_id,
         "r_wheel_id": r_wheel_id,
