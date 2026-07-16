@@ -761,8 +761,9 @@ def _fallback_full_rebuild(
         print(_msg, file=_sys.stderr, flush=True)
 
     # On success, clear the reinit flag so the next step can use incremental.
-    if result.get("solve_success", False):
-        workspace.workspace_reinit_required = False
-        workspace.solve_count = max(workspace.solve_count, 1)
+    # Always clear reinit flag — even on NaN/failure, the workspace structure
+    # is valid. A failed solve does NOT require structural rebuild next step.
+    workspace.workspace_reinit_required = False
+    workspace.solve_count = max(workspace.solve_count, 1)
 
     return result
