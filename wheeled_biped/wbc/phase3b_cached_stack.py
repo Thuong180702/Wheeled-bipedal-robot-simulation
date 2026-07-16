@@ -671,6 +671,14 @@ def _build_task_costs_from_snapshot(
 
         H_task += w_com * (A_com.T @ A_com)
         g_task += -w_com * (A_com.T @ b_com).flatten()
+        # Check for NaN after COM task
+        if not np.all(np.isfinite(H_task)):
+            import sys as _sc
+            print(f"[WARN] COM task produced NaN! Jcom_z finite={np.all(np.isfinite(Jcom_z))} "
+                  f"jdq_com_z={jdq_com_z:.6f} z_com={z_com_current:.4f}",
+                  file=_sc.stderr, flush=True)
+            H_task = np.nan_to_num(H_task, nan=0.0)
+            g_task = np.nan_to_num(g_task, nan=0.0)
 
         per_task["com_height"] = {
             "A": A_com, "b": b_com, "weight": w_com,
@@ -705,14 +713,24 @@ def _build_task_costs_from_snapshot(
 
         W_torso = np.diag([w_torso, w_torso, w_torso])
         # Skip torso task if Jr is degenerate (produces NaN Hessian)
-        _jr_max = float(np.max(np.abs(Jr)))
-        if _jr_max > 1e6 or not np.all(np.isfinite(Jr)):
+        _jr_ok = np.all(np.isfinite(Jr)) and np.all(np.isfinite(jdw_torso)) and np.all(np.isfinite(e_R))
+        if not _jr_ok:
             import sys as _sys2
-            print(f"[WARN] Torso task SKIPPED: Jr max_abs={_jr_max:.1f} finite={np.all(np.isfinite(Jr))}",
+            _jr_max = float(np.max(np.abs(Jr)))
+            print(f"[WARN] Torso task SKIPPED: Jr max_abs={_jr_max:.1f} ok={_jr_ok}",
                   file=_sys2.stderr, flush=True)
         else:
             H_task += A_torso.T @ W_torso @ A_torso
             g_task += -(A_torso.T @ W_torso @ b_torso).flatten()
+        # Clean up NaN after torso task (regardless of _jr_ok)
+        if not np.all(np.isfinite(H_task)):
+            import sys as _sc2
+            _jr_max_val = float(np.max(np.abs(Jr)))
+            print(f"[WARN] Torso task produced NaN! Jr max={_jr_max_val:.1f} finite={np.all(np.isfinite(Jr))} "
+                  f"jdw_torso finite={np.all(np.isfinite(jdw_torso))}",
+                  file=_sc2.stderr, flush=True)
+            H_task = np.nan_to_num(H_task, nan=0.0)
+            g_task = np.nan_to_num(g_task, nan=0.0)
 
         per_task["torso_orientation"] = {
             "A": A_torso, "b": b_torso, "weight": w_torso,
@@ -739,6 +757,9 @@ def _build_task_costs_from_snapshot(
 
         H_task += w_posture * (A_posture.T @ A_posture)
         g_task += -w_posture * (A_posture.T @ b_posture).flatten()
+        if not np.all(np.isfinite(H_task)):
+            H_task = np.nan_to_num(H_task, nan=0.0)
+            g_task = np.nan_to_num(g_task, nan=0.0)
 
         per_task["posture"] = {
             "A": A_posture, "b": b_posture, "weight": w_posture,
