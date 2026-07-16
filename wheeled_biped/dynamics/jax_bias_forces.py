@@ -1012,6 +1012,25 @@ def jax_bias_forces(qpos: Array, qvel: Array, constants: dict[str, Any]) -> Arra
     return jax_bias_forces_fk_arrays(qpos, qvel, fk_arrays, tuple(rest))
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# JIT-compiled bias forces — caches XLA compilation across calls.
+# JIT the _fk_arrays version (all args are traced arrays/tuples, no dicts).
+# ═══════════════════════════════════════════════════════════════════════════
+_jax_bias_forces_jit = jax.jit(jax_bias_forces_fk_arrays)
+
+
+def jax_bias_forces_jit(qpos: Array, qvel: Array, constants: dict[str, Any]) -> Array:
+    """Compute qfrc_bias via JIT-cached _fk_arrays path. (Fast on repeat calls.)"""
+    fk_arrays = extract_jax_fk_arrays(constants)
+    bias_arrays_full = extract_jax_bias_arrays(constants)
+    _, *rest = bias_arrays_full
+    return _jax_bias_forces_jit(qpos, qvel, fk_arrays, tuple(rest))
+
+
+# Replace the public API with the JIT-cached version
+jax_bias_forces = jax_bias_forces_jit
+
+
 def jax_gravity_forces(qpos: Array, constants: dict[str, Any]) -> Array:
     """Compute gravity forces: qfrc_bias(q, q̇=0).
 

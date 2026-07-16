@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import mujoco
@@ -335,3 +336,20 @@ def jax_forward_kinematics(qpos: Array, constants: dict[str, Any]) -> dict[str, 
     """
     fk_arrays = extract_jax_fk_arrays(constants)
     return jax_forward_kinematics_fk_arrays(qpos, fk_arrays)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# JIT-compiled FK — caches XLA compilation across calls.
+# JIT the _fk_arrays version (all args are traced arrays, no dicts).
+# ═══════════════════════════════════════════════════════════════════════════
+_jax_forward_kinematics_jit = jax.jit(jax_forward_kinematics_fk_arrays)
+
+
+def jax_forward_kinematics_jit(qpos: Array, constants: dict[str, Any]) -> dict[str, Array]:
+    """Compute world-frame body positions and orientations. (JIT-cached)"""
+    fk_arrays = extract_jax_fk_arrays(constants)
+    return _jax_forward_kinematics_jit(qpos, fk_arrays)
+
+
+# Replace public API with JIT-cached version
+jax_forward_kinematics = jax_forward_kinematics_jit

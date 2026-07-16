@@ -325,6 +325,51 @@ def contact_point_translational_jacobian(
     return Jp
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# JIT-cached contact Jacobian — pre-compute the jacfwd once at module level
+# by using a tuple-based inner function (no dicts), then wrapping with JIT.
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _cpwp_from_fk(qpos: Array, body_id: Array, local_point: Array,
+                   fk_body_pos: Array, fk_body_quat: Array) -> Array:
+    """Contact-point world position given pre-computed FK arrays."""
+    body_pos_w = fk_body_pos[body_id]
+    body_quat_w = fk_body_quat[body_id]
+    R_body_w = _quat_to_rotmat(body_quat_w)
+    return body_pos_w + R_body_w @ local_point
+
+
+# JIT-compiled Jacobian of _cpwp_from_fk w.r.t. qpos (arg 0).
+# All args are traced JAX arrays — no dicts, no Python ints.
+_jac_cpwp_fk = jax.jit(jax.jacfwd(_cpwp_from_fk, argnums=0))
+
+
+def contact_point_translational_jacobian_jit(
+    qpos: Array, body_id: int, local_point: Array, constants: dict[str, Any],
+) -> Array:
+    """Translational contact Jacobian Jp via JIT-cached jacfwd. (Fast on repeat.)"""
+    from wheeled_biped.dynamics.jax_kinematics import jax_forward_kinematics
+    fk = jax_forward_kinematics(qpos, constants)
+    base_origin_w = fk["body_pos_world"][1]
+    base_quat_w = fk["body_quat_world"][1]
+    R_base_w = _quat_to_rotmat(base_quat_w)
+    p_w = _cpwp_from_fk(qpos, jnp.array(body_id), local_point,
+                         fk["body_pos_world"], fk["body_quat_world"])
+    r = p_w - base_origin_w
+    Jp_base_linear = jnp.eye(3, dtype=qpos.dtype)
+    Jp_base_angular = -_skew3(r) @ R_base_w
+    jac_full_qpos = _jac_cpwp_fk(qpos, jnp.array(body_id), local_point,
+                                  fk["body_pos_world"], fk["body_quat_world"])
+    Jp_actuated = jac_full_qpos[:, 7:17]
+    Jp = jnp.concatenate([Jp_base_linear, Jp_base_angular, Jp_actuated], axis=1)
+    return Jp
+
+
+# Replace public API with JIT-cached version
+contact_point_translational_jacobian = contact_point_translational_jacobian_jit
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Contact point rotational Jacobian
 # ═══════════════════════════════════════════════════════════════════════

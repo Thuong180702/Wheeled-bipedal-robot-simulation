@@ -232,18 +232,46 @@ def _qpos_jac_to_qvel_jac(J_qpos: np.ndarray, qpos: np.ndarray) -> np.ndarray:
     return J_qvel
 
 
-def _compute_com_jac_jax(qpos_jax, constants):
-    """JAX-traced COM Jacobian in qpos space (3×17)."""
-    from wheeled_biped.dynamics.jax_kinematics import jax_forward_kinematics
-    from wheeled_biped.dynamics.jax_com import jax_compute_com
+# ═══════════════════════════════════════════════════════════════════════════
+# Pre-compiled Jacobians (module level — compiled ONCE, reused across calls).
+# Without JIT, jax.jacfwd on closures recompiles on every call.
+# ═══════════════════════════════════════════════════════════════════════════
 
-    def _com_fn(q):
-        fk = jax_forward_kinematics(q, constants)
-        return jax_compute_com(
-            fk["body_pos_world"], fk["body_quat_world"],
-            constants["body_ipos"], constants["body_mass"],
-        )
-    return jax.jacfwd(_com_fn)(qpos_jax)  # (3, 17)
+def _com_fn_from_fk(qpos: Array, fk_arrays: tuple, body_ipos: Array, body_mass: Array) -> Array:
+    """COM from FK arrays — no closures, JIT-compatible."""
+    from wheeled_biped.dynamics.jax_kinematics import jax_forward_kinematics_fk_arrays
+    from wheeled_biped.dynamics.jax_com import jax_compute_com
+    fk = jax_forward_kinematics_fk_arrays(qpos, fk_arrays)
+    return jax_compute_com(fk["body_pos_world"], fk["body_quat_world"], body_ipos, body_mass)
+
+
+_jac_com_jit = jax.jit(jax.jacfwd(_com_fn_from_fk, argnums=0))
+
+
+def _torso_quat_fn_from_fk(qpos: Array, fk_arrays: tuple, torso_id: Array) -> Array:
+    """Torso quaternion from FK arrays — no closures, JIT-compatible."""
+    from wheeled_biped.dynamics.jax_kinematics import jax_forward_kinematics_fk_arrays
+    fk = jax_forward_kinematics_fk_arrays(qpos, fk_arrays)
+    return fk["body_quat_world"][torso_id]
+
+
+_jac_torso_quat_jit = jax.jit(jax.jacfwd(_torso_quat_fn_from_fk, argnums=0))
+
+
+def _compute_com_jac_jax(qpos_jax, constants):
+    """JAX-traced COM Jacobian in qpos space (3×17). (JIT-cached)"""
+    from wheeled_biped.dynamics.jax_kinematics import extract_jax_fk_arrays
+    fk_arrays = extract_jax_fk_arrays(constants)
+    return _jac_com_jit(qpos_jax, fk_arrays,
+                        constants["body_ipos"], constants["body_mass"])
+
+
+def _compute_torso_quat_jac_jax(qpos_jax, constants):
+    """JAX-traced torso quaternion Jacobian in qpos space (4×17). (JIT-cached)"""
+    from wheeled_biped.dynamics.jax_kinematics import extract_jax_fk_arrays
+    fk_arrays = extract_jax_fk_arrays(constants)
+    torso_id = jnp.array(_get_torso_body_id(constants))
+    return _jac_torso_quat_jit(qpos_jax, fk_arrays, torso_id)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -311,15 +339,6 @@ def compute_com_jdot_qdot(
 # ═══════════════════════════════════════════════════════════════════════════
 # Task 3: Torso orientation / angular acceleration task
 # ═══════════════════════════════════════════════════════════════════════════
-
-def _compute_torso_quat_jac_jax(qpos_jax, constants):
-    """JAX-traced torso quaternion Jacobian in qpos space (4×17)."""
-    def _torso_quat_fn(q):
-        fk = _compute_fk(q, constants)
-        torso_id = _get_torso_body_id(constants)
-        return fk["body_quat_world"][torso_id]
-    return jax.jacfwd(_torso_quat_fn)(qpos_jax)  # (4, 17)
-
 
 def compute_torso_angular_velocity_jacobian(
     qpos: np.ndarray,

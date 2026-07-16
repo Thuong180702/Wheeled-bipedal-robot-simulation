@@ -427,6 +427,32 @@ def jax_mass_matrix(
     return jax_mass_matrix_fk_arrays(qpos, fk_arrays, mm_arrays)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# JIT-compiled mass matrix — caches XLA compilation across calls.
+# JIT the _fk_arrays version (all args are traced arrays/tuples, no dicts).
+# ═══════════════════════════════════════════════════════════════════════════
+_jax_mass_matrix_jit = jax.jit(jax_mass_matrix_fk_arrays)
+
+
+def jax_mass_matrix_jit(qpos: Array, constants: dict[str, Any]) -> Array:
+    """Compute M(q) via JIT-cached _fk_arrays path. (Fast on repeat calls.)"""
+    fk_arrays = extract_jax_fk_arrays(constants)
+    mm_arrays = (
+        constants["body_mass"],
+        constants["body_ipos"],
+        constants["body_iquat"],
+        constants["body_inertia"],
+        constants["joint_dof_adr"],
+        constants["body_order"],
+        constants["dof_armature"],
+    )
+    return _jax_mass_matrix_jit(qpos, fk_arrays, mm_arrays)
+
+
+# Replace the public API with the JIT-cached version
+jax_mass_matrix = jax_mass_matrix_jit
+
+
 def jax_actuated_mass_submatrix(
     qpos: Array,
     constants: dict[str, Any],
