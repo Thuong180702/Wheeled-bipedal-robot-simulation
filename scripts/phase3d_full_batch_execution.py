@@ -1103,6 +1103,7 @@ def run_single_push_suite(
     v3_ctrl: dict[str, Any] | None,
     resume: bool,
     jsonl_path: Path,
+    post_push_steps: int = POST_PUSH_STEPS,
     **kwargs,
 ) -> list[dict[str, Any]]:
     """Single-push tests: 5 heights × 4 directions × N seeds."""
@@ -1145,7 +1146,7 @@ def run_single_push_suite(
                     push_config=push_cfg,
                     push_step_start=PUSH_WARMUP_STEPS,
                     push_duration=PUSH_DURATION_STEPS,
-                    post_push_steps=POST_PUSH_STEPS,
+                    post_push_steps=post_push_steps,
                     v3_ctrl=v3_ctrl,
                     **kwargs,
                 )
@@ -1188,6 +1189,7 @@ def run_random_push_suite(
     v3_ctrl: dict[str, Any] | None,
     resume: bool,
     jsonl_path: Path,
+    post_push_steps: int = POST_PUSH_STEPS,
     **kwargs,
 ) -> list[dict[str, Any]]:
     """Random-push tests: 5 heights × N random seeds."""
@@ -1228,7 +1230,7 @@ def run_random_push_suite(
                 push_config=push_cfg,
                 push_step_start=PUSH_WARMUP_STEPS,
                 push_duration=PUSH_DURATION_STEPS,
-                post_push_steps=POST_PUSH_STEPS,
+                post_push_steps=post_push_steps,
                 v3_ctrl=v3_ctrl,
                 **kwargs,
             )
