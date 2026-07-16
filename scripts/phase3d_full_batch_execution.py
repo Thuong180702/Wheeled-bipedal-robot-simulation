@@ -1938,6 +1938,8 @@ def main():
     parser.add_argument("--no-jax-dynamics-warmup", action="store_false",
         dest="jax_dynamics_warmup",
         help="Skip JAX dynamics cache warmup")
+    parser.add_argument("--no-pre-warm", action="store_true",
+        help="Skip JAX snapshot pre-warming (faster startup, first steps will compile on-demand)")
     parser.add_argument("--jax-dynamics-diagnostic", action="store_true",
         help="Print JAX dynamics cache diagnostics")
     parser.add_argument("--jax-dynamics-fd-precision", type=str, default="float64",
@@ -2068,7 +2070,10 @@ def main():
             sys.exit(1)
 
         # ── Pre-warm ALL JAX dynamics (both cached AND non-cached paths, all contact counts) ──
-        print("Pre-warming JAX dynamics (cached + non-cached, 0/2/4 contacts — this will take 2-3 min)...")
+        if args.no_pre_warm:
+            print("Pre-warm SKIPPED (--no-pre-warm). JAX will compile on first use.")
+        else:
+            print("Pre-warming JAX dynamics (cached + non-cached, 0/2/4 contacts — this will take 2-3 min)...")
         _t_warm = time.perf_counter()
 
         # Non-cached path (prepare_phase3b_snapshot)
@@ -2087,17 +2092,29 @@ def main():
         _fake_contacts_2 = [_fake_contact(_l_wheel_id), _fake_contact(_r_wheel_id)]
         _fake_contacts_4 = [_fake_contact(_l_wheel_id), _fake_contact(_r_wheel_id), _fake_contact(_l_wheel_id), _fake_contact(_r_wheel_id)]
 
-        # Non-cached: 0, 2, 4 contacts
-        for _label, _cts in [("nc0", []), ("nc2", _fake_contacts_2), ("nc4", _fake_contacts_4)]:
-            _ = prepare_phase3b_snapshot(_label, data.qpos.copy(), np.zeros(model.nv), _cts, qp_c, max_contacts=4)
-        print(f"  Non-cached path pre-warmed: {(time.perf_counter() - _t_warm):.1f}s")
+        if not args.no_pre_warm:
+            # Non-cached: 0, 2, 4 contacts
+            for _label, _cts in [("nc0", []), ("nc2", _fake_contacts_2), ("nc4", _fake_contacts_4)]:
+                _ = prepare_phase3b_snapshot(_label, data.qpos.copy(), np.zeros(model.nv), _cts, qp_c, max_contacts=4)
+            print(f"  Non-cached path pre-warmed: {(time.perf_counter() - _t_warm):.1f}s")
 
         # Cached path (prepare_phase3b_snapshot_cached — used by incremental QP during rollout)
-        if jax_dynamics_cache is not None:
+        if jax_dynamics_cache is not None and not args.no_pre_warm:
             from wheeled_biped.wbc.phase3d3e_jax_dynamics_cache import prepare_phase3b_snapshot_cached
+            _cached_snaps = []
             for _label, _cts in [("c0", []), ("c2", _fake_contacts_2), ("c4", _fake_contacts_4)]:
-                _ = prepare_phase3b_snapshot_cached(jax_dynamics_cache, _label, data.qpos.copy(), np.zeros(model.nv), _cts, qp_c, max_contacts=4)
+                _snap = prepare_phase3b_snapshot_cached(jax_dynamics_cache, _label, data.qpos.copy(), np.zeros(model.nv), _cts, qp_c, max_contacts=4)
+                _cached_snaps.append(_snap)
             print(f"  Cached path pre-warmed: {(time.perf_counter() - _t_warm):.1f}s")
+
+            # Also pre-build full QP to compile rolling constraints + constraint JAX functions
+            from wheeled_biped.wbc.structured_qp_problem import build_structured_qp_from_phase3c_snapshot
+            for _snap in _cached_snaps:
+                _ = build_structured_qp_from_phase3c_snapshot(
+                    _snap, args.task_mode, args.rolling_mode, qp_c,
+                    padded_contacts=True, max_contacts=args.incremental_qp_max_contacts,
+                )
+            print(f"  QP build pre-warmed: {(time.perf_counter() - _t_warm):.1f}s")
         print(f"  Total pre-warm: {(time.perf_counter() - _t_warm):.1f}s")
 
         del _fake_contact, _fake_contacts_2, _fake_contacts_4
