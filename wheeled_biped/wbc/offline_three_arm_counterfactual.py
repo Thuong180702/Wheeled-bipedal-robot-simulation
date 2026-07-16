@@ -1386,17 +1386,24 @@ def _wrap_angle(angle: float) -> float:
 
 
 def _make_dummy_centroidal(mj_data: mujoco.MjData):
-    """Create a minimal centroidal-like object from raw MjData."""
+    """Create a minimal centroidal-like object from raw MjData.
+
+    Computes actual pitch/roll/yaw from the torso quaternion so the V3
+    controller receives correct orientation feedback (critical for
+    balance — the previous hardcoded 0.0 made V3 blind to tilt).
+    """
     from types import SimpleNamespace
     quat = mj_data.qpos[3:7]
-    _, _, yaw = _quat_to_rpy(quat)
+    roll, pitch, yaw = _quat_to_rpy(quat)
+    # World-frame angular velocity — approximate body rates for near-upright.
+    angvel_world = mj_data.qvel[3:6]  # (wx, wy, wz) in world frame
     return SimpleNamespace(
-        body_pitch_x=0.0,
-        body_pitch_rate_x=0.0,
-        body_roll_y=0.0,
-        body_roll_rate_y=0.0,
-        body_yaw_z=yaw,
-        body_yaw_rate_z=float(mj_data.qvel[5]),
+        body_pitch_x=float(pitch),
+        body_pitch_rate_x=float(angvel_world[0]),  # world wx ≈ body pitch rate
+        body_roll_y=float(roll),
+        body_roll_rate_y=float(angvel_world[1]),   # world wy ≈ body roll rate
+        body_yaw_z=float(yaw),
+        body_yaw_rate_z=float(angvel_world[2]),    # world wz = body yaw rate
         com_pos=mj_data.qpos[0:3].copy(),
         com_vel=mj_data.qvel[0:3].copy(),
         left_wheel_contact=True,
