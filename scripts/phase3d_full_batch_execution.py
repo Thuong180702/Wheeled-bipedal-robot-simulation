@@ -545,11 +545,28 @@ def run_three_arm_rollout(
 
     _v3_available = v3_ctrl is not None and v3_ctrl.get("initialized", False)
 
-    # ── Initialize clones ────────────────────────────────────────────────────
+    # ── Initialize state ────────────────────────────────────────────────────
     data.qpos[:] = scenario_qpos.copy()
     data.qvel[:] = scenario_qvel.copy()
     mujoco.mj_forward(model, data)
 
+    # ── Stabilize with V3 controller before cloning (matching production path) ─
+    # Without this, all 3 arms start from an uncontrolled free-fall state
+    # which V3 was never designed to recover from (WBC handles it but the
+    # comparison is unfair).  100 steps with V3 ≈ 0.5s settling time.
+    if _v3_available and not single_arm:
+        _stab_ctx = _build_v3_controller_context(
+            model, data, v3_ctrl,
+            eq_joint=_default_eq_joint(),
+            height_ref=float(data.qpos[2]),
+        )
+        for _ in range(100):
+            _tau_stab = _compute_v3_torque_real(data, model, v3_ctrl, _stab_ctx)
+            data.ctrl[:] = _tau_stab
+            for _ in range(n_substeps):
+                mujoco.mj_step(model, data)
+
+    # ── Initialize clones ────────────────────────────────────────────────────
     clone_result = clone_three_sim_states(model, data)
     clones = clone_result["clones"]
 
