@@ -46,11 +46,13 @@ DEFAULT_KD_POSTURE = 2.0
 # ── Default task weights — balanced_default mode ─────────────────────────
 
 BALANCED_DEFAULT_WEIGHTS = {
-    "w_com": 5.0,
+    "w_com": 3.0,             # reduced: less aggressive COM → less drift coupling
     "w_torso": 3.0,
-    "w_posture": 2.0,
+    "w_posture": 1.5,         # reduced: let V3's natural posture dominate
     "w_wheel": 0.5,
     "w_force_distribution": 0.1,
+    "w_com_xy": 5.0,          # STRONGER: prioritize drift damping
+    "w_yaw_damping": 1.0,     # STRONGER: prioritize yaw stability
     "w_qdd": 1.0,
     "w_tau": 0.001,
     "w_lambda": 0.001,
@@ -63,6 +65,8 @@ FEASIBILITY_ONLY_WEIGHTS = {
     "w_posture": 0.0,
     "w_wheel": 0.0,
     "w_force_distribution": 0.0,
+    "w_com_xy": 0.0,
+    "w_yaw_damping": 0.0,
     "w_qdd": 1.0,
     "w_tau": 0.001,
     "w_lambda": 0.001,
@@ -75,6 +79,8 @@ POSTURE_PRIORITY_WEIGHTS = {
     "w_posture": 10.0,
     "w_wheel": 0.5,
     "w_force_distribution": 0.1,
+    "w_com_xy": 2.0,
+    "w_yaw_damping": 0.3,
     "w_qdd": 1.0,
     "w_tau": 0.001,
     "w_lambda": 0.001,
@@ -87,6 +93,8 @@ TORSO_PRIORITY_WEIGHTS = {
     "w_posture": 1.0,
     "w_wheel": 0.5,
     "w_force_distribution": 0.1,
+    "w_com_xy": 2.0,
+    "w_yaw_damping": 0.3,
     "w_qdd": 1.0,
     "w_tau": 0.001,
     "w_lambda": 0.001,
@@ -99,6 +107,8 @@ COM_PRIORITY_WEIGHTS = {
     "w_posture": 1.0,
     "w_wheel": 0.5,
     "w_force_distribution": 0.1,
+    "w_com_xy": 4.0,
+    "w_yaw_damping": 0.5,
     "w_qdd": 1.0,
     "w_tau": 0.001,
     "w_lambda": 0.001,

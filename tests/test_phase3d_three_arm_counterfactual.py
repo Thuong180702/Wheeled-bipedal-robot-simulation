@@ -604,3 +604,715 @@ def test_readiness_gates_fail_on_assist_falls():
 
     result = check_readiness_gates(report)
     assert not result["all_passed"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Adaptive assist tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _make_stable_state() -> dict:
+    """Return a state dict representing near-perfect stability at model nominal height."""
+    return {
+        "pitch": 0.0,
+        "roll": 0.0,
+        "pitch_rate": 0.0,
+        "roll_rate": 0.0,
+        "com_vel_xy": 0.0,
+        "height": 0.53,
+        "height_target": 0.53,
+        "height_model_nominal": 0.53,
+        # sigma_height omitted → uses ADAPTIVE_HEIGHT_SIGMA default
+    }
+
+
+def _make_unstable_state() -> dict:
+    """Return a state dict representing a large disturbance."""
+    return {
+        "pitch": 0.3,
+        "roll": 0.25,
+        "pitch_rate": 1.5,
+        "roll_rate": 1.2,
+        "com_vel_xy": 0.8,
+        "height": 0.45,
+        "height_target": 0.53,
+        "height_model_nominal": 0.53,
+    }
+
+
+class TestAdaptiveAssistTorque:
+    """Tests for compute_adaptive_assist_torque."""
+
+    def test_import(self):
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+            ADAPTIVE_ASSIST_ALPHA_MAX,
+            ADAPTIVE_ASSIST_K_ROLE,
+            ADAPTIVE_HEIGHT_MODEL_NOMINAL,
+            ADAPTIVE_HEIGHT_SIGMA,
+            ADAPTIVE_AGREEMENT_SOFT_EPS,
+            ADAPTIVE_PUSH_FORCE_THRESHOLD,
+            ADAPTIVE_DIVERGENCE_HEIGHT_THRESHOLD,
+            ADAPTIVE_DIVERGENCE_PITCH_THRESHOLD,
+            ADAPTIVE_HYSTERESIS_ALPHA_ATTACK,
+            ADAPTIVE_HYSTERESIS_ALPHA_DECAY,
+            ADAPTIVE_HYSTERESIS_TEMPERATURE,
+        )
+        assert ADAPTIVE_ASSIST_ALPHA_MAX > 0
+        assert ADAPTIVE_ASSIST_K_ROLE.shape == (10,)
+        assert 0.50 < ADAPTIVE_HEIGHT_MODEL_NOMINAL < 0.60
+        assert ADAPTIVE_HEIGHT_SIGMA > 0
+        assert ADAPTIVE_AGREEMENT_SOFT_EPS > 0
+        assert ADAPTIVE_PUSH_FORCE_THRESHOLD > 0
+        assert ADAPTIVE_DIVERGENCE_HEIGHT_THRESHOLD > 0
+        assert ADAPTIVE_DIVERGENCE_PITCH_THRESHOLD > 0
+        assert 0.0 <= ADAPTIVE_HYSTERESIS_ALPHA_DECAY < ADAPTIVE_HYSTERESIS_ALPHA_ATTACK <= 1.0
+
+    def test_stable_state_high_alpha(self, constants):
+        """At stable state, posture joints get meaningful alpha."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+
+        # All torques have same sign so agreement ≈ 1.0 for active joints
+        tau_v3 = np.array([0.1, 0.03, -0.5, -0.8, 0.2, 0.1, 0.03, -0.5, -0.8, 0.2])
+        tau_wbc = np.array([0.15, 0.05, -0.6, -1.0, 0.25, 0.15, 0.05, -0.6, -1.0, 0.25])
+        state = _make_stable_state()
+
+        result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+
+        assert result["tau_cmd_assist"].shape == (10,)
+        # Stable state → g ≈ 1.0 → posture joints get ~alpha_max * K_role
+        assert result["g_stability"] > 0.9
+        # hip_pitch (index 2, 7) should have higher alpha than hip_roll (0, 5)
+        alpha = result["alpha_per_joint"]
+        assert alpha[2] > alpha[0]  # l_hip_pitch > l_hip_roll
+        assert alpha[3] > alpha[1]  # l_knee > l_hip_yaw
+        assert alpha[7] > alpha[5]  # r_hip_pitch > r_hip_roll
+
+    def test_unstable_state_zero_alpha(self, constants):
+        """At unstable state (large disturbance), alpha → 0 → pure V3."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+
+        tau_v3 = np.array([5.0, 0.0, 8.0, -10.0, 15.0, 5.0, 0.0, 8.0, -10.0, 15.0])
+        tau_wbc = np.array([2.0, 1.0, 3.0, -4.0, 5.0, 2.0, 1.0, 3.0, -4.0, 5.0])
+        state = _make_unstable_state()
+
+        result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+
+        # Unstable → g ≈ 0
+        assert result["g_stability"] < 0.2
+        # All alpha values should be very small
+        assert np.all(result["alpha_per_joint"] < 0.05)
+        # tau_cmd should be very close to tau_v3
+        np.testing.assert_allclose(result["tau_cmd_assist"], tau_v3, atol=0.5)
+
+    def test_per_joint_alpha_shape(self, constants):
+        """Alpha is a per-joint vector of shape (10,)."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10)
+        state = _make_stable_state()
+
+        result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+
+        assert result["alpha_per_joint"].shape == (10,)
+        assert np.all(result["alpha_per_joint"] >= 0.0)
+        assert np.all(result["alpha_per_joint"] <= result["alpha_per_joint"].max() + 1e-10)
+
+    def test_directional_gate_opposing_signs(self, constants):
+        """When WBC opposes V3, continuous agreement → 0.0 → alpha ≈ 0."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+
+        # V3 and WBC push in opposite directions
+        tau_v3 = np.array([5.0, 2.0, 8.0, -10.0, 15.0, 5.0, 2.0, 8.0, -10.0, 15.0])
+        tau_wbc = np.array([-3.0, -1.0, -5.0, 6.0, -8.0, -3.0, -1.0, -5.0, 6.0, -8.0])
+        state = _make_stable_state()
+
+        result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+
+        # Continuous tanh agreement: opposing signs → agreement ≤ 0.02
+        agreement = result["agreement"]
+        for j in range(10):
+            if abs(tau_v3[j]) > 0.01:
+                assert agreement[j] < 0.05, \
+                    f"Joint {j}: agreement={agreement[j]} for opposing signs"
+        # Alpha should be correspondingly near zero
+        alpha = result["alpha_per_joint"]
+        for j in range(10):
+            if abs(tau_v3[j]) > 0.01:
+                assert alpha[j] < 0.02, \
+                    f"Joint {j}: alpha={alpha[j]} too high for opposing signs"
+
+    def test_directional_gate_reinforcing_signs(self, constants):
+        """When WBC reinforces V3 (same direction), continuous agreement ≈ 1.0."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+
+        # V3 and WBC push in same direction
+        tau_v3 = np.array([5.0, 2.0, 8.0, -10.0, 15.0, 5.0, 2.0, 8.0, -10.0, 15.0])
+        tau_wbc = np.array([8.0, 3.0, 10.0, -15.0, 20.0, 8.0, 3.0, 10.0, -15.0, 20.0])
+        state = _make_stable_state()
+
+        result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+
+        # Continuous tanh agreement: same sign → agreement > 0.95
+        agreement = result["agreement"]
+        for j in range(10):
+            if abs(tau_v3[j]) > 0.01:
+                assert agreement[j] > 0.9, \
+                    f"Joint {j}: agreement={agreement[j]} for same direction"
+
+    def test_clips_to_actuator_limits(self, constants):
+        """Output is always clipped to actuator torque limits."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+
+        # Very large torques
+        tau_v3 = np.ones(10) * 100.0
+        tau_wbc = np.ones(10) * 200.0
+        state = _make_stable_state()
+
+        result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+
+        assert np.all(result["tau_cmd_assist"] >= constants["tau_min"])
+        assert np.all(result["tau_cmd_assist"] <= constants["tau_max"])
+
+    def test_return_keys_compatibility(self, constants):
+        """Return dict has all keys expected by the rollout loop."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10) * 0.1
+        state = _make_stable_state()
+
+        result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+
+        # Required keys for backward compatibility
+        required_keys = [
+            "tau_cmd_assist", "tau_assist_raw", "tau_assist_clipped",
+            "alpha", "assist_limit_fraction", "assist_limit",
+            "clipping_count", "saturation_count", "clipping_mask",
+            "max_abs_assist_raw", "max_abs_assist_clipped",
+            "assist_active",
+        ]
+        for key in required_keys:
+            assert key in result, f"Missing required key: {key}"
+
+        # Adaptive-specific keys
+        adaptive_keys = [
+            "alpha_per_joint", "g_stability", "agreement", "K_role", "adaptive",
+            "g_height", "g_push", "g_divergence",
+        ]
+        for key in adaptive_keys:
+            assert key in result, f"Missing adaptive key: {key}"
+
+        # New continuous gate keys
+        assert 0.0 <= result["g_height"] <= 1.0
+        assert result["g_push"] == 1.0  # default when not passed
+        assert result["g_divergence"] == 1.0  # default when not passed
+
+    def test_zero_correction_no_change(self, constants):
+        """When WBC == V3, output equals V3 regardless of state."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+
+        tau = np.array([0.5, -0.3, 1.0, -1.5, 0.0, 0.5, -0.3, 1.0, -1.5, 0.0])
+        state = _make_stable_state()
+
+        result = compute_adaptive_assist_torque(tau, tau.copy(), state, constants)
+
+        np.testing.assert_allclose(result["tau_cmd_assist"], tau)
+
+    def test_height_error_reduces_stability(self, constants):
+        """Height tracking error reduces the stability gate."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10) * 0.5
+        state_nominal = _make_stable_state()
+        state_offset = _make_stable_state()
+        state_offset["height"] = 0.48  # 5cm below keyframe (0.53)
+        state_offset["height_target"] = 0.53
+
+        result_nominal = compute_adaptive_assist_torque(tau_v3, tau_wbc, state_nominal, constants)
+        result_offset = compute_adaptive_assist_torque(tau_v3, tau_wbc, state_offset, constants)
+
+        # Height error should reduce stability gate
+        assert result_offset["g_stability"] < result_nominal["g_stability"]
+
+    def test_adaptive_flag_in_result(self, constants):
+        """Result dict has adaptive=True."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10) * 0.1
+        state = _make_stable_state()
+
+        result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+
+        assert result["adaptive"] is True
+
+    def test_increasing_pitch_reduces_alpha(self, constants):
+        """As pitch increases, per-joint alpha decreases monotonically."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10) * 0.5
+
+        alphas = []
+        for pitch in [0.0, 0.05, 0.10, 0.20, 0.30]:
+            state = _make_stable_state()
+            state["pitch"] = pitch
+            result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+            alphas.append(float(np.mean(result["alpha_per_joint"])))
+
+        # Alpha should decrease monotonically with increasing pitch
+        for i in range(len(alphas) - 1):
+            assert alphas[i] >= alphas[i + 1] - 1e-10, \
+                f"Alpha not monotonic: {alphas}"
+
+    # ── New tests for continuous (no if/else) gate system ──────────────────
+
+    def test_height_model_confidence_at_nominal(self, constants):
+        """g_height ≈ 1.0 at model nominal height."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+            ADAPTIVE_HEIGHT_MODEL_NOMINAL,
+        )
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10) * 0.5
+        state = _make_stable_state()
+        state["height"] = ADAPTIVE_HEIGHT_MODEL_NOMINAL
+        state["height_target"] = ADAPTIVE_HEIGHT_MODEL_NOMINAL
+
+        result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+        assert result["g_height"] > 0.95  # near 1.0 at nominal
+
+    def test_height_model_confidence_decays_with_offset(self, constants):
+        """g_height decays smoothly as height deviates from model nominal."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+            ADAPTIVE_HEIGHT_MODEL_NOMINAL,
+            ADAPTIVE_HEIGHT_SIGMA,
+        )
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10) * 0.5
+
+        g_heights = []
+        for dh in [0.0, 0.02, 0.04, 0.06, 0.10]:
+            state = _make_stable_state()
+            state["height"] = ADAPTIVE_HEIGHT_MODEL_NOMINAL + dh
+            state["height_target"] = state["height"]
+            result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+            g_heights.append(result["g_height"])
+
+        # g_height should decrease monotonically with increasing offset
+        for i in range(len(g_heights) - 1):
+            assert g_heights[i] >= g_heights[i + 1] - 1e-10, \
+                f"g_height not monotonic: {g_heights}"
+        # At dh=0.04 with sigma=0.015: g_height = exp(-(0.04/0.015)²) ≈ 0.0008
+        assert g_heights[2] < 0.005, \
+            f"g_height at dh=0.04 should be ~0.001, got {g_heights[2]}"
+
+    def test_continuous_agreement_smooth_transition(self, constants):
+        """Agreement transitions smoothly through 0.5 when V3 crosses zero."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+        # WBC correction is always +0.3 in same direction as V3's magnitude
+        # So when V3 > 0: V3 and correction have same sign → reinforcing
+        # When V3 < 0: V3 and correction have opposite sign → opposing
+        # When V3 ≈ 0: correction ≈ 0.3 positive → agreement depends on V3 sign
+        agreements_crossing = []
+        for v3_val in [-0.5, -0.1, -0.01, 0.0, 0.01, 0.1, 0.5]:
+            tau_v3 = np.ones(10) * v3_val
+            # WBC = V3 + correction where correction always = 0.3 (positive)
+            tau_wbc = tau_v3 + 0.3
+            state = _make_stable_state()
+            result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+            agreements_crossing.append(float(result["agreement"][0]))
+
+        # V3 negative: v3*corr < 0 → agreement < 0.5 (opposing)
+        assert agreements_crossing[0] < 0.1  # v3=-0.5: strongly negative
+        assert agreements_crossing[1] < 0.5  # v3=-0.1: weakly negative
+        # V3 near zero: agreement ≈ 0.5 (neutral)
+        assert 0.4 < agreements_crossing[3] < 0.6  # v3=0.0: neutral
+        # V3 positive: v3*corr > 0 → agreement > 0.5 (reinforcing)
+        assert agreements_crossing[5] > 0.5   # v3=0.1: weakly positive
+        assert agreements_crossing[6] > 0.9   # v3=0.5: strongly reinforcing
+
+    def test_push_gate_reduces_alpha(self, constants):
+        """g_push < 1.0 reduces per-joint alpha."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10) * 0.5
+        state = _make_stable_state()
+
+        result_full = compute_adaptive_assist_torque(
+            tau_v3, tau_wbc, state, constants, g_push=1.0,
+        )
+        result_attenuated = compute_adaptive_assist_torque(
+            tau_v3, tau_wbc, state, constants, g_push=0.1,
+        )
+
+        assert result_full["g_push"] == 1.0
+        assert result_attenuated["g_push"] == 0.1
+        # Attenuated alpha should be ~10× smaller
+        assert np.mean(result_attenuated["alpha_per_joint"]) < \
+               np.mean(result_full["alpha_per_joint"]) * 0.2
+
+    def test_divergence_gate_reduces_alpha(self, constants):
+        """g_divergence < 1.0 reduces per-joint alpha."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10) * 0.5
+        state = _make_stable_state()
+
+        result_full = compute_adaptive_assist_torque(
+            tau_v3, tau_wbc, state, constants, g_divergence=1.0,
+        )
+        result_attenuated = compute_adaptive_assist_torque(
+            tau_v3, tau_wbc, state, constants, g_divergence=0.5,
+        )
+
+        assert result_full["g_divergence"] == 1.0
+        assert result_attenuated["g_divergence"] == 0.5
+        assert np.mean(result_attenuated["alpha_per_joint"]) < \
+               np.mean(result_full["alpha_per_joint"]) * 0.7
+
+    def test_all_gates_combined_multiplicative(self, constants):
+        """All continuous gates multiply together to scale alpha."""
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10) * 0.5
+        state = _make_stable_state()
+
+        # All gates at 0.5
+        result = compute_adaptive_assist_torque(
+            tau_v3, tau_wbc, state, constants,
+            g_push=0.5, g_divergence=0.5,
+        )
+        # alpha should also be ~0.5² = 0.25 of full (g_height also near 1.0 here)
+        result_full = compute_adaptive_assist_torque(
+            tau_v3, tau_wbc, state, constants,
+            g_push=1.0, g_divergence=1.0,
+        )
+        ratio = np.mean(result["alpha_per_joint"]) / max(np.mean(result_full["alpha_per_joint"]), 1e-8)
+        # Expect roughly 0.25, but allow range due to g_height not exactly 1.0
+        assert 0.15 < ratio < 0.40, f"Expected α ratio ~0.25, got {ratio}"
+
+    def test_low_tiny_height_gate_near_zero(self, constants):
+        """At low_tiny (0.63m, 4cm below model nominal), g_height is low.
+
+        This is the key test for the root cause of the safety_fail:
+        WBC model confidence should be low at extreme heights.
+        """
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+            ADAPTIVE_HEIGHT_MODEL_NOMINAL,
+        )
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10) * 0.5
+        state = _make_stable_state()
+        state["height"] = 0.48  # 5cm below keyframe
+        state["height_target"] = 0.48  # commanded height matches
+        state["height_model_nominal"] = ADAPTIVE_HEIGHT_MODEL_NOMINAL  # 0.53
+
+        result = compute_adaptive_assist_torque(tau_v3, tau_wbc, state, constants)
+
+        # g_height for 0.48 vs nominal 0.53: dh = -0.05, sigma=0.015
+        # g_height = exp(-(0.05/0.015)²) ≈ 0.00001
+        assert result["g_height"] < 0.005, \
+            f"Expected g_height ~0 at h=0.48, got {result['g_height']}"
+        # Mean alpha should be essentially zero at this extreme height
+        assert np.mean(result["alpha_per_joint"]) < 0.005, \
+            f"Alpha should be essentially zero at extreme height, got {np.mean(result['alpha_per_joint'])}"
+
+    def test_g_height_uses_min_of_cmd_and_act(self, constants):
+        """g_height = min(cmd_confidence, act_confidence) — continuous.
+
+        Protects against both bad commands AND state drift without positive feedback.
+        """
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            compute_adaptive_assist_torque,
+        )
+        tau_v3 = np.zeros(10)
+        tau_wbc = np.ones(10) * 0.5
+
+        # Case 1: Both at nominal → g_height ≈ 1.0
+        state_nominal = _make_stable_state()
+        result_nom = compute_adaptive_assist_torque(tau_v3, tau_wbc, state_nominal, constants)
+        assert result_nom["g_height"] > 0.95
+
+        # Case 2: Command at 0.515 (1.5cm low), actual at command → g_height ≈ 0.37
+        state_cmd_low = _make_stable_state()
+        state_cmd_low["height"] = 0.515
+        state_cmd_low["height_target"] = 0.515
+        result_cmd_low = compute_adaptive_assist_torque(tau_v3, tau_wbc, state_cmd_low, constants)
+
+        # Case 3: Command nominal (0.53), actual drifted to 0.51 (2cm off)
+        # → g_height = act_confidence ≈ 0.17, worse than cmd at 0.515
+        state_drifted = _make_stable_state()
+        state_drifted["height"] = 0.51
+        state_drifted["height_target"] = 0.53
+        result_drifted = compute_adaptive_assist_torque(tau_v3, tau_wbc, state_drifted, constants)
+
+        # Drifted g_height (min of cmd=1.0, act=0.169) should be act_confidence
+        # Much lower than cmd_low (both=0.368) — protects against state drift
+        assert result_drifted["g_height"] < result_cmd_low["g_height"], \
+            f"Drifted ({result_drifted['g_height']:.4f}) should be < cmd_low ({result_cmd_low['g_height']:.4f})"
+        # Verify drifted g_height ≈ act_confidence (0.65 - 0.67 = -2cm, sigma=1.5cm)
+        assert 0.15 < result_drifted["g_height"] < 0.20, \
+            f"Drifted g_height should be ~0.169, got {result_drifted['g_height']:.4f}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Posture-Guided Assist Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+    compute_posture_guided_assist, POSTURE_GUIDED_DQ_MAX,
+    POSTURE_GUIDED_JOINT_SCALE, POSTURE_GUIDED_Q_MIN, POSTURE_GUIDED_Q_MAX,
+)
+
+
+def _make_pg_state(pitch=0.0, roll=0.0, height=0.53, height_target=0.53):
+    """Helper to create posture-guided state dict."""
+    return {
+        "pitch": float(pitch), "roll": float(roll),
+        "pitch_rate": 0.0, "roll_rate": 0.0,
+        "com_vel_xy": 0.0, "height": float(height),
+        "height_target": float(height_target),
+        "height_model_nominal": 0.53, "sigma_height": 0.015,
+    }
+
+
+def _make_pg_constants():
+    """Helper to create minimal constants for posture-guided tests."""
+    return {
+        "tau_min": np.full(10, -100.0, dtype=np.float64),
+        "tau_max": np.full(10, 100.0, dtype=np.float64),
+        "tau_limit": np.full(10, 100.0, dtype=np.float64),
+        "nu": 26,
+    }
+
+
+class TestPostureGuidedAssist:
+    """Tests for compute_posture_guided_assist — WBC as planner, V3 as executor."""
+
+    def test_zero_qdd_returns_unchanged_q_ref(self):
+        """When WBC recommends zero acceleration, q_ref should not change."""
+        qdd_wbc = np.zeros(26, dtype=np.float64)
+        # Use q_ref within the valid joint limits (knee: 0.80–2.20 rad)
+        q_ref = np.array([0.0, 0.0, 0.93, 1.75, 0.0, 0.0, 0.0, 0.93, 1.75, 0.0],
+                         dtype=np.float64)
+        state = _make_pg_state()
+        constants = _make_pg_constants()
+
+        result = compute_posture_guided_assist(qdd_wbc, q_ref, state, constants)
+
+        np.testing.assert_array_almost_equal(result["q_ref_adapted"], q_ref)
+        assert np.max(np.abs(result["dq_applied"])) == 0.0
+
+    def test_only_posture_joints_adapt(self):
+        """Only hip_pitch and knee should receive WBC guidance (joint_scale > 0)."""
+        qdd_wbc = np.zeros(26, dtype=np.float64)
+        qdd_wbc[6:16] = 1.0  # all joints get same WBC recommendation
+        q_ref = np.zeros(10, dtype=np.float64)
+        state = _make_pg_state()
+        constants = _make_pg_constants()
+
+        result = compute_posture_guided_assist(qdd_wbc, q_ref, state, constants)
+
+        dq = result["dq_applied"]
+        # Posture joints (hip_pitch[2,7], knee[3,8]) should have non-zero delta
+        assert abs(dq[2]) > 0, f"hip_pitch_l should adapt, got {dq[2]}"
+        assert abs(dq[3]) > 0, f"knee_l should adapt, got {dq[3]}"
+        assert abs(dq[7]) > 0, f"hip_pitch_r should adapt, got {dq[7]}"
+        assert abs(dq[8]) > 0, f"knee_r should adapt, got {dq[8]}"
+        # Non-posture joints should have zero delta
+        assert dq[0] == 0.0, f"hip_roll_l should not adapt, got {dq[0]}"
+        assert dq[1] == 0.0, f"hip_yaw_l should not adapt, got {dq[1]}"
+        assert dq[4] == 0.0, f"wheel_l should not adapt, got {dq[4]}"
+        assert dq[5] == 0.0, f"hip_roll_r should not adapt, got {dq[5]}"
+        assert dq[6] == 0.0, f"hip_yaw_r should not adapt, got {dq[6]}"
+        assert dq[9] == 0.0, f"wheel_r should not adapt, got {dq[9]}"
+
+    def test_unstable_state_blocks_adaptation(self):
+        """When robot is unstable (large pitch), gate should close → no adaptation."""
+        qdd_wbc = np.zeros(26, dtype=np.float64)
+        qdd_wbc[9] = 10.0  # large knee_L acceleration (qvel index 9)
+        q_ref = np.array([0.0, 0.0, 0.93, 1.75, 0.0, 0.0, 0.0, 0.93, 1.75, 0.0],
+                         dtype=np.float64)
+        # Large pitch + roll → g_stability ≈ 0
+        state = _make_pg_state(pitch=0.3, roll=0.2)
+        constants = _make_pg_constants()
+
+        result = compute_posture_guided_assist(qdd_wbc, q_ref, state, constants)
+
+        assert result["g_stability"] < 1e-6, \
+            f"At pitch=0.3, roll=0.2, g_stability should be ~0, got {result['g_stability']:.10f}"
+        assert result["alpha_posture"] < 0.01, \
+            f"Unstable state should block adaptation, got alpha={result['alpha_posture']:.6f}"
+        assert not result["posture_active"]
+        np.testing.assert_array_almost_equal(result["q_ref_adapted"], q_ref)
+
+    def test_perfect_stability_allows_adaptation(self):
+        """At perfect stability, gate should allow full adaptation rate."""
+        qdd_wbc = np.zeros(26, dtype=np.float64)
+        qdd_wbc[8] = 1.0  # small knee acceleration
+        q_ref = np.zeros(10, dtype=np.float64)
+        state = _make_pg_state(pitch=0.0, roll=0.0, height=0.53, height_target=0.53)
+        constants = _make_pg_constants()
+
+        result = compute_posture_guided_assist(qdd_wbc, q_ref, state, constants)
+
+        assert result["g_stability"] > 0.99, \
+            f"Perfect stability should give g≈1, got {result['g_stability']:.6f}"
+        assert result["g_height"] > 0.99, \
+            f"At nominal height, g_height should be 1, got {result['g_height']:.6f}"
+        assert result["alpha_posture"] > 0.5, \
+            f"Full gate should allow adaptation, got alpha={result['alpha_posture']:.6f}"
+        assert result["posture_active"]
+
+    def test_adaptation_respects_dq_max(self):
+        """q_ref adaptation should never exceed POSTURE_GUIDED_DQ_MAX * dt per step."""
+        qdd_wbc = np.zeros(26, dtype=np.float64)
+        qdd_wbc[8] = 1000.0  # extremely large WBC recommendation
+        q_ref = np.zeros(10, dtype=np.float64)
+        state = _make_pg_state()
+        constants = _make_pg_constants()
+        dt = 0.01
+
+        result = compute_posture_guided_assist(qdd_wbc, q_ref, state, constants, dt=dt)
+
+        max_allowed = POSTURE_GUIDED_DQ_MAX * dt
+        assert np.max(np.abs(result["dq_applied"])) <= max_allowed + 1e-15, \
+            f"dq_applied max {np.max(np.abs(result['dq_applied']))} exceeds limit {max_allowed}"
+
+    def test_q_ref_clipped_to_joint_limits(self):
+        """Adapted q_ref should respect joint limits from POSTURE_GUIDED_Q_MIN/MAX."""
+        qdd_wbc = np.zeros(26, dtype=np.float64)
+        # Large negative acceleration for knee (index 3)
+        qdd_wbc[9] = -500.0
+        q_ref = np.array([0.0, 0.0, 0.3, -1.7, 0.0, 0.0, 0.0, 0.3, -1.7, 0.0],
+                         dtype=np.float64)
+        state = _make_pg_state()
+        constants = _make_pg_constants()
+
+        result = compute_posture_guided_assist(qdd_wbc, q_ref, state, constants)
+
+        assert np.all(result["q_ref_adapted"] >= POSTURE_GUIDED_Q_MIN), \
+            f"q_ref_adapted below min: {result['q_ref_adapted']}"
+        assert np.all(result["q_ref_adapted"] <= POSTURE_GUIDED_Q_MAX), \
+            f"q_ref_adapted above max: {result['q_ref_adapted']}"
+        # Knee at index 3 should hit limit: POSTURE_GUIDED_Q_MIN[3] = -1.80
+        assert result["q_ref_adapted"][3] >= -1.80 - 1e-10
+
+    def test_no_torque_blend_output(self):
+        """Posture-guided assist should NOT return any torque command — only q_ref."""
+        qdd_wbc = np.zeros(26, dtype=np.float64)
+        qdd_wbc[8] = 0.5
+        q_ref = np.zeros(10, dtype=np.float64)
+        state = _make_pg_state()
+        constants = _make_pg_constants()
+
+        result = compute_posture_guided_assist(qdd_wbc, q_ref, state, constants)
+
+        # Must have q_ref adaptation fields
+        assert "q_ref_adapted" in result
+        assert "dq_applied" in result
+        assert "alpha_posture" in result
+        # Must NOT have torque blend fields
+        assert "tau_cmd_assist" not in result, \
+            "Posture-guided should NOT output torque command"
+        assert "alpha_per_joint" not in result, \
+            "Posture-guided should NOT output per-joint alpha"
+
+    def test_push_gate_blocks_adaptation(self):
+        """During push, g_push → 0 should block posture adaptation."""
+        qdd_wbc = np.zeros(26, dtype=np.float64)
+        qdd_wbc[9] = 1.0  # knee_L qdd index
+        q_ref = np.zeros(10, dtype=np.float64)
+        state = _make_pg_state()
+        constants = _make_pg_constants()
+
+        result = compute_posture_guided_assist(
+            qdd_wbc, q_ref, state, constants, g_push=1e-6,
+        )
+
+        assert result["alpha_posture"] < 0.01, \
+            f"Push gate should block adaptation, got alpha={result['alpha_posture']:.6f}"
+        assert not result["posture_active"]
+
+    def test_divergence_gate_blocks_adaptation(self):
+        """When assist clone diverges from V3, g_div → 0 should block adaptation."""
+        qdd_wbc = np.zeros(26, dtype=np.float64)
+        qdd_wbc[9] = 1.0  # knee_L qdd index
+        q_ref = np.zeros(10, dtype=np.float64)
+        state = _make_pg_state()
+        constants = _make_pg_constants()
+
+        result = compute_posture_guided_assist(
+            qdd_wbc, q_ref, state, constants, g_divergence=1e-6,
+        )
+
+        assert result["alpha_posture"] < 0.01, \
+            f"Divergence gate should block adaptation, got alpha={result['alpha_posture']:.6f}"
+        assert not result["posture_active"]
+
+    def test_adaptation_direction_follows_wbc_sign(self):
+        """Adaptation should follow WBC's recommended direction (same sign as qdd)."""
+        qdd_wbc = np.zeros(26, dtype=np.float64)
+        # qvel indices: 6=hip_roll_L, 7=hip_yaw_L, 8=hip_pitch_L, 9=knee_L, ...
+        # knee_L is qvel[9], maps to dq_applied[3]
+        qdd_wbc[9] = 5.0  # positive knee_L acceleration → joint index 3
+        q_ref = np.zeros(10, dtype=np.float64)
+        state = _make_pg_state()
+        constants = _make_pg_constants()
+
+        result = compute_posture_guided_assist(qdd_wbc, q_ref, state, constants)
+
+        # Knee (joint index 3, qvel index 9) should adapt in same direction as qdd[9]
+        assert result["dq_applied"][3] > 0, \
+            f"Knee should adapt positive, got {result['dq_applied'][3]}"
+
+    def test_symmetric_joints_receive_equal_adaptation(self):
+        """Left and right posture joints should receive equal WBC guidance."""
+        qdd_wbc = np.zeros(26, dtype=np.float64)
+        # qvel[9] = knee_L, qvel[14] = knee_R
+        qdd_wbc[9] = 1.0   # left knee qdd
+        qdd_wbc[14] = 1.0  # right knee qdd
+        q_ref = np.zeros(10, dtype=np.float64)
+        state = _make_pg_state()
+        constants = _make_pg_constants()
+
+        result = compute_posture_guided_assist(qdd_wbc, q_ref, state, constants)
+
+        # Left knee (joint index 3) and right knee (joint index 8) should get same delta
+        np.testing.assert_almost_equal(result["dq_applied"][3], result["dq_applied"][8])

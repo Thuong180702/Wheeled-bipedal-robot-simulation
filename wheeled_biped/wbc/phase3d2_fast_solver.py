@@ -66,6 +66,7 @@ def solve_phase3c_fast(
     eps_abs: float = 1e-5,
     eps_rel: float = 1e-5,
     max_iter: int = 4000,
+    q_act_ref_override: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Solve a Phase 3C QP using the fast structured backend.
 
@@ -80,6 +81,7 @@ def solve_phase3c_fast(
         backend_name: name of backend to use ("osqp", "slsqp", etc.).
         warm_start: optional initial guess for primal variables.
         max_contacts: padded contact slots.
+        q_act_ref_override: (10,) optional posture reference override.
         k_lat: lateral stabilization gain.
         k_roll: forward rolling stabilization gain.
         rolling_soft_weight: soft rolling cost weight.

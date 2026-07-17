@@ -45,6 +45,7 @@ def build_phase3c_qp_from_snapshot(
     k_lat: float = DEFAULT_K_LAT,
     k_roll: float = DEFAULT_K_ROLL,
     rolling_soft_weight: float = DEFAULT_ROLLING_SOFT_WEIGHT,
+    q_act_ref_override: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Build QP matrices with selected task mode and rolling mode.
 
@@ -76,7 +77,10 @@ def build_phase3c_qp_from_snapshot(
     # ── Build base Phase 3B.1 QP ──────────────────────────────────────
     from .phase3b_cached_stack import build_phase3b_qp_from_snapshot
 
-    qp_mats = build_phase3b_qp_from_snapshot(snapshot, task_mode, constants)
+    qp_mats = build_phase3b_qp_from_snapshot(
+        snapshot, task_mode, constants,
+        q_act_ref_override=q_act_ref_override,
+    )
 
     # ── Build contacts list from snapshot ─────────────────────────────
     contacts_list = _snapshot_to_contacts_list(snapshot)

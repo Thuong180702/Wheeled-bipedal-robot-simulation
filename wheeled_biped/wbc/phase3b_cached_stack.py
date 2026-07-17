@@ -435,6 +435,7 @@ def build_phase3b_qp_from_snapshot(
     snapshot: Phase3BSnapshot,
     task_mode: str,
     constants: dict[str, Any],
+    q_act_ref_override: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Build QP matrices from a precomputed snapshot for a specific task mode.
 
@@ -448,6 +449,9 @@ def build_phase3b_qp_from_snapshot(
         task_mode: one of "feasibility_only", "balanced_default",
                    "posture_priority", "torso_priority", "com_priority".
         constants: dict from ``build_qp_wbc_constants``.
+        q_act_ref_override: (10,) optional posture reference override.
+            When provided, the QP's posture task tracks toward this reference
+            instead of damping toward the current position (velocity damping).
 
     Returns:
         dict with all QP matrices (base + task costs).
@@ -575,7 +579,7 @@ def build_phase3b_qp_from_snapshot(
 
     # ── Build task cost matrices from snapshot (cached Jacobians) ────
     H_task, g_task, per_task_meta = _build_task_costs_from_snapshot(
-        snapshot, weights,
+        snapshot, weights, constants,
     )
 
     H += H_task
@@ -618,10 +622,16 @@ def build_phase3b_qp_from_snapshot(
 def _build_task_costs_from_snapshot(
     snapshot: Phase3BSnapshot,
     weights: dict[str, float],
+    constants: dict[str, Any] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
     """Build task cost matrices H_task, g_task using CACHED Jacobians.
 
     Does NOT call any JAX functions — uses only precomputed data from snapshot.
+
+    Args:
+        snapshot: precomputed Phase3BSnapshot with cached Jacobians.
+        weights: task weight dict from TASK_WEIGHT_MODES.
+        constants: optional constants dict (used for _posture_ref_override, etc.)
 
     Returns:
         (H_task, g_task, per_task_metadata)
@@ -648,7 +658,7 @@ def _build_task_costs_from_snapshot(
     lambda_slice = slice(26, 26 + n_lambda)
 
     # ── COM height task ─────────────────────────────────────────────
-    w_com = weights.get("w_com", 0.0)
+    w_com = weights.get("w_com", 0.0) * 0.4  # further reduced: minimize drift from COM task
     if w_com > 0.0:
         Jcom = snapshot.Jcom
         Jcom_z = Jcom[2:3, :]
@@ -660,7 +670,9 @@ def _build_task_costs_from_snapshot(
 
         kp_z = DEFAULT_KP_COM
         kd_z = DEFAULT_KD_COM
-        z_ref = z_com_current  # hold current height
+        # Track COMMANDED height, not current — gives WBC a real objective
+        z_ref = (constants.get("_commanded_height", z_com_current)
+                 if constants else z_com_current)
         vz_ref = 0.0
 
         a_com_z_des = kp_z * (z_ref - z_com_current) + kd_z * (vz_ref - vz_com)
@@ -677,8 +689,8 @@ def _build_task_costs_from_snapshot(
             print(f"[WARN] COM task produced NaN! Jcom_z finite={np.all(np.isfinite(Jcom_z))} "
                   f"jdq_com_z={jdq_com_z:.6f} z_com={z_com_current:.4f}",
                   file=_sc.stderr, flush=True)
-            H_task = np.nan_to_num(H_task, nan=0.0)
-            g_task = np.nan_to_num(g_task, nan=0.0)
+            H_task = np.nan_to_num(H_task, nan=0.0, posinf=0.0, neginf=0.0)
+            g_task = np.nan_to_num(g_task, nan=0.0, posinf=0.0, neginf=0.0)
 
         per_task["com_height"] = {
             "A": A_com, "b": b_com, "weight": w_com,
@@ -686,56 +698,55 @@ def _build_task_costs_from_snapshot(
             "a_des": a_com_z_des, "z_current": z_com_current, "z_ref": z_ref,
         }
 
-    # ── Torso orientation task ──────────────────────────────────────
-    w_torso = weights.get("w_torso", 0.0)
+    # ── Torso orientation task (simplified — Euler angles, no SO(3) log) ──
+    w_torso = weights.get("w_torso", 0.0) * 0.5  # halved: gentle orientation guidance
     if w_torso > 0.0:
-        Jr = snapshot.Jr
-        jdw_torso = snapshot.jdw_torso
-        e_R = snapshot.e_R
-        omega_current = snapshot.omega_current
+        # Use simple roll/pitch error from quaternion (yaw is free).
+        # Avoids SO(3) log numerical issues and Jr Jacobian overflow.
+        quat = snapshot.qpos[3:7]
+        from scipy.spatial.transform import Rotation
+        r = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
+        roll, pitch, yaw = r.as_euler('xyz')
+        roll_error = float(roll)   # target roll = 0
+        pitch_error = float(pitch)  # target pitch = 0
+        e_R_simple = np.array([roll_error, pitch_error, 0.0], dtype=np.float64)
 
-        # NaN guard: clamp degenerate Jacobian values before matmul
-        Jr = np.nan_to_num(Jr, nan=0.0, posinf=1e3, neginf=-1e3)
-        Jr = np.clip(Jr, -1e4, 1e4)
-        jdw_torso = np.nan_to_num(jdw_torso, nan=0.0, posinf=1e3, neginf=-1e3)
-        e_R = np.nan_to_num(e_R, nan=0.0, posinf=1.0, neginf=-1.0)
-        omega_current = np.nan_to_num(omega_current, nan=0.0, posinf=1e2, neginf=-1e2)
+        # Current angular velocity (body-frame, ≈ world-frame near upright)
+        omega_body = snapshot.qvel[3:6].copy()
+        roll_rate = float(omega_body[0])
+        pitch_rate = float(omega_body[1])
+        omega_simple = np.array([roll_rate, pitch_rate, 0.0], dtype=np.float64)
 
-        kp_R = DEFAULT_KP_R
-        kd_R = DEFAULT_KD_R
+        kp_R = DEFAULT_KP_R   # [25, 25, 5]
+        kd_R = DEFAULT_KD_R   # [7, 7, 2]
         omega_target = np.zeros(3, dtype=np.float64)
 
-        alpha_des = kp_R * e_R + kd_R * (omega_target - omega_current)
+        alpha_des = kp_R * e_R_simple + kd_R * (omega_target - omega_simple)
 
+        # Use free-joint angular acceleration columns only (qdd[3:6]).
+        # For a near-upright robot, the free joint directly controls torso
+        # orientation. Actuated joints' contribution flows through dynamics.
+        # This eliminates the Jr Jacobian overflow entirely.
         A_torso = np.zeros((3, nz), dtype=np.float64)
-        A_torso[:, qdd_slice] = Jr
-        b_torso = alpha_des - jdw_torso
+        A_torso[0, 3] = 1.0  # roll accel
+        A_torso[1, 4] = 1.0  # pitch accel
+        A_torso[2, 5] = 1.0  # yaw accel (free, but included for shape)
+        b_torso = alpha_des  # no jdw_torso offset needed for free joint
 
-        W_torso = np.diag([w_torso, w_torso, w_torso])
-        # Skip torso task if Jr is degenerate (produces NaN Hessian)
-        _jr_ok = np.all(np.isfinite(Jr)) and np.all(np.isfinite(jdw_torso)) and np.all(np.isfinite(e_R))
-        if not _jr_ok:
-            import sys as _sys2
-            _jr_max = float(np.max(np.abs(Jr)))
-            print(f"[WARN] Torso task SKIPPED: Jr max_abs={_jr_max:.1f} ok={_jr_ok}",
-                  file=_sys2.stderr, flush=True)
-        else:
-            H_task += A_torso.T @ W_torso @ A_torso
-            g_task += -(A_torso.T @ W_torso @ b_torso).flatten()
-        # Clean up NaN after torso task (regardless of _jr_ok)
+        W_torso = np.diag([w_torso, w_torso, 0.1 * w_torso])  # yaw ~free
+
+        # Clean H_task before adding torso contribution
         if not np.all(np.isfinite(H_task)):
-            import sys as _sc2
-            _jr_max_val = float(np.max(np.abs(Jr)))
-            print(f"[WARN] Torso task produced NaN! Jr max={_jr_max_val:.1f} finite={np.all(np.isfinite(Jr))} "
-                  f"jdw_torso finite={np.all(np.isfinite(jdw_torso))}",
-                  file=_sc2.stderr, flush=True)
-            H_task = np.nan_to_num(H_task, nan=0.0)
-            g_task = np.nan_to_num(g_task, nan=0.0)
+            H_task = np.nan_to_num(H_task, nan=0.0, posinf=0.0, neginf=0.0)
+            g_task = np.nan_to_num(g_task, nan=0.0, posinf=0.0, neginf=0.0)
+
+        H_task += A_torso.T @ W_torso @ A_torso
+        g_task += -(A_torso.T @ W_torso @ b_torso).flatten()
 
         per_task["torso_orientation"] = {
             "A": A_torso, "b": b_torso, "weight": w_torso,
-            "Jr": Jr, "jdw_torso": jdw_torso,
-            "e_R": e_R, "alpha_des": alpha_des, "omega_current": omega_current,
+            "e_R_simple": e_R_simple, "omega_simple": omega_simple,
+            "alpha_des": alpha_des,
         }
 
     # ── Posture task ────────────────────────────────────────────────
@@ -746,7 +757,11 @@ def _build_task_costs_from_snapshot(
 
         kp_p = DEFAULT_KP_POSTURE
         kd_p = DEFAULT_KD_POSTURE
-        q_act_ref = q_act_current
+        # Use constants dict for posture override (most robust threading),
+        # then fall back to current position (velocity damping).
+        _override = constants.get("_posture_ref_override") if constants else None
+        q_act_ref = (_override.copy() if _override is not None
+                     else q_act_current)
         qd_act_ref = np.zeros(10, dtype=np.float64)
 
         qdd_act_des = kp_p * (q_act_ref - q_act_current) + kd_p * (qd_act_ref - qd_act_current)
@@ -755,11 +770,16 @@ def _build_task_costs_from_snapshot(
         A_posture[:, 6:16] = np.eye(10)
         b_posture = qdd_act_des
 
+        # Clean NaN from previous tasks before adding posture contribution
+        if not np.all(np.isfinite(H_task)):
+            H_task = np.nan_to_num(H_task, nan=0.0, posinf=0.0, neginf=0.0)
+            g_task = np.nan_to_num(g_task, nan=0.0, posinf=0.0, neginf=0.0)
+
         H_task += w_posture * (A_posture.T @ A_posture)
         g_task += -w_posture * (A_posture.T @ b_posture).flatten()
         if not np.all(np.isfinite(H_task)):
-            H_task = np.nan_to_num(H_task, nan=0.0)
-            g_task = np.nan_to_num(g_task, nan=0.0)
+            H_task = np.nan_to_num(H_task, nan=0.0, posinf=0.0, neginf=0.0)
+            g_task = np.nan_to_num(g_task, nan=0.0, posinf=0.0, neginf=0.0)
 
         per_task["posture"] = {
             "A": A_posture, "b": b_posture, "weight": w_posture,
@@ -783,6 +803,52 @@ def _build_task_costs_from_snapshot(
         per_task["wheel_accel"] = {
             "A": A_wheel, "b": b_wheel, "weight": w_wheel,
             "wheel_indices": wheel_indices,
+        }
+
+    # ── Horizontal CoM velocity damping ──────────────────────────────
+    # Penalizes COM xy acceleration → WBC produces drift-minimizing
+    # joint/wheel torques that counteract horizontal forces from
+    # posture changes. This is the KEY missing objective — without it,
+    # WBC's posture optimization can cause drift.
+    w_com_xy = weights.get("w_com_xy", 0.0)
+    if w_com_xy > 0.0:
+        Jcom = snapshot.Jcom
+        Jcom_xy = Jcom[0:2, :]  # horizontal COM Jacobian
+        jdq_com_xy = snapshot.jdq_com[0:2].copy()  # Jdot*qdot for xy
+
+        qvel_np = snapshot.qvel
+        v_xy = np.dot(Jcom_xy, qvel_np)[:2]
+
+        # Target: dampen horizontal velocity toward zero
+        kp_xy = 5.0   # proportional gain on velocity error
+        kd_xy = 2.0   # feedforward damping
+        a_xy_des = kp_xy * (np.zeros(2) - v_xy)  # dampen velocity
+
+        A_com_xy = np.zeros((2, nz), dtype=np.float64)
+        A_com_xy[:, qdd_slice] = Jcom_xy
+        b_com_xy = a_xy_des - jdq_com_xy
+
+        H_task += w_com_xy * (A_com_xy.T @ A_com_xy)
+        g_task += -w_com_xy * (A_com_xy.T @ b_com_xy).flatten()
+
+        per_task["com_xy_damping"] = {
+            "A": A_com_xy, "b": b_com_xy, "weight": w_com_xy,
+            "Jcom_xy": Jcom_xy, "v_xy": v_xy, "a_xy_des": a_xy_des,
+        }
+
+    # ── Yaw angular momentum damping ─────────────────────────────────
+    # Penalizes yaw angular acceleration qdd[5] → WBC dampens yaw
+    # rotation through coordinated joint/wheel torque.
+    w_yaw_damping = weights.get("w_yaw_damping", 0.0)
+    if w_yaw_damping > 0.0:
+        A_yaw = np.zeros((1, nz), dtype=np.float64)
+        A_yaw[0, 5] = 1.0  # base yaw angular acceleration
+        b_yaw = np.array([0.0], dtype=np.float64)  # zero target
+
+        H_task += w_yaw_damping * (A_yaw.T @ A_yaw)
+
+        per_task["yaw_damping"] = {
+            "A": A_yaw, "b": b_yaw, "weight": w_yaw_damping,
         }
 
     # ── Contact force distribution regularization ───────────────────

@@ -85,6 +85,16 @@ clone_three_sim_states = _offline_3ac.clone_three_sim_states
 compute_v3_torque_for_state = _offline_3ac.compute_v3_torque_for_state
 compute_wbc_torque_for_state = _offline_3ac.compute_wbc_torque_for_state
 compute_assist_torque = _offline_3ac.compute_assist_torque
+compute_adaptive_assist_torque = _offline_3ac.compute_adaptive_assist_torque
+ADAPTIVE_ASSIST_ALPHA_MAX = _offline_3ac.ADAPTIVE_ASSIST_ALPHA_MAX
+ADAPTIVE_HEIGHT_MODEL_NOMINAL = _offline_3ac.ADAPTIVE_HEIGHT_MODEL_NOMINAL
+ADAPTIVE_HEIGHT_SIGMA = _offline_3ac.ADAPTIVE_HEIGHT_SIGMA
+ADAPTIVE_PUSH_FORCE_THRESHOLD = _offline_3ac.ADAPTIVE_PUSH_FORCE_THRESHOLD
+ADAPTIVE_DIVERGENCE_HEIGHT_THRESHOLD = _offline_3ac.ADAPTIVE_DIVERGENCE_HEIGHT_THRESHOLD
+ADAPTIVE_DIVERGENCE_PITCH_THRESHOLD = _offline_3ac.ADAPTIVE_DIVERGENCE_PITCH_THRESHOLD
+ADAPTIVE_HYSTERESIS_ALPHA_ATTACK = _offline_3ac.ADAPTIVE_HYSTERESIS_ALPHA_ATTACK
+ADAPTIVE_HYSTERESIS_ALPHA_DECAY = _offline_3ac.ADAPTIVE_HYSTERESIS_ALPHA_DECAY
+ADAPTIVE_HYSTERESIS_TEMPERATURE = _offline_3ac.ADAPTIVE_HYSTERESIS_TEMPERATURE
 step_v3_baseline_clone = _offline_3ac.step_v3_baseline_clone
 step_wbc_only_clone = _offline_3ac.step_wbc_only_clone
 step_v3_plus_wbc_assist_clone = _offline_3ac.step_v3_plus_wbc_assist_clone
@@ -520,6 +530,8 @@ def run_three_arm_rollout(
     rolling_mode: str = "full_rolling_soft",
     assist_alpha: float = DEFAULT_ASSIST_ALPHA,
     assist_limit_fraction: float = DEFAULT_ASSIST_LIMIT_FRACTION,
+    adaptive_mode: bool = False,
+    adaptive_alpha_max: float = ADAPTIVE_ASSIST_ALPHA_MAX,
     v3_ctrl: dict[str, Any] | None = None,
     qp_backend: str = "osqp",
     warm_start: bool = True,
@@ -694,11 +706,106 @@ def run_three_arm_rollout(
 
         # ── Assist torque — FAIL CLOSED ──────────────────────────────────────
         if wbc_solve_ok:
-            assist_result = compute_assist_torque(
-                tau_v3, tau_wbc, constants,
-                alpha=assist_alpha,
-                assist_limit_fraction=assist_limit_fraction,
-            )
+            if adaptive_mode:
+                # ── Extract state from assist clone ──────────────────────────
+                _qpos = clones[ARM_V3_PLUS_WBC_ASSIST].qpos
+                _qvel = clones[ARM_V3_PLUS_WBC_ASSIST].qvel
+                _quat = _qpos[3:7]
+                _roll, _pitch, _yaw = _quat_to_rpy(_quat)
+                _assist_state = {
+                    "pitch": float(_pitch),
+                    "roll": float(_roll),
+                    "pitch_rate": float(_qvel[4]),
+                    "roll_rate": float(_qvel[3]),
+                    "com_vel_xy": float(np.linalg.norm(_qvel[0:2])),
+                    "height": float(_qpos[2]),
+                    "height_target": height_ref,
+                    "height_model_nominal": ADAPTIVE_HEIGHT_MODEL_NOMINAL,
+                    "sigma_height": ADAPTIVE_HEIGHT_SIGMA,
+                }
+
+                # ── Continuous push gate (NO if/else) ───────────────────────
+                # g_push = exp(-(F_push / F_threshold)²)  during push, else 1.0
+                # Uses known force magnitude because qvel hasn't updated yet.
+                _push_force_norm = 0.0
+                if push_config is not None and push_active:
+                    _push_force_norm = float(np.linalg.norm(push_config["force"]))
+                if _push_force_norm > 1e-6:
+                    _g_push = float(np.exp(-((_push_force_norm / ADAPTIVE_PUSH_FORCE_THRESHOLD) ** 2)))
+                else:
+                    _g_push = 1.0
+
+                # ── Continuous divergence gate (NO if/else, NO lockout) ─────
+                # g_div = exp(-((h_div/h_thr)² + (pitch_div/pitch_thr)²))
+                # Uses post-step divergence from PREVIOUS step — comparing
+                # both clones at the same timestep, not V3(T+1) vs Assist(T).
+                _h_div = float(controller_context.get("_prev_height_div", 0.0))
+                _pitch_div = float(controller_context.get("_prev_pitch_div", 0.0))
+                _g_div = float(np.exp(-(
+                    (_h_div / ADAPTIVE_DIVERGENCE_HEIGHT_THRESHOLD) ** 2
+                    + (_pitch_div / ADAPTIVE_DIVERGENCE_PITCH_THRESHOLD) ** 2
+                )))
+
+                # ── Torque-level assist ──────────────────────────────────────
+                assist_result = compute_adaptive_assist_torque(
+                    tau_v3, tau_wbc, _assist_state, constants,
+                    alpha_max=adaptive_alpha_max,
+                    g_push=_g_push,
+                    g_divergence=_g_div,
+                )
+                # ── Continuous hysteresis filter (NO if/else) ────────────────
+                # Asymmetric EMA via sigmoid interpolation:
+                #   delta = g_raw - g_filtered
+                #   α_eff = α_min + (α_max-α_min) * σ(-delta/T)
+                # When gate drops (delta<0): σ→1, α_eff→α_attack (fast=1.0)
+                # When gate rises (delta>0): σ→0, α_eff→α_decay (slow=0.1)
+                _g_raw = float(assist_result["g_stability"])
+                _g_height_raw = float(assist_result["g_height"])
+                _g_combined = _g_raw * _g_height_raw * _g_push * _g_div
+                _g_filtered_prev = float(controller_context.get("_g_filtered", 1.0))
+
+                _delta = _g_combined - _g_filtered_prev
+                _alpha_hyst = (
+                    ADAPTIVE_HYSTERESIS_ALPHA_DECAY
+                    + (ADAPTIVE_HYSTERESIS_ALPHA_ATTACK - ADAPTIVE_HYSTERESIS_ALPHA_DECAY)
+                    * (1.0 / (1.0 + np.exp(_delta / ADAPTIVE_HYSTERESIS_TEMPERATURE)))
+                )
+                _g_filtered = _g_filtered_prev + _alpha_hyst * _delta
+                _g_filtered = float(np.clip(_g_filtered, 0.0, 1.0))
+                controller_context["_g_filtered"] = _g_filtered
+
+                # Apply filtered gate: scale alpha by filtered/combined ratio
+                _g_combined_safe = max(_g_combined, 1e-8)
+                _alpha_scale = _g_filtered / _g_combined_safe
+                if _alpha_scale < 0.999:  # Only re-compute if meaningful difference
+                    assist_result["alpha_per_joint"] = (
+                        assist_result["alpha_per_joint"] * _alpha_scale
+                    )
+                    tau_assist_filtered = (
+                        tau_v3 + assist_result["alpha_per_joint"] * (tau_wbc - tau_v3)
+                    )
+                    tau_assist_filtered = np.clip(
+                        tau_assist_filtered,
+                        constants["tau_min"],
+                        constants["tau_max"],
+                    )
+                    assist_result["tau_cmd_assist"] = tau_assist_filtered
+
+                # Store telemetry
+                assist_result["g_stability_filtered"] = float(_g_filtered)
+                assist_result["g_stability_raw"] = float(_g_raw)
+                assist_result["g_height_raw"] = _g_height_raw
+                assist_result["g_push_raw"] = _g_push
+                assist_result["g_divergence_raw"] = _g_div
+                assist_result["g_combined_raw"] = _g_combined
+                assist_result["_divergence_height"] = float(_h_div)
+                assist_result["_divergence_pitch"] = float(_pitch_div)
+            else:
+                assist_result = compute_assist_torque(
+                    tau_v3, tau_wbc, constants,
+                    alpha=assist_alpha,
+                    assist_limit_fraction=assist_limit_fraction,
+                )
             tau_assist = assist_result["tau_cmd_assist"]
             assist_active = True
         else:
@@ -711,6 +818,14 @@ def run_three_arm_rollout(
                 "tau_assist_clipped": np.zeros(10),
                 "tau_cmd_assist": tau_assist,
                 "alpha": assist_alpha,
+                "alpha_per_joint": np.zeros(10) if adaptive_mode else None,
+                "g_stability": 0.0 if adaptive_mode else None,
+                "g_height": 0.0 if adaptive_mode else None,
+                "g_push": 0.0 if adaptive_mode else None,
+                "g_divergence": 0.0 if adaptive_mode else None,
+                "g_posture": 0.0 if adaptive_mode else None,
+                "agreement": np.zeros(10) if adaptive_mode else None,
+                "adaptive": adaptive_mode,
                 "assist_limit_fraction": assist_limit_fraction,
                 "assist_limit": constants["assist_limit"],
                 "clipping_count": 0,
@@ -729,12 +844,30 @@ def run_three_arm_rollout(
             "step": step,
             "torque": tau_assist.tolist(),
             "assist_active": assist_active,
+            "adaptive_mode": adaptive_mode,
             "assist_result": {k: v for k, v in assist_result.items()
                               if not isinstance(v, np.ndarray)
-                              or k in ("clipping_mask",)},
+                              or k in ("clipping_mask", "alpha_per_joint", "agreement", "K_role")},
             "metrics": assist_metrics,
             "push_active": push_active,
         })
+
+        # ── Post-step divergence telemetry (continuous gate, NO lockout) ────
+        # Store post-step divergence for NEXT step's continuous gate,
+        # ensuring both clones are compared at the SAME timestep.
+        if adaptive_mode and not single_arm:
+            _h_div_post = float(abs(
+                float(clones[ARM_V3_BASELINE].qpos[2])
+                - float(clones[ARM_V3_PLUS_WBC_ASSIST].qpos[2])
+            ))
+            _p_div_post = float(abs(
+                float(_quat_to_rpy(clones[ARM_V3_BASELINE].qpos[3:7])[1])
+                - float(_quat_to_rpy(clones[ARM_V3_PLUS_WBC_ASSIST].qpos[3:7])[1])
+            ))
+            assist_result["_divergence_height_post"] = _h_div_post
+            assist_result["_divergence_pitch_post"] = _p_div_post
+            controller_context["_prev_height_div"] = _h_div_post
+            controller_context["_prev_pitch_div"] = _p_div_post
 
         _step_elapsed = time.perf_counter() - step_t0
         full_step_times.append(_step_elapsed)
@@ -802,6 +935,7 @@ def run_three_arm_rollout(
         "rolling_mode": rolling_mode,
         "assist_alpha": assist_alpha,
         "assist_limit_fraction": assist_limit_fraction,
+        "adaptive_mode": adaptive_mode,
         "v3_entries": v3_entries,
         "wbc_entries": wbc_entries,
         "assist_entries": assist_entries,
@@ -1947,6 +2081,14 @@ def main():
     parser.add_argument("--assist-alpha", type=float, default=DEFAULT_ASSIST_ALPHA)
     parser.add_argument("--assist-limit-fraction", type=float, default=DEFAULT_ASSIST_LIMIT_FRACTION)
 
+    # Adaptive assist (state-dependent per-joint blending)
+    parser.add_argument("--adaptive", action="store_true",
+                        help="Use state-dependent per-joint adaptive assist")
+    parser.add_argument("--adaptive-alpha-max", type=float,
+                        default=ADAPTIVE_ASSIST_ALPHA_MAX,
+                        help=f"Max per-joint alpha for adaptive assist "
+                             f"(default: {ADAPTIVE_ASSIST_ALPHA_MAX})")
+
     # QP Solver
     parser.add_argument("--qp-backend", type=str, default="osqp",
                         choices=["osqp", "clarabel", "cvxopt", "slsqp"])
@@ -2067,7 +2209,10 @@ def main():
         rolling_mode=args.rolling_mode,
     )
 
-    print(f"Assist: alpha={args.assist_alpha}, limit_fraction={args.assist_limit_fraction}")
+    if args.adaptive:
+        print(f"Assist: ADAPTIVE mode (alpha_max={args.adaptive_alpha_max})")
+    else:
+        print(f"Assist: alpha={args.assist_alpha}, limit_fraction={args.assist_limit_fraction}")
     print(f"WBC: task_mode={args.task_mode}, rolling_mode={args.rolling_mode}")
     print(f"Steps per case: {args.steps}")
     print()
@@ -2210,6 +2355,8 @@ def main():
         rolling_mode=args.rolling_mode,
         assist_alpha=args.assist_alpha,
         assist_limit_fraction=args.assist_limit_fraction,
+        adaptive_mode=args.adaptive,
+        adaptive_alpha_max=args.adaptive_alpha_max,
         qp_backend=args.qp_backend,
         warm_start=not args.no_warm_start,
         max_contacts=args.max_contacts,

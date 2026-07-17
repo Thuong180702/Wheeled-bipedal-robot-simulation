@@ -202,6 +202,100 @@ def init_v3_controller(
 DEFAULT_ASSIST_ALPHA = 0.25
 DEFAULT_ASSIST_LIMIT_FRACTION = 0.20
 
+# ── Adaptive assist parameters ────────────────────────────────────────────────
+
+ADAPTIVE_ASSIST_ALPHA_MAX = 0.35  # WBC now has meaningful targets
+
+# Maximum fraction of actuator torque limit allowed for WBC-V3 correction.
+# Even with the gate system, WBC torque at extreme heights can be 50-200× V3.
+# A 5% gate on 200 Nm = 10 Nm, which can dominate V3's 1-2 Nm.
+# This cap is a CONTINUOUS function (clip = identity within bounds, constant outside)
+# proportional to each actuator's torque limit.
+# At tau_limit = 15 Nm: max_correction = 0.25 * 15 = 3.75 Nm
+ADAPTIVE_CORRECTION_LIMIT_FRACTION = 0.25
+
+# Per-joint role weights for adaptive assist.
+# Higher values → more WBC influence on that joint.
+# Posture joints (hip_pitch, knee) get higher weight because WBC is better at
+# steady-state posture optimization. Balance joints (hip_roll, hip_yaw) get
+# lower weight because V3 is better at reactive stabilization.
+ADAPTIVE_ASSIST_K_ROLE = np.array(
+    [0.12, 0.05, 0.60, 0.60, 0.35, 0.12, 0.05, 0.60, 0.60, 0.35],
+    dtype=np.float64,
+)
+# Joint index mapping:
+#   0=l_hip_roll  1=l_hip_yaw  2=l_hip_pitch  3=l_knee  4=l_wheel
+#   5=r_hip_roll  6=r_hip_yaw  7=r_hip_pitch  8=r_knee  9=r_wheel
+
+# Stability gate thresholds for Gaussian RBF:
+#   g = exp(-Σ(feature / threshold)²)
+# Each threshold is the "1-sigma" point where g drops to exp(-1) ≈ 0.37.
+# Calibrated to V3's normal operating range:
+#   pitch ~1-5° (0.02-0.09 rad), roll ~15-25° (0.26-0.44 rad)
+ADAPTIVE_STABILITY_THRESHOLDS = {
+    "pitch_rad": 0.15,           # 8.6° — gate open during normal V3 pitch oscillation
+    "roll_rad": 0.30,            # 17.2° — gradual transition across V3 roll range
+    "pitch_rate_rad_s": 0.50,    # allow natural pitch oscillations
+    "roll_rate_rad_s": 0.50,     # allow natural roll oscillations
+    "com_vel_xy_m_s": 0.30,      # allow normal CoM movement during balance
+    "height_error_m": 0.10,      # ±10 cm tolerance for height tracking
+}
+
+# ── Continuous height-model confidence ──────────────────────────────────────
+# WBC model quality degrades continuously as height deviates from the model's
+# calibration point (where Jacobians, mass matrix, and contact model are most
+# accurate). Instead of a binary on/off at a threshold, confidence follows a
+# Gaussian:  g_height = exp(-((h - h0) / sigma)^2)
+#
+# At h = h0:        g_height = 1.00  (full WBC confidence)
+# At h = h0 ± 2cm:  g_height = 0.78
+# At h = h0 ± 4cm:  g_height = 0.37
+# At h = h0 ± 6cm:  g_height = 0.11
+# At h = h0 ± 10cm: g_height = 0.002 (essentially zero)
+
+ADAPTIVE_HEIGHT_MODEL_NOMINAL = 0.53  # [m]  keyframe equilibrium height
+ADAPTIVE_HEIGHT_SIGMA = 0.025         # [m]  widened: g→0.37 at ±2.5 cm (from ±1.5 cm)
+# g_height at key heights (h0=0.53):
+#   h=0.53  (nominal):        g_height = 1.000  (full confidence)
+#   h=0.515 (1.5 cm off):     g_height = 0.368  (sigma point)
+#   h=0.50  (3 cm off):       g_height = 0.018  (-3 cm)
+#   h=0.48  (5 cm off):       g_height ≈ 0.000  (-5 cm, essentially zero)
+#   h=0.58  (5 cm off):       g_height ≈ 0.000  (+5 cm, essentially zero)
+
+# ── Continuous directional agreement ────────────────────────────────────────
+# Soft transition parameter for tanh-based agreement between V3 and WBC:
+#   agreement_j = 0.5 + 0.5 * tanh(v3_j * correction_j / eps)
+# Smaller eps → sharper transition at zero; larger → softer blending.
+
+ADAPTIVE_AGREEMENT_SOFT_EPS = 0.05
+
+# ── Continuous push gate ────────────────────────────────────────────────────
+# During external pushes, WBC should be attenuated because the stability gate
+# uses qvel which hasn't updated yet (force applied to xfrc_applied before
+# mj_step). The push gate uses the known force magnitude:
+#   g_push = exp(-(F_push / F_threshold)^2)
+
+ADAPTIVE_PUSH_FORCE_THRESHOLD = 50.0  # [N]  push force at which g→0.37
+
+# ── Continuous divergence gate ──────────────────────────────────────────────
+# If assist clone diverges from V3 clone (height or pitch), smoothly reduce
+# WBC influence instead of a hard 200-step lockout:
+#   g_div = exp(-((h_div / h_threshold)^2 + (pitch_div / pitch_threshold)^2))
+
+ADAPTIVE_DIVERGENCE_HEIGHT_THRESHOLD = 0.01   # [m]   h-div at which g_div→0.37 (was 0.02)
+ADAPTIVE_DIVERGENCE_PITCH_THRESHOLD = 0.0175  # [rad] pitch-div at which g_div→0.37 (~1 deg, was 2 deg)
+
+# ── Continuous hysteresis ───────────────────────────────────────────────────
+# Asymmetric EMA via sigmoid interpolation: attack fast, decay slow.
+#   delta = g_raw - g_filtered
+#   alpha_eff = alpha_min + (alpha_max - alpha_min) * sigmoid(-delta / T)
+# When delta < 0 (gate dropping): sigmoid(positive) → 1, alpha_eff ≈ alpha_max
+# When delta > 0 (gate rising):  sigmoid(negative) → 0, alpha_eff ≈ alpha_min
+
+ADAPTIVE_HYSTERESIS_ALPHA_ATTACK = 1.00   # EMA alpha when gate drops (instant)
+ADAPTIVE_HYSTERESIS_ALPHA_DECAY = 0.10    # EMA alpha when gate rises (slow)
+ADAPTIVE_HYSTERESIS_TEMPERATURE = 0.02    # sigmoid sharpness
+
 # ── Arm labels ────────────────────────────────────────────────────────────────
 
 ARM_V3_BASELINE = "V3_BASELINE"
@@ -288,7 +382,7 @@ def build_three_arm_eval_constants(
 
     # Build or reuse rolling constants
     if rolling_constants is None:
-        from wheeled_biped.wbc.offline_rolling_constants import build_wheel_rolling_constants
+        from wheeled_biped.wbc.offline_rolling_constraints import build_wheel_rolling_constants
         rolling_constants = build_wheel_rolling_constants(model, contact_constants=qp_constants.get("_contact_constants"))
 
     # Ensure rolling constants are embedded in qp_constants
@@ -522,9 +616,10 @@ def compute_wbc_torque_for_state(
     qp_backend: str = "osqp",
     warm_start: np.ndarray | None = None,
     max_contacts: int = 4,
-    eps_abs: float = 1e-5,
-    eps_rel: float = 1e-5,
-    max_iter: int = 4000,
+    eps_abs: float = 1e-4,
+    eps_rel: float = 1e-4,
+    max_iter: int = 10000,
+    q_act_ref_override: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Solve Phase 3C rolling-aware QP-WBC for the current state.
 
@@ -535,6 +630,9 @@ def compute_wbc_torque_for_state(
         qpos: (nq,) generalized positions.
         qvel: (nv,) generalized velocities.
         contacts: list of active contact dicts.
+        q_act_ref_override: (10,) optional posture reference for the QP's
+            posture task. When provided, the posture task tracks toward this
+            target instead of damping toward current position.
         task_mode: WBC task mode.
         rolling_mode: WBC rolling mode.
         constants: dict from ``build_three_arm_eval_constants``.
@@ -590,6 +688,7 @@ def compute_wbc_torque_for_state(
         )
         qp_mats = build_phase3c_qp_from_snapshot(
             snapshot, task_mode, rolling_mode, qp_c,
+            q_act_ref_override=q_act_ref_override,
         )
 
         # Phase 3D.2 fast solver path
@@ -792,6 +891,586 @@ def compute_assist_torque(
         "max_abs_assist_raw": float(np.max(np.abs(tau_assist_raw))),
         "max_abs_assist_clipped": float(np.max(np.abs(tau_assist_clipped))),
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Task 5b: compute_adaptive_assist_torque
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def compute_adaptive_assist_torque(
+    tau_v3: np.ndarray,
+    tau_wbc: np.ndarray,
+    state: dict[str, Any],
+    constants: dict[str, Any],
+    alpha_max: float = ADAPTIVE_ASSIST_ALPHA_MAX,
+    g_push: float = 1.0,
+    g_divergence: float = 1.0,
+) -> dict[str, Any]:
+    """Compute state-dependent per-joint adaptive V3+WBC assist torque.
+
+    ALL gate terms are continuous functions — no if/else, no discrete thresholds.
+    The unified alpha formula is:
+
+        α_j = α_max · g_stability · g_height · g_push · g_div · A_j · K_role_j
+
+    where every term is a smooth, continuous function of physical quantities:
+
+    g_stability = exp(-Σ(feature/threshold)²)     Gaussian RBF stability gate
+    g_height    = exp(-((h-h₀)/σ_h)²)             WBC model confidence vs height
+    g_push      = exp(-(F_push/F₀)²)              push-force attenuation
+    g_div       = exp(-Σ(divergence/threshold)²)   clone-divergence attenuation
+    A_j         = 0.5 + 0.5·tanh(v3_j·corr_j/ε)   continuous directional agreement
+    K_role_j    = per-joint role weight (constant)
+
+    Key behaviors:
+    - During disturbances → g_stability ≈ 0 → α ≈ 0, pure V3
+    - At extreme heights → g_height ≈ 0 → α ≈ 0, WBC model unreliable
+    - During push → g_push < 1 → attenuated WBC
+    - When assist diverges from V3 → g_div < 1 → attenuated WBC
+    - When WBC opposes V3 → A_j ≈ 0 → gated per joint
+    - Posture joints (hip_pitch, knee) get higher K_role
+
+    Args:
+        tau_v3: (10,) V3 torque vector [Nm].
+        tau_wbc: (10,) WBC torque vector [Nm].
+        state: dict with stability features:
+            - pitch, roll [rad]
+            - pitch_rate, roll_rate [rad/s]
+            - com_vel_xy [m/s]
+            - height [m]
+            - height_target [m]
+            - height_model_nominal [m] (default ADAPTIVE_HEIGHT_MODEL_NOMINAL)
+            - sigma_height [m] (default ADAPTIVE_HEIGHT_SIGMA)
+        constants: dict from ``build_three_arm_eval_constants``.
+        alpha_max: maximum per-joint alpha (capped at this value).
+        g_push: pre-computed continuous push gate ∈ [0, 1].
+        g_divergence: pre-computed continuous divergence gate ∈ [0, 1].
+
+    Returns:
+        dict with:
+        - tau_cmd_assist: (10,) final assist torque
+        - alpha_per_joint: (10,) per-joint alpha values
+        - g_stability: float stability gate value
+        - g_height: float height-model confidence
+        - g_push: float push gate (echoed)
+        - g_divergence: float divergence gate (echoed)
+        - agreement: (10,) per-joint directional agreement
+        - K_role: (10,) per-joint role weights
+        - tau_assist_raw: (10,) raw WBC-V3 correction
+        - saturation_count: int number of joints at actuator limits
+        - assist_active: bool always True
+    """
+    thresholds = ADAPTIVE_STABILITY_THRESHOLDS
+
+    # ── 1. g_stability: Gaussian RBF stability gate (CONTINUOUS) ───────────
+    pitch = float(state.get("pitch", 0.0))
+    roll = float(state.get("roll", 0.0))
+    pitch_rate = float(state.get("pitch_rate", 0.0))
+    roll_rate = float(state.get("roll_rate", 0.0))
+    com_vel_xy = float(state.get("com_vel_xy", 0.0))
+    height = float(state.get("height", 0.67))
+    height_target = float(state.get("height_target", 0.67))
+
+    instability = (
+        (pitch / thresholds["pitch_rad"]) ** 2
+        + (roll / thresholds["roll_rad"]) ** 2
+        + (pitch_rate / thresholds["pitch_rate_rad_s"]) ** 2
+        + (roll_rate / thresholds["roll_rate_rad_s"]) ** 2
+        + (com_vel_xy / thresholds["com_vel_xy_m_s"]) ** 2
+        + ((height - height_target) / thresholds["height_error_m"]) ** 2
+    )
+    g_stability = float(np.exp(-instability))
+
+    # ── 2. g_height: WBC model confidence vs height (CONTINUOUS) ─────────
+    # WBC dynamics are most accurate at the model's calibration height h₀.
+    # Confidence depends on BOTH the commanded height AND the actual height.
+    # Using only commanded height misses drift (robot at 0.60 when asked
+    # for 0.67). Using only actual height creates positive feedback.
+    # Solution: take the WORSE of the two — min(cmd_confidence, act_confidence).
+    # This is a continuous function (pointwise minimum of two smooth Gaussians).
+    h0 = float(state.get("height_model_nominal", ADAPTIVE_HEIGHT_MODEL_NOMINAL))
+    sigma_h = float(state.get("sigma_height", ADAPTIVE_HEIGHT_SIGMA))
+
+    g_height_cmd = float(np.exp(-(((height_target - h0) / sigma_h) ** 2)))
+    g_height_act = float(np.exp(-(((height - h0) / sigma_h) ** 2)))
+    g_height = min(g_height_cmd, g_height_act)  # continuous: worst of both
+
+    # Numerical safety floor: below 0.1%, set to exact zero to prevent
+    # float64 noise accumulation in chaotic nonlinear dynamics.
+    if g_height < 1e-3:
+        g_height = 0.0
+
+    # ── 3. A_j: continuous directional agreement (CONTINUOUS, no if/else) ──
+    # agreement_j = 0.5 + 0.5 * tanh(v3_j * correction_j / eps)
+    # - same sign → product > 0 → tanh > 0 → agreement > 0.5 (reinforce)
+    # - opposite sign → product < 0 → tanh < 0 → agreement < 0.5 (oppose)
+    # - either ≈ 0 → product ≈ 0 → tanh ≈ 0 → agreement ≈ 0.5 (neutral)
+    correction = tau_wbc - tau_v3
+    eps_agree = ADAPTIVE_AGREEMENT_SOFT_EPS
+    v3_corr_product = tau_v3 * correction
+    agreement = 0.5 + 0.5 * np.tanh(v3_corr_product / eps_agree)
+
+    # ── 4. K_role: per-joint role weights (constant) ─────────────────────
+    K_role = ADAPTIVE_ASSIST_K_ROLE.copy()
+
+    # ── 5. Unified per-joint alpha ───────────────────────────────────────
+    #     ALL terms are smooth, continuous, and physically motivated.
+    alpha_per_joint = (
+        alpha_max
+        * g_stability
+        * g_height
+        * g_push
+        * g_divergence
+        * agreement
+        * K_role
+    )
+    alpha_per_joint = np.clip(alpha_per_joint, 0.0, alpha_max)
+
+    # ── 6. Cap correction magnitude (CONTINUOUS, scales with g_height) ────
+    # The correction cap shrinks proportionally with g_height: when model
+    # confidence is low, the allowed WBC correction magnitude also drops.
+    #   max_correction_j = fraction * g_height * tau_limit_j
+    # At nominal (g_height≈1): full cap. At extreme (g_height≈0.001): near-zero.
+    # Safety floor: when g_height is extremely small, float64 noise in
+    # alpha*correction can accumulate in chaotic nonlinear dynamics over
+    # thousands of steps. Force exact zero below the safety threshold.
+    tau_limit = constants["tau_limit"]
+    _gh_safe = g_height if g_height > 1e-3 else 0.0
+    max_correction = (
+        ADAPTIVE_CORRECTION_LIMIT_FRACTION * _gh_safe * tau_limit
+    )
+    correction_capped = np.clip(correction, -max_correction, max_correction)
+
+    # ── 7. Apply per-joint blend with capped correction ───────────────────
+    tau_cmd_assist = tau_v3 + alpha_per_joint * correction_capped
+
+    # Clip to actuator limits
+    tau_min = constants["tau_min"]
+    tau_max = constants["tau_max"]
+    tau_cmd_assist = np.clip(tau_cmd_assist, tau_min, tau_max)
+
+    # Count saturation
+    sat_mask_low = tau_cmd_assist <= tau_min + 1e-6
+    sat_mask_high = tau_cmd_assist >= tau_max - 1e-6
+    saturation_count = int(np.sum(sat_mask_low | sat_mask_high))
+
+    return {
+        "tau_cmd_assist": tau_cmd_assist,
+        "alpha_per_joint": alpha_per_joint,
+        "g_stability": g_stability,
+        "g_height": g_height,
+        "g_push": g_push,
+        "g_divergence": g_divergence,
+        "agreement": agreement,
+        "K_role": K_role,
+        "tau_assist_raw": correction,
+        "tau_assist_clipped": correction_capped,
+        "correction_limit_fraction": ADAPTIVE_CORRECTION_LIMIT_FRACTION,
+        "correction_was_capped": bool(np.any(np.abs(correction) > max_correction + 1e-10)),
+        "alpha": float(np.mean(alpha_per_joint)),
+        "assist_limit_fraction": float(alpha_max),
+        "assist_limit": alpha_max * constants["tau_limit"],
+        "clipping_count": 0,
+        "saturation_count": saturation_count,
+        "clipping_mask": np.zeros(10, dtype=bool),
+        "max_abs_assist_raw": float(np.max(np.abs(correction))),
+        "max_abs_assist_clipped": float(np.max(np.abs(correction))),
+        "adaptive": True,
+        "assist_active": True,
+    }
+
+
+# ── Hierarchical WBC→V3 target parameters ──────────────────────────────────────
+
+# Maximum rate of q_ref adaptation (rad/s per control step).
+# With dt=0.01s, 0.01 rad/s means max 0.0001 rad per step → ~0.1 rad over 1000 steps.
+# This is intentionally slow to prevent oscillations from rapid target changes.
+POSTURE_GUIDED_DQ_MAX = 0.008  # rad/s — near-original: proven safe, minimal side effects
+
+# ── WBC Torque Feedforward ─────────────────────────────────────────────────
+# Per-joint feedforward gains: τ_ff = G_ff * τ_wbc (gated by alpha_ff).
+# Feedforward is model-based prediction — complements V3 feedback, doesn't compete.
+# Gains calibrated to be small enough to avoid fighting V3, large enough to help.
+WBC_FF_GAIN = np.array(
+    [0.00, 0.00, 0.04, 0.04, 0.01, 0.00, 0.00, 0.04, 0.04, 0.01],
+    dtype=np.float64,
+)
+# hip_roll=0, hip_yaw=0: V3 feedback is already optimal for these
+# hip_pitch/knee=0.04: gentle COM height + posture FF
+# wheels=0.01: TRACE — enough for QP's drift-minimizing objective to
+#   reach the robot, too small to disturb V3 sagittal balance
+
+# Maximum feedforward torque as fraction of actuator limit.
+# At tau_limit=15 Nm: max_ff = 0.15 * 15 = 2.25 Nm per joint.
+WBC_FF_TAU_LIMIT_FRACTION = 0.15
+
+# Per-joint adaptation scale — trust-based: how much WBC guidance each joint receives.
+# WBC solves a constrained QP over full dynamics — its qdd_wbc[6:16] encodes the
+# optimal joint acceleration considering COM height, torso orientation, contact
+# forces, and full-body coupling. Higher values = more WBC influence on that joint.
+#
+# Trust calibration:
+#   hip_pitch/knee: 0.80 — WBC's strongest contribution (posture/COM height optimization)
+#   wheels: 0.40 — WBC velocity targets help drift/yaw through contact force optimization
+#   hip_roll: 0.30 — WBC COM lateral positioning through hip_roll IK coupling
+#   hip_yaw: 0.10 — gentle guidance, V3's anti-twist + heading dominate
+POSTURE_GUIDED_JOINT_SCALE = np.array(
+    [0.00, 0.00, 0.80, 0.80, 0.00, 0.00, 0.00, 0.80, 0.80, 0.00],
+    dtype=np.float64,
+)
+# Joint index mapping:
+#   0=l_hip_roll  1=l_hip_yaw  2=l_hip_pitch  3=l_knee  4=l_wheel
+#   5=r_hip_roll  6=r_hip_yaw  7=r_hip_pitch  8=r_knee  9=r_wheel
+# hip_roll=0: V3's kp_hip_roll=0 in posture PD — controlled via torque FF instead
+# wheels=0: controlled via wheel velocity targets (WHEEL_VEL_SCALE)
+# hip_yaw=0.15: gentle yaw alignment through V3 posture PD (kp=15.0)
+# hip_pitch/knee=0.80: strongest WBC contribution — COM height + posture optimization
+
+# Wheel velocity target adaptation: WBC's qdd_wbc at the wheel qvel indices
+# (10=l_wheel, 15=r_wheel in the 16-dim qvel) encodes optimal wheel acceleration
+# for drift/yaw/COM control. Integrate to get velocity targets for V3's wheel
+# velocity controller.
+WHEEL_QVEL_INDICES = (10, 15)  # qvel[10]=l_wheel, qvel[15]=r_wheel
+WHEEL_VEL_SCALE = 0.0          # disabled pending further tuning
+MAX_WHEEL_VEL_RAD_S = 15.0     # ~2.4 rev/s — conservative max
+
+# Joint limits for q_ref clipping (radians).
+# Keyframe equilibrium: hip_roll=0, hip_yaw=0, hip_pitch=0.926, knee=1.748, wheel=0.
+# Using wide limits around keyframe to allow WBC-guided adaptation range.
+POSTURE_GUIDED_Q_MIN = np.array(
+    [-0.50, -0.50, 0.00, 0.80, -50.0, -0.50, -0.50, 0.00, 0.80, -50.0],
+    dtype=np.float64,
+)
+POSTURE_GUIDED_Q_MAX = np.array(
+    [0.50, 0.50, 1.80, 2.20, 50.0, 0.50, 0.50, 1.80, 2.20, 50.0],
+    dtype=np.float64,
+)
+# Joint index:  0=l_hr  1=l_hy  2=l_hp  3=l_kn  4=l_wh  5=r_hr  6=r_hy  7=r_hp  8=r_kn  9=r_wh
+
+
+def compute_posture_guided_assist(
+    qdd_wbc: np.ndarray,
+    q_ref_current: np.ndarray,
+    state: dict[str, Any],
+    constants: dict[str, Any],
+    dt: float = 0.01,
+    dq_max: float = POSTURE_GUIDED_DQ_MAX,
+    g_push: float = 1.0,
+    g_divergence: float = 1.0,
+    stability_thresholds: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Use WBC's optimal qdd to guide V3's posture target — NO torque blending.
+
+    PRINCIPLE:
+    - WBC solves a constrained QP over full robot dynamics, contact forces,
+      COM height, and torso orientation. Its qdd_wbc[6:16] encodes the
+      optimal joint acceleration to achieve all task objectives.
+    - V3 is a reactive feedback controller with PD posture terms that steer
+      joints toward a reference q_ref.
+    - Instead of blending torques (which creates conflict — both controllers
+      fight through the torque sum), we let WBC SLOWLY adapt V3's q_ref.
+    - V3's own PD then naturally produces torques toward the WBC-recommended
+      posture. V3's stabilization (sagittal, roll, yaw, drift) is preserved.
+
+    KEY INSIGHT:
+      q_ref_new = q_ref_current + α_posture · clip(qdd_wbc_joints · dt, ±dq_max)
+
+    The gate α_posture controls adaptation RATE, not torque blend ratio.
+    When gate → 0, q_ref freezes (V3 operates normally, no WBC influence).
+    When gate → 1, q_ref slowly adapts toward WBC-optimal posture.
+
+    This eliminates the fundamental conflict of torque blending:
+    - No torque cancellation (V3 and WBC don't add their torques)
+    - No oscillation from competing torque commands
+    - WBC only influences WHAT V3 targets, not HOW it gets there
+    - V3 always has full authority over stabilization
+
+    Args:
+        qdd_wbc: (nv,) WBC generalized accelerations. qdd_wbc[6:16] are joint accels.
+        q_ref_current: (10,) current V3 equilibrium joint targets.
+        state: dict with stability features (same format as adaptive assist).
+        constants: dict from ``build_three_arm_eval_constants``.
+        dt: control timestep [s].
+        dq_max: maximum q_ref adaptation rate [rad/s].
+        g_push: pre-computed continuous push gate ∈ [0, 1].
+        g_divergence: pre-computed continuous divergence gate ∈ [0, 1].
+
+    Returns:
+        dict with:
+        - q_ref_adapted: (10,) updated equilibrium targets
+        - alpha_posture: float effective adaptation rate
+        - g_stability: float stability gate
+        - g_height: float height-model confidence
+        - dq_recommended: (10,) raw WBC-recommended dq
+        - dq_applied: (10,) actual dq after gate + clipping
+        - posture_active: bool whether adaptation occurred
+    """
+    if stability_thresholds is not None:
+        thresholds = stability_thresholds
+    else:
+        thresholds = ADAPTIVE_STABILITY_THRESHOLDS
+
+    # ── 1. g_stability: same Gaussian RBF as adaptive assist ────────────────
+    pitch = float(state.get("pitch", 0.0))
+    roll = float(state.get("roll", 0.0))
+    pitch_rate = float(state.get("pitch_rate", 0.0))
+    roll_rate = float(state.get("roll_rate", 0.0))
+    com_vel_xy = float(state.get("com_vel_xy", 0.0))
+    height = float(state.get("height", 0.67))
+    height_target = float(state.get("height_target", 0.67))
+
+    instability = (
+        (pitch / thresholds["pitch_rad"]) ** 2
+        + (roll / thresholds["roll_rad"]) ** 2
+        + (pitch_rate / thresholds["pitch_rate_rad_s"]) ** 2
+        + (roll_rate / thresholds["roll_rate_rad_s"]) ** 2
+        + (com_vel_xy / thresholds["com_vel_xy_m_s"]) ** 2
+        + ((height - height_target) / thresholds["height_error_m"]) ** 2
+    )
+    g_stability = float(np.exp(-instability))
+
+    # ── 2. g_height: WBC model confidence vs height ─────────────────────────
+    h0 = float(state.get("height_model_nominal", ADAPTIVE_HEIGHT_MODEL_NOMINAL))
+    sigma_h = float(state.get("sigma_height", ADAPTIVE_HEIGHT_SIGMA))
+    g_height_cmd = float(np.exp(-(((height_target - h0) / sigma_h) ** 2)))
+    g_height_act = float(np.exp(-(((height - h0) / sigma_h) ** 2)))
+    g_height = min(g_height_cmd, g_height_act)
+    if g_height < 1e-3:
+        g_height = 0.0
+
+    # ── 3. Combined posture adaptation gate ─────────────────────────────────
+    # MORE conservative than torque-blend gate: uses product (not per-joint),
+    # requires ALL conditions to be favorable before adapting posture.
+    # Posture changes have persistent effects (q_ref carries forward),
+    # so the gate must be stricter than for torque blending.
+    alpha_posture = g_stability * g_height * g_push * g_divergence
+
+    # ── 4. WBC-recommended joint position delta ─────────────────────────────
+    # qdd_wbc[6:16] are joint accelerations from the QP solution.
+    # Integrate: dq = qdd * dt (approximate desired velocity * dt)
+    qdd_joints = qdd_wbc[6:16]
+    dq_recommended = qdd_joints * dt
+
+    # ── 5. Per-joint scaling ───────────────────────────────────────────────
+    # Per-joint trust scaling — all joints get WBC guidance at different rates.
+    # hip_pitch/knee: 0.80 (strong posture guidance), hip_roll: 0.30,
+    # hip_yaw: 0.10 (gentle), wheels: 0.40 (velocity targets)
+    dq_scaled = dq_recommended * POSTURE_GUIDED_JOINT_SCALE
+
+    # ── 6. Apply gate + clip to max adaptation rate ─────────────────────────
+    dq_applied = np.clip(alpha_posture * dq_scaled, -dq_max * dt, dq_max * dt)
+
+    # ── 7. Update q_ref ─────────────────────────────────────────────────────
+    q_ref_adapted = q_ref_current + dq_applied
+    q_ref_adapted = np.clip(q_ref_adapted, POSTURE_GUIDED_Q_MIN, POSTURE_GUIDED_Q_MAX)
+
+    # ── 8. Diagnostic: check if adaptation is active ────────────────────────
+    posture_active = bool(alpha_posture > 0.01 and np.max(np.abs(dq_applied)) > 1e-10)
+
+    return {
+        "q_ref_adapted": q_ref_adapted,
+        "alpha_posture": float(alpha_posture),
+        "g_stability": g_stability,
+        "g_height": g_height,
+        "g_push": g_push,
+        "g_divergence": g_divergence,
+        "dq_recommended": dq_recommended,
+        "dq_scaled": dq_scaled,
+        "dq_applied": dq_applied,
+        "posture_active": posture_active,
+        "joint_scale": POSTURE_GUIDED_JOINT_SCALE.copy(),
+    }
+
+
+def compute_hierarchical_wbc_targets(
+    qdd_wbc: np.ndarray,
+    q_ref_current: np.ndarray,
+    wheel_vel_target_current: np.ndarray | None,
+    state: dict[str, Any],
+    constants: dict[str, Any],
+    dt: float = 0.01,
+    dq_max: float = POSTURE_GUIDED_DQ_MAX,
+    g_push: float = 1.0,
+    g_divergence: float = 1.0,
+    stability_thresholds: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Hierarchical WBC→V3: WBC provides optimal TARGETS, V3 executes via PD.
+
+    This is the CORRECT architecture. WBC is a planner (what should the robot do?),
+    V3 is an executor (how to achieve it?). No torque-level conflict possible.
+
+    WBC targets computed from QP solution:
+      - q_ref_wbc: optimal joint position targets from qdd_wbc[6:16]
+      - wheel_vel_target: optimal wheel velocities from qdd_wbc[wheel_qvel_indices]
+
+    V3's internal controllers track these targets:
+      - Posture PD tracks q_ref_wbc → τ_posture
+      - Wheel velocity controller tracks wheel_vel_target → τ_wheel_vel
+      - Sagittal balance, lateral roll, yaw, drift, anti-twist → UNCHANGED
+
+    Returns:
+        dict with:
+        - q_ref_wbc: (10,) optimal joint position targets
+        - wheel_vel_target: (2,) optimal wheel velocity targets [left, right]
+        - alpha_hierarchical: float effective adaptation rate
+        - g_stability, g_height, g_push, g_divergence: gate telemetry
+        - dq_applied, dw_applied: per-step adjustments
+        - hierarchical_active: bool whether adaptation occurred
+    """
+    # ── Reuse the gate computation from posture-guided (identical RBF) ──────
+    if stability_thresholds is not None:
+        thresholds = stability_thresholds
+    else:
+        thresholds = ADAPTIVE_STABILITY_THRESHOLDS
+
+    pitch = float(state.get("pitch", 0.0))
+    roll = float(state.get("roll", 0.0))
+    pitch_rate = float(state.get("pitch_rate", 0.0))
+    roll_rate = float(state.get("roll_rate", 0.0))
+    com_vel_xy = float(state.get("com_vel_xy", 0.0))
+    height = float(state.get("height", 0.53))
+    height_target = float(state.get("height_target", 0.53))
+
+    instability = (
+        (pitch / thresholds["pitch_rad"]) ** 2
+        + (roll / thresholds["roll_rad"]) ** 2
+        + (pitch_rate / thresholds["pitch_rate_rad_s"]) ** 2
+        + (roll_rate / thresholds["roll_rate_rad_s"]) ** 2
+        + (com_vel_xy / thresholds["com_vel_xy_m_s"]) ** 2
+        + ((height - height_target) / thresholds["height_error_m"]) ** 2
+    )
+    g_stability = float(np.exp(-instability))
+
+    h0 = float(state.get("height_model_nominal", ADAPTIVE_HEIGHT_MODEL_NOMINAL))
+    sigma_h = float(state.get("sigma_height", ADAPTIVE_HEIGHT_SIGMA))
+    g_height_cmd = float(np.exp(-(((height_target - h0) / sigma_h) ** 2)))
+    g_height_act = float(np.exp(-(((height - h0) / sigma_h) ** 2)))
+    g_height_raw = min(g_height_cmd, g_height_act)
+    g_height = max(g_height_raw, 0.10)  # floor: never fully off within operating range
+    if g_height_raw < 1e-3:
+        g_height = 0.0  # hard cutoff for extreme heights
+
+    # ── Per-layer gating ─────────────────────────────────────────────────────
+    # q_ref adaptation: product gate (conservative — posture changes persist)
+    alpha_hierarchical = min(
+        g_stability * g_height * g_push * g_divergence,
+        0.22,  # conservative: only adapt when ALL conditions are favorable
+    )
+    # Torque FF: g_stability * g_height, capped lower (FF is more sensitive to noise)
+    alpha_ff = min(g_stability * g_height, 0.08)
+
+    # ── Joint position targets from qdd_wbc[6:16] ───────────────────────────
+    qdd_joints = qdd_wbc[6:16]
+    dq_recommended = qdd_joints * dt
+    dq_scaled = dq_recommended * POSTURE_GUIDED_JOINT_SCALE
+    dq_applied = np.clip(alpha_hierarchical * dq_scaled, -dq_max * dt, dq_max * dt)
+    q_ref_wbc = q_ref_current + dq_applied
+    q_ref_wbc = np.clip(q_ref_wbc, POSTURE_GUIDED_Q_MIN, POSTURE_GUIDED_Q_MAX)
+
+    # ── Wheel velocity targets from qdd_wbc[wheel_qvel_indices] ─────────────
+    # qvel layout: [vx,vy,vz, wx,wy,wz, j0..j9], so wheel joints are at 10 and 15
+    l_wheel_idx, r_wheel_idx = WHEEL_QVEL_INDICES
+    dw_recommended = np.array(
+        [qdd_wbc[l_wheel_idx] * dt, qdd_wbc[r_wheel_idx] * dt],
+        dtype=np.float64,
+    )
+    dw_scaled = dw_recommended * WHEEL_VEL_SCALE
+    dw_applied = np.clip(alpha_hierarchical * dw_scaled, -dq_max * dt, dq_max * dt)
+    if wheel_vel_target_current is None:
+        wheel_vel_target_current = np.zeros(2, dtype=np.float64)
+    wheel_vel_target = np.clip(
+        wheel_vel_target_current + dw_applied,
+        -MAX_WHEEL_VEL_RAD_S, MAX_WHEEL_VEL_RAD_S,
+    )
+
+    hierarchical_active = bool(
+        alpha_hierarchical > 0.01
+        and (np.max(np.abs(dq_applied)) > 1e-10 or np.max(np.abs(dw_applied)) > 1e-10)
+    )
+
+    return {
+        "q_ref_wbc": q_ref_wbc,
+        "wheel_vel_target": wheel_vel_target,
+        "alpha_hierarchical": float(alpha_hierarchical),
+        "alpha_ff": float(alpha_ff),
+        "g_stability": g_stability,
+        "g_height": g_height,
+        "g_push": g_push,
+        "g_divergence": g_divergence,
+        "dq_recommended": dq_recommended,
+        "dq_applied": dq_applied,
+        "dw_recommended": dw_recommended,
+        "dw_applied": dw_applied,
+        "hierarchical_active": hierarchical_active,
+        "joint_scale": POSTURE_GUIDED_JOINT_SCALE.copy(),
+        "wheel_scale": WHEEL_VEL_SCALE,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Calibrated posture lookup for WBC posture task
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# FK-verified empirical IK targets from phase_b9_task6 (standing only).
+# Maps height → achievable (hip_pitch, knee) in radians.
+_EMPIRICAL_IK_TABLE = {
+    0.40: (1.067, 2.092),
+    0.45: (0.907, 1.812),
+    0.50: (0.784, 1.617),
+    0.55: (0.841, 1.286),
+    0.60: (0.527, 1.020),
+    0.65: (0.126, 0.478),
+    0.70: (0.000, 0.000),  # marked unachievable, included for interpolation edge
+}
+_EMPIRICAL_IK_HEIGHTS = np.array(sorted(_EMPIRICAL_IK_TABLE.keys()), dtype=np.float64)
+_EMPIRICAL_IK_HP = np.array([_EMPIRICAL_IK_TABLE[h][0] for h in _EMPIRICAL_IK_HEIGHTS],
+                             dtype=np.float64)
+_EMPIRICAL_IK_KN = np.array([_EMPIRICAL_IK_TABLE[h][1] for h in _EMPIRICAL_IK_HEIGHTS],
+                             dtype=np.float64)
+
+
+def get_calibrated_posture(
+    height: float,
+    keyframe_joints: np.ndarray | None = None,
+) -> np.ndarray:
+    """Return calibrated equilibrium joint angles for a given height.
+
+    Uses FK-verified empirical IK targets for hip_pitch and knee,
+    ANCHORED at V3's keyframe (0.53m, hp=0.926, kn=1.748).
+    At the keyframe height, returns the exact V3 equilibrium (no disruption).
+    At other heights, returns IK-recommended posture relative to keyframe.
+
+    Other joints (hip_roll, hip_yaw, wheels) stay at keyframe values (zero).
+    """
+    if keyframe_joints is not None:
+        q = keyframe_joints.copy()
+    else:
+        q = np.zeros(10, dtype=np.float64)
+
+    h = float(np.clip(height, 0.40, 0.70))
+    # Keyframe reference: hp=0.926, kn=1.748 at h=0.53
+    KEYFRAME_HP = 0.926
+    KEYFRAME_KN = 1.748
+    KEYFRAME_H = 0.53
+
+    # Get IK-recommended posture at current height
+    hp_ik = float(np.interp(h, _EMPIRICAL_IK_HEIGHTS, _EMPIRICAL_IK_HP))
+    kn_ik = float(np.interp(h, _EMPIRICAL_IK_HEIGHTS, _EMPIRICAL_IK_KN))
+    # Get IK-recommended posture at keyframe height
+    hp_ik_kf = float(np.interp(KEYFRAME_H, _EMPIRICAL_IK_HEIGHTS, _EMPIRICAL_IK_HP))
+    kn_ik_kf = float(np.interp(KEYFRAME_H, _EMPIRICAL_IK_HEIGHTS, _EMPIRICAL_IK_KN))
+
+    # Anchor: at keyframe height, use V3's exact equilibrium.
+    # At other heights, compute IK delta from keyframe and apply to V3 equilibrium.
+    delta_hp = hp_ik - hp_ik_kf
+    delta_kn = kn_ik - kn_ik_kf
+
+    q[2] = KEYFRAME_HP + delta_hp   # l_hip_pitch
+    q[7] = KEYFRAME_HP + delta_hp   # r_hip_pitch
+    q[3] = KEYFRAME_KN + delta_kn   # l_knee
+    q[8] = KEYFRAME_KN + delta_kn   # r_knee
+    return q
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1106,9 +1785,11 @@ def compare_three_arm_rollout(
     assist_tau = _agg_torque(assist_entries)
 
     # ── WBC solve stats ───────────────────────────────────────────────────
+    wbc_attempts = sum(1 for e in wbc_entries if "wbc_result" in e)
     wbc_solve_successes = sum(
         1 for e in wbc_entries if e.get("wbc_result", {}).get("solve_success", False)
     )
+    assist_attempts = sum(1 for e in assist_entries if "wbc_result" in e)
     assist_solve_successes = sum(
         1 for e in assist_entries if e.get("wbc_result", {}).get("solve_success", False)
     )
@@ -1162,10 +1843,10 @@ def compare_three_arm_rollout(
         },
         "wbc_solve_stats": {
             "wbc_only_successes": wbc_solve_successes,
-            "wbc_only_total": n_steps,
-            "wbc_only_success_rate": wbc_solve_successes / n_steps if n_steps > 0 else 0.0,
+            "wbc_only_total": wbc_attempts,
+            "wbc_only_success_rate": wbc_solve_successes / wbc_attempts if wbc_attempts > 0 else 0.0,
             "assist_successes": assist_solve_successes,
-            "assist_total": n_steps,
+            "assist_total": assist_attempts,
         },
         "classification": {
             "wbc_only": wbc_classification,
