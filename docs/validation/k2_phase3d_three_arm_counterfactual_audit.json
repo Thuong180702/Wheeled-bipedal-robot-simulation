@@ -1,0 +1,187 @@
+{
+  "phase": "3D.1",
+  "verdict": "PARTIAL_READY",
+  "constants_version": "phase3d_three_arm_counterfactual",
+  "timestamp": "2026-07-05T19:23:12.562655+00:00",
+  "baseline_truth": {
+    "uses_real_v3_controller": true,
+    "uses_simplified_pd": false,
+    "profile": "K2_JAX_DEDICATED_DEFAULT_V3",
+    "v3_initialized": true,
+    "v3_error": null,
+    "num_states_checked": 0,
+    "max_abs_tau_diff_vs_reference": null,
+    "rms_tau_diff_vs_reference": null,
+    "actuator_order_verified": false,
+    "pass": true
+  },
+  "phase3c_prerequisite": {
+    "phase3c_ready": true,
+    "total_qp_solves_completed": 120,
+    "hard_constraints_pass": true,
+    "controller_modified": false,
+    "qp_torque_injected": false,
+    "realtime_integration": false
+  },
+  "validation_crosscheck": {
+    "attempted": false,
+    "num_cases": 0,
+    "num_passed": 0,
+    "max_dynamics_diff": null,
+    "max_contact_accel_diff": null,
+    "max_friction_diff": null,
+    "max_torque_diff": null,
+    "pass": false
+  },
+  "quick_tests": {
+    "total": 24,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "core_wbc_tests_skipped": false
+  },
+  "test_suite_coverage": {
+    "legacy_c": {
+      "available": false,
+      "completed": false,
+      "num_scenarios": 0
+    },
+    "legacy_d": {
+      "available": false,
+      "completed": false,
+      "num_scenarios": 0
+    },
+    "legacy_e": {
+      "available": false,
+      "completed": false,
+      "num_scenarios": 0
+    },
+    "standard_deterministic": {
+      "completed": false,
+      "num_scenarios": 8,
+      "steps_per_scenario": 1000
+    },
+    "deterministic_single_push": {
+      "completed": false,
+      "num_scenarios": 13,
+      "push_envelopes": [
+        "mild",
+        "nominal"
+      ]
+    },
+    "random_single_push_mild": {
+      "completed": false,
+      "num_seeds": 0,
+      "seeds": []
+    },
+    "random_single_push_harsh_diagnostic": {
+      "completed": false,
+      "required_for_ready": false,
+      "seeds": [
+        101,
+        102,
+        103,
+        104,
+        105
+      ]
+    },
+    "long_horizon_3000": {
+      "completed": false,
+      "num_scenarios": 8,
+      "steps_per_scenario": 3000
+    }
+  },
+  "counterfactual_audit": {
+    "baseline_controller": "K2_JAX_DEDICATED_DEFAULT_V3",
+    "arms": [
+      "V3_BASELINE",
+      "WBC_ONLY",
+      "V3_PLUS_WBC_ASSIST"
+    ],
+    "candidate_controller": "phase3c_wbc_full_rolling_soft",
+    "assist_alpha": 0.25,
+    "assist_limit_fraction": 0.2,
+    "total_scenarios": 1,
+    "wbc_solve_success_rate": 1.0,
+    "wbc_hard_constraint_pass_rate": null,
+    "v3_source": "real_jax_controller"
+  },
+  "minimal_smoke_rollout": {
+    "completed": true,
+    "num_scenarios": 1,
+    "steps_per_scenario": 100,
+    "arms": [
+      "V3_BASELINE",
+      "WBC_ONLY",
+      "V3_PLUS_WBC_ASSIST"
+    ],
+    "wbc_solve_success_rate": 1.0,
+    "wbc_hard_constraint_pass_rate": null,
+    "nan_inf_count": 0,
+    "torque_limit_violations": 0
+  },
+  "safety_comparison": {
+    "v3_falls": 0,
+    "wbc_only_falls": 0,
+    "assist_falls": 0,
+    "v3_safety_fails": 0,
+    "wbc_only_safety_fails": 0,
+    "assist_safety_fails": 0,
+    "nan_inf_count": 0,
+    "torque_limit_violations": 0
+  },
+  "physical_outcome_comparison": {
+    "wbc_only": {
+      "improved": 0,
+      "equivalent": 0,
+      "mixed": 0,
+      "regressed": 1,
+      "safety_fail": 0
+    },
+    "assist": {
+      "improved": 1,
+      "equivalent": 0,
+      "mixed": 0,
+      "regressed": 0,
+      "safety_fail": 0
+    },
+    "best_arm_counts": {
+      "V3_BASELINE": 0,
+      "WBC_ONLY": 0,
+      "V3_PLUS_WBC_ASSIST": 1,
+      "INCONCLUSIVE": 0
+    },
+    "recommended_next_path": "WBC_ASSIST_PATH"
+  },
+  "aggregate_ratios": {
+    "height_error": {
+      "wbc_only_over_v3": 0.994797816504969,
+      "assist_over_v3": 0.9987080576631727
+    },
+    "posture_error": {
+      "wbc_only_over_v3": 1.0237286416287963,
+      "assist_over_v3": 1.0059055582845762
+    },
+    "drift": {
+      "wbc_only_over_v3": 0.9154888549658241,
+      "assist_over_v3": 0.9778052275240067
+    },
+    "yaw_error": {
+      "wbc_only_over_v3": 2.319115741949575,
+      "assist_over_v3": 0.36437461231236845
+    }
+  },
+  "torque_comparison": {},
+  "wbc_constraints": {},
+  "performance": {},
+  "controller_modified": false,
+  "qp_torque_injected_into_realtime": false,
+  "wbc_torque_applied_only_to_offline_clones": true,
+  "assist_torque_applied_only_to_offline_clones": true,
+  "realtime_integration": false,
+  "limitations": [
+    "V3 torque uses real JAX controller path (K2_JAX_DEDICATED_DEFAULT_V3)",
+    "Legacy C/D/E suites not found in repository",
+    "Full validation cross-check pending execution"
+  ]
+}

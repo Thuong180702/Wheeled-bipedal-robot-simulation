@@ -11,9 +11,11 @@ This controller replaces SagittalWheelBalanceController when selected via
 Output: nonzero torque only on wheel joints [4, 9].
 """
 
+import math
+
 import jax.numpy as jnp
 from jax import Array
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from wheeled_biped.controllers.balance_core_types import (
@@ -25,12 +27,156 @@ from wheeled_biped.controllers.position_hold_capture_gate import (
     PositionHoldCaptureGate,
     CaptureGateDiagnostics,
 )
+from wheeled_biped.controllers.signal_filters import BiquadNotchFilter, FirstOrderLowPassFilter, smoothstep_gate
 
 
 def smoothstep01(u: float) -> float:
     """Standard smoothstep interpolation: s(0)=0, s(1)=1, s'(0)=s'(1)=0."""
     u = max(0.0, min(1.0, u))
     return u * u * (3.0 - 2.0 * u)
+
+
+def interpolate_pitch_ref_offset(
+    height_m: float,
+    heights_m: tuple[float, ...],
+    offsets_deg: tuple[float, ...],
+    clamp: bool = True,
+) -> float:
+    """Piecewise-linear lookup of the scheduled pitch_ref offset for a height.
+
+    Used by the height_scheduled_pitch_equilibrium_trim structural fix: each
+    height has a distinct equilibrium pitch, so the offset that centers support
+    drift is height-dependent (see Phase 1 sweep). This is a pure offline lookup
+    — no JAX arrays — called once per step on a Python float height.
+
+    Args:
+        height_m: query height (commanded/target CoM height in metres).
+        heights_m: schedule breakpoints, strictly ascending.
+        offsets_deg: offset at each breakpoint, same length as heights_m.
+        clamp: when True (default) hold the endpoint offset outside the range;
+            when False, linearly extrapolate from the two nearest breakpoints.
+
+    Returns:
+        Interpolated pitch_ref offset in degrees. Returns 0.0 if the schedule is
+        empty or malformed (defensive: an empty schedule means "no offset").
+    """
+    n = len(heights_m)
+    if n == 0 or n != len(offsets_deg):
+        return 0.0
+    if n == 1:
+        return float(offsets_deg[0])
+
+    # Below the lowest breakpoint.
+    if height_m <= heights_m[0]:
+        if clamp:
+            return float(offsets_deg[0])
+        h0, h1 = heights_m[0], heights_m[1]
+        o0, o1 = offsets_deg[0], offsets_deg[1]
+        t = (height_m - h0) / (h1 - h0)
+        return float(o0 + t * (o1 - o0))
+
+    # Above the highest breakpoint.
+    if height_m >= heights_m[-1]:
+        if clamp:
+            return float(offsets_deg[-1])
+        h0, h1 = heights_m[-2], heights_m[-1]
+        o0, o1 = offsets_deg[-2], offsets_deg[-1]
+        t = (height_m - h0) / (h1 - h0)
+        return float(o0 + t * (o1 - o0))
+
+    # Interior: find the bracketing segment.
+    for i in range(1, n):
+        if height_m <= heights_m[i]:
+            h0, h1 = heights_m[i - 1], heights_m[i]
+            o0, o1 = offsets_deg[i - 1], offsets_deg[i]
+            t = (height_m - h0) / (h1 - h0)
+            return float(o0 + t * (o1 - o0))
+    return float(offsets_deg[-1])  # unreachable, defensive
+
+
+def compute_outer_loop_pitch_ref(
+    support_error_m: float,
+    support_error_rate_m_s: float,
+    integral_error_m_s: float,
+    kp_deg_per_m: float,
+    kd_deg_per_mps: float,
+    ki_deg_per_m_s: float,
+    deadband_m: float,
+    theta_ref_max_deg: float,
+) -> float:
+    """Raw dynamic pitch_ref offset (deg) for the Phase B support-position outer loop.
+
+    PD(+I) on the live support-position error, layered on top of the frozen
+    height schedule. Pure Python float — no JAX — called once per control step.
+
+    The restoring SIGN is carried entirely by the caller-supplied gain signs; this
+    function applies no implicit sign convention. A positive ``support_error_m``
+    (forward drift) times a positive ``kp_deg_per_m`` produces a positive offset.
+
+    Order of operations:
+      1. Deadband: the proportional term is zeroed while ``abs(support_error)`` is
+         below ``deadband_m`` (no nudging while already centered). The derivative
+         and integral terms are NOT deadbanded — damping/integral should keep
+         acting through the band.
+      2. Sum: ``Kp*error_after_deadband + Kd*error_rate + Ki*integral``.
+      3. Saturation: clamp to ``[-theta_ref_max_deg, +theta_ref_max_deg]``.
+
+    Args:
+        support_error_m: live signed support-position error (m). Positive = forward.
+        support_error_rate_m_s: low-passed derivative of the support error (m/s).
+        integral_error_m_s: clamped integral accumulator (m*s); pass 0.0 when the
+            integral path is disabled.
+        kp_deg_per_m: proportional gain (deg per m). Sign selects restoring direction.
+        kd_deg_per_mps: derivative gain (deg per m/s).
+        ki_deg_per_m_s: integral gain (deg per m*s); 0.0 disables the integral path.
+        deadband_m: proportional deadband half-width (m).
+        theta_ref_max_deg: saturation half-range for the dynamic offset (deg).
+
+    Returns:
+        Saturated dynamic pitch_ref offset in degrees (before rate-limit/lowpass).
+    """
+    if abs(support_error_m) < deadband_m:
+        error_p = 0.0
+    else:
+        error_p = support_error_m
+    dynamic = (
+        kp_deg_per_m * error_p
+        + kd_deg_per_mps * support_error_rate_m_s
+        + ki_deg_per_m_s * integral_error_m_s
+    )
+    if dynamic > theta_ref_max_deg:
+        return float(theta_ref_max_deg)
+    if dynamic < -theta_ref_max_deg:
+        return float(-theta_ref_max_deg)
+    return float(dynamic)
+
+
+def apply_rate_limit(prev: float, target: float, max_delta: float) -> float:
+    """Limit the per-step change from ``prev`` toward ``target`` to ``max_delta``.
+
+    ``max_delta <= 0`` disables limiting (returns ``target`` unchanged). Pure float.
+    """
+    if max_delta <= 0.0:
+        return float(target)
+    delta = target - prev
+    if delta > max_delta:
+        return float(prev + max_delta)
+    if delta < -max_delta:
+        return float(prev - max_delta)
+    return float(target)
+
+
+def apply_lowpass(prev: float, target: float, alpha: float) -> float:
+    """First-order low-pass: ``(1-alpha)*prev + alpha*target``.
+
+    ``alpha <= 0`` holds ``prev``; ``alpha >= 1`` returns ``target`` (no filtering).
+    Pure float.
+    """
+    if alpha <= 0.0:
+        return float(prev)
+    if alpha >= 1.0:
+        return float(target)
+    return float((1.0 - alpha) * prev + alpha * target)
 
 
 def scheduled_k_position(
@@ -134,10 +280,219 @@ class SagittalAuthoritySchedule:
     k_wheel_velocity_z_low: float = 0.45
     k_wheel_velocity_z_high: float = 0.52
 
+    # Continuous kd_pitch scheduling (Tall-height WIP damping fix).
+    # Increases pitch-rate damping at tall heights to suppress the 2.5 Hz
+    # wheeled inverted pendulum mode without affecting low-height behavior.
+    # Maps: z_ref <= z_low -> kd_pitch_nominal (no extra damping)
+    #       z_ref >= z_high -> kd_pitch_high_max (full extra damping)
+    # Uses smoothstep interpolation between the two bounds.
+    # Disabled by default so every legacy profile is unchanged.
+    continuous_kd_pitch: bool = False
+    kd_pitch_nominal: float = 10.0
+    kd_pitch_high_max: float = 20.0
+    kd_pitch_z_low: float = 0.40
+    kd_pitch_z_high: float = 0.52
+
     # Position integral settings (Step E extreme height fix)
     enable_position_integral: bool = False
     ki_position_integral: float = 0.0  # 0.0 when disabled
     integral_max_abs: float = 0.0  # 0.0 when disabled
+
+    # Pitch equilibrium trim (Phase 3 fix)
+    # Positive offset makes controller target backward lean, reducing forward drift
+    # Default 0.0, recommended values: 2.0-4.0 deg for high variants
+    pitch_ref_offset_deg: float = 0.0
+
+    # Height-scheduled pitch reference offset (structural fix, Phase 2).
+    # When enabled, the pitch_ref offset is looked up from a per-height schedule
+    # via piecewise-linear interpolation instead of using the static
+    # pitch_ref_offset_deg. The static offset (pitch_equilibrium_trim) stays a
+    # single forward lean tuned for high_0p480 and over-corrects low heights; the
+    # schedule supplies the correct equilibrium-pitch offset at each height.
+    # Disabled by default so baseline and all legacy profiles are unchanged.
+    # heights_m must be ascending and the same length as offsets_deg. Below the
+    # lowest / above the highest scheduled height the endpoint value is held when
+    # pitch_ref_height_schedule_clamp is True.
+    pitch_ref_height_schedule_enabled: bool = False
+    pitch_ref_height_schedule_heights_m: tuple[float, ...] = ()
+    pitch_ref_height_schedule_offsets_deg: tuple[float, ...] = ()
+    pitch_ref_height_schedule_clamp: bool = True
+    # Optional smoothing of the scheduled offset when the commanded height moves
+    # (only relevant for height transitions; inert for fixed-height runs).
+    # 0.0 disables each. rate_limit caps deg/step change; lowpass_alpha in (0,1].
+    pitch_ref_offset_rate_limit_deg_per_step: float = 0.0
+    pitch_ref_offset_lowpass_alpha: float = 0.0
+
+    
+    # Support-position outer loop (Phase B dynamic pitch-reference correction).
+    # A bounded, gated, opt-in real-time correction to pitch_ref driven by the live
+    # support-position error, layered ON TOP of the frozen height schedule above.
+    # The schedule supplies the height-dependent DC operating point; this loop adds
+    # slow centering feedback around it. Disabled by default so every legacy profile
+    # (and height_scheduled_pitch_equilibrium_trim itself) is byte-for-byte unchanged.
+    # The restoring SIGN is carried by the configured Kp sign, proven empirically in
+    # the Phase 4 sign sweep — no sign is hard-coded as "correct". Integral is
+    # disabled initially (Ki = 0). See
+    # docs/validation/support_position_outer_loop_pitch_ref_design.md.
+    outer_loop_enabled: bool = False
+    outer_loop_kp_deg_per_m: float = 0.0
+    outer_loop_kd_deg_per_mps: float = 0.0
+    outer_loop_ki_deg_per_m_s: float = 0.0
+    outer_loop_integral_enabled: bool = False
+    outer_loop_integral_clamp_m_s: float = 0.05
+    outer_loop_theta_ref_max_deg: float = 3.0
+    outer_loop_theta_ref_rate_limit_deg_per_step: float = 0.03
+    outer_loop_theta_ref_lowpass_alpha: float = 0.15
+    outer_loop_support_error_deadband_m: float = 0.015
+    outer_loop_support_velocity_lowpass_alpha: float = 0.20
+    outer_loop_disable_if_abs_error_gt_m: float = 0.25
+    outer_loop_disable_if_pitch_gt_deg: float = 12.0
+    outer_loop_disable_if_roll_gt_deg: float = 5.0
+    outer_loop_contact_required: bool = True
+    outer_loop_height_schedule_required: bool = True
+
+    # Support-position outer loop (Phase B dynamic centering).
+    # A bounded, gated, opt-in additive nudge to pitch_ref driven by the live
+    # support-position error, layered ON TOP of the frozen height schedule above.
+    # Disabled by default so every legacy profile (and the Phase A base profile
+    # height_scheduled_pitch_equilibrium_trim) is byte-for-byte unchanged: when
+    # outer_loop_enabled is False the dynamic term is identically 0.0 and the
+    # applied pitch_ref equals the scheduled offset.
+    # The sign of the restoring direction lives entirely in the configured
+    # outer_loop_kp_deg_per_m value; it is NOT hard-coded in the control law and
+    # must be selected empirically (Phase 4 two-sign sweep). Integral disabled
+    # initially (Ki = 0, integral_enabled = False) — PD only.
+    # See docs/validation/support_position_outer_loop_pitch_ref_design.md.
+    outer_loop_enabled: bool = False
+    outer_loop_kp_deg_per_m: float = 0.0
+    outer_loop_kd_deg_per_mps: float = 0.0
+    outer_loop_ki_deg_per_m_s: float = 0.0
+    outer_loop_integral_enabled: bool = False
+    outer_loop_integral_clamp_m_s: float = 0.05
+    outer_loop_theta_ref_max_deg: float = 3.0
+    outer_loop_theta_ref_rate_limit_deg_per_step: float = 0.03
+    outer_loop_theta_ref_lowpass_alpha: float = 0.15
+    outer_loop_support_error_deadband_m: float = 0.015
+    outer_loop_support_velocity_lowpass_alpha: float = 0.20
+    outer_loop_disable_if_abs_error_gt_m: float = 0.25
+    outer_loop_disable_if_pitch_gt_deg: float = 12.0
+    outer_loop_disable_if_roll_gt_deg: float = 5.0
+    outer_loop_contact_required: bool = True
+    outer_loop_height_schedule_required: bool = True
+
+    # Calibrated height-dependent outer loop (Phase B calibration, opt-in).
+    # When True, the runtime computes Kp/Kd/Ki/theta_max/deadband/rate_limit/
+    # lowpass from the continuous height functions in
+    # wheeled_biped/controllers/calibrated_outer_loop_functions.py (fitted from
+    # the Phase 2 per-height gain sweep) instead of the fixed scalar outer_loop_*
+    # values above. NO setup-name branching — every parameter is interpolated
+    # from the commanded target CoM height. Disabled by default so the base
+    # support_position_outer_loop_pitch_ref profile and all legacy profiles keep
+    # their fixed scalar gains byte-for-byte. See
+    # docs/validation/calibrated_support_position_outer_loop_pitch_ref_final_report.md.
+    calibrated_outer_loop_enabled: bool = False
+    calibrated_outer_loop_function_version: str = "v1"
+
+    # PFF low-band support shaping (opt-in candidate only).
+    # Smoothly enables a bounded support-position pitch-ref correction around
+    # 0.320 m without touching the physics equilibrium feedforward source.
+    low_band_support_outer_loop_enabled: bool = False
+    low_band_support_center_m: float = 0.320
+    low_band_support_sigma_m: float = 0.006
+    low_band_support_kp_peak_deg_per_m: float = 1.5
+    low_band_support_theta_ref_max_peak_deg: float = 3.00
+    low_band_support_pitch_ref_offset_peak_deg: float = 0.0
+    # When True, the low-band support Kp blends with the base (calibrated) Kp
+    # so that the effective Kp does not drop to zero at heights far from the
+    # low-band center. At scale=1 (near center), Kp ≈ peak_kp; at scale=0 (far),
+    # Kp ≈ base_kp. This is required for tall-height push recovery where the
+    # support correction must remain active. Default False for backward compat.
+    low_band_support_blend_with_base: bool = False
+
+    # Physics-based equilibrium feedforward (Phase D, opt-in).
+    # When True, the runtime reads tau_eq_ff(h) from
+    # wheeled_biped/controllers/physics_equilibrium_feedforward.py and adds it
+    # directly to the final wheel torque each step. This replaces the empirical
+    # pitch_ref_height_schedule — see the physics_equilibrium_feedforward_outer_loop
+    # profile below. The feedforward is derived from MuJoCo closed-loop
+    # equilibrium dynamics, not hand-tuned per-height offsets. Disabled by
+    # default so every legacy profile (and B2v2) is byte-for-byte unchanged.
+    physics_equilibrium_feedforward_enabled: bool = False
+    physics_eq_ff_clamp_to_height_range: bool = True
+    physics_eq_ff_function_version: str = ""
+    physics_eq_ff_max_abs_nm: float = 8.0  # safety clamp
+
+    # Unified sagittal state-feedback no-offset controller.
+    # Replaces the independent tau_pitch + tau_position + tau_velocity_damping
+    # sum-of-torques architecture with a single coordinated sagittal command
+    # from full state feedback. Requires pitch_ref_offset_deg = 0.0 and disables
+    # all offset/trim/bias mechanisms. See
+    # docs/validation/unified_sagittal_no_offset_design.md.
+    # Disabled by default — opt-in via dedicated profile.
+    enable_unified_sagittal_state_feedback: bool = False
+
+    # Unified controller gains (scheduled by height if *_height_schedule is True)
+    # support error proportional gain
+    unified_kx: float = 40.0
+    # support error rate gain
+    unified_kv: float = 15.0
+    # pitch proportional gain (+sign: forward lean -> forward torque; 0 = disabled in pure-support mode)
+    unified_ktheta: float = 0.0
+    # pitch rate gain
+    unified_komega: float = 10.0
+    # height error gain (typically 0 — height controlled by leg PD)
+    unified_kh: float = 0.0
+    # height rate gain (typically 0)
+    unified_khdot: float = 0.0
+    # Torque cap for unified controller (Nm)
+    unified_torque_cap: float = 5.0
+    # Rate limit (Nm/step)
+    unified_rate_limit: float = 0.10
+
+    # Height-scheduled unified gains
+    unified_gain_height_schedule: bool = False
+    unified_kx_nominal: float = 3.0
+    unified_kx_low_max: float = 5.0
+    unified_kv_nominal: float = 0.15
+    unified_kv_low_max: float = 0.30
+    unified_ktheta_nominal: float = 3.0
+    unified_ktheta_low_max: float = 4.0
+    unified_komega_nominal: float = 0.15
+    unified_komega_low_max: float = 0.25
+    unified_torque_cap_nominal: float = 6.0
+    unified_torque_cap_low_max: float = 6.0
+
+    # Unified controller mode classifier thresholds
+    unified_drift_enter_m: float = 0.04
+    unified_drift_exit_m: float = 0.02
+    unified_push_pitch_enter_rad: float = 0.15
+    unified_push_pitch_rate_enter_radps: float = 0.20
+    unified_push_exit_rad: float = 0.05
+    unified_height_transition_enter_m: float = 0.005
+    unified_hip_yaw_risk_rad: float = 0.10
+    unified_hip_yaw_danger_rad: float = 0.15
+    unified_contact_degraded: int = 2  # fewer than this = degraded
+
+    # Priority weights per mode
+    unified_support_weight_steady: float = 1.0
+    unified_pitch_weight_steady: float = 1.0
+    unified_rate_weight_steady: float = 1.0
+    unified_height_weight_steady: float = 0.5
+    unified_support_weight_drift: float = 2.0
+    unified_pitch_weight_drift: float = 0.7
+    unified_rate_weight_drift: float = 1.5
+    unified_support_weight_push: float = 0.5
+    unified_pitch_weight_push: float = 2.0
+    unified_rate_weight_push: float = 1.0
+    unified_support_weight_transition: float = 0.7
+    unified_pitch_weight_transition: float = 0.7
+    unified_support_weight_degraded: float = 0.5
+    unified_pitch_weight_degraded: float = 1.5
+    unified_rate_weight_degraded: float = 0.5
+    unified_support_weight_hip_yaw_risk: float = 0.5
+    unified_pitch_weight_hip_yaw_risk: float = 0.5
+    unified_rate_weight_hip_yaw_risk: float = 0.3
+
     integral_pitch_error_threshold_rad: float = 0.03
     integral_support_velocity_threshold_m_s: float = 0.03
     integral_wheel_velocity_threshold_rad_s: float = 1.0
@@ -428,6 +783,91 @@ class SagittalAuthoritySchedule:
     apcr1nd_damping_scale_emergency: float = 0.10
     apcr1nd_preserve_damping_if_helps: bool = True
 
+    # ── K2 JAX Dedicated Default V1: Pitch-damping enhancement ────────────
+    # Candidate E v2 (2026-06-30). Adds continuous pitch-rate-dependent wheel
+    # damping during oscillations. Smoothstep-gated, height-transition-aware,
+    # zero steady-state effect. Enabled by default in DEFAULT_V1 profile.
+    enable_pitch_damping_boost: bool = False
+    pitch_damping_boost_kd: float = 3.0                # Nm/(rad/s)
+    pitch_damping_rate_threshold_low: float = 0.035     # rad/s (~2 deg/s)
+    pitch_damping_rate_threshold_high: float = 0.262    # rad/s (~15 deg/s)
+    pitch_damping_height_gate_enabled: bool = True
+
+    # ── Drift Controller (K2 JAX dedicated) ──────────────────────────────────
+    # Coordinated wheel-torque drift correction with continuous state-dependent
+    # gating. Corrects sagittal velocity drift, heading/yaw drift, and provides
+    # weak position return — all through smoothstep-gated wheel torques.
+    # Zero effect when disabled. Hardware-compatible estimator interface.
+    enable_drift_controller: bool = False
+    drift_k_vel: float = 6.0             # Nm/(m/s) velocity damping gain
+    drift_k_pos: float = 1.5             # Nm/m position return gain (intentionally weak)
+    drift_k_heading: float = 3.0         # Nm/rad heading hold proportional gain
+    drift_k_heading_rate: float = 0.8    # Nm/(rad/s) heading rate damping
+    drift_push_damp_mult: float = 1.5    # max additional velocity damping during push-like states
+    drift_max_tau: float = 5.0           # Nm per-wheel max drift torque (smooth tanh bound)
+    drift_hgate_low: float = 0.03        # CoM z-vel (m/s) below which height_gate ≈ 1.0
+    drift_hgate_high: float = 0.15       # CoM z-vel (m/s) above which height_gate ≈ 0.0
+    drift_pgate_low: float = 0.15        # drift distance (m) below which pos_gate ≈ 0.0
+    drift_pgate_high: float = 0.80       # drift distance (m) above which pos_gate ≈ 1.0
+
+    # ── Heading hip-yaw stabilizer (low-authority soft heading impedance) ──
+    # Acts on hip-yaw joints [1,6] with very low authority smooth bounded torque.
+    # Corrects slow yaw drift without wheel differential. Yields to poor
+    # stability, fast height motion, and hip-yaw divergence.
+    enable_heading_hip_yaw: bool = False
+    heading_hy_kp: float = 0.15          # Nm/rad — very low proportional gain
+    heading_hy_kd: float = 0.05          # Nm/(rad/s) — mild damping
+    heading_hy_max_tau: float = 0.8      # Nm per-joint smooth tanh bound
+
+    # ── Anti-twist damping (reduce excessive hip-yaw divergence) ──────────
+    # Applies opposing torques to hip-yaw joints [1,6] to damp left/right
+    # asymmetry. Mild gains, smooth bounds. Does not lock legs.
+    enable_anti_twist: bool = False
+    anti_twist_kp: float = 0.3           # Nm/rad anti-twist proportional
+    anti_twist_kd: float = 0.1           # Nm/(rad/s) anti-twist damping
+    anti_twist_max_tau: float = 0.6      # Nm per-joint smooth tanh bound
+
+    # ── Hip-yaw mean centering (weak return toward neutral) ────────────────
+    # Gently brings both legs back toward zero-mean after disturbances.
+    # Very weak authority. Yields under poor balance, divergence, and height motion.
+    hy_mean_center_kp: float = 0.5        # Nm/rad weak centering proportional
+    hy_mean_center_max_tau: float = 0.4   # Nm per-joint smooth tanh bound
+
+    # ── Anti-twist divergence guard thresholds (V5 parameterization) ───────
+    # Progressive kp boost when hip-yaw divergence enters the guard region.
+    # guard_start: divergence at which boost begins (V3: 0.22, V4: 0.18)
+    # guard_strong: divergence at which boost saturates (V3: 0.32, V4: 0.30)
+    # guard_boost_max: maximum kp multiplier (V3: 3.5, V4: 5.0)
+    anti_twist_guard_start_rad: float = 0.22
+    anti_twist_guard_strong_rad: float = 0.32
+    anti_twist_guard_boost_max: float = 3.5
+    # V5 two-layer emergency guard: separate tanh cap for guard extra torque
+    anti_twist_emergency_max_tau: float = 0.25  # Nm per-joint, separate from base
+
+    # ── Heading twist yield gate thresholds (V5 parameterization) ──────────
+    # Reduces heading authority as hip-yaw divergence grows.
+    # yield_start: divergence at which heading yield begins (V3: 0.35 disabled, V4: 0.18)
+    # yield_zero: divergence at which heading is fully suppressed (V3/V4: 0.35)
+    # When yield_start >= yield_zero, the yield gate is disabled (always 1.0).
+    heading_twist_yield_start_rad: float = 0.35
+    heading_twist_yield_zero_rad: float = 0.35
+
+    # ── Dynamic q_ref blend alpha (V5 parameterization) ─────────────────────
+    # Fraction of dynamic (two-point-smooth) q_ref vs static equilibrium anchor.
+    # Only applies to multi-segment dynamic cycles. V3: 0.40, V4: 0.60
+    dynamic_q_ref_blend_alpha: float = 0.40
+
+    # ── Split height gates for drift controller ───────────────────────────
+    # Per-component height motion sensitivity. Wider gates = more active during
+    # height transitions. Narrower gates = more suppressed.
+    drift_hgate_vel_low: float = 0.05        # CoM z-vel (m/s) below which height_gate_vel ≈ 1.0
+    drift_hgate_vel_high: float = 0.25       # CoM z-vel (m/s) above which height_gate_vel ≈ 0.0
+    drift_hgate_heading_low: float = 0.02    # CoM z-vel (m/s) below which height_gate_heading ≈ 1.0
+    drift_hgate_heading_high: float = 0.10   # CoM z-vel (m/s) above which height_gate_heading ≈ 0.0
+
+    # ── Height trajectory speed (transition duration control) ─────────────
+    height_transition_duration_s: float = 8.0  # Target duration for full height ramp
+
     # T6F Architecture Fix: Budget Cap Raise
     # Conditionally raises upstream max_position_tau cap during safe high-height emergency recenter
     # Addresses upstream 4.0 Nm clipping that prevents tuned cap authority from reaching wheels
@@ -483,6 +923,249 @@ class SagittalAuthoritySchedule:
     t6j_bias_trim_disable_if_roll_gt_deg: float = 3.0
     t6j_bias_trim_disable_if_wheel_vel_gt_rad_s: float = 7.0
     t6j_bias_trim_disable_if_abs_error_gt_m: float = 0.22
+
+    # Adaptive Centering Bias Trim: proportional, height-aware, guarded trim
+    # Replaces the bang-bang T6J trim with smooth proportional authority
+    # when adaptive_support_centering_trim profile is selected.
+    adaptive_bias_trim_enabled: bool = False
+    adaptive_bias_trim_replace_t6j: bool = True  # True = adaptive replaces T6J entirely
+    adaptive_bias_window_steps: int = 300
+    adaptive_bias_fast_window_steps: int = 100
+    adaptive_bias_enter_threshold_m: float = 0.035
+    adaptive_bias_exit_threshold_m: float = 0.012
+    adaptive_bias_relief_hysteresis_m: float = 0.005
+    adaptive_bias_k_tau_per_m: float = 5.0
+    adaptive_bias_max_tau_low_nm: float = 0.35
+    adaptive_bias_max_tau_high_nm: float = 0.50
+    adaptive_bias_max_tau_extreme_nm: float = 0.55
+    adaptive_bias_height_low_m: float = 0.38
+    adaptive_bias_height_high_m: float = 0.48
+    adaptive_bias_height_extreme_m: float = 0.52
+    adaptive_bias_rate_nm_per_step: float = 0.006
+    adaptive_bias_fast_rate_nm_per_step: float = 0.012
+    adaptive_bias_decay_rate_nm_per_step: float = 0.018
+    adaptive_bias_only_when_upright: bool = True
+    adaptive_bias_only_when_contact_stable: bool = True
+    adaptive_bias_disable_if_pitch_gt_deg: float = 12.0
+    adaptive_bias_disable_if_roll_gt_deg: float = 5.0
+    adaptive_bias_disable_if_abs_error_gt_m: float = 0.24
+    adaptive_bias_disable_if_hip_yaw_gt_rad: float = 0.25
+    adaptive_bias_zero_crossing_guard_enabled: bool = True
+    adaptive_bias_zero_crossing_window_steps: int = 500
+    adaptive_bias_zero_crossing_limit: int = 8
+    adaptive_bias_zero_crossing_max_scale: float = 0.5
+    adaptive_bias_sign_reversal_hold_steps: int = 100
+
+    # Zero-Crossing Support Recenter: hysteresis recenter that forces drift to cross zero
+    # Key difference from adaptive_bias_trim: holds correction until drift crosses to
+    # opposite side, not just until near-zero. Enforces symmetric oscillation.
+    enable_zero_crossing_recenter: bool = False
+    zc_replace_adaptive: bool = False  # True = replace adaptive_bias_trim with ZC
+
+    # Entry/exit thresholds
+    zc_enter_m: float = 0.08           # Enter recenter when |e| > this
+    zc_exit_m: float = 0.025           # Exit recenter when |e| <= this (with dwell)
+    zc_cross_target_m: float = 0.02    # Target overshoot into opposite side
+    zc_near_zero_band_m: float = 0.03  # Error considered "near zero"
+
+    # Hold duration constraints
+    zc_min_hold_steps: int = 50        # Minimum hold before considering release
+    zc_max_hold_steps: int = 600       # Force exit after this many steps
+
+    # Torque authority
+    zc_base_tau_nm: float = 0.20       # Base correction torque
+    zc_max_tau_nm: float = 0.65        # Maximum correction torque
+    zc_rate_nm_per_step: float = 0.01  # Rate limit: increase toward target
+    zc_decay_nm_per_step: float = 0.02 # Decay rate: return to zero
+
+    # Error-proportional gain
+    zc_error_gain_nm_per_m: float = 3.0  # Nm per meter of error
+
+    # Optional velocity damping
+    zc_velocity_gain: float = 0.0      # Damping term (0.0 = disabled)
+
+    # Safety gates (absolute disable conditions)
+    zc_disable_if_abs_error_gt_m: float = 0.25
+    zc_disable_if_pitch_gt_deg: float = 12.0
+    zc_disable_if_roll_gt_deg: float = 5.0
+    zc_disable_if_hip_yaw_gt_rad: float = 0.25
+
+    # Dwell time for exit (converging signal)
+    zc_dwell_steps_for_exit: int = 30
+    zc_dwell_target_within_m: float = 0.015
+
+    # Early Zero-Crossing Support Recenter: exits at zero crossing, not opposite side
+    # Key differences from ZC:
+    # - Entry at 0.05 m (earlier) vs 0.08 m
+    # - Exit at e <= 0 (not -0.02)
+    # - No opposite-side target required
+    # - Immediate decay after zero crossing
+    enable_early_zero_crossing_recenter: bool = False
+    ezc_replace_adaptive: bool = False  # True = replace adaptive_bias_trim with EZC
+    ezc_replace_zc: bool = False  # True = replace old ZC with EZC
+
+    # Entry/exit thresholds
+    ezc_enter_m: float = 0.05           # Enter recenter when |e| > this
+    ezc_exit_at_zero: bool = True       # Exit when e <= 0 (or e >= 0)
+    ezc_zero_dwell_steps: int = 3       # Dwell at zero before decay starts
+    ezc_reentry_m: float = 0.05         # Re-enter when |e| > this again
+
+    # Hold duration constraints
+    ezc_min_hold_steps: int = 0        # No minimum hold (exit at zero)
+    ezc_max_hold_steps: int = 500      # Force exit after this many steps
+
+    # Torque authority
+    ezc_base_tau_nm: float = 0.18       # Base correction torque
+    ezc_max_tau_nm: float = 0.55        # Maximum correction torque
+    ezc_rate_nm_per_step: float = 0.012  # Rate limit: increase toward target
+    ezc_decay_nm_per_step: float = 0.025  # Decay rate: return to zero
+
+    # Error-proportional gain
+    ezc_error_gain_nm_per_m: float = 3.0  # Nm per meter of error
+
+    # Anti-rebound hold: keep decaying correction after zero crossing
+    # Key fix for EZC_FAILURE_EXIT_TOO_EARLY_REBOUND
+    # After crossing zero, keep a small decaying correction to prevent immediate rebound
+    ezc_antirebound_enabled: bool = False  # Enable anti-rebound decay
+    ezc_antirebound_decay_steps: int = 30  # Steps over which to decay after zero crossing
+    ezc_antirebound_initial_ratio: float = 0.50  # Start at 50% of current tau
+
+    # Safety gates (absolute disable conditions)
+    ezc_disable_if_abs_error_gt_m: float = 0.25
+    ezc_disable_if_pitch_gt_deg: float = 12.0
+    ezc_disable_if_roll_gt_deg: float = 5.0
+    ezc_disable_if_hip_yaw_gt_rad: float = 0.25
+
+    # Pitch bias DC compensation (Phase 7 mechanism)
+    # Removes slow residual tau_pitch DC component during stable upright posture.
+    # Does NOT zero tau_pitch; does NOT suppress dynamic pitch correction.
+    # See docs/validation/pitch_bias_compensated_zc_design.md for the full design.
+    pitch_bias_comp_enabled: bool = False                         # Master enable
+    pitch_bias_window_steps: int = 300                            # EMA window for tau_pitch estimate
+    pitch_bias_max_comp_nm: float = 0.60                          # Hard cap on compensation (Nm)
+    pitch_bias_comp_rate_nm_per_step: float = 0.005               # Rate limit growing comp
+    pitch_bias_decay_rate_nm_per_step: float = 0.012              # Decay rate when gate fails
+    pitch_bias_only_when_abs_pitch_lt_deg: float = 2.0            # Estimation gate: pitch upright
+    pitch_bias_only_when_abs_error_lt_m: float = 0.12             # Estimation gate: drift small
+    pitch_bias_disable_if_pitch_gt_deg: float = 12.0              # Hard safety disable on pitch
+    pitch_bias_disable_if_roll_gt_deg: float = 5.0                # Hard safety disable on roll
+    pitch_bias_disable_if_contact_unstable: bool = True           # Hard safety disable on contact
+    pitch_bias_disable_if_height_lt_m: float = 0.25               # Hard safety disable on low height
+    pitch_bias_gate_abs_error_soft_m: float = 0.12                # Soft gate (apply allowed)
+    pitch_bias_gate_abs_error_hard_m: float = 0.20                # Hard gate (apply blocked)
+
+    # ---- Notch / band-stop filter for 2.5 Hz WIP mode (K candidate family) ----
+    # A causal IIR biquad notch filter centred on the observed 2.5 Hz WIP mode.
+    # Only active at tall heights via the height gate.  Opt-in only — every
+    # existing profile has enable_wip_notch_filter=False and is unchanged.
+    enable_wip_notch_filter: bool = False
+
+    # Target signal(s) to filter.  Allowed values:
+    #   "pitch_rate"                     — pitch_rate in tau_pitch_rate term
+    #   "wheel_velocity"                 — wheel_vel in tau_wheel_vel term
+    #   "pitch_rate_and_wheel_velocity"  — both
+    #   "support_velocity"               — support_vel in support velocity damping
+    #   "all_damping_signals"            — pitch_rate + wheel_velocity + support_vel
+    wip_notch_target_signal: str = "pitch_rate"
+
+    # Filter centre frequency (Hz).  Telemetry shows ~2.4–2.5 Hz for pitch_rate.
+    wip_notch_center_hz: float = 2.5
+
+    # Quality factor (Q).  Higher Q = narrower notch.
+    # Recommended: 4–8 for 100 Hz sample rate, 2.5 Hz centre.
+    wip_notch_q: float = 6.0
+
+    # Sample rate (Hz).  0 means auto-derive from controller dt.  100 Hz nominal.
+    wip_notch_fs_hz: float = 0.0  # 0 = auto
+
+    # Height gate for filter activation (smooth Hermite interpolation).
+    # Below z_start → filter blend = 0 (fully raw).
+    # Above z_full → filter blend = blend (fully filtered if blend=1).
+    wip_notch_height_gate_start_m: float = 0.42
+    wip_notch_height_gate_full_m: float = 0.48
+
+    # Enable the height gate.  When False, the filter is always at full blend
+    # (when enable_wip_notch_filter is True).
+    wip_notch_gate_enabled: bool = True
+
+    # Filter blend ratio.  0.0 = fully raw; 1.0 = fully filtered.
+    # Intermediate values allow partial blending.
+    wip_notch_filter_blend: float = 1.0
+
+    # ---- Filter topology selection (K notch/filter sweep, audit-only) ----
+    # Allowed values:
+    #   "biquad_notch"          — current K1 biquad notch (default, unchanged)
+    #   "first_order_lowpass"   — first-order IIR low-pass on pitch rate
+    #   "notch_disabled"        — diagnostic: disable filter entirely
+    # Audit-only.  K1 is "biquad_notch" and must remain unchanged.
+    wip_notch_filter_type: str = "biquad_notch"
+
+    # Cutoff frequency for first_order_lowpass filter type (Hz).
+    # Ignored for biquad_notch filter type.
+    wip_lowpass_cutoff_hz: float = 3.0
+
+    # ---- L family: Coordinated sagittal state feedback (Phase 3) ---- #
+    # When enabled, a coordinated state-feedback term is added to the wheel
+    # torque AFTER the normal sagittal torque computation to synchronize
+    # the pitch, support, and rate contributions.
+    enable_coordinated_sagittal_feedback: bool = False
+    # Selects the feedback gain function:
+    #   "L1_low_freq"           — conservative low-frequency state feedback
+    #   "L2_phase_lead"         — phase-lead compensation on pitch rate
+    #   "L3_pitch_ref_stabilization" — pitch reference modulation
+    #   "N1_mild_phase_lead"    — mild phase-lead for damping diagnostic
+    coordinated_feedback_kind: str = "none"
+
+    # ---- LR family: Replacement coordinated sagittal feedback (Phase 2) ---- #
+    # Unlike the L family (which ADDS feedback on top of K1's existing terms),
+    # LR REPLACES the sum-of-independent-torques with a single coordinated
+    # feedback term. This avoids the torque double-counting that caused L1/L2/L3
+    # failures (4-5 Nm RMS added to K1's existing 5-8 Nm).
+    # Preserves equilibrium/feedforward path and notch filter.
+    # Disabled by default — opt-in via LR profiles.
+    enable_lr_replacement_feedback: bool = False
+    # Selects the replacement gain function:
+    #   "LR1_low_freq"              — LR coordinated low-frequency state feedback
+    #   "LR2_phase_lead"            — LR with phase-lead compensation
+    #   "LR3_pitch_ref_stabilized"  — LR with pitch reference stabilization
+    lr_replacement_kind: str = "none"
+
+    # ---- LP family: Priority sagittal allocator — pitch-first support-residual ---- #
+    # Architectural alternative to LR/LRS coordinated feedback. Instead of a
+    # single equal-priority sum, LP computes pitch stabilization first and
+    # allocates support-centering torque only from residual safe authority.
+    # Support correction is gated by pitch state safety, saturation headroom,
+    # direction consistency, and slew limits. Preserves K1 EQ/FF baseline.
+    # Disabled by default — opt-in via LP profiles.
+    enable_lp_priority_allocator: bool = False
+    # Selects the priority-allocation variant:
+    #   "LP1_pitch_first_support_residual" — conservative pitch, soft support
+    #   "LP2_pitch_strong_support_soft"    — stronger pitch-rate, softer support
+    #   "LP3_support_recenter_when_safe"   — support only after pitch settles
+    lp_allocator_kind: str = "none"
+
+    # ---- M family: Body-yaw/wheel-yaw correct-actuator fix (Phase 4) ---- #
+    # When enabled, adds body-yaw correction through differential wheel
+    # velocity with support-aware gating.
+    enable_body_yaw_wheel_stabilization: bool = False
+    wheel_yaw_kp: float = 0.5
+    wheel_yaw_kd: float = 0.1
+    wheel_yaw_max_torque: float = 1.5
+    wheel_yaw_height_gate_start_m: float = 0.34
+    wheel_yaw_height_gate_full_m: float = 0.42
+    wheel_yaw_activation_threshold_rad: float = 0.05
+    wheel_yaw_support_gate_enabled: bool = True
+    wheel_yaw_support_error_threshold_m: float = 0.15
+    wheel_yaw_support_rate_threshold_mps: float = 0.05
+
+    # N1 micro-sweep parameters (Phase 5)
+    # Controls the height-scheduled mild phase-lead damping.
+    # Only used when enable_coordinated_sagittal_feedback=True and
+    # coordinated_feedback_kind="N1_mild_phase_lead".
+    n1_rate_low: float = 0.3    # k_rate at low height (0.30 m)
+    n1_rate_high: float = 0.5   # k_rate at high height (0.48 m)
+    n1_lead_low: float = 0.02   # k_lead at low height (0.30 m)
+    n1_lead_high: float = 0.04  # k_lead at high height (0.48 m)
 
     def is_active_for_variant(self, variant_name: str | None) -> bool:
         return variant_name is not None and variant_name in self.applies_to_variants
@@ -1656,6 +2339,92 @@ SUPPORT_CENTERING_BIAS_TRIM = SagittalAuthoritySchedule(
     t6j_bias_trim_disable_if_abs_error_gt_m=0.22,
 )
 
+# Adaptive Centering Bias Trim: proportional, height-aware, guarded trim
+# Inherits all SUPPORT_CENTERING_BIAS_TRIM settings and adds adaptive trim.
+# When enabled, replaces the bang-bang T6J trim with proportional authority.
+ADAPTIVE_SUPPORT_CENTERING_TRIM = SagittalAuthoritySchedule(
+    profile_name="adaptive_support_centering_trim",
+    applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height", "high_0p430", "high_0p450", "high_0p465", "high_0p480"),
+    # Inherit all SUPPORT_CENTERING_BIAS_TRIM settings
+    continuous_max_position_tau=True,
+    max_position_tau_nominal=4.0,
+    velocity_damping_scale=1.10,
+    recenter_priority_enabled=True,
+    recenter_priority_startup_guard_steps=100,
+    vd_wheel_damping_recenter_override_enabled=True,
+    vd_wheel_damping_preserve_if_opposes_drift=True,
+    position_cap_recenter_boost_enabled=True,
+    recenter_priority_safe_min_com_z=0.27,
+    recenter_priority_safe_roll_rad=0.15,
+    recenter_priority_safe_pitch_rad=0.15,
+    recenter_priority_direct_enabled=True,
+    recenter_priority_direct_enter_m=0.06,
+    recenter_priority_direct_exit_m=0.03,
+    apcr1nd_tuned_enabled=True,
+    apcr1nd_tuned_variant_name="adaptive_support_centering_trim",
+    apcr1nd_soft_enter_m=0.05,
+    apcr1nd_direct_enter_m=0.06,
+    apcr1nd_desired_band_m=0.08,
+    apcr1nd_hard_band_m=0.10,
+    apcr1nd_emergency_band_m=0.12,
+    apcr1nd_release_inner_m=0.03,
+    apcr1nd_hold_outside_band=True,
+    apcr1nd_converging_release_steps=15,
+    apcr1nd_position_cap_normal_nm=4.0,
+    apcr1nd_position_cap_soft_nm=4.5,
+    apcr1nd_position_cap_desired_nm=5.5,
+    apcr1nd_position_cap_hard_nm=6.5,
+    apcr1nd_position_cap_emergency_nm=7.0,
+    apcr1nd_damping_scale_normal=1.0,
+    apcr1nd_damping_scale_soft=0.50,
+    apcr1nd_damping_scale_desired=0.30,
+    apcr1nd_damping_scale_hard=0.15,
+    apcr1nd_damping_scale_emergency=0.10,
+    apcr1nd_preserve_damping_if_helps=True,
+    arch_fix_enabled=True,
+    arch_fix_type="budget_cap_raise",
+    arch_fix_height_threshold_m=0.45,
+    arch_fix_hard_max_position_tau=6.5,
+    arch_fix_emergency_max_position_tau=7.0,
+    t6i_enabled=True,
+    t6i_convergence_window_steps=5,
+    t6i_convergence_threshold_m=0.12,
+    t6i_convergence_trend_threshold_m=0.03,
+    t6i_cap_decay_rate_nm_per_step=0.10,
+    t6i_cap_min_nm=4.0,
+    t6i_max_cap_delta_per_step_nm=0.30,
+    t6j_bias_trim_enabled=False,  # Replaced by adaptive trim
+    # Adaptive centering bias trim (replaces bang-bang T6J)
+    adaptive_bias_trim_enabled=True,
+    adaptive_bias_trim_replace_t6j=True,
+    adaptive_bias_window_steps=300,
+    adaptive_bias_fast_window_steps=100,
+    adaptive_bias_enter_threshold_m=0.035,
+    adaptive_bias_exit_threshold_m=0.012,
+    adaptive_bias_relief_hysteresis_m=0.005,
+    adaptive_bias_k_tau_per_m=5.0,
+    adaptive_bias_max_tau_low_nm=0.35,
+    adaptive_bias_max_tau_high_nm=0.50,
+    adaptive_bias_max_tau_extreme_nm=0.55,
+    adaptive_bias_height_low_m=0.38,
+    adaptive_bias_height_high_m=0.48,
+    adaptive_bias_height_extreme_m=0.52,
+    adaptive_bias_rate_nm_per_step=0.006,
+    adaptive_bias_fast_rate_nm_per_step=0.012,
+    adaptive_bias_decay_rate_nm_per_step=0.018,
+    adaptive_bias_only_when_upright=True,
+    adaptive_bias_only_when_contact_stable=True,
+    adaptive_bias_disable_if_pitch_gt_deg=12.0,
+    adaptive_bias_disable_if_roll_gt_deg=5.0,
+    adaptive_bias_disable_if_abs_error_gt_m=0.24,
+    adaptive_bias_disable_if_hip_yaw_gt_rad=0.25,
+    adaptive_bias_zero_crossing_guard_enabled=True,
+    adaptive_bias_zero_crossing_window_steps=500,
+    adaptive_bias_zero_crossing_limit=8,
+    adaptive_bias_zero_crossing_max_scale=0.5,
+    adaptive_bias_sign_reversal_hold_steps=100,
+)
+
 T6C_HIGH_EARLY_PLUS_STRONGER = SagittalAuthoritySchedule(
     profile_name="T6C_high_early_plus_stronger",
     applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height"),
@@ -1702,6 +2471,2245 @@ T6C_HIGH_EARLY_PLUS_STRONGER = SagittalAuthoritySchedule(
 T6D_HIGH_TRANSIENT_BOOST = T6C_HIGH_EARLY_PLUS_STRONGER
 T6E_HIGH_PITCH_AWARE_BOOST = T6C_HIGH_EARLY_PLUS_STRONGER
 
+# Zero-Crossing Support Recenter: hysteresis recenter that forces drift to cross zero
+# Based on adaptive_support_centering_trim + ZC state machine
+ZERO_CROSSING_SUPPORT_RECENTER = SagittalAuthoritySchedule(
+    profile_name="zero_crossing_support_recenter",
+    applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height", "high_0p430", "high_0p450", "high_0p465", "high_0p480"),
+    # Inherit all ADAPTIVE_SUPPORT_CENTERING_TRIM settings
+    continuous_max_position_tau=True,
+    max_position_tau_nominal=4.0,
+    velocity_damping_scale=1.10,
+    recenter_priority_enabled=True,
+    recenter_priority_startup_guard_steps=100,
+    vd_wheel_damping_recenter_override_enabled=True,
+    vd_wheel_damping_preserve_if_opposes_drift=True,
+    position_cap_recenter_boost_enabled=True,
+    recenter_priority_safe_min_com_z=0.27,
+    recenter_priority_safe_roll_rad=0.15,
+    recenter_priority_safe_pitch_rad=0.15,
+    recenter_priority_direct_enabled=True,
+    recenter_priority_direct_enter_m=0.06,
+    recenter_priority_direct_exit_m=0.03,
+    apcr1nd_tuned_enabled=True,
+    apcr1nd_tuned_variant_name="zero_crossing_support_recenter",
+    apcr1nd_soft_enter_m=0.05,
+    apcr1nd_direct_enter_m=0.06,
+    apcr1nd_desired_band_m=0.08,
+    apcr1nd_hard_band_m=0.10,
+    apcr1nd_emergency_band_m=0.12,
+    apcr1nd_release_inner_m=0.03,
+    apcr1nd_hold_outside_band=True,
+    apcr1nd_converging_release_steps=15,
+    apcr1nd_position_cap_normal_nm=4.0,
+    apcr1nd_position_cap_soft_nm=4.5,
+    apcr1nd_position_cap_desired_nm=5.5,
+    apcr1nd_position_cap_hard_nm=6.5,
+    apcr1nd_position_cap_emergency_nm=7.0,
+    apcr1nd_damping_scale_normal=1.0,
+    apcr1nd_damping_scale_soft=0.50,
+    apcr1nd_damping_scale_desired=0.30,
+    apcr1nd_damping_scale_hard=0.15,
+    apcr1nd_damping_scale_emergency=0.10,
+    apcr1nd_preserve_damping_if_helps=True,
+    arch_fix_enabled=True,
+    arch_fix_type="budget_cap_raise",
+    arch_fix_height_threshold_m=0.45,
+    arch_fix_hard_max_position_tau=6.5,
+    arch_fix_emergency_max_position_tau=7.0,
+    t6i_enabled=True,
+    t6i_convergence_window_steps=5,
+    t6i_convergence_threshold_m=0.12,
+    t6i_convergence_trend_threshold_m=0.03,
+    t6i_cap_decay_rate_nm_per_step=0.10,
+    t6i_cap_min_nm=4.0,
+    t6i_max_cap_delta_per_step_nm=0.30,
+    t6j_bias_trim_enabled=False,
+    adaptive_bias_trim_enabled=True,
+    adaptive_bias_trim_replace_t6j=True,
+    adaptive_bias_window_steps=300,
+    adaptive_bias_fast_window_steps=100,
+    adaptive_bias_enter_threshold_m=0.035,
+    adaptive_bias_exit_threshold_m=0.012,
+    adaptive_bias_relief_hysteresis_m=0.005,
+    adaptive_bias_k_tau_per_m=5.0,
+    adaptive_bias_max_tau_low_nm=0.35,
+    adaptive_bias_max_tau_high_nm=0.50,
+    adaptive_bias_max_tau_extreme_nm=0.55,
+    adaptive_bias_height_low_m=0.38,
+    adaptive_bias_height_high_m=0.48,
+    adaptive_bias_height_extreme_m=0.52,
+    adaptive_bias_rate_nm_per_step=0.006,
+    adaptive_bias_fast_rate_nm_per_step=0.012,
+    adaptive_bias_decay_rate_nm_per_step=0.018,
+    adaptive_bias_only_when_upright=True,
+    adaptive_bias_only_when_contact_stable=True,
+    adaptive_bias_disable_if_pitch_gt_deg=12.0,
+    adaptive_bias_disable_if_roll_gt_deg=5.0,
+    adaptive_bias_disable_if_abs_error_gt_m=0.24,
+    adaptive_bias_disable_if_hip_yaw_gt_rad=0.25,
+    adaptive_bias_zero_crossing_guard_enabled=True,
+    adaptive_bias_zero_crossing_window_steps=500,
+    adaptive_bias_zero_crossing_limit=8,
+    adaptive_bias_zero_crossing_max_scale=0.5,
+    adaptive_bias_sign_reversal_hold_steps=100,
+    # ZC recenter: NEW - hysteresis hold-through-zero recenter
+    enable_zero_crossing_recenter=True,
+    zc_replace_adaptive=False,  # ZC supplements adaptive trim
+    zc_enter_m=0.08,
+    zc_exit_m=0.025,
+    zc_cross_target_m=0.02,
+    zc_near_zero_band_m=0.03,
+    zc_min_hold_steps=50,
+    zc_max_hold_steps=600,
+    zc_base_tau_nm=0.20,
+    zc_max_tau_nm=0.65,
+    zc_rate_nm_per_step=0.01,
+    zc_decay_nm_per_step=0.02,
+    zc_error_gain_nm_per_m=3.0,
+    zc_velocity_gain=0.0,
+    zc_disable_if_abs_error_gt_m=0.25,
+    zc_disable_if_pitch_gt_deg=12.0,
+    zc_disable_if_roll_gt_deg=5.0,
+    zc_disable_if_hip_yaw_gt_rad=0.25,
+    zc_dwell_steps_for_exit=30,
+    zc_dwell_target_within_m=0.015,
+)
+
+# Early Zero-Crossing Support Recenter: exits at zero crossing, not opposite side
+# Based on ZERO_CROSSING_SUPPORT_RECENTER with key changes:
+# - Entry at 0.05 m (earlier) vs 0.08 m
+# - Exit at e <= 0 (not -0.02)
+# - No opposite-side target required
+# - Immediate decay after zero crossing
+EARLY_ZERO_CROSSING_RECENTER = SagittalAuthoritySchedule(
+    profile_name="early_zero_crossing_recenter",
+    applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height", "high_0p430", "high_0p450", "high_0p465", "high_0p480"),
+    # Inherit all ZERO_CROSSING_SUPPORT_RECENTER settings
+    continuous_max_position_tau=True,
+    max_position_tau_nominal=4.0,
+    velocity_damping_scale=1.10,
+    recenter_priority_enabled=True,
+    recenter_priority_startup_guard_steps=100,
+    vd_wheel_damping_recenter_override_enabled=True,
+    vd_wheel_damping_preserve_if_opposes_drift=True,
+    position_cap_recenter_boost_enabled=True,
+    recenter_priority_safe_min_com_z=0.27,
+    recenter_priority_safe_roll_rad=0.15,
+    recenter_priority_safe_pitch_rad=0.15,
+    recenter_priority_direct_enabled=True,
+    recenter_priority_direct_enter_m=0.06,
+    recenter_priority_direct_exit_m=0.03,
+    apcr1nd_tuned_enabled=True,
+    apcr1nd_tuned_variant_name="early_zero_crossing_recenter",
+    apcr1nd_soft_enter_m=0.05,
+    apcr1nd_direct_enter_m=0.06,
+    apcr1nd_desired_band_m=0.08,
+    apcr1nd_hard_band_m=0.10,
+    apcr1nd_emergency_band_m=0.12,
+    apcr1nd_release_inner_m=0.03,
+    apcr1nd_hold_outside_band=True,
+    apcr1nd_converging_release_steps=15,
+    apcr1nd_position_cap_normal_nm=4.0,
+    apcr1nd_position_cap_soft_nm=4.5,
+    apcr1nd_position_cap_desired_nm=5.5,
+    apcr1nd_position_cap_hard_nm=6.5,
+    apcr1nd_position_cap_emergency_nm=7.0,
+    apcr1nd_damping_scale_normal=1.0,
+    apcr1nd_damping_scale_soft=0.50,
+    apcr1nd_damping_scale_desired=0.30,
+    apcr1nd_damping_scale_hard=0.15,
+    apcr1nd_damping_scale_emergency=0.10,
+    apcr1nd_preserve_damping_if_helps=True,
+    arch_fix_enabled=True,
+    arch_fix_type="budget_cap_raise",
+    arch_fix_height_threshold_m=0.45,
+    arch_fix_hard_max_position_tau=6.5,
+    arch_fix_emergency_max_position_tau=7.0,
+    t6i_enabled=True,
+    t6i_convergence_window_steps=5,
+    t6i_convergence_threshold_m=0.12,
+    t6i_convergence_trend_threshold_m=0.03,
+    t6i_cap_decay_rate_nm_per_step=0.10,
+    t6i_cap_min_nm=4.0,
+    t6i_max_cap_delta_per_step_nm=0.30,
+    t6j_bias_trim_enabled=False,
+    adaptive_bias_trim_enabled=True,
+    adaptive_bias_trim_replace_t6j=True,
+    adaptive_bias_window_steps=300,
+    adaptive_bias_fast_window_steps=100,
+    adaptive_bias_enter_threshold_m=0.035,
+    adaptive_bias_exit_threshold_m=0.012,
+    adaptive_bias_relief_hysteresis_m=0.005,
+    adaptive_bias_k_tau_per_m=5.0,
+    adaptive_bias_max_tau_low_nm=0.35,
+    adaptive_bias_max_tau_high_nm=0.50,
+    adaptive_bias_max_tau_extreme_nm=0.55,
+    adaptive_bias_height_low_m=0.38,
+    adaptive_bias_height_high_m=0.48,
+    adaptive_bias_height_extreme_m=0.52,
+    adaptive_bias_rate_nm_per_step=0.006,
+    adaptive_bias_fast_rate_nm_per_step=0.012,
+    adaptive_bias_decay_rate_nm_per_step=0.018,
+    adaptive_bias_only_when_upright=True,
+    adaptive_bias_only_when_contact_stable=True,
+    adaptive_bias_disable_if_pitch_gt_deg=12.0,
+    adaptive_bias_disable_if_roll_gt_deg=5.0,
+    adaptive_bias_disable_if_abs_error_gt_m=0.24,
+    adaptive_bias_disable_if_hip_yaw_gt_rad=0.25,
+    adaptive_bias_zero_crossing_guard_enabled=True,
+    adaptive_bias_zero_crossing_window_steps=500,
+    adaptive_bias_zero_crossing_limit=8,
+    adaptive_bias_zero_crossing_max_scale=0.5,
+    adaptive_bias_sign_reversal_hold_steps=100,
+    # Early ZC recenter: EXITS AT ZERO, not opposite side
+    enable_zero_crossing_recenter=False,  # Disable old ZC
+    enable_early_zero_crossing_recenter=True,
+    ezc_replace_adaptive=False,  # EZC supplements adaptive trim
+    ezc_replace_zc=True,  # EZC replaces old ZC
+    ezc_enter_m=0.05,  # Earlier entry than old ZC (0.08)
+    ezc_exit_at_zero=True,  # Exit at zero, not -0.02
+    ezc_zero_dwell_steps=3,  # Brief dwell at zero
+    ezc_reentry_m=0.05,
+    ezc_min_hold_steps=0,  # No minimum hold
+    ezc_max_hold_steps=500,  # 500 steps max hold
+    ezc_base_tau_nm=0.18,  # Slightly lower base torque
+    ezc_max_tau_nm=0.55,  # Slightly lower max torque
+    ezc_rate_nm_per_step=0.012,  # Faster rate
+    ezc_decay_nm_per_step=0.025,  # Faster decay
+    ezc_error_gain_nm_per_m=3.0,
+    ezc_disable_if_abs_error_gt_m=0.25,
+    ezc_disable_if_pitch_gt_deg=12.0,
+    ezc_disable_if_roll_gt_deg=5.0,
+    ezc_disable_if_hip_yaw_gt_rad=0.25,
+)
+
+
+# =====================================================================
+# EARLY_ZERO_CROSSING_RECENTER_V2: Anti-rebound fix
+# =====================================================================
+# Fix for EZC_FAILURE_EXIT_TOO_EARLY_REBOUND
+# Root cause: EZC exits at zero but positive bias (~+3.5 Nm) immediately
+# returns drift to +0.10 to +0.20 m before EZC can re-enter.
+#
+# Changes from V1 (early_zero_crossing_recenter):
+# - Stronger torque: base 0.25, max 0.70 (vs 0.18, 0.55)
+# - Anti-rebound decay: keep decaying correction for 30 steps after crossing zero
+# - Slower decay rate: 0.018 Nm/step (vs 0.025) to sustain correction longer
+# - Longer zero dwell: 5 steps (vs 3) before entering anti-rebound decay
+#
+# Anti-rebound logic:
+# When crossing zero (e <= 0), enter ANTIREBOUND_DECAY state instead of exiting.
+# Keep current tau (ezc_antirebound_initial_ratio * current tau) and decay over
+# ezc_antirebound_decay_steps (30). This prevents drift from immediately returning
+# positive while tau_position recovers from the positive bias.
+EARLY_ZERO_CROSSING_RECENTER_V2 = SagittalAuthoritySchedule(
+    profile_name="early_zero_crossing_recenter_v2",
+    applies_to_variants=("low_0p300", "low_0p330", "low_0p360", "extreme_height", "high_0p430", "high_0p450", "high_0p465", "high_0p480"),
+    # Inherit all EARLY_ZERO_CROSSING_RECENTER settings
+    continuous_max_position_tau=True,
+    max_position_tau_nominal=4.0,
+    velocity_damping_scale=1.10,
+    recenter_priority_enabled=True,
+    recenter_priority_startup_guard_steps=100,
+    vd_wheel_damping_recenter_override_enabled=True,
+    vd_wheel_damping_preserve_if_opposes_drift=True,
+    position_cap_recenter_boost_enabled=True,
+    recenter_priority_safe_min_com_z=0.27,
+    recenter_priority_safe_roll_rad=0.15,
+    recenter_priority_safe_pitch_rad=0.15,
+    recenter_priority_direct_enabled=True,
+    recenter_priority_direct_enter_m=0.06,
+    recenter_priority_direct_exit_m=0.03,
+    apcr1nd_tuned_enabled=True,
+    apcr1nd_tuned_variant_name="early_zero_crossing_recenter_v2",
+    apcr1nd_soft_enter_m=0.05,
+    apcr1nd_direct_enter_m=0.06,
+    apcr1nd_desired_band_m=0.08,
+    apcr1nd_hard_band_m=0.10,
+    apcr1nd_emergency_band_m=0.12,
+    apcr1nd_release_inner_m=0.03,
+    apcr1nd_hold_outside_band=True,
+    apcr1nd_converging_release_steps=15,
+    apcr1nd_position_cap_normal_nm=4.0,
+    apcr1nd_position_cap_soft_nm=4.5,
+    apcr1nd_position_cap_desired_nm=5.5,
+    apcr1nd_position_cap_hard_nm=6.5,
+    apcr1nd_position_cap_emergency_nm=7.0,
+    apcr1nd_damping_scale_normal=1.0,
+    apcr1nd_damping_scale_soft=0.50,
+    apcr1nd_damping_scale_desired=0.30,
+    apcr1nd_damping_scale_hard=0.15,
+    apcr1nd_damping_scale_emergency=0.10,
+    apcr1nd_preserve_damping_if_helps=True,
+    arch_fix_enabled=True,
+    arch_fix_type="budget_cap_raise",
+    arch_fix_height_threshold_m=0.45,
+    arch_fix_hard_max_position_tau=6.5,
+    arch_fix_emergency_max_position_tau=7.0,
+    t6i_enabled=True,
+    t6i_convergence_window_steps=5,
+    t6i_convergence_threshold_m=0.12,
+    t6i_convergence_trend_threshold_m=0.03,
+    t6i_cap_decay_rate_nm_per_step=0.10,
+    t6i_cap_min_nm=4.0,
+    t6i_max_cap_delta_per_step_nm=0.30,
+    t6j_bias_trim_enabled=False,
+    adaptive_bias_trim_enabled=True,
+    adaptive_bias_trim_replace_t6j=True,
+    adaptive_bias_window_steps=300,
+    adaptive_bias_fast_window_steps=100,
+    adaptive_bias_enter_threshold_m=0.035,
+    adaptive_bias_exit_threshold_m=0.012,
+    adaptive_bias_relief_hysteresis_m=0.005,
+    adaptive_bias_k_tau_per_m=5.0,
+    adaptive_bias_max_tau_low_nm=0.35,
+    adaptive_bias_max_tau_high_nm=0.50,
+    adaptive_bias_max_tau_extreme_nm=0.55,
+    adaptive_bias_height_low_m=0.38,
+    adaptive_bias_height_high_m=0.48,
+    adaptive_bias_height_extreme_m=0.52,
+    adaptive_bias_rate_nm_per_step=0.006,
+    adaptive_bias_fast_rate_nm_per_step=0.012,
+    adaptive_bias_decay_rate_nm_per_step=0.018,
+    adaptive_bias_only_when_upright=True,
+    adaptive_bias_only_when_contact_stable=True,
+    adaptive_bias_disable_if_pitch_gt_deg=12.0,
+    adaptive_bias_disable_if_roll_gt_deg=5.0,
+    adaptive_bias_disable_if_abs_error_gt_m=0.24,
+    adaptive_bias_disable_if_hip_yaw_gt_rad=0.25,
+    adaptive_bias_zero_crossing_guard_enabled=True,
+    adaptive_bias_zero_crossing_window_steps=500,
+    adaptive_bias_zero_crossing_limit=8,
+    adaptive_bias_zero_crossing_max_scale=0.5,
+    adaptive_bias_sign_reversal_hold_steps=100,
+    # Disable old ZC, enable EZC
+    enable_zero_crossing_recenter=False,
+    enable_early_zero_crossing_recenter=True,
+    ezc_replace_adaptive=False,
+    ezc_replace_zc=True,
+    # EZC V2 parameters: stronger, with anti-rebound
+    ezc_enter_m=0.05,
+    ezc_exit_at_zero=True,
+    ezc_zero_dwell_steps=5,  # Longer dwell before anti-rebound decay
+    ezc_reentry_m=0.05,
+    ezc_min_hold_steps=0,
+    ezc_max_hold_steps=500,
+    ezc_base_tau_nm=0.25,  # Stronger base (vs 0.18)
+    ezc_max_tau_nm=0.70,   # Stronger max (vs 0.55)
+    ezc_rate_nm_per_step=0.015,  # Faster ramp (vs 0.012)
+    ezc_decay_nm_per_step=0.018,  # Slower decay (vs 0.025) - KEY CHANGE
+    ezc_error_gain_nm_per_m=4.0,  # Stronger error gain (vs 3.0)
+    # Anti-rebound configuration (NEW)
+    ezc_antirebound_enabled=True,  # KEY FIX
+    ezc_antirebound_decay_steps=30,  # Decay over 30 steps after zero crossing
+    ezc_antirebound_initial_ratio=0.50,  # Start at 50% of current tau
+    ezc_disable_if_abs_error_gt_m=0.25,
+    ezc_disable_if_pitch_gt_deg=12.0,
+    ezc_disable_if_roll_gt_deg=5.0,
+    ezc_disable_if_hip_yaw_gt_rad=0.25,
+)
+
+
+# =====================================================================
+# Phase 7: Pitch Bias Compensated Zero-Crossing Recenter
+# Inherits all settings from EARLY_ZERO_CROSSING_RECENTER_V2 plus enables
+# pitch bias DC compensation. See:
+#   docs/validation/tau_pitch_positive_bias_audit.md
+#   docs/validation/pitch_bias_compensated_zc_design.md
+# =====================================================================
+PITCH_BIAS_COMPENSATED_ZERO_CROSSING_RECENTER = replace(
+    EARLY_ZERO_CROSSING_RECENTER_V2,
+    profile_name="pitch_bias_compensated_zero_crossing_recenter",
+    pitch_bias_comp_enabled=True,
+    pitch_bias_window_steps=300,
+    pitch_bias_max_comp_nm=0.60,
+    pitch_bias_comp_rate_nm_per_step=0.005,
+    pitch_bias_decay_rate_nm_per_step=0.012,
+    pitch_bias_only_when_abs_pitch_lt_deg=2.0,
+    pitch_bias_only_when_abs_error_lt_m=0.12,
+    pitch_bias_disable_if_pitch_gt_deg=12.0,
+    pitch_bias_disable_if_roll_gt_deg=5.0,
+    pitch_bias_disable_if_contact_unstable=True,
+    pitch_bias_disable_if_height_lt_m=0.25,
+    pitch_bias_gate_abs_error_soft_m=0.12,
+    pitch_bias_gate_abs_error_hard_m=0.20,
+)
+
+# =====================================================================
+# Pitch Equilibrium Trim (Phase 3 structural fix)
+# =====================================================================
+# ROOT CAUSE (see docs/validation/sagittal_root_cause_final_report.md):
+# The robot settles into a forward-pitched equilibrium (~+3.3 deg) because
+# the leg geometry at high heights places the CoM slightly forward of the
+# wheel contact line. With pitch_ref=0, tau_pitch = kp_pitch * pitch_x is
+# persistently positive (~+2.9 Nm), pushing wheels forward, while
+# tau_position pulls backward and saturates. The two net to ~0 final wheel
+# torque, freezing the robot in a forward-biased support stalemate and
+# producing one-sided positive drift (80-92% positive).
+#
+# FIX: shift the pitch reference to the measured equilibrium pitch via a
+# small positive offset. This makes tau_pitch oscillate symmetrically about
+# zero instead of biasing forward, so support drift centers about zero.
+# This is a coordination fix, NOT a suppression: full dynamic pitch gain is
+# preserved; only the setpoint moves. Causal ablation (kp_pitch sweep +
+# pitch_ref sweep) confirmed ROOT_CAUSE_PITCH_GAIN_TOO_HIGH relative to the
+# equilibrium requirement, and +4 deg on high_0p480 yielded 5000-step
+# pos%=46.7 / neg%=53.3 with no fall.
+#
+# Built on ADAPTIVE_SUPPORT_CENTERING_TRIM so all existing safety gates,
+# recenter machinery, and authority scheduling remain intact. Opt-in only.
+PITCH_EQUILIBRIUM_TRIM = replace(
+    ADAPTIVE_SUPPORT_CENTERING_TRIM,
+    profile_name="pitch_equilibrium_trim",
+    pitch_ref_offset_deg=4.0,
+)
+
+# =====================================================================
+# HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM (structural fix, Phase 2)
+# =====================================================================
+# The static pitch_equilibrium_trim above applies a single +4 deg forward
+# lean tuned for high_0p480. But each height settles at a DIFFERENT
+# equilibrium pitch, so a single offset over-corrects the low band (the
+# 0.32-0.36 m heights settle at a NEGATIVE equilibrium pitch and need a
+# negative offset, not +4). The Phase 1 blind 110-run height x offset sweep
+# (docs/validation/height_scheduled_pitch_offset_sweep_report.md) selected the
+# per-height offset that best centers signed support drift under the task
+# metric (|pos%-50|, maxabs, P2P, out15%, posture/hip-yaw safety; final drift
+# deliberately excluded). Verdict: HEIGHT_OFFSET_SWEEP_READY with a
+# baseline-relative hip-yaw gate (the absolute 0.20 rad gate flagged behavior
+# the accepted offset-0 adaptive baseline already exhibits).
+#
+# Selected per-height winners (raw, not smoothed — the user chose raw winners
+# over a monotone fit because the low band's score-vs-offset curve is flat and
+# a forced monotone ramp would discard the data-selected low-band offsets):
+#   0.300 m -> +3   0.320 m -> -2   0.330 m -> -4   0.340 m ->  0
+#   0.360 m -> -3   0.380 m -> +5   0.430 m -> +2   0.450 m -> +2
+#   0.465 m -> +3   0.480 m -> +3
+#
+# Inherits ALL safety machinery from ADAPTIVE_SUPPORT_CENTERING_TRIM. The only
+# differences from its parent are the profile name and the height schedule
+# fields. pitch_ref_offset_deg stays 0.0 so that when the schedule is active it
+# is the sole source of the offset (no double-application); the runtime uses
+# the scheduled value when pitch_ref_height_schedule_enabled is True. Opt-in
+# only — every other profile keeps the schedule disabled.
+HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM = replace(
+    ADAPTIVE_SUPPORT_CENTERING_TRIM,
+    profile_name="height_scheduled_pitch_equilibrium_trim",
+    pitch_ref_offset_deg=0.0,
+    pitch_ref_height_schedule_enabled=True,
+    pitch_ref_height_schedule_heights_m=(
+        0.300, 0.320, 0.330, 0.340, 0.360, 0.380, 0.430, 0.450, 0.465, 0.480,
+    ),
+    pitch_ref_height_schedule_offsets_deg=(
+        3.0, -2.0, -4.0, 0.0, -3.0, 5.0, 2.0, 2.0, 3.0, 3.0,
+    ),
+    pitch_ref_height_schedule_clamp=True,
+)
+
+
+# Phase B — Support-position outer-loop pitch reference.
+# Opt-in dynamic centering layered on top of the frozen Phase A height schedule.
+# Inherits the full HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM schedule and all
+# safety machinery; only the outer_loop_* fields are turned on. The initial Kp
+# below is a POSITIVE-sign placeholder consistent with the Phase A evidence
+# (forward drift -> positive scheduled offset reduced it); the final sign and
+# gain are selected empirically by the Phase 4 two-sign sweep and may be edited
+# here. Kd starts at 0.0 (P-only) until the PD screening in Phase 4. Integral
+# stays disabled. See docs/validation/support_position_outer_loop_pitch_ref_design.md.
+SUPPORT_POSITION_OUTER_LOOP_PITCH_REF = replace(
+    HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,
+    profile_name="support_position_outer_loop_pitch_ref",
+    outer_loop_enabled=True,
+    outer_loop_kp_deg_per_m=1.0,
+    outer_loop_kd_deg_per_mps=0.0,
+    outer_loop_ki_deg_per_m_s=0.0,
+    outer_loop_integral_enabled=False,
+)
+
+
+# Phase B calibration — Calibrated support-position outer-loop pitch reference.
+# Opt-in refinement of SUPPORT_POSITION_OUTER_LOOP_PITCH_REF (B) that replaces
+# the single fixed (Kp=1.0, Kd=0.0, Ki=0.0) gains with smooth height-dependent
+# functions fitted from the Phase 2 per-height gain sweep. The scalar
+# outer_loop_* fields below are retained only as the OFF-RANGE fallback / default
+# (they are overridden at runtime by the calibrated height functions when
+# calibrated_outer_loop_enabled is True). Inherits the full frozen Phase A height
+# schedule and every safety gate from B unchanged. The base B profile and all
+# legacy profiles keep calibrated_outer_loop_enabled=False, so they are
+# byte-for-byte unchanged. See
+# wheeled_biped/controllers/calibrated_outer_loop_functions.py and
+# docs/validation/calibrated_support_position_outer_loop_pitch_ref_final_report.md.
+CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF = replace(
+    SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,
+    profile_name="calibrated_support_position_outer_loop_pitch_ref",
+    calibrated_outer_loop_enabled=True,
+)
+
+# Calibrated height-dependent outer loop (Phase B calibration v2, opt-in).
+# v2 differs from the v1 calibrated profile only in the upper band (0.465, 0.480)
+# where v1's Kp was too aggressive, causing regressions at 2000 steps. v2 lowers
+# Kp(0.465) from 1.350 to 1.000 and Kp(0.480) from 1.575 to 1.050 based on
+# targeted upper-band resweep results. All other breakpoints (0.300-0.450) are
+# unchanged from v1. See
+# wheeled_biped/controllers/calibrated_outer_loop_functions_v2.py and
+# docs/validation/calibrated_outer_loop_upper_band_resweep_report.md.
+CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2 = replace(
+    SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,
+    profile_name="calibrated_support_position_outer_loop_pitch_ref_v2",
+    calibrated_outer_loop_enabled=True,
+    calibrated_outer_loop_function_version="v2",
+)
+
+# =====================================================================
+# Physics-Based Equilibrium Feedforward Outer Loop (Phase D, opt-in)
+# =====================================================================
+# Replaces the empirical pitch_ref_height_schedule with a physics-based
+# equilibrium wheel torque feedforward. The feedforward is derived from the
+# MuJoCo closed-loop equilibrium pitch at each height (without empirical offset)
+# and applied directly as a wheel torque each step. This is NOT a hand-tuned
+# offset — the equilibrium emerges from physics + controller Kp_pitch dynamics.
+#
+# Key design choices:
+# - Inherits ALL safety infrastructure from CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2.
+# - Adds `physics_equilibrium_feedforward_enabled` flag and a height-dependent
+#   `physics_eq_ff_*` schedule the runtime reads via the
+#   `physics_equilibrium_feedforward` module.
+# - When enabled, the controller ADDS the physics-derived DC wheel torque
+#   feedforward to the final wheel torque each step, BEFORE the rate-limit and
+#   low-pass stages. The controller's tau_pitch should remain approximately
+#   zero in steady state (no empirical pitch_ref_offset is needed).
+# - pitch_ref_height_schedule_enabled is set False; the empirical schedule is
+#   not used. Telemetry emits `physics_equivalent_pitch_ref_deg = 0.0` and
+#   `empirical_pitch_ref_offset_disabled = True` so callers can distinguish.
+# - Disabled by default — opt-in only.
+# See docs/validation/physics_equilibrium_feedforward_outer_loop_final_report.md.
+PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP = replace(
+    CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,
+    profile_name="physics_equilibrium_feedforward_outer_loop",
+    # Disable empirical pitch_ref_offset schedule
+    pitch_ref_offset_deg=0.0,
+    pitch_ref_height_schedule_enabled=False,
+    pitch_ref_height_schedule_heights_m=(),
+    pitch_ref_height_schedule_offsets_deg=(),
+    # Enable physics-based equilibrium feedforward
+    physics_equilibrium_feedforward_enabled=True,
+    physics_eq_ff_clamp_to_height_range=True,
+    # Telemetry provenance
+    physics_eq_ff_function_version="1.0",
+)
+
+
+# Opt-in low-band support correction for the PFF Step C focused_low_0p320 case.
+# The physics feedforward source and interpolation remain unchanged; this profile
+# only re-enables a smooth, bounded support-position pitch-ref correction around
+# 0.320 m where local telemetry shows a settling operating-point regression.
+PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,
+    profile_name="physics_equilibrium_feedforward_outer_loop_low_band_support_v1",
+    outer_loop_height_schedule_required=False,
+    calibrated_outer_loop_function_version="v2",
+    low_band_support_outer_loop_enabled=True,
+    low_band_support_center_m=0.320,
+    low_band_support_sigma_m=0.006,
+    low_band_support_kp_peak_deg_per_m=1.5,
+    low_band_support_theta_ref_max_peak_deg=3.00,
+    low_band_support_pitch_ref_offset_peak_deg=1.00,
+)
+
+
+# Opt-in v2 low-band support correction selected by
+# physics_ff_low_band_support_v2_tuning. It preserves the same continuous
+# low-band mechanism as v1 while narrowing the height support and reducing peak
+# Kp to lower fixed-height low_0p320 P2P. Disabled by default.
+PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,
+    profile_name="physics_equilibrium_feedforward_outer_loop_low_band_support_v2",
+    outer_loop_height_schedule_required=False,
+    calibrated_outer_loop_function_version="v2",
+    low_band_support_outer_loop_enabled=True,
+    low_band_support_center_m=0.320,
+    low_band_support_sigma_m=0.004,
+    low_band_support_kp_peak_deg_per_m=1.4,
+    low_band_support_theta_ref_max_peak_deg=3.00,
+    low_band_support_pitch_ref_offset_peak_deg=1.00,
+)
+
+# I_SUPPORT_REFERENCE_REACQUISITION_V1 — candidate I1 for support reference
+# reacquisition and pitch-support limit-cycle suppression.
+# Based on the low-band v2 sagittal schedule, with the critical fix that the
+# low-band support Kp blends with the base (calibrated) Kp instead of replacing
+# it. This ensures the support outer loop provides centering feedback at ALL
+# heights, including the tall high_0p480 variant where the previous profile
+# zeroed the effective Kp (height_scale ≈ 0 far from the 0.320 m low-band center).
+#
+# Key change vs v2: low_band_support_blend_with_base=True
+# At scale=1 (near 0.320 m): Kp ≈ peak_kp = 1.4 deg/m (same as v2)
+# At scale=0 (at 0.480 m): Kp ≈ base_kp = 1.050 deg/m (calibrated v2 outer loop)
+# Smooth transition in between.
+#
+# This is an opt-in diagnostic candidate. D remains current-best.
+# Disabled by default.
+I_SUPPORT_REFERENCE_REACQUISITION_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="i_support_reference_reacquisition_v1",
+    low_band_support_blend_with_base=True,
+)
+
+# =====================================================================
+# J_TALL_HEIGHT_SAGITTAL_WIP_DAMPING_V1 Family (Tall-height WIP damping)
+# =====================================================================
+# Opt-in candidate family for increasing sagittal damping at tall height
+# to suppress the 2.505 Hz wheeled inverted pendulum pitch-support mode.
+#
+# Base: PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2
+#       (same sagittal base as G1_sg080/D_MODE_HIP_YAW_DIV_V1)
+#
+# Mode-div parameters are applied via CLI flags (same as G1_sg080:
+# kp=10, kd=0.5, mt=7.5, sl=0.30, sg=0.80).
+#
+# These profiles only add damping scheduling at tall heights. They do NOT
+# change pitch Kp, support outer loop Kp, PFF source, or any low-height
+# behavior. D remains current-best. J candidates are opt-in diagnostic only.
+#
+# All profiles: continuous height-scheduled damping increase above z_low,
+# with smoothstep interpolation to z_high. This ensures zero change at
+# low/nominal heights and progressive engagement from 0.40 m upward.
+#
+# J1 family — height-scheduled kd_pitch (pitch rate damping) increase at tall height.
+#   Directly dampens the 2.5 Hz pitch oscillation component.
+# J1a: mild increase (nominal 10.0 -> high_max 15.0)
+# J1b: moderate increase (nominal 10.0 -> high_max 20.0)
+# J1c: strong increase (nominal 10.0 -> high_max 30.0)
+#
+# J2 family — height-scheduled k_wheel_velocity increase at tall height.
+#   Uses the existing continuous_k_wheel_velocity infrastructure.
+#   Dampens the wheel velocity component of the WIP mode.
+# J2a: mild increase (nominal 0.50 -> high_max 0.85)
+# J2b: moderate increase (nominal 0.50 -> high_max 1.00)
+# J2c: stronger increase (nominal 0.50 -> high_max 1.25)
+#
+# J3 family — Combined kd_pitch + k_wheel_velocity damping.
+# J3a: mild combined (J1a + J2a)
+# J3b: moderate combined (J1b + J2b)
+# J3c: strong combined (J1c + J2c)
+# =====================================================================
+
+J1A_TALL_KD_PITCH_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j1a_tall_kd_pitch_v1",
+    continuous_kd_pitch=True,
+    kd_pitch_nominal=10.0,
+    kd_pitch_high_max=15.0,
+    kd_pitch_z_low=0.40,
+    kd_pitch_z_high=0.52,
+)
+
+J1B_TALL_KD_PITCH_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j1b_tall_kd_pitch_v1",
+    continuous_kd_pitch=True,
+    kd_pitch_nominal=10.0,
+    kd_pitch_high_max=20.0,
+    kd_pitch_z_low=0.40,
+    kd_pitch_z_high=0.52,
+)
+
+J1C_TALL_KD_PITCH_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j1c_tall_kd_pitch_v1",
+    continuous_kd_pitch=True,
+    kd_pitch_nominal=10.0,
+    kd_pitch_high_max=30.0,
+    kd_pitch_z_low=0.40,
+    kd_pitch_z_high=0.52,
+)
+
+J2A_TALL_K_WHEEL_VEL_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j2a_tall_k_wheel_vel_v1",
+    continuous_k_wheel_velocity=True,
+    k_wheel_velocity_nominal=0.50,
+    k_wheel_velocity_high_max=0.85,
+    k_wheel_velocity_z_low=0.45,
+    k_wheel_velocity_z_high=0.52,
+)
+
+J2B_TALL_K_WHEEL_VEL_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j2b_tall_k_wheel_vel_v1",
+    continuous_k_wheel_velocity=True,
+    k_wheel_velocity_nominal=0.50,
+    k_wheel_velocity_high_max=1.00,
+    k_wheel_velocity_z_low=0.45,
+    k_wheel_velocity_z_high=0.52,
+)
+
+J2C_TALL_K_WHEEL_VEL_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j2c_tall_k_wheel_vel_v1",
+    continuous_k_wheel_velocity=True,
+    k_wheel_velocity_nominal=0.50,
+    k_wheel_velocity_high_max=1.25,
+    k_wheel_velocity_z_low=0.45,
+    k_wheel_velocity_z_high=0.52,
+)
+
+J3A_TALL_COMBINED_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j3a_tall_combined_v1",
+    continuous_kd_pitch=True,
+    kd_pitch_nominal=10.0,
+    kd_pitch_high_max=15.0,
+    kd_pitch_z_low=0.40,
+    kd_pitch_z_high=0.52,
+    continuous_k_wheel_velocity=True,
+    k_wheel_velocity_nominal=0.50,
+    k_wheel_velocity_high_max=0.85,
+    k_wheel_velocity_z_low=0.45,
+    k_wheel_velocity_z_high=0.52,
+)
+
+J3B_TALL_COMBINED_V1 = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="j3b_tall_combined_v1",
+    continuous_kd_pitch=True,
+    kd_pitch_nominal=10.0,
+    kd_pitch_high_max=20.0,
+    kd_pitch_z_low=0.40,
+    kd_pitch_z_high=0.52,
+    continuous_k_wheel_velocity=True,
+    k_wheel_velocity_nominal=0.50,
+    k_wheel_velocity_high_max=1.00,
+    k_wheel_velocity_z_low=0.45,
+    k_wheel_velocity_z_high=0.52,
+)
+
+# =====================================================================
+# K_TARGETED_2P5HZ_WIP_NOTCH_V1 Family (Notch-filtered damping, 2.5 Hz WIP)
+# =====================================================================
+# Opt-in candidate family that applies a causal IIR biquad notch filter
+# around the observed 2.5 Hz WIP mode to prevent phase-lagged damping
+# signals from feeding the oscillation.
+#
+# Base: G1_sg080 (same sagittal as D_MODE_HIP_YAW_DIV_V1)
+#       physics_equilibrium_feedforward_outer_loop_low_band_support_v2
+#       + enable_wip_notch_filter=True + filter parameters.
+#
+# Mode-div parameters are applied via CLI flags (same as G1_sg080:
+# kp=10, kd=0.5, mt=7.5, sl=0.30, sg=0.80).
+#
+# D remains current-best. K candidates are opt-in diagnostic only.
+# =====================================================================
+
+K1_PITCH_RATE_NOTCH = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="k1_pitch_rate_notch_v1",
+    enable_wip_notch_filter=True,
+    wip_notch_target_signal="pitch_rate",
+    wip_notch_center_hz=2.5,
+    wip_notch_q=6.0,
+    wip_notch_filter_blend=1.0,
+    wip_notch_gate_enabled=True,
+    wip_notch_height_gate_start_m=0.42,
+    wip_notch_height_gate_full_m=0.48,
+)
+K1B_PITCH_RATE_NOTCH_2P3 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1b_pitch_rate_notch_2p3",
+    wip_notch_center_hz=2.3,
+)
+K1C_PITCH_RATE_NOTCH_2P7 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1c_pitch_rate_notch_2p7",
+    wip_notch_center_hz=2.7,
+)
+K1D_PITCH_RATE_NOTCH_Q4 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1d_pitch_rate_notch_q4",
+    wip_notch_q=4.0,
+)
+K1E_PITCH_RATE_NOTCH_Q8 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1e_pitch_rate_notch_q8",
+    wip_notch_q=8.0,
+)
+K1F_PITCH_RATE_NOTCH_BLEND075 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1f_pitch_rate_notch_blend075",
+    wip_notch_filter_blend=0.75,
+)
+K1G_PITCH_RATE_NOTCH_BLEND050 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k1g_pitch_rate_notch_blend050",
+    wip_notch_filter_blend=0.50,
+)
+K2_NOTCH_LOW_Q_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="k2_notch_low_q_v1",
+    wip_notch_q=2.0,
+    # K2 JAX dedicated runner promotion — Phase 1 parameter parity fixes:
+    # K2 inherits empty applies_to_variants from the SagittalAuthoritySchedule
+    # default, which causes is_active_for_variant() to always return False and
+    # _eff_velocity_damping_scale to stay at the baseline 1.0.  Set the intended
+    # variant list and velocity_damping_scale so the canonical path matches the
+    # documented K2 profile behaviour.
+    applies_to_variants=(
+        "low_0p300", "low_0p330", "low_0p360", "extreme_height",
+        "high_0p430", "high_0p450", "high_0p465", "high_0p480",
+    ),
+    velocity_damping_scale=1.10,
+    # APCR1ND hold_outside_band: keep the recentering-engaged state until the
+    # support error falls below the inner release band (hysteresis).  The class
+    # default is False (immediate release); K2 intends True for push-recovery
+    # robustness.  Matches APCR1ND_T2 hold-outside-band variant.
+    apcr1nd_hold_outside_band=True,
+)
+
+# ── K2 JAX Dedicated Default V1 ────────────────────────────────────────────────
+# Promoted from Candidate E v2 (2026-06-30).
+# Identical to K2_NOTCH_LOW_Q_V1 plus continuous pitch-damping enhancement.
+# This is the OFFICIAL default controller for all future development.
+K2_JAX_DEDICATED_DEFAULT_V1 = replace(
+    K2_NOTCH_LOW_Q_V1,
+    profile_name="k2_jax_dedicated_default_v1",
+    # Phase 4 Candidate E v2: continuous pitch-damping enhancement.
+    # Adds 3.0 Nm/(rad/s) additional pitch-rate damping at wheels during
+    # oscillations (>2 deg/s), gated by height-velocity to avoid fighting
+    # natural pitch during intentional height transitions.
+    # Zero steady-state effect. Smoothstep-gated. No discrete thresholds.
+    enable_pitch_damping_boost=True,
+    pitch_damping_boost_kd=3.0,       # Nm/(rad/s)
+    pitch_damping_rate_threshold_low=0.035,   # rad/s (2 deg/s)
+    pitch_damping_rate_threshold_high=0.262,  # rad/s (15 deg/s)
+    pitch_damping_height_gate_enabled=True,
+)
+
+# ── K2 JAX Dedicated Default V2 ────────────────────────────────────────────────
+# Promoted from DRIFT_ITER2_VEL_ONLY_WIDE_GATE (2026-06-30).
+# Identical to K2_JAX_DEDICATED_DEFAULT_V1 plus velocity-only drift damping.
+#
+# This is the OFFICIAL default controller for all future development.
+# For rollback, use K2_JAX_DEDICATED_DEFAULT_V1.
+#
+# Configuration:
+#   - Velocity damping only (k_vel=10.0, no heading, no position return)
+#   - Wide height gate: smoothstep(0.03→0.15 m/s CoM z-velocity)
+#   - Position gate remains configurable but k_pos=0 disables it
+#   - No wheel-differential heading correction (known unsafe at low height)
+#
+# Known limitations:
+#   - Does not fully solve heading/yaw drift
+#   - Does not fully solve dynamic-height drift
+#   - Next development should target: heading/yaw estimation, wheel asymmetry,
+#     dynamic-height transition speed, dynamic-height drift, push drift decay.
+K2_JAX_DEDICATED_DEFAULT_V2 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1,
+    profile_name="k2_jax_dedicated_default_v2",
+    # Drift controller: velocity-only damping, no heading, no position return
+    enable_drift_controller=True,
+    drift_k_vel=10.0,              # Nm/(m/s) — validated best safe gain
+    drift_k_pos=0.0,               # Nm/m — disabled (unsafe at low height)
+    drift_k_heading=0.0,           # Nm/rad — disabled (unsafe at low height)
+    drift_k_heading_rate=0.0,      # Nm/(rad/s) — disabled
+    drift_max_tau=8.0,             # Nm per-wheel smooth tanh bound
+    drift_push_damp_mult=1.5,      # Conservative push damping
+    drift_hgate_low=0.03,          # CoM z-vel below 0.03 m/s → height_gate ≈ 1.0
+    drift_hgate_high=0.15,         # CoM z-vel above 0.15 m/s → height_gate ≈ 0.0
+    drift_pgate_low=0.15,          # drift distance below 0.15m → pos_gate ≈ 0.0
+    drift_pgate_high=0.80,         # drift distance above 0.80m → pos_gate ≈ 1.0
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE
+#
+# Built on V2 (velocity-only drift damping). Adds:
+#   - Low-authority hip-yaw heading stabilizer (no wheel differential)
+#   - Anti-twist damping (reduce hip-yaw divergence)
+#   - Split height gates (vel stays active during height transitions)
+#   - Height transition speed control (5-10s target via S-curve)
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate",
+    # ── Heading hip-yaw stabilizer ──────────────────────────────────────────
+    enable_heading_hip_yaw=True,
+    heading_hy_kp=0.15,             # Nm/rad — very low, soft impedance
+    heading_hy_kd=0.05,             # Nm/(rad/s) — mild damping
+    heading_hy_max_tau=0.8,         # Nm per-joint smooth tanh bound
+    # ── Anti-twist damping ──────────────────────────────────────────────────
+    enable_anti_twist=True,
+    anti_twist_kp=0.3,              # Nm/rad
+    anti_twist_kd=0.1,              # Nm/(rad/s)
+    anti_twist_max_tau=0.6,         # Nm per-joint
+    # ── Split height gates ──────────────────────────────────────────────────
+    # Velocity gate: WIDER — stays active during controlled height motion
+    drift_hgate_vel_low=0.05,       # below 0.05 m/s → gate ≈ 1.0
+    drift_hgate_vel_high=0.25,      # above 0.25 m/s → gate ≈ 0.0
+    # Heading gate: NARROWER — reduces quickly during height transitions
+    drift_hgate_heading_low=0.02,   # below 0.02 m/s → gate ≈ 1.0
+    drift_hgate_heading_high=0.10,  # above 0.10 m/s → gate ≈ 0.0
+    # Height transition speed
+    height_transition_duration_s=8.0,
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2
+#
+# Built on HHT Candidate with structural fixes from long telemetry diagnosis:
+#   - TASK 1: Differential hip-yaw heading torque (left=+tau, right=-tau)
+#            instead of symmetric (non-functional) torque.
+#   - TASK 2: Reduced anti-twist authority to avoid fighting heading correction:
+#            kp: 0.30→0.15, max_tau: 0.6→0.3 Nm
+#   - TASK 3: Added weak hip-yaw mean centering to prevent outward leg drift
+#   - TASK 4: (runtime-only) Multi-segment dynamic cycle q_ref fix
+#   - TASK 5: Drift gates retuned after conflict resolution
+#
+# Hard principles:
+#   - Velocity-only drift damping (V2). No wheel-differential heading.
+#   - Continuous gates only. No discrete height buckets.
+#   - No scenario-specific hacks. No silent profile fallback.
+#   - Balance priority > drift/heading/yaw. No excessive leg twisting.
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v2",
+    # ── TASK 1: Stronger heading hip-yaw with differential torque ──────────
+    # Sign convention: left=+tau, right=-tau → CW yaw moment (validated via
+    # controlled yaw-error injection test).
+    enable_heading_hip_yaw=True,
+    heading_hy_kp=0.40,             # Nm/rad — increased from 0.15 for authority
+    heading_hy_kd=0.10,             # Nm/(rad/s) — increased from 0.05
+    heading_hy_max_tau=1.5,         # Nm per-joint — increased from 0.8
+    # ── TASK 2: Reduced anti-twist authority ───────────────────────────────
+    # Anti-twist should damp excessive divergence, not fight yaw correction.
+    enable_anti_twist=True,
+    anti_twist_kp=0.15,             # Nm/rad — reduced from 0.30
+    anti_twist_kd=0.1,              # Nm/(rad/s) — unchanged (conservative)
+    anti_twist_max_tau=0.3,         # Nm per-joint — reduced from 0.6
+    # ── TASK 3: Weak hip-yaw mean centering ────────────────────────────────
+    hy_mean_center_kp=0.5,          # Nm/rad — very weak centering
+    hy_mean_center_max_tau=0.4,     # Nm per-joint smooth tanh bound
+    # ── TASK 5: Slightly widened velocity gate (was over-gated 3-8x) ──────
+    # After heading/anti-twist conflict fix, velocity damping can breathe.
+    # Heading and position gates remain conservative. No wheel-diff heading.
+    drift_hgate_vel_low=0.08,       # widened from 0.05
+    drift_hgate_vel_high=0.35,      # widened from 0.25
+    drift_hgate_heading_low=0.02,   # conservative (unchanged)
+    drift_hgate_heading_high=0.10,  # conservative (unchanged)
+    # Height transition speed
+    height_transition_duration_s=8.0,
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3
+#
+# Built on V2 Candidate with three structural fixes from V2 telemetry:
+#   - TASK 1: Widened heading stability gate (pitch full-gate 0.07 rad instead
+#            of 0.035 rad) so heading torque can activate during normal balance.
+#            Twist gate widened (full-gate 0.10 instead of 0.04 rad) so heading
+#            can operate at typical divergence levels.
+#   - TASK 2: Differential heading sign validated via telemetry correlation.
+#   - TASK 3: (runtime-only) Multi-segment q_ref boundary blending.
+#   - TASK 4: Soft divergence guard added to anti-twist damping.
+#            Progressive boost (up to 3.5x) at divergence 0.22→0.32 rad.
+#
+# All V2 values preserved except heading gate thresholds and divergence guard.
+# Drift gains unchanged (Task 5).
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3",
+    # ── TASK 1: Same heading gains, gate thresholds relaxed at call site ─────
+    # (heading_hy_kp/kd/max_tau unchanged from V2: 0.40, 0.10, 1.5)
+    # (anti_twist_kp/kd/max_tau unchanged from V2: 0.15, 0.1, 0.3)
+    # (hy_mean_center_kp/max_tau unchanged from V2: 0.5, 0.4)
+    # (drift_hgate values unchanged from V2: vel 0.08/0.35, heading 0.02/0.10)
+    # (height_transition_duration_s unchanged: 8.0)
+    # The heading gate threshold changes are at the JAX call site in
+    # k2_jax_controller.py, not parameterized in the profile.
+    #
+    # Pitch stability gate: full at 0.07 rad (was 0.035), zero at 0.21 rad
+    # Roll stability gate: full at 0.035 rad (was 0.017), zero at 0.122 rad
+    # Twist gate in heading: full at 0.10 rad (was 0.04), zero at 0.30 rad
+    # Divergence guard boost: activates at 0.22 rad, 3.5x at 0.32 rad
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4
+#
+# Built on V3 Candidate with two structural fixes from V3 telemetry:
+#   - TASK 1: Dynamic cycle q_ref blend retuned from 40% dynamic/60% static
+#            to 60% dynamic/40% static for better height tracking.
+#            Boundary blending (60-step smoothstep) preserved.
+#   - TASK 2: Divergence guard strengthened:
+#            * Activation lowered from 0.22 rad to 0.18 rad
+#            * Full boost increased from 3.5x to 5.0x at 0.30 rad (was 0.32)
+#            * Heading twist yield gate added: yields heading at 0.18→0.35 rad
+#   - TASK 3: Heading fix preserved — same gains, same differential sign.
+#   - TASK 4: Realtime verified with no-telemetry runs.
+#
+# All V3 values preserved: heading gains (0.40, 0.10, 1.5), anti-twist base
+# (0.15, 0.1, 0.3), mean centering (0.5, 0.4), drift gates unchanged.
+# Divergence guard thresholds changed at JAX call site in k2_jax_controller.py.
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v4",
+    # ── TASK 1: Dynamic cycle blend retuned ─────────────────────────────────
+    dynamic_q_ref_blend_alpha=0.60,  # 60% dynamic, 40% static (was 0.40 in V3)
+    # ── TASK 2: Divergence guard strengthened ──────────────────────────────
+    # Guard activation: 0.18 rad (was 0.22 rad in V3)
+    # Guard boost: 5.0x max (was 3.5x in V3), full at 0.30 rad (was 0.32 in V3)
+    anti_twist_guard_start_rad=0.18,
+    anti_twist_guard_strong_rad=0.30,
+    anti_twist_guard_boost_max=5.0,
+    # Heading twist yield: active at 0.18→0.35 rad (was disabled in V3)
+    heading_twist_yield_start_rad=0.18,
+    heading_twist_yield_zero_rad=0.35,
+    # ── TASK 3: Heading fix preserved ─────────────────────────────────────
+    # Same gains, same differential sign, same gate thresholds as V3
+    # (heading_hy_kp/kd/max_tau unchanged: 0.40, 0.10, 1.5)
+    # (anti_twist_kp/kd/max_tau unchanged: 0.15, 0.1, 0.3)
+    # (hy_mean_center_kp/max_tau unchanged: 0.5, 0.4)
+    # (drift_hgate values unchanged from V2: vel 0.08/0.35, heading 0.02/0.10)
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 1 ABLATION PROFILES — HHT V4 Regression Root-Cause Analysis
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Ablation A: HHT_ABLATE_V3_BASE ─────────────────────────────────────────
+# Exact V3 behavior. All V3 guard thresholds, no heading twist yield, 40% blend.
+# Purpose: baseline reference for ablation comparison.
+HHT_ABLATE_V3_BASE = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="hht_ablate_v3_base",
+    # V3 guard: 0.22→0.32 rad, 3.5x boost
+    anti_twist_guard_start_rad=0.22,
+    anti_twist_guard_strong_rad=0.32,
+    anti_twist_guard_boost_max=3.5,
+    # V3: no heading twist yield (disabled)
+    heading_twist_yield_start_rad=0.35,
+    heading_twist_yield_zero_rad=0.35,
+    # V3: 40% dynamic blend
+    dynamic_q_ref_blend_alpha=0.40,
+)
+
+# ── Ablation B: HHT_ABLATE_V3_PLUS_60_40_BLEND ────────────────────────────
+# V3 behavior + only the 60/40 q_ref blend change.
+# No divergence guard changes, no heading twist yield changes.
+# Purpose: determine whether 60/40 blend is safe by itself.
+HHT_ABLATE_V3_PLUS_60_40_BLEND = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="hht_ablate_v3_plus_60_40_blend",
+    # V3 guard: 0.22→0.32 rad, 3.5x boost
+    anti_twist_guard_start_rad=0.22,
+    anti_twist_guard_strong_rad=0.32,
+    anti_twist_guard_boost_max=3.5,
+    # V3: no heading twist yield (disabled)
+    heading_twist_yield_start_rad=0.35,
+    heading_twist_yield_zero_rad=0.35,
+    # V4: 60% dynamic blend (only V4 change applied)
+    dynamic_q_ref_blend_alpha=0.60,
+)
+
+# ── Ablation C: HHT_ABLATE_V4_NO_GUARD_CHANGE ─────────────────────────────
+# V4 but with divergence guard rolled back to V3 values.
+# Keeps 60/40 blend and heading twist yield.
+# Purpose: check whether strengthened divergence guard caused push fall.
+HHT_ABLATE_V4_NO_GUARD_CHANGE = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4,
+    profile_name="hht_ablate_v4_no_guard_change",
+    # Rollback guard to V3: 0.22→0.32 rad, 3.5x boost
+    anti_twist_guard_start_rad=0.22,
+    anti_twist_guard_strong_rad=0.32,
+    anti_twist_guard_boost_max=3.5,
+    # Keep V4 heading twist yield
+    # Keep V4 60/40 blend
+)
+
+# ── Ablation D: HHT_ABLATE_V4_NO_HEADING_TWIST_YIELD ─────────────────────
+# V4 but with heading twist yield gate disabled (set to V3 behavior).
+# Keeps 60/40 blend and V4 guard.
+# Purpose: check whether heading yield during high twist caused push regression.
+HHT_ABLATE_V4_NO_HEADING_TWIST_YIELD = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4,
+    profile_name="hht_ablate_v4_no_heading_twist_yield",
+    # Disable heading twist yield (V3 behavior: start >= zero)
+    heading_twist_yield_start_rad=0.35,
+    heading_twist_yield_zero_rad=0.35,
+    # Keep V4 guard: 0.18→0.30, 5.0x
+    # Keep V4 60/40 blend
+)
+
+# ── Ablation E: HHT_ABLATE_GUARD_CAP_TEST ────────────────────────────────
+# V4 guard thresholds/boost, but increase anti_twist_max_tau from 0.3→0.45 Nm.
+# Tests the theory that the 0.3 Nm tanh cap bottleneck prevents guard from working.
+# Purpose: check if raising the torque cap allows the guard boost to take effect.
+HHT_ABLATE_GUARD_CAP_TEST = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V4,
+    profile_name="hht_ablate_guard_cap_test",
+    # V4 guard: 0.18→0.30, 5.0x
+    # V4 heading twist yield
+    # V4 60/40 blend
+    # Increased anti-twist torque cap
+    anti_twist_max_tau=0.45,  # was 0.3 in V4/V3
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V5
+#
+# Built on V3 base + ablation-proven improvements:
+#   - TASK 1: 60/40 dynamic q_ref blend (proven safe by ablation B:
+#             +3.2 cm height, -55% displacement, -0.033 rad div, -0.2° pitch RMS).
+#             Will test 65/35 and 70/30 blends for further tracking gains.
+#   - TASK 2: Two-layer divergence guard (fixes V4 bottleneck):
+#             * Layer 1: V3 base anti-twist (kp=0.15, max_tau=0.3, own tanh channel)
+#             * Layer 2: Emergency guard at 0.28→0.34 rad, boost 3.5x, separate
+#               tanh cap 0.25 Nm — never squeezed by Layer 1 cap.
+#             * Do NOT multiply base kp into same tanh cap (V4 bottleneck).
+#   - TASK 3: Push regression investigation — V4 fall was non-deterministic.
+#             V5's delayed heading yield (0.30→0.38 rad, not 0.18→0.35) avoids
+#             suppressing heading torque during normal push recovery.
+#   - TASK 4: Heading sign/gate from V3 preserved. No gain increase.
+#
+# Hard principles: V3 base, 60/40 blend, two-layer emergency guard (0.28→0.34),
+# heading yield delayed to 0.30→0.38 rad, no heading gain increase.
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V5 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v5",
+    # ── TASK 1: 60/40 dynamic q_ref blend (proven safe) ────────────────────
+    dynamic_q_ref_blend_alpha=0.60,  # 60% dynamic, 40% static
+    # ── TASK 2: Two-layer guard (V3 base + emergency extra) ───────────────
+    # Layer 1: V3 guard behavior — boost kp at 0.22→0.32 rad, 3.5x, tanh 0.3 Nm
+    # Layer 2: Emergency extra on separate tanh channel — never squeezed by base cap
+    # The guard gate controls BOTH boost multiplier and emergency extra activation.
+    anti_twist_guard_start_rad=0.22,    # V3 guard activation (was 0.28 — left gap)
+    anti_twist_guard_strong_rad=0.32,   # V3 guard full (was 0.34)
+    anti_twist_guard_boost_max=3.5,     # 3.5x extra kp at full gate
+    anti_twist_emergency_max_tau=0.25,  # Nm — separate tanh cap for emergency extra
+    # ── TASK 3: Delayed heading twist yield ───────────────────────────────
+    # Heading yields only after divergence enters emergency region (0.30 rad),
+    # fully suppressed at 0.38 rad. Maintains heading torque during normal recovery.
+    heading_twist_yield_start_rad=0.30,  # rad — yield activation (was 0.18 in V4)
+    heading_twist_yield_zero_rad=0.38,   # rad — fully suppressed (was 0.35 in V4)
+    # ── TASK 4: Heading fix preserved ─────────────────────────────────────
+    # Same gains, same differential sign: heading_hy_kp=0.40, kd=0.10, max_tau=1.5
+    # anti_twist_kp=0.15, kd=0.1, max_tau=0.3, hy_mean_center_kp=0.5, max_tau=0.4
+    # drift_hgate unchanged: vel 0.08/0.35, heading 0.02/0.10
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3 AUDIT FIX CANDIDATE — evidence-backed fixes from V3 root-cause analysis
+#
+# Root Cause #1: Drift height gate uses position error (cm) but compares against
+# thresholds 0.08-0.35 cm (0.8-3.5 mm). At typical height errors of 0.5-2 cm,
+# the gate is always zero → drift velocity damping disabled for >99.8% of steps.
+# Fix: Widen thresholds to 2-12 cm so gate stays open during normal tracking.
+#
+# Root Cause #2: Heading kp=0.40 generates <0.03 Nm peak torque at 5° yaw error.
+# Fix: Increase heading kp modestly to 1.0 (2.5x) so heading generates meaningful
+# correction without over-authority. Keep kd and max_tau unchanged.
+#
+# Root Cause #3: Dynamic q_ref blend 40/60 (V3) limits height tracking to 0.404 m
+# with 0.48 m target. V4's 60/40 blend fixed this without safety regression.
+# Fix: Adopt 60/40 blend (proven safe in HHT_ABLATE_V3_PLUS_60_40_BLEND tests).
+#
+# No other changes from V3. All gates remain continuous.
+# ═══════════════════════════════════════════════════════════════════════════════
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3_audit_fix",
+    # ── Fix #1: Drift height gate thresholds widened for position-error units ──
+    # com_z_vel_abs in drift controller = |height_error| * 100 (cm).
+    # Old: hgate_vel 0.08→0.35 cm (0.8→3.5 mm) — always zero.
+    # New: hgate_vel 2.0→12.0 cm (2→12 cm) — gate open during normal tracking.
+    drift_hgate_vel_low=2.0,        # full gate below 2 cm height error
+    drift_hgate_vel_high=12.0,      # zero gate above 12 cm height error
+    # ── Fix #2: Stronger heading hip-yaw gain ──────────────────────────────────
+    heading_hy_kp=1.0,              # Nm/rad — 2.5x V3 (0.40→1.0)
+    # heading_hy_kd=0.10 unchanged — conservative
+    # heading_hy_max_tau=1.5 unchanged — already sufficient
+    # ── Fix #3: 60/40 dynamic q_ref blend for height tracking ─────────────────
+    dynamic_q_ref_blend_alpha=0.60,  # 60% dynamic, 40% static (V4-proven value)
+    # ── All other V3 parameters preserved ──────────────────────────────────────
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3 AUDIT FIX V2 — heading gain midpoint to address lateral drift regression
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUDIT_FIX_V2 builds from AUDIT_FIX with one change: heading_hy_kp=0.70
+# (midpoint between V3's 0.40 and AUDIT_FIX's 1.0).
+#
+# Rationale: AUDIT_FIX (kp=1.0) showed lateral drift regression (+311%)
+# and push yaw worsening (+15%). Stronger differential hip-yaw heading
+# torque may be injecting lateral/yaw-side forces. kp=0.70 tests whether
+# the regression scales proportionally with gain.
+#
+# Preserved from AUDIT_FIX:
+#   drift_hgate_vel_low  = 2.0
+#   drift_hgate_vel_high = 12.0
+#   dynamic_q_ref_blend_alpha = 0.60
+#
+# No other changes. All gates remain continuous, no scenario hacks.
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3_audit_fix_v2",
+    # ── Fix #1: Drift height gate thresholds widened for position-error units ──
+    drift_hgate_vel_low=2.0,        # full gate below 2 cm height error
+    drift_hgate_vel_high=12.0,      # zero gate above 12 cm height error
+    # ── Fix #2: Heading hip-yaw gain at midpoint (0.70 vs V3=0.40, AUDIT_FIX=1.0)
+    heading_hy_kp=0.70,             # Nm/rad — 1.75x V3, 0.70x AUDIT_FIX
+    # heading_hy_kd=0.10 unchanged
+    # heading_hy_max_tau=1.5 unchanged
+    # ── Fix #3: 60/40 dynamic q_ref blend for height tracking ─────────────────
+    dynamic_q_ref_blend_alpha=0.60,  # 60% dynamic, 40% static
+    # ── All other V3 parameters preserved ──────────────────────────────────────
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3 AUDIT FIX V2 FINAL — promote candidate from 5-point micro-ablation
+# ═══════════════════════════════════════════════════════════════════════════════
+# Micro-ablation across kp ∈ {0.40, 0.55, 0.70, 0.85, 1.00} revealed that kp=0.55
+# achieves near-zero yaw error (-0.50° at fixed 0.400 m) with lateral drift
+# nearly identical to V3 (-0.030 m vs -0.028 m). This is NON-MONOTONIC — kp=0.70
+# is WORSE than both kp=0.55 and kp=0.85 for fixed-height yaw.
+#
+# Three evidence-backed changes from V3:
+#   1. drift_hgate_vel_low/high:  0.08/0.35 → 2.0/12.0  (fix disabled drift gate)
+#   2. heading_hy_kp:             0.40       → 0.55       (optimal from 5-pt sweep)
+#   3. dynamic_q_ref_blend_alpha: 0.40       → 0.60       (better height tracking)
+#
+# All other V3 parameters preserved.
+K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2_FINAL = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="k2_jax_dedicated_default_v2_heading_height_twist_candidate_v3_audit_fix_v2_final",
+    # ── Fix #1: Drift height gate thresholds widened for position-error units ──
+    drift_hgate_vel_low=2.0,        # full gate below 2 cm height error
+    drift_hgate_vel_high=12.0,      # zero gate above 12 cm height error
+    # ── Fix #2: Heading hip-yaw gain — optimal from 5-point micro-ablation ─────
+    heading_hy_kp=0.55,             # Nm/rad — 1.375x V3, near-zero yaw at fixed ht
+    # heading_hy_kd=0.10 unchanged
+    # heading_hy_max_tau=1.5 unchanged
+    # ── Fix #3: 60/40 dynamic q_ref blend for height tracking ─────────────────
+    dynamic_q_ref_blend_alpha=0.60,  # 60% dynamic, 40% static
+    # ── All other V3 parameters preserved ──────────────────────────────────────
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V3 — OFFICIAL DEFAULT (promoted 2026-07-01)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Promoted from V3_AUDIT_FIX_V2_FINAL after comprehensive validation:
+#   - 5-point heading-gain micro-ablation identified kp=0.55 as optimal
+#   - 37/37 validation scenarios survive, 0 falls, 0 SAFETY_FAIL
+#   - Fixed-height yaw: -0.50° vs V2/V3's 5.27° (NEAR-ZERO)
+#   - Lateral drift at mid height: -0.030m (nearly identical to V3's -0.028m)
+#   - Dynamic height: 0.436m max vs V3's 0.404m (+8%)
+#   - Dynamic displacement: 1.37m vs V3's 3.09m (-56%)
+#   - Drift height gate: 100% operational vs V3's 0.2%
+#   - Performance: 121-127 Hz without telemetry
+#
+# Three evidence-backed changes from V3:
+#   1. drift_hgate_vel_low/high:  0.08/0.35 → 2.0/12.0  (fix disabled drift gate)
+#   2. heading_hy_kp:             0.40       → 0.55       (optimal from 5-pt sweep)
+#   3. dynamic_q_ref_blend_alpha: 0.40       → 0.60       (better height tracking)
+#
+# Rollback: use --profile K2_JAX_DEDICATED_DEFAULT_V2
+K2_JAX_DEDICATED_DEFAULT_V3 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2_FINAL,
+    profile_name="k2_jax_dedicated_default_v3",
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3 AUDIT FIX V2 MICRO-ABLATIONS — heading gain sweep for tradeoff mapping
+# ═══════════════════════════════════════════════════════════════════════════════
+# Two micro-ablation profiles to fit the heading-gain tradeoff curve:
+#  - kp=0.55 between V3(0.40) and V2(0.70)
+#  - kp=0.85 between V2(0.70) and FIX(1.0)
+# Used only if kp=0.70 push yaw is worse than both extremes.
+# All other AUDIT_FIX corrections preserved.
+V3_AUDIT_FIX_KP_055 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX,
+    profile_name="v3_audit_fix_kp_055",
+    heading_hy_kp=0.55,              # Nm/rad — 1.375x V3, ~midpoint V3↔V2
+)
+V3_AUDIT_FIX_KP_085 = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX,
+    profile_name="v3_audit_fix_kp_085",
+    heading_hy_kp=0.85,              # Nm/rad — ~midpoint V2↔FIX
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3 AUDIT ABLATIONS — single-factor changes for root-cause validation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# A: Disable heading hip-yaw (isolate heading contribution to yaw/twist)
+V3_AUDIT_HEADING_OFF = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="v3_audit_heading_off",
+    enable_heading_hip_yaw=False,
+)
+
+# D: Heading gate always open under normal pitch/roll (test if heading torque
+#    is effective when not gated by the twist/error sub-gates)
+V3_AUDIT_HEADING_GATE_OPEN = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="v3_audit_heading_gate_open",
+    # Use V3 base with inherently more open gates — the gate thresholds
+    # are at the JAX call site; this profile variant exists for runner
+    # identification. Actual changes in k2_jax_controller.py call site.
+)
+
+# F: Dynamic q_ref 100% static (test whether static anchor causes height tracking failure)
+V3_AUDIT_QREF_STATIC = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="v3_audit_qref_static",
+    dynamic_q_ref_blend_alpha=0.0,  # 100% static equilibrium anchor
+)
+
+# G: Dynamic q_ref 100% dynamic (test whether dynamic-only q_ref is stable)
+V3_AUDIT_QREF_DYNAMIC = replace(
+    K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3,
+    profile_name="v3_audit_qref_dynamic",
+    dynamic_q_ref_blend_alpha=1.0,  # 100% dynamic q_ref
+)
+
+# ── K2 JAX Dedicated Default V1 + Drift Controller ────────────────────────────
+# Candidate: adds coordinated wheel-torque drift correction with continuous
+# stability/height/contact/hip-yaw gating. All gates are smoothstep — no hard
+# thresholds, no scenario flags, no lateral pseudo-force.
+# Ablation-safe: set enable_drift_controller=False to revert to DEFAULT_V1
+# through the same code path.
+K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1,
+    profile_name="k2_jax_dedicated_default_v1_drift_fixed",
+    # Drift controller: coordinated wheel-torque correction
+    enable_drift_controller=True,
+    drift_k_vel=6.0,              # Nm/(m/s) — conservative first pass
+    drift_k_pos=1.5,              # Nm/m — intentionally weak
+    drift_k_heading=3.0,          # Nm/rad
+    drift_k_heading_rate=0.8,     # Nm/(rad/s)
+    drift_push_damp_mult=1.5,     # max 2.5x damping during push-like states
+    drift_max_tau=5.0,            # Nm per-wheel smooth tanh bound
+    drift_hgate_low=0.03,         # CoM z-vel below 0.03 m/s → height_gate ≈ 1.0
+    drift_hgate_high=0.15,        # CoM z-vel above 0.15 m/s → height_gate ≈ 0.0
+    drift_pgate_low=0.15,         # drift distance below 0.15m → pos_gate ≈ 0.0
+    drift_pgate_high=0.80,        # drift distance above 0.80m → pos_gate ≈ 1.0
+)
+
+# ─── Drift Iteration 2 Variants ──────────────────────────────────────────────
+
+# Variant A: Velocity damping only, wide gate, no position/heading
+DRIFT_ITER2_VEL_ONLY_WIDE_GATE = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    profile_name="drift_iter2_vel_only_wide_gate",
+    drift_k_vel=10.0,
+    drift_k_pos=0.0,
+    drift_k_heading=0.0,
+    drift_k_heading_rate=0.0,
+    drift_max_tau=8.0,
+)
+
+# Variant B: Velocity damping + heading hold, wide gate
+DRIFT_ITER2_VEL_HEADING_WIDE_GATE = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    profile_name="drift_iter2_vel_heading_wide_gate",
+    drift_k_vel=10.0,
+    drift_k_pos=0.0,
+    drift_k_heading=5.0,
+    drift_k_heading_rate=1.5,
+    drift_max_tau=8.0,
+)
+
+# Variant C: Velocity + heading + late position return
+DRIFT_ITER2_VEL_HEADING_LATE_POSITION = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    profile_name="drift_iter2_vel_heading_late_position",
+    drift_k_vel=10.0,
+    drift_k_pos=1.5,
+    drift_k_heading=5.0,
+    drift_k_heading_rate=1.5,
+    drift_max_tau=8.0,
+    drift_pgate_low=0.15,
+    drift_pgate_high=0.80,
+)
+
+# Variant D: Push damping emphasis (higher push_damp_mult)
+DRIFT_ITER2_PUSH_DAMPING = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    profile_name="drift_iter2_push_damping",
+    drift_k_vel=10.0,
+    drift_k_pos=0.0,
+    drift_k_heading=5.0,
+    drift_k_heading_rate=1.5,
+    drift_max_tau=8.0,
+    drift_push_damp_mult=3.0,
+)
+
+# Variant E: Dynamic height yield (late position, wide height gate)
+DRIFT_ITER2_DYNAMIC_YIELD = replace(
+    K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
+    profile_name="drift_iter2_dynamic_yield",
+    drift_k_vel=10.0,
+    drift_k_pos=0.0,
+    drift_k_heading=5.0,
+    drift_k_heading_rate=1.5,
+    drift_max_tau=8.0,
+    drift_hgate_low=0.03,
+    drift_hgate_high=0.15,
+    drift_pgate_low=0.50,
+    drift_pgate_high=1.50,
+)
+
+
+K2_WHEEL_VEL_NOTCH = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="k2_wheel_vel_notch_v1",
+    enable_wip_notch_filter=True,
+    wip_notch_target_signal="wheel_velocity",
+    wip_notch_center_hz=2.5,
+    wip_notch_q=6.0,
+    wip_notch_filter_blend=1.0,
+    wip_notch_gate_enabled=True,
+    wip_notch_height_gate_start_m=0.42,
+    wip_notch_height_gate_full_m=0.48,
+)
+K3_PITCH_RATE_WHEEL_VEL_NOTCH = replace(
+    PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    profile_name="k3_pitch_rate_wheel_vel_notch_v1",
+    enable_wip_notch_filter=True,
+    wip_notch_target_signal="pitch_rate_and_wheel_velocity",
+    wip_notch_center_hz=2.5,
+    wip_notch_q=6.0,
+    wip_notch_filter_blend=1.0,
+    wip_notch_gate_enabled=True,
+    wip_notch_height_gate_start_m=0.42,
+    wip_notch_height_gate_full_m=0.48,
+)
+K3B_PITCH_RATE_WHEEL_VEL_NOTCH_BLEND075 = replace(
+    K3_PITCH_RATE_WHEEL_VEL_NOTCH,
+    profile_name="k3b_pitch_rate_wheel_vel_notch_blend075",
+    wip_notch_filter_blend=0.75,
+)
+
+# =====================================================================
+# K_SWEEP factory — audit-only filter parameter sweep profiles
+# =====================================================================
+# These profiles are generated programmatically from K1_PITCH_RATE_NOTCH.
+# All are audit-only — none may become current-best.
+# =====================================================================
+
+
+def _make_sweep_profile(base, name, **overrides):
+    """Create an audit-only sweep profile from a base profile.
+
+    Marks the profile as audit-only by appending '--audit-sweep' to the name.
+    All sweep profiles inherit from K1_PITCH_RATE_NOTCH.
+    """
+    return replace(base, profile_name=name, **overrides)
+
+
+# ── Group A: Centre frequency sweep (Q=6, blend=1.0, biquad_notch) ──
+K_SWEEP_FC_1P50 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_1p50",
+    wip_notch_center_hz=1.5, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_1P75 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_1p75",
+    wip_notch_center_hz=1.75, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_2P00 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_2p00",
+    wip_notch_center_hz=2.0, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_2P25 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_2p25",
+    wip_notch_center_hz=2.25, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_2P75 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_2p75",
+    wip_notch_center_hz=2.75, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_3P00 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_3p00",
+    wip_notch_center_hz=3.0, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_3P25 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_3p25",
+    wip_notch_center_hz=3.25, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_FC_3P50 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_fc_3p50",
+    wip_notch_center_hz=3.5, wip_notch_q=6.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+
+# ── Group B: Q sweep (fc=2.5, blend=1.0, biquad_notch) ──
+K_SWEEP_Q_2P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_q_2p0",
+    wip_notch_center_hz=2.5, wip_notch_q=2.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_Q_3P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_q_3p0",
+    wip_notch_center_hz=2.5, wip_notch_q=3.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_Q_8P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_q_8p0",
+    wip_notch_center_hz=2.5, wip_notch_q=8.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_Q_10P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_q_10p0",
+    wip_notch_center_hz=2.5, wip_notch_q=10.0, wip_notch_filter_blend=1.0,
+    wip_notch_filter_type="biquad_notch",
+)
+
+# ── Group C: Blend sweep (fc=2.5, Q=6, biquad_notch) ──
+K_SWEEP_BLEND_0P00 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_blend_0p00",
+    wip_notch_center_hz=2.5, wip_notch_q=6.0, wip_notch_filter_blend=0.0,
+    wip_notch_filter_type="biquad_notch",
+)
+K_SWEEP_BLEND_0P25 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_blend_0p25",
+    wip_notch_center_hz=2.5, wip_notch_q=6.0, wip_notch_filter_blend=0.25,
+    wip_notch_filter_type="biquad_notch",
+)
+
+# ── Group D: Topology variants ──
+# Notch-disabled diagnostic
+K_SWEEP_NOTCH_DISABLED = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_notch_disabled",
+    wip_notch_filter_type="notch_disabled",
+)
+
+# First-order lowpass variants (cutoff sweep: 3.0, 4.0, 5.0, 6.0 Hz)
+K_SWEEP_LP_3P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_lp_3p0",
+    wip_notch_filter_type="first_order_lowpass",
+    wip_lowpass_cutoff_hz=3.0,
+)
+K_SWEEP_LP_4P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_lp_4p0",
+    wip_notch_filter_type="first_order_lowpass",
+    wip_lowpass_cutoff_hz=4.0,
+)
+K_SWEEP_LP_5P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_lp_5p0",
+    wip_notch_filter_type="first_order_lowpass",
+    wip_lowpass_cutoff_hz=5.0,
+)
+K_SWEEP_LP_6P0 = _make_sweep_profile(
+    K1_PITCH_RATE_NOTCH, "k_sweep_lp_6p0",
+    wip_notch_filter_type="first_order_lowpass",
+    wip_lowpass_cutoff_hz=6.0,
+)
+
+# ── All sweep profile names for registry ──
+ALL_K_SWEEP_PROFILES = {
+    # Group A: centre frequency
+    "k_sweep_fc_1p50": K_SWEEP_FC_1P50,
+    "k_sweep_fc_1p75": K_SWEEP_FC_1P75,
+    "k_sweep_fc_2p00": K_SWEEP_FC_2P00,
+    "k_sweep_fc_2p25": K_SWEEP_FC_2P25,
+    "k_sweep_fc_2p75": K_SWEEP_FC_2P75,
+    "k_sweep_fc_3p00": K_SWEEP_FC_3P00,
+    "k_sweep_fc_3p25": K_SWEEP_FC_3P25,
+    "k_sweep_fc_3p50": K_SWEEP_FC_3P50,
+    # Group B: Q
+    "k_sweep_q_2p0": K_SWEEP_Q_2P0,
+    "k_sweep_q_3p0": K_SWEEP_Q_3P0,
+    "k_sweep_q_8p0": K_SWEEP_Q_8P0,
+    "k_sweep_q_10p0": K_SWEEP_Q_10P0,
+    # Group C: blend
+    "k_sweep_blend_0p00": K_SWEEP_BLEND_0P00,
+    "k_sweep_blend_0p25": K_SWEEP_BLEND_0P25,
+    # Group D: topology
+    "k_sweep_notch_disabled": K_SWEEP_NOTCH_DISABLED,
+    "k_sweep_lp_3p0": K_SWEEP_LP_3P0,
+    "k_sweep_lp_4p0": K_SWEEP_LP_4P0,
+    "k_sweep_lp_5p0": K_SWEEP_LP_5P0,
+    "k_sweep_lp_6p0": K_SWEEP_LP_6P0,
+}
+
+
+# =====================================================================
+# L Family — K1 + Coordinated Sagittal State Feedback (Phase 3)
+# =====================================================================
+# Base: K1 (K1_PITCH_RATE_NOTCH)
+#
+# Purpose: Replace the independent sagittal torque summation with a
+# coordinated state-feedback command that accounts for coupled sagittal
+# states. The goal is to suppress the 2.5 Hz WIP mode by synchronizing
+# pitch, support, and rate contributions instead of letting them fight.
+#
+# State vector: [pitch_error, pitch_rate_effective, support_position_error,
+#                support_velocity, wheel_velocity_average]
+#
+# Controller form:
+#   tau_coordinated = K1_base_torque + coordinated_feedback(x)
+#
+# Where coordinated_feedback uses manually specified gains in an LQR-like
+# structure, NOT arbitrary independent term summation.
+#
+# Telemetry fields in sagittal_diag:
+#   L_enabled, L_candidate_kind, L_state_vector,
+#   L_gains, L_feedback_torque, L_base_torque, L_final_torque
+#
+# Key rule: Do NOT modify K1 parameters. Add coordinated_feedback on top.
+
+
+def _coordinated_feedback_gains_L1(height_m: float) -> dict:
+    """L1 gains: conservative state feedback focused on suppressing 2.5 Hz.
+
+    Gains are height-scheduled between low and high heights.
+    State vector order: [pitch, pitch_rate, support_err, support_vel, wheel_vel_mean]
+
+    At tall heights (0.48 m), pitch-rate and support-velocity gains are
+    tuned to provide phase-coherent damping at ~2.5 Hz.
+    At low heights (0.33 m), same gains but lower overall torque authority.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    # Gains interpolate between low-height and high-height values
+    k_pitch = 8.0 + (5.0 - 8.0) * h_norm           # pitch error (Nm/rad)
+    k_pitch_rate = 0.8 + (1.5 - 0.8) * h_norm        # pitch rate (Nm/(rad/s))
+    k_support = -15.0 + (-20.0 - (-15.0)) * h_norm    # support error (Nm/m)
+    k_support_vel = -0.5 + (-1.0 - (-0.5)) * h_norm   # support vel (Nm/(m/s))
+    k_wheel_vel = 0.0                                 # wheel vel not used in L1
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "k_wheel_vel": float(k_wheel_vel),
+        "kind": "coordinated_low_freq_state_feedback",
+    }
+
+
+def _coordinated_feedback_gains_L2(height_m: float) -> dict:
+    """L2 gains: coordinated feedback with phase-lead compensation.
+
+    Adds a small phase-lead on the pitch_rate path to reduce the ~90° phase
+    lag that causes damping to feed the 2.5 Hz mode. The lead compensation
+    is implemented as an additional term on pitch rate error rate (pitch
+    acceleration proxy) to create a phase-advanced damping component.
+
+    Lead: tau_lead = k_lead * d(pitch_rate)/dt (acceleration proxy)
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 8.0 + (5.0 - 8.0) * h_norm
+    k_pitch_rate = 0.8 + (1.2 - 0.8) * h_norm        # slightly lower rate gain than L1
+    k_support = -15.0 + (-20.0 - (-15.0)) * h_norm
+    k_support_vel = -0.5 + (-1.0 - (-0.5)) * h_norm
+    k_lead = 0.05 + (0.08 - 0.05) * h_norm            # phase-lead on pitch acceleration proxy
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "k_lead": float(k_lead),
+        "kind": "coordinated_phase_lead_compensation",
+    }
+
+
+def _coordinated_feedback_gains_L3(height_m: float) -> dict:
+    """L3 gains: coordinated feedback + pitch reference stabilization.
+
+    Small pitch reference correction based on support state. The correction
+    is a physical, state-tied modification: when support error is large, the
+    pitch reference is shifted slightly to reduce the pitch-vs-support
+    conflict without suppressing pitch torque or support torque.
+
+    pitch_ref_mod = small_k * support_error (deg)
+
+    The correction is amplitude-limited to prevent anti-phase injection.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 8.0 + (5.0 - 8.0) * h_norm
+    k_pitch_rate = 0.8 + (1.5 - 0.8) * h_norm
+    k_support = -15.0 + (-20.0 - (-15.0)) * h_norm
+    k_support_vel = -0.5 + (-1.0 - (-0.5)) * h_norm
+    pitch_ref_gain = 1.5 + (2.5 - 1.5) * h_norm       # deg/m of support error
+    pitch_ref_max = 1.0 + (1.5 - 1.0) * h_norm         # max correction (deg)
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "pitch_ref_gain": float(pitch_ref_gain),
+        "pitch_ref_max": float(pitch_ref_max),
+        "kind": "coordinated_pitch_ref_stabilization",
+    }
+
+
+# ---- LR family: Replacement coordinated sagittal feedback gain functions ---- #
+# These use similar gains to the L family but the feedback REPLACES the
+# sum-of-independent-torques rather than adding on top. The gains are
+# dimensioned to be the TOTAL feedback, not an additive supplement.
+# Height-scheduled with conservative bounds to avoid the L family's
+# torque double-counting failure.
+
+def _lr_replacement_gains_LR1(height_m: float) -> dict:
+    """LR1 gains: replacement coordinated low-frequency feedback.
+
+    Replaces the sum-of-independent-torques with a single coordinated
+    command. Gains are the full feedback authority, not additive.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    # Moderate replacement gains — total authority, not additive supplement
+    k_pitch = 6.0 + (3.5 - 6.0) * h_norm           # pitch error (Nm/rad) — moderate
+    k_pitch_rate = 0.6 + (1.2 - 0.6) * h_norm        # pitch rate (Nm/(rad/s))
+    k_support = -8.0 + (-12.0 - (-8.0)) * h_norm      # support error (Nm/m)
+    k_support_vel = -0.3 + (-0.6 - (-0.3)) * h_norm   # support vel (Nm/(m/s))
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "kind": "lr_replacement_low_freq_state_feedback",
+    }
+
+
+def _lr_replacement_gains_LR2(height_m: float) -> dict:
+    """LR2 gains: replacement coordinated feedback with phase-lead.
+
+    Adds phase-lead compensation on the pitch_rate path. Gains are
+    the full replacement authority.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 6.0 + (3.5 - 6.0) * h_norm
+    k_pitch_rate = 0.5 + (1.0 - 0.5) * h_norm        # slightly lower rate gain than LR1
+    k_support = -8.0 + (-12.0 - (-8.0)) * h_norm
+    k_support_vel = -0.3 + (-0.6 - (-0.3)) * h_norm
+    k_lead = 0.04 + (0.06 - 0.04) * h_norm            # phase-lead on pitch acceleration
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "k_lead": float(k_lead),
+        "kind": "lr_replacement_phase_lead_compensation",
+    }
+
+
+def _lr_replacement_gains_LR3(height_m: float) -> dict:
+    """LR3 gains: replacement coordinated feedback with pitch ref stabilization.
+
+    Includes small pitch reference correction based on support state.
+    Gains are the full replacement authority.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 6.0 + (3.5 - 6.0) * h_norm
+    k_pitch_rate = 0.6 + (1.2 - 0.6) * h_norm
+    k_support = -8.0 + (-12.0 - (-8.0)) * h_norm
+    k_support_vel = -0.3 + (-0.6 - (-0.3)) * h_norm
+    pitch_ref_gain = 1.0 + (2.0 - 1.0) * h_norm        # deg/m of support error
+    pitch_ref_max_deg = 0.8 + (1.2 - 0.8) * h_norm      # max correction (deg)
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "pitch_ref_gain": float(pitch_ref_gain),
+        "pitch_ref_max_deg": float(pitch_ref_max_deg),
+        "kind": "lr_replacement_pitch_ref_stabilization",
+    }
+
+
+# ---- LRS Family: Sign-audited constrained gain sweep ---- #
+# All signs confirmed correct by Phase 1 audit (2026-06-24).
+# Failure mode is gain magnitude, not sign.
+# Hard bounds: k_pitch <= 15, k_pitch_rate <= 3, |k_support| <= 2.5x LR1, |k_support_vel| <= 2.5x LR1.
+
+def _lrs_replacement_gains_S1(height_m: float) -> dict:
+    """LRS1: Support-dominant — increase support position/velocity authority.
+
+    Target: fix support drift while keeping pitch gains moderate.
+    k_support ≈ 1.8x LR1, k_support_vel ≈ 1.8x LR1.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 6.0 + (3.5 - 6.0) * h_norm           # same as LR1
+    k_pitch_rate = 0.6 + (1.2 - 0.6) * h_norm        # same as LR1
+    # 1.8x LR1 support gains
+    k_support = -14.4 + (-21.6 - (-14.4)) * h_norm    # 1.8x: -12→-21.6 at h=0.48
+    k_support_vel = -0.54 + (-1.08 - (-0.54)) * h_norm  # 1.8x: -0.6→-1.08 at h=0.48
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "kind": "lrs1_support_dominant",
+    }
+
+
+def _lrs_replacement_gains_S2(height_m: float) -> dict:
+    """LRS2: Pitch-rate damping — increase damping around 0.5 Hz.
+
+    k_pitch_rate ≈ 2.5x LR1, other gains at LR1 level.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 6.0 + (3.5 - 6.0) * h_norm           # same as LR1
+    # 2.5x LR1 pitch rate gain (capped at hard bound 3.0)
+    k_pitch_rate_base = 1.5 + (3.0 - 1.5) * h_norm   # 2.5x LR1 baseline
+    k_pitch_rate = min(k_pitch_rate_base, 3.0)        # hard bound
+    k_support = -8.0 + (-12.0 - (-8.0)) * h_norm      # same as LR1
+    k_support_vel = -0.3 + (-0.6 - (-0.3)) * h_norm   # same as LR1
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "kind": "lrs2_pitch_rate_damping",
+    }
+
+
+def _lrs_replacement_gains_S3(height_m: float) -> dict:
+    """LRS3: Balanced medium — moderate increase across all gains.
+
+    k_pitch ≈ 1.5x LR1, k_pitch_rate ≈ 2x LR1, support ≈ 1.5x LR1.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch = 9.0 + (5.25 - 9.0) * h_norm             # 1.5x: 3.5→5.25 at h=0.48
+    k_pitch_rate = 1.2 + (2.4 - 1.2) * h_norm          # 2x: 1.2→2.4 at h=0.48
+    k_support = -12.0 + (-18.0 - (-12.0)) * h_norm     # 1.5x: -12→-18 at h=0.48
+    k_support_vel = -0.45 + (-0.9 - (-0.45)) * h_norm  # 1.5x: -0.6→-0.9 at h=0.48
+    return {
+        "k_pitch": float(k_pitch),
+        "k_pitch_rate": float(k_pitch_rate),
+        "k_support": float(k_support),
+        "k_support_vel": float(k_support_vel),
+        "kind": "lrs3_balanced_medium",
+    }
+
+
+# =============================================================================
+# LP PRIORITY SAGITTAL ALLOCATOR GAIN FUNCTIONS
+# =============================================================================
+# Architectural alternative to LR/LRS coordinated feedback. Instead of a single
+# equal-priority sum tau = k_pitch*pitch + k_pitch_rate*pitch_rate +
+# k_support*support + k_support_vel*support_vel, LP uses:
+#
+#   tau_common = tau_eq_ff_pass_through
+#              + tau_pitch_priority
+#              + tau_support_residual_allocated
+#
+# where pitch priority gets first access to dynamic authority and support
+# centering only uses remaining residual, gated by pitch safety, saturation
+# headroom, direction consistency, and slew limits.
+#
+# Hard safety bounds (same as LRS for comparability):
+#   |k_pitch_lp| <= 15 Nm/rad
+#   |k_pitch_rate_lp| <= 3 Nm/(rad/s)
+#   |k_support_lp| <= 30 (2.5× LR1 baseline)
+#   |k_support_vel_lp| <= 1.5 (2.5× LR1 baseline)
+
+
+def _lp_priority_gains_LP1(height_m: float) -> dict:
+    """LP1: Conservative pitch priority, soft support residual.
+
+    Pitch gets moderate authority. Support centering is soft and only allowed
+    when pitch state is controlled. Designed to test whether pitch-first
+    allocation can complete 3000 steps where LR/LRS failed.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch_lp = 8.0 + (5.0 - 8.0) * h_norm               # moderate pitch stiffness
+    k_pitch_rate_lp = 2.0 + (1.2 - 2.0) * h_norm            # moderate pitch damping
+    k_support_lp = -10.0 + (-16.0 - (-10.0)) * h_norm       # moderate support centering
+    k_support_vel_lp = -0.4 + (-0.8 - (-0.4)) * h_norm      # moderate support velocity damping
+    return {
+        "k_pitch_lp": float(k_pitch_lp),
+        "k_pitch_rate_lp": float(k_pitch_rate_lp),
+        "k_support_lp": float(k_support_lp),
+        "k_support_vel_lp": float(k_support_vel_lp),
+        # Safety gates
+        "pitch_safe_low_deg": 5.0,        # full support below this pitch
+        "pitch_safe_high_deg": 12.0,       # zero support above this pitch
+        "rate_safe_low_deg_s": 30.0,       # full support below this pitch rate
+        "rate_safe_high_deg_s": 80.0,      # zero support above this pitch rate
+        # Allocation limits
+        "pitch_priority_limit_nm": 5.0,     # max pitch priority torque
+        "support_residual_fraction": 0.6,   # fraction of residual authority for support
+        "support_slew_limit_nm_per_step": 0.3,  # max support torque change per step
+        "support_deadband_m": 0.02,         # ignore small support errors
+        # Direction gate
+        "direction_gate_enabled": True,
+        "kind": "lp1_pitch_first_support_residual",
+    }
+
+
+def _lp_priority_gains_LP2(height_m: float) -> dict:
+    """LP2: Stronger pitch-rate stabilization, softer support.
+
+    Higher pitch-rate damping with tighter support gates. Goal: test whether
+    stronger pitch damping + attenuated support can complete 3000 steps.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch_lp = 6.0 + (4.0 - 6.0) * h_norm                # slightly lower pitch stiffness
+    k_pitch_rate_lp = 2.8 + (1.8 - 2.8) * h_norm            # stronger pitch damping
+    k_pitch_rate_lp = min(k_pitch_rate_lp, 3.0)              # hard bound
+    k_support_lp = -8.0 + (-12.0 - (-8.0)) * h_norm         # softer support
+    k_support_vel_lp = -0.3 + (-0.6 - (-0.3)) * h_norm      # softer support velocity
+    return {
+        "k_pitch_lp": float(k_pitch_lp),
+        "k_pitch_rate_lp": float(k_pitch_rate_lp),
+        "k_support_lp": float(k_support_lp),
+        "k_support_vel_lp": float(k_support_vel_lp),
+        # Tighter safety gates
+        "pitch_safe_low_deg": 4.0,
+        "pitch_safe_high_deg": 10.0,
+        "rate_safe_low_deg_s": 25.0,
+        "rate_safe_high_deg_s": 70.0,
+        # Allocation limits
+        "pitch_priority_limit_nm": 4.5,
+        "support_residual_fraction": 0.4,   # less residual for support
+        "support_slew_limit_nm_per_step": 0.2,
+        "support_deadband_m": 0.03,
+        "direction_gate_enabled": True,
+        "kind": "lp2_pitch_strong_support_soft",
+    }
+
+
+def _lp_priority_gains_LP3(height_m: float) -> dict:
+    """LP3: Support recentering delayed/gated — only when pitch is safe.
+
+    Support correction is held at zero until post-push pitch settles below a
+    strict threshold. After settling, support recentering is enabled with
+    moderate gains. Goal: test temporal separation of pitch stabilization
+    and support recovery.
+    """
+    h_norm = max(0.0, min(1.0, (height_m - 0.30) / (0.48 - 0.30)))
+    k_pitch_lp = 10.0 + (6.0 - 10.0) * h_norm               # strong pitch priority
+    k_pitch_rate_lp = 2.2 + (1.4 - 2.2) * h_norm             # moderate pitch damping
+    k_support_lp = -12.0 + (-18.0 - (-12.0)) * h_norm        # strong support (when active)
+    k_support_vel_lp = -0.5 + (-1.0 - (-0.5)) * h_norm       # moderate support vel damping
+    return {
+        "k_pitch_lp": float(k_pitch_lp),
+        "k_pitch_rate_lp": float(k_pitch_rate_lp),
+        "k_support_lp": float(k_support_lp),
+        "k_support_vel_lp": float(k_support_vel_lp),
+        # Very tight safety gates — support only when pitch is well-controlled
+        "pitch_safe_low_deg": 3.0,
+        "pitch_safe_high_deg": 7.0,
+        "rate_safe_low_deg_s": 20.0,
+        "rate_safe_high_deg_s": 50.0,
+        # Support settling: require pitch_abs below settle_threshold for N steps
+        "pitch_settle_threshold_deg": 4.0,
+        "pitch_settle_steps_required": 50,
+        # Allocation limits
+        "pitch_priority_limit_nm": 6.0,
+        "support_residual_fraction": 0.5,
+        "support_slew_limit_nm_per_step": 0.15,  # slower support ramp
+        "support_deadband_m": 0.015,
+        "direction_gate_enabled": True,
+        "kind": "lp3_support_recenter_when_safe",
+    }
+
+
+# ---- LR Family Profile Constants ---- #
+# These profiles REPLACE the sum-of-independent-torques with coordinated
+# feedback, preserving equilibrium/feedforward and notch filter.
+# Built on K1_PITCH_RATE_NOTCH.
+
+LR1_K1_REPLACEMENT_COORDINATED_LOW_FREQ_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lr1_k1_replacement_coordinated_low_freq_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LR1_low_freq",
+)
+
+LR2_K1_REPLACEMENT_PHASE_LEAD_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lr2_k1_replacement_phase_lead_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LR2_phase_lead",
+)
+
+LR3_K1_REPLACEMENT_PITCH_REF_STABILIZED_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lr3_k1_replacement_pitch_ref_stabilized_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LR3_pitch_ref_stabilized",
+)
+
+
+# ---- LRS Family: Sign-audited constrained gain sweep profiles ---- #
+# All signs confirmed correct. Failure mode is gain magnitude, not sign.
+# See: scripts/audit_lr_support_drift_sign_phase.py (Phase 1 audit, 2026-06-24).
+# Built on K1_PITCH_RATE_NOTCH, opt-in only.
+
+LRS1_SUPPORT_DOMINANT_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lrs1_support_dominant_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LRS1_support_dominant",
+)
+
+LRS2_PITCH_RATE_DAMPING_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lrs2_pitch_rate_damping_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LRS2_pitch_rate_damping",
+)
+
+LRS3_BALANCED_MEDIUM_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lrs3_balanced_medium_v1",
+    enable_lr_replacement_feedback=True,
+    lr_replacement_kind="LRS3_balanced_medium",
+)
+
+
+# ---- LP Family: Priority Sagittal Allocator Profiles ---- #
+# Pitch-first support-residual architecture. Resolves the LR/LRS support-pitch
+# coupling by allocating pitch stabilization torque first and support-centering
+# torque only from residual safe authority, gated by pitch safety, saturation
+# headroom, direction consistency, and slew limits.
+# Built on K1_PITCH_RATE_NOTCH, opt-in only. Preserves K1 EQ/FF baseline.
+# See: docs/validation/lp_priority_sagittal_allocator_report.md
+
+LP1_K1_PRIORITY_PITCH_FIRST_SUPPORT_RESIDUAL_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lp1_k1_priority_pitch_first_support_residual_v1",
+    enable_lp_priority_allocator=True,
+    lp_allocator_kind="LP1_pitch_first_support_residual",
+)
+
+LP2_K1_PRIORITY_PITCH_STRONG_SUPPORT_SOFT_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lp2_k1_priority_pitch_strong_support_soft_v1",
+    enable_lp_priority_allocator=True,
+    lp_allocator_kind="LP2_pitch_strong_support_soft",
+)
+
+LP3_K1_PRIORITY_SUPPORT_RECENTER_WHEN_SAFE_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="lp3_k1_priority_support_recenter_when_safe_v1",
+    enable_lp_priority_allocator=True,
+    lp_allocator_kind="LP3_support_recenter_when_safe",
+)
+
+
+# L1 — Lowest-risk coordinated feedback
+# Adds small coordinated LQR-style state feedback on top of K1's notch.
+# The feedback torque is added to the wheel torque AFTER the normal sagittal
+# torque computation, so K1's existing terms are unchanged.
+L1_K1_COORDINATED_LOW_FREQ_FEEDBACK = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="l1_k1_coordinated_low_freq_feedback_v1",
+    # Metadata: the coordinated feedback function is selected at runtime
+    # via a new field on SagittalAuthoritySchedule.
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="L1_low_freq",
+)
+
+# L2 — Coordinated with phase-lead compensation
+L2_K1_COORDINATED_PHASE_LEAD = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="l2_k1_coordinated_phase_lead_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="L2_phase_lead",
+)
+
+# L3 — Coordinated with pitch reference stabilization
+L3_K1_COORDINATED_PITCH_REF_STABILIZATION = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="l3_k1_coordinated_pitch_ref_stabilization_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="L3_pitch_ref_stabilization",
+)
+
+# =====================================================================
+# M Family — K1 + Body-Yaw/Wheel-Yaw Correct-Actuator Fix (Phase 4)
+# =====================================================================
+# Base: K1 (K1_PITCH_RATE_NOTCH)
+#
+# Purpose: Reduce D4/D5 hip_yaw > 0.35 rad by addressing body yaw drift
+# through the correct actuator path (differential wheel velocity), not
+# through hip-yaw torque increase.
+#
+# Key difference from old E candidate: M uses sagittal-coordinated wheel
+# yaw that accounts for pitch/support state to avoid yaw-spin instability.
+# The wheel yaw torque is modulated by a support-confidence gate and does
+# NOT fight the mode-div divergence controller.
+#
+# Telemetry: M_enabled, M_candidate_kind, M_wheel_yaw_torque,
+#            M_body_yaw_error, M_support_gate, M_yaw_correlation
+
+
+# M1 — Low-band body-yaw damping through differential wheel velocity.
+# Uses low gain with smooth yaw-rate-based activation.
+M1_K1_BODY_YAW_DIFF_WHEEL_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="m1_k1_body_yaw_diff_wheel_v1",
+    enable_body_yaw_wheel_stabilization=True,
+    wheel_yaw_kp=0.5,
+    wheel_yaw_kd=0.1,
+    wheel_yaw_max_torque=1.5,
+    wheel_yaw_height_gate_start_m=0.34,
+    wheel_yaw_height_gate_full_m=0.42,
+    wheel_yaw_activation_threshold_rad=0.05,
+    wheel_yaw_support_gate_enabled=True,
+)
+
+# M2 — Support-aware body-yaw damping.
+# Modulates wheel-yaw correction based on support/contact confidence.
+# Avoids injecting yaw torque during poor support states.
+M2_K1_BODY_YAW_SUPPORT_AWARE_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="m2_k1_body_yaw_support_aware_v1",
+    enable_body_yaw_wheel_stabilization=True,
+    wheel_yaw_kp=0.8,
+    wheel_yaw_kd=0.15,
+    wheel_yaw_max_torque=2.0,
+    wheel_yaw_height_gate_start_m=0.34,
+    wheel_yaw_height_gate_full_m=0.42,
+    wheel_yaw_activation_threshold_rad=0.05,
+    wheel_yaw_support_gate_enabled=True,
+    wheel_yaw_support_error_threshold_m=0.15,
+    wheel_yaw_support_rate_threshold_mps=0.05,
+)
+
+# =====================================================================
+# N Family — K1 + Mild Phase-Compensated Damping Diagnostic (Phase 5)
+# =====================================================================
+# Base: K1 (K1_PITCH_RATE_NOTCH)
+#
+# Purpose: Check whether K1 notch plus very mild coordinated damping
+# can recover the transient J3a benefit without J3a's growing oscillation.
+#
+# Restriction: No J3a as-is. No K3 combined notch. No wheel_velocity
+# notch full blend. Abort if RMS worsens vs K1.
+
+# N1 — Very mild phase-lead-compensated pitch rate damping increment.
+# Uses the same phase-lead concept from L2 but at a much lower level,
+# applied only to the pitch_rate path (not the full sagittal command).
+N1_K1_MILD_PHASE_LEAD_DAMPING = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="n1_k1_mild_phase_lead_damping_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="N1_mild_phase_lead",
+)
+
+# N1 micro-sweep variants (K1 + mild parameter changes)
+# All stay within bounds: k_rate <= 0.6, k_lead <= 0.06
+
+# N1b: slightly higher rate and lead
+N1B_K1_MILD_PHASE_LEAD_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="n1b_k1_mild_phase_lead_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="N1_mild_phase_lead",
+    n1_rate_low=0.4,
+    n1_rate_high=0.6,
+    n1_lead_low=0.03,
+    n1_lead_high=0.06,
+)
+
+# N1c: same rate as N1b but slightly lower lead
+N1C_K1_MILD_PHASE_LEAD_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="n1c_k1_mild_phase_lead_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="N1_mild_phase_lead",
+    n1_rate_low=0.4,
+    n1_rate_high=0.6,
+    n1_lead_low=0.025,
+    n1_lead_high=0.05,
+)
+
+# N1d: same lead as N1b but slightly lower rate
+N1D_K1_MILD_PHASE_LEAD_V1 = replace(
+    K1_PITCH_RATE_NOTCH,
+    profile_name="n1d_k1_mild_phase_lead_v1",
+    enable_coordinated_sagittal_feedback=True,
+    coordinated_feedback_kind="N1_mild_phase_lead",
+    n1_rate_low=0.35,
+    n1_rate_high=0.55,
+    n1_lead_low=0.03,
+    n1_lead_high=0.06,
+)
+
+# =====================================================================
+# Unified Sagittal State-Feedback No-Offset Controller
+# =====================================================================
+# Opt-in profile that replaces the independent tau_pitch + tau_position +
+# tau_velocity_damping sum-of-torques architecture with a single coordinated
+# sagittal command from full state feedback. The mode classifier detects 8
+# operating modes and applies priority-weighted arbitration so the six state
+# terms share the same torque budget toward the SAME goal.
+#
+# Key design choices:
+# - pitch_ref_offset_deg = 0.0 (no pitch offset at all)
+# - pitch_ref_height_schedule_enabled = False
+# - All offset/trim/bias mechanisms disabled
+# - One unified command replaces tau_pitch, tau_position, outer_loop
+# - Mode classifier + priority arbitration
+# - Height-scheduled gains (continuous gain scheduling)
+# - Safety gates for contact/roll/hip-yaw/torque-cap/rate-limit
+#
+# Built on HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM's safety infrastructure
+# for contact/roll/height gates but overrides ALL sagittal control
+# computation. Disabled by default — opt-in only.
+# See docs/validation/unified_sagittal_no_offset_design.md.
+UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET = replace(
+    HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,
+    profile_name="unified_sagittal_state_feedback_no_offset",
+    # Disable ALL offset/trim/bias mechanisms
+    pitch_ref_offset_deg=0.0,
+    pitch_ref_height_schedule_enabled=False,
+    pitch_ref_height_schedule_heights_m=(),
+    pitch_ref_height_schedule_offsets_deg=(),
+    outer_loop_enabled=False,
+    calibrated_outer_loop_enabled=False,
+    pitch_bias_comp_enabled=False,
+    t6j_bias_trim_enabled=False,
+    adaptive_bias_trim_enabled=False,
+    enable_phase_aware_recenter=False,
+    enable_hysteresis_recenter=False,
+    enable_bias_cancel=False,
+    enable_active_pitch_crossing=False,
+    # Enable unified state-feedback mode
+    enable_unified_sagittal_state_feedback=True,
+    # Tuned gains for no-offset operation.
+    # Pitch-primary architecture: tau = Ktheta*pitch + Komega*pitch_rate - Ki*∫err dt
+    # No separate tau_position term — avoids the structural pitch-vs-support conflict.
+    # The integral slowly winds up to cancel steady-state drift, replacing the
+    # pitch_ref_offset without introducing a fixed bias.
+    unified_kx=0.0,
+    unified_kv=0.0,
+    unified_ktheta=30.0,
+    unified_komega=10.0,
+    unified_kh=0.0,
+    unified_khdot=0.0,
+    unified_torque_cap=6.0,
+    unified_rate_limit=1.0,
+    # Gain scheduling disabled for initial discovery
+    unified_gain_height_schedule=False,
+    unified_torque_cap_nominal=5.0,
+    unified_torque_cap_low_max=6.0,
+)
+
+# Backward-compatible aliases — development identifiers → semantic constants.
+# These allow existing imports and scripts to keep working. The primary names
+# (BAND_LIMITED_SUPPORT_RECENTER, EMERGENCY_BUDGET_CAP_RAISE, etc.) should be
+# used in new code.
+APCR1ND_T5_BAND_LIMITED_BALANCED = BAND_LIMITED_SUPPORT_RECENTER  # legacy
+T6F_BUDGET_CAP_RAISE = EMERGENCY_BUDGET_CAP_RAISE                  # legacy
+T6I_PHASE_AWARE_RELEASE = PHASE_AWARE_AUTHORITY_RELEASE            # legacy
+T6J_CENTERING_BIAS_TRIM = SUPPORT_CENTERING_BIAS_TRIM             # legacy
+ADAPTIVE_CENTERING_BIAS_TRIM = ADAPTIVE_SUPPORT_CENTERING_TRIM  # legacy alias
+
 # Profile registry for CLI selection
 JOINT_FIX_PROFILES = {
     "baseline": BASELINE_AUTHORITY_SCHEDULE,
@@ -1744,16 +4752,25 @@ JOINT_FIX_PROFILES = {
     "phase_aware_authority_release": PHASE_AWARE_AUTHORITY_RELEASE,  # semantic
     "T6J_centering_bias_trim": SUPPORT_CENTERING_BIAS_TRIM,      # legacy alias
     "support_centering_bias_trim": SUPPORT_CENTERING_BIAS_TRIM, # semantic
+    "adaptive_support_centering_trim": ADAPTIVE_SUPPORT_CENTERING_TRIM,  # opt-in proportional adaptive trim
+    "zero_crossing_support_recenter": ZERO_CROSSING_SUPPORT_RECENTER,  # ZC hysteresis recenter
+    "early_zero_crossing_recenter": EARLY_ZERO_CROSSING_RECENTER,  # Early ZC: exits at zero, not opposite side
+    "early_zero_crossing_recenter_v2": EARLY_ZERO_CROSSING_RECENTER_V2,  # V2: anti-rebound fix for EZC_FAILURE_EXIT_TOO_EARLY_REBOUND
+    "pitch_bias_compensated_zero_crossing_recenter": PITCH_BIAS_COMPENSATED_ZERO_CROSSING_RECENTER,  # Phase 7: EZC V2 + pitch DC bias compensation
+    "pitch_equilibrium_trim": PITCH_EQUILIBRIUM_TRIM,  # Phase 3 structural fix: shift pitch reference to equilibrium to center support drift
+    "height_scheduled_pitch_equilibrium_trim": HEIGHT_SCHEDULED_PITCH_EQUILIBRIUM_TRIM,  # Phase 2 structural fix: per-height pitch_ref offset schedule
+    "support_position_outer_loop_pitch_ref": SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # Phase B dynamic outer loop on top of height schedule
+    "calibrated_support_position_outer_loop_pitch_ref": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF,  # v1 — failed Phase 6 upper-band regressions
+    "calibrated_support_position_outer_loop_pitch_ref_v2": CALIBRATED_SUPPORT_POSITION_OUTER_LOOP_PITCH_REF_V2,  # v2 — opt-in, no regressions  # Phase B calibration: height-dependent outer-loop gains
+    # Physics-based equilibrium feedforward outer loop (Phase D, opt-in)
+    "physics_equilibrium_feedforward_outer_loop": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP,
+    "physics_equilibrium_feedforward_outer_loop_low_band_support_v1": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V1,
+    "physics_equilibrium_feedforward_outer_loop_low_band_support_v2": PHYSICS_EQUILIBRIUM_FEEDFORWARD_OUTER_LOOP_LOW_BAND_SUPPORT_V2,
+    # I_SUPPORT_REFERENCE_REACQUISITION_V1 — candidate I1 (opt-in, diagnostic only)
+    "i_support_reference_reacquisition_v1": I_SUPPORT_REFERENCE_REACQUISITION_V1,
+    # Unified sagittal state-feedback no-offset controller
+    "unified_sagittal_state_feedback_no_offset": UNIFIED_SAGITTAL_STATE_FEEDBACK_NO_OFFSET,
 }
-
-# Backward-compatible aliases — development identifiers → semantic constants.
-# These allow existing imports and scripts to keep working. The primary names
-# (BAND_LIMITED_SUPPORT_RECENTER, EMERGENCY_BUDGET_CAP_RAISE, etc.) should be
-# used in new code.
-APCR1ND_T5_BAND_LIMITED_BALANCED = BAND_LIMITED_SUPPORT_RECENTER  # legacy
-T6F_BUDGET_CAP_RAISE = EMERGENCY_BUDGET_CAP_RAISE                  # legacy
-T6I_PHASE_AWARE_RELEASE = PHASE_AWARE_AUTHORITY_RELEASE            # legacy
-T6J_CENTERING_BIAS_TRIM = SUPPORT_CENTERING_BIAS_TRIM             # legacy
 
 
 class SagittalVelocityDampedBalanceController:
@@ -1905,6 +4922,19 @@ class SagittalVelocityDampedBalanceController:
         self._t6j_bias_trim_target_tau = 0.0  # Current target trim torque before rate limiting
         self._t6j_bias_positive_duration_steps = 0
         self._t6j_bias_negative_duration_steps = 0
+        # State for Adaptive Centering Bias Trim (proportional, height-aware, guarded)
+        self._adaptive_bias_trim_tau = 0.0           # current applied trim torque
+        self._adaptive_bias_trim_target_tau = 0.0    # target before rate limiting
+        self._adaptive_bias_slow_error_history = []  # slow window signed errors
+        self._adaptive_bias_fast_error_history = []  # fast window signed errors
+        self._adaptive_bias_zero_crossing_history = []  # signed errors for crossing detection
+        self._adaptive_bias_crossing_count = 0        # crossings in current window
+        self._adaptive_bias_guard_trigger_count = 0   # consecutive guard triggers
+        self._adaptive_bias_prev_trim_sign = 0        # +1/-1/0
+        self._adaptive_bias_prev_error_sign = 0       # +1/-1/0
+        self._adaptive_bias_hold_steps = 0            # steps in sign-reversal hold
+        self._adaptive_bias_positive_area = 0.0       # accumulated positive drift area
+        self._adaptive_bias_negative_area = 0.0       # accumulated negative drift area
         self._apc_drift_priority_tau_limit = 0.0  # Current drift priority tau limit
         self._apc_drift_priority_rate_limit = 0.0  # Current drift priority rate limit
         self._apc_drift_priority_prev_tau = 0.0  # Previous tau for rate limiting
@@ -1932,6 +4962,75 @@ class SagittalVelocityDampedBalanceController:
         # State for APCR1nD Tuned Variants
         self._apcr1nd_tuned_converging_steps = 0  # Consecutive converging steps for release
         self._apcr1nd_tuned_recenter_held = False  # Recenter held outside band
+        self._apcr1nd_wd_override_active = False  # Phase 0: wheel damping override applied this step
+
+        # State for Zero-Crossing Support Recenter (ZC)
+        self._zc_state = "CENTER_IDLE"  # CENTER_IDLE, RECENTER_FROM_POSITIVE, RECENTER_FROM_NEGATIVE, HOLD_THROUGH_ZERO, SAFETY_DECAY
+        self._zc_state_id = 0           # 0=IDLE, 1=POS, 2=NEG, 3=HOLD, 4=DECAY
+        self._zc_direction = 0          # -1, 0, +1 correction direction
+        self._zc_hold_steps = 0         # steps in current hold
+        self._zc_dwell_steps = 0        # dwell steps in near-zero band
+        self._zc_tau = 0.0              # current applied ZC correction torque
+        self._zc_target_tau = 0.0       # target before rate limiting
+        self._zc_enter_event = 0         # cumulative enter events
+        self._zc_exit_event = 0          # cumulative exit events
+        self._zc_crossed_zero = False    # True if current episode crossed zero
+        self._zc_cross_target_reached = False  # True if crossed to opposite side
+        self._zc_episode_id = 0          # episode counter
+        self._zc_episode_start_error = 0.0  # error at episode start
+        self._zc_episode_min_error = 0.0  # min error in positive episode
+        self._zc_episode_max_error = 0.0  # max error in negative episode
+        self._zc_safety_gate_pass = True  # safety gate status
+        self._zc_block_reason = "none"   # block reason for telemetry
+        self._zc_exit_reason = "none"     # exit reason for telemetry
+
+        # State for Early Zero-Crossing Support Recenter (EZC)
+        # Key differences: exits at zero, not opposite side; earlier entry at 0.05 m
+        # V2 adds: ANTIREBOUND_DECAY state for anti-rebound hold
+        self._ezc_state = "CENTER_IDLE"  # CENTER_IDLE, RECENTER_FROM_POSITIVE, RECENTER_FROM_NEGATIVE, ZERO_CROSSED_DECAY, ANTIREBOUND_DECAY, SAFETY_DECAY
+        self._ezc_state_id = 0           # 0=IDLE, 1=POS, 2=NEG, 3=DECAY, 4=SAFETY, 5=ANTIREBOUND
+        self._ezc_direction = 0           # -1, 0, +1 correction direction
+        self._ezc_hold_steps = 0          # steps in current hold
+        self._ezc_tau = 0.0               # current applied EZC correction torque
+        self._ezc_target_tau = 0.0        # target before rate limiting
+        self._ezc_enter_event = 0         # cumulative enter events
+        self._ezc_zero_cross_exit_event = 0  # cumulative exits at zero
+        self._ezc_safety_exit_event = 0   # cumulative exits due to safety
+        self._ezc_crossed_zero = False     # True if current episode crossed zero
+        self._ezc_zero_dwell_steps = 0    # dwell steps after zero crossing
+        self._ezc_episode_id = 0          # episode counter
+        self._ezc_episode_start_error = 0.0  # error at episode start
+        self._ezc_episode_min_error = 0.0 # min error in positive episode
+        self._ezc_episode_max_error = 0.0 # max error in negative episode
+        self._ezc_safety_gate_pass = True # safety gate status
+        self._ezc_block_reason = "none"   # block reason for telemetry
+        self._ezc_exit_reason = "none"    # exit reason for telemetry
+        # Anti-rebound state (V2)
+        self._ezc_antirebound_steps = 0   # steps in anti-rebound decay
+        self._ezc_antirebound_tau_start = 0.0  # tau at start of anti-rebound
+
+        # Pitch bias DC compensation state (Phase 7)
+        self._pitch_bias_estimate_nm = 0.0   # EMA of tau_pitch in stable windows
+        self._pitch_bias_samples = 0          # number of EMA updates
+        self._pitch_bias_comp_tau_nm = 0.0   # current bounded compensation
+
+        # Notch filter state (K candidate family — 2.5 Hz WIP mode)
+        self._wip_notch_pitch_rate: BiquadNotchFilter | None = None
+        self._wip_notch_wheel_left: BiquadNotchFilter | None = None
+        self._wip_notch_wheel_right: BiquadNotchFilter | None = None
+        self._wip_notch_support_vel: BiquadNotchFilter | None = None
+        self._wip_notch_fs_hz: float = 0.0
+
+        # Unified sagittal state-feedback controller state
+        self._prev_unified_tau_cmd = 0.0      # previous step's tau_cmd for rate limiting
+        self._no_offset_int_error = 0.0        # integral accumulator for no-offset controller
+
+        # L family: coordinated state-feedback state (Phase 3)
+        self._prev_pitch_rate_for_L = 0.0      # previous pitch_rate for phase-lead computation
+        self._prev_pitch_rate_for_N = 0.0      # previous pitch_rate for N1 mild damping
+        self._prev_pitch_rate_for_LR = 0.0     # previous pitch_rate for LR2 phase-lead computation
+        self._lp_prev_support_allocated = 0.0  # LP slew-limit state
+        self._lp_pitch_settle_counter = 0       # LP3 pitch-settle counter
 
         # Initialize capture gate if enabled
         if self.enable_capture_gate:
@@ -2108,6 +5207,30 @@ class SagittalVelocityDampedBalanceController:
         t6j_bias_applied_to_final_tau = 0.0
         t6j_bias_expected_direction_correct = False
 
+        # Adaptive centering bias trim telemetry variables (initialized before use)
+        adaptive_bias_trim_enabled = bool(self.authority_schedule.adaptive_bias_trim_enabled)
+        adaptive_bias_trim_active = False
+        adaptive_bias_mean_error_m = 0.0
+        adaptive_bias_fast_mean_error_m = 0.0
+        adaptive_bias_effective_error_m = 0.0
+        adaptive_bias_target_tau_nm = 0.0
+        adaptive_bias_tau_nm = float(self._adaptive_bias_trim_tau)
+        adaptive_bias_max_tau_current_nm = 0.0
+        adaptive_bias_height_scale = 0.0
+        adaptive_bias_rate_used_nm_per_step = 0.0
+        adaptive_bias_zero_crossing_count = 0
+        adaptive_bias_zero_crossing_guard_active = False
+        adaptive_bias_near_zero_relief_active = False
+        adaptive_bias_sign_reversal_blocked = False
+        adaptive_bias_safety_gate_pass = False
+        adaptive_bias_block_reason = "disabled"
+        adaptive_bias_expected_direction_correct = False
+        adaptive_bias_positive_area = 0.0
+        adaptive_bias_negative_area = 0.0
+        adaptive_bias_symmetry_ratio = 0.0
+        adaptive_bias_hip_yaw_gate_pass = True
+        adaptive_bias_hip_yaw_abs_max = 0.0
+
         if self.authority_schedule.arch_fix_enabled:
             # Gate 1: Height threshold (only at high heights >= 0.45m)
             arch_fix_height_gate_pass = schedule_height_ref >= self.authority_schedule.arch_fix_height_threshold_m
@@ -2163,6 +5286,21 @@ class SagittalVelocityDampedBalanceController:
             effective_k_wheel_velocity = self.k_wheel_velocity
             high_height_wheel_damping_active = False
 
+        # kd_pitch scheduling (Tall-height WIP damping fix, J candidate).
+        # Uses the same smoothstep function as k_wheel_velocity (increases at tall heights).
+        if self.authority_schedule.continuous_kd_pitch:
+            effective_kd_pitch = scheduled_k_wheel_velocity(
+                z_ref=schedule_height_ref,
+                k_nominal=self.authority_schedule.kd_pitch_nominal,
+                k_high_max=self.authority_schedule.kd_pitch_high_max,
+                z_low=self.authority_schedule.kd_pitch_z_low,
+                z_high=self.authority_schedule.kd_pitch_z_high,
+            )
+            high_height_kd_pitch_active = effective_kd_pitch > self.authority_schedule.kd_pitch_nominal
+        else:
+            effective_kd_pitch = self.kd_pitch
+            high_height_kd_pitch_active = False
+
         SMALL_EPSILON = 1e-6
         low_height_sagittal_schedule_active = (
             (self.authority_schedule.continuous_k_position or
@@ -2188,9 +5326,287 @@ class SagittalVelocityDampedBalanceController:
         support_position_velocity_m_s = (sagittal_position_error_m - self.prev_support_position_error_m) / self.dt
         self.prev_support_position_error_m = sagittal_position_error_m
 
+        # ---- Notch filter for 2.5 Hz WIP mode (K candidate family) ----
+        # Applies causal IIR biquad notch filter to selected damping input signals
+        # to prevent phase-lagged damping from feeding the 2.5 Hz oscillation mode.
+        # Only active when enable_wip_notch_filter is True on the authority schedule.
+        notch_enabled = self.authority_schedule.enable_wip_notch_filter
+        # Audit-only: notch_disabled filter type forces filter off for diagnostics
+        if self.authority_schedule.wip_notch_filter_type == "notch_disabled":
+            notch_enabled = False
+        notch_target = self.authority_schedule.wip_notch_target_signal
+        notch_center_hz = self.authority_schedule.wip_notch_center_hz
+        notch_q = self.authority_schedule.wip_notch_q
+        notch_blend = self.authority_schedule.wip_notch_filter_blend
+
+        # Derive fs from dt if not explicitly set
+        if self._wip_notch_fs_hz <= 0:
+            self._wip_notch_fs_hz = float(1.0 / self.dt) if self.dt > 0 else 100.0
+        fs_hz = self.authority_schedule.wip_notch_fs_hz if self.authority_schedule.wip_notch_fs_hz > 0 else self._wip_notch_fs_hz
+
+        # Compute height gate
+        if notch_enabled and self.authority_schedule.wip_notch_gate_enabled:
+            notch_height_gate = smoothstep_gate(
+                schedule_height_ref,
+                self.authority_schedule.wip_notch_height_gate_start_m,
+                self.authority_schedule.wip_notch_height_gate_full_m,
+            )
+        else:
+            notch_height_gate = 1.0 if notch_enabled else 0.0
+
+        # Telemetry: raw signals (always captured)
+        pitch_rate_raw = float(pitch_rate_x_rad_s)
+        wheel_left_raw = float(wheel_vel_left_rad_s)
+        wheel_right_raw = float(wheel_vel_right_rad_s)
+        support_vel_raw = float(support_position_velocity_m_s)
+
+        # Notched signals (may equal raw if filter disabled)
+        pitch_rate_notched = pitch_rate_raw
+        wheel_left_notched = wheel_left_raw
+        wheel_right_notched = wheel_right_raw
+        support_vel_notched = support_vel_raw
+
+        # Lazy-init filters
+        notch_filter_valid = False
+        if notch_enabled:
+            try:
+                filter_type = self.authority_schedule.wip_notch_filter_type
+                if self._wip_notch_pitch_rate is None:
+                    if filter_type == "first_order_lowpass":
+                        lp_cutoff = self.authority_schedule.wip_lowpass_cutoff_hz
+                        self._wip_notch_pitch_rate = FirstOrderLowPassFilter(fs_hz=fs_hz, cutoff_hz=lp_cutoff)
+                        self._wip_notch_wheel_left = FirstOrderLowPassFilter(fs_hz=fs_hz, cutoff_hz=lp_cutoff)
+                        self._wip_notch_wheel_right = FirstOrderLowPassFilter(fs_hz=fs_hz, cutoff_hz=lp_cutoff)
+                        self._wip_notch_support_vel = FirstOrderLowPassFilter(fs_hz=fs_hz, cutoff_hz=lp_cutoff)
+                    else:
+                        # Default: biquad_notch (K1 behaviour preserved)
+                        self._wip_notch_pitch_rate = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+                        self._wip_notch_wheel_left = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+                        self._wip_notch_wheel_right = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+                        self._wip_notch_support_vel = BiquadNotchFilter(fs_hz=fs_hz, fc_hz=notch_center_hz, Q=notch_q)
+
+                # Update filters
+                should_filter_pr = notch_target in ("pitch_rate", "pitch_rate_and_wheel_velocity", "all_damping_signals")
+                should_filter_wv = notch_target in ("wheel_velocity", "pitch_rate_and_wheel_velocity", "all_damping_signals")
+                should_filter_sv = notch_target in ("support_velocity", "all_damping_signals")
+
+                # Apply filter per signal
+                if should_filter_pr:
+                    pitch_rate_notched = self._wip_notch_pitch_rate.update(pitch_rate_raw)
+                if should_filter_wv:
+                    wheel_left_notched = self._wip_notch_wheel_left.update(wheel_left_raw)
+                    wheel_right_notched = self._wip_notch_wheel_right.update(wheel_right_raw)
+                if should_filter_sv:
+                    support_vel_notched = self._wip_notch_support_vel.update(support_vel_raw)
+
+                notch_filter_valid = True
+            except Exception:
+                # If filter fails, fall back to raw signals
+                notch_filter_valid = False
+
+        # Blend: gate * blend controls how much filtered vs raw signal is used
+        gate = notch_height_gate * notch_blend if notch_enabled else 0.0
+        pitch_rate_effective = (1.0 - gate) * pitch_rate_raw + gate * pitch_rate_notched
+        wheel_left_effective = (1.0 - gate) * wheel_left_raw + gate * wheel_left_notched
+        wheel_right_effective = (1.0 - gate) * wheel_right_raw + gate * wheel_right_notched
+        support_vel_effective = (1.0 - gate) * support_vel_raw + gate * support_vel_notched
+
+        # For telemetry: compute signal delta
+        notch_signal_delta_pr = float(pitch_rate_effective - pitch_rate_raw)
+        notch_signal_delta_wl = float(wheel_left_effective - wheel_left_raw)
+        notch_signal_delta_wr = float(wheel_right_effective - wheel_right_raw)
+
+        # Use effective (notched or raw) signals for damping computations
+        # Replace raw signals for the remainder of compute()
+        # Note: wheel_vel_mean is already computed from raw — recompute if filter active
+        if notch_enabled and gate > 1e-9:
+            wheel_vel_mean = 0.5 * (wheel_left_effective + wheel_right_effective)
+
+        # Override pitch_rate_x_rad_s and wheel velocity references for damping terms
+        pitch_rate_for_damping = pitch_rate_effective
+        wheel_left_for_damping = wheel_left_effective
+        wheel_right_for_damping = wheel_right_effective
+        support_vel_for_damping = support_vel_effective
+
+        # =====================================================================
+        # UNIFIED SAGITTAL STATE-FEEDBACK NO-OFFSET CONTROLLER
+        # =====================================================================
+        # When enabled, replaces all of tau_pitch, tau_position, tau_velocity,
+        # tau_support_velocity, tau_cp, tau_com_vy, recenter, hysteresis, bias,
+        # APC, and outer-loop with a single coordinated state-feedback command.
+        #
+        # The unified controller uses priority-weighted mode arbitration to
+        # prevent the torque conflict documented in
+        # docs/validation/unified_no_offset_state_conflict_audit.md.
+        # =====================================================================
+        no_offset_active = self.authority_schedule.enable_unified_sagittal_state_feedback
+        no_offset_mode = "disabled"
+        no_offset_gate_pass = True
+        no_offset_block_reason = "none"
+        no_offset_kx = 0.0
+        no_offset_kv = 0.0
+        no_offset_ktheta = 0.0
+        no_offset_komega = 0.0
+        no_offset_kh = 0.0
+        no_offset_khdot = 0.0
+        no_offset_tau_support_state = 0.0
+        no_offset_tau_pitch_state = 0.0
+        no_offset_tau_rate_state = 0.0
+        no_offset_tau_height_state = 0.0
+        no_offset_priority_support = 1.0
+        no_offset_priority_pitch = 1.0
+        no_offset_priority_rate = 1.0
+        no_offset_tau_total_raw = 0.0
+        no_offset_tau_total_limited = 0.0
+        no_offset_torque_cap = 0.0
+        no_offset_rate_limit = 0.0
+        no_offset_saturation_active = False
+        no_offset_arbitration_reason = "disabled"
+        no_offset_pitch_ref_offset_deg = 0.0
+        unified_tau_cmd = None  # If computed, used at assembly to replace tau_common
+
+        if no_offset_active:
+            sched = self.authority_schedule
+            no_offset_pitch_ref_offset_deg = 0.0
+            abs_support_error = abs(float(sagittal_position_error_m))
+            abs_pitch = abs(float(pitch_x_rad))
+            abs_roll = abs(float(roll_y_rad))
+            abs_height_err = abs(float(com_z_m) - float(commanded_height_ref_m if commanded_height_ref_m is not None else com_z_m))
+            hip_yaw_abs_max = 0.0  # Not available in compute method; set from diagnostics externally
+
+            # --- Safety gates ---
+            if not contact_valid:
+                no_offset_gate_pass = False
+                no_offset_block_reason = "contact_invalid"
+            elif com_z_m < 0.28 or com_z_m > 0.50:
+                no_offset_gate_pass = False
+                no_offset_block_reason = "height_unsafe"
+            elif abs_roll > 0.15:
+                no_offset_gate_pass = False
+                no_offset_block_reason = "roll_unsafe"
+
+            # --- Mode classifier ---
+            # Mode classification affects priority weights but does not
+            # change the fundamental control law. When Ktheta=0 (pure
+            # support-centering), the weights are always 1.0 (no arbitration
+            # needed since there's only one objective).
+            no_offset_priority_support = 1.0
+            no_offset_priority_pitch = 1.0
+            no_offset_priority_rate = 1.0
+
+            pitch_rate_large = abs(float(pitch_rate_x_rad_s)) > sched.unified_push_pitch_rate_enter_radps
+            pitch_large = abs_pitch > sched.unified_push_pitch_enter_rad
+            drift_detected = abs_support_error > sched.unified_drift_enter_m
+            height_changing = abs_height_err > sched.unified_height_transition_enter_m
+            hip_yaw_risky = hip_yaw_abs_max > sched.unified_hip_yaw_risk_rad
+            hip_yaw_danger = hip_yaw_abs_max > sched.unified_hip_yaw_danger_rad
+            contact_ok = contact_valid
+
+            if not no_offset_gate_pass:
+                no_offset_mode = "BLOCKED"
+            elif not contact_ok:
+                no_offset_mode = "CONTACT_DEGRADED"
+            elif hip_yaw_danger:
+                no_offset_mode = "HIP_YAW_RISK"
+            elif pitch_large or pitch_rate_large:
+                no_offset_mode = "PUSH_RECOVERY"
+            elif drift_detected:
+                no_offset_mode = "DRIFT_RECOVERY"
+            elif height_changing:
+                no_offset_mode = "HEIGHT_TRANSITION"
+            else:
+                no_offset_mode = "STEADY"
+
+            # --- Height-scheduled gains ---
+            h_norm = max(0.0, min(1.0, (float(com_z_m) - 0.30) / (0.48 - 0.30)))
+            if sched.unified_gain_height_schedule:
+                no_offset_kx = sched.unified_kx_nominal + (sched.unified_kx_low_max - sched.unified_kx_nominal) * (1.0 - h_norm)
+                no_offset_kv = sched.unified_kv_nominal + (sched.unified_kv_low_max - sched.unified_kv_nominal) * (1.0 - h_norm)
+                no_offset_ktheta = sched.unified_ktheta_nominal + (sched.unified_ktheta_low_max - sched.unified_ktheta_nominal) * (1.0 - h_norm)
+                no_offset_komega = sched.unified_komega_nominal + (sched.unified_komega_low_max - sched.unified_komega_nominal) * (1.0 - h_norm)
+                no_offset_torque_cap = sched.unified_torque_cap_nominal + (sched.unified_torque_cap_low_max - sched.unified_torque_cap_nominal) * (1.0 - h_norm)
+            else:
+                no_offset_kx = sched.unified_kx
+                no_offset_kv = sched.unified_kv
+                no_offset_ktheta = sched.unified_ktheta
+                no_offset_komega = sched.unified_komega
+                no_offset_torque_cap = sched.unified_torque_cap
+            no_offset_rate_limit = sched.unified_rate_limit
+            no_offset_kh = sched.unified_kh
+            no_offset_khdot = sched.unified_khdot
+
+            # --- Priority weights (simplified — pitch-primary architecture) ---
+            # With the pitch-primary architecture (no separate tau_position),
+            # weights are always 1.0. The sign-aware coordination is handled
+            # by the integral term, not by weighting.
+            no_offset_priority_support = 1.0
+            no_offset_priority_pitch = 1.0
+            no_offset_priority_rate = 1.0
+            no_offset_arbitration_reason = no_offset_mode.lower()
+
+            # --- Unified state-feedback command ---
+            # tau_pitch_fb = +Ktheta * pitch_x (forward correction for forward lean)
+            # tau_support = -Kx * err - Kv * vel (support-centering PD)
+            # tau_integral = -Ki * ∫err dt (anti-windup bounded integral)
+            #
+            # The integral term is critical for no-offset operation: it winds up
+            # to cancel the DC torque from tau_pitch_fb, eliminating steady-state
+            # drift without requiring a pitch_ref_offset. Integral is bounded to
+            # prevent windup during large transients.
+            # EQUILIBRIUM PITCH HIGH-PASS: use Ktheta*(pitch - pitch_eqm) so the DC
+            # component of equilibrium lean (~3 deg at h=0.48) does not produce
+            # unwanted forward torque. pitch_eqm is a slow EMA (~10s time constant).
+            if not hasattr(self, '_pitch_eqm_estimate'):
+                self._pitch_eqm_estimate = float(pitch_x_rad)
+            alpha_eqm = 0.010  # 100-step EMA @100Hz ≈ 10s time constant
+            self._pitch_eqm_estimate = (1.0 - alpha_eqm) * self._pitch_eqm_estimate + alpha_eqm * float(pitch_x_rad)
+            pitch_deviation = float(pitch_x_rad) - self._pitch_eqm_estimate
+
+            tau_pitch_fb = +no_offset_ktheta * pitch_deviation
+            tau_support = 0.0
+
+            # Integral on support error (eliminates steady-state drift without offset)
+            self._no_offset_int_error += sagittal_position_error_m * self.dt
+            k_bound = max(no_offset_ktheta * 0.5, 1.0)
+            max_int = 3.0 / k_bound
+            self._no_offset_int_error = max(-max_int, min(max_int, self._no_offset_int_error))
+            ki_eff = no_offset_ktheta * 0.020
+            tau_integral = -ki_eff * self._no_offset_int_error
+
+            tau_rate = +no_offset_komega * pitch_rate_x_rad_s
+            tau_height = 0.0
+
+            # Unified command: high-pass pitch + drift integral + pitch rate damping
+            unified_tau_cmd_raw = tau_pitch_fb + tau_rate + tau_integral
+
+            no_offset_tau_support_state = 0.0  # no separate support term
+            no_offset_tau_pitch_state = float(tau_pitch_fb)
+            no_offset_tau_rate_state = float(tau_rate)
+            no_offset_tau_height_state = float(tau_integral)  # reuse height_state for integral telemetry
+            no_offset_tau_total_raw = float(unified_tau_cmd_raw)
+
+            # --- Torque cap ---
+            if abs(unified_tau_cmd_raw) > no_offset_torque_cap:
+                unified_tau_cmd_limited = float(jnp.clip(unified_tau_cmd_raw, -no_offset_torque_cap, no_offset_torque_cap))
+                no_offset_saturation_active = True
+            else:
+                unified_tau_cmd_limited = float(unified_tau_cmd_raw)
+
+            # Rate limit
+            if abs(unified_tau_cmd_limited - self._prev_unified_tau_cmd) > no_offset_rate_limit:
+                delta = unified_tau_cmd_limited - self._prev_unified_tau_cmd
+                delta = max(-no_offset_rate_limit, min(no_offset_rate_limit, delta))
+                unified_tau_cmd_limited = self._prev_unified_tau_cmd + delta
+
+            self._prev_unified_tau_cmd = unified_tau_cmd_limited
+            no_offset_tau_total_limited = float(unified_tau_cmd_limited)
+
+            # Store for final assembly
+            unified_tau_cmd = unified_tau_cmd_limited
+
         # Per-wheel damping (separate for each wheel)
-        tau_wheel_vel_left = -effective_k_wheel_velocity * wheel_vel_left_rad_s
-        tau_wheel_vel_right = -effective_k_wheel_velocity * wheel_vel_right_rad_s
+        tau_wheel_vel_left = -effective_k_wheel_velocity * wheel_left_for_damping
+        tau_wheel_vel_right = -effective_k_wheel_velocity * wheel_right_for_damping
 
         # APCR1l: Check if pitch suppression should be applied during RECENTER state
         # During RECENTER, tau_pitch fights drift correction (robot leans back intentionally,
@@ -2222,6 +5638,113 @@ class SagittalVelocityDampedBalanceController:
             else:
                 tau_pitch = float(jnp.clip(tau_pitch_scheduled, -effective_pitch_tau_cap, effective_pitch_tau_cap))
                 tau_pitch_clipped = tau_pitch
+
+        # =====================================================================
+        # Pitch Bias DC Compensation (Phase 7 mechanism)
+        # Estimates and removes only the slow tau_pitch DC component during
+        # stable upright posture. Does NOT zero tau_pitch, does NOT suppress
+        # dynamic pitch correction. See docs/validation/tau_pitch_positive_bias_audit.md
+        # and docs/validation/pitch_bias_compensated_zc_design.md.
+        # =====================================================================
+        tau_pitch_before_bias_comp = float(tau_pitch)
+        pitch_bias_gate_pass = False
+        pitch_bias_block_reason = "disabled"
+        pitch_bias_comp_tau = 0.0
+        pitch_bias_estimation_active = False
+
+        if self.authority_schedule.pitch_bias_comp_enabled:
+            sched = self.authority_schedule
+            abs_pitch_deg = abs(float(pitch_x_rad)) * 180.0 / math.pi
+            abs_roll_deg = abs(float(roll_y_rad)) * 180.0 / math.pi
+            abs_error_pbc = abs(float(sagittal_position_error_m))
+
+            # Hard safety gates - never apply if any of these fail
+            safety_pass = True
+            if sched.pitch_bias_disable_if_contact_unstable and not contact_valid:
+                safety_pass = False
+                pitch_bias_block_reason = "contact_invalid"
+            elif float(com_z_m) < sched.pitch_bias_disable_if_height_lt_m:
+                safety_pass = False
+                pitch_bias_block_reason = "height_unsafe"
+            elif abs_pitch_deg > sched.pitch_bias_disable_if_pitch_gt_deg:
+                safety_pass = False
+                pitch_bias_block_reason = "pitch_unsafe"
+            elif abs_roll_deg > sched.pitch_bias_disable_if_roll_gt_deg:
+                safety_pass = False
+                pitch_bias_block_reason = "roll_unsafe"
+
+            if safety_pass:
+                # Estimation window: only when robot is upright AND drift is small
+                pitch_bias_estimation_active = (
+                    abs_pitch_deg < sched.pitch_bias_only_when_abs_pitch_lt_deg
+                    and abs_error_pbc < sched.pitch_bias_only_when_abs_error_lt_m
+                )
+
+                # Apply gate: hard band disables, soft band allows, estimation window forces apply
+                if abs_error_pbc >= sched.pitch_bias_gate_abs_error_hard_m:
+                    pitch_bias_gate_pass = False
+                    pitch_bias_block_reason = "error_hard_gate"
+                elif pitch_bias_estimation_active:
+                    pitch_bias_gate_pass = True
+                    pitch_bias_block_reason = "in_estimation_window"
+                elif abs_error_pbc < sched.pitch_bias_gate_abs_error_soft_m:
+                    pitch_bias_gate_pass = True
+                    pitch_bias_block_reason = "soft_gate_pass"
+                else:
+                    pitch_bias_gate_pass = False
+                    pitch_bias_block_reason = "outside_apply_window"
+
+                # Update EMA estimate only during estimation window
+                if pitch_bias_estimation_active:
+                    window = max(1, int(sched.pitch_bias_window_steps))
+                    alpha = 1.0 / window
+                    self._pitch_bias_estimate_nm = (
+                        (1.0 - alpha) * self._pitch_bias_estimate_nm
+                        + alpha * tau_pitch_before_bias_comp
+                    )
+                    self._pitch_bias_samples += 1
+
+                # Rate-limit current compensation toward target
+                # Only compensate the positive DC residual (negative bias should not be amplified)
+                target_comp = max(0.0, self._pitch_bias_estimate_nm)
+                target_comp = min(target_comp, sched.pitch_bias_max_comp_nm)
+
+                if pitch_bias_gate_pass:
+                    rate = sched.pitch_bias_comp_rate_nm_per_step
+                    if self._pitch_bias_comp_tau_nm < target_comp:
+                        self._pitch_bias_comp_tau_nm = min(
+                            target_comp,
+                            self._pitch_bias_comp_tau_nm + rate,
+                        )
+                    elif self._pitch_bias_comp_tau_nm > target_comp:
+                        decay = sched.pitch_bias_decay_rate_nm_per_step
+                        self._pitch_bias_comp_tau_nm = max(
+                            target_comp,
+                            self._pitch_bias_comp_tau_nm - decay,
+                        )
+                    pitch_bias_comp_tau = self._pitch_bias_comp_tau_nm
+                else:
+                    # Gate fails: decay toward zero (do not apply)
+                    decay = sched.pitch_bias_decay_rate_nm_per_step
+                    self._pitch_bias_comp_tau_nm = max(
+                        0.0,
+                        self._pitch_bias_comp_tau_nm - decay,
+                    )
+                    pitch_bias_comp_tau = 0.0
+            else:
+                # Safety gate failed - decay any active compensation
+                decay = self.authority_schedule.pitch_bias_decay_rate_nm_per_step
+                self._pitch_bias_comp_tau_nm = max(
+                    0.0,
+                    self._pitch_bias_comp_tau_nm - decay,
+                )
+                pitch_bias_comp_tau = 0.0
+
+            # Apply compensation - subtract from tau_pitch (positive comp -> reduces positive tau_pitch)
+            tau_pitch = tau_pitch - pitch_bias_comp_tau
+            tau_pitch_clipped = tau_pitch
+
+        tau_pitch_after_bias_comp = float(tau_pitch)
 
         # APCR1m: Conditional pitch blend (instead of hard suppression)
         # Blend tau_pitch based on error magnitude, with startup guard and safety gates
@@ -2298,12 +5821,12 @@ class SagittalVelocityDampedBalanceController:
         # =====================================================================
         # Pitch suppression moved to after arch_fix_active computation
 
-        tau_pitch_rate = self.kd_pitch * pitch_rate_x_rad_s
+        tau_pitch_rate = effective_kd_pitch * pitch_rate_for_damping
         tau_sagittal_velocity = -effective_k_velocity * effective_velocity_damping_scale * sagittal_velocity_m_s
 
         # Support position velocity damping term
         # Directly opposes support-center drift velocity to prevent transient position excursions
-        tau_support_velocity = -effective_support_velocity_gain * effective_support_velocity_scale * support_position_velocity_m_s
+        tau_support_velocity = -effective_support_velocity_gain * effective_support_velocity_scale * support_vel_for_damping
 
         # Capture-point-like term matching baseline controller's cp/com_vy contributions
         # Uses sagittal_position_error as proxy for cp_error and sagittal_velocity as proxy for com_vy
@@ -2743,6 +6266,259 @@ class SagittalVelocityDampedBalanceController:
                 tau_position_with_trim = float(tau_position + updated_trim)
                 tau_position = float(jnp.clip(tau_position_with_trim, -effective_max_position_tau, effective_max_position_tau))
                 t6j_bias_applied_to_final_tau = float(updated_trim)
+
+            # =====================================================================
+            # Adaptive Centering Bias Trim (ASCT): proportional, height-aware trim
+            # Replaces bang-bang T6J with smooth proportional authority
+            # =====================================================================
+            if adaptive_bias_trim_enabled:
+                signed_error = float(sagittal_position_error_m)
+                sch = self.authority_schedule
+
+                # --- Update slow and fast error histories ---
+                self._adaptive_bias_slow_error_history.append(signed_error)
+                if len(self._adaptive_bias_slow_error_history) > int(sch.adaptive_bias_window_steps):
+                    self._adaptive_bias_slow_error_history.pop(0)
+                self._adaptive_bias_fast_error_history.append(signed_error)
+                if len(self._adaptive_bias_fast_error_history) > int(sch.adaptive_bias_fast_window_steps):
+                    self._adaptive_bias_fast_error_history.pop(0)
+
+                # Compute means
+                slow_n = max(1, len(self._adaptive_bias_slow_error_history))
+                fast_n = max(1, len(self._adaptive_bias_fast_error_history))
+                mean_err = sum(self._adaptive_bias_slow_error_history) / slow_n
+                fast_mean_err = sum(self._adaptive_bias_fast_error_history) / fast_n
+                adaptive_bias_mean_error_m = mean_err
+                adaptive_bias_fast_mean_error_m = fast_mean_err
+
+                # --- Height-scheduled max trim ---
+                com_z = float(com_z_m)
+                z_low = float(sch.adaptive_bias_height_low_m)
+                z_high = float(sch.adaptive_bias_height_high_m)
+                z_extreme = float(sch.adaptive_bias_height_extreme_m)
+                max_low = float(sch.adaptive_bias_max_tau_low_nm)
+                max_high = float(sch.adaptive_bias_max_tau_high_nm)
+                max_extreme = float(sch.adaptive_bias_max_tau_extreme_nm)
+                if com_z <= z_low:
+                    max_tau_current = max_low
+                    adaptive_bias_height_scale = 0.0
+                elif com_z >= z_extreme:
+                    max_tau_current = max_extreme
+                    adaptive_bias_height_scale = 1.0
+                else:
+                    # Linear interpolation: low->high for [z_low, z_high], high->extreme for [z_high, z_extreme]
+                    if com_z <= z_high:
+                        t = (com_z - z_low) / max(z_high - z_low, 1e-9)
+                    else:
+                        t = 1.0 + (com_z - z_high) / max(z_extreme - z_high, 1e-9)
+                    t = max(0.0, min(2.0, t))
+                    if t <= 1.0:
+                        max_tau_current = max_low + (max_high - max_low) * t
+                    else:
+                        max_tau_current = max_high + (max_extreme - max_high) * (t - 1.0)
+                    adaptive_bias_height_scale = min(1.0, t)
+                adaptive_bias_max_tau_current_nm = max_tau_current
+
+                # --- Zero-crossing detection and guard ---
+                self._adaptive_bias_zero_crossing_history.append(signed_error)
+                max_zc_len = max(1, int(sch.adaptive_bias_zero_crossing_window_steps))
+                if len(self._adaptive_bias_zero_crossing_history) > max_zc_len:
+                    self._adaptive_bias_zero_crossing_history.pop(0)
+                zc_window = self._adaptive_bias_zero_crossing_history
+                zc_count = 0
+                for i in range(1, len(zc_window)):
+                    if (zc_window[i-1] < 0) != (zc_window[i] < 0):
+                        zc_count += 1
+                adaptive_bias_zero_crossing_count = zc_count
+                zc_guard_active = False
+                if sch.adaptive_bias_zero_crossing_guard_enabled and zc_count > int(sch.adaptive_bias_zero_crossing_limit):
+                    zc_guard_active = True
+                    self._adaptive_bias_guard_trigger_count += 1
+                    if self._adaptive_bias_guard_trigger_count >= 3:
+                        # Reset counter after 3 consecutive triggers
+                        self._adaptive_bias_guard_trigger_count = 0
+                else:
+                    self._adaptive_bias_guard_trigger_count = 0
+                adaptive_bias_zero_crossing_guard_active = zc_guard_active
+
+                # Apply guard scale
+                guard_scale = 1.0
+                if zc_guard_active:
+                    guard_scale = float(sch.adaptive_bias_zero_crossing_max_scale)
+                max_tau_guarded = max_tau_current * guard_scale
+
+                # --- Positive/negative area in slow window ---
+                pos_a = sum(v for v in self._adaptive_bias_slow_error_history if v > 0)
+                neg_a = abs(sum(v for v in self._adaptive_bias_slow_error_history if v < 0))
+                total_a = pos_a + neg_a
+                adaptive_bias_positive_area = pos_a
+                adaptive_bias_negative_area = neg_a
+                adaptive_bias_symmetry_ratio = (abs(pos_a - neg_a) / total_a) if total_a > 1e-9 else 0.0
+
+                # --- Safety gates ---
+                abs_pitch_deg = abs(float(pitch_x_rad)) * 180.0 / math.pi
+                abs_roll_deg = abs(float(roll_y_rad)) * 180.0 / math.pi
+                contact_ok = (not sch.adaptive_bias_only_when_contact_stable) or bool(contact_valid)
+                upright_ok = (
+                    (not sch.adaptive_bias_only_when_upright)
+                    or (abs_pitch_deg <= sch.adaptive_bias_disable_if_pitch_gt_deg
+                        and abs_roll_deg <= sch.adaptive_bias_disable_if_roll_gt_deg)
+                )
+                # hip_yaw_abs_max not directly available in compute() scope;
+                # use the same pattern as the rest of the controller: default to 0.0
+                # and let telemetry reveal it post-hoc. This avoids a hard dependency
+                # on an absent local variable.
+                try:
+                    hy_val = float(hip_yaw_abs_max_tracking)
+                except (NameError, TypeError, ValueError):
+                    hy_val = 0.0
+                hy_ok = hy_val <= float(sch.adaptive_bias_disable_if_hip_yaw_gt_rad)
+                adaptive_bias_hip_yaw_gate_pass = hy_ok
+                adaptive_bias_hip_yaw_abs_max = hy_val
+                abs_error_ok = abs(signed_error) <= float(sch.adaptive_bias_disable_if_abs_error_gt_m)
+                pitch_ok = abs_pitch_deg <= float(sch.adaptive_bias_disable_if_pitch_gt_deg)
+                roll_ok = abs_roll_deg <= float(sch.adaptive_bias_disable_if_roll_gt_deg)
+
+                safety_pass = bool(contact_ok and upright_ok and hy_ok and abs_error_ok)
+                adaptive_bias_safety_gate_pass = safety_pass
+
+                if not contact_ok:
+                    adaptive_bias_block_reason = "contact_unstable"
+                elif not upright_ok:
+                    adaptive_bias_block_reason = "upright_gate_fail"
+                elif not hy_ok:
+                    adaptive_bias_block_reason = "hip_yaw_unsafe"
+                elif not abs_error_ok:
+                    adaptive_bias_block_reason = "abs_error_too_large"
+                elif zc_guard_active:
+                    adaptive_bias_block_reason = "zero_crossing_guard"
+                else:
+                    adaptive_bias_block_reason = "ok"
+
+                # --- Proportional target computation ---
+                enter_th = float(sch.adaptive_bias_enter_threshold_m)
+                exit_th = float(sch.adaptive_bias_exit_threshold_m)
+                relief_th = float(sch.adaptive_bias_relief_hysteresis_m)
+                k_tau = float(sch.adaptive_bias_k_tau_per_m)
+
+                sign_err = 1.0 if mean_err > 1e-9 else (-1.0 if mean_err < -1e-9 else 0.0)
+                err_sign_changed = (sign_err != 0) and (sign_err != self._adaptive_bias_prev_error_sign)
+
+                # Sign-reversal guard: hold before reversing
+                if err_sign_changed:
+                    self._adaptive_bias_hold_steps = int(sch.adaptive_bias_sign_reversal_hold_steps)
+                    self._adaptive_bias_prev_error_sign = sign_err
+                elif self._adaptive_bias_hold_steps > 0:
+                    self._adaptive_bias_hold_steps -= 1
+                    self._adaptive_bias_prev_error_sign = sign_err
+
+                sign_reversal_blocked = (self._adaptive_bias_hold_steps > 0) and err_sign_changed
+                adaptive_bias_sign_reversal_blocked = sign_reversal_blocked
+
+                # Near-zero relief
+                near_zero = abs(mean_err) <= exit_th
+                in_hysteresis = abs(mean_err) <= exit_th + relief_th
+                adaptive_bias_near_zero_relief_active = near_zero
+
+                if near_zero:
+                    # Inside exit threshold: target zero
+                    raw_target = 0.0
+                elif sign_reversal_blocked:
+                    # Sign reversal in progress: decay toward zero
+                    raw_target = 0.0
+                elif in_hysteresis:
+                    # In hysteresis band: hold current
+                    raw_target = float(self._adaptive_bias_trim_tau)
+                else:
+                    # Normal proportional target
+                    eff_err = mean_err - sign_err * exit_th
+                    raw_target = -k_tau * eff_err
+
+                adaptive_bias_effective_error_m = mean_err - sign_err * exit_th if not near_zero and not sign_reversal_blocked else 0.0
+
+                # Apply height/guard ceiling
+                clipped_target = max(-max_tau_guarded, min(max_tau_guarded, raw_target))
+                adaptive_bias_target_tau_nm = float(clipped_target)
+
+                # Rate limiting
+                current_trim_a = float(self._adaptive_bias_trim_tau)
+                is_decay = abs(clipped_target) < abs(current_trim_a)
+                rate = float(sch.adaptive_bias_decay_rate_nm_per_step) if is_decay else float(sch.adaptive_bias_rate_nm_per_step)
+                adaptive_bias_rate_used_nm_per_step = rate
+
+                trim_delta_a = clipped_target - current_trim_a
+                if abs(trim_delta_a) > rate:
+                    trim_delta_a = rate if trim_delta_a > 0.0 else -rate
+                updated_trim_a = current_trim_a + trim_delta_a
+                updated_trim_a = max(-max_tau_guarded, min(max_tau_guarded, updated_trim_a))
+
+                self._adaptive_bias_trim_target_tau = clipped_target
+                self._adaptive_bias_trim_tau = updated_trim_a
+                adaptive_bias_tau_nm = updated_trim_a
+
+                # Direction correctness
+                if mean_err > 1e-9:
+                    adaptive_bias_expected_direction_correct = updated_trim_a <= 0.0
+                elif mean_err < -1e-9:
+                    adaptive_bias_expected_direction_correct = updated_trim_a >= 0.0
+                else:
+                    adaptive_bias_expected_direction_correct = abs(updated_trim_a) < 1e-9
+
+                # Phase 0: ABS trim state/timing trace — capture all intermediates
+                # for JAX parity comparison. Accessed by simulate_hierarchical_controller.py.
+                self._py_abs_trim_trace = {
+                    'signed_error': float(signed_error),
+                    'mean_err': float(mean_err),
+                    'fast_mean_err': float(fast_mean_err),
+                    'sign_err': float(sign_err),
+                    'max_tau_current': float(max_tau_current),
+                    'max_tau_g': float(max_tau_guarded),
+                    'guard_scale': float(guard_scale),
+                    'raw_target': float(raw_target),
+                    'clipped_target': float(clipped_target),
+                    'is_decay': bool(is_decay),
+                    'rate': float(rate),
+                    'trim_delta': float(trim_delta_a),
+                    'new_trim': float(updated_trim_a),
+                    'safety_pass': bool(safety_pass),
+                    'trim_to_apply': float(updated_trim_a),  # same as new_trim, gated later
+                    'tau_position_before_trim': float(tau_position),
+                    'tau_position_raw': float(tau_position_raw),
+                    'effective_max_position_tau': float(effective_max_position_tau),
+                    'hold_steps': int(self._adaptive_bias_hold_steps),
+                    'err_sign_changed': bool(err_sign_changed),
+                    'sign_rev_blocked': bool(sign_reversal_blocked),
+                    'near_zero': bool(near_zero),
+                    'in_hysteresis': bool(in_hysteresis),
+                    'zc_guard_active': bool(zc_guard_active),
+                    # Phase 0: safety gate component diagnostics for parity tracing
+                    'safety_contact_ok': bool(contact_ok),
+                    'safety_upright_ok': bool(upright_ok),
+                    'safety_hy_ok': bool(hy_ok),
+                    'safety_abs_error_ok': bool(abs_error_ok),
+                    'safety_pitch_deg': float(abs_pitch_deg),
+                    'safety_roll_deg': float(abs_roll_deg),
+                }
+
+                # Apply to tau_position AFTER T6J block (or independently if T6J disabled)
+                adaptive_trim_to_apply = float(updated_trim_a)
+                if safety_pass:
+                    # Only apply if safety gates pass
+                    tau_position = float(jnp.clip(
+                        tau_position + adaptive_trim_to_apply,
+                        -effective_max_position_tau,
+                        effective_max_position_tau
+                    ))
+                    # "Active" = meaningful corrective trim is being applied, not merely
+                    # that the gates passed. Trim is inactive at near-zero error, during
+                    # sign-reversal hold, or when magnitude is negligible.
+                    adaptive_bias_trim_active = bool(
+                        (not near_zero)
+                        and (not sign_reversal_blocked)
+                        and abs(updated_trim_a) > 1e-9
+                    )
+                    if adaptive_bias_trim_active:
+                        adaptive_bias_block_reason = "ok"
             tau_position_total_bound_clipped = False
             tau_position_saturated = abs(tau_position_before_clip) >= effective_max_position_tau * 0.99
             tau_position_saturation_reason = "fixed_cap" if tau_position_saturated else "none"
@@ -2758,6 +6534,541 @@ class SagittalVelocityDampedBalanceController:
             tau_position_lower_bound = -float(effective_max_position_tau)
             tau_position_upper_bound = float(effective_max_position_tau)
             position_authority_mode = "scheduled_fixed_cap" if schedule_active else "fixed_cap"
+
+        # =====================================================================
+        # Zero-Crossing Support Recenter (ZC): hysteresis hold-through-zero
+        # Supplements adaptive_bias_trim when enable_zero_crossing_recenter is True
+        # Forces drift to cross to opposite side before releasing correction
+        # =====================================================================
+        zc_state = "CENTER_IDLE"
+        zc_state_id = 0
+        zc_active = False
+        zc_direction = 0
+        zc_tau_nm = 0.0
+        zc_target_tau_nm = 0.0
+        zc_crossed_zero = False
+        zc_cross_target_reached = False
+        zc_safety_gate_pass = True
+        zc_block_reason = "none"
+        zc_expected_direction_correct = True
+
+        if self.authority_schedule.enable_zero_crossing_recenter:
+            sch = self.authority_schedule
+
+            # Get primary drift signal (active_pitch_crossing_signed_error_m)
+            signed_error = float(sagittal_position_error_m)
+            abs_error = abs(signed_error)
+            pitch_rad = float(pitch_x_rad)
+            roll_rad = float(roll_y_rad)
+
+            # Get hip_yaw if available (column 534)
+            hip_yaw_abs = 0.0
+            if hasattr(self, '_hip_yaw_for_zc'):
+                hip_yaw_abs = abs(self._hip_yaw_for_zc)
+
+            # ZC Safety gate
+            if abs_error > sch.zc_disable_if_abs_error_gt_m:
+                zc_safety_gate_pass = False
+                zc_block_reason = "error_too_large"
+            elif abs(pitch_rad) > sch.zc_disable_if_pitch_gt_deg * (3.14159 / 180.0):
+                zc_safety_gate_pass = False
+                zc_block_reason = "pitch_unsafe"
+            elif abs(roll_rad) > sch.zc_disable_if_roll_gt_deg * (3.14159 / 180.0):
+                zc_safety_gate_pass = False
+                zc_block_reason = "roll_unsafe"
+            elif hip_yaw_abs > sch.zc_disable_if_hip_yaw_gt_rad:
+                zc_safety_gate_pass = False
+                zc_block_reason = "hip_yaw_unsafe"
+
+            # State machine transitions
+            prev_state = self._zc_state
+
+            if self._zc_state == "CENTER_IDLE":
+                # Check entry conditions
+                if zc_safety_gate_pass:
+                    if signed_error > sch.zc_enter_m:
+                        self._zc_state = "RECENTER_FROM_POSITIVE"
+                        self._zc_direction = -1  # negative correction
+                        self._zc_hold_steps = 0
+                        self._zc_dwell_steps = 0
+                        self._zc_enter_event += 1
+                        self._zc_episode_id += 1
+                        self._zc_episode_start_error = signed_error
+                        self._zc_episode_min_error = signed_error
+                        self._zc_crossed_zero = False
+                        self._zc_cross_target_reached = False
+                        self._zc_tau = 0.0
+                        self._zc_target_tau = 0.0
+                    elif signed_error < -sch.zc_enter_m:
+                        self._zc_state = "RECENTER_FROM_NEGATIVE"
+                        self._zc_direction = +1  # positive correction
+                        self._zc_hold_steps = 0
+                        self._zc_dwell_steps = 0
+                        self._zc_enter_event += 1
+                        self._zc_episode_id += 1
+                        self._zc_episode_start_error = signed_error
+                        self._zc_episode_max_error = signed_error
+                        self._zc_crossed_zero = False
+                        self._zc_cross_target_reached = False
+                        self._zc_tau = 0.0
+                        self._zc_target_tau = 0.0
+
+            elif self._zc_state == "RECENTER_FROM_POSITIVE":
+                # Apply negative correction
+                self._zc_hold_steps += 1
+                self._zc_episode_min_error = min(self._zc_episode_min_error, signed_error)
+
+                # Check if crossed zero
+                if signed_error < 0:
+                    self._zc_crossed_zero = True
+                if signed_error < -sch.zc_cross_target_m:
+                    self._zc_cross_target_reached = True
+
+                # Target torque: base + error proportional
+                target_tau = sch.zc_base_tau_nm + sch.zc_error_gain_nm_per_m * abs_error
+                target_tau = min(target_tau, sch.zc_max_tau_nm)
+                target_tau = max(target_tau, sch.zc_base_tau_nm)
+                self._zc_target_tau = target_tau
+
+                # Exit conditions
+                exit_to_decay = False
+                if signed_error <= -sch.zc_cross_target_m:
+                    # Crossed to opposite side - success
+                    self._zc_state = "HOLD_THROUGH_ZERO"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "cross_target"
+                    self._zc_hold_steps = 0
+                elif self._zc_hold_steps >= sch.zc_max_hold_steps:
+                    # Max hold reached
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "max_hold"
+                    self._zc_hold_steps = 0
+                elif zc_safety_gate_pass and abs_error <= sch.zc_near_zero_band_m and self._zc_hold_steps >= sch.zc_min_hold_steps:
+                    # In near-zero band after min hold - check dwell
+                    self._zc_dwell_steps += 1
+                    if self._zc_dwell_steps >= sch.zc_dwell_steps_for_exit:
+                        self._zc_state = "SAFETY_DECAY"
+                        self._zc_exit_event += 1
+                        self._zc_exit_reason = "dwell_exit"
+                        self._zc_hold_steps = 0
+                        self._zc_dwell_steps = 0
+                elif not zc_safety_gate_pass:
+                    # Safety gate failed
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "safety_gate"
+                    self._zc_hold_steps = 0
+
+            elif self._zc_state == "RECENTER_FROM_NEGATIVE":
+                # Apply positive correction
+                self._zc_hold_steps += 1
+                self._zc_episode_max_error = max(self._zc_episode_max_error, signed_error)
+
+                # Check if crossed zero
+                if signed_error > 0:
+                    self._zc_crossed_zero = True
+                if signed_error > sch.zc_cross_target_m:
+                    self._zc_cross_target_reached = True
+
+                # Target torque
+                target_tau = sch.zc_base_tau_nm + sch.zc_error_gain_nm_per_m * abs_error
+                target_tau = min(target_tau, sch.zc_max_tau_nm)
+                target_tau = max(target_tau, sch.zc_base_tau_nm)
+                self._zc_target_tau = target_tau
+
+                # Exit conditions
+                if signed_error >= sch.zc_cross_target_m:
+                    self._zc_state = "HOLD_THROUGH_ZERO"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "cross_target"
+                    self._zc_hold_steps = 0
+                elif self._zc_hold_steps >= sch.zc_max_hold_steps:
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "max_hold"
+                    self._zc_hold_steps = 0
+                elif zc_safety_gate_pass and abs_error <= sch.zc_near_zero_band_m and self._zc_hold_steps >= sch.zc_min_hold_steps:
+                    self._zc_dwell_steps += 1
+                    if self._zc_dwell_steps >= sch.zc_dwell_steps_for_exit:
+                        self._zc_state = "SAFETY_DECAY"
+                        self._zc_exit_event += 1
+                        self._zc_exit_reason = "dwell_exit"
+                        self._zc_hold_steps = 0
+                        self._zc_dwell_steps = 0
+                elif not zc_safety_gate_pass:
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "safety_gate"
+                    self._zc_hold_steps = 0
+
+            elif self._zc_state == "HOLD_THROUGH_ZERO":
+                # Continue reduced correction to ensure full crossing
+                self._zc_hold_steps += 1
+                hold_tau = min(self._zc_target_tau, sch.zc_base_tau_nm)
+                self._zc_target_tau = hold_tau
+
+                # Exit conditions
+                if abs_error <= sch.zc_exit_m and self._zc_hold_steps >= sch.zc_min_hold_steps:
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "hold_through_zero"
+                    self._zc_hold_steps = 0
+                elif self._zc_hold_steps >= sch.zc_max_hold_steps:
+                    self._zc_state = "SAFETY_DECAY"
+                    self._zc_exit_event += 1
+                    self._zc_exit_reason = "max_hold"
+                    self._zc_hold_steps = 0
+
+            elif self._zc_state == "SAFETY_DECAY":
+                # Decay correction toward zero
+                if abs(self._zc_tau) > 1e-9:
+                    decay = sch.zc_decay_nm_per_step
+                    if self._zc_tau > 0:
+                        self._zc_tau = max(0, self._zc_tau - decay)
+                    else:
+                        self._zc_tau = min(0, self._zc_tau + decay)
+                else:
+                    self._zc_tau = 0.0
+                    self._zc_direction = 0
+                    self._zc_state = "CENTER_IDLE"
+
+            # Rate limit toward target (except in SAFETY_DECAY)
+            if self._zc_state != "SAFETY_DECAY" and abs(self._zc_target_tau) > 1e-9:
+                is_increase = abs(self._zc_target_tau) > abs(self._zc_tau)
+                rate = sch.zc_rate_nm_per_step if is_increase else sch.zc_decay_nm_per_step
+                delta = self._zc_target_tau - self._zc_tau
+                if abs(delta) > rate:
+                    delta = rate if delta > 0 else -rate
+                self._zc_tau = self._zc_tau + delta
+
+            # Apply ZC correction to tau_position
+            if self._zc_state not in ("CENTER_IDLE", "SAFETY_DECAY"):
+                zc_active = True
+                # Direction sign is in _zc_direction (-1 or +1), tau is positive magnitude
+                zc_tau_signed = self._zc_direction * abs(self._zc_tau)
+                tau_position = float(jnp.clip(
+                    tau_position + zc_tau_signed,
+                    -effective_max_position_tau,
+                    effective_max_position_tau
+                ))
+
+            # Telemetry output
+            zc_state = self._zc_state
+            zc_state_id = {"CENTER_IDLE": 0, "RECENTER_FROM_POSITIVE": 1, "RECENTER_FROM_NEGATIVE": 2,
+                          "HOLD_THROUGH_ZERO": 3, "SAFETY_DECAY": 4}.get(zc_state, 0)
+            zc_direction = self._zc_direction
+            zc_tau_nm = float(self._zc_tau) * self._zc_direction  # signed tau
+            zc_target_tau_nm = self._zc_target_tau * self._zc_direction  # signed
+            zc_crossed_zero = self._zc_crossed_zero
+            zc_cross_target_reached = self._zc_cross_target_reached
+            zc_safety_gate_pass = zc_safety_gate_pass
+            zc_block_reason = zc_block_reason if not zc_safety_gate_pass else "none"
+
+            # Direction correctness
+            if signed_error > 1e-9:
+                zc_expected_direction_correct = (zc_tau_nm <= 0)
+            elif signed_error < -1e-9:
+                zc_expected_direction_correct = (zc_tau_nm >= 0)
+            else:
+                zc_expected_direction_correct = True
+
+        # =====================================================================
+        # Early Zero-Crossing Support Recenter (EZC)
+        # Key differences from old ZC:
+        # - Entry at 0.05 m (earlier) vs 0.08 m
+        # - Exit at e <= 0 (not -0.02)
+        # - No opposite-side target required
+        # - Immediate decay after zero crossing
+        # =====================================================================
+        ezc_state = "CENTER_IDLE"
+        ezc_state_id = 0
+        ezc_active = False
+        ezc_direction = 0
+        ezc_tau_nm = 0.0
+        ezc_target_tau_nm = 0.0
+        ezc_crossed_zero = False
+        ezc_safety_gate_pass = True
+        ezc_block_reason = "none"
+        ezc_expected_direction_correct = True
+
+        if self.authority_schedule.enable_early_zero_crossing_recenter:
+            sch = self.authority_schedule
+
+            # Get primary drift signal (active_pitch_crossing_signed_error_m)
+            signed_error = float(sagittal_position_error_m)
+            abs_error = abs(signed_error)
+            pitch_rad = float(pitch_x_rad)
+            roll_rad = float(roll_y_rad)
+
+            # Get hip_yaw if available
+            hip_yaw_abs = 0.0
+            if hasattr(self, '_hip_yaw_for_ezc'):
+                hip_yaw_abs = abs(self._hip_yaw_for_ezc)
+
+            # EZC Safety gate
+            if abs_error > sch.ezc_disable_if_abs_error_gt_m:
+                ezc_safety_gate_pass = False
+                ezc_block_reason = "error_too_large"
+            elif abs(pitch_rad) > sch.ezc_disable_if_pitch_gt_deg * (3.14159 / 180.0):
+                ezc_safety_gate_pass = False
+                ezc_block_reason = "pitch_unsafe"
+            elif abs(roll_rad) > sch.ezc_disable_if_roll_gt_deg * (3.14159 / 180.0):
+                ezc_safety_gate_pass = False
+                ezc_block_reason = "roll_unsafe"
+            elif hip_yaw_abs > sch.ezc_disable_if_hip_yaw_gt_rad:
+                ezc_safety_gate_pass = False
+                ezc_block_reason = "hip_yaw_unsafe"
+
+            # State machine transitions
+            if self._ezc_state == "CENTER_IDLE":
+                # Check entry conditions
+                if ezc_safety_gate_pass:
+                    if signed_error > sch.ezc_enter_m:
+                        self._ezc_state = "RECENTER_FROM_POSITIVE"
+                        self._ezc_direction = -1  # negative correction
+                        self._ezc_hold_steps = 0
+                        self._ezc_zero_dwell_steps = 0
+                        self._ezc_enter_event += 1
+                        self._ezc_episode_id += 1
+                        self._ezc_episode_start_error = signed_error
+                        self._ezc_episode_min_error = signed_error
+                        self._ezc_crossed_zero = False
+                        self._ezc_tau = 0.0
+                        self._ezc_target_tau = 0.0
+                        self._ezc_exit_reason = "none"
+                    elif signed_error < -sch.ezc_enter_m:
+                        self._ezc_state = "RECENTER_FROM_NEGATIVE"
+                        self._ezc_direction = +1  # positive correction
+                        self._ezc_hold_steps = 0
+                        self._ezc_zero_dwell_steps = 0
+                        self._ezc_enter_event += 1
+                        self._ezc_episode_id += 1
+                        self._ezc_episode_start_error = signed_error
+                        self._ezc_episode_max_error = signed_error
+                        self._ezc_crossed_zero = False
+                        self._ezc_tau = 0.0
+                        self._ezc_target_tau = 0.0
+                        self._ezc_exit_reason = "none"
+
+            elif self._ezc_state == "RECENTER_FROM_POSITIVE":
+                # Apply negative correction
+                self._ezc_hold_steps += 1
+                self._ezc_episode_min_error = min(self._ezc_episode_min_error, signed_error)
+
+                # Check if crossed zero
+                if signed_error < 0:
+                    self._ezc_crossed_zero = True
+
+                # Target torque: base + error proportional
+                target_tau = sch.ezc_base_tau_nm + sch.ezc_error_gain_nm_per_m * abs_error
+                target_tau = min(target_tau, sch.ezc_max_tau_nm)
+                target_tau = max(target_tau, sch.ezc_base_tau_nm)
+                self._ezc_target_tau = target_tau
+
+                # Exit conditions - EXIT AT ZERO, not opposite side
+                if signed_error <= 0:
+                    # CROSSED ZERO - check if anti-rebound is enabled (V2)
+                    if sch.ezc_antirebound_enabled:
+                        # Enter ANTIREBOUND_DECAY instead of immediate decay
+                        self._ezc_state = "ANTIREBOUND_DECAY"
+                        self._ezc_antirebound_steps = 0
+                        # Start with ezc_antirebound_initial_ratio of current tau
+                        self._ezc_antirebound_tau_start = abs(self._ezc_tau) * sch.ezc_antirebound_initial_ratio
+                        self._ezc_target_tau = self._ezc_antirebound_tau_start
+                        self._ezc_zero_cross_exit_event += 1
+                        self._ezc_exit_reason = "anti_rebound"
+                        self._ezc_hold_steps = 0
+                    else:
+                        # Original behavior: exit to ZERO_CROSSED_DECAY
+                        self._ezc_state = "ZERO_CROSSED_DECAY"
+                        self._ezc_zero_cross_exit_event += 1
+                        self._ezc_exit_reason = "zero_cross"
+                        self._ezc_hold_steps = 0
+                        self._ezc_target_tau = 0.0  # Start decaying toward zero
+                elif self._ezc_hold_steps >= sch.ezc_max_hold_steps:
+                    # Max hold reached
+                    self._ezc_state = "SAFETY_DECAY"
+                    self._ezc_safety_exit_event += 1
+                    self._ezc_exit_reason = "max_hold"
+                    self._ezc_hold_steps = 0
+                elif not ezc_safety_gate_pass:
+                    # Safety gate failed
+                    self._ezc_state = "SAFETY_DECAY"
+                    self._ezc_safety_exit_event += 1
+                    self._ezc_exit_reason = "safety_gate"
+                    self._ezc_hold_steps = 0
+
+            elif self._ezc_state == "RECENTER_FROM_NEGATIVE":
+                # Apply positive correction
+                self._ezc_hold_steps += 1
+                self._ezc_episode_max_error = max(self._ezc_episode_max_error, signed_error)
+
+                # Check if crossed zero
+                if signed_error > 0:
+                    self._ezc_crossed_zero = True
+
+                # Target torque
+                target_tau = sch.ezc_base_tau_nm + sch.ezc_error_gain_nm_per_m * abs_error
+                target_tau = min(target_tau, sch.ezc_max_tau_nm)
+                target_tau = max(target_tau, sch.ezc_base_tau_nm)
+                self._ezc_target_tau = target_tau
+
+                # Exit conditions - EXIT AT ZERO, not opposite side
+                if signed_error >= 0:
+                    # CROSSED ZERO - check if anti-rebound is enabled (V2)
+                    if sch.ezc_antirebound_enabled:
+                        # Enter ANTIREBOUND_DECAY instead of immediate decay
+                        self._ezc_state = "ANTIREBOUND_DECAY"
+                        self._ezc_antirebound_steps = 0
+                        # Start with ezc_antirebound_initial_ratio of current tau
+                        self._ezc_antirebound_tau_start = abs(self._ezc_tau) * sch.ezc_antirebound_initial_ratio
+                        self._ezc_target_tau = self._ezc_antirebound_tau_start
+                        self._ezc_zero_cross_exit_event += 1
+                        self._ezc_exit_reason = "anti_rebound"
+                        self._ezc_hold_steps = 0
+                    else:
+                        # Original behavior: exit to ZERO_CROSSED_DECAY
+                        self._ezc_state = "ZERO_CROSSED_DECAY"
+                        self._ezc_zero_cross_exit_event += 1
+                        self._ezc_exit_reason = "zero_cross"
+                        self._ezc_hold_steps = 0
+                        self._ezc_target_tau = 0.0  # Start decaying toward zero
+                elif self._ezc_hold_steps >= sch.ezc_max_hold_steps:
+                    self._ezc_state = "SAFETY_DECAY"
+                    self._ezc_safety_exit_event += 1
+                    self._ezc_exit_reason = "max_hold"
+                    self._ezc_hold_steps = 0
+                elif not ezc_safety_gate_pass:
+                    self._ezc_state = "SAFETY_DECAY"
+                    self._ezc_safety_exit_event += 1
+                    self._ezc_exit_reason = "safety_gate"
+                    self._ezc_hold_steps = 0
+
+            elif self._ezc_state == "ZERO_CROSSED_DECAY":
+                # Decay correction toward zero after zero crossing
+                self._ezc_hold_steps += 1
+                self._ezc_zero_dwell_steps += 1
+                self._ezc_target_tau = 0.0  # Target is zero
+
+                # Decay tau toward zero
+                if abs(self._ezc_tau) > 1e-9:
+                    decay = sch.ezc_decay_nm_per_step
+                    if self._ezc_tau > 0:
+                        self._ezc_tau = max(0, self._ezc_tau - decay)
+                    else:
+                        self._ezc_tau = min(0, self._ezc_tau + decay)
+                else:
+                    self._ezc_tau = 0.0
+                    self._ezc_direction = 0
+                    self._ezc_state = "CENTER_IDLE"
+
+            elif self._ezc_state == "ANTIREBOUND_DECAY":
+                # V2 Anti-rebound hold: decay slowly after zero crossing
+                # This prevents immediate rebound while tau_position recovers
+                self._ezc_hold_steps += 1
+                self._ezc_antirebound_steps += 1
+
+                # Check if anti-rebound is complete
+                decay_steps = sch.ezc_antirebound_decay_steps
+                if self._ezc_antirebound_steps >= decay_steps:
+                    # Decay complete - exit to idle
+                    self._ezc_tau = 0.0
+                    self._ezc_direction = 0
+                    self._ezc_state = "CENTER_IDLE"
+                    self._ezc_exit_reason = "antirebound_complete"
+                else:
+                    # Linear decay from ezc_antirebound_initial_ratio * tau to 0
+                    progress = self._ezc_antirebound_steps / decay_steps
+                    target_tau = self._ezc_antirebound_tau_start * (1.0 - progress)
+                    self._ezc_target_tau = target_tau
+
+                    # Smoothly decay tau (use smaller decay rate for smoother transition)
+                    if abs(self._ezc_tau) > 1e-9:
+                        decay = sch.ezc_decay_nm_per_step * 0.5  # Slower decay during anti-rebound
+                        if self._ezc_tau > 0:
+                            self._ezc_tau = max(0, self._ezc_tau - decay)
+                        else:
+                            self._ezc_tau = min(0, self._ezc_tau + decay)
+                    else:
+                        self._ezc_tau = 0.0
+                        self._ezc_direction = 0
+                        self._ezc_state = "CENTER_IDLE"
+
+                # Check for re-entry: if error grows back to enter threshold while in anti-rebound
+                # Allow re-entry to handle large rebound quickly
+                if signed_error > sch.ezc_enter_m:
+                    # Re-enter recenter state
+                    if self._ezc_direction < 0:  # Was correcting positive drift
+                        self._ezc_state = "RECENTER_FROM_POSITIVE"
+                        self._ezc_hold_steps = 0
+                        self._ezc_enter_event += 1
+                        self._ezc_episode_id += 1
+                        self._ezc_episode_start_error = signed_error
+                        self._ezc_episode_min_error = signed_error
+                        self._ezc_tau = 0.0
+                        self._ezc_target_tau = 0.0
+                        self._ezc_exit_reason = "none"
+                    # Note: No need to check RECENTER_FROM_NEGATIVE since we only correct positive drift
+
+            elif self._ezc_state == "SAFETY_DECAY":
+                # Decay correction toward zero if safety gate failed
+                if abs(self._ezc_tau) > 1e-9:
+                    decay = sch.ezc_decay_nm_per_step
+                    if self._ezc_tau > 0:
+                        self._ezc_tau = max(0, self._ezc_tau - decay)
+                    else:
+                        self._ezc_tau = min(0, self._ezc_tau + decay)
+                else:
+                    self._ezc_tau = 0.0
+                    self._ezc_direction = 0
+                    self._ezc_state = "CENTER_IDLE"
+
+            # Rate limit toward target (except in decay states)
+            if self._ezc_state not in ("ZERO_CROSSED_DECAY", "SAFETY_DECAY", "CENTER_IDLE") and abs(self._ezc_target_tau) > 1e-9:
+                is_increase = abs(self._ezc_target_tau) > abs(self._ezc_tau)
+                rate = sch.ezc_rate_nm_per_step if is_increase else sch.ezc_decay_nm_per_step
+                delta = self._ezc_target_tau - self._ezc_tau
+                if abs(delta) > rate:
+                    delta = rate if delta > 0 else -rate
+                self._ezc_tau = self._ezc_tau + delta
+
+            # Apply EZC correction to tau_position
+            if self._ezc_state not in ("CENTER_IDLE", "SAFETY_DECAY"):
+                ezc_active = True
+                # Direction sign is in _ezc_direction (-1 or +1), tau is positive magnitude
+                ezc_tau_signed = self._ezc_direction * abs(self._ezc_tau)
+                tau_position = float(jnp.clip(
+                    tau_position + ezc_tau_signed,
+                    -effective_max_position_tau,
+                    effective_max_position_tau
+                ))
+
+            # Telemetry output
+            ezc_state = self._ezc_state
+            ezc_state_id_map = {
+                "CENTER_IDLE": 0,
+                "RECENTER_FROM_POSITIVE": 1,
+                "RECENTER_FROM_NEGATIVE": 2,
+                "ZERO_CROSSED_DECAY": 3,
+                "SAFETY_DECAY": 4,
+                "ANTIREBOUND_DECAY": 5  # V2 anti-rebound state
+            }
+            ezc_state_id = ezc_state_id_map.get(ezc_state, 0)
+            ezc_direction = self._ezc_direction
+            ezc_tau_nm = float(self._ezc_tau) * self._ezc_direction  # signed tau
+            ezc_target_tau_nm = self._ezc_target_tau * self._ezc_direction  # signed
+            ezc_crossed_zero = self._ezc_crossed_zero
+            ezc_safety_gate_pass = ezc_safety_gate_pass
+            ezc_block_reason = ezc_block_reason if not ezc_safety_gate_pass else "none"
+
+            # Direction correctness
+            if signed_error > 1e-9:
+                ezc_expected_direction_correct = (ezc_tau_nm <= 0)
+            elif signed_error < -1e-9:
+                ezc_expected_direction_correct = (ezc_tau_nm >= 0)
+            else:
+                ezc_expected_direction_correct = True
 
         # =====================================================================
         # APCR1nD: Direct Support Drift Trigger (BEFORE APCR1n block)
@@ -2924,6 +7235,7 @@ class SagittalVelocityDampedBalanceController:
         apcr1n_recenter_priority_active = False
         apcr1n_startup_guard_active = False
         apcr1n_wheel_damping_override_active = False
+        self._apcr1nd_wd_override_active = False  # Phase 0: reset for this step
         apcr1n_wheel_damping_scale = 1.0
         apcr1n_wheel_damping_before = 0.0
         apcr1n_wheel_damping_after = 0.0
@@ -3052,6 +7364,7 @@ class SagittalVelocityDampedBalanceController:
 
                             # Telemetry
                             apcr1n_wheel_damping_override_active = True
+                            self._apcr1nd_wd_override_active = True  # Phase 0: JAX parity state
                             apcr1n_wheel_damping_scale = wheel_scale
                             apcr1n_wheel_damping_before = float(tau_wheel_vel_left_orig)
                             apcr1n_wheel_damping_after = float(tau_wheel_vel_left)
@@ -4296,12 +8609,393 @@ class SagittalVelocityDampedBalanceController:
         else:
             apc_gate_reason = "active"
 
+        # ---- LP family: Priority Sagittal Allocator (pitch-first support-residual) ---- #
+        # Architectural alternative to LR/LRS. Computes pitch priority first, then
+        # allocates support-centering torque only from residual safe authority.
+        # Support is gated by pitch safety, saturation headroom, direction
+        # consistency, and slew limits. Preserves K1 EQ/FF baseline.
+        LP_enabled = self.authority_schedule.enable_lp_priority_allocator
+        LP_kind = self.authority_schedule.lp_allocator_kind
+        LP_gains = {}
+        if LP_enabled and LP_kind.startswith("LP"):
+            height_fb = float(com_z_m)
+            if LP_kind == "LP1_pitch_first_support_residual":
+                LP_gains = _lp_priority_gains_LP1(height_fb)
+            elif LP_kind == "LP2_pitch_strong_support_soft":
+                LP_gains = _lp_priority_gains_LP2(height_fb)
+            elif LP_kind == "LP3_support_recenter_when_safe":
+                LP_gains = _lp_priority_gains_LP3(height_fb)
+
+        # LP telemetry defaults (populated when LP is active, zero otherwise)
+        LP_eq_ff_pass_through = 0.0
+        LP_pitch_error_rad = 0.0
+        LP_pitch_rate_rad_s = 0.0
+        LP_pitch_priority_raw = 0.0
+        LP_pitch_priority = 0.0
+        LP_pitch_priority_limit = 0.0
+        LP_pitch_abs_gate = 0.0
+        LP_pitch_rate_gate = 0.0
+        LP_saturation_gate = 0.0
+        LP_direction_gate = 0.0
+        LP_support_gate = 0.0
+        LP_support_error_m = 0.0
+        LP_support_velocity_m_s = 0.0
+        LP_support_raw = 0.0
+        LP_support_allocated_raw = 0.0
+        LP_support_allocated = 0.0
+        LP_support_slew_limited = 0.0
+        LP_support_limit_nm = 0.0
+        LP_residual_authority_nm = 0.0
+        LP_support_residual_fraction = 0.0
+        LP_tau_total_preclip = 0.0
+        LP_support_suppressed_reason = "lp_disabled"
+        LP_near_saturation = False
+        LP_support_direction_assists = False
+
+        # ---- LR family: Replacement coordinated sagittal state feedback ---- #
+        # Unlike the L family (which ADDS on top), LR REPLACES the independent
+        # dynamic damping terms (tau_pitch_rate, tau_sagittal_velocity,
+        # tau_support_velocity) with a single coordinated state-feedback command.
+        #
+        # CRITICAL (EQ/FF pass-through fix): LR PRESERVES K1's equilibrium/
+        # feedforward baseline (tau_pitch + tau_position + tau_cp + tau_com_vy).
+        # These terms carry the pitch equilibrium authority through the pitch
+        # reference offset (pitch_eq + outer_loop + PFF) and the position
+        # centering bias. Without this pass-through, the LR path has zero
+        # equilibrium/feedforward and the total torque is ~10x too weak.
+        #
+        # Architecture:
+        #   tau_common = tau_eq_ff_pass_through + LR_dynamic_feedback
+        # where:
+        #   tau_eq_ff_pass_through = tau_pitch + tau_position + tau_cp + tau_com_vy
+        #     (equilibrium/feedforward — carries static authority to maintain height)
+        #   LR_dynamic_feedback = k_pitch*pitch + k_pitch_rate*pitch_rate
+        #     + k_support*support_err + k_support_vel*support_vel
+        #     (replaces tau_pitch_rate + tau_sagittal_velocity + tau_support_velocity)
+        LR_enabled = self.authority_schedule.enable_lr_replacement_feedback
+        LR_kind = self.authority_schedule.lr_replacement_kind
+        LR_feedback_torque = 0.0
+        LR_k1_existing_estimate = 0.0
+        LR_eq_ff_pass_through = 0.0
+        LR_removed_dynamic_terms_estimate = 0.0
+        LR_gains = {}
+        LR_replacement_mode = "none"
+        # LRS component-wise torque decomposition (for sign/phase audit)
+        LRS_tau_pitch_component = 0.0
+        LRS_tau_pitch_rate_component = 0.0
+        LRS_tau_support_component = 0.0
+        LRS_tau_support_vel_component = 0.0
+        LR_state_vector = [
+            float(pitch_x_rad),
+            float(pitch_rate_for_damping),
+            float(sagittal_position_error_m),
+            float(support_position_velocity_m_s),
+            float(wheel_vel_mean),
+        ]
+        if LR_enabled and (LR_kind.startswith("LR") or LR_kind.startswith("LRS")):
+            height_fb = float(com_z_m)
+            if LR_kind == "LR1_low_freq":
+                LR_gains = _lr_replacement_gains_LR1(height_fb)
+                g = LR_gains
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                )
+            elif LR_kind == "LR2_phase_lead":
+                LR_gains = _lr_replacement_gains_LR2(height_fb)
+                g = LR_gains
+                pitch_accel = (LR_state_vector[1] - getattr(self, '_prev_pitch_rate_for_LR', 0.0)) / max(self.dt, 1e-6)
+                self._prev_pitch_rate_for_LR = LR_state_vector[1]
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                    + g.get("k_lead", 0.0) * pitch_accel
+                )
+            elif LR_kind == "LR3_pitch_ref_stabilized":
+                LR_gains = _lr_replacement_gains_LR3(height_fb)
+                g = LR_gains
+                pitch_ref_mod = g["pitch_ref_gain"] * LR_state_vector[2]
+                pitch_ref_mod = max(-g["pitch_ref_max_deg"], min(g["pitch_ref_max_deg"], pitch_ref_mod))
+                pitch_ref_mod_rad = math.radians(pitch_ref_mod)
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                    + self.kp_pitch * pitch_ref_mod_rad
+                )
+            elif LR_kind == "LRS1_support_dominant":
+                LR_gains = _lrs_replacement_gains_S1(height_fb)
+                g = LR_gains
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                )
+            elif LR_kind == "LRS2_pitch_rate_damping":
+                LR_gains = _lrs_replacement_gains_S2(height_fb)
+                g = LR_gains
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                )
+            elif LR_kind == "LRS3_balanced_medium":
+                LR_gains = _lrs_replacement_gains_S3(height_fb)
+                g = LR_gains
+                LR_feedback_torque = (
+                    g["k_pitch"] * LR_state_vector[0]
+                    + g["k_pitch_rate"] * LR_state_vector[1]
+                    + g["k_support"] * LR_state_vector[2]
+                    + g["k_support_vel"] * LR_state_vector[3]
+                )
+            # Component-wise torque decomposition for LRS variants
+            if LR_kind.startswith("LRS") and isinstance(LR_gains, dict) and LR_gains:
+                g = LR_gains
+                LRS_tau_pitch_component = float(g["k_pitch"] * LR_state_vector[0])
+                LRS_tau_pitch_rate_component = float(g["k_pitch_rate"] * LR_state_vector[1])
+                LRS_tau_support_component = float(g["k_support"] * LR_state_vector[2])
+                LRS_tau_support_vel_component = float(g["k_support_vel"] * LR_state_vector[3])
+            else:
+                LRS_tau_pitch_component = 0.0
+                LRS_tau_pitch_rate_component = 0.0
+                LRS_tau_support_component = 0.0
+                LRS_tau_support_vel_component = 0.0
+            # Capture what K1's full sum-of-torques would have been
+            LR_k1_existing_estimate = float(
+                tau_pitch + tau_pitch_rate + tau_sagittal_velocity +
+                tau_support_velocity + tau_position + tau_cp + tau_com_vy
+            )
+            # Equilibrium/feedforward pass-through: preserve K1's pitch equilibrium,
+            # position centering, and capture-point corrections.
+            # These carry the static authority to maintain the target height.
+            LR_eq_ff_pass_through = float(tau_pitch + tau_position + tau_cp + tau_com_vy)
+            # Dynamic terms that LR replaces (captured before zeroing for telemetry)
+            LR_removed_dynamic_terms_estimate = float(
+                tau_pitch_rate + tau_sagittal_velocity + tau_support_velocity
+            )
+            LR_replacement_mode = "eq_ff_pass_through"
+
         # Common scalar command (before per-wheel damping)
         # No internal clipping - let the composer handle torque limits like baseline does
-        tau_common_unclipped = (
-            tau_pitch + tau_pitch_rate + tau_sagittal_velocity +
-            tau_support_velocity + tau_position + tau_cp + tau_com_vy
-        )
+        if unified_tau_cmd is not None:
+            # Unified controller replaces all torque components with a single coordinated command
+            tau_common_unclipped = unified_tau_cmd
+            # Set individual terms to 0 for telemetry consistency (they're not used)
+            tau_pitch = 0.0
+            tau_pitch_raw = tau_pitch_raw_orig if 'tau_pitch_raw_orig' in dir() else 0.0
+            tau_pitch_scheduled = 0.0
+            tau_pitch_clipped = 0.0
+            tau_pitch_rate = 0.0
+            tau_sagittal_velocity = 0.0
+            tau_support_velocity = 0.0
+            tau_position = 0.0
+            tau_position_raw = 0.0
+            tau_position_p = 0.0
+            tau_position_integral = 0.0
+            tau_cp = 0.0
+            tau_com_vy = 0.0
+            recenter_tau_clipped = 0.0
+            hyst_tau_clipped = 0.0
+            bias_tau_clipped = 0.0
+            apc_tau_clipped = 0.0
+        elif LR_enabled and (LR_kind.startswith("LR") or LR_kind.startswith("LRS")):
+            # LR replacement with EQ/FF pass-through:
+            # tau_common = tau_eq_ff_pass_through + LR_dynamic_feedback
+            # where tau_eq_ff_pass_through preserves K1's equilibrium/feedforward
+            # (tau_pitch + tau_position + tau_cp + tau_com_vy) and
+            # LR_dynamic_feedback replaces the independent dynamic terms
+            # (tau_pitch_rate + tau_sagittal_velocity + tau_support_velocity).
+            tau_common_unclipped = LR_eq_ff_pass_through + LR_feedback_torque
+            # Zero only the dynamic terms that LR replaces (for clean telemetry).
+            # tau_pitch, tau_position, tau_cp, tau_com_vy are KEPT
+            # — they carry the equilibrium/feedforward pass-through.
+            tau_pitch_rate = 0.0
+            tau_sagittal_velocity = 0.0
+            tau_support_velocity = 0.0
+        elif LP_enabled and LP_kind.startswith("LP"):
+            # ---- LP family: Priority Sagittal Allocator ---- #
+            # Pitch-first support-residual architecture.
+            #
+            # tau_common = tau_eq_ff_pass_through
+            #            + tau_pitch_priority
+            #            + tau_support_residual_allocated
+            #
+            # where:
+            #   tau_eq_ff_pass_through = tau_pitch + tau_position + tau_cp + tau_com_vy
+            #     (K1 equilibrium/feedforward — preserved unchanged)
+            #   tau_pitch_priority = clamped pitch/pitch_rate damping
+            #     (gets first access to dynamic torque authority)
+            #   tau_support_residual_allocated = gated, slew-limited support centering
+            #     (only uses remaining residual authority after pitch priority)
+            #
+            # Support is attenuated when pitch|pitch_rate is high, when near
+            # torque saturation, or when support correction would worsen pitch.
+
+            # --- Step 1: EQ/FF pass-through (preserved K1 baseline) ---
+            LP_eq_ff_pass_through = float(tau_pitch + tau_position + tau_cp + tau_com_vy)
+
+            # --- Step 2: Pitch priority torque ---
+            LP_pitch_error_rad = float(pitch_x_rad)
+            LP_pitch_rate_rad_s = float(pitch_rate_for_damping)
+            LP_pitch_priority_raw = float(
+                LP_gains["k_pitch_lp"] * LP_pitch_error_rad
+                + LP_gains["k_pitch_rate_lp"] * LP_pitch_rate_rad_s
+            )
+            LP_pitch_priority_limit = float(LP_gains["pitch_priority_limit_nm"])
+            LP_pitch_priority = max(-LP_pitch_priority_limit,
+                                    min(LP_pitch_priority_limit, LP_pitch_priority_raw))
+
+            # --- Step 3: Safety gates ---
+            LP_pitch_abs_deg = float(abs(math.degrees(LP_pitch_error_rad)))
+            LP_pitch_rate_abs_deg_s = float(abs(math.degrees(LP_pitch_rate_rad_s)))
+
+            # pitch_abs_gate: 1.0 at or below safe_low, 0.0 at or above safe_high
+            _psl = float(LP_gains["pitch_safe_low_deg"])
+            _psh = float(LP_gains["pitch_safe_high_deg"])
+            if LP_pitch_abs_deg <= _psl:
+                LP_pitch_abs_gate = 1.0
+            elif LP_pitch_abs_deg >= _psh:
+                LP_pitch_abs_gate = 0.0
+            else:
+                LP_pitch_abs_gate = 1.0 - (LP_pitch_abs_deg - _psl) / (_psh - _psl)
+
+            # pitch_rate_gate: 1.0 at or below safe_low, 0.0 at or above safe_high
+            _rsl = float(LP_gains["rate_safe_low_deg_s"])
+            _rsh = float(LP_gains["rate_safe_high_deg_s"])
+            if LP_pitch_rate_abs_deg_s <= _rsl:
+                LP_pitch_rate_gate = 1.0
+            elif LP_pitch_rate_abs_deg_s >= _rsh:
+                LP_pitch_rate_gate = 0.0
+            else:
+                LP_pitch_rate_gate = 1.0 - (LP_pitch_rate_abs_deg_s - _rsl) / (_rsh - _rsl)
+
+            # saturation_gate: decreases as total torque approaches max_tau_wheel
+            LP_pre_support_torque = float(abs(LP_eq_ff_pass_through + LP_pitch_priority))
+            LP_saturation_gate = max(0.0, 1.0 - LP_pre_support_torque / max(self.max_tau_wheel * 0.85, 1e-6))
+            LP_saturation_gate = min(1.0, max(0.0, LP_saturation_gate))
+
+            # direction_gate: attenuate if support torque direction would worsen pitch
+            LP_support_error_m = float(sagittal_position_error_m)
+            LP_support_velocity_m_s = float(support_position_velocity_m_s)
+            LP_support_raw = float(
+                LP_gains["k_support_lp"] * LP_support_error_m
+                + LP_gains["k_support_vel_lp"] * LP_support_velocity_m_s
+            )
+            LP_direction_gate = 1.0
+            LP_support_direction_assists = False
+            if LP_gains.get("direction_gate_enabled", False):
+                # Support torque should move robot opposite to support error direction.
+                # If support_error > 0 (robot drifted forward), support torque should
+                # push backward (negative). If pitch > 0 (leaning forward), the
+                # support torque may worsen pitch if it adds forward torque.
+                # Simple heuristic: if support_raw and pitch_error have opposite signs
+                # AND pitch_error is significant, the support torque is helping hold
+                # pitch (robot is leaning one way, support pushes the other way to
+                # restore). If they have the SAME sign, support may worsen pitch.
+                if LP_pitch_abs_deg > 3.0:
+                    _supp_sign = 1.0 if LP_support_raw > 0 else (-1.0 if LP_support_raw < 0 else 0.0)
+                    _pitch_sign = 1.0 if LP_pitch_error_rad > 0 else (-1.0 if LP_pitch_error_rad < 0 else 0.0)
+                    if _supp_sign != 0 and _pitch_sign != 0:
+                        if _supp_sign == _pitch_sign:
+                            # Same sign — support may worsen pitch, attenuate
+                            LP_direction_gate = 0.3
+                        else:
+                            # Opposite signs — support helps pitch
+                            LP_direction_gate = 1.0
+                            LP_support_direction_assists = True
+
+            # --- Step 4: Composite support gate ---
+            LP_support_gate = float(
+                LP_pitch_abs_gate * LP_pitch_rate_gate * LP_saturation_gate * LP_direction_gate
+            )
+
+            # --- Step 5: Support deadband ---
+            LP_support_deadband_m = float(LP_gains.get("support_deadband_m", 0.02))
+            if abs(LP_support_error_m) < LP_support_deadband_m:
+                LP_support_gate = 0.0
+
+            # --- Step 6: Residual authority and support limit ---
+            LP_residual_authority_nm = float(max(0.0, self.max_tau_wheel * 0.85 - LP_pre_support_torque))
+            LP_support_residual_fraction = float(LP_gains["support_residual_fraction"])
+            LP_support_limit_nm = float(LP_residual_authority_nm * LP_support_residual_fraction)
+
+            LP_support_allocated_raw = float(LP_support_raw * LP_support_gate)
+            LP_support_allocated = max(-LP_support_limit_nm,
+                                       min(LP_support_limit_nm, LP_support_allocated_raw))
+
+            # --- Step 7: Slew limit on support allocated torque ---
+            LP_support_slew_limit = float(LP_gains.get("support_slew_limit_nm_per_step", 0.3))
+            LP_prev_support_allocated = float(getattr(self, '_lp_prev_support_allocated', 0.0))
+            LP_support_slew_limited = float(
+                LP_prev_support_allocated
+                + max(-LP_support_slew_limit,
+                      min(LP_support_slew_limit, LP_support_allocated - LP_prev_support_allocated))
+            )
+            self._lp_prev_support_allocated = LP_support_slew_limited
+
+            # --- Step 8: LP3 settling counter (delayed support activation) ---
+            LP_pitch_settled = True  # default for LP1/LP2
+            LP_settle_counter = getattr(self, '_lp_pitch_settle_counter', 0)
+            LP_settle_required = int(LP_gains.get("pitch_settle_steps_required", 0))
+            LP_settle_threshold = float(LP_gains.get("pitch_settle_threshold_deg", 999.0))
+            if LP_kind == "LP3_support_recenter_when_safe" and LP_settle_required > 0:
+                if LP_pitch_abs_deg < LP_settle_threshold:
+                    LP_settle_counter = LP_settle_counter + 1
+                else:
+                    LP_settle_counter = 0
+                self._lp_pitch_settle_counter = LP_settle_counter
+                LP_pitch_settled = LP_settle_counter >= LP_settle_required
+                if not LP_pitch_settled:
+                    LP_support_slew_limited = 0.0
+                    LP_support_gate = 0.0
+
+            # --- Step 9: Support suppression reason ---
+            LP_support_suppressed_reason = "none"
+            if LP_support_gate < 0.01:
+                reasons = []
+                if LP_pitch_abs_gate < 0.01:
+                    reasons.append("pitch_abs")
+                if LP_pitch_rate_gate < 0.01:
+                    reasons.append("pitch_rate")
+                if LP_saturation_gate < 0.01:
+                    reasons.append("saturation")
+                if LP_direction_gate < 0.3:
+                    reasons.append("direction")
+                if abs(LP_support_error_m) < LP_support_deadband_m:
+                    reasons.append("deadband")
+                if not LP_pitch_settled:
+                    reasons.append("pitch_not_settled")
+                LP_support_suppressed_reason = "+".join(reasons) if reasons else "gate_zero"
+
+            # --- Step 10: Compose final torque ---
+            LP_tau_total_preclip = float(
+                LP_eq_ff_pass_through + LP_pitch_priority + LP_support_slew_limited
+            )
+
+            # Near-saturation flag
+            LP_near_saturation = bool(
+                abs(LP_tau_total_preclip) >= self.max_tau_wheel * 0.95
+            )
+
+            tau_common_unclipped = LP_tau_total_preclip
+            # Zero the dynamic terms that LP replaces (for clean telemetry).
+            # tau_pitch, tau_position, tau_cp, tau_com_vy are KEPT
+            # — they carry the equilibrium/feedforward pass-through.
+            tau_pitch_rate = 0.0
+            tau_sagittal_velocity = 0.0
+            tau_support_velocity = 0.0
+        else:
+            tau_common_unclipped = (
+                tau_pitch + tau_pitch_rate + tau_sagittal_velocity +
+                tau_support_velocity + tau_position + tau_cp + tau_com_vy
+            )
         # Add phase-aware recenter torque (decoupled from tau_position)
         tau_common_unclipped = tau_common_unclipped + recenter_tau_clipped
         # Add hysteresis recenter torque (F2_strategy)
@@ -4310,6 +9004,99 @@ class SagittalVelocityDampedBalanceController:
         tau_common_unclipped = tau_common_unclipped + bias_tau_clipped
         # Add Active Pitch Crossing torque (APC_strategy)
         tau_common_unclipped = tau_common_unclipped + apc_tau_clipped
+
+        # ---- L family: Coordinated sagittal state feedback (Phase 3) ---- #
+        # Adds a coordinated state-feedback term on top of K1's existing terms.
+        # This synchronizes pitch, support, rate contributions to avoid the
+        # torque-phase-conflict that feeds the 2.5 Hz WIP mode.
+        L_enabled = self.authority_schedule.enable_coordinated_sagittal_feedback
+        L_candidate_kind = self.authority_schedule.coordinated_feedback_kind
+        L_state_vector = [
+            float(pitch_x_rad),
+            float(pitch_rate_for_damping),
+            float(sagittal_position_error_m),
+            float(support_position_velocity_m_s),
+            float(wheel_vel_mean),
+        ]
+        L_gains = {}
+        L_feedback_torque = 0.0
+        if L_enabled and L_candidate_kind.startswith("L"):
+            height_fb = float(com_z_m)
+            if L_candidate_kind == "L1_low_freq":
+                L_gains = _coordinated_feedback_gains_L1(height_fb)
+                g = L_gains
+                L_feedback_torque = (
+                    g["k_pitch"] * L_state_vector[0]
+                    + g["k_pitch_rate"] * L_state_vector[1]
+                    + g["k_support"] * L_state_vector[2]
+                    + g["k_support_vel"] * L_state_vector[3]
+                )
+            elif L_candidate_kind == "L2_phase_lead":
+                L_gains = _coordinated_feedback_gains_L2(height_fb)
+                g = L_gains
+                # Pitch acceleration proxy: use pitch_rate derivative (pitch rate diff / dt)
+                pitch_accel = (L_state_vector[1] - self._prev_pitch_rate_for_L) / max(self.dt, 1e-6)
+                L_feedback_torque = (
+                    g["k_pitch"] * L_state_vector[0]
+                    + g["k_pitch_rate"] * L_state_vector[1]
+                    + g["k_support"] * L_state_vector[2]
+                    + g["k_support_vel"] * L_state_vector[3]
+                    + g.get("k_lead", 0.0) * pitch_accel
+                )
+                self._prev_pitch_rate_for_L = L_state_vector[1]
+            elif L_candidate_kind == "L3_pitch_ref_stabilization":
+                L_gains = _coordinated_feedback_gains_L3(height_fb)
+                g = L_gains
+                # Pitch reference modulation based on support error
+                pitch_ref_mod = g["pitch_ref_gain"] * L_state_vector[2]
+                pitch_ref_mod = max(-g["pitch_ref_max"], min(g["pitch_ref_max"], pitch_ref_mod))
+                # Convert ref mod (deg) to additional torque: use Kp_pitch * ref_mod(rad)
+                pitch_ref_mod_rad = math.radians(pitch_ref_mod)
+                L_feedback_torque = (
+                    g["k_pitch"] * L_state_vector[0]
+                    + g["k_pitch_rate"] * L_state_vector[1]
+                    + g["k_support"] * L_state_vector[2]
+                    + g["k_support_vel"] * L_state_vector[3]
+                    + self.kp_pitch * pitch_ref_mod_rad
+                )
+            # Add coordinated feedback torque to common command
+            tau_common_unclipped = tau_common_unclipped + L_feedback_torque
+
+        # ---- N1 mild phase-lead damping diagnostic (Phase 5) ---- #
+        if L_enabled and L_candidate_kind == "N1_mild_phase_lead":
+            height_fb = float(com_z_m)
+            h_norm = max(0.0, min(1.0, (height_fb - 0.30) / (0.48 - 0.30)))
+            # Very mild phase-lead-compensated pitch rate damping
+            # Parameters from profile for micro-sweep support
+            sched = self.authority_schedule
+            k_rate = sched.n1_rate_low + (sched.n1_rate_high - sched.n1_rate_low) * h_norm
+            k_lead = sched.n1_lead_low + (sched.n1_lead_high - sched.n1_lead_low) * h_norm
+            pitch_accel = (float(pitch_rate_for_damping) - getattr(self, '_prev_pitch_rate_for_N', 0.0)) / max(self.dt, 1e-6)
+            self._prev_pitch_rate_for_N = float(pitch_rate_for_damping)
+            N_feedback_torque = k_rate * float(pitch_rate_for_damping) + k_lead * pitch_accel
+            tau_common_unclipped = tau_common_unclipped + N_feedback_torque
+            L_feedback_torque = N_feedback_torque
+            L_candidate_kind = "N1_mild_phase_lead"
+            L_gains = {"k_rate": float(k_rate), "k_lead": float(k_lead)}
+
+        # ---- M family: Body-yaw / wheel-yaw correct-actuator fix (Phase 4) ---- #
+        # Adds body-yaw correction through differential wheel velocity with
+        # support-aware gating. Does NOT fight mode-div divergence controller.
+        M_enabled = self.authority_schedule.enable_body_yaw_wheel_stabilization
+        M_wheel_yaw_torque = 0.0
+        M_body_yaw_error = 0.0
+        M_support_gate = 1.0
+        M_yaw_correlation = 0.0
+        if M_enabled:
+            sched = self.authority_schedule
+            # Yaw error: use yaw from orientation (negative pitch_yaw or available yaw signal)
+            # In the sagittal controller, yaw error is approximated from body orientation
+            yaw_error = float(0.0)  # Will be populated from external yaw signal
+            # For now, this is a stub — the actual yaw error is computed in the
+            # simulation harness and passed via commanded_height_ref_m or a new field.
+
+        # ---- End of L/M/N candidate additions ---- #
+
         tau_total_before_final_clip = float(tau_common_unclipped + (tau_wheel_vel_left + tau_wheel_vel_right) / 2.0)
         tau_common = self.wheel_torque_sign * tau_common_unclipped
 
@@ -4339,6 +9126,12 @@ class SagittalVelocityDampedBalanceController:
             "tau_pitch_scheduled": float(tau_pitch_scheduled),
             "tau_pitch_clipped": float(tau_pitch_clipped),
             "tau_pitch_rate": float(tau_pitch_rate),
+            "tau_pitch_rate_raw_signal": float(effective_kd_pitch * pitch_rate_raw),
+            "tau_pitch_rate_filtered_signal": float(effective_kd_pitch * pitch_rate_notched),
+            "tau_wheel_velocity_left_raw_signal": float(-effective_k_wheel_velocity * wheel_left_raw),
+            "tau_wheel_velocity_left_filtered_signal": float(-effective_k_wheel_velocity * wheel_left_notched),
+            "tau_wheel_velocity_right_raw_signal": float(-effective_k_wheel_velocity * wheel_right_raw),
+            "tau_wheel_velocity_right_filtered_signal": float(-effective_k_wheel_velocity * wheel_right_notched),
             "tau_cp": float(tau_cp),
             "tau_com_vy": float(tau_com_vy),
             "tau_sagittal_velocity": float(tau_sagittal_velocity),
@@ -4423,6 +9216,105 @@ class SagittalVelocityDampedBalanceController:
             "k_wheel_velocity_high_max": float(self.authority_schedule.k_wheel_velocity_high_max),
             "k_wheel_velocity_z_low": float(self.authority_schedule.k_wheel_velocity_z_low),
             "k_wheel_velocity_z_high": float(self.authority_schedule.k_wheel_velocity_z_high),
+            # ---- Tall-height kd_pitch scheduling telemetry (J candidate) ----
+            "effective_kd_pitch": float(effective_kd_pitch),
+            "high_height_kd_pitch_active": bool(high_height_kd_pitch_active),
+            "kd_pitch_nominal": float(self.authority_schedule.kd_pitch_nominal),
+            "kd_pitch_high_max": float(self.authority_schedule.kd_pitch_high_max),
+            "kd_pitch_z_low": float(self.authority_schedule.kd_pitch_z_low),
+            "kd_pitch_z_high": float(self.authority_schedule.kd_pitch_z_high),
+            # ---- Notch filter telemetry (K candidate — 2.5 Hz WIP notch) ----
+            "wip_notch_enabled": bool(notch_enabled),
+            "wip_notch_target_signal": str(notch_target),
+            "wip_notch_center_hz": float(notch_center_hz),
+            "wip_notch_q": float(notch_q),
+            "wip_notch_filter_type": str(self.authority_schedule.wip_notch_filter_type),
+            "wip_lowpass_cutoff_hz": float(self.authority_schedule.wip_lowpass_cutoff_hz),
+            "wip_notch_fs_hz": float(fs_hz),
+            "wip_notch_height_gate": float(notch_height_gate),
+            "wip_notch_filter_blend": float(notch_blend),
+            "wip_notch_filter_valid": bool(notch_filter_valid),
+            "pitch_rate_raw": float(pitch_rate_raw),
+            "pitch_rate_notched": float(pitch_rate_notched),
+            "pitch_rate_effective": float(pitch_rate_effective),
+            "wheel_velocity_left_raw": float(wheel_left_raw),
+            "wheel_velocity_left_notched": float(wheel_left_notched),
+            "wheel_velocity_left_effective": float(wheel_left_for_damping),
+            "wheel_velocity_right_raw": float(wheel_right_raw),
+            "wheel_velocity_right_notched": float(wheel_right_notched),
+            "wheel_velocity_right_effective": float(wheel_right_for_damping),
+            "support_velocity_raw": float(support_vel_raw),
+            "support_velocity_notched": float(support_vel_notched),
+            "support_velocity_effective": float(support_vel_for_damping),
+            "notch_signal_delta_pr": float(notch_signal_delta_pr),
+            "notch_signal_delta_wl": float(notch_signal_delta_wl),
+            "notch_signal_delta_wr": float(notch_signal_delta_wr),
+            # ---- L family: Coordinated sagittal state feedback telemetry ----
+            "L_enabled": bool(L_enabled),
+            "L_candidate_kind": str(L_candidate_kind),
+            "L_state_pitch_rad": float(L_state_vector[0]) if isinstance(L_state_vector, list) and len(L_state_vector) > 0 else 0.0,
+            "L_state_pitch_rate_rad_s": float(L_state_vector[1]) if isinstance(L_state_vector, list) and len(L_state_vector) > 1 else 0.0,
+            "L_state_support_error_m": float(L_state_vector[2]) if isinstance(L_state_vector, list) and len(L_state_vector) > 2 else 0.0,
+            "L_state_wheel_vel_rad_s": float(L_state_vector[4]) if isinstance(L_state_vector, list) and len(L_state_vector) > 4 else 0.0,
+            "L_feedback_torque_nm": float(L_feedback_torque),
+            "L_gains_kind": str(L_gains.get("kind", "none")) if isinstance(L_gains, dict) else "none",
+            # ---- LR family: Replacement coordinated feedback telemetry ---- #
+            "LR_enabled": bool(LR_enabled),
+            "LR_candidate_kind": str(LR_kind) if LR_enabled else "none",
+            "LR_state_pitch_rad": float(LR_state_vector[0]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 0 else 0.0,
+            "LR_state_pitch_rate_rad_s": float(LR_state_vector[1]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 1 else 0.0,
+            "LR_state_support_error_m": float(LR_state_vector[2]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 2 else 0.0,
+            "LR_state_support_velocity_m_s": float(LR_state_vector[3]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 3 else 0.0,
+            "LR_state_wheel_vel_rad_s": float(LR_state_vector[4]) if isinstance(LR_state_vector, list) and len(LR_state_vector) > 4 else 0.0,
+            "LR_feedback_torque_nm": float(LR_feedback_torque),
+            "LR_dynamic_feedback_torque_nm": float(LR_feedback_torque),
+            "LR_eq_ff_pass_through_nm": float(LR_eq_ff_pass_through),
+            "LR_total_command_preclip_nm": float(LR_eq_ff_pass_through + LR_feedback_torque)
+                if LR_enabled and (LR_kind.startswith("LR") or LR_kind.startswith("LRS")) else 0.0,
+            "LR_total_command_postclip_nm": float(tau_common),
+            "LR_k1_existing_estimate_nm": float(LR_k1_existing_estimate),
+            "LR_removed_dynamic_terms_estimate_nm": float(LR_removed_dynamic_terms_estimate),
+            "LR_eq_ff_estimate_nm": float(LR_eq_ff_pass_through),
+            "LR_replacement_mode": str(LR_replacement_mode),
+            "LR_gains_kind": str(LR_gains.get("kind", "none")) if isinstance(LR_gains, dict) else "none",
+            # ---- LRS family: Component-wise torque decomposition ---- #
+            "LRS_tau_pitch_component_nm": float(LRS_tau_pitch_component),
+            "LRS_tau_pitch_rate_component_nm": float(LRS_tau_pitch_rate_component),
+            "LRS_tau_support_component_nm": float(LRS_tau_support_component),
+            "LRS_tau_support_vel_component_nm": float(LRS_tau_support_vel_component),
+            # ---- LP family: Priority Sagittal Allocator telemetry ---- #
+            "LP_enabled": bool(LP_enabled),
+            "LP_candidate_kind": str(LP_kind) if LP_enabled else "none",
+            "LP_allocator_mode": str(LP_kind) if LP_enabled else "none",
+            "LP_tau_eq_ff_nm": float(LP_eq_ff_pass_through) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_pitch_priority_raw_nm": float(LP_pitch_priority_raw) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_pitch_priority_nm": float(LP_pitch_priority) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_support_raw_nm": float(LP_support_raw) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_support_allocated_nm": float(LP_support_allocated) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_support_slew_limited_nm": float(LP_support_slew_limited) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_total_preclip_nm": float(LP_tau_total_preclip) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_tau_total_postclip_nm": float(tau_common) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_pitch_abs_gate": float(LP_pitch_abs_gate) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_pitch_rate_gate": float(LP_pitch_rate_gate) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_saturation_gate": float(LP_saturation_gate) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_direction_gate": float(LP_direction_gate) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_gate": float(LP_support_gate) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_residual_authority_nm": float(LP_residual_authority_nm) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_limit_nm": float(LP_support_limit_nm) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_residual_fraction": float(LP_support_residual_fraction) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_pitch_error_rad": float(LP_pitch_error_rad) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_pitch_rate_effective_rad_s": float(LP_pitch_rate_rad_s) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_error_m": float(LP_support_error_m) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_velocity_m_s": float(LP_support_velocity_m_s) if LP_enabled and LP_kind.startswith("LP") else 0.0,
+            "LP_support_suppressed_reason": str(LP_support_suppressed_reason) if LP_enabled and LP_kind.startswith("LP") else "lp_disabled",
+            "LP_near_saturation": bool(LP_near_saturation) if LP_enabled and LP_kind.startswith("LP") else False,
+            "LP_support_direction_assists_pitch_error": bool(LP_support_direction_assists) if LP_enabled and LP_kind.startswith("LP") else False,
+            "LP_gains_kind": str(LP_gains.get("kind", "none")) if isinstance(LP_gains, dict) else "none",
+            # ---- M family: Body-yaw/wheel-yaw telemetry ----
+            "M_enabled": bool(M_enabled),
+            "M_wheel_yaw_torque_nm": float(M_wheel_yaw_torque),
+            "M_body_yaw_error_rad": float(M_body_yaw_error),
+            "M_support_gate": float(M_support_gate),
             # ---- Pitch-aware position scaling telemetry ----
             "pitch_aware_position_scaling_enabled": bool(self.authority_schedule.enable_pitch_aware_position_scaling),
             "pitch_aware_position_scale": float(pitch_aware_position_scale),
@@ -4505,6 +9397,81 @@ class SagittalVelocityDampedBalanceController:
             "t6j_bias_block_reason": str(t6j_bias_block_reason),
             "t6j_bias_applied_to_final_tau": float(t6j_bias_applied_to_final_tau),
             "t6j_bias_expected_direction_correct": bool(t6j_bias_expected_direction_correct),
+            # ---- Adaptive Centering Bias Trim telemetry ----
+            "adaptive_bias_trim_enabled": bool(adaptive_bias_trim_enabled),
+            "adaptive_bias_trim_active": bool(adaptive_bias_trim_active),
+            "adaptive_bias_mean_error_m": float(adaptive_bias_mean_error_m),
+            "adaptive_bias_fast_mean_error_m": float(adaptive_bias_fast_mean_error_m),
+            "adaptive_bias_effective_error_m": float(adaptive_bias_effective_error_m),
+            "adaptive_bias_target_tau_nm": float(adaptive_bias_target_tau_nm),
+            "adaptive_bias_tau_nm": float(adaptive_bias_tau_nm),
+            "adaptive_bias_max_tau_current_nm": float(adaptive_bias_max_tau_current_nm),
+            "adaptive_bias_height_scale": float(adaptive_bias_height_scale),
+            "adaptive_bias_rate_used_nm_per_step": float(adaptive_bias_rate_used_nm_per_step),
+            "adaptive_bias_zero_crossing_count": int(adaptive_bias_zero_crossing_count),
+            "adaptive_bias_zero_crossing_guard_active": bool(adaptive_bias_zero_crossing_guard_active),
+            "adaptive_bias_near_zero_relief_active": bool(adaptive_bias_near_zero_relief_active),
+            "adaptive_bias_sign_reversal_blocked": bool(adaptive_bias_sign_reversal_blocked),
+            "adaptive_bias_safety_gate_pass": bool(adaptive_bias_safety_gate_pass),
+            "adaptive_bias_block_reason": str(adaptive_bias_block_reason),
+            "adaptive_bias_expected_direction_correct": bool(adaptive_bias_expected_direction_correct),
+            "adaptive_bias_positive_area": float(adaptive_bias_positive_area),
+            "adaptive_bias_negative_area": float(adaptive_bias_negative_area),
+            "adaptive_bias_symmetry_ratio": float(adaptive_bias_symmetry_ratio),
+            "adaptive_bias_hip_yaw_gate_pass": bool(adaptive_bias_hip_yaw_gate_pass),
+            "adaptive_bias_hip_yaw_abs_max": float(adaptive_bias_hip_yaw_abs_max),
+            # ---- Zero-Crossing Support Recenter (ZC) telemetry ----
+            "zc_state": str(zc_state),
+            "zc_state_id": int(zc_state_id),
+            "zc_active": bool(zc_active),
+            "zc_direction": int(zc_direction),
+            "zc_enter_event": int(self._zc_enter_event),
+            "zc_exit_event": int(self._zc_exit_event),
+            "zc_hold_steps": int(self._zc_hold_steps),
+            "zc_tau_nm": float(zc_tau_nm),
+            "zc_target_tau_nm": float(zc_target_tau_nm),
+            "zc_crossed_zero": bool(zc_crossed_zero),
+            "zc_cross_target_reached": bool(zc_cross_target_reached),
+            "zc_safety_gate_pass": bool(zc_safety_gate_pass),
+            "zc_block_reason": str(zc_block_reason),
+            "zc_episode_id": int(self._zc_episode_id),
+            "zc_episode_start_error": float(self._zc_episode_start_error),
+            "zc_episode_min_error": float(self._zc_episode_min_error),
+            "zc_episode_max_error": float(self._zc_episode_max_error),
+            "zc_expected_direction_correct": bool(zc_expected_direction_correct),
+            # ---- Early Zero-Crossing Recenter telemetry (EZC) ----
+            "ezc_state_id": int(ezc_state_id),
+            "ezc_active": bool(ezc_active),
+            "ezc_direction": int(ezc_direction),
+            "ezc_enter_event": int(self._ezc_enter_event),
+            "ezc_zero_cross_exit_event": int(self._ezc_zero_cross_exit_event),
+            "ezc_safety_exit_event": int(self._ezc_safety_exit_event),
+            "ezc_hold_steps": int(self._ezc_hold_steps),
+            "ezc_tau_nm": float(ezc_tau_nm),
+            "ezc_target_tau_nm": float(ezc_target_tau_nm),
+            "ezc_crossed_zero": bool(ezc_crossed_zero),
+            "ezc_zero_dwell_steps": int(self._ezc_zero_dwell_steps),
+            "ezc_safety_gate_pass": bool(ezc_safety_gate_pass),
+            "ezc_block_reason": str(ezc_block_reason),
+            "ezc_episode_id": int(self._ezc_episode_id),
+            "ezc_episode_start_error": float(self._ezc_episode_start_error),
+            "ezc_episode_min_error": float(self._ezc_episode_min_error),
+            "ezc_episode_max_error": float(self._ezc_episode_max_error),
+            "ezc_expected_direction_correct": bool(ezc_expected_direction_correct),
+            "ezc_exit_reason": str(self._ezc_exit_reason),
+            # V2 Anti-rebound telemetry
+            "ezc_antirebound_steps": int(self._ezc_antirebound_steps),
+            "ezc_antirebound_tau_start": float(self._ezc_antirebound_tau_start),
+            # ---- Pitch Bias DC Compensation telemetry (Phase 7) ----
+            "pitch_bias_comp_enabled": bool(self.authority_schedule.pitch_bias_comp_enabled),
+            "pitch_bias_comp_active": bool(pitch_bias_gate_pass),
+            "pitch_bias_estimation_active": bool(pitch_bias_estimation_active),
+            "pitch_bias_estimate_nm": float(self._pitch_bias_estimate_nm),
+            "pitch_bias_comp_tau_nm": float(pitch_bias_comp_tau),
+            "pitch_bias_samples": int(self._pitch_bias_samples),
+            "pitch_bias_block_reason": str(pitch_bias_block_reason),
+            "tau_pitch_before_bias_comp": float(tau_pitch_before_bias_comp),
+            "tau_pitch_after_bias_comp": float(tau_pitch_after_bias_comp),
             # ---- Phase-aware recenter telemetry (F1_strategy) ----
             "phase_recenter_enabled": bool(phase_recenter_enabled),
             "phase_recenter_active": bool(recenter_gate_safe and not recenter_deadband_active),
@@ -4740,6 +9707,83 @@ class SagittalVelocityDampedBalanceController:
             "apcr1n_physical_drift_column_used": str(apcr1n_physical_drift_column_used),
             "final_wheel_tau_with_apc": float(tau_common_unclipped + (tau_wheel_vel_left + tau_wheel_vel_right) / 2.0),
             "final_wheel_tau_without_apc": float(tau_common_unclipped - apc_tau_clipped + (tau_wheel_vel_left + tau_wheel_vel_right) / 2.0),
+            # ---- Unified sagittal state-feedback no-offset controller telemetry ----
+            "no_offset_controller_active": bool(no_offset_active),
+            "no_offset_mode": str(no_offset_mode),
+            "no_offset_gate_pass": bool(no_offset_gate_pass),
+            "no_offset_block_reason": str(no_offset_block_reason),
+            "no_offset_kx": float(no_offset_kx),
+            "no_offset_kv": float(no_offset_kv),
+            "no_offset_ktheta": float(no_offset_ktheta),
+            "no_offset_komega": float(no_offset_komega),
+            "no_offset_kh": float(no_offset_kh),
+            "no_offset_khdot": float(no_offset_khdot),
+            "no_offset_tau_support_state": float(no_offset_tau_support_state),
+            "no_offset_tau_pitch_state": float(no_offset_tau_pitch_state),
+            "no_offset_tau_rate_state": float(no_offset_tau_rate_state),
+            "no_offset_tau_height_state": float(no_offset_tau_height_state),
+            "no_offset_priority_support": float(no_offset_priority_support),
+            "no_offset_priority_pitch": float(no_offset_priority_pitch),
+            "no_offset_priority_rate": float(no_offset_priority_rate),
+            "no_offset_tau_total_raw": float(no_offset_tau_total_raw),
+            "no_offset_tau_total_limited": float(no_offset_tau_total_limited),
+            "no_offset_torque_cap": float(no_offset_torque_cap),
+            "no_offset_rate_limit": float(no_offset_rate_limit),
+            "no_offset_saturation_active": bool(no_offset_saturation_active),
+            "no_offset_arbitration_reason": str(no_offset_arbitration_reason),
+            "no_offset_pitch_ref_offset_deg": float(no_offset_pitch_ref_offset_deg),
+            # === K1 Augmented Telemetry — Phase 1 (read-only, behavior-neutral) ===
+            # A. Pitch-rate notch / filter path
+            "k1_raw_pitch_rate_x": float(pitch_rate_raw),
+            "k1_filtered_pitch_rate_x": float(pitch_rate_effective),
+            "k1_notch_output": float(pitch_rate_notched),
+            "k1_notch_input": float(pitch_rate_raw),
+            "k1_notch_state_1": float(self._wip_notch_pitch_rate.get_state()[0]) if self._wip_notch_pitch_rate is not None else 0.0,
+            "k1_notch_state_2": float(self._wip_notch_pitch_rate.get_state()[1]) if self._wip_notch_pitch_rate is not None else 0.0,
+            "k1_notch_state_y1": float(self._wip_notch_pitch_rate.get_state()[2]) if self._wip_notch_pitch_rate is not None else 0.0,
+            "k1_notch_state_y2": float(self._wip_notch_pitch_rate.get_state()[3]) if self._wip_notch_pitch_rate is not None else 0.0,
+            "k1_notch_enabled": bool(notch_enabled),
+            "k1_notch_blend": float(notch_blend),
+            "k1_notch_center_hz": float(notch_center_hz),
+            "k1_notch_q": float(notch_q),
+            "k1_notch_height_gate_alpha": float(notch_height_gate),
+            "k1_notch_filter_type": str(self.authority_schedule.wip_notch_filter_type),
+            "k1_lowpass_cutoff_hz": float(self.authority_schedule.wip_lowpass_cutoff_hz),
+            # B. Torque decomposition before clipping
+            "k1_tau_pitch_raw": float(tau_pitch),
+            "k1_tau_pitch_rate_raw": float(tau_pitch_rate),
+            "k1_tau_position_raw": float(tau_position_before_clip),
+            "k1_tau_com_velocity_raw": float(tau_sagittal_velocity),
+            "k1_tau_wheel_velocity_raw": float(tau_wheel_vel_left + tau_wheel_vel_right),
+            "k1_tau_support_velocity_raw": float(tau_support_velocity),
+            "k1_tau_eq_ff_raw": 0.0,
+            "k1_tau_common_preclip": float(tau_common_unclipped),
+            "k1_tau_left_preclip": float(tau_common_unclipped + tau_wheel_vel_left),
+            "k1_tau_right_preclip": float(tau_common_unclipped + tau_wheel_vel_right),
+            # C. Torque clipping / saturation
+            "k1_tau_position_cap_active": bool(tau_position_saturated),
+            "k1_tau_position_cap_margin_nm": float(effective_max_position_tau - abs(float(tau_position_before_clip))),
+            "k1_tau_total_clip_active": bool(saturated),
+            "k1_tau_total_clip_margin_nm": float(final_wheel_torque_margin),
+            "k1_tau_left_postclip": float(tau_left),
+            "k1_tau_right_postclip": float(tau_right),
+            "k1_tau_clip_delta_left": float((tau_common_unclipped + tau_wheel_vel_left) - tau_left),
+            "k1_tau_clip_delta_right": float((tau_common_unclipped + tau_wheel_vel_right) - tau_right),
+            "k1_tau_clip_delta_common": float(tau_common_unclipped - tau_common),
+            "k1_saturation_fraction_window_50": -1.0,
+            "k1_saturation_fraction_window_200": -1.0,
+            # D. Support / coupling diagnostics
+            "k1_support_error_m": float(sagittal_position_error_m),
+            "k1_support_velocity_m_s": float(support_position_velocity_m_s),
+            "k1_com_y_velocity_m_s": float(sagittal_velocity_m_s),
+            "k1_pitch_support_phase_lag_s_est": 0.0,
+            "k1_pitch_support_corr_window_200": 0.0,
+            # E. Controller mode flags
+            "k1_feedback_mode": str("balance-core"),
+            "k1_profile_name": str(self.authority_schedule.profile_name),
+            "k1_current_best_id": "K2_NOTCH_LOW_Q_V1",  # K2 promoted 2026-06-25 (Step C/E/D passed; K1 legacy)
+            "k1_audit_ablation_mode": "none",
+            "k1_telemetry_augmented_version": 1,
         }
 
         # Add capture gate diagnostics if enabled

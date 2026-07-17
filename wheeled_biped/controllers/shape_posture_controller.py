@@ -239,6 +239,19 @@ class ShapePostureController:
         self.divergence_gate_z_low = divergence_gate_z_low
         self.divergence_gate_z_high = divergence_gate_z_high
 
+        # Configure the mode‑based controller using existing fields when enabled
+        from .mode_based_hip_yaw_divergence_controller import ModeBasedHipYawDivergenceController
+        cfg = {
+            "enabled": enable_hip_yaw_divergence_damping,
+            "kp_div": k_divergence,
+            "kd_div": k_divergence_rate,
+            "max_torque": tau_max_divergence,
+            "soft_limit_rad": divergence_gate_z_low,
+            "soft_limit_gain": divergence_gate_z_high - divergence_gate_z_low,
+            "ref_source": "target",
+        }
+        self._mode_based_controller = ModeBasedHipYawDivergenceController(cfg)
+
     def compute(
         self,
         q_ref: Array,
@@ -309,35 +322,41 @@ class ShapePostureController:
             tau_comp_left_clipped = jnp.abs(tau_comp_left_raw) > self.tau_max_support_comp
             tau_comp_right_clipped = jnp.abs(tau_comp_right_raw) > self.tau_max_support_comp
 
-        # Compute HY2-DIV divergence damping (antisymmetric compensation)
+        # Compute HY2-DIV divergence damping (antisymmetric compensation) using mode‑based controller
         div_gate = 0.0
         tau_div_left_raw = 0.0
         tau_div_right_raw = 0.0
         tau_div_left_clipped = False
         tau_div_right_clipped = False
 
-        if self.enable_hip_yaw_divergence_damping and (self.k_divergence != 0.0 or self.k_divergence_rate != 0.0):
-            # Compute smooth height gate
+        if self.enable_hip_yaw_divergence_damping:
+            # Compute smooth height gate (preserve original behavior for telemetry)
             u = jnp.clip((self.divergence_gate_z_high - target_com_height) / (self.divergence_gate_z_high - self.divergence_gate_z_low), 0.0, 1.0)
             div_gate = 3.0 * u**2 - 2.0 * u**3
 
-            # Compute divergence and divergence rate
-            # Divergence: l_error - r_error (positive = left ahead, right behind)
-            l_error = posture_error[1]  # left hip yaw
-            r_error = posture_error[6]   # right hip yaw
-            divergence = l_error - r_error
-            divergence_rate = joint_vel[1] - joint_vel[6]  # left vel - right vel
+            # Build state for controller
+            class _HipYawState:
+                def __init__(self, div_error: float, div_rate: float, height: float):
+                    self.div_error = div_error
+                    self.div_rate = div_rate
+                    self.height = height
 
-            # Antisymmetric torque: opposes divergence
-            # If left > right (positive divergence), left needs -tau, right needs +tau
-            tau_div_left_raw = -(self.k_divergence * divergence + self.k_divergence_rate * divergence_rate) * div_gate
-            tau_div_right_raw = +(self.k_divergence * divergence + self.k_divergence_rate * divergence_rate) * div_gate
+            l_error = posture_error[1]
+            r_error = posture_error[6]
+            divergence = l_error - r_error
+            divergence_rate = joint_vel[1] - joint_vel[6]
+            state = _HipYawState(div_error=divergence, div_rate=divergence_rate, height=target_com_height)
+
+            result = self._mode_based_controller.compute(state)
+            # Apply height gate to the controller's output (controller already applies its own gate, but we retain original gating semantics)
+            tau_div_left_raw = result["tau_left"] * div_gate
+            tau_div_right_raw = result["tau_right"] * div_gate
 
             # Apply torque clamp
             tau_div_left_raw = jnp.clip(tau_div_left_raw, -self.tau_max_divergence, self.tau_max_divergence)
             tau_div_right_raw = jnp.clip(tau_div_right_raw, -self.tau_max_divergence, self.tau_max_divergence)
 
-            # Detect clipping (before clipping would always trigger; check post-clip magnitude)
+            # Detect clipping based on configured max torque
             tau_div_left_clipped = jnp.abs(tau_div_left_raw) >= self.tau_max_divergence - 1e-6
             tau_div_right_clipped = jnp.abs(tau_div_right_raw) >= self.tau_max_divergence - 1e-6
 

@@ -45,6 +45,7 @@ from wheeled_biped.controllers.sagittal_wheel_balance_controller import Sagittal
 from wheeled_biped.controllers.shape_posture_controller import ShapePostureController
 from wheeled_biped.controllers.support_feedforward_controller import SupportFeedforwardController
 from wheeled_biped.controllers.torque_ownership_validator import TorqueOwnershipValidator
+from .hip_yaw_ownership import HIP_YAW_MODE_OWNERS, OwnershipError, validate_ownership, hip_yaw_common_owner, hip_yaw_divergence_owner, hip_yaw_mode_ownership_violation
 
 __all__ = [
     "LQRBalanceController",
@@ -56,4 +57,10 @@ __all__ = [
     "ShapePostureController",
     "SupportFeedforwardController",
     "TorqueOwnershipValidator",
+    "HIP_YAW_MODE_OWNERS",
+    "OwnershipError",
+    "validate_ownership",
+    "hip_yaw_common_owner",
+    "hip_yaw_divergence_owner",
+    "hip_yaw_mode_ownership_violation",
 ]

@@ -1,0 +1,91 @@
+{
+  "phase": "2C.5",
+  "verdict": "READY_FOR_PHASE_2D_CONTACT_DYNAMICS_PORT",
+  "constants_version": "phase2c5_actuated_coriolis",
+  "timestamp": "2026-07-03T00:00:00.000000+00:00",
+  "report_corrected": true,
+  "correction_notes": [
+    "Per-joint 'Before Fix' table in markdown corrected — previous values (~1e-7 to 1e-8) were mislabeled.",
+    "Corrected values from body-local RNEA trace without Coriolis term (scripts/phase2c5_root_cause_isolation.py).",
+    "Actual pre-2C.5 per-joint errors: l_hip_pitch=0.251, l_knee=0.095, l_hip_roll=0.024 (matches high-level Phase 2C.4 report).",
+    "xpassed tests in test_phase2c4_runtime_mcross_orientation.py converted to normal strict tests (Phase 2C.5 fix resolved the underlying issue)."
+  ],
+  "num_original_cases": 35,
+  "phase2c4_reconciliation": {
+    "resolved": true,
+    "notes": [
+      "Phase 2C.4 JSON aggregates across all populations.",
+      "Separate FB diagnostics confirmed machine-precision errors.",
+      "Phase 2C.5 separates max errors by population."
+    ]
+  },
+  "root_cause_identified": true,
+  "root_cause": "Missing free-joint Coriolis acceleration Sdot_free @ qdot_free = [0; -omega_body x v_body] in RNEA forward pass",
+  "fix_applied": "Added -jnp.cross(omega_body, v_body_origin) to torso linear acceleration in jax_bias_forces.py",
+  "pre_fix_per_joint_errors_wz_vx_keyframe": {
+    "description": "Body-local RNEA trace WITHOUT Coriolis fix vs CPU MuJoCo, wz+vx at default keyframe",
+    "l_hip_roll": 2.40e-02,
+    "l_hip_yaw": 2.00e-06,
+    "l_hip_pitch": 2.51e-01,
+    "l_knee": 9.50e-02,
+    "l_wheel": 1.02e-11,
+    "r_hip_roll": 2.40e-02,
+    "r_hip_yaw": 2.45e-07,
+    "r_hip_pitch": 2.51e-01,
+    "r_knee": 9.50e-02,
+    "r_wheel": 1.20e-11
+  },
+  "gravity_pass_warn_fail": {
+    "PASS": 111,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "full_bias_pass_warn_fail": {
+    "PASS": 35,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "free_base_force_pass_warn_fail": {
+    "PASS": 111,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "free_base_torque_pass_warn_fail": {
+    "PASS": 111,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "actuated_bias_pass_warn_fail": {
+    "PASS": 111,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "velocity_bias_pass_warn_fail": {
+    "PASS": 111,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "cross_term_pass_warn_fail": {
+    "PASS": 10,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "base_orientation_pass_warn_fail": {
+    "PASS": 48,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "max_gravity_abs_error": 6.164550768517074e-06,
+  "max_full_bias_abs_error": 1.4143209909889265e-05,
+  "max_free_base_force_abs_error": 1.4143209909889265e-05,
+  "max_free_base_torque_abs_error": 9.483005001253986e-07,
+  "max_actuated_bias_abs_error": 4.5973911277918944e-07,
+  "max_velocity_bias_abs_error": 1.4420637540979442e-05,
+  "max_cross_term_abs_error": 7.62939453125e-06,
+  "max_base_orientation_abs_error": 9.53858742036573e-06,
+  "jit_compatible": true,
+  "controller_modified": false,
+  "xpassed_tests_cleaned": true,
+  "remaining_issues": [],
+  "limitations": []
+}

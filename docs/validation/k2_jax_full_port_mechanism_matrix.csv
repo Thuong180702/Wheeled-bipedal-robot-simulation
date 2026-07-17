@@ -1,0 +1,29 @@
+Mechanism,Python Source,JAX Source,Status,Risk Level,Affected Actuators,Failing Scenarios
+Input packing,simulate_hierarchical_controller.py:6494-6515,k2_jax_controller.py:934-976,PORTED_EXACT,LOW,All 10,-
+Dynamic target height,simulate_hierarchical_controller.py (height_variant_setup),k2_jax_controller.py input _I_HEIGHT_REF,PORTED_EXACT,LOW,All (indirect),-
+Height variant target_com_z,simulate_hierarchical_controller.py:4697-4734,k2_jax_controller.py input commanded_height_ref_m,PORTED_EXACT,LOW,All (indirect),-
+pitch_x_error computation,simulate_hierarchical_controller.py:6208 (pre-adjusted),k2_jax_controller.py input _I_PITCH_X (pre-adjusted),PORTED_EXACT,LOW,Wheels [4,9],-
+Physics eq pitch ref (Option B),simulate_hierarchical_controller.py:4736-4787,k2_jax_controller.py:1138-1163 (diagnostic-only),PORTED_EXACT,LOW,Wheels [4,9],-
+Calibrated outer loop,simulate_hierarchical_controller.py:4857-4989,k2_jax_controller.py:1127-1158,PORTED_EXACT,LOW,Wheels [4,9],-
+Support error computation,simulate_hierarchical_controller.py:5979-6003,k2_jax_controller.py input sagittal_position_error_m,PORTED_EXACT,LOW,Wheels [4,9],-
+Support error rate smoothing,simulate_hierarchical_controller.py outer loop,k2_jax_controller.py:1145-1149,PORTED_EXACT,LOW,Wheels [4,9],-
+Low-band support,simulate_hierarchical_controller.py:4934-4962,k2_jax_controller.py:1141-1142,PORTED_WITH_KNOWN_DIFF,MINOR (kp 1.4 vs 1.5),Wheels[4,9],-
+Empirical support FF,support_feedforward_controller.py:53-72,k2_jax_controller.py:768-776,PORTED_EXACT,LOW,Hip_pitch[2,7] Knee[3,8],-
+Sagittal terms,sagittal_velocity_damped_balance_controller.py:4366+,k2_jax_controller.py:1195-1209,PORTED_EXACT,LOW,Wheels[4,9],-
+WIP notch filter,sagittal_velocity_damped_balance_controller.py:4628-4711,k2_jax_controller.py:1091-1100,PORTED_EXACT (verified <=1e-10),LOW,Wheels[4,9],-
+Notch height gate,sagittal_velocity_damped_balance_controller.py:4647-4654,k2_jax_controller.py:1099,PORTED_EXACT,LOW,Wheels[4,9],-
+Continuous gain scheduling,sagittal_velocity_damped_balance_controller.py:4419-4601,k2_jax_controller.py:1102-1124,PORTED_EXACT,LOW,Wheels[4,9],-
+Shape posture,shape_posture_controller.py,k2_jax_controller.py:1211-1219,PORTED_WITH_KNOWN_DIFF,MEDIUM (PD gains?),Leg joints[0-3,5-8],-
+Lateral roll,lateral_roll_balance_controller.py,k2_jax_controller.py:1222-1225,PORTED_EXACT,LOW,Hip_roll[0,5],-
+Yaw,yaw_controller.py (PRE-composer),k2_jax_controller.py:1228 (POST-composer),PORTED_WITH_KNOWN_DIFF,HIGH (insertion order),Hip_yaw[1,6],push_fwd_90N push_bwd_90N
+Mode hip-yaw divergence,mode_hip_yaw_divergence_controller.py (PRE-composer),k2_jax_controller.py:1231-1232 (POST-composer),PORTED_WITH_KNOWN_DIFF,HIGH (insertion order),Hip_yaw[1,6],push_fwd_90N push_bwd_90N
+HY-FF (JAX-only),N/A (no Python equivalent),k2_jax_controller.py:1235-1236 (EXCLUDED),JAX_EXTRA_NO_PYTHON_EQUIVALENT,LOW (excluded),None,-
+Adaptive bias trim,sagittal_velocity_damped_balance_controller.py:5578-5755,k2_jax_controller.py:1169-1193,PORTED_WITH_KNOWN_DIFF,HIGH (3 discrepancies),Wheels[4,9],ramp_down
+Composer (sum+clip+rate-limit),balance_core_torque_composer.py:50-155,k2_jax_controller.py:1247-1250,PORTED_EXACT,LOW,All 10,-
+max_position_tau scheduling,sagittal_velocity_damped_balance_controller.py:4443-4455,k2_jax_controller.py:1118-1124,PORTED_EXACT,LOW,Wheels[4,9],-
+Per-joint torque limits,simulate_hierarchical_controller.py:5299,Params torque_limit[0..9],PORTED_EXACT,LOW,All 10,-
+Clip/rate-limit/smoothing,balance_core_torque_composer.py:93-100,k2_jax_torque_composer_step(),PORTED_EXACT (verified <=1e-10),LOW,All 10,-
+tau_prev state,simulate_hierarchical_controller.py:6481,k2_jax_controller.py:1263,PORTED_WITH_KNOWN_DIFF,HIGH (yaw/mode_div in prev_tau[1,6]),Hip_yaw[1,6],push_fwd_90N push_bwd_90N
+Telemetry/diag mapping,sagittal_velocity_damped_balance_controller.py diagnostics,k2_jax_controller.py:1286-1307,PORTED_EXACT,LOW,N/A,-
+WBC torque zeroing,simulate_hierarchical_controller.py:2258-2267,N/A (pure balance-core),DOWNSTREAM_PYTHON_ONLY,LOW,All,-
+Final ctrl assignment,simulate_hierarchical_controller.py:6777,simulate_hierarchical_controller.py:6554,PORTED_EXACT,LOW,All 10,-

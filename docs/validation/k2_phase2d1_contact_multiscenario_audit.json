@@ -1,0 +1,222 @@
+{
+  "phase": "2D.1",
+  "verdict": "READY_FOR_PHASE_3_OFFLINE_QP_WBC_PROTOTYPE",
+  "verdict_reason": "All validations pass with full coverage",
+  "constants_version": "phase2d_contact_dynamics",
+  "timestamp": "2026-07-03T06:43:39.352772+00:00",
+  "num_scenarios_requested": 12,
+  "num_scenarios_included": 12,
+  "num_scenarios_skipped": 0,
+  "num_contacts_validated": 44,
+  "left_wheel_contacts": 22,
+  "right_wheel_contacts": 22,
+  "height_coverage": {
+    "low": true,
+    "mid": true,
+    "high": true
+  },
+  "velocity_coverage": {
+    "nonzero_base_velocity": true,
+    "yaw_rate": true
+  },
+  "orientation_coverage": {
+    "non_identity_base_orientation": true
+  },
+  "contact_point_reconstruction_pass_warn_fail": {
+    "PASS": 44,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "contact_jacobian_pass_warn_fail": {
+    "PASS": 44,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "jacobian_base_linear_pass_warn_fail": {
+    "PASS": 44,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "jacobian_base_angular_pass_warn_fail": {
+    "PASS": 44,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "jacobian_actuated_pass_warn_fail": {
+    "PASS": 44,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "contact_force_mapping_pass_warn_fail": {
+    "PASS": 44,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "qfrc_constraint_sum_pass_warn_fail": {
+    "PASS": 0,
+    "WARN": 0,
+    "FAIL": 0,
+    "not_applicable": 12
+  },
+  "max_contact_point_error": 8.532577031039601e-08,
+  "max_jacobian_full_abs_error": 9.4217358803661e-08,
+  "max_jacobian_base_linear_abs_error": 0.0,
+  "max_jacobian_base_angular_abs_error": 9.4217358803661e-08,
+  "max_jacobian_actuated_abs_error": 7.910557758838976e-08,
+  "max_contact_qfrc_abs_error": 9.852009355881819e-05,
+  "max_contact_qfrc_free_base_abs_error": 8.756635213558184e-05,
+  "max_contact_qfrc_actuated_abs_error": 9.852009355881819e-05,
+  "max_qfrc_constraint_sum_abs_error": null,
+  "jit_compatible": true,
+  "controller_modified": false,
+  "contact_detection_implemented": false,
+  "limitations": [
+    "Contact detection not implemented \u2014 CPU MuJoCo locates contacts.",
+    "Summed qfrc_constraint validation may be inapplicable due to joint limits.",
+    "No friction cone / QP / WBC integration.",
+    "No controller integration \u2014 pure dynamics validation."
+  ],
+  "scenario_details": [
+    {
+      "name": "keyframe_static",
+      "height_meta": "keyframe",
+      "has_velocity": false,
+      "non_identity_orientation": false,
+      "num_contacts": 4
+    },
+    {
+      "name": "passive_settle_keyframe",
+      "height_meta": "keyframe",
+      "has_velocity": false,
+      "non_identity_orientation": false,
+      "num_contacts": 4
+    },
+    {
+      "name": "low_height_settle",
+      "height_meta": "low",
+      "has_velocity": false,
+      "non_identity_orientation": false,
+      "num_contacts": 4
+    },
+    {
+      "name": "mid_height_settle",
+      "height_meta": "mid",
+      "has_velocity": false,
+      "non_identity_orientation": false,
+      "num_contacts": 4
+    },
+    {
+      "name": "high_height_settle",
+      "height_meta": "high",
+      "has_velocity": false,
+      "non_identity_orientation": false,
+      "num_contacts": 4
+    },
+    {
+      "name": "small_forward_velocity",
+      "height_meta": "velocity",
+      "has_velocity": true,
+      "non_identity_orientation": false,
+      "num_contacts": 4
+    },
+    {
+      "name": "small_lateral_velocity",
+      "height_meta": "velocity",
+      "has_velocity": true,
+      "non_identity_orientation": false,
+      "num_contacts": 4
+    },
+    {
+      "name": "small_yaw_rate",
+      "height_meta": "velocity",
+      "has_velocity": true,
+      "non_identity_orientation": false,
+      "num_contacts": 4
+    },
+    {
+      "name": "small_roll_tilt",
+      "height_meta": "orientation",
+      "has_velocity": false,
+      "non_identity_orientation": true,
+      "num_contacts": 4
+    },
+    {
+      "name": "small_pitch_tilt",
+      "height_meta": "orientation",
+      "has_velocity": false,
+      "non_identity_orientation": true,
+      "num_contacts": 2
+    },
+    {
+      "name": "random_pose_small_perturbation_1",
+      "height_meta": "perturbed",
+      "has_velocity": true,
+      "non_identity_orientation": true,
+      "num_contacts": 4
+    },
+    {
+      "name": "random_pose_small_perturbation_2",
+      "height_meta": "perturbed",
+      "has_velocity": true,
+      "non_identity_orientation": true,
+      "num_contacts": 2
+    }
+  ],
+  "angular_convention_results": [
+    {
+      "orientation_label": "identity",
+      "rpy_deg": [
+        0,
+        0,
+        0
+      ],
+      "jacobian_base_angular_expected_error": 0.0,
+      "jacobian_base_linear_identity_error": 0.0,
+      "verdict": "PASS"
+    },
+    {
+      "orientation_label": "roll_5deg",
+      "rpy_deg": [
+        5,
+        0,
+        0
+      ],
+      "jacobian_base_angular_expected_error": 4.128386965618347e-08,
+      "jacobian_base_linear_identity_error": 0.0,
+      "verdict": "PASS"
+    },
+    {
+      "orientation_label": "pitch_5deg",
+      "rpy_deg": [
+        0,
+        5,
+        0
+      ],
+      "jacobian_base_angular_expected_error": 5.960464477539063e-08,
+      "jacobian_base_linear_identity_error": 0.0,
+      "verdict": "PASS"
+    },
+    {
+      "orientation_label": "yaw_10deg",
+      "rpy_deg": [
+        0,
+        0,
+        10
+      ],
+      "jacobian_base_angular_expected_error": 2.8455738099175676e-08,
+      "jacobian_base_linear_identity_error": 0.0,
+      "verdict": "PASS"
+    },
+    {
+      "orientation_label": "combined_small_rpy",
+      "rpy_deg": [
+        3,
+        4,
+        6
+      ],
+      "jacobian_base_angular_expected_error": 3.8954481196284974e-08,
+      "jacobian_base_linear_identity_error": 0.0,
+      "verdict": "PASS"
+    }
+  ]
+}

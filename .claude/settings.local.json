@@ -26,7 +26,14 @@
       "Skill(superpowers:using-git-worktrees)",
       "Skill(superpowers:using-git-worktrees:*)",
       "Skill(superpowers:test-driven-development)",
-      "Skill(superpowers:test-driven-development:*)"
+      "Skill(superpowers:test-driven-development:*)",
+      "Bash(powershell -Command \"while \\(Get-Process -Id 5252 -ErrorAction SilentlyContinue\\) { Start-Sleep -Seconds 120 }; Write-Host 'STEP_E_DONE'\")",
+      "Bash(powershell -Command \"while \\(Get-Process -Id 5252 -ErrorAction SilentlyContinue\\) { Start-Sleep -Seconds 300 }; Write-Host 'STEP_E_DONE'\")",
+      "Bash(break)",
+      "Bash(Get-Content -Path \"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\f--ROBOTCUATAO-Wheeled-bipedal-robot-simulation\\\\2ebbfccd-ecf8-4c15-aae8-65f1ccd260a5\\\\tasks\\\\b93uzadmn.output\" -Tail 5 -Wait)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import json; d=json.load\\(open\\('outputs/k1_notch_filter_sweep/screening_results.json'\\)\\); print\\('Profiles completed:', len\\([k for k,v in d.items\\(\\) if v.get\\('runs'\\)]\\)\\); [print\\(f'  {k}: {list\\(v.get\\(\\\\\"runs\\\\\",{}\\).keys\\(\\)\\)}'\\) for k,v in sorted\\(d.items\\(\\)\\)[:8]]\")",
+      "Bash(python -c \"import json; d=json.load\\(open\\('outputs/k1_notch_filter_sweep/screening_results.json'\\)\\); print\\('Done:', sum\\(1 for k,v in d.items\\(\\) for rk,rv in v.get\\('runs',{}\\).items\\(\\) if rv.get\\('status'\\)=='OK' or 'lf_peak_freq_hz' in rv\\), '/ 23 profiles'\\)\")"
     ]
   }
 }

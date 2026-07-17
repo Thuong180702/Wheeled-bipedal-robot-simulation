@@ -1,0 +1,93 @@
+{
+  "phase": "2C.3",
+  "verdict": "PARTIAL_READY",
+  "constants_version": "phase2c3_free_base_projection",
+  "num_original_cases": 35,
+  "gravity_pass_warn_fail": {
+    "PASS": 133,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "full_bias_pass_warn_fail": {
+    "PASS": 21,
+    "WARN": 7,
+    "FAIL": 7
+  },
+  "free_base_force_pass_warn_fail": {
+    "PASS": 133,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "free_base_torque_pass_warn_fail": {
+    "PASS": 119,
+    "WARN": 7,
+    "FAIL": 7
+  },
+  "actuated_bias_pass_warn_fail": {
+    "PASS": 21,
+    "WARN": 7,
+    "FAIL": 7
+  },
+  "velocity_bias_pass_warn_fail": {
+    "PASS": 112,
+    "WARN": 7,
+    "FAIL": 7
+  },
+  "cross_term_pass_warn_fail": {
+    "note": "free-base w x v: PASS (fixed in 2C.3), other pairs: PASS"
+  },
+  "base_orientation_pass_warn_fail": {
+    "note": "PASS at identity, WARN/FAIL at non-identity (pre-existing RNEA issue)"
+  },
+  "max_gravity_abs_error": 6.16e-06,
+  "max_full_bias_abs_error": 0.062,
+  "max_free_base_force_abs_error": 9.4e-06,
+  "max_free_base_torque_abs_error": 0.062,
+  "max_actuated_bias_abs_error": 0.058,
+  "max_velocity_bias_abs_error": 0.062,
+  "max_cross_term_abs_error": 0.0,
+  "max_base_orientation_abs_error": 0.324,
+  "jit_compatible": true,
+  "controller_modified": false,
+  "free_joint_convention": {
+    "qvel_frame": "world",
+    "qvel_order": "[v_lin; omega]",
+    "qfrc_frame": "world",
+    "qfrc_order": "[force; torque]",
+    "root_force_origin": "body_origin",
+    "projection": "S_free^T @ F_spatial_root with gyroscopic correction"
+  },
+  "root_force_projection": {
+    "method": "body_local_rnea_with_free_base_correction",
+    "force_correction": "m_total * omega x v_lin",
+    "torque_correction": "-M_cross^T @ (v_lin x omega)",
+    "M_cross_source": "precomputed_at_identity"
+  },
+  "phase2c_reference": {
+    "full_bias": "21 PASS / 0 WARN / 14 FAIL",
+    "max_full_err": 0.625,
+    "max_act_err": 0.0553
+  },
+  "phase2c1_reference": {
+    "full_bias": "21 PASS / 0 WARN / 14 FAIL",
+    "max_full_err": 1.92,
+    "max_act_err": 0.078
+  },
+  "phase2c2_reference": {
+    "full_bias": "21 PASS / 0 WARN / 14 FAIL",
+    "max_full_err": 1.38,
+    "max_act_err": 0.0629
+  },
+  "remaining_issues": [
+    "FB torque error ~0.06 at non-identity poses (M_cross approximation with joint position changes)",
+    "Actuated bias residual ~0.06 from mixed base+actuated velocity cases",
+    "Body-local RNEA centrifugal force error at non-identity base orientations (pre-existing)",
+    "7 FAIL, 7 WARN in original 35-case matrix (improved from 14 FAIL in 2C.2)"
+  ],
+  "limitations": [
+    "M_cross precomputed at identity; degrades with joint position changes",
+    "Actuated joint bias has residual errors from mixed velocity coupling",
+    "Non-identity base orientation: pre-existing centrifugal force error in body-local RNEA",
+    "Joint friction/damping/armature not included"
+  ]
+}

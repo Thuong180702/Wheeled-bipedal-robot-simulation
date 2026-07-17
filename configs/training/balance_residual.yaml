@@ -13,6 +13,14 @@
 # - Push recovery (corrective wheel motion and leg adjustments)
 
 # --- Metadata ---
+mode_hip_yaw_divergence:
+  enabled: false
+  kp_div: 1.0
+  kd_div: 0.1
+  max_torque: 1.0
+  soft_limit_rad: 0.3
+  soft_limit_gain: 0.5
+  ref_source: "target"
 metadata:
   stage: balance_residual
   policy_type: residual_ppo

@@ -1,0 +1,1762 @@
+{
+  "metadata": {
+    "input_dir": "outputs\\DRIFT_ITER2_VEL_ONLY_WIDE_GATE_step_e",
+    "analyzer_version": "1.0.0",
+    "baseline_type": "K2_JAX_DEDICATED_REALTIME_IMPROVEMENT_BASELINE"
+  },
+  "aggregate": {
+    "total_scenarios": 10,
+    "scenarios_with_telemetry": 0,
+    "falls": 0,
+    "falls_list": [],
+    "safety_summary": {
+      "fell": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "fall_step": {
+        "mean": -1.0,
+        "std": 0.0,
+        "min": -1.0,
+        "max": -1.0,
+        "median": -1.0
+      },
+      "pitch_max_deg": {
+        "mean": 5.95118810879196,
+        "std": 2.5266428732305544,
+        "min": 1.824014126159308,
+        "max": 9.03551834998531,
+        "median": 7.1557366561101015
+      },
+      "pitch_min_deg": {
+        "mean": -3.128461025950009,
+        "std": 2.747934125055698,
+        "min": -7.588238384693488,
+        "max": 0.0,
+        "median": -2.08317751197139
+      },
+      "roll_max_deg": {
+        "mean": 0.7006964804902452,
+        "std": 0.30743755319107985,
+        "min": 0.20122310407768132,
+        "max": 1.1523572832215014,
+        "median": 0.7234684137199832
+      },
+      "roll_min_deg": {
+        "mean": -0.13016520545742558,
+        "std": 0.15423084476157592,
+        "min": -0.542786363803672,
+        "max": 0.0,
+        "median": -0.08358983700131573
+      },
+      "hip_yaw_joint_max_rad": {
+        "mean": 0.05593045586133279,
+        "std": 0.026090980107189948,
+        "min": 0.019256554856590474,
+        "max": 0.11152650789957139,
+        "median": 0.0533422656769227
+      },
+      "contact_loss_steps": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "median": 1.0
+      },
+      "nan_inf_detected": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      }
+    },
+    "posture_summary": {
+      "pitch_rms_deg": {
+        "mean": 3.6342859015256272,
+        "std": 0.9299545627615529,
+        "min": 1.8618448446307911,
+        "max": 5.308406773917545,
+        "median": 3.546089477163955
+      },
+      "pitch_peak_deg": {
+        "mean": 7.315205476524072,
+        "std": 1.1752573227513023,
+        "min": 4.547723710912936,
+        "max": 9.03551834998531,
+        "median": 7.216981085971193
+      },
+      "roll_rms_deg": {
+        "mean": 0.3308177934577442,
+        "std": 0.16647813370889805,
+        "min": 0.1330493720885907,
+        "max": 0.6262005631210609,
+        "median": 0.30173405340078185
+      },
+      "roll_peak_deg": {
+        "mean": 0.7348528064628443,
+        "std": 0.2662656373414934,
+        "min": 0.3410721781123207,
+        "max": 1.1523572832215014,
+        "median": 0.7234684137199832
+      },
+      "pitch_settling_steps": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "pitch_rate_rms_deg_s": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "roll_rate_rms_deg_s": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "yaw_rate_rms_deg_s": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "angular_velocity_rms_deg_s": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "orientation_energy_integral": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "yaw_drift_deg": {
+        "mean": 4.115830039285397,
+        "std": 1.6298682762449874,
+        "min": 0.8678724078911693,
+        "max": 6.154099571183073,
+        "median": 4.0450926162000025
+      }
+    },
+    "leg_symmetry_summary": {
+      "hip_yaw_joint_max_rad": {
+        "mean": 0.05593045586133279,
+        "std": 0.026090980107189948,
+        "min": 0.019256554856590474,
+        "max": 0.11152650789957139,
+        "median": 0.0533422656769227
+      },
+      "hip_yaw_div_rms_rad": {
+        "mean": 0.037940896728824225,
+        "std": 0.021881961597746864,
+        "min": 0.013434476571015375,
+        "max": 0.09171383325002945,
+        "median": 0.03332850028590889
+      },
+      "hip_yaw_div_max_rad": {
+        "mean": 0.0901573490253117,
+        "std": 0.048424714168542014,
+        "min": 0.02626238845051066,
+        "max": 0.20081972855995844,
+        "median": 0.08652985006341432
+      },
+      "hip_yaw_lr_divergence_deg": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "hip_pitch_symmetry_error_deg": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "knee_symmetry_error_deg": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "leg_posture_error_rms": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "hip_roll_symmetry_error_deg": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      }
+    },
+    "support_drift_summary": {
+      "support_rms_m": {
+        "mean": 0.056014600000000005,
+        "std": 0.008548199321494558,
+        "min": 0.041934,
+        "max": 0.069286,
+        "median": 0.0555885
+      },
+      "support_peak_m": {
+        "mean": 0.11751113022865947,
+        "std": 0.016150407154900043,
+        "min": 0.09372404630681527,
+        "max": 0.14576620708308663,
+        "median": 0.11898067302841632
+      },
+      "sagittal_drift_m": {
+        "mean": 0.007536974661646645,
+        "std": 0.0052277663908443074,
+        "min": -0.0017958409873634297,
+        "max": 0.014986872389913622,
+        "median": 0.00815951076463668
+      },
+      "lateral_drift_m": {
+        "mean": -0.013436062953996044,
+        "std": 0.05680144175714924,
+        "min": -0.10608590244588122,
+        "max": 0.07654529882909515,
+        "median": -0.009775269990892437
+      },
+      "final_displacement_m": {
+        "mean": 0.049264599049417726,
+        "std": 0.032620030385979375,
+        "min": 0.004896245686521191,
+        "max": 0.10626257373736966,
+        "median": 0.048317942953542914
+      },
+      "max_displacement_m": {
+        "mean": 0.09712974959278317,
+        "std": 0.011870616466363525,
+        "min": 0.0810282952866081,
+        "max": 0.11661223638818624,
+        "median": 0.09326321125131987
+      },
+      "support_velocity_rms_m_s": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "wheel_travel_asymmetry_m": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "com_support_offset_rms_m": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      }
+    },
+    "dynamic_height_summary": {
+      "height_rmse_m": {
+        "mean": 0.004906112079229409,
+        "std": 0.0027292570569010816,
+        "min": 0.0008078397371676922,
+        "max": 0.010074088238767187,
+        "median": 0.004233849309631761
+      },
+      "height_initial_m": {
+        "mean": 0.3854150564579103,
+        "std": 0.06208853032393017,
+        "min": 0.2954845595126816,
+        "max": 0.48103523095710155,
+        "median": 0.37131170635651356
+      },
+      "height_final_m": {
+        "mean": 0.3877292813710215,
+        "std": 0.06627003197762867,
+        "min": 0.2927608872759891,
+        "max": 0.4903195631957372,
+        "median": 0.3731137246250971
+      },
+      "height_min_m": {
+        "mean": 0.3838891555291556,
+        "std": 0.06339813385175876,
+        "min": 0.2913840460418411,
+        "max": 0.480930577043345,
+        "median": 0.37037592052303725
+      },
+      "height_max_m": {
+        "mean": 0.3893532879429832,
+        "std": 0.06591327992416834,
+        "min": 0.2954845595126816,
+        "max": 0.4911432871197534,
+        "median": 0.3740456435131845
+      },
+      "height_tracking_lag_steps": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "height_overshoot_m": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "height_undershoot_m": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "q_ref_tracking_error_rms": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "dynamic_transition_smoothness": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      }
+    },
+    "torque_quality_summary": {
+      "torque_peak_total_nm": {
+        "mean": 8.632958532717263,
+        "std": 0.35146817082547793,
+        "min": 8.0,
+        "max": 9.164727186418354,
+        "median": 8.689722320292411
+      },
+      "torque_peak_wheels_nm": {
+        "mean": 2.5998049514985606,
+        "std": 0.8381433570972222,
+        "min": 1.4611545349539041,
+        "max": 4.0,
+        "median": 2.4989602188215034
+      },
+      "torque_peak_hip_yaw_nm": {
+        "mean": 1.6466641252934735,
+        "std": 0.867744719126881,
+        "min": 0.5743594947335319,
+        "max": 3.7362329095024633,
+        "median": 1.5766372165711062
+      },
+      "torque_peak_legs_nm": {
+        "mean": 8.632958532717263,
+        "std": 0.35146817082547793,
+        "min": 8.0,
+        "max": 9.164727186418354,
+        "median": 8.689722320292411
+      },
+      "torque_peak_hip_roll_nm": {
+        "mean": 0.29191966218087984,
+        "std": 0.07024386101025715,
+        "min": 0.19594772358793128,
+        "max": 0.4131852463558719,
+        "median": 0.28697219173872884
+      },
+      "torque_rms_l_hip_roll_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_peak_l_hip_roll_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_rms_l_hip_yaw_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_peak_l_hip_yaw_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_rms_l_hip_pitch_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_peak_l_hip_pitch_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_rms_l_knee_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_peak_l_knee_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_rms_l_wheel_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_peak_l_wheel_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_rms_r_hip_roll_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_peak_r_hip_roll_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_rms_r_hip_yaw_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_peak_r_hip_yaw_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_rms_r_hip_pitch_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_peak_r_hip_pitch_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_rms_r_knee_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_peak_r_knee_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_rms_r_wheel_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_peak_r_wheel_nm": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_rate_rms_nm_s": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_rate_peak_nm_s": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "torque_saturation_count": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "controller_conflict_index": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      }
+    },
+    "robustness_summary": {
+      "contact_loss_steps": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "median": 1.0
+      },
+      "contact_loss_frac": {
+        "mean": 0.0005000000000000001,
+        "std": 1.0842021724855044e-19,
+        "min": 0.0005,
+        "max": 0.0005,
+        "median": 0.0005
+      },
+      "post_push_active": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "post_pitch_rms_500_deg": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "post_support_rms_500_m": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "recovery_time_steps": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "median": 0.0
+      },
+      "long_run_drift_rate_m_per_kstep": {
+        "mean": 0.024632299524708863,
+        "std": 0.016310015192989687,
+        "min": 0.0024481228432605955,
+        "max": 0.05313128686868483,
+        "median": 0.024158971476771457
+      },
+      "stability_score_0_to_1": {
+        "mean": 0.7984366373162539,
+        "std": 0.04104682681401083,
+        "min": 0.7173476171005494,
+        "max": 0.8733795395095862,
+        "median": 0.8089499935511987
+      }
+    },
+    "pitch_rms_deg_low": {
+      "mean": 3.049571576886344,
+      "std": 0.7806186734759137,
+      "count": 4
+    },
+    "pitch_rms_deg_mid": {
+      "mean": 4.213081147584617,
+      "std": 1.095325626332928,
+      "count": 2
+    },
+    "pitch_rms_deg_high": {
+      "mean": 3.9296026031354163,
+      "std": 0.5968243716992208,
+      "count": 4
+    },
+    "pitch_rms_deg_fixed_height": {
+      "mean": 3.6342859015256272,
+      "std": 0.9299545627615529,
+      "count": 10
+    },
+    "performance": {
+      "mean_hz": 63.36316599212498,
+      "min_hz": 42.01872846159045,
+      "max_hz": 91.69253400921004
+    }
+  },
+  "scenarios": [
+    {
+      "scenario_id": "high_0p430",
+      "status": "ok",
+      "has_full_telemetry": false,
+      "scope": "step_e",
+      "scenario_type": "fixed_height",
+      "height_region": "high",
+      "steps": 2000,
+      "max_steps": 2000,
+      "achieved_hz": 76.46570729427017,
+      "mean_step_ms": 13.077757799997926,
+      "safety": {
+        "fell": false,
+        "fall_step": -1,
+        "termination_reason": "",
+        "pitch_max_deg": 7.1882748173758255,
+        "pitch_min_deg": -1.9494186076871745,
+        "roll_max_deg": 0.6778591284312435,
+        "roll_min_deg": -0.03172193893572513,
+        "hip_yaw_joint_max_rad": 0.05252650592030226,
+        "contact_loss_steps": 1,
+        "nan_inf_detected": false
+      },
+      "posture": {
+        "pitch_rms_deg": 3.1284407990079184,
+        "pitch_peak_deg": 7.1882748173758255,
+        "roll_rms_deg": 0.35355338174806467,
+        "roll_peak_deg": 0.6778591284312435,
+        "pitch_settling_steps": 0,
+        "pitch_rate_rms_deg_s": 0.0,
+        "roll_rate_rms_deg_s": 0.0,
+        "yaw_rate_rms_deg_s": 0.0,
+        "angular_velocity_rms_deg_s": 0.0,
+        "orientation_energy_integral": 0.0,
+        "yaw_drift_deg": 3.032813482449638
+      },
+      "leg_symmetry": {
+        "hip_yaw_joint_max_rad": 0.05252650592030226,
+        "hip_yaw_div_rms_rad": 0.03853983715868136,
+        "hip_yaw_div_max_rad": 0.0833605359790479,
+        "hip_yaw_lr_divergence_deg": 0.0,
+        "hip_pitch_symmetry_error_deg": 0.0,
+        "knee_symmetry_error_deg": 0.0,
+        "leg_posture_error_rms": 0.0,
+        "hip_roll_symmetry_error_deg": 0.0
+      },
+      "support_drift": {
+        "support_rms_m": 0.050004,
+        "support_peak_m": 0.1400881391389513,
+        "sagittal_drift_m": 0.010431315254144811,
+        "lateral_drift_m": -0.08478251058274616,
+        "final_displacement_m": 0.08542181477026123,
+        "max_displacement_m": 0.10300503595340207,
+        "support_velocity_rms_m_s": 0.0,
+        "wheel_travel_asymmetry_m": 0.0,
+        "com_support_offset_rms_m": 0.0
+      },
+      "dynamic_height": {
+        "height_rmse_m": 0.003944568137522554,
+        "height_initial_m": 0.42850179714270226,
+        "height_final_m": 0.4326459074232092,
+        "height_min_m": 0.42809913442924763,
+        "height_max_m": 0.43489942946576443,
+        "height_tracking_lag_steps": 0,
+        "height_overshoot_m": 0.0,
+        "height_undershoot_m": 0.0,
+        "q_ref_tracking_error_rms": 0.0,
+        "dynamic_transition_smoothness": 0.0
+      },
+      "torque_quality": {
+        "torque_peak_total_nm": 8.711369780901977,
+        "torque_peak_wheels_nm": 2.9618237455007317,
+        "torque_peak_hip_yaw_nm": 1.5649970098622648,
+        "torque_peak_legs_nm": 8.711369780901977,
+        "torque_peak_hip_roll_nm": 0.22782474237421566,
+        "torque_rms_l_hip_roll_nm": 0.0,
+        "torque_peak_l_hip_roll_nm": 0.0,
+        "torque_rms_l_hip_yaw_nm": 0.0,
+        "torque_peak_l_hip_yaw_nm": 0.0,
+        "torque_rms_l_hip_pitch_nm": 0.0,
+        "torque_peak_l_hip_pitch_nm": 0.0,
+        "torque_rms_l_knee_nm": 0.0,
+        "torque_peak_l_knee_nm": 0.0,
+        "torque_rms_l_wheel_nm": 0.0,
+        "torque_peak_l_wheel_nm": 0.0,
+        "torque_rms_r_hip_roll_nm": 0.0,
+        "torque_peak_r_hip_roll_nm": 0.0,
+        "torque_rms_r_hip_yaw_nm": 0.0,
+        "torque_peak_r_hip_yaw_nm": 0.0,
+        "torque_rms_r_hip_pitch_nm": 0.0,
+        "torque_peak_r_hip_pitch_nm": 0.0,
+        "torque_rms_r_knee_nm": 0.0,
+        "torque_peak_r_knee_nm": 0.0,
+        "torque_rms_r_wheel_nm": 0.0,
+        "torque_peak_r_wheel_nm": 0.0,
+        "torque_rate_rms_nm_s": 0.0,
+        "torque_rate_peak_nm_s": 0.0,
+        "torque_saturation_count": 0,
+        "torque_authority_share": {},
+        "controller_conflict_index": 0.0
+      },
+      "robustness": {
+        "contact_loss_steps": 1,
+        "contact_loss_frac": 0.0005,
+        "post_push_active": false,
+        "post_pitch_rms_500_deg": 0.0,
+        "post_support_rms_500_m": 0.0,
+        "recovery_time_steps": 0,
+        "long_run_drift_rate_m_per_kstep": 0.04271090738513061,
+        "stability_score_0_to_1": 0.8223647571447201
+      }
+    },
+    {
+      "scenario_id": "high_0p450",
+      "status": "ok",
+      "has_full_telemetry": false,
+      "scope": "step_e",
+      "scenario_type": "fixed_height",
+      "height_region": "high",
+      "steps": 2000,
+      "max_steps": 2000,
+      "achieved_hz": 45.1584934531363,
+      "mean_step_ms": 22.14422855000157,
+      "safety": {
+        "fell": false,
+        "fall_step": -1,
+        "termination_reason": "",
+        "pitch_max_deg": 7.978200465068886,
+        "pitch_min_deg": -0.05115574453490752,
+        "roll_max_deg": 0.3655345649942802,
+        "roll_min_deg": -0.08015309776259809,
+        "hip_yaw_joint_max_rad": 0.019256554856590474,
+        "contact_loss_steps": 1,
+        "nan_inf_detected": false
+      },
+      "posture": {
+        "pitch_rms_deg": 4.683593863632709,
+        "pitch_peak_deg": 7.978200465068886,
+        "roll_rms_deg": 0.1330493720885907,
+        "roll_peak_deg": 0.3655345649942802,
+        "pitch_settling_steps": 0,
+        "pitch_rate_rms_deg_s": 0.0,
+        "roll_rate_rms_deg_s": 0.0,
+        "yaw_rate_rms_deg_s": 0.0,
+        "angular_velocity_rms_deg_s": 0.0,
+        "orientation_energy_integral": 0.0,
+        "yaw_drift_deg": 2.8676109919347255
+      },
+      "leg_symmetry": {
+        "hip_yaw_joint_max_rad": 0.019256554856590474,
+        "hip_yaw_div_rms_rad": 0.013434476571015375,
+        "hip_yaw_div_max_rad": 0.02626238845051066,
+        "hip_yaw_lr_divergence_deg": 0.0,
+        "hip_pitch_symmetry_error_deg": 0.0,
+        "knee_symmetry_error_deg": 0.0,
+        "leg_posture_error_rms": 0.0,
+        "hip_roll_symmetry_error_deg": 0.0
+      },
+      "support_drift": {
+        "support_rms_m": 0.066399,
+        "support_peak_m": 0.14576620708308663,
+        "sagittal_drift_m": 0.006125020778160599,
+        "lateral_drift_m": -0.10608590244588122,
+        "final_displacement_m": 0.10626257373736966,
+        "max_displacement_m": 0.11206481485209675,
+        "support_velocity_rms_m_s": 0.0,
+        "wheel_travel_asymmetry_m": 0.0,
+        "com_support_offset_rms_m": 0.0
+      },
+      "dynamic_height": {
+        "height_rmse_m": 0.008698774425417851,
+        "height_initial_m": 0.45117706546721875,
+        "height_final_m": 0.4578093221587406,
+        "height_min_m": 0.4508161846672399,
+        "height_max_m": 0.45943548082332397,
+        "height_tracking_lag_steps": 0,
+        "height_overshoot_m": 0.0,
+        "height_undershoot_m": 0.0,
+        "q_ref_tracking_error_rms": 0.0,
+        "dynamic_transition_smoothness": 0.0
+      },
+      "torque_quality": {
+        "torque_peak_total_nm": 8.766346385981834,
+        "torque_peak_wheels_nm": 4.0,
+        "torque_peak_hip_yaw_nm": 0.6552450029427218,
+        "torque_peak_legs_nm": 8.766346385981834,
+        "torque_peak_hip_roll_nm": 0.21194936629916802,
+        "torque_rms_l_hip_roll_nm": 0.0,
+        "torque_peak_l_hip_roll_nm": 0.0,
+        "torque_rms_l_hip_yaw_nm": 0.0,
+        "torque_peak_l_hip_yaw_nm": 0.0,
+        "torque_rms_l_hip_pitch_nm": 0.0,
+        "torque_peak_l_hip_pitch_nm": 0.0,
+        "torque_rms_l_knee_nm": 0.0,
+        "torque_peak_l_knee_nm": 0.0,
+        "torque_rms_l_wheel_nm": 0.0,
+        "torque_peak_l_wheel_nm": 0.0,
+        "torque_rms_r_hip_roll_nm": 0.0,
+        "torque_peak_r_hip_roll_nm": 0.0,
+        "torque_rms_r_hip_yaw_nm": 0.0,
+        "torque_peak_r_hip_yaw_nm": 0.0,
+        "torque_rms_r_hip_pitch_nm": 0.0,
+        "torque_peak_r_hip_pitch_nm": 0.0,
+        "torque_rms_r_knee_nm": 0.0,
+        "torque_peak_r_knee_nm": 0.0,
+        "torque_rms_r_wheel_nm": 0.0,
+        "torque_peak_r_wheel_nm": 0.0,
+        "torque_rate_rms_nm_s": 0.0,
+        "torque_rate_peak_nm_s": 0.0,
+        "torque_saturation_count": 0,
+        "torque_authority_share": {},
+        "controller_conflict_index": 0.0
+      },
+      "robustness": {
+        "contact_loss_steps": 1,
+        "contact_loss_frac": 0.0005,
+        "post_push_active": false,
+        "post_pitch_rms_500_deg": 0.0,
+        "post_support_rms_500_m": 0.0,
+        "recovery_time_steps": 0,
+        "long_run_drift_rate_m_per_kstep": 0.05313128686868483,
+        "stability_score_0_to_1": 0.7578373444930491
+      }
+    },
+    {
+      "scenario_id": "high_0p465",
+      "status": "ok",
+      "has_full_telemetry": false,
+      "scope": "step_e",
+      "scenario_type": "fixed_height",
+      "height_region": "high",
+      "steps": 2000,
+      "max_steps": 2000,
+      "achieved_hz": 91.69253400921004,
+      "mean_step_ms": 10.906013350002468,
+      "safety": {
+        "fell": false,
+        "fall_step": -1,
+        "termination_reason": "",
+        "pitch_max_deg": 7.245687354566561,
+        "pitch_min_deg": -2.216936416255605,
+        "roll_max_deg": 0.3410721781123207,
+        "roll_min_deg": -0.2540931079413896,
+        "hip_yaw_joint_max_rad": 0.03144130335706268,
+        "contact_loss_steps": 1,
+        "nan_inf_detected": false
+      },
+      "posture": {
+        "pitch_rms_deg": 3.62659812065289,
+        "pitch_peak_deg": 7.245687354566561,
+        "roll_rms_deg": 0.1419170496114426,
+        "roll_peak_deg": 0.3410721781123207,
+        "pitch_settling_steps": 0,
+        "pitch_rate_rms_deg_s": 0.0,
+        "roll_rate_rms_deg_s": 0.0,
+        "yaw_rate_rms_deg_s": 0.0,
+        "angular_velocity_rms_deg_s": 0.0,
+        "orientation_energy_integral": 0.0,
+        "yaw_drift_deg": 6.119519366471096
+      },
+      "leg_symmetry": {
+        "hip_yaw_joint_max_rad": 0.03144130335706268,
+        "hip_yaw_div_rms_rad": 0.018612072961309605,
+        "hip_yaw_div_max_rad": 0.04476108453351175,
+        "hip_yaw_lr_divergence_deg": 0.0,
+        "hip_pitch_symmetry_error_deg": 0.0,
+        "knee_symmetry_error_deg": 0.0,
+        "leg_posture_error_rms": 0.0,
+        "hip_roll_symmetry_error_deg": 0.0
+      },
+      "support_drift": {
+        "support_rms_m": 0.063378,
+        "support_peak_m": 0.12203911482587493,
+        "sagittal_drift_m": 0.014216411876712876,
+        "lateral_drift_m": 0.07654529882909515,
+        "final_displacement_m": 0.07785428144606961,
+        "max_displacement_m": 0.0933044693850342,
+        "support_velocity_rms_m_s": 0.0,
+        "wheel_travel_asymmetry_m": 0.0,
+        "com_support_offset_rms_m": 0.0
+      },
+      "dynamic_height": {
+        "height_rmse_m": 0.00408989204279134,
+        "height_initial_m": 0.4610681003812731,
+        "height_final_m": 0.46869604260440667,
+        "height_min_m": 0.4609564413806956,
+        "height_max_m": 0.4698792307989355,
+        "height_tracking_lag_steps": 0,
+        "height_overshoot_m": 0.0,
+        "height_undershoot_m": 0.0,
+        "q_ref_tracking_error_rms": 0.0,
+        "dynamic_transition_smoothness": 0.0
+      },
+      "torque_quality": {
+        "torque_peak_total_nm": 8.042863559775363,
+        "torque_peak_wheels_nm": 1.7837265128726723,
+        "torque_peak_hip_yaw_nm": 0.9343938126988759,
+        "torque_peak_legs_nm": 8.042863559775363,
+        "torque_peak_hip_roll_nm": 0.19594772358793128,
+        "torque_rms_l_hip_roll_nm": 0.0,
+        "torque_peak_l_hip_roll_nm": 0.0,
+        "torque_rms_l_hip_yaw_nm": 0.0,
+        "torque_peak_l_hip_yaw_nm": 0.0,
+        "torque_rms_l_hip_pitch_nm": 0.0,
+        "torque_peak_l_hip_pitch_nm": 0.0,
+        "torque_rms_l_knee_nm": 0.0,
+        "torque_peak_l_knee_nm": 0.0,
+        "torque_rms_l_wheel_nm": 0.0,
+        "torque_peak_l_wheel_nm": 0.0,
+        "torque_rms_r_hip_roll_nm": 0.0,
+        "torque_peak_r_hip_roll_nm": 0.0,
+        "torque_rms_r_hip_yaw_nm": 0.0,
+        "torque_peak_r_hip_yaw_nm": 0.0,
+        "torque_rms_r_hip_pitch_nm": 0.0,
+        "torque_peak_r_hip_pitch_nm": 0.0,
+        "torque_rms_r_knee_nm": 0.0,
+        "torque_peak_r_knee_nm": 0.0,
+        "torque_rms_r_wheel_nm": 0.0,
+        "torque_peak_r_wheel_nm": 0.0,
+        "torque_rate_rms_nm_s": 0.0,
+        "torque_rate_peak_nm_s": 0.0,
+        "torque_saturation_count": 0,
+        "torque_authority_share": {},
+        "controller_conflict_index": 0.0
+      },
+      "robustness": {
+        "contact_loss_steps": 1,
+        "contact_loss_frac": 0.0005,
+        "post_push_active": false,
+        "post_pitch_rms_500_deg": 0.0,
+        "post_support_rms_500_m": 0.0,
+        "recovery_time_steps": 0,
+        "long_run_drift_rate_m_per_kstep": 0.038927140723034805,
+        "stability_score_0_to_1": 0.8101550709906689
+      }
+    },
+    {
+      "scenario_id": "high_0p480",
+      "status": "ok",
+      "has_full_telemetry": false,
+      "scope": "step_e",
+      "scenario_type": "fixed_height",
+      "height_region": "high",
+      "steps": 2000,
+      "max_steps": 2000,
+      "achieved_hz": 47.97584903435589,
+      "mean_step_ms": 20.843820800000685,
+      "safety": {
+        "fell": false,
+        "fall_step": -1,
+        "termination_reason": "",
+        "pitch_max_deg": 8.74073324557246,
+        "pitch_min_deg": -1.3434017644440361,
+        "roll_max_deg": 0.20122310407768132,
+        "roll_min_deg": -0.542786363803672,
+        "hip_yaw_joint_max_rad": 0.050544200484264556,
+        "contact_loss_steps": 1,
+        "nan_inf_detected": false
+      },
+      "posture": {
+        "pitch_rms_deg": 4.279777629248147,
+        "pitch_peak_deg": 8.74073324557246,
+        "roll_rms_deg": 0.13551210201525934,
+        "roll_peak_deg": 0.542786363803672,
+        "pitch_settling_steps": 0,
+        "pitch_rate_rms_deg_s": 0.0,
+        "roll_rate_rms_deg_s": 0.0,
+        "yaw_rate_rms_deg_s": 0.0,
+        "angular_velocity_rms_deg_s": 0.0,
+        "orientation_energy_integral": 0.0,
+        "yaw_drift_deg": 6.154099571183073
+      },
+      "leg_symmetry": {
+        "hip_yaw_joint_max_rad": 0.050544200484264556,
+        "hip_yaw_div_rms_rad": 0.032585613919383895,
+        "hip_yaw_div_max_rad": 0.0735116869966593,
+        "hip_yaw_lr_divergence_deg": 0.0,
+        "hip_pitch_symmetry_error_deg": 0.0,
+        "knee_symmetry_error_deg": 0.0,
+        "leg_posture_error_rms": 0.0,
+        "hip_roll_symmetry_error_deg": 0.0
+      },
+      "support_drift": {
+        "support_rms_m": 0.058055,
+        "support_peak_m": 0.1228942566555426,
+        "sagittal_drift_m": 0.014986872389913622,
+        "lateral_drift_m": 0.03623133002647174,
+        "final_displacement_m": 0.03920861664887793,
+        "max_displacement_m": 0.09322195311760552,
+        "support_velocity_rms_m_s": 0.0,
+        "wheel_travel_asymmetry_m": 0.0,
+        "com_support_offset_rms_m": 0.0
+      },
+      "dynamic_height": {
+        "height_rmse_m": 0.010074088238767187,
+        "height_initial_m": 0.48103523095710155,
+        "height_final_m": 0.4903195631957372,
+        "height_min_m": 0.480930577043345,
+        "height_max_m": 0.4911432871197534,
+        "height_tracking_lag_steps": 0,
+        "height_overshoot_m": 0.0,
+        "height_undershoot_m": 0.0,
+        "q_ref_tracking_error_rms": 0.0,
+        "dynamic_transition_smoothness": 0.0
+      },
+      "torque_quality": {
+        "torque_peak_total_nm": 8.0,
+        "torque_peak_wheels_nm": 3.3030356093992688,
+        "torque_peak_hip_yaw_nm": 1.761534143852381,
+        "torque_peak_legs_nm": 8.0,
+        "torque_peak_hip_roll_nm": 0.25696582943867635,
+        "torque_rms_l_hip_roll_nm": 0.0,
+        "torque_peak_l_hip_roll_nm": 0.0,
+        "torque_rms_l_hip_yaw_nm": 0.0,
+        "torque_peak_l_hip_yaw_nm": 0.0,
+        "torque_rms_l_hip_pitch_nm": 0.0,
+        "torque_peak_l_hip_pitch_nm": 0.0,
+        "torque_rms_l_knee_nm": 0.0,
+        "torque_peak_l_knee_nm": 0.0,
+        "torque_rms_l_wheel_nm": 0.0,
+        "torque_peak_l_wheel_nm": 0.0,
+        "torque_rms_r_hip_roll_nm": 0.0,
+        "torque_peak_r_hip_roll_nm": 0.0,
+        "torque_rms_r_hip_yaw_nm": 0.0,
+        "torque_peak_r_hip_yaw_nm": 0.0,
+        "torque_rms_r_hip_pitch_nm": 0.0,
+        "torque_peak_r_hip_pitch_nm": 0.0,
+        "torque_rms_r_knee_nm": 0.0,
+        "torque_peak_r_knee_nm": 0.0,
+        "torque_rms_r_wheel_nm": 0.0,
+        "torque_peak_r_wheel_nm": 0.0,
+        "torque_rate_rms_nm_s": 0.0,
+        "torque_rate_peak_nm_s": 0.0,
+        "torque_saturation_count": 0,
+        "torque_authority_share": {},
+        "controller_conflict_index": 0.0
+      },
+      "robustness": {
+        "contact_loss_steps": 1,
+        "contact_loss_frac": 0.0005,
+        "post_push_active": false,
+        "post_pitch_rms_500_deg": 0.0,
+        "post_support_rms_500_m": 0.0,
+        "recovery_time_steps": 0,
+        "long_run_drift_rate_m_per_kstep": 0.019604308324438966,
+        "stability_score_0_to_1": 0.7778803924166771
+      }
+    },
+    {
+      "scenario_id": "low_0p300",
+      "status": "ok",
+      "has_full_telemetry": false,
+      "scope": "step_e",
+      "scenario_type": "fixed_height",
+      "height_region": "low",
+      "steps": 2000,
+      "max_steps": 2000,
+      "achieved_hz": 67.20642363298873,
+      "mean_step_ms": 14.87953004999872,
+      "safety": {
+        "fell": false,
+        "fall_step": -1,
+        "termination_reason": "",
+        "pitch_max_deg": 7.123198494844377,
+        "pitch_min_deg": -1.3800138802823363,
+        "roll_max_deg": 0.9474935918908437,
+        "roll_min_deg": 0.0,
+        "hip_yaw_joint_max_rad": 0.11152650789957139,
+        "contact_loss_steps": 1,
+        "nan_inf_detected": false
+      },
+      "posture": {
+        "pitch_rms_deg": 2.9082066285536223,
+        "pitch_peak_deg": 7.123198494844377,
+        "roll_rms_deg": 0.6262005631210609,
+        "roll_peak_deg": 0.9474935918908437,
+        "pitch_settling_steps": 0,
+        "pitch_rate_rms_deg_s": 0.0,
+        "roll_rate_rms_deg_s": 0.0,
+        "yaw_rate_rms_deg_s": 0.0,
+        "angular_velocity_rms_deg_s": 0.0,
+        "orientation_energy_integral": 0.0,
+        "yaw_drift_deg": 0.8678724078911693
+      },
+      "leg_symmetry": {
+        "hip_yaw_joint_max_rad": 0.11152650789957139,
+        "hip_yaw_div_rms_rad": 0.09171383325002945,
+        "hip_yaw_div_max_rad": 0.20081972855995844,
+        "hip_yaw_lr_divergence_deg": 0.0,
+        "hip_pitch_symmetry_error_deg": 0.0,
+        "knee_symmetry_error_deg": 0.0,
+        "leg_posture_error_rms": 0.0,
+        "hip_roll_symmetry_error_deg": 0.0
+      },
+      "support_drift": {
+        "support_rms_m": 0.041934,
+        "support_peak_m": 0.09595217981701856,
+        "sagittal_drift_m": 0.00486895140710325,
+        "lateral_drift_m": -0.0005162693270422403,
+        "final_displacement_m": 0.004896245686521191,
+        "max_displacement_m": 0.08419181110483785,
+        "support_velocity_rms_m_s": 0.0,
+        "wheel_travel_asymmetry_m": 0.0,
+        "com_support_offset_rms_m": 0.0
+      },
+      "dynamic_height": {
+        "height_rmse_m": 0.007093781403369322,
+        "height_initial_m": 0.2954845595126816,
+        "height_final_m": 0.2927608872759891,
+        "height_min_m": 0.2913840460418411,
+        "height_max_m": 0.2954845595126816,
+        "height_tracking_lag_steps": 0,
+        "height_overshoot_m": 0.0,
+        "height_undershoot_m": 0.0,
+        "q_ref_tracking_error_rms": 0.0,
+        "dynamic_transition_smoothness": 0.0
+      },
+      "torque_quality": {
+        "torque_peak_total_nm": 9.018425643858064,
+        "torque_peak_wheels_nm": 1.4611545349539041,
+        "torque_peak_hip_yaw_nm": 3.7362329095024633,
+        "torque_peak_legs_nm": 9.018425643858064,
+        "torque_peak_hip_roll_nm": 0.24707248949739363,
+        "torque_rms_l_hip_roll_nm": 0.0,
+        "torque_peak_l_hip_roll_nm": 0.0,
+        "torque_rms_l_hip_yaw_nm": 0.0,
+        "torque_peak_l_hip_yaw_nm": 0.0,
+        "torque_rms_l_hip_pitch_nm": 0.0,
+        "torque_peak_l_hip_pitch_nm": 0.0,
+        "torque_rms_l_knee_nm": 0.0,
+        "torque_peak_l_knee_nm": 0.0,
+        "torque_rms_l_wheel_nm": 0.0,
+        "torque_peak_l_wheel_nm": 0.0,
+        "torque_rms_r_hip_roll_nm": 0.0,
+        "torque_peak_r_hip_roll_nm": 0.0,
+        "torque_rms_r_hip_yaw_nm": 0.0,
+        "torque_peak_r_hip_yaw_nm": 0.0,
+        "torque_rms_r_hip_pitch_nm": 0.0,
+        "torque_peak_r_hip_pitch_nm": 0.0,
+        "torque_rms_r_knee_nm": 0.0,
+        "torque_peak_r_knee_nm": 0.0,
+        "torque_rms_r_wheel_nm": 0.0,
+        "torque_peak_r_wheel_nm": 0.0,
+        "torque_rate_rms_nm_s": 0.0,
+        "torque_rate_peak_nm_s": 0.0,
+        "torque_saturation_count": 0,
+        "torque_authority_share": {},
+        "controller_conflict_index": 0.0
+      },
+      "robustness": {
+        "contact_loss_steps": 1,
+        "contact_loss_frac": 0.0005,
+        "post_push_active": false,
+        "post_pitch_rms_500_deg": 0.0,
+        "post_support_rms_500_m": 0.0,
+        "recovery_time_steps": 0,
+        "long_run_drift_rate_m_per_kstep": 0.0024481228432605955,
+        "stability_score_0_to_1": 0.8170176347850553
+      }
+    },
+    {
+      "scenario_id": "low_0p320",
+      "status": "ok",
+      "has_full_telemetry": false,
+      "scope": "step_e",
+      "scenario_type": "fixed_height",
+      "height_region": "low",
+      "steps": 2000,
+      "max_steps": 2000,
+      "achieved_hz": 42.01872846159045,
+      "mean_step_ms": 23.79891150000185,
+      "safety": {
+        "fell": false,
+        "fall_step": -1,
+        "termination_reason": "",
+        "pitch_max_deg": 3.3653803052513256,
+        "pitch_min_deg": -7.588238384693488,
+        "roll_max_deg": 0.8149458883243322,
+        "roll_min_deg": -0.08702657624003336,
+        "hip_yaw_joint_max_rad": 0.05916319655018579,
+        "contact_loss_steps": 1,
+        "nan_inf_detected": false
+      },
+      "posture": {
+        "pitch_rms_deg": 3.4655808336750202,
+        "pitch_peak_deg": 7.588238384693488,
+        "roll_rms_deg": 0.31626737007534106,
+        "roll_peak_deg": 0.8149458883243322,
+        "pitch_settling_steps": 0,
+        "pitch_rate_rms_deg_s": 0.0,
+        "roll_rate_rms_deg_s": 0.0,
+        "yaw_rate_rms_deg_s": 0.0,
+        "angular_velocity_rms_deg_s": 0.0,
+        "orientation_energy_integral": 0.0,
+        "yaw_drift_deg": 4.684431314388153
+      },
+      "leg_symmetry": {
+        "hip_yaw_joint_max_rad": 0.05916319655018579,
+        "hip_yaw_div_rms_rad": 0.03407138665243388,
+        "hip_yaw_div_max_rad": 0.10277740122210174,
+        "hip_yaw_lr_divergence_deg": 0.0,
+        "hip_pitch_symmetry_error_deg": 0.0,
+        "knee_symmetry_error_deg": 0.0,
+        "leg_posture_error_rms": 0.0,
+        "hip_roll_symmetry_error_deg": 0.0
+      },
+      "support_drift": {
+        "support_rms_m": 0.061073,
+        "support_peak_m": 0.11592223123095771,
+        "sagittal_drift_m": 9.6061042915762e-05,
+        "lateral_drift_m": -0.06457150982596961,
+        "final_displacement_m": 0.06457158127945495,
+        "max_displacement_m": 0.0919621004567761,
+        "support_velocity_rms_m_s": 0.0,
+        "wheel_travel_asymmetry_m": 0.0,
+        "com_support_offset_rms_m": 0.0
+      },
+      "dynamic_height": {
+        "height_rmse_m": 0.0008078397371676922,
+        "height_initial_m": 0.32182957134209184,
+        "height_final_m": 0.3185298532767963,
+        "height_min_m": 0.3174380179079808,
+        "height_max_m": 0.32182957134209184,
+        "height_tracking_lag_steps": 0,
+        "height_overshoot_m": 0.0,
+        "height_undershoot_m": 0.0,
+        "q_ref_tracking_error_rms": 0.0,
+        "dynamic_transition_smoothness": 0.0
+      },
+      "torque_quality": {
+        "torque_peak_total_nm": 8.785157946312692,
+        "torque_peak_wheels_nm": 2.036096692142275,
+        "torque_peak_hip_yaw_nm": 1.588277423279948,
+        "torque_peak_legs_nm": 8.785157946312692,
+        "torque_peak_hip_roll_nm": 0.37175722680178824,
+        "torque_rms_l_hip_roll_nm": 0.0,
+        "torque_peak_l_hip_roll_nm": 0.0,
+        "torque_rms_l_hip_yaw_nm": 0.0,
+        "torque_peak_l_hip_yaw_nm": 0.0,
+        "torque_rms_l_hip_pitch_nm": 0.0,
+        "torque_peak_l_hip_pitch_nm": 0.0,
+        "torque_rms_l_knee_nm": 0.0,
+        "torque_peak_l_knee_nm": 0.0,
+        "torque_rms_l_wheel_nm": 0.0,
+        "torque_peak_l_wheel_nm": 0.0,
+        "torque_rms_r_hip_roll_nm": 0.0,
+        "torque_peak_r_hip_roll_nm": 0.0,
+        "torque_rms_r_hip_yaw_nm": 0.0,
+        "torque_peak_r_hip_yaw_nm": 0.0,
+        "torque_rms_r_hip_pitch_nm": 0.0,
+        "torque_peak_r_hip_pitch_nm": 0.0,
+        "torque_rms_r_knee_nm": 0.0,
+        "torque_peak_r_knee_nm": 0.0,
+        "torque_rms_r_wheel_nm": 0.0,
+        "torque_peak_r_wheel_nm": 0.0,
+        "torque_rate_rms_nm_s": 0.0,
+        "torque_rate_peak_nm_s": 0.0,
+        "torque_saturation_count": 0,
+        "torque_authority_share": {},
+        "controller_conflict_index": 0.0
+      },
+      "robustness": {
+        "contact_loss_steps": 1,
+        "contact_loss_frac": 0.0005,
+        "post_push_active": false,
+        "post_pitch_rms_500_deg": 0.0,
+        "post_support_rms_500_m": 0.0,
+        "recovery_time_steps": 0,
+        "long_run_drift_rate_m_per_kstep": 0.032285790639727474,
+        "stability_score_0_to_1": 0.8077449161117285
+      }
+    },
+    {
+      "scenario_id": "low_0p330",
+      "status": "ok",
+      "has_full_telemetry": false,
+      "scope": "step_e",
+      "scenario_type": "fixed_height",
+      "height_region": "low",
+      "steps": 2000,
+      "max_steps": 2000,
+      "achieved_hz": 78.80249242358364,
+      "mean_step_ms": 12.689953949993651,
+      "safety": {
+        "fell": false,
+        "fall_step": -1,
+        "termination_reason": "",
+        "pitch_max_deg": 1.824014126159308,
+        "pitch_min_deg": -7.136090579864467,
+        "roll_max_deg": 1.1523572832215014,
+        "roll_min_deg": -0.09943893467543521,
+        "hip_yaw_joint_max_rad": 0.07364651389627,
+        "contact_loss_steps": 1,
+        "nan_inf_detected": false
+      },
+      "posture": {
+        "pitch_rms_deg": 3.962654000685941,
+        "pitch_peak_deg": 7.136090579864467,
+        "roll_rms_deg": 0.47251620599804034,
+        "roll_peak_deg": 1.1523572832215014,
+        "pitch_settling_steps": 0,
+        "pitch_rate_rms_deg_s": 0.0,
+        "roll_rate_rms_deg_s": 0.0,
+        "yaw_rate_rms_deg_s": 0.0,
+        "angular_velocity_rms_deg_s": 0.0,
+        "orientation_energy_integral": 0.0,
+        "yaw_drift_deg": 4.101998499064054
+      },
+      "leg_symmetry": {
+        "hip_yaw_joint_max_rad": 0.07364651389627,
+        "hip_yaw_div_rms_rad": 0.05177391614144779,
+        "hip_yaw_div_max_rad": 0.11619666291055228,
+        "hip_yaw_lr_divergence_deg": 0.0,
+        "hip_pitch_symmetry_error_deg": 0.0,
+        "knee_symmetry_error_deg": 0.0,
+        "leg_posture_error_rms": 0.0,
+        "hip_roll_symmetry_error_deg": 0.0
+      },
+      "support_drift": {
+        "support_rms_m": 0.046789,
+        "support_peak_m": 0.1230236625406752,
+        "sagittal_drift_m": 0.010121933325605601,
+        "lateral_drift_m": -0.007051098904417311,
+        "final_displacement_m": 0.012335782504887165,
+        "max_displacement_m": 0.11661223638818624,
+        "support_velocity_rms_m_s": 0.0,
+        "wheel_travel_asymmetry_m": 0.0,
+        "com_support_offset_rms_m": 0.0
+      },
+      "dynamic_height": {
+        "height_rmse_m": 0.004377806576472181,
+        "height_initial_m": 0.33501247521117616,
+        "height_final_m": 0.33421677838512936,
+        "height_min_m": 0.3330197637971653,
+        "height_max_m": 0.3351903836392365,
+        "height_tracking_lag_steps": 0,
+        "height_overshoot_m": 0.0,
+        "height_undershoot_m": 0.0,
+        "q_ref_tracking_error_rms": 0.0,
+        "dynamic_transition_smoothness": 0.0
+      },
+      "torque_quality": {
+        "torque_peak_total_nm": 8.668074859682845,
+        "torque_peak_wheels_nm": 3.534346737617534,
+        "torque_peak_hip_yaw_nm": 1.8893514413370334,
+        "torque_peak_legs_nm": 8.668074859682845,
+        "torque_peak_hip_roll_nm": 0.4131852463558719,
+        "torque_rms_l_hip_roll_nm": 0.0,
+        "torque_peak_l_hip_roll_nm": 0.0,
+        "torque_rms_l_hip_yaw_nm": 0.0,
+        "torque_peak_l_hip_yaw_nm": 0.0,
+        "torque_rms_l_hip_pitch_nm": 0.0,
+        "torque_peak_l_hip_pitch_nm": 0.0,
+        "torque_rms_l_knee_nm": 0.0,
+        "torque_peak_l_knee_nm": 0.0,
+        "torque_rms_l_wheel_nm": 0.0,
+        "torque_peak_l_wheel_nm": 0.0,
+        "torque_rms_r_hip_roll_nm": 0.0,
+        "torque_peak_r_hip_roll_nm": 0.0,
+        "torque_rms_r_hip_yaw_nm": 0.0,
+        "torque_peak_r_hip_yaw_nm": 0.0,
+        "torque_rms_r_hip_pitch_nm": 0.0,
+        "torque_peak_r_hip_pitch_nm": 0.0,
+        "torque_rms_r_knee_nm": 0.0,
+        "torque_peak_r_knee_nm": 0.0,
+        "torque_rms_r_wheel_nm": 0.0,
+        "torque_peak_r_wheel_nm": 0.0,
+        "torque_rate_rms_nm_s": 0.0,
+        "torque_rate_peak_nm_s": 0.0,
+        "torque_saturation_count": 0,
+        "torque_authority_share": {},
+        "controller_conflict_index": 0.0
+      },
+      "robustness": {
+        "contact_loss_steps": 1,
+        "contact_loss_frac": 0.0005,
+        "post_push_active": false,
+        "post_pitch_rms_500_deg": 0.0,
+        "post_support_rms_500_m": 0.0,
+        "recovery_time_steps": 0,
+        "long_run_drift_rate_m_per_kstep": 0.0061678912524435825,
+        "stability_score_0_to_1": 0.7735163276058206
+      }
+    },
+    {
+      "scenario_id": "low_0p340",
+      "status": "ok",
+      "has_full_telemetry": false,
+      "scope": "step_e",
+      "scenario_type": "fixed_height",
+      "height_region": "low",
+      "steps": 2000,
+      "max_steps": 2000,
+      "achieved_hz": 44.406662367966284,
+      "mean_step_ms": 22.51914345000114,
+      "safety": {
+        "fell": false,
+        "fall_step": -1,
+        "termination_reason": "",
+        "pitch_max_deg": 4.547723710912936,
+        "pitch_min_deg": -3.050965519381673,
+        "roll_max_deg": 1.10790154745217,
+        "roll_min_deg": 0.0,
+        "hip_yaw_joint_max_rad": 0.07990378820253838,
+        "contact_loss_steps": 1,
+        "nan_inf_detected": false
+      },
+      "posture": {
+        "pitch_rms_deg": 1.8618448446307911,
+        "pitch_peak_deg": 4.547723710912936,
+        "roll_rms_deg": 0.5588036376479034,
+        "roll_peak_deg": 1.10790154745217,
+        "pitch_settling_steps": 0,
+        "pitch_rate_rms_deg_s": 0.0,
+        "roll_rate_rms_deg_s": 0.0,
+        "yaw_rate_rms_deg_s": 0.0,
+        "angular_velocity_rms_deg_s": 0.0,
+        "orientation_energy_integral": 0.0,
+        "yaw_drift_deg": 3.228797576001
+      },
+      "leg_symmetry": {
+        "hip_yaw_joint_max_rad": 0.07990378820253838,
+        "hip_yaw_div_rms_rad": 0.05155698856525433,
+        "hip_yaw_div_max_rad": 0.12550381072365402,
+        "hip_yaw_lr_divergence_deg": 0.0,
+        "hip_pitch_symmetry_error_deg": 0.0,
+        "knee_symmetry_error_deg": 0.0,
+        "leg_posture_error_rms": 0.0,
+        "hip_roll_symmetry_error_deg": 0.0
+      },
+      "support_drift": {
+        "support_rms_m": 0.050106,
+        "support_peak_m": 0.10841297215321308,
+        "sagittal_drift_m": 0.009857249005098833,
+        "lateral_drift_m": -0.012499441077367564,
+        "final_displacement_m": 0.015918586155657968,
+        "max_displacement_m": 0.10994006580293456,
+        "support_velocity_rms_m_s": 0.0,
+        "wheel_travel_asymmetry_m": 0.0,
+        "com_support_offset_rms_m": 0.0
+      },
+      "dynamic_height": {
+        "height_rmse_m": 0.003415788219968152,
+        "height_initial_m": 0.33741835185183044,
+        "height_final_m": 0.3360870101400116,
+        "height_min_m": 0.33549554897796613,
+        "height_max_m": 0.3375796497016753,
+        "height_tracking_lag_steps": 0,
+        "height_overshoot_m": 0.0,
+        "height_undershoot_m": 0.0,
+        "q_ref_tracking_error_rms": 0.0,
+        "dynamic_transition_smoothness": 0.0
+      },
+      "torque_quality": {
+        "torque_peak_total_nm": 8.620927457971845,
+        "torque_peak_wheels_nm": 1.9522498906998458,
+        "torque_peak_hip_yaw_nm": 2.2881376527499686,
+        "torque_peak_legs_nm": 8.620927457971845,
+        "torque_peak_hip_roll_nm": 0.31697855403878133,
+        "torque_rms_l_hip_roll_nm": 0.0,
+        "torque_peak_l_hip_roll_nm": 0.0,
+        "torque_rms_l_hip_yaw_nm": 0.0,
+        "torque_peak_l_hip_yaw_nm": 0.0,
+        "torque_rms_l_hip_pitch_nm": 0.0,
+        "torque_peak_l_hip_pitch_nm": 0.0,
+        "torque_rms_l_knee_nm": 0.0,
+        "torque_peak_l_knee_nm": 0.0,
+        "torque_rms_l_wheel_nm": 0.0,
+        "torque_peak_l_wheel_nm": 0.0,
+        "torque_rms_r_hip_roll_nm": 0.0,
+        "torque_peak_r_hip_roll_nm": 0.0,
+        "torque_rms_r_hip_yaw_nm": 0.0,
+        "torque_peak_r_hip_yaw_nm": 0.0,
+        "torque_rms_r_hip_pitch_nm": 0.0,
+        "torque_peak_r_hip_pitch_nm": 0.0,
+        "torque_rms_r_knee_nm": 0.0,
+        "torque_peak_r_knee_nm": 0.0,
+        "torque_rms_r_wheel_nm": 0.0,
+        "torque_peak_r_wheel_nm": 0.0,
+        "torque_rate_rms_nm_s": 0.0,
+        "torque_rate_peak_nm_s": 0.0,
+        "torque_saturation_count": 0,
+        "torque_authority_share": {},
+        "controller_conflict_index": 0.0
+      },
+      "robustness": {
+        "contact_loss_steps": 1,
+        "contact_loss_frac": 0.0005,
+        "post_push_active": false,
+        "post_pitch_rms_500_deg": 0.0,
+        "post_support_rms_500_m": 0.0,
+        "recovery_time_steps": 0,
+        "long_run_drift_rate_m_per_kstep": 0.007959293077828984,
+        "stability_score_0_to_1": 0.8733795395095862
+      }
+    },
+    {
+      "scenario_id": "low_0p360",
+      "status": "ok",
+      "has_full_telemetry": false,
+      "scope": "step_e",
+      "scenario_type": "fixed_height",
+      "height_region": "mid",
+      "steps": 2000,
+      "max_steps": 2000,
+      "achieved_hz": 82.45242502289672,
+      "mean_step_ms": 12.128206050001609,
+      "safety": {
+        "fell": false,
+        "fall_step": -1,
+        "termination_reason": "",
+        "pitch_max_deg": 2.4631502181826046,
+        "pitch_min_deg": -6.568389362356401,
+        "roll_max_deg": 0.7690776990087227,
+        "roll_min_deg": -0.13421100000879155,
+        "hip_yaw_joint_max_rad": 0.054158025433543144,
+        "contact_loss_steps": 1,
+        "nan_inf_detected": false
+      },
+      "posture": {
+        "pitch_rms_deg": 3.1177555212516888,
+        "pitch_peak_deg": 6.568389362356401,
+        "roll_rms_deg": 0.28315751554551694,
+        "roll_peak_deg": 0.7690776990087227,
+        "pitch_settling_steps": 0,
+        "pitch_rate_rms_deg_s": 0.0,
+        "roll_rate_rms_deg_s": 0.0,
+        "yaw_rate_rms_deg_s": 0.0,
+        "angular_velocity_rms_deg_s": 0.0,
+        "orientation_energy_integral": 0.0,
+        "yaw_drift_deg": 3.988186733335951
+      },
+      "leg_symmetry": {
+        "hip_yaw_joint_max_rad": 0.054158025433543144,
+        "hip_yaw_div_rms_rad": 0.030199255161895238,
+        "hip_yaw_div_max_rad": 0.08969916414778076,
+        "hip_yaw_lr_divergence_deg": 0.0,
+        "hip_pitch_symmetry_error_deg": 0.0,
+        "knee_symmetry_error_deg": 0.0,
+        "leg_posture_error_rms": 0.0,
+        "hip_roll_symmetry_error_deg": 0.0
+      },
+      "support_drift": {
+        "support_rms_m": 0.053122,
+        "support_peak_m": 0.09372404630681527,
+        "sagittal_drift_m": 0.006461772524174527,
+        "lateral_drift_m": 0.05706256873205527,
+        "final_displacement_m": 0.05742726925820789,
+        "max_displacement_m": 0.0810282952866081,
+        "support_velocity_rms_m_s": 0.0,
+        "wheel_travel_asymmetry_m": 0.0,
+        "com_support_offset_rms_m": 0.0
+      },
+      "dynamic_height": {
+        "height_rmse_m": 0.0043816509478302205,
+        "height_initial_m": 0.36326108264840146,
+        "height_final_m": 0.36466459024091274,
+        "height_min_m": 0.3621515641969308,
+        "height_max_m": 0.3650890739750159,
+        "height_tracking_lag_steps": 0,
+        "height_overshoot_m": 0.0,
+        "height_undershoot_m": 0.0,
+        "q_ref_tracking_error_rms": 0.0,
+        "dynamic_transition_smoothness": 0.0
+      },
+      "torque_quality": {
+        "torque_peak_total_nm": 8.551692506269651,
+        "torque_peak_wheels_nm": 1.8353677783475468,
+        "torque_peak_hip_yaw_nm": 1.4741123619755452,
+        "torque_peak_legs_nm": 8.551692506269651,
+        "torque_peak_hip_roll_nm": 0.3510053026524997,
+        "torque_rms_l_hip_roll_nm": 0.0,
+        "torque_peak_l_hip_roll_nm": 0.0,
+        "torque_rms_l_hip_yaw_nm": 0.0,
+        "torque_peak_l_hip_yaw_nm": 0.0,
+        "torque_rms_l_hip_pitch_nm": 0.0,
+        "torque_peak_l_hip_pitch_nm": 0.0,
+        "torque_rms_l_knee_nm": 0.0,
+        "torque_peak_l_knee_nm": 0.0,
+        "torque_rms_l_wheel_nm": 0.0,
+        "torque_peak_l_wheel_nm": 0.0,
+        "torque_rms_r_hip_roll_nm": 0.0,
+        "torque_peak_r_hip_roll_nm": 0.0,
+        "torque_rms_r_hip_yaw_nm": 0.0,
+        "torque_peak_r_hip_yaw_nm": 0.0,
+        "torque_rms_r_hip_pitch_nm": 0.0,
+        "torque_peak_r_hip_pitch_nm": 0.0,
+        "torque_rms_r_knee_nm": 0.0,
+        "torque_peak_r_knee_nm": 0.0,
+        "torque_rms_r_wheel_nm": 0.0,
+        "torque_peak_r_wheel_nm": 0.0,
+        "torque_rate_rms_nm_s": 0.0,
+        "torque_rate_peak_nm_s": 0.0,
+        "torque_saturation_count": 0,
+        "torque_authority_share": {},
+        "controller_conflict_index": 0.0
+      },
+      "robustness": {
+        "contact_loss_steps": 1,
+        "contact_loss_frac": 0.0005,
+        "post_push_active": false,
+        "post_pitch_rms_500_deg": 0.0,
+        "post_support_rms_500_m": 0.0,
+        "recovery_time_steps": 0,
+        "long_run_drift_rate_m_per_kstep": 0.028713634629103944,
+        "stability_score_0_to_1": 0.8271227730046846
+      }
+    },
+    {
+      "scenario_id": "low_0p380",
+      "status": "ok",
+      "has_full_telemetry": false,
+      "scope": "step_e",
+      "scenario_type": "fixed_height",
+      "height_region": "mid",
+      "steps": 2000,
+      "max_steps": 2000,
+      "achieved_hz": 57.452344221251515,
+      "mean_step_ms": 17.405730149999727,
+      "safety": {
+        "fell": false,
+        "fall_step": -1,
+        "termination_reason": "",
+        "pitch_max_deg": 9.03551834998531,
+        "pitch_min_deg": 0.0,
+        "roll_max_deg": 0.6294998193893573,
+        "roll_min_deg": -0.07222103520661087,
+        "hip_yaw_joint_max_rad": 0.02713796201299919,
+        "contact_loss_steps": 1,
+        "nan_inf_detected": false
+      },
+      "posture": {
+        "pitch_rms_deg": 5.308406773917545,
+        "pitch_peak_deg": 9.03551834998531,
+        "roll_rms_deg": 0.2872007367262226,
+        "roll_peak_deg": 0.6294998193893573,
+        "pitch_settling_steps": 0,
+        "pitch_rate_rms_deg_s": 0.0,
+        "roll_rate_rms_deg_s": 0.0,
+        "yaw_rate_rms_deg_s": 0.0,
+        "angular_velocity_rms_deg_s": 0.0,
+        "orientation_energy_integral": 0.0,
+        "yaw_drift_deg": 6.112970450135107
+      },
+      "leg_symmetry": {
+        "hip_yaw_joint_max_rad": 0.02713796201299919,
+        "hip_yaw_div_rms_rad": 0.016921586906791353,
+        "hip_yaw_div_max_rad": 0.03868102672934004,
+        "hip_yaw_lr_divergence_deg": 0.0,
+        "hip_pitch_symmetry_error_deg": 0.0,
+        "knee_symmetry_error_deg": 0.0,
+        "leg_posture_error_rms": 0.0,
+        "hip_roll_symmetry_error_deg": 0.0
+      },
+      "support_drift": {
+        "support_rms_m": 0.069286,
+        "support_peak_m": 0.10728849253445943,
+        "sagittal_drift_m": -0.0017958409873634297,
+        "lateral_drift_m": -0.028693094964158502,
+        "final_displacement_m": 0.028749239006869598,
+        "max_displacement_m": 0.08596671358035027,
+        "support_velocity_rms_m_s": 0.0,
+        "wheel_travel_asymmetry_m": 0.0,
+        "com_support_offset_rms_m": 0.0
+      },
+      "dynamic_height": {
+        "height_rmse_m": 0.002176931062987594,
+        "height_initial_m": 0.3793623300646256,
+        "height_final_m": 0.3815628590092815,
+        "height_min_m": 0.37860027684914366,
+        "height_max_m": 0.383002213051353,
+        "height_tracking_lag_steps": 0,
+        "height_overshoot_m": 0.0,
+        "height_undershoot_m": 0.0,
+        "q_ref_tracking_error_rms": 0.0,
+        "dynamic_transition_smoothness": 0.0
+      },
+      "torque_quality": {
+        "torque_peak_total_nm": 9.164727186418354,
+        "torque_peak_wheels_nm": 3.13024801345183,
+        "torque_peak_hip_yaw_nm": 0.5743594947335319,
+        "torque_peak_legs_nm": 9.164727186418354,
+        "torque_peak_hip_roll_nm": 0.32651014076247237,
+        "torque_rms_l_hip_roll_nm": 0.0,
+        "torque_peak_l_hip_roll_nm": 0.0,
+        "torque_rms_l_hip_yaw_nm": 0.0,
+        "torque_peak_l_hip_yaw_nm": 0.0,
+        "torque_rms_l_hip_pitch_nm": 0.0,
+        "torque_peak_l_hip_pitch_nm": 0.0,
+        "torque_rms_l_knee_nm": 0.0,
+        "torque_peak_l_knee_nm": 0.0,
+        "torque_rms_l_wheel_nm": 0.0,
+        "torque_peak_l_wheel_nm": 0.0,
+        "torque_rms_r_hip_roll_nm": 0.0,
+        "torque_peak_r_hip_roll_nm": 0.0,
+        "torque_rms_r_hip_yaw_nm": 0.0,
+        "torque_peak_r_hip_yaw_nm": 0.0,
+        "torque_rms_r_hip_pitch_nm": 0.0,
+        "torque_peak_r_hip_pitch_nm": 0.0,
+        "torque_rms_r_knee_nm": 0.0,
+        "torque_peak_r_knee_nm": 0.0,
+        "torque_rms_r_wheel_nm": 0.0,
+        "torque_peak_r_wheel_nm": 0.0,
+        "torque_rate_rms_nm_s": 0.0,
+        "torque_rate_peak_nm_s": 0.0,
+        "torque_saturation_count": 0,
+        "torque_authority_share": {},
+        "controller_conflict_index": 0.0
+      },
+      "robustness": {
+        "contact_loss_steps": 1,
+        "contact_loss_frac": 0.0005,
+        "post_push_active": false,
+        "post_pitch_rms_500_deg": 0.0,
+        "post_support_rms_500_m": 0.0,
+        "recovery_time_steps": 0,
+        "long_run_drift_rate_m_per_kstep": 0.014374619503434799,
+        "stability_score_0_to_1": 0.7173476171005494
+      }
+    }
+  ]
+}

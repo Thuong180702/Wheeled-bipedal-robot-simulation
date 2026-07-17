@@ -1,0 +1,67 @@
+{
+  "phase": "2C.2",
+  "verdict": "NOT_READY",
+  "rollback_decision": "clean_rewrite",
+  "constants_version": "phase2c2_body_local_rnea",
+  "num_original_cases": 35,
+  "gravity_pass_warn_fail": {
+    "PASS": 133,
+    "WARN": 0,
+    "FAIL": 0
+  },
+  "full_bias_pass_warn_fail": {
+    "PASS": 21,
+    "WARN": 0,
+    "FAIL": 14
+  },
+  "free_base_force_pass_warn_fail": {
+    "PASS": 119,
+    "WARN": 0,
+    "FAIL": 14
+  },
+  "free_base_torque_pass_warn_fail": {
+    "PASS": 119,
+    "WARN": 6,
+    "FAIL": 8
+  },
+  "actuated_bias_pass_warn_fail": {
+    "PASS": 119,
+    "WARN": 7,
+    "FAIL": 7
+  },
+  "velocity_bias_pass_warn_fail": {
+    "PASS": 119,
+    "WARN": 0,
+    "FAIL": 14
+  },
+  "cross_term_pass_warn_fail": {
+    "note": "free-base angular x linear FAIL, all others PASS"
+  },
+  "max_gravity_abs_error": 6.164550768517074e-06,
+  "max_full_bias_abs_error": 1.3759223322300584,
+  "max_free_base_force_abs_error": 1.3759223322300584,
+  "max_free_base_torque_abs_error": 0.19420744956760208,
+  "max_actuated_bias_abs_error": 0.06294431855439608,
+  "max_velocity_bias_abs_error": 1.3759217880914292,
+  "max_cross_term_abs_error": "see cross-term validation",
+  "jit_compatible": false,
+  "controller_modified": false,
+  "phase2c_reference": {
+    "full_bias": "21 PASS / 0 WARN / 14 FAIL",
+    "max_full_err": 0.625,
+    "max_act_err": 0.0553
+  },
+  "phase2c1_reference": {
+    "full_bias": "21 PASS / 0 WARN / 14 FAIL",
+    "max_full_err": 1.92,
+    "max_act_err": 0.078
+  },
+  "remaining_issues": [
+    "Free-base angular x linear velocity cross-term error (FB force ~2.4N at w=1 rad/s)",
+    "14 FAIL cases in original 35-case matrix (same pattern as Phase 2C/2C.1)"
+  ],
+  "limitations": [
+    "Mixed free-base angular + linear velocity cases have residual cross-term coupling error",
+    "Joint friction/damping/armature not included"
+  ]
+}
