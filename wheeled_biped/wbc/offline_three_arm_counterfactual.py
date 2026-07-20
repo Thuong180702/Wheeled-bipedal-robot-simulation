@@ -37,6 +37,8 @@ _V3_CONTROLLER_CACHE: dict[str, Any] = {}
 
 def init_v3_controller(
     profile_name: str = "K2_JAX_DEDICATED_DEFAULT_V3",
+    model: mujoco.MjModel | None = None,
+    keyframe_index: int = 0,
 ) -> dict[str, Any]:
     """Initialize the real V3 JAX controller for offline counterfactual evaluation.
 
@@ -47,6 +49,14 @@ def init_v3_controller(
     Args:
         profile_name: V3 controller profile to use.
             Default: ``K2_JAX_DEDICATED_DEFAULT_V3``.
+        model: robot model used to derive the controller's equilibrium
+            constants (equilibrium pitch, support center, sagittal axis)
+            from the actual keyframe geometry — matching
+            ``scripts/run_k2_jax_realtime.py``. Strongly recommended; when
+            omitted, generic constants are used which are only correct for
+            a robot whose forward/sagittal axis happens to be world-X.
+        keyframe_index: model keyframe to calibrate against when ``model``
+            is given.
 
     Returns:
         dict with keys:
@@ -62,7 +72,7 @@ def init_v3_controller(
     """
     global _V3_CONTROLLER_CACHE
 
-    cache_key = f"v3_controller_{profile_name}"
+    cache_key = f"v3_controller_{profile_name}_{id(model) if model is not None else 'no_model'}"
     if cache_key in _V3_CONTROLLER_CACHE:
         return _V3_CONTROLLER_CACHE[cache_key]
 
@@ -88,12 +98,16 @@ def init_v3_controller(
             K2_JAX_PARAMS_SIZE_DRIFT,
             K2_JAX_INPUT_SIZE,
         )
+        import wheeled_biped.controllers.sagittal_velocity_damped_balance_controller as _sag
         from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import (
             K2_JAX_DEDICATED_DEFAULT_V3,
         )
 
-        # ── Resolve profile ─────────────────────────────────────────────────
-        _profile = K2_JAX_DEDICATED_DEFAULT_V3
+        # ── Resolve profile by name (was hardcoded to V3, ignoring the arg) ──
+        _profile = getattr(_sag, profile_name, None)
+        if _profile is None:
+            # Also accept lowercase profile_name attributes.
+            _profile = getattr(_sag, profile_name.upper(), K2_JAX_DEDICATED_DEFAULT_V3)
         result["profile"] = _profile
 
         # ── Controller constants (from V3 profile) ──────────────────────────
@@ -107,11 +121,55 @@ def init_v3_controller(
         result["torque_limit"] = torque_limit
         result["control_dt"] = CONTROL_DT
 
-        # ── Equilibrium constants (from standard standing posture) ──────────
-        pitch_x_eq_rad = 0.0
-        roll_y_eq_rad = 0.0
-        support_center_eq = np.array([0.0, 0.0], dtype=np.float64)
-        sagittal_axis = np.array([1.0, 0.0], dtype=np.float64)
+        # ── Equilibrium constants (from actual model keyframe geometry) ─────
+        # Must match scripts/run_k2_jax_realtime.py's calibration exactly:
+        # sagittal_axis and support_center_eq depend on the robot's real
+        # forward-axis orientation and wheel layout, which are NOT
+        # generically [1, 0] / [0, 0] — e.g. this robot's wheels are
+        # separated along world-X, so its sagittal (forward) axis is
+        # world-Y, not world-X.
+        if model is not None:
+            from wheeled_biped.controllers.orientation_utils import (
+                compute_robot_frame_orientation_from_quaternion,
+            )
+            from wheeled_biped.controllers.sagittal_balance_state import (
+                compute_support_center_xy,
+            )
+
+            calib_data = mujoco.MjData(model)
+            if model.nkey > 0:
+                mujoco.mj_resetDataKeyframe(model, calib_data, keyframe_index)
+            mujoco.mj_forward(model, calib_data)
+
+            quat_eq = np.array(calib_data.qpos[3:7], dtype=np.float64)
+            pitch_x_eq_rad, roll_y_eq_rad, yaw_z_eq = compute_robot_frame_orientation_from_quaternion(quat_eq)
+
+            l_wheel_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
+            r_wheel_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
+            if l_wheel_id < 0 or r_wheel_id < 0:
+                raise ValueError(
+                    "init_v3_controller: model has no l_wheel_link/r_wheel_link "
+                    "bodies — cannot derive support_center_eq/sagittal_axis."
+                )
+            support_center_eq = np.array(
+                compute_support_center_xy(
+                    tuple(calib_data.xpos[l_wheel_id]), tuple(calib_data.xpos[r_wheel_id]),
+                ),
+                dtype=np.float64,
+            )
+            sagittal_axis = np.array([np.sin(yaw_z_eq), np.cos(yaw_z_eq)], dtype=np.float64)
+        else:
+            _log.warning(
+                "init_v3_controller() called without `model` — using generic "
+                "equilibrium constants (pitch_x_eq=0, support_center_eq=[0,0], "
+                "sagittal_axis=[1,0]). These are WRONG unless the robot's "
+                "forward/sagittal axis is world-X; pass `model` to calibrate "
+                "from the real keyframe instead."
+            )
+            pitch_x_eq_rad = 0.0
+            roll_y_eq_rad = 0.0
+            support_center_eq = np.array([0.0, 0.0], dtype=np.float64)
+            sagittal_axis = np.array([1.0, 0.0], dtype=np.float64)
 
         # ── Velocity damping scale (V3 default) ────────────────────────────
         vel_damp_scale = getattr(_profile, "velocity_damping_scale", 1.0)
@@ -170,6 +228,10 @@ def init_v3_controller(
             heading_twist_yield_start_rad=getattr(_profile, "heading_twist_yield_start_rad", 0.35),
             heading_twist_yield_zero_rad=getattr(_profile, "heading_twist_yield_zero_rad", 0.35),
             anti_twist_emergency_max_tau=getattr(_profile, "anti_twist_emergency_max_tau", 0.25),
+            homing_enabled=getattr(_profile, "enable_posture_homing", False),
+            homing_kp_hip_roll=getattr(_profile, "homing_kp_hip_roll", 0.0),
+            homing_kp_hip_yaw=getattr(_profile, "homing_kp_hip_yaw", 0.0),
+            homing_max_tau=getattr(_profile, "homing_max_tau", 4.0),
         )
 
         # ── Pack JAX state ──────────────────────────────────────────────────
@@ -370,8 +432,9 @@ def build_three_arm_eval_constants(
     l_wheel_qvel_idx = int(model.jnt_dofadr[l_wheel_joint_id])
     r_wheel_qvel_idx = int(model.jnt_dofadr[r_wheel_joint_id])
 
-    # Body IDs
-    torso_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
+    # Body IDs (body is "torso", not "torso_link" — the latter returns -1, which
+    # then indexes subtree_com[-1] = the last body instead of the robot CoM).
+    torso_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "torso")
     l_wheel_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
     r_wheel_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
 

@@ -206,7 +206,14 @@ _IDX_HEADING_TWIST_YIELD_START = 81  # rad — yield activation (V3: 0.35 disabl
 _IDX_HEADING_TWIST_YIELD_ZERO = 82   # rad — fully suppressed (V3/V4: 0.35)
 # V5 two-layer emergency guard param (+1, index 83)
 _IDX_ANTI_TWIST_EMERGENCY_MAX_TAU = 83  # Nm — separate tanh cap for emergency guard extra
-K2_JAX_PARAMS_SIZE_DRIFT = K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE + 30  # 84 (was 78)
+# ── Posture homing (F5/F12): return hip_roll/hip_yaw to nominal q_ref when the
+# robot is settled, so the legs un-splay after a push. Gated by stability so it
+# never fights balance during a disturbance. ──
+_IDX_HOMING_ENABLED = 84
+_IDX_HOMING_KP_HIP_ROLL = 85   # Nm/rad — hip_roll restoring (V3 posture kp_hip_roll=0)
+_IDX_HOMING_KP_HIP_YAW = 86    # Nm/rad — hip_yaw restoring boost (relieves scissor)
+_IDX_HOMING_MAX_TAU = 87       # Nm per-joint smooth tanh bound
+K2_JAX_PARAMS_SIZE_DRIFT = K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE + 34  # 88 (was 84)
 
 # Index constants for fast params access inside JIT
 _IDX_NOTCH_B0 = 0
@@ -300,6 +307,11 @@ def pack_params_stage2(
     heading_twist_yield_zero_rad: float = 0.35,   # rad — fully suppressed
     # V5 two-layer emergency guard
     anti_twist_emergency_max_tau: float = 0.25,   # Nm — separate tanh cap for guard extra
+    # Posture homing (F5/F12) — return legs to nominal q_ref when settled
+    homing_enabled: bool = False,
+    homing_kp_hip_roll: float = 0.0,   # Nm/rad
+    homing_kp_hip_yaw: float = 0.0,    # Nm/rad
+    homing_max_tau: float = 4.0,       # Nm per-joint smooth tanh bound
 ) -> jnp.ndarray:
     """Pack K2 controller params into flat JAX params array (Stage 2 + drift + heading layout).
 
@@ -402,6 +414,12 @@ def pack_params_stage2(
 
     # V5 two-layer emergency guard param
     params = params.at[_IDX_ANTI_TWIST_EMERGENCY_MAX_TAU].set(float(anti_twist_emergency_max_tau))
+
+    # Posture homing (F5/F12)
+    params = params.at[_IDX_HOMING_ENABLED].set(1.0 if homing_enabled else 0.0)
+    params = params.at[_IDX_HOMING_KP_HIP_ROLL].set(float(homing_kp_hip_roll))
+    params = params.at[_IDX_HOMING_KP_HIP_YAW].set(float(homing_kp_hip_yaw))
+    params = params.at[_IDX_HOMING_MAX_TAU].set(float(homing_max_tau))
 
     return params
 
@@ -2220,13 +2238,18 @@ def k2_jax_heading_hip_yaw_stabilizer(
     )
 
     # ── Torque computation ──
-    # PD + soft integral: counter-steer toward reference yaw
-    # Differential hip-yaw torque: left=+tau, right=-tau creates CW yaw moment.
-    # Positive heading_error = robot has turned CCW → need CW correction.
-    #   +kp*heading_error → positive tau → CW yaw (counter-steer) ✓
-    #   -kd*yaw_rate → opposes current rotation direction ✓
-    # Sign convention: to be validated by V3 telemetry (Task 2).
-    tau_raw = (kp * heading_error - kd * est_yaw_rate_rad_s + 0.05 * kp * integral) * heading_gate
+    # PD + soft integral: regulate heading_error = (est_yaw - ref_yaw) → 0.
+    # Empirically (differential-torque injection test) the mapping
+    #   tau_L=+tau_bounded, tau_R=-tau_bounded  produces a +CCW yaw moment
+    #   (M_z = G*tau_bounded, G > 0).
+    # Standard regulation with this error convention needs
+    #   M_z = -Kp*e - Kd*(de/dt) = -kp*heading_error - kd*yaw_rate,
+    # so tau_bounded must be NEGATIVE of the proportional/integral error.
+    # The previous law used +kp*heading_error (and +integral), i.e. POSITIVE
+    # feedback on yaw error — it amplified drift instead of correcting it
+    # (audit F6, confirmed: +tau_L/-tau_R gave +CCW, not the claimed CW).
+    # The derivative term -kd*yaw_rate already had the correct (damping) sign.
+    tau_raw = (-kp * heading_error - kd * est_yaw_rate_rad_s - 0.05 * kp * integral) * heading_gate
 
     # Smooth tanh bound
     tau_bounded = max_tau * jnp.tanh(tau_raw / jnp.maximum(max_tau, 1e-6))
@@ -2235,18 +2258,13 @@ def k2_jax_heading_hip_yaw_stabilizer(
     tau_bounded = jnp.where(enabled, tau_bounded, 0.0)
 
     # ═════════════════════════════════════════════════════════════════════
-    # Differential hip-yaw torque for heading correction
-    #
-    # Positive heading_error = robot has turned CCW relative to reference.
-    # To turn CW (reduce heading error):
-    #   - left hip-yaw: +tau (push left leg forward, CW yaw moment)
-    #   - right hip-yaw: -tau (push right leg backward, CW yaw moment)
-    #
-    # Sign convention: validated by V3 telemetry — if heading_sign_check > 0,
-    # the torque reduces yaw error (correct sign). If < 0, convention is wrong.
+    # Differential hip-yaw torque for heading correction.
+    # Mapping tau_L=+tau_bounded, tau_R=-tau_bounded → +CCW yaw moment (G>0).
+    # The restoring sign now lives in tau_raw (= -kp*e - ...), so a positive
+    # heading_error yields tau_bounded<0 → tau_L<0/tau_R>0 → CW correction.
     # ═════════════════════════════════════════════════════════════════════
-    tau_heading_l = tau_bounded    # Left hip-yaw [1]: +tau → CW yaw
-    tau_heading_r = -tau_bounded   # Right hip-yaw [6]: -tau → CW yaw
+    tau_heading_l = tau_bounded    # Left hip-yaw [1]
+    tau_heading_r = -tau_bounded   # Right hip-yaw [6]
 
     return (tau_heading_l, tau_heading_r, tau_raw, tau_bounded,
             new_state, heading_error, heading_gate,
@@ -2547,11 +2565,16 @@ def k2_jax_drift_controller(
     # Negative body_drift_vx = drifting backward → positive torque = forward recovery
     tau_drift_vel = -k_vel * body_drift_vx * vel_gate * vel_damping_mult
 
-    # Component 3: Heading hold (antisymmetric)
-    # Positive yaw_error = turned CCW → negative diff torque = turn CW back
+    # Component 3: Heading hold (antisymmetric wheel torque)
+    # Wheel mapping tau_L=+h, tau_R=-h. Injection test: (tau_L=+,tau_R=-) → CW
+    # yaw (Δyaw<0), i.e. the diff-torque→yaw gain G_w is NEGATIVE. Standard
+    # regulation M_z = -Kp*yaw_error - Kd*yaw_rate then needs
+    #   h = M_z / G_w = +k_heading*yaw_error + k_heading_rate*yaw_rate.
+    # (The previous -k_heading form was positive feedback — it was only ever
+    # safe because k_heading was 0. Audit F6-b: fixed sign + enabled gain.)
     heading_torque = (
-        -k_heading * yaw_error
-        - k_heading_rate * est_yaw_rate
+        k_heading * yaw_error
+        + k_heading_rate * est_yaw_rate
     ) * heading_gate
 
     # Component 4: Position return (symmetric, very weak)
@@ -3174,6 +3197,27 @@ def k2_jax_controller_step(
     # Add mean centering torques (symmetric on [1,6])
     tau_posture_with_yaw = tau_posture_with_yaw.at[1].add(_tau_center_l)
     tau_posture_with_yaw = tau_posture_with_yaw.at[6].add(_tau_center_r)
+
+    # === Step 9.9: Posture homing (F5/F12) — un-splay legs when settled ===
+    # V3 has kp_hip_roll=0 in the posture PD, so after a push the abducted
+    # hip_roll never returns and the hip_yaw scissor stays friction-pinned.
+    # Add a restoring PD toward nominal q_ref on hip_roll[0,5] and hip_yaw[1,6],
+    # GATED by stability (_twist_stability ≈ 0 during a disturbance, ≈ 1 when
+    # settled) so it never fights lateral balance mid-push. Bounded via tanh.
+    _homing_on = params_flat[_IDX_HOMING_ENABLED] > 0.5
+    _h_kp_hr = params_flat[_IDX_HOMING_KP_HIP_ROLL]
+    _h_kp_hy = params_flat[_IDX_HOMING_KP_HIP_YAW]
+    _h_max = params_flat[_IDX_HOMING_MAX_TAU]
+
+    def _homing_tau(kp, qref, q, qd):
+        raw = (kp * (qref - q) - 0.15 * kp * qd) * _twist_stability
+        return _h_max * jnp.tanh(raw / jnp.maximum(_h_max, 1e-6))
+
+    _hz = jnp.where(_homing_on, 1.0, 0.0)
+    tau_posture_with_yaw = tau_posture_with_yaw.at[0].add(_hz * _homing_tau(_h_kp_hr, qref_hr_l, q_hr_l, qd_hr_l))
+    tau_posture_with_yaw = tau_posture_with_yaw.at[5].add(_hz * _homing_tau(_h_kp_hr, qref_hr_r, q_hr_r, qd_hr_r))
+    tau_posture_with_yaw = tau_posture_with_yaw.at[1].add(_hz * _homing_tau(_h_kp_hy, qref_hy_l, q_hy_l, qd_hy_l))
+    tau_posture_with_yaw = tau_posture_with_yaw.at[6].add(_hz * _homing_tau(_h_kp_hy, qref_hy_r, q_hy_r, qd_hy_r))
 
     tau_sum = tau_sag + tau_posture_with_yaw + tau_lateral + k2_jax_empirical_support_ff()
 

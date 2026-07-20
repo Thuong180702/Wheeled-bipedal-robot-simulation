@@ -326,44 +326,68 @@ def contact_point_translational_jacobian(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# JIT-cached contact Jacobian — pre-compute the jacfwd once at module level
-# by using a tuple-based inner function (no dicts), then wrapping with JIT.
+# JIT-cached contact Jacobian — autodiff THROUGH forward kinematics.
+#
+# The actuated columns of Jp are d(p_world)/d(qpos[7:17]); p_world depends on
+# qpos entirely through FK, so the derivative MUST be taken through FK. The
+# previous "cached" version differentiated a function that received FK as
+# pre-computed constant args, so d/d(qpos) was identically zero — every leg
+# column of Jp was 0, breaking the whole WBC dynamics model (see audit F1).
+#
+# We differentiate the tuple-array FK form (jax_forward_kinematics_fk_arrays),
+# which is a pure pytree-of-arrays function → jax.jit caches compilation across
+# calls. body_id is a static arg so the FK gather index is concrete.
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def _cpwp_from_fk(qpos: Array, body_id: Array, local_point: Array,
-                   fk_body_pos: Array, fk_body_quat: Array) -> Array:
-    """Contact-point world position given pre-computed FK arrays."""
-    body_pos_w = fk_body_pos[body_id]
-    body_quat_w = fk_body_quat[body_id]
-    R_body_w = _quat_to_rotmat(body_quat_w)
+def _contact_point_world_pos_from_arrays(
+    qpos: Array, body_id: int, local_point: Array, fk_arrays: tuple,
+) -> Array:
+    """Contact-point world position, differentiable w.r.t. qpos through FK."""
+    from wheeled_biped.dynamics.jax_kinematics import (
+        jax_forward_kinematics_fk_arrays,
+    )
+    fk = jax_forward_kinematics_fk_arrays(qpos, fk_arrays)
+    body_pos_w = fk["body_pos_world"][body_id]
+    R_body_w = _quat_to_rotmat(fk["body_quat_world"][body_id])
     return body_pos_w + R_body_w @ local_point
 
 
-# JIT-compiled Jacobian of _cpwp_from_fk w.r.t. qpos (arg 0).
-# All args are traced JAX arrays — no dicts, no Python ints.
-_jac_cpwp_fk = jax.jit(jax.jacfwd(_cpwp_from_fk, argnums=0))
+# JIT-cached full Jacobian d(p_world)/d(qpos). body_id static → concrete gather.
+_jac_cp_full = jax.jit(
+    jax.jacfwd(_contact_point_world_pos_from_arrays, argnums=0),
+    static_argnums=(1,),
+)
 
 
 def contact_point_translational_jacobian_jit(
     qpos: Array, body_id: int, local_point: Array, constants: dict[str, Any],
 ) -> Array:
-    """Translational contact Jacobian Jp via JIT-cached jacfwd. (Fast on repeat.)"""
-    from wheeled_biped.dynamics.jax_kinematics import jax_forward_kinematics
+    """Translational contact Jacobian Jp via JIT-cached jacfwd through FK."""
+    from wheeled_biped.dynamics.jax_kinematics import (
+        jax_forward_kinematics, extract_jax_fk_arrays,
+    )
+    body_id = int(body_id)
+    local_point = jnp.asarray(local_point, dtype=qpos.dtype)
+
     fk = jax_forward_kinematics(qpos, constants)
     base_origin_w = fk["body_pos_world"][1]
-    base_quat_w = fk["body_quat_world"][1]
-    R_base_w = _quat_to_rotmat(base_quat_w)
-    p_w = _cpwp_from_fk(qpos, jnp.array(body_id), local_point,
-                         fk["body_pos_world"], fk["body_quat_world"])
+    R_base_w = _quat_to_rotmat(fk["body_quat_world"][1])
+    R_body_w = _quat_to_rotmat(fk["body_quat_world"][body_id])
+    p_w = fk["body_pos_world"][body_id] + R_body_w @ local_point
     r = p_w - base_origin_w
+
+    # Free-base columns are analytic (the qpos[3:7] quaternion block from jacfwd
+    # is NOT the 3-column angular Jacobian, so we compute 0:6 by hand and take
+    # only the actuated hinge columns 7:17 from the autodiff Jacobian).
     Jp_base_linear = jnp.eye(3, dtype=qpos.dtype)
     Jp_base_angular = -_skew3(r) @ R_base_w
-    jac_full_qpos = _jac_cpwp_fk(qpos, jnp.array(body_id), local_point,
-                                  fk["body_pos_world"], fk["body_quat_world"])
-    Jp_actuated = jac_full_qpos[:, 7:17]
-    Jp = jnp.concatenate([Jp_base_linear, Jp_base_angular, Jp_actuated], axis=1)
-    return Jp
+
+    fk_arrays = extract_jax_fk_arrays(constants)
+    jac_full = _jac_cp_full(qpos, body_id, local_point, fk_arrays)
+    Jp_actuated = jac_full[:, 7:17]
+
+    return jnp.concatenate([Jp_base_linear, Jp_base_angular, Jp_actuated], axis=1)
 
 
 # Replace public API with JIT-cached version

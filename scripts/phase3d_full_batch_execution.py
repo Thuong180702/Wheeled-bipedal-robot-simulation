@@ -36,6 +36,7 @@ from pathlib import Path
 # ── MPS Metal GPU: disable float64 (not supported) ────────────────────────
 import jax
 jax.config.update('jax_enable_x64', False)
+import jax.numpy as jnp
 from typing import Any
 
 import mujoco
@@ -114,7 +115,7 @@ build_wheel_rolling_constants = _offline_rc.build_wheel_rolling_constants
 
 # From audit script
 from wheeled_biped.controllers.sagittal_balance_state import compute_support_center_xy
-from wheeled_biped.controllers.k2_jax_controller import pack_input_k2_standalone
+from wheeled_biped.controllers.k2_jax_controller import pack_input_k2_standalone, pack_state_k2
 from wheeled_biped.utils.config import get_model_path
 
 # ── Output paths ────────────────────────────────────────────────────────────────
@@ -178,20 +179,36 @@ PRE_FLIGHT_INTEGRITY = {
 # Height variant scenario generation
 # ═══════════════════════════════════════════════════════════════════════════════════
 
+def _com_z(data) -> float:
+    """Whole-body CoM height — the frame V3's commanded_height_ref_m lives in.
+
+    V3 compares the reference against com_z internally, so passing base-z (qpos[2],
+    ~0.13 m higher) closes the drift/heading/centering gates and mis-schedules
+    gains. See docs/validation/v3_wbc_assist_root_cause_audit.md (F3/F4).
+    """
+    return float(data.subtree_com[0][2])
+
+
 def generate_height_variant_state(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     variant_name: str,
+    v3_ctrl: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Generate settled qpos/qvel for a named height variant.
 
     Uses the model keyframe as the base, sets qpos[2] to the seed height,
-    and settles for the configured number of steps.
+    and settles for the configured number of steps under the real V3
+    controller (mirrors the stabilization step in run_three_arm_rollout).
+    Falls back to uncontrolled stepping only if no V3 controller is
+    available — that fallback is diagnostic-only and will not produce a
+    valid standing state.
 
     Args:
         model: MuJoCo model.
         data: MuJoCo data (used temporarily for keyframe reset).
         variant_name: one of 'nominal', 'low_tiny', 'high_tiny', 'low_small', 'high_small'.
+        v3_ctrl: initialized V3 controller dict, or None for uncontrolled settle.
 
     Returns:
         dict with qpos, qvel, meta, and settling diagnostics.
@@ -200,16 +217,32 @@ def generate_height_variant_state(
     seed_z = variant["seed_qpos_z"]
     settle_steps = variant["settle_steps"]
 
-    # Start from keyframe
+    # Start from the keyframe (natural equilibrium). We do NOT drop the base to
+    # seed_z: V3 cannot track distinct CoM height commands from this posture (all
+    # variants settle to ~0.41 m CoM regardless — see audit), and dropping to
+    # seed_z=0.63–0.75 only "settled" before because the base-z-as-CoM command
+    # bug made V3 extend and catch the fall. With a correct CoM command those
+    # drops collapse. seed_z is retained purely as a label / assist-gate target.
     d = mujoco.MjData(model)
     if model.nkey > 0:
         mujoco.mj_resetDataKeyframe(model, d, 0)
-    d.qpos[2] = seed_z
     mujoco.mj_forward(model, d)
+    natural_com_z = _com_z(d)  # CoM V3 can actually hold at natural posture
 
-    # Settle
-    for _ in range(settle_steps):
-        mujoco.mj_step(model, d)
+    # Settle under real V3 control (matches run_three_arm_rollout's own
+    # pre-clone stabilization); uncontrolled free-fall otherwise. Reference is
+    # CoM-frame (V3 compares against com_z), not base-z seed_z.
+    if v3_ctrl is not None and v3_ctrl.get("initialized", False):
+        v3_ctrl["jax_state"] = pack_state_k2()
+        _stab_ctx = _build_v3_controller_context(model, d, v3_ctrl, height_ref=natural_com_z)
+        for _ in range(settle_steps):
+            _tau_stab = _compute_v3_torque_real(d, model, v3_ctrl, _stab_ctx)
+            d.ctrl[:] = _tau_stab
+            for _ in range(5):
+                mujoco.mj_step(model, d)
+    else:
+        for _ in range(settle_steps):
+            mujoco.mj_step(model, d)
 
     qpos = d.qpos.copy()
     qvel = d.qvel.copy()
@@ -228,12 +261,18 @@ def generate_height_variant_state(
     return {
         "qpos": qpos,
         "qvel": qvel,
+        # Settled V3 controller state for this scenario (audit F13): restore
+        # instead of resetting so the rollout does not over-drive the wheels.
+        "v3_jax_state": (np.asarray(v3_ctrl["jax_state"])
+                         if v3_ctrl is not None and v3_ctrl.get("initialized", False)
+                         else None),
         "meta": {
             "type": "height_variant_hold",
             "variant": variant_name,
             "seed_qpos_z": seed_z,
+            "target_com_z": _com_z(d),
             "final_qpos_z": float(qpos[2]),
-            "final_com_z": float(qpos[2]),  # proxy: qpos[2] ≈ CoM z for upright
+            "final_com_z": _com_z(d),
             "final_qvel_norm": float(np.linalg.norm(qvel)),
             "contact_validity": True,  # contacts checked at rollout time
             "settling_success": settling_ok,
@@ -246,16 +285,20 @@ def generate_height_recovery_state(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     variant_name: str,
+    v3_ctrl: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Generate a height-recovery scenario for Step C.
 
     The robot starts settled at a different height and must recover to the
-    variant's target height. For simplicity, start 0.10m away and step toward target.
+    variant's target height under the real V3 controller (mirrors
+    generate_height_variant_state / run_three_arm_rollout's stabilization
+    instead of an uncontrolled free-fall).
 
     Args:
         model: MuJoCo model.
         data: MuJoCo data.
         variant_name: target height variant.
+        v3_ctrl: initialized V3 controller dict, or None for uncontrolled settle.
 
     Returns:
         dict with qpos, qvel, meta for recovery scenario.
@@ -274,12 +317,23 @@ def generate_height_recovery_state(
     d = mujoco.MjData(model)
     if model.nkey > 0:
         mujoco.mj_resetDataKeyframe(model, d, 0)
+    mujoco.mj_forward(model, d)
+    natural_com_z = _com_z(d)  # CoM V3 can actually hold; recover toward it
     d.qpos[2] = start_z
     mujoco.mj_forward(model, d)
 
     settle_steps = variant["settle_steps"]
-    for _ in range(settle_steps):
-        mujoco.mj_step(model, d)
+    if v3_ctrl is not None and v3_ctrl.get("initialized", False):
+        v3_ctrl["jax_state"] = pack_state_k2()
+        _stab_ctx = _build_v3_controller_context(model, d, v3_ctrl, height_ref=natural_com_z)
+        for _ in range(settle_steps):
+            _tau_stab = _compute_v3_torque_real(d, model, v3_ctrl, _stab_ctx)
+            d.ctrl[:] = _tau_stab
+            for _ in range(5):
+                mujoco.mj_step(model, d)
+    else:
+        for _ in range(settle_steps):
+            mujoco.mj_step(model, d)
 
     qpos = d.qpos.copy()
     qvel = d.qvel.copy()
@@ -297,11 +351,15 @@ def generate_height_recovery_state(
     return {
         "qpos": qpos,
         "qvel": qvel,
+        "v3_jax_state": (np.asarray(v3_ctrl["jax_state"])  # settled state — F13
+                         if v3_ctrl is not None and v3_ctrl.get("initialized", False)
+                         else None),
         "meta": {
             "type": "height_recovery",
             "variant": variant_name,
             "start_qpos_z": start_z,
             "target_qpos_z": target_z,
+            "target_com_z": _com_z(d),
             "final_qpos_z": float(qpos[2]),
             "final_qvel_norm": float(np.linalg.norm(qvel)),
             "settling_success": settling_ok,
@@ -332,7 +390,7 @@ def generate_push_config(direction: str, magnitude: float = PUSH_MAGNITUDE_N) ->
     }
     force = direction_map.get(direction, [magnitude, 0, 0])
     return {
-        "body": "torso_link",
+        "body": "torso",
         "force": force,
         "point": [0, 0, 0.3],
         "direction": direction,
@@ -351,7 +409,9 @@ def generate_random_push_config(seed: int, magnitude_range: tuple[float, float] 
         dict with body, force vector, magnitude, direction, seed.
     """
     rng = np.random.default_rng(seed)
-    body_set = ["torso_link", "l_hip_pitch_link", "r_hip_pitch_link",
+    # Real body names (previous list used nonexistent *_link names → mj_name2id
+    # returned -1 and those pushes were silently skipped).
+    body_set = ["torso", "l_thigh", "r_thigh",
                  "l_knee_link", "r_knee_link"]
     body = body_set[rng.integers(0, len(body_set))]
     force_mag = rng.uniform(*magnitude_range)
@@ -533,6 +593,7 @@ def run_three_arm_rollout(
     adaptive_mode: bool = False,
     adaptive_alpha_max: float = ADAPTIVE_ASSIST_ALPHA_MAX,
     v3_ctrl: dict[str, Any] | None = None,
+    v3_jax_state: np.ndarray | None = None,
     qp_backend: str = "osqp",
     warm_start: bool = True,
     max_contacts: int = 4,
@@ -562,21 +623,23 @@ def run_three_arm_rollout(
     data.qvel[:] = scenario_qvel.copy()
     mujoco.mj_forward(model, data)
 
-    # ── Stabilize with V3 controller before cloning (matching production path) ─
-    # Without this, all 3 arms start from an uncontrolled free-fall state
-    # which V3 was never designed to recover from (WBC handles it but the
-    # comparison is unfair).  100 steps with V3 ≈ 0.5s settling time.
-    if _v3_available and not single_arm:
-        _stab_ctx = _build_v3_controller_context(
-            model, data, v3_ctrl,
-            eq_joint=_default_eq_joint(),
-            height_ref=float(data.qpos[2]),
-        )
-        for _ in range(100):
-            _tau_stab = _compute_v3_torque_real(data, model, v3_ctrl, _stab_ctx)
-            data.ctrl[:] = _tau_stab
-            for _ in range(n_substeps):
-                mujoco.mj_step(model, data)
+    # Restore the generator's SETTLED controller state (audit F13). A reset +
+    # re-stabilize over-drives the wheels off the rolling settle and fabricates
+    # V3 falls. Only reset + re-stabilize if no settled state was captured.
+    if _v3_available:
+        if v3_jax_state is not None:
+            v3_ctrl["jax_state"] = jnp.asarray(v3_jax_state)
+        else:
+            v3_ctrl["jax_state"] = pack_state_k2()
+            if not single_arm:
+                _stab_ctx = _build_v3_controller_context(
+                    model, data, v3_ctrl, height_ref=_com_z(data),
+                )
+                for _ in range(100):
+                    _tau_stab = _compute_v3_torque_real(data, model, v3_ctrl, _stab_ctx)
+                    data.ctrl[:] = _tau_stab
+                    for _ in range(n_substeps):
+                        mujoco.mj_step(model, data)
 
     # ── Initialize clones ────────────────────────────────────────────────────
     clone_result = clone_three_sim_states(model, data)
@@ -585,14 +648,37 @@ def run_three_arm_rollout(
     initial_state = _capture_state(data)
 
     # ── Build V3 controller context ──────────────────────────────────────────
-    eq_joint = _default_eq_joint()
-    height_ref = float(data.qpos[2])
+    # height_ref = CoM frame (V3 compares against com_z; never base-z).
+    # assist_base_z_target = base-z frame for the adaptive-assist g_height gate
+    # (h0=ADAPTIVE_HEIGHT_MODEL_NOMINAL is base-z). See audit F3/F4.
+    eq_joint = np.array(data.qpos[7:17], dtype=np.float64).copy()
+    height_ref = float(scenario_meta.get("target_com_z", _com_z(data)))
+    assist_base_z_target = float(scenario_meta.get(
+        "seed_qpos_z", scenario_meta.get("target_qpos_z", data.qpos[2])))
     if _v3_available:
         controller_context = _build_v3_controller_context(
             model, data, v3_ctrl, eq_joint=eq_joint, height_ref=height_ref,
         )
     else:
         controller_context = {"eq_joint": eq_joint, "height_ref": height_ref}
+
+    # ── Independent closed-loop controller state for the ASSIST arm ───────────
+    # The assist arm is its own closed-loop rollout: it must compute BOTH its
+    # V3 base torque and its WBC torque from the ASSIST clone's own state, not
+    # borrow the V3-baseline / WBC-only clones' torques. Borrowing produced an
+    # open-loop assist arm that ran away once the clones diverged. That means
+    # the assist arm needs its own V3 controller instance (own jax_state) and
+    # its own estimator context, evolving with the assist clone's trajectory.
+    if _v3_available and not single_arm:
+        v3_ctrl_assist = dict(v3_ctrl)  # shares immutable jax_step_fn/jax_params
+        v3_ctrl_assist["jax_state"] = (jnp.asarray(v3_jax_state) if v3_jax_state is not None else pack_state_k2())  # F13: shared settled start
+        controller_context_assist = _build_v3_controller_context(
+            model, clones[ARM_V3_PLUS_WBC_ASSIST], v3_ctrl_assist,
+            eq_joint=eq_joint, height_ref=height_ref,
+        )
+    else:
+        v3_ctrl_assist = None
+        controller_context_assist = controller_context
 
     v3_entries: list[dict[str, Any]] = []
     wbc_entries: list[dict[str, Any]] = []
@@ -608,13 +694,20 @@ def run_three_arm_rollout(
     wbc_solve_failures: int = 0
     assist_wbc_failures: int = 0
 
-    # Warm-start vector for QP
+    # Warm-start vectors for QP (per independent arm)
     _warm_start_vec: np.ndarray | None = None
+    _warm_start_vec_assist: np.ndarray | None = None
 
     for step in range(total_steps):
         step_t0 = time.perf_counter()
 
         # ── Apply push forces ────────────────────────────────────────────────
+        # Clear every step: a push is a transient over its window. MuJoCo does
+        # not auto-clear xfrc_applied, so leaving it set made the shove a
+        # permanent force that toppled every arm (the real cause of offline V3
+        # looking far weaker than the realtime controller).
+        for arm_name in ALL_ARMS:
+            clones[arm_name].xfrc_applied[:] = 0.0
         push_active = False
         if push_config is not None and push_step_start <= step < push_step_start + push_duration:
             push_active = True
@@ -677,7 +770,14 @@ def run_three_arm_rollout(
         qp_elapsed = time.perf_counter() - qp_t0
 
         tau_wbc = wbc_result["tau_wbc"]
-        wbc_solve_ok = wbc_result.get("solve_success", False)
+        # NaN guard: OSQP can report success while returning a non-finite
+        # torque (e.g. a NaN whose float32 bits read back as ~2.14e9). Treat
+        # any non-finite torque as a solve failure so it fails closed instead
+        # of poisoning the WBC-only rollout and the assist blend.
+        wbc_solve_ok = (
+            wbc_result.get("solve_success", False)
+            and bool(np.all(np.isfinite(tau_wbc)))
+        )
 
         # Track timing
         solve_times.append(wbc_result.get("solve_time_s", qp_elapsed))
@@ -704,14 +804,51 @@ def run_three_arm_rollout(
             "push_active": push_active,
         })
 
+        # ── Assist arm control — computed from the ASSIST clone's OWN state ───
+        # The assist arm is an independent closed-loop rollout, so both its V3
+        # base torque and its WBC torque must be evaluated on the assist clone's
+        # own state (not borrowed from the V3-baseline / WBC-only clones, which
+        # diverge). tau_v3_assist uses the assist arm's dedicated V3 controller
+        # instance; tau_wbc_assist is a dedicated WBC solve on the assist clone.
+        if _v3_available and not single_arm:
+            tau_v3_assist = _compute_v3_torque_real(
+                clones[ARM_V3_PLUS_WBC_ASSIST], model,
+                v3_ctrl_assist, controller_context_assist,
+            )
+        else:
+            tau_v3_assist = tau_v3
+
+        assist_clone = clones[ARM_V3_PLUS_WBC_ASSIST]
+        assist_wbc_contacts = extract_active_contacts(model, assist_clone, contact_c)
+        assist_wbc_result = _dispatch_wbc_torque(
+            assist_clone, model, assist_wbc_contacts,
+            task_mode, rolling_mode, constants, controller_context_assist,
+            qp_backend=qp_backend,
+            warm_start=warm_start,
+            _warm_start_vec=_warm_start_vec_assist if warm_start else None,
+            max_contacts=max_contacts,
+            solver_eps_abs=solver_eps_abs,
+            solver_eps_rel=solver_eps_rel,
+            solver_max_iter=solver_max_iter,
+            incremental_workspace=incremental_workspace,
+        )
+        tau_wbc_assist = assist_wbc_result["tau_wbc"]
+        assist_wbc_ok = (
+            assist_wbc_result.get("solve_success", False)
+            and bool(np.all(np.isfinite(tau_wbc_assist)))
+        )
+
         # ── Assist torque — FAIL CLOSED ──────────────────────────────────────
-        if wbc_solve_ok:
+        if assist_wbc_ok:
             if adaptive_mode:
                 # ── Extract state from assist clone ──────────────────────────
                 _qpos = clones[ARM_V3_PLUS_WBC_ASSIST].qpos
                 _qvel = clones[ARM_V3_PLUS_WBC_ASSIST].qvel
                 _quat = _qpos[3:7]
                 _roll, _pitch, _yaw = _quat_to_rpy(_quat)
+                # g_height gate is base-z (h0=0.53): height & target both base-z.
+                # Must NOT use V3's CoM height_ref or g_height collapses to 0 and
+                # assist silently switches off (audit F4).
                 _assist_state = {
                     "pitch": float(_pitch),
                     "roll": float(_roll),
@@ -719,7 +856,7 @@ def run_three_arm_rollout(
                     "roll_rate": float(_qvel[3]),
                     "com_vel_xy": float(np.linalg.norm(_qvel[0:2])),
                     "height": float(_qpos[2]),
-                    "height_target": height_ref,
+                    "height_target": assist_base_z_target,
                     "height_model_nominal": ADAPTIVE_HEIGHT_MODEL_NOMINAL,
                     "sigma_height": ADAPTIVE_HEIGHT_SIGMA,
                 }
@@ -748,7 +885,7 @@ def run_three_arm_rollout(
 
                 # ── Torque-level assist ──────────────────────────────────────
                 assist_result = compute_adaptive_assist_torque(
-                    tau_v3, tau_wbc, _assist_state, constants,
+                    tau_v3_assist, tau_wbc_assist, _assist_state, constants,
                     alpha_max=adaptive_alpha_max,
                     g_push=_g_push,
                     g_divergence=_g_div,
@@ -782,7 +919,8 @@ def run_three_arm_rollout(
                         assist_result["alpha_per_joint"] * _alpha_scale
                     )
                     tau_assist_filtered = (
-                        tau_v3 + assist_result["alpha_per_joint"] * (tau_wbc - tau_v3)
+                        tau_v3_assist
+                        + assist_result["alpha_per_joint"] * (tau_wbc_assist - tau_v3_assist)
                     )
                     tau_assist_filtered = np.clip(
                         tau_assist_filtered,
@@ -802,15 +940,15 @@ def run_three_arm_rollout(
                 assist_result["_divergence_pitch"] = float(_pitch_div)
             else:
                 assist_result = compute_assist_torque(
-                    tau_v3, tau_wbc, constants,
+                    tau_v3_assist, tau_wbc_assist, constants,
                     alpha=assist_alpha,
                     assist_limit_fraction=assist_limit_fraction,
                 )
             tau_assist = assist_result["tau_cmd_assist"]
             assist_active = True
         else:
-            # FAIL CLOSED: WBC solve failed → tau_cmd = tau_v3
-            tau_assist = tau_v3.copy()
+            # FAIL CLOSED: assist WBC solve failed → tau_cmd = assist arm's own V3
+            tau_assist = tau_v3_assist.copy()
             assist_active = False
             assist_wbc_failures += 1
             assist_result = {
@@ -970,9 +1108,9 @@ def _build_v3_controller_context(
     )
 
     if eq_joint is None:
-        eq_joint = _default_eq_joint()
+        eq_joint = np.array(data.qpos[7:17], dtype=np.float64).copy()
     if height_ref is None:
-        height_ref = float(data.qpos[2])
+        height_ref = _com_z(data)  # CoM frame — never base-z (audit F3)
     if initial_yaw_z is None:
         _, _, yaw = _quat_to_rpy(data.qpos[3:7])
         initial_yaw_z = yaw
@@ -996,7 +1134,7 @@ def _build_v3_controller_context(
         "r_wheel_id": r_wheel_id,
         "eq_joint": eq_joint,
         "height_ref": height_ref,
-        "prev_com_pos": np.zeros(3),
+        "prev_com_pos": None,
     }
 
 
@@ -1068,7 +1206,7 @@ def run_step_e_suite(
                 continue
 
         print(f"  Step E [{variant_name}]: position hold, {n_steps} steps")
-        state = generate_height_variant_state(model, data, variant_name)
+        state = generate_height_variant_state(model, data, variant_name, v3_ctrl=v3_ctrl)
 
         if not state["meta"]["settling_success"]:
             print(f"    WARNING: settling failed for {variant_name}. Recording as blocked.")
@@ -1086,7 +1224,7 @@ def run_step_e_suite(
 
         result = run_three_arm_rollout(
             model, data, scenario_name, state["qpos"], state["qvel"], state["meta"],
-            constants, n_steps=n_steps, n_substeps=n_substeps, v3_ctrl=v3_ctrl,
+            constants, n_steps=n_steps, n_substeps=n_substeps, v3_ctrl=v3_ctrl, v3_jax_state=state.get("v3_jax_state"),
             **kwargs,
         )
 
@@ -1138,7 +1276,7 @@ def run_step_c_suite(
                 continue
 
         print(f"  Step C [{variant_name}]: height recovery, {n_steps} steps")
-        state = generate_height_recovery_state(model, data, variant_name)
+        state = generate_height_recovery_state(model, data, variant_name, v3_ctrl=v3_ctrl)
 
         if not state["meta"]["settling_success"]:
             print(f"    WARNING: settling failed for {variant_name}. Recording as blocked.")
@@ -1156,7 +1294,7 @@ def run_step_c_suite(
 
         result = run_three_arm_rollout(
             model, data, scenario_name, state["qpos"], state["qvel"], state["meta"],
-            constants, n_steps=n_steps, n_substeps=n_substeps, v3_ctrl=v3_ctrl,
+            constants, n_steps=n_steps, n_substeps=n_substeps, v3_ctrl=v3_ctrl, v3_jax_state=state.get("v3_jax_state"),
             **kwargs,
         )
 
@@ -1213,7 +1351,7 @@ def run_step_d_suite(
             # Use seeded RNG for scenario generation
             rng_state = np.random.get_state()
             np.random.seed(seed)
-            state = generate_height_variant_state(model, data, variant_name)
+            state = generate_height_variant_state(model, data, variant_name, v3_ctrl=v3_ctrl)
             np.random.set_state(rng_state)
 
             if not state["meta"]["settling_success"]:
@@ -1231,7 +1369,7 @@ def run_step_d_suite(
 
             result = run_three_arm_rollout(
                 model, data, scenario_name, state["qpos"], state["qvel"], state["meta"],
-                constants, n_steps=n_steps, n_substeps=n_substeps, v3_ctrl=v3_ctrl,
+                constants, n_steps=n_steps, n_substeps=n_substeps, v3_ctrl=v3_ctrl, v3_jax_state=state.get("v3_jax_state"),
                 **kwargs,
             )
 
@@ -1292,7 +1430,7 @@ def run_single_push_suite(
 
                 rng_state = np.random.get_state()
                 np.random.seed(seed)
-                state = generate_height_variant_state(model, data, variant_name)
+                state = generate_height_variant_state(model, data, variant_name, v3_ctrl=v3_ctrl)
                 np.random.set_state(rng_state)
 
                 if not state["meta"]["settling_success"]:
@@ -1316,7 +1454,7 @@ def run_single_push_suite(
                     push_step_start=PUSH_WARMUP_STEPS,
                     push_duration=PUSH_DURATION_STEPS,
                     post_push_steps=post_push_steps,
-                    v3_ctrl=v3_ctrl,
+                    v3_ctrl=v3_ctrl, v3_jax_state=state.get("v3_jax_state"),
                     **kwargs,
                 )
 
@@ -1376,7 +1514,7 @@ def run_random_push_suite(
 
             rng_state = np.random.get_state()
             np.random.seed(seed)
-            state = generate_height_variant_state(model, data, variant_name)
+            state = generate_height_variant_state(model, data, variant_name, v3_ctrl=v3_ctrl)
             np.random.set_state(rng_state)
 
             if not state["meta"]["settling_success"]:
@@ -1400,7 +1538,7 @@ def run_random_push_suite(
                 push_step_start=PUSH_WARMUP_STEPS,
                 push_duration=PUSH_DURATION_STEPS,
                 post_push_steps=post_push_steps,
-                v3_ctrl=v3_ctrl,
+                v3_ctrl=v3_ctrl, v3_jax_state=state.get("v3_jax_state"),
                 **kwargs,
             )
 
@@ -2167,6 +2305,16 @@ def main():
         print("\nSINGLE-ARM MODE — running V3_BASELINE only (skip WBC and Assist clones)")
         print("3× speed improvement expected")
 
+    # ── Fresh full run: drop stale JSONL entries ─────────────────────────────
+    # --full without --resume means "recompute every scenario from scratch."
+    # Without this, append_jsonl_result keeps piling new lines onto old runs'
+    # entries forever; the report-merge logic now prefers the freshest entry
+    # per (scenario, arm, suite) regardless, but leaving unbounded stale
+    # duplicates on disk is its own hygiene bug, so start the file clean here.
+    if args.full and not args.resume and JSONL_PATH.exists():
+        print(f"\nFresh full run (no --resume): clearing stale results at {JSONL_PATH}")
+        JSONL_PATH.unlink()
+
     # ── V3 truth check ──────────────────────────────────────────────────────
     if not args.skip_truth_check:
         print("\nRunning pre-batch V3 truth check...")
@@ -2316,7 +2464,7 @@ def main():
 
     # ── Initialize V3 controller ────────────────────────────────────────────
     print("Initializing V3 controller (real JAX path)...")
-    v3_ctrl = init_v3_controller(profile_name="K2_JAX_DEDICATED_DEFAULT_V3")
+    v3_ctrl = init_v3_controller(profile_name="K2_JAX_DEDICATED_DEFAULT_V3", model=model)
     if v3_ctrl["initialized"]:
         print(f"  V3 controller READY: {v3_ctrl['profile_name']}")
     else:
@@ -2454,16 +2602,21 @@ def main():
 
     # ── Generate reports ────────────────────────────────────────────────────
     if all_results:
-        all_entries = load_all_jsonl_entries(JSONL_PATH)
+        persisted_entries = load_all_jsonl_entries(JSONL_PATH)
 
-        # Merge new results not yet in JSONL
-        seen = set()
-        for e in all_entries:
-            seen.add((e.get("scenario"), e.get("arm"), e.get("suite")))
+        # Merge persisted JSONL entries with this run's fresh in-memory results,
+        # keyed by (scenario, arm, suite). Fresh results always win over stale
+        # persisted entries for the same key ("last write wins"), so a non-resume
+        # full rerun's real results are never shadowed by an older run's entries
+        # that happen to already be on disk for the same scenarios.
+        merged_by_key: dict[tuple, dict[str, Any]] = {}
+        for e in persisted_entries:
+            key = (e.get("scenario"), e.get("arm"), e.get("suite"))
+            merged_by_key[key] = e
         for r in all_results:
             key = (r.get("scenario"), r.get("arm"), r.get("suite"))
-            if key not in seen:
-                all_entries.append(r)
+            merged_by_key[key] = r
+        all_entries = list(merged_by_key.values())
 
         verdict_doc = generate_full_batch_report(
             all_entries, constants, PRE_FLIGHT_INTEGRITY, is_quick=is_quick,

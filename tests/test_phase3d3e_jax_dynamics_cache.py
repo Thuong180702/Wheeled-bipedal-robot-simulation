@@ -461,8 +461,18 @@ class TestContactJacobianCorrectness:
             jdq_orig = jdq_all_orig[3*i:3*i+3]
 
             max_diff = np.max(np.abs(jdq_orig - jdq_cache))
-            # Float32 FD noise floor: ~1e-3 to 5e-3
-            assert max_diff < 1e-2, f"Contact {i}: Jdot*qdot max diff: {max_diff}"
+            # Float32 FD noise floor. This is a PRECISION test, not a correctness
+            # test: both methods compute the same J̇q̇, but the cache path does a
+            # central FD of the analytic contact Jacobian with eps=1e-5 in float32,
+            # which suffers catastrophic cancellation (~1e-2). The float64 FD-of-
+            # Jacobian agrees with the position-double-FD `compute_contact_jdot_qdot`
+            # to <1e-3, confirming both are correct. The floor rose from ~5e-3 to
+            # ~1e-2 once the contact Jacobian's actuated (leg) columns became
+            # nonzero — before the F1 fix they were identically zero, so those
+            # columns contributed no cancellation noise (and the WBC dynamics model
+            # was wrong). The production WBC path uses the float64 `compute_contact_
+            # jdot_qdot`, not this float32 fallback.
+            assert max_diff < 2e-2, f"Contact {i}: Jdot*qdot max diff: {max_diff}"
 
     def test_padded_contact_array_shape(self):
         """Verify contacts_to_padded_arrays produces correct shapes."""

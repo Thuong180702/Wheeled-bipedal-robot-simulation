@@ -40,18 +40,28 @@ OSQP_NEG_INFTY = -1e30
 
 # ── Phase 3B QP cache (deduplicate builds within one structured QP call) ─────
 
-_QP3B_CACHE: dict[int, Any] = {}
+_QP3B_CACHE: dict[tuple[int, str], Any] = {}
 
 
-def _build_phase3b_qp_cached(snapshot: Any, constants: dict[str, Any]) -> dict[str, Any]:
-    """Build Phase 3B QP from snapshot once and cache by snapshot id."""
-    snap_id = id(snapshot)
-    if snap_id not in _QP3B_CACHE:
+def _build_phase3b_qp_cached(
+    snapshot: Any, task_mode: str, constants: dict[str, Any],
+) -> dict[str, Any]:
+    """Build Phase 3B QP from snapshot once and cache by (snapshot, task_mode).
+
+    task_mode MUST be threaded through: it selects the task-cost weights that
+    populate H/g (CoM, torso, posture, com_xy, yaw). The previous version
+    hardcoded "feasibility_only", so the fast/OSQP path silently dropped every
+    task objective and solved a bare feasibility QP regardless of the requested
+    mode (audit F2). Hard constraints (dynamics/contact/friction) are
+    task-independent, so any mode's qp_3b is valid for the constraint builder.
+    """
+    key = (id(snapshot), task_mode)
+    if key not in _QP3B_CACHE:
         from .phase3b_cached_stack import build_phase3b_qp_from_snapshot
-        _QP3B_CACHE[snap_id] = build_phase3b_qp_from_snapshot(
-            snapshot, "feasibility_only", constants,
+        _QP3B_CACHE[key] = build_phase3b_qp_from_snapshot(
+            snapshot, task_mode, constants,
         )
-    return _QP3B_CACHE[snap_id]
+    return _QP3B_CACHE[key]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -197,7 +207,7 @@ def build_structured_qp_from_phase3c_snapshot(
     }
 
     # ── Build Phase 3B QP once, reuse for both objective and constraints ──
-    qp_3b = _build_phase3b_qp_cached(snapshot, constants)
+    qp_3b = _build_phase3b_qp_cached(snapshot, task_mode, constants)
 
     # ── 1. Build quadratic cost: H_base + H_task + H_rolling_soft → P ────
     P_dense, q_vec, per_task = _build_sparse_objective(
@@ -350,9 +360,9 @@ def _build_sparse_objective(
     qp_3b=None,
 ):
     """Build P (dense → will be CSC) and q vector."""
-    # Start with base regularization from Phase 3B
+    # Start with base regularization + task costs from Phase 3B (task_mode!)
     if qp_3b is None:
-        qp_3b = _build_phase3b_qp_cached(snapshot, constants)
+        qp_3b = _build_phase3b_qp_cached(snapshot, task_mode, constants)
 
     H_total = qp_3b["H"].copy()
     g_total = qp_3b["g"].copy()
@@ -408,7 +418,10 @@ def _build_unified_constraints(
         constraint_slices: dict mapping group → (start, end).
     """
     if qp_3b is None:
-        qp_3b = _build_phase3b_qp_cached(snapshot, constants)
+        # Hard constraints (dynamics/contact/friction) are task-independent, so
+        # any mode's qp_3b is valid here. Normal calls pass qp_3b in; this
+        # fallback only fires for standalone use.
+        qp_3b = _build_phase3b_qp_cached(snapshot, "feasibility_only", constants)
 
     rows = []
     l_vals = []
