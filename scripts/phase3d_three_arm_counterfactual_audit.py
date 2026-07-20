@@ -80,6 +80,8 @@ _capture_state = _offline_3ac._capture_state
 _make_dummy_centroidal = _offline_3ac._make_dummy_centroidal
 _default_eq_joint = _offline_3ac._default_eq_joint
 
+from wheeled_biped.controllers.k2_jax_controller import pack_state_k2
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Paths
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -415,7 +417,7 @@ def _build_v3_controller_context(
         dict with controller context.
     """
     if eq_joint is None:
-        eq_joint = _default_eq_joint()
+        eq_joint = np.array(data.qpos[7:17], dtype=np.float64).copy()
     if height_ref is None:
         height_ref = float(data.qpos[2])
     if initial_yaw_z is None:
@@ -433,7 +435,7 @@ def _build_v3_controller_context(
         "r_wheel_id": r_wheel_id,
         "eq_joint": eq_joint,
         "height_ref": height_ref,
-        "prev_com_pos": np.zeros(3),
+        "prev_com_pos": None,
     }
 
 
@@ -510,6 +512,8 @@ def run_three_arm_rollout(
         print("  Falling back to simplified posture PD — results are DIAGNOSTIC ONLY.")
         print("  Phase 3D.1 verdict will be PARTIAL_READY, not READY.")
         _uses_simplified_pd = True
+    else:
+        v3_ctrl["jax_state"] = pack_state_k2()
 
     # ── Initialize clones ──────────────────────────────────────────────────
     data.qpos[:] = scenario_qpos.copy()
@@ -522,7 +526,7 @@ def run_three_arm_rollout(
     initial_state = _capture_state(data)
 
     # ── Build V3 controller context (one per rollout) ──────────────────────
-    eq_joint = _default_eq_joint()
+    eq_joint = np.array(data.qpos[7:17], dtype=np.float64).copy()
     height_ref = float(data.qpos[2])
     if _v3_available:
         controller_context = _build_v3_controller_context(
@@ -1360,7 +1364,7 @@ def main():
 
     # ── Initialize V3 controller (REAL JAX controller path) ──────────────
     print("Initializing V3 controller (REAL JAX path)...")
-    v3_ctrl = init_v3_controller(profile_name="K2_JAX_DEDICATED_DEFAULT_V3")
+    v3_ctrl = init_v3_controller(profile_name="K2_JAX_DEDICATED_DEFAULT_V3", model=model)
     if v3_ctrl["initialized"]:
         print(f"  V3 controller READY: profile={v3_ctrl['profile_name']}")
         print(f"  torque_limit: {v3_ctrl['torque_limit']}")

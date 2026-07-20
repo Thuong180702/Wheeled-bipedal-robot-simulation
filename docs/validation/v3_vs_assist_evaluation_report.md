@@ -1,0 +1,148 @@
+# V3 vs V3+WBC Assist — Comprehensive Promotion Evaluation
+
+**Date:** 2026-07-17 08:03 UTC
+**Scenarios:** 1
+**Elapsed:** 0.7 min
+
+## 1. Executive Summary
+
+| Metric | V3 Baseline | V3+WBC Assist |
+|--------|:----------:|:------------:|
+| Total Falls | 35 | 0 |
+| EQUIVALENT | — | 0 |
+| IMPROVED | — | 0 |
+| REGRESSED | — | 0 |
+| SAFETY_FAIL | — | 1 |
+
+## 2. Aggregate Metric Comparison (Mean ± Std)
+
+### SAFETY
+
+| Metric | V3 | Assist | Ratio |
+|--------|:---:|:------:|:-----:|
+| falls | 35.0000 | 0.0000 | 0.000000 ❌ |
+| safety_fails | 35.0000 | 49.0000 | 1.400000 ❌ |
+| survival_steps | 266.0000 | 300.0000 | 1.127820 ❌ |
+| hip_yaw_max_rad | 0.2075 | 0.4367 | 2.104960 ❌ |
+| hip_yaw_div_max_rad | 0.4030 | 0.8589 | 2.131291 ❌ |
+
+### POSTURE — Tilt
+
+| Metric | V3 | Assist | Ratio |
+|--------|:---:|:------:|:-----:|
+| pitch_rms_deg | 2.3832 | 2.0563 | 0.862838 ❌ |
+| pitch_max_deg | 21.2893 | 12.6556 | 0.594458 ❌ |
+| roll_rms_deg | 29.7056 | 17.3289 | 0.583355 ❌ |
+| roll_max_deg | 133.2636 | 40.7402 | 0.305711 ❌ |
+| pitch_rate_rms_deg_s | 0.3788 | 0.4766 | 1.258289 ❌ |
+| roll_rate_rms_deg_s | 1.3675 | 0.4850 | 0.354666 ❌ |
+| yaw_rate_rms_deg_s | 0.1786 | 0.1779 | 0.996288 ⚠️ |
+| angular_velocity_rms_deg_s | 144.9713 | 70.8185 | 0.488500 ❌ |
+
+### POSTURE — Yaw Drift
+
+| Metric | V3 | Assist | Ratio |
+|--------|:---:|:------:|:-----:|
+| yaw_drift_deg | 4.9236 | 7.9983 | 1.624471 ❌ |
+| yaw_drift_max_deg | 4.9236 | 10.0214 | 2.035377 ❌ |
+| yaw_drift_rms_deg | 0.7487 | 3.7070 | 4.950986 ❌ |
+
+### SUPPORT DRIFT
+
+| Metric | V3 | Assist | Ratio |
+|--------|:---:|:------:|:-----:|
+| support_rms_m | 1.8503 | 1.6011 | 0.865332 ❌ |
+| support_peak_m | 5.1157 | 3.1991 | 0.625341 ❌ |
+| sagittal_drift_m | -0.0005 | 0.0766 | -161.851614 ❌ |
+| lateral_drift_m | -5.6743 | -2.5817 | 0.454984 ❌ |
+| final_displacement_m | 5.6743 | 2.5829 | 0.455184 ❌ |
+| max_displacement_m | 5.6743 | 2.5968 | 0.457646 ❌ |
+
+### HEIGHT TRACKING
+
+| Metric | V3 | Assist | Ratio |
+|--------|:---:|:------:|:-----:|
+| height_rmse_m | 0.0589 | 0.1524 | 2.587272 ❌ |
+| height_initial_m | 0.5264 | 0.5264 | 1.000000 ✅ |
+| height_final_m | 0.2705 | 0.1533 | 0.566709 ❌ |
+| height_min_m | 0.2705 | 0.1533 | 0.566709 ❌ |
+| height_max_m | 0.5328 | 0.5510 | 1.034173 ⚠️ |
+
+### LEG SYMMETRY
+
+| Metric | V3 | Assist | Ratio |
+|--------|:---:|:------:|:-----:|
+| hip_yaw_joint_max_rad | 0.2075 | 0.4367 | 2.104960 ❌ |
+| hip_yaw_div_rms_rad | 0.1632 | 0.3367 | 2.062624 ❌ |
+| hip_pitch_symmetry_error_deg | 2.1317 | 2.5975 | 1.218526 ❌ |
+| knee_symmetry_error_deg | 1.5231 | 2.5235 | 1.656829 ❌ |
+| hip_roll_symmetry_error_deg | 14.6628 | 13.7118 | 0.935136 ❌ |
+| leg_posture_error_rms | 44.9116 | 56.0828 | 1.248738 ❌ |
+
+### TORQUE
+
+| Metric | V3 | Assist | Ratio |
+|--------|:---:|:------:|:-----:|
+| torque_peak_total_nm | 15.3904 | 15.3904 | 1.000000 ✅ |
+| torque_peak_wheels_nm | 15.3904 | 15.3904 | 1.000000 ✅ |
+| torque_peak_hip_yaw_nm | 8.6859 | 8.6859 | 1.000000 ✅ |
+| torque_peak_legs_nm | 11.0661 | 11.0661 | 1.000000 ✅ |
+| torque_rms | 3.6294 | 3.6296 | 1.000058 ✅ |
+| torque_rate_rms_nm_s | 1.1387 | 1.1386 | 0.999948 ✅ |
+| torque_saturation_count | 0.0000 | 0.0000 | 1.000000 ✅ |
+
+### VIBRATION
+
+| Metric | V3 | Assist | Ratio |
+|--------|:---:|:------:|:-----:|
+| pitch_lf_power_deg | 0.4816 | 1.6424 | 3.410499 ❌ |
+| LF_power | 0.0001 | 0.0008 | 11.631500 ❌ |
+| WIP_power | 0.0000 | 0.0000 | 19.137329 ❌ |
+
+### STABILITY
+
+| Metric | V3 | Assist | Ratio |
+|--------|:---:|:------:|:-----:|
+| stability_score | 0.7250 | 0.7770 | 1.071624 ❌ |
+| com_vel_rms | 2.6701 | 1.1130 | 0.416841 ❌ |
+| wheel_power_proxy | 65.2614 | 85.7230 | 1.313532 ❌ |
+| long_run_drift_rate_m_per_kstep | 18.9145 | 8.6096 | 0.455184 ❌ |
+| contact_loss_steps | 33.0000 | 51.0000 | 1.545455 ❌ |
+
+## 3. Results by Suite
+
+### step_e (1 scenarios)
+
+| Metric | V3 | Assist | Ratio |
+|--------|:--:|:------:|:-----:|
+| pitch_rms_deg | 2.3832 | 2.0563 | 0.862838 |
+| roll_rms_deg | 29.7056 | 17.3289 | 0.583355 |
+| support_rms_m | 1.8503 | 1.6011 | 0.865332 |
+| yaw_drift_rms_deg | 0.7487 | 3.7070 | 4.950986 |
+| height_rmse_m | 0.0589 | 0.1524 | 2.587272 |
+| torque_rate_rms_nm_s | 1.1387 | 1.1386 | 0.999948 |
+| hip_yaw_max_rad | 0.2075 | 0.4367 | 2.104960 |
+| final_displacement_m | 5.6743 | 2.5829 | 0.455184 |
+| stability_score | 0.7250 | 0.7770 | 1.071624 |
+| **Falls** | 35 | 0 | — |
+
+## 4. Per-Scenario Results
+
+| Scenario | Suite | Steps | V3 Falls | A Falls | Pitch R | Roll R | Drift R | Yaw R | Ht R | TorqOsc R | Class |
+|----------|-------|:-----:|:--------:|:-------:|:-------:|:------:|:-------:|:-----:|:----:|:---------:|:-----:|
+| step_e_0p480 | step_e | 300 | 35 | 0 | 0.862838 | 0.583355 | 0.455184 | 4.950986 | 2.587272 | 0.999948 | 🚨 |
+
+## 5. Safety Gates
+
+| Gate | Result |
+|------|:------:|
+| Assist falls (0) ≤ V3 falls (35) | ✅ PASS |
+| Zero regressions | ✅ PASS |
+| Zero safety failures | ❌ FAIL |
+
+## 6. Promotion Verdict
+
+**PROMOTE_READY** — V3+WBC Assist safe to promote as equivalent to V3
+
+---
+*Generated by scripts/evaluate_v3_vs_assist.py*

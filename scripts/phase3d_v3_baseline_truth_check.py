@@ -30,7 +30,6 @@ from wheeled_biped.wbc.offline_three_arm_counterfactual import (
     init_v3_controller,
     compute_v3_torque_for_state,
     _make_dummy_centroidal,
-    _default_eq_joint,
     _quat_to_rpy,
 )
 from wheeled_biped.controllers.sagittal_balance_state import compute_support_center_xy
@@ -207,7 +206,7 @@ def run_baseline_truth_check(verbose: bool = False) -> dict[str, Any]:
 
     # ── Initialize V3 controller ──────────────────────────────────────
     print("Initializing V3 controller...")
-    v3_ctrl = init_v3_controller(profile_name="K2_JAX_DEDICATED_DEFAULT_V3")
+    v3_ctrl = init_v3_controller(profile_name="K2_JAX_DEDICATED_DEFAULT_V3", model=model)
 
     if not v3_ctrl["initialized"]:
         print(f"FAILED: {v3_ctrl.get('error', 'unknown error')}")
@@ -226,7 +225,7 @@ def run_baseline_truth_check(verbose: bool = False) -> dict[str, Any]:
     # ── Generate test states ──────────────────────────────────────────
     print("Generating test states...")
     test_states = generate_test_states(model, data)
-    eq_joint = _default_eq_joint()
+    eq_joint = np.array(test_states["keyframe_static"]["qpos"][7:17], dtype=np.float64).copy()
     print(f"States: {list(test_states.keys())}")
     print()
 

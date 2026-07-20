@@ -509,6 +509,47 @@ class TestStructuredQPFromSnapshot:
         validation = validate_structured_qp(sqp)
         assert validation["valid"], f"Validation failed: {validation['checks']}"
 
+    def test_task_mode_threads_into_objective(self):
+        """Regression (audit F2): the fast/structured QP objective MUST depend on
+        task_mode. The bug hardcoded 'feasibility_only' in the cached Phase-3B
+        build, so every mode produced an identical bare-feasibility QP. Different
+        modes must yield different Hessians (task costs present)."""
+        from wheeled_biped.wbc.offline_qp_wbc import build_qp_wbc_constants
+        from wheeled_biped.wbc.phase3b_cached_stack import prepare_phase3b_snapshot
+        from wheeled_biped.wbc.structured_qp_problem import (
+            build_structured_qp_from_phase3c_snapshot,
+        )
+
+        model = _get_mujoco_model()
+        if model is None:
+            pytest.skip("MuJoCo model not available")
+
+        constants = build_qp_wbc_constants(model)
+        data = mujoco.MjData(model)
+        mujoco.mj_resetData(model, data)
+        qpos = data.qpos.copy()
+        qvel = np.zeros(16)
+        contacts = _extract_wheel_contacts(model, data)
+
+        # Distinct snapshot objects so the (id, mode) cache does not collide.
+        snap_a = prepare_phase3b_snapshot("t_feas", qpos, qvel, contacts, constants)
+        snap_b = prepare_phase3b_snapshot("t_post", qpos, qvel, contacts, constants)
+        P_feas = build_structured_qp_from_phase3c_snapshot(
+            snap_a, "feasibility_only", "normal_only", constants,
+            padded_contacts=True, max_contacts=4,
+        ).P.toarray()
+        P_post = build_structured_qp_from_phase3c_snapshot(
+            snap_b, "posture_priority", "normal_only", constants,
+            padded_contacts=True, max_contacts=4,
+        ).P.toarray()
+
+        assert not np.allclose(P_feas, P_post), (
+            "Structured QP Hessian identical across task modes — task costs are "
+            "not threaded through (fast path solving bare feasibility_only)."
+        )
+        # Posture task loads the actuated-qdd block (qvel indices 6:16).
+        assert np.abs(P_post[6:16, 6:16]).sum() > np.abs(P_feas[6:16, 6:16]).sum()
+
     def test_solver_integration_basic(self):
         """End-to-end: snapshot → structured QP → solve → extract components."""
         from wheeled_biped.wbc.offline_qp_wbc import build_qp_wbc_constants

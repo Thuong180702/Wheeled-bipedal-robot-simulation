@@ -80,6 +80,7 @@ from wheeled_biped.controllers.sagittal_balance_state import compute_support_cen
 from wheeled_biped.controllers.centroidal_state_estimator import (
     CentroidalStateEstimator, CentroidalStateEstimatorConfig,
 )
+from wheeled_biped.controllers.k2_jax_controller import pack_state_k2
 from wheeled_biped.utils.config import get_model_path
 
 # ── Output paths ────────────────────────────────────────────────────────────
@@ -117,7 +118,7 @@ LONG_RUN_HEIGHTS = [0.48, 0.50, 0.53, 0.55, 0.58]
 # ── Build controller context ────────────────────────────────────────────────
 
 def _build_controller_context(model, data, v3_ctrl, height_ref):
-    eq_joint = _default_eq_joint()
+    eq_joint = np.array(data.qpos[7:17], dtype=np.float64).copy()
     robot_mass = float(np.sum(model.body_mass))
     cfg = CentroidalStateEstimatorConfig(
         robot_mass=robot_mass,
@@ -131,7 +132,7 @@ def _build_controller_context(model, data, v3_ctrl, height_ref):
         "r_wheel_id": mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link"),
         "eq_joint": eq_joint,
         "height_ref": height_ref,
-        "prev_com_pos": np.zeros(3),
+        "prev_com_pos": None,
     }
 
 
@@ -192,6 +193,7 @@ def run_dual_arm_rollout(
     keyframe_h = float(data.qpos[2])
 
     # ── Short V3 settling (5 steps) ─────────────────────────────────────────
+    v3_ctrl["jax_state"] = pack_state_k2()
     ctx = _build_controller_context(model, data, v3_ctrl, keyframe_h)
     for _ in range(5):
         tau = _compute_v3_torque(data, model, v3_ctrl, ctx)
@@ -767,7 +769,7 @@ def main():
     model = mujoco.MjModel.from_xml_path(str(get_model_path()))
     data = mujoco.MjData(model)
     print("[1/3] Initializing V3 controller...")
-    v3_ctrl = init_v3_controller()
+    v3_ctrl = init_v3_controller(model=model)
 
     print("[2/3] Building evaluation constants...")
     qp_c = build_qp_wbc_constants(model)

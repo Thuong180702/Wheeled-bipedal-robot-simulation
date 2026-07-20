@@ -90,7 +90,8 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     K2_NOTCH_LOW_Q_V1,
     K2_JAX_DEDICATED_DEFAULT_V1,
     K2_JAX_DEDICATED_DEFAULT_V2 as _K2_AUTH_SCHED,  # V2 rollback alias
-    K2_JAX_DEDICATED_DEFAULT_V3 as _K3_AUTH_SCHED,   # V3 — OFFICIAL DEFAULT (promoted 2026-07-01)
+    K2_JAX_DEDICATED_DEFAULT_V3 as _K3_AUTH_SCHED,   # V3 — previous default / rollback
+    K2_JAX_DEDICATED_DEFAULT_V3_HOMING as _K3H_AUTH_SCHED,  # V3_HOMING — OFFICIAL DEFAULT (2026-07-19)
     K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
     K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE,
     K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2,
@@ -285,8 +286,17 @@ def parse_args():
                    help="Save generated push config to JSON file")
     p.add_argument("--load-random-push-config", type=str, default=None,
                    help="Load push config from JSON file (for exact replay)")
-    p.add_argument("--profile", type=str, default="k2_jax_dedicated_default_v3",
-                   help="Sagittal authority profile name (default: k2_jax_dedicated_default_v3)")
+    p.add_argument("--profile", type=str, default="k2_jax_dedicated_default_v3_homing",
+                   help="Sagittal authority profile name (default: k2_jax_dedicated_default_v3_homing; "
+                        "rollback to k2_jax_dedicated_default_v3 for the no-homing V3)")
+    # ── V3 + WBC assist (diagnostic overlay; default OFF = untouched V3 path) ──
+    p.add_argument("--assist", action="store_true", default=False,
+                   help="Apply bounded WBC assist on top of V3 (tau_v3 + alpha*clip(tau_wbc - tau_v3)). "
+                        "Solves the QP-WBC on the live state each step. Default OFF.")
+    p.add_argument("--assist-alpha", type=float, default=0.25)
+    p.add_argument("--assist-limit-fraction", type=float, default=0.20)
+    p.add_argument("--assist-task-mode", type=str, default="balanced_default")
+    p.add_argument("--assist-rolling-mode", type=str, default="full_rolling_soft")
     p.add_argument("--dynamic-height-trajectory", type=str, default=None,
                    help="Path to dynamic height trajectory JSON")
     p.add_argument("--dynamic-height-scurve", type=str, default=None,
@@ -804,7 +814,11 @@ def main():
     # K2_JAX_DEDICATED_DEFAULT_V1 is kept as historical reference.
     _PROFILE_MAP = {
         "k2_notch_low_q_v1": K2_NOTCH_LOW_Q_V1,
-        # Default V3 (CURRENT — promoted 2026-07-01 from V3_AUDIT_FIX_V2_FINAL)
+        # OFFICIAL DEFAULT (promoted 2026-07-19): V3 + post-push homing (F5/F12
+        # leg un-splay + yaw/position return) + all audit fixes F1–F13/F6b/F8b.
+        "k2_jax_dedicated_default_v3_homing": _K3H_AUTH_SCHED,
+        "K2_JAX_DEDICATED_DEFAULT_V3_HOMING": _K3H_AUTH_SCHED,
+        # V3 (rollback — previous default, no homing)
         "k2_jax_dedicated_default_v3": _K3_AUTH_SCHED,  # K2_JAX_DEDICATED_DEFAULT_V3
         "K2_JAX_DEDICATED_DEFAULT_V3": _K3_AUTH_SCHED,
         # Default V2 (rollback — promoted 2026-06-30)
@@ -963,6 +977,11 @@ def main():
         heading_twist_yield_zero_rad=getattr(_auth, "heading_twist_yield_zero_rad", 0.35),
         # V5 two-layer emergency guard
         anti_twist_emergency_max_tau=getattr(_auth, "anti_twist_emergency_max_tau", 0.25),
+        # Posture homing (F5/F12) — un-splay legs / return posture when settled
+        homing_enabled=getattr(_auth, "enable_posture_homing", False),
+        homing_kp_hip_roll=getattr(_auth, "homing_kp_hip_roll", 0.0),
+        homing_kp_hip_yaw=getattr(_auth, "homing_kp_hip_yaw", 0.0),
+        homing_max_tau=getattr(_auth, "homing_max_tau", 4.0),
     )
     jax_state = pack_state_k2()
     jax_step_fn = jax.jit(k2_jax_controller_step)
@@ -1319,6 +1338,54 @@ def main():
     step = 0
     terminated = False
     term_reason = ""
+
+    # ══════════════════════════════════════════════════════════════════════
+    # V3 + WBC ASSIST OVERLAY (diagnostic; default OFF)
+    # ══════════════════════════════════════════════════════════════════════
+    _assist = None
+    if args.assist:
+        from wheeled_biped.wbc.offline_qp_wbc import (
+            build_qp_wbc_constants as _bqp, _ensure_contact_constants as _ecc,
+        )
+        from wheeled_biped.wbc.offline_rolling_constraints import (
+            build_wheel_rolling_constants as _bwrc,
+        )
+        from wheeled_biped.wbc.offline_three_arm_counterfactual import (
+            build_three_arm_eval_constants as _b3c,
+            compute_wbc_torque_for_state as _cwbc,
+            compute_assist_torque as _cassist,
+        )
+        _aqp = _bqp(mj_model); _ecc(_aqp)
+        _arc = _bwrc(mj_model, contact_constants=_aqp.get("_contact_constants"))
+        _aconst = _b3c(mj_model, qp_constants=_aqp, rolling_constants=_arc,
+                       assist_alpha=args.assist_alpha,
+                       assist_limit_fraction=args.assist_limit_fraction,
+                       task_mode=args.assist_task_mode, rolling_mode=args.assist_rolling_mode)
+
+        def _extract_wheel_contacts(model, data, cc):
+            wids = set(int(v) for v in cc.get("wheel_body_ids", {}).values() if v >= 0)
+            out = []
+            for ci in range(data.ncon):
+                c = data.contact[ci]
+                b1 = int(model.geom_bodyid[int(c.geom1)]); b2 = int(model.geom_bodyid[int(c.geom2)])
+                wb = b1 if b1 in wids else (b2 if b2 in wids else None)
+                if wb is None:
+                    continue
+                pos = np.array(c.pos, dtype=np.float64)
+                bx = np.array(data.xpos[wb], dtype=np.float64)
+                bm = np.array(data.xmat[wb], dtype=np.float64).reshape(3, 3)
+                out.append({"body_id": wb, "position": pos,
+                            "frame": np.array(c.frame, dtype=np.float64).reshape(3, 3),
+                            "local_point": bm.T @ (pos - bx), "distance": float(c.dist)})
+            return out
+
+        _assist = {"const": _aconst, "cc": _aqp.get("_contact_constants", {}),
+                   "wbc": _cwbc, "assist": _cassist, "extract": _extract_wheel_contacts,
+                   "wbc_fail": 0}
+        if not args.quiet:
+            print(f"V3+WBC ASSIST overlay ENABLED (alpha={args.assist_alpha}, "
+                  f"limit_frac={args.assist_limit_fraction}) — solves QP-WBC per step, slower.")
+
     # ══════════════════════════════════════════════════════════════════════
     # VISUAL VIEWER SETUP
     # ══════════════════════════════════════════════════════════════════════
@@ -1376,6 +1443,11 @@ def main():
         _height_target_tol = 0.02  # 2 cm tolerance for "reached target"
 
         # ── Apply push forces ────────────────────────────────────────────
+        # Clear external forces every step: a push is a transient over its
+        # [s0, s1) window. Without this reset the last window value stays in
+        # xfrc_applied forever (MuJoCo does not auto-clear it), turning an
+        # 8-step shove into a permanent force that topples the robot.
+        mj_data.xfrc_applied[:] = 0.0
         fx_tot = 0.0
         fy_tot = 0.0
         fz_tot = 0.0
@@ -1503,6 +1575,27 @@ def main():
 
         # ── Apply torque ─────────────────────────────────────────────────
         tau = np.array(jax_tau, dtype=np.float64)
+
+        # ── V3 + WBC assist overlay (fail closed to V3) ──────────────────
+        if _assist is not None:
+            _contacts = _assist["extract"](mj_model, mj_data, _assist["cc"])
+            _wres = _assist["wbc"](
+                mj_data.qpos.copy(), mj_data.qvel.copy(), _contacts,
+                args.assist_task_mode, args.assist_rolling_mode, _assist["const"],
+                fast_validation=True, qp_backend="osqp", max_contacts=4,
+                eps_abs=1e-5, eps_rel=1e-5, max_iter=4000,
+            )
+            _tw = np.asarray(_wres.get("tau_wbc", np.zeros(10)), dtype=np.float64)
+            if _wres.get("solve_success", False) and np.all(np.isfinite(_tw)):
+                _ares = _assist["assist"](
+                    tau, _tw, _assist["const"],
+                    alpha=args.assist_alpha,
+                    assist_limit_fraction=args.assist_limit_fraction,
+                )
+                tau = np.asarray(_ares["tau_cmd_assist"], dtype=np.float64)
+            else:
+                _assist["wbc_fail"] += 1
+
         mj_data.ctrl[:] = tau
 
         # ── Physics substeps ─────────────────────────────────────────────

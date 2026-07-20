@@ -810,6 +810,13 @@ class SagittalAuthoritySchedule:
     drift_pgate_low: float = 0.15        # drift distance (m) below which pos_gate ≈ 0.0
     drift_pgate_high: float = 0.80       # drift distance (m) above which pos_gate ≈ 1.0
 
+    # ── Posture homing (F5/F12): restore hip_roll/hip_yaw to nominal q_ref when
+    # settled so legs un-splay after a push. Stability-gated in the JAX step. ──
+    enable_posture_homing: bool = False
+    homing_kp_hip_roll: float = 0.0      # Nm/rad hip_roll restoring (V3 posture kp=0)
+    homing_kp_hip_yaw: float = 0.0       # Nm/rad hip_yaw restoring boost
+    homing_max_tau: float = 4.0          # Nm per-joint smooth tanh bound
+
     # ── Heading hip-yaw stabilizer (low-authority soft heading impedance) ──
     # Acts on hip-yaw joints [1,6] with very low authority smooth bounded torque.
     # Corrects slow yaw drift without wheel differential. Yields to poor
@@ -3720,6 +3727,43 @@ K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2_FINAL
 K2_JAX_DEDICATED_DEFAULT_V3 = replace(
     K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V3_AUDIT_FIX_V2_FINAL,
     profile_name="k2_jax_dedicated_default_v3",
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V3_HOMING — OFFICIAL DEFAULT (promoted 2026-07-19)
+# V3 + post-push HOMING (audit F5/F12). Realtime runner defaults to this profile;
+# rollback to K2_JAX_DEDICATED_DEFAULT_V3 (no homing) if needed. Validated: quick
+# 48-scenario suite 0 falls and ≥ WBC-assist on all metrics; push recovery returns
+# legs+heading to nominal; 20 s stand-up/sit-down height sweep tracks CoM to ~3 mm.
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3 recovers from pushes without falling but does NOT return to the initial pose:
+#   - legs stay splayed (hip_roll abducted: V3 posture kp_hip_roll=0 → no restoring)
+#   - hip_yaw scissored (friction-pinned)
+#   - body keeps a residual yaw offset and the wheels keep rolling (no yaw/position
+#     return loop — drift_k_pos/k_heading were 0)
+# This profile adds, all STABILITY-GATED (inactive during a disturbance):
+#   - posture homing: hip_roll + hip_yaw restoring PD toward nominal q_ref (F12)
+#   - wheel-differential heading return (F6-b sign fix) + sagittal position return (F5)
+#   - widened drift heading height-gate so the return activates during normal balance
+# Mechanism verified: hip_roll splay dev 0.154→0.017 rad with homing; wheel-diff
+# yaw gain has strong authority (2 Nm → >100°). Gains kept conservative.
+K2_JAX_DEDICATED_DEFAULT_V3_HOMING = replace(
+    K2_JAX_DEDICATED_DEFAULT_V3,
+    profile_name="k2_jax_dedicated_default_v3_homing",
+    # ── F12: posture homing (un-splay legs when settled) ──
+    # Gains from a 2D sweep on r_thigh 90N: hip_roll dev 0.2°/joint, hip_yaw
+    # 2.3°/joint (baseline 4.3°/~9°). kp_hip_roll kept high enough to hold hip_roll
+    # against the coupling from the strong hip_yaw restoring.
+    enable_posture_homing=True,
+    homing_kp_hip_roll=15.0,   # Nm/rad — closes hip_roll abduction (was 0 in V3)
+    homing_kp_hip_yaw=25.0,    # Nm/rad — relieves hip_yaw scissor (friction-limited)
+    homing_max_tau=10.0,       # Nm per-joint bound
+    # ── F5: yaw + sagittal position return via wheels (drift controller) ──
+    drift_k_heading=2.0,       # Nm/rad — wheel-differential yaw return (F6-b sign)
+    drift_k_heading_rate=0.6,  # Nm/(rad/s) — yaw-rate damping
+    drift_k_pos=2.0,           # Nm/m — weak sagittal position return
+    drift_hgate_heading_low=2.0,   # widen heading height-gate to cm scale (F10)
+    drift_hgate_heading_high=12.0,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
