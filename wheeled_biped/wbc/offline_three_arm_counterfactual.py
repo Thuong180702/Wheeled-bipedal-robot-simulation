@@ -116,7 +116,15 @@ def init_v3_controller(
         if isinstance(torque_limit, (list, tuple)):
             torque_limit = np.array(torque_limit, dtype=np.float64)
 
-        MAX_TORQUE_RATE = 100.0  # Nm/s — from realtime runner default
+        # Must MATCH scripts/run_k2_jax_realtime.py MAX_TORQUE_RATE (400 Nm/s).
+        # This was stale at 100 (comment claimed "runner default") — a 4×
+        # slower actuator slew than production. Measured consequence: during
+        # aggressive post-push recovery the wheel torque staircased at
+        # ±1 Nm/step (a phase-lagged triangle wave vs a ±60 Nm 2.5 Hz demand),
+        # pumping the pitch oscillation until the fall — and visible as
+        # mechanical jerk in renders. Every offline threshold measured with
+        # 100 understated the real controller.
+        MAX_TORQUE_RATE = 400.0  # Nm/s — matches realtime runner
 
         result["torque_limit"] = torque_limit
         result["control_dt"] = CONTROL_DT

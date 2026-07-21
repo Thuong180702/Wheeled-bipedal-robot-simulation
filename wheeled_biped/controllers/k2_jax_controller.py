@@ -2594,12 +2594,29 @@ def k2_jax_drift_controller(
     )
     vel_damping_mult = 1.0 + push_damp_mult * push_inference  # 1.0→(1.0+push_damp_mult)
 
-    # Heading gate: reduce if hip-yaw diverging; uses narrower height gate
+    # Heading gate: reduce if hip-yaw diverging; uses narrower height gate.
+    # ANCHOR settled-trust: the hy_div throttle protects against fighting a
+    # DYNAMICALLY twisting stance, but it also blocked the yaw return forever
+    # after big diagonal pushes — the scissor is friction-pinned and creeps at
+    # only ~0.01 rad/s under 2 Nm of homing, so |div| stays >0.15 for 30 s+
+    # while the robot stands perfectly still with its heading 22° off
+    # (measured; raising homing/heading gains does NOT help — the gate is the
+    # blocker). When the anchor quiet-stance envelope says the robot is
+    # settled, trust the homing and let the wheel-differential return run:
+    # whole-body yaw needs no hip-yaw joint motion. Gated on anchor_ki>0 so
+    # every other profile keeps the original gate exactly.
+    _hy_div_term = 1.0 - _smoothstep01((hip_yaw_div - 0.05) / (0.15 - 0.05))
+    _anchor_on_h = params_flat[_IDX_ANCHOR_KI] > 0.0
+    _settled_trust = jnp.where(
+        _anchor_on_h,
+        1.0 - _smoothstep01((state_flat[_S_ANCHOR_ACT_EMA] - 0.18) / (0.30 - 0.18)),
+        0.0,
+    )
     heading_gate = (
         stability_gate
         * height_gate_heading
         * _smoothstep01((yaw_error_abs - 0.03) / (0.15 - 0.03))
-        * (1.0 - _smoothstep01((hip_yaw_div - 0.05) / (0.15 - 0.05)))
+        * jnp.maximum(_hy_div_term, _settled_trust)
     )
 
     # Position gate: weak, heavily gated (configurable smoothstep region); tightest height gate
