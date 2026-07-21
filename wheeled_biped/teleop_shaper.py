@@ -56,18 +56,28 @@ KEY_X, KEY_BACKSPACE = 88, 259
 
 
 class TeleopShaper:
-    # Cruise steps and limits
-    VX_STEP = 0.10          # m/s per ↑/↓ press
-    VX_MAX_FWD = 0.50
-    VX_MAX_BACK = 0.35      # backward asymmetry above ~0.4 m/s (teleop v1)
+    # Cruise steps and limits. Raised after the principled cruise fix
+    # (wheel-velocity FF + position relief): the robot now tracks cmd_vx
+    # accurately and stays stable well past the old 0.5 cap — swept to 1.5 m/s
+    # fwd / 1.1 back with pitch_max only 5-6° (letgo at 12°) at every height.
+    # Ceilings kept at 1.0/0.7 for a comfortable margin (pitch ~4.5° at 0.9).
+    VX_STEP = 0.15          # m/s per ↑/↓ press
+    VX_MAX_FWD = 1.00
+    VX_MAX_BACK = 0.70
     WZ_STEP = 0.20          # rad/s per ←/→ press
     WZ_MAX = 0.60
-    ACC = 0.60              # m/s^2 slew of the applied vx toward the setpoint
+    ACC = 0.60              # m/s^2 slew of the applied vx (gentle ramp — a
+    # snappier 0.90 made a spin→drive→reverse chain launch too hard and fall)
     WACC = 2.0              # rad/s^2 slew of the applied yaw rate
-    # Speed-vs-turn coupling cap (teleop v1: sustained circles tip at high
-    # vx·wz; start conservative, battery re-validates on the fixed harness)
-    TURN_CAP_FLOOR = 0.15   # m/s always allowed
-    TURN_CAP_SLOPE = 0.55   # vx_cap = max(FLOOR, VX_MAX - SLOPE*|wz|/WZ_MAX * VX_MAX)
+    # Speed-vs-turn coupling cap: straight-line drive may use the full raised
+    # VX_MAX_FWD, but turning scrubs the translate speed toward TURN_DRIVE_CAP
+    # (an ABSOLUTE limit, NOT scaled by VX_MAX_FWD). Turn-while-drive builds
+    # roll on the weak axis; when the cap was tied to the raised max it let
+    # turn-drive hit 0.54 m/s and a spin→drive-turn chain rolled over (roll
+    # 3°→72°, measured). At the 0.83 turn fraction of that chain this gives
+    # ~0.27 m/s — the old validated turn-drive speed.
+    TURN_CAP_FLOOR = 0.12   # m/s always allowed
+    TURN_DRIVE_CAP = 0.12   # m/s translate ceiling at FULL turn (|wz|=WZ_MAX)
     # Robot-frame leash on the integrated target (v2 lesson #5)
     LEAD = 0.09             # m ahead (below tau_position saturation 4Nm/k40=0.10)
     TRAIL = 0.30            # m behind (loose — the overshoot anchor must stay)
@@ -170,8 +180,9 @@ class TeleopShaper:
 
     # ── hold-to-drive mode (real press/release via pynput; the MuJoCo viewer
     # delivers no release events, so hold semantics are impossible there) ──
-    VX_HOLD_FWD = 0.40      # m/s while ↑ held
-    VX_HOLD_BACK = 0.30     # m/s while ↓ held
+    VX_HOLD_FWD = 0.80      # m/s while ↑ held (2× the old 0.40; stable to 1.5)
+    VX_HOLD_BACK = 0.45     # m/s while ↓ held (backward is the weak axis — 0.6
+    # fell reversing out of a spin→drive→reverse chain; 0.45 holds it)
     WZ_HOLD = 0.50          # rad/s while ←/→ held
 
     def update_held(self, held: set) -> str | None:
@@ -241,9 +252,11 @@ class TeleopShaper:
         def slew(cur, tgt, rate):
             d = np.clip(tgt - cur, -rate * dt, rate * dt)
             return cur + d
-        # Speed-vs-turn cap (continuous)
+        # Speed-vs-turn cap (continuous): full VX_MAX_FWD straight, scrubbed to
+        # the absolute TURN_DRIVE_CAP at full turn (decoupled from the max).
+        turn_frac = min(abs(self.wz_tgt) / self.WZ_MAX, 1.0)
         vx_cap = max(self.TURN_CAP_FLOOR,
-                     self.VX_MAX_FWD * (1.0 - self.TURN_CAP_SLOPE * abs(self.wz_tgt) / self.WZ_MAX))
+                     self.VX_MAX_FWD - (self.VX_MAX_FWD - self.TURN_DRIVE_CAP) * turn_frac)
         vx_goal = float(np.clip(self.vx_tgt, -min(self.VX_MAX_BACK, vx_cap), min(self.VX_MAX_FWD, vx_cap)))
         self.vx = float(slew(self.vx, vx_goal, self.ACC))
         self.wz = float(slew(self.wz, self.wz_tgt, self.WACC))
