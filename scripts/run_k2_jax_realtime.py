@@ -751,6 +751,29 @@ def _draw_push_arrow(viewer, mj_data, tel):
     scn.ngeom = 1
 
 
+def _poll_keys(tel):
+    """Poll the physical key state (Quartz) into the held-set + edge events.
+    Permission-free and focus-independent. Runs once per control step."""
+    kp = tel.get("_keypoll")
+    if kp is None:
+        return
+    fn, src = kp["fn"], kp["src"]
+    held = set()
+    for mac, glfw_code in kp["map"].items():
+        if fn(src, mac):
+            held.add(glfw_code)
+    tel["held"] = held
+    sp = bool(fn(src, kp["space"]))
+    if sp and not tel["_prev_space"]:
+        tel["push_edge"] = True          # rising edge → one push
+    tel["_prev_space"] = sp
+    bs = bool(fn(src, kp["bs"]))
+    if bs and not tel["_prev_bs"]:
+        tel["keys"].append(tel["KEY_BS"])  # rising edge → snapshot guard
+    tel["_prev_bs"] = bs
+    tel["pyn_events"] += 1
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1498,78 +1521,29 @@ def main():
             KEY_UP as _KU, KEY_DOWN as _KD, KEY_LEFT as _KL,
             KEY_RIGHT as _KR, KEY_PGUP as _KPU, KEY_PGDN as _KPD)
         _teleop["pyn_events"] = 0
+        # HOLD-TO-DRIVE needs real press/release. Quartz CGEventSourceKeyState
+        # POLLS the physical key state each control step — permission-free (not
+        # a tap/monitor, so no Input Monitoring prompt) and, unlike the AppKit
+        # local monitor, not focus/timing-flaky (that silently missed a session
+        # and dropped to press-cruise). Keys are read globally (the viewer need
+        # not hold focus). Space/Backspace are edge-detected from the poll.
         try:
-            from AppKit import NSEvent
-            # macOS virtual keycodes
-            _MACMAP = {126: _KU, 125: _KD, 123: _KL, 124: _KR,
-                       116: _KPU, 121: _KPD}
-            _MAC_SPACE, _MAC_BS = 49, 51
-            _MASK_DOWN, _MASK_UP = (1 << 10), (1 << 11)
-
-            def _mac_handler(event):
-                try:
-                    _et = event.type()
-                    _kc = int(event.keyCode())
-                    if _et == 10:  # KeyDown
-                        if _kc in _MACMAP:
-                            if not event.isARepeat():
-                                _teleop["held"].add(_MACMAP[_kc])
-                                _teleop["pyn_events"] += 1
-                            return event
-                        if _kc == _MAC_SPACE:
-                            if not event.isARepeat():
-                                _teleop["push_edge"] = True
-                                _teleop["pyn_events"] += 1
-                            return None   # consume: keep it from the viewer
-                        if _kc == _MAC_BS:
-                            print("[TELEOP] Backspace blocked (viewer keyframe "
-                                  "reset would drop the robot)")
-                            return None   # consume BEFORE the viewer sees it
-                    elif _et == 11:  # KeyUp
-                        if _kc in _MACMAP:
-                            _teleop["held"].discard(_MACMAP[_kc])
-                            _teleop["pyn_events"] += 1
-                except Exception:
-                    pass
-                return event
-
-            _teleop["_mac_monitor"] = (
-                NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
-                    _MASK_DOWN | _MASK_UP, _mac_handler))
+            import Quartz as _QZ
+            _teleop["_keypoll"] = dict(
+                fn=_QZ.CGEventSourceKeyState,
+                src=_QZ.kCGEventSourceStateHIDSystemState,
+                # macOS virtual keycode → shaper GLFW code
+                map={126: _KU, 125: _KD, 123: _KL, 124: _KR, 116: _KPU, 121: _KPD},
+                space=49, bs=51)
+            _teleop["_prev_space"] = False
+            _teleop["_prev_bs"] = False
             _teleop["pynput_ok"] = True
-            print("[TELEOP] hold-to-drive input: AppKit local monitor "
-                  "(no permission needed; keep the viewer window focused)")
-        except Exception as _ak_e:
-            try:
-                from pynput import keyboard as _pk
-                _PKMAP = {_pk.Key.up: _KU, _pk.Key.down: _KD,
-                          _pk.Key.left: _KL, _pk.Key.right: _KR,
-                          _pk.Key.page_up: _KPU, _pk.Key.page_down: _KPD}
-
-                def _pyn_press(k):
-                    _teleop["pyn_events"] += 1
-                    if k in _PKMAP:
-                        _teleop["held"].add(_PKMAP[k])
-                    elif k == _pk.Key.space:
-                        _teleop["push_edge"] = True
-                    elif k == _pk.Key.backspace:
-                        _teleop["keys"].append(_T_KEY_BS)
-
-                def _pyn_release(k):
-                    _teleop["pyn_events"] += 1
-                    if k in _PKMAP:
-                        _teleop["held"].discard(_PKMAP[k])
-
-                _pyn_listener = _pk.Listener(on_press=_pyn_press,
-                                             on_release=_pyn_release,
-                                             daemon=True)
-                _pyn_listener.start()
-                _teleop["pynput_ok"] = True
-                print("[TELEOP] hold-to-drive input: pynput (needs Input "
-                      "Monitoring permission for your terminal)")
-            except Exception as _pyn_e:  # pragma: no cover
-                print(f"[TELEOP] AppKit ({_ak_e}) and pynput ({_pyn_e}) "
-                      "unavailable — press-cruise keys via the viewer window")
+            print("[TELEOP] hold-to-drive input: Quartz key-state poll "
+                  "(permission-free, works whether or not the viewer is focused)")
+        except Exception as _qz_e:  # pragma: no cover (non-macOS)
+            _teleop["_keypoll"] = None
+            print(f"[TELEOP] Quartz key poll unavailable ({_qz_e}) — "
+                  "press-cruise keys via the viewer window")
 
     if args.visual:
         _vsync_hz = float(max(5.0, min(args.visual_sync_hz, 120.0)))
@@ -1742,7 +1716,9 @@ def main():
                       f"({support_xy[0]:+.2f}, {support_xy[1]:+.2f}), h={centroidal.com_pos[2]:.3f}")
             _sh = _teleop["shaper"]
             if _sh is not None and _teleop["pynput_ok"]:
-                # HOLD-TO-DRIVE: held keys → cruise; release → auto stop+anchor
+                # HOLD-TO-DRIVE: poll physical keys → held set + edges, then
+                # held keys → cruise; release → auto stop+anchor
+                _poll_keys(_teleop)
                 if _teleop["push_edge"]:
                     _teleop["push_edge"] = False
                     _teleop["keys"].append(_teleop["KEY_X"])  # reuse push path
