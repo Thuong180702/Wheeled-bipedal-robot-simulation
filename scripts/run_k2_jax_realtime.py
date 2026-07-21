@@ -1615,14 +1615,24 @@ def main():
                 while _teleop["keys"]:
                     _kc = _teleop["keys"].pop(0)
                     if _kc == _teleop["KEY_X"]:
-                        _f = float(_teleop["rng"].uniform(30.0, 80.0))
+                        # Random push, IMPULSE-calibrated to the measured
+                        # envelope (~4.5-7 N·s at nominal, smaller standing
+                        # tall). A raw 30-80 N × 5-10 step draw spans up to
+                        # 8 N·s — two live sessions fell to their first X
+                        # press (62 N×10, 78 N×10). Force/direction/duration
+                        # stay random; the impulse stays challenging but
+                        # mostly recoverable.
                         _ang = float(_teleop["rng"].uniform(0.0, 360.0))
                         _dur = int(_teleop["rng"].integers(5, 11))
+                        _h_lo = np.clip((0.454 - _sh.h) / (0.454 - 0.354), 0.0, 1.0)
+                        _imp = float(_teleop["rng"].uniform(1.5, 2.5 + 3.0 * _h_lo))
+                        _f = _imp / (_dur * CONTROL_DT)
                         _a = _t_yaw + np.radians(_ang)
                         _teleop["push_vec"] = np.array(
                             [-np.sin(_a), np.cos(_a), 0.0]) * _f
                         _teleop["push_left"] = _dur
-                        print(f"[PUSH] {_f:.0f} N @ {_ang:.0f}° tu huong tien × {_dur} steps")
+                        print(f"[PUSH] {_f:.0f} N @ {_ang:.0f}° tu huong tien × {_dur} steps "
+                              f"(impulse {_imp:.1f} N·s)")
                     elif _kc == _teleop["KEY_BS"]:
                         if _teleop["snap"] is not None:
                             mj_data.qpos[:] = _teleop["snap"][0]
