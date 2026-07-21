@@ -1602,10 +1602,19 @@ K2_JAX_INPUT_FIELDS: tuple[str, ...] = (
     "est_world_vx_m_s",       # estimated world x velocity
     "est_world_vy_m_s",       # estimated world y velocity
     "est_yaw_rate_rad_s",     # estimated world yaw rate
+    # Teleop command inputs (+6) — ALL zero when teleop is inactive, which
+    # makes every teleop override below a no-op (byte-identical autonomous
+    # behavior; parity-safe). The runner integrates and LEASHES the target.
+    "teleop_active",              # 0/1 gate for every teleop override
+    "teleop_cmd_vx_m_s",          # sagittal velocity setpoint (heading frame)
+    "teleop_target_x_m",          # world-frame anchor target x (leashed)
+    "teleop_target_y_m",          # world-frame anchor target y (leashed)
+    "teleop_target_yaw_rad",      # world-frame heading target
+    "teleop_cmd_yaw_rate_rad_s",  # heading-rate feed-forward
 )
-# Unified input size: always 51 elements (42 base + 3 standalone + 6 drift estimator).
-# Old 42-element inputs are padded with zeros at indices 42-50.
-K2_JAX_INPUT_SIZE: int = 51
+# Unified input size: 57 elements (42 base + 3 standalone + 6 drift estimator
+# + 6 teleop). Old shorter inputs are padded with zeros.
+K2_JAX_INPUT_SIZE: int = 57
 
 _I_PITCH_X, _I_PITCH_RATE, _I_ROLL_Y, _I_ROLL_RATE = 0, 1, 2, 3
 _I_YAW_ERR, _I_YAW_RATE, _I_COM_Z, _I_COM_VY = 4, 5, 6, 7
@@ -1626,6 +1635,13 @@ _I_EST_YAW = 47
 _I_EST_WORLD_VX = 48
 _I_EST_WORLD_VY = 49
 _I_EST_YAW_RATE = 50
+# Teleop command inputs (indices 51-56)
+_I_TELEOP_ACTIVE = 51
+_I_TELEOP_CMD_VX = 52
+_I_TELEOP_TARGET_X = 53
+_I_TELEOP_TARGET_Y = 54
+_I_TELEOP_TARGET_YAW = 55
+_I_TELEOP_CMD_YAW_RATE = 56
 K2_JAX_INPUT_SIZE_STANDALONE = K2_JAX_INPUT_SIZE  # same unified size
 
 
@@ -1702,6 +1718,13 @@ def pack_input_k2_standalone(
     est_world_vx_m_s=0.0,
     est_world_vy_m_s=0.0,
     est_yaw_rate_rad_s=0.0,
+    # Teleop command inputs (defaults 0 = inactive → overrides are no-ops)
+    teleop_active=0.0,
+    teleop_cmd_vx_m_s=0.0,
+    teleop_target_x_m=0.0,
+    teleop_target_y_m=0.0,
+    teleop_target_yaw_rad=0.0,
+    teleop_cmd_yaw_rate_rad_s=0.0,
 ):
     """Pack raw-state K2 inputs into flat JAX array (51-element standalone + drift contract).
 
@@ -1770,6 +1793,13 @@ def pack_input_k2_standalone(
     inp[_I_EST_WORLD_VX] = float(est_world_vx_m_s)
     inp[_I_EST_WORLD_VY] = float(est_world_vy_m_s)
     inp[_I_EST_YAW_RATE] = float(est_yaw_rate_rad_s)
+    # Teleop command fields
+    inp[_I_TELEOP_ACTIVE] = float(teleop_active)
+    inp[_I_TELEOP_CMD_VX] = float(teleop_cmd_vx_m_s)
+    inp[_I_TELEOP_TARGET_X] = float(teleop_target_x_m)
+    inp[_I_TELEOP_TARGET_Y] = float(teleop_target_y_m)
+    inp[_I_TELEOP_TARGET_YAW] = float(teleop_target_yaw_rad)
+    inp[_I_TELEOP_CMD_YAW_RATE] = float(teleop_cmd_yaw_rate_rad_s)
     return jnp.asarray(inp)
 
 
@@ -2204,6 +2234,8 @@ def k2_jax_heading_hip_yaw_stabilizer(
     height_motion_gate: jnp.ndarray,
     hip_yaw_div: jnp.ndarray,
     hip_yaw_mean: jnp.ndarray,
+    teleop_ref_active: jnp.ndarray | float = 0.0,
+    teleop_ref_yaw: jnp.ndarray | float = 0.0,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray,
            jnp.ndarray, jnp.ndarray, jnp.ndarray,
            jnp.ndarray, jnp.ndarray, jnp.ndarray,
@@ -2242,6 +2274,13 @@ def k2_jax_heading_hip_yaw_stabilizer(
     ref_latched = state_flat[_S_HEADING_HY_REF_LATCHED]
     do_latch = ref_latched < 0.5
     ref_yaw = jnp.where(do_latch, est_yaw_rad, state_flat[_S_HEADING_HY_REF_YAW])
+    # Teleop: follow the commanded heading target (and store it, so releasing
+    # teleop anchors at the last commanded heading). TELEOP V2 ROOT CAUSE #1:
+    # this stabilizer's step-0 latched yaw silently fought EVERY commanded
+    # turn — low authority but persistent, and its hip-yaw torque re-scissors
+    # the legs after each spin.
+    _hy_t_on = jnp.asarray(teleop_ref_active) > 0.5
+    ref_yaw = jnp.where(_hy_t_on, jnp.asarray(teleop_ref_yaw), ref_yaw)
 
     new_state = state_flat.at[_S_HEADING_HY_REF_YAW].set(ref_yaw)
     new_state = new_state.at[_S_HEADING_HY_REF_LATCHED].set(1.0)
@@ -2537,6 +2576,14 @@ def k2_jax_drift_controller(
     ref_y = jnp.where(do_latch, est_world_y, state_flat[_S_DRIFT_REF_WORLD_Y])
     ref_yaw = jnp.where(do_latch, est_yaw, state_flat[_S_DRIFT_REF_YAW])
 
+    # ── Teleop: the reference pose IS the (runner-leashed) teleop target ──
+    # Also stored, so on teleop release the robot anchors at its last
+    # commanded pose instead of running back to the pre-teleop home.
+    _td_on = input_flat[_I_TELEOP_ACTIVE] > 0.5
+    ref_x = jnp.where(_td_on, input_flat[_I_TELEOP_TARGET_X], ref_x)
+    ref_y = jnp.where(_td_on, input_flat[_I_TELEOP_TARGET_Y], ref_y)
+    ref_yaw = jnp.where(_td_on, input_flat[_I_TELEOP_TARGET_YAW], ref_yaw)
+
     # Update state with latched reference
     new_state = state_flat.at[_S_DRIFT_REF_WORLD_X].set(ref_x)
     new_state = new_state.at[_S_DRIFT_REF_WORLD_Y].set(ref_y)
@@ -2546,7 +2593,12 @@ def k2_jax_drift_controller(
     # ── World-frame drift ──
     world_drift_x = est_world_x - ref_x
     world_drift_y = est_world_y - ref_y
-    yaw_error = est_yaw - ref_yaw
+    # Teleop targets can cross ±π: use the wrapped error (teleop v1: unwrapped
+    # yaw error breaks 180° turns). Non-teleop keeps the legacy raw difference
+    # for byte-identical parity.
+    _yaw_err_raw = est_yaw - ref_yaw
+    _yaw_err_wrapped = jnp.arctan2(jnp.sin(_yaw_err_raw), jnp.cos(_yaw_err_raw))
+    yaw_error = jnp.where(_td_on, _yaw_err_wrapped, _yaw_err_raw)
 
     # ── Rotate into body frame ──
     cos_yaw = jnp.cos(est_yaw)
@@ -2618,6 +2670,13 @@ def k2_jax_drift_controller(
         * _smoothstep01((yaw_error_abs - 0.03) / (0.15 - 0.03))
         * jnp.maximum(_hy_div_term, _settled_trust)
     )
+    # Teleop heading gate: stability × height only (teleop v2 lesson — the
+    # yaw-error deadband makes commanded turns register late, and the hy_div
+    # yield deadlocks the last ~leash of a turn: wheel-diff gets gated off by
+    # the post-spin hip-yaw scissor while the scissor itself needs the turn
+    # to finish to relax).
+    heading_gate = jnp.where(
+        _td_on, stability_gate * height_gate_heading, heading_gate)
 
     # Position gate: weak, heavily gated (configurable smoothstep region); tightest height gate
     position_gate = (
@@ -2643,9 +2702,13 @@ def k2_jax_drift_controller(
     #   h = M_z / G_w = +k_heading*yaw_error + k_heading_rate*yaw_rate.
     # (The previous -k_heading form was positive feedback — it was only ever
     # safe because k_heading was 0. Audit F6-b: fixed sign + enabled gain.)
+    # Teleop: rate-damping references the COMMANDED yaw rate so damping does
+    # not fight a commanded spin (feed-forward; 0 when teleop inactive).
+    _yaw_rate_eff = est_yaw_rate - jnp.where(
+        _td_on, input_flat[_I_TELEOP_CMD_YAW_RATE], 0.0)
     heading_torque = (
         k_heading * yaw_error
-        + k_heading_rate * est_yaw_rate
+        + k_heading_rate * _yaw_rate_eff
     ) * heading_gate
 
     # Component 4: Position return (symmetric, very weak)
@@ -2822,11 +2885,29 @@ def k2_jax_controller_step(
     # from raw state inputs (support_center + COM velocity), matching Python's
     # compute_support_center_xy + project_sagittal_displacement + project_sagittal_velocity.
     # When False, uses Python-computed values from input_flat (backward-compatible).
+    # ── Teleop overrides (all no-ops when teleop_active=0) ──
+    # 1) Heading-aware sagittal axis: the calibrated axis is world-fixed, so a
+    #    fixed-axis balancer topples once the robot has turned ~90° from its
+    #    start heading (measured in teleop v1). Forward = Rz(yaw)·[0,1]
+    #    = [-sin(yaw), cos(yaw)] — the [+sin, cos] form only agrees at yaw=0
+    #    and toppled at 180° (teleop v1 lesson).
+    # 2) Moving position reference: the anchor point is the (runner-leashed)
+    #    teleop target instead of the calibrated world home, so the whole
+    #    core position stack (P/I, outer loop, low-band, APCR bands) tracks
+    #    the commanded pose with a bounded error.
+    _t_on = input_flat[_I_TELEOP_ACTIVE] > 0.5
+    _t_yaw = input_flat[_I_EST_YAW]
+    _t_ax = jnp.where(_t_on, -jnp.sin(_t_yaw), _sag_axis_x)
+    _t_ay = jnp.where(_t_on, jnp.cos(_t_yaw), _sag_axis_y)
+    _t_refx = jnp.where(_t_on, input_flat[_I_TELEOP_TARGET_X], _support_center_eq_x)
+    _t_refy = jnp.where(_t_on, input_flat[_I_TELEOP_TARGET_Y], _support_center_eq_y)
+    _t_cmd_vx = jnp.where(_t_on, input_flat[_I_TELEOP_CMD_VX], 0.0)
+
     _raw_sag_pos_err = (
-        (_support_center_x - _support_center_eq_x) * _sag_axis_x
-        + (_support_center_y - _support_center_eq_y) * _sag_axis_y
+        (_support_center_x - _t_refx) * _t_ax
+        + (_support_center_y - _t_refy) * _t_ay
     )
-    _raw_sag_vel = _com_vx_standalone * _sag_axis_x + com_vy * _sag_axis_y
+    _raw_sag_vel = _com_vx_standalone * _t_ax + com_vy * _t_ay
     _raw_support_vel = jnp.where(
         jnp.abs(prev_support_error) > 1e-15,
         (_raw_sag_pos_err - prev_support_error) / control_dt,
@@ -2952,7 +3033,21 @@ def k2_jax_controller_step(
     # both-synced parity. The logically correct hip-yaw gate is deferred to a
     # separate Python controller fix (non-parity task).
     _hip_yaw_ok = True  # matches Python effective behavior (NameError fallback)
-    _safety = _contact_ok & _upright_ok & _abs_error_ok & _hip_yaw_ok
+    # Teleop-busy freeze (teleop v2 root cause #4): while a velocity/turn
+    # command is active, the sagittal error is COMMAND-INDUCED — the 300-step
+    # ABS bias integrator would wind it up as "bias" (measured 0.42 Nm vs the
+    # true 0.10) and rail tau_position for seconds after the command ends.
+    # Freeze ABS adaptation (and the anchor integral below, via _safety)
+    # unless teleop is idle. Continuous in the command magnitude.
+    _t_busy = jnp.where(
+        _t_on,
+        _jax_smoothstep01(
+            (jnp.abs(_t_cmd_vx)
+             + 0.5 * jnp.abs(input_flat[_I_TELEOP_CMD_YAW_RATE]) - 0.01)
+            / (0.05 - 0.01)),
+        0.0,
+    )
+    _safety = _contact_ok & _upright_ok & _abs_error_ok & _hip_yaw_ok & (_t_busy < 0.5)
 
     # Compute trim using sliding window ring buffer + ZC buffer (matches Python exactly)
     (_new_trim, _new_hold, _new_prev_sign, _new_zc, _trim_to_apply,
@@ -3165,9 +3260,10 @@ def k2_jax_controller_step(
 
     tau_sag, sag_diag = k2_jax_sagittal_torque_assembly(
         pitch_x_rad=effective_pitch_x, pitch_rate_rad_s=pitch_rate_eff,
-        # Leashed error (== raw sag_pos_err when the leash is disabled) keeps
-        # the position channel linear; only tau_position/tau_cp consume this.
-        sagittal_velocity_m_s=sag_vel, sagittal_position_error_m=_anchor_eff_err,
+        # Teleop: velocity term tracks the commanded setpoint (sag_vel - cmd_vx)
+        # instead of damping to zero; cmd_vx is 0 when teleop is inactive.
+        sagittal_velocity_m_s=sag_vel - _t_cmd_vx,
+        sagittal_position_error_m=_anchor_eff_err,
         wheel_vel_left_rad_s=wheel_vel_l, wheel_vel_right_rad_s=wheel_vel_r,
         support_velocity_m_s=support_vel,
         kp_pitch=_kp_pitch_eff, effective_pitch_scale=1.0, effective_pitch_tau_cap=0.0,
@@ -3233,7 +3329,30 @@ def k2_jax_controller_step(
     q_ref_full = jnp.array([qref_hr_l, qref_hy_l, qref_hp_l, qref_kn_l, 0.0,
                               qref_hr_r, qref_hy_r, qref_hp_r, qref_kn_r, 0.0], dtype=jnp.float64)
 
-    tau_posture, _ = k2_jax_shape_posture_compute(q_ref_full, joint_pos_full, joint_vel_full)
+    # Teleop: give hip_roll posture stiffness while driving. V3 keeps
+    # kp_hip_roll=0 (hip_roll free for lateral balance compliance) and relies
+    # on the stability-gated HOMING to un-splay at rest — but sustained
+    # driving keeps the stability gate low, so lateral wheel scrub torque
+    # splays the legs UNOPPOSED (measured in the teleop marathon: hip_roll
+    # +0.10 → +0.72 rad over 3 s of post-push cruising → wheelbase blowout →
+    # fall). Zero when teleop is inactive → byte-identical for all profiles.
+    # Gate = DRIVING (continuous _t_busy) OR SPLAY-DETECTED. Busy-only left a
+    # hole: a push triggers the safety let-go → cruise 0 → busy 0 → stiffness
+    # off exactly while the scrub-seeded splay is running away (measured:
+    # hip_roll reached 0.70 rad and fell). The splay branch engages on the
+    # hip_roll deviation itself (off below 0.08 rad → anchored stillness
+    # untouched; full above 0.20 rad), teleop-only.
+    _t_hr_dev = jnp.maximum(
+        jnp.abs(input_flat[_I_Q_START + 6] - input_flat[_I_QREF_START + 6]),
+        jnp.abs(input_flat[_I_Q_START + 7] - input_flat[_I_QREF_START + 7]))
+    _t_hr_splay = jnp.where(
+        _t_on, _jax_smoothstep01((_t_hr_dev - 0.08) / (0.20 - 0.08)), 0.0)
+    _t_hr_gate = jnp.maximum(_t_busy, _t_hr_splay)
+    _t_kp_hr = 20.0 * _t_hr_gate
+    _t_kd_hr = 2.0 * _t_hr_gate
+    tau_posture, _ = k2_jax_shape_posture_compute(
+        q_ref_full, joint_pos_full, joint_vel_full,
+        kp_hip_roll=_t_kp_hr, kd_hip_roll=_t_kd_hr)
 
     # === Step 6: Lateral roll ===
     # enable_stance_regularization=True matches Python behavior:
@@ -3354,6 +3473,8 @@ def k2_jax_controller_step(
             input_flat[_I_EST_YAW], input_flat[_I_EST_YAW_RATE],
             _heading_pitch_gate, _heading_roll_gate, _heading_contact_gate,
             _heading_height_gate, _hy_div, _hy_mean,
+            teleop_ref_active=input_flat[_I_TELEOP_ACTIVE],
+            teleop_ref_yaw=input_flat[_I_TELEOP_TARGET_YAW],
         )
 
     # ═══════════════════════════════════════════════════════════════════════════

@@ -571,6 +571,7 @@ def compute_v3_torque_for_state(
     jax_state: jnp.ndarray,
     jax_params: jnp.ndarray,
     controller_context: dict[str, Any],
+    teleop: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Compute V3 torque using the existing public controller path.
 
@@ -664,6 +665,13 @@ def compute_v3_torque_for_state(
         est_world_vx_m_s=float(getattr(centroidal, "com_vel", np.zeros(3))[0]),
         est_world_vy_m_s=float(getattr(centroidal, "com_vel", np.zeros(3))[1]),
         est_yaw_rate_rad_s=float(getattr(centroidal, "body_yaw_rate_z", 0.0)),
+        # Teleop command fields (all zero → inactive when teleop is None)
+        teleop_active=float((teleop or {}).get("teleop_active", 0.0)),
+        teleop_cmd_vx_m_s=float((teleop or {}).get("teleop_cmd_vx_m_s", 0.0)),
+        teleop_target_x_m=float((teleop or {}).get("teleop_target_x_m", 0.0)),
+        teleop_target_y_m=float((teleop or {}).get("teleop_target_y_m", 0.0)),
+        teleop_target_yaw_rad=float((teleop or {}).get("teleop_target_yaw_rad", 0.0)),
+        teleop_cmd_yaw_rate_rad_s=float((teleop or {}).get("teleop_cmd_yaw_rate_rad_s", 0.0)),
     )
 
     jax_tau, next_jax_state, jax_diag = jax_step_fn(jax_state, jax_input, jax_params)

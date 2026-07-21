@@ -254,6 +254,12 @@ def parse_args():
                    help="Suppress all non-essential output")
     p.add_argument("--visual", action="store_true", default=False,
                    help="Launch MuJoCo viewer")
+    p.add_argument("--teleop", action="store_true", default=False,
+                   help="Interactive keyboard teleop (implies --visual; on macOS run "
+                        "with mjpython). Keys: arrow Up/Down = velocity cruise, "
+                        "Left/Right = turn cruise, Space = stop + anchor here, "
+                        "PgUp/PgDn (fn+Up/fn+Down on Mac) = stand up / sit down, "
+                        "X = random push, Backspace = guarded (state restored)")
     p.add_argument("--visual-sync-hz", type=float, default=30.0,
                    help="Viewer sync rate Hz (default: 30)")
     p.add_argument("--visual-realtime-factor", type=float, default=1.0,
@@ -1417,6 +1423,30 @@ def main():
     last_sync_sim_time = -999.0
     sim_start_time = 0.0
 
+    # ── Teleop init ─────────────────────────────────────────────────────
+    _teleop = None
+    if args.teleop:
+        args.visual = True
+        from wheeled_biped.teleop_shaper import (
+            TeleopShaper as _TeleopShaper, HeightPosture as _HeightPosture,
+            KEY_X as _T_KEY_X, KEY_BACKSPACE as _T_KEY_BS, KEY_SPACE as _T_KEY_SPACE)
+        _teleop = {
+            "Shaper": _TeleopShaper,
+            "hp": _HeightPosture(),
+            "keys": [],           # appended from the viewer thread
+            "shaper": None,       # created once the startup transient settles
+            "activate_step": 200,
+            "push_left": 0,
+            "push_vec": np.zeros(3),
+            "snap": None,         # healthy-state snapshot (Backspace guard)
+            "rng": np.random.default_rng(),
+            "KEY_X": _T_KEY_X, "KEY_BS": _T_KEY_BS, "KEY_SPACE": _T_KEY_SPACE,
+        }
+
+        def _teleop_key_cb(keycode):
+            # Viewer thread: enqueue only (list.append is atomic in CPython)
+            _teleop["keys"].append(int(keycode))
+
     if args.visual:
         _vsync_hz = float(max(5.0, min(args.visual_sync_hz, 120.0)))
         visual_realtime_factor = float(max(args.visual_realtime_factor, 0.01))
@@ -1435,7 +1465,15 @@ def main():
                 print("Close the viewer window to end simulation.")
                 print(f"Viewer sync: {_vsync_hz:.0f} Hz | Realtime factor: {visual_realtime_factor:.1f}")
 
-        viewer = mujoco.viewer.launch_passive(mj_model, mj_data)
+        if _teleop is not None:
+            viewer = mujoco.viewer.launch_passive(
+                mj_model, mj_data, key_callback=_teleop_key_cb)
+            print("[TELEOP] Viewer up. Controls: ↑/↓ velocity cruise, ←/→ turn "
+                  "cruise, Space stop+anchor, PgUp/PgDn (fn+↑/↓) stand/sit, "
+                  "X random push. (Letter keys also toggle viewer visuals — "
+                  "that is a MuJoCo viewer built-in.)")
+        else:
+            viewer = mujoco.viewer.launch_passive(mj_model, mj_data)
         viewer.sync()
         if _vstartup_delay > 0:
             time.sleep(_vstartup_delay)
@@ -1556,6 +1594,68 @@ def main():
             and centroidal.contact_force_valid
         )
 
+        # ── Teleop: keys → shaper → target/height overrides ──────────────
+        _tel_cmd = None
+        if _teleop is not None:
+            _t_yaw = float(centroidal.body_yaw_z)
+            _t_pitch = float(centroidal.body_pitch_x)
+            _t_roll = float(centroidal.body_roll_y)
+            # Healthy-state snapshot for the Backspace guard (the viewer's own
+            # Backspace performs a RAW keyframe reset → guaranteed fall).
+            if abs(_t_pitch) < 0.35 and abs(_t_roll) < 0.35 and float(mj_data.qpos[2]) > 0.3:
+                _teleop["snap"] = (mj_data.qpos.copy(), mj_data.qvel.copy())
+            if _teleop["shaper"] is None and step >= _teleop["activate_step"]:
+                _teleop["shaper"] = _teleop["Shaper"](
+                    float(support_xy[0]), float(support_xy[1]), _t_yaw,
+                    float(centroidal.com_pos[2]))
+                print(f"[TELEOP] ACTIVE at t={step * CONTROL_DT:.1f}s — anchored at "
+                      f"({support_xy[0]:+.2f}, {support_xy[1]:+.2f}), h={centroidal.com_pos[2]:.3f}")
+            _sh = _teleop["shaper"]
+            if _sh is not None:
+                while _teleop["keys"]:
+                    _kc = _teleop["keys"].pop(0)
+                    if _kc == _teleop["KEY_X"]:
+                        _f = float(_teleop["rng"].uniform(30.0, 80.0))
+                        _ang = float(_teleop["rng"].uniform(0.0, 360.0))
+                        _dur = int(_teleop["rng"].integers(5, 11))
+                        _a = _t_yaw + np.radians(_ang)
+                        _teleop["push_vec"] = np.array(
+                            [-np.sin(_a), np.cos(_a), 0.0]) * _f
+                        _teleop["push_left"] = _dur
+                        print(f"[PUSH] {_f:.0f} N @ {_ang:.0f}° tu huong tien × {_dur} steps")
+                    elif _kc == _teleop["KEY_BS"]:
+                        if _teleop["snap"] is not None:
+                            mj_data.qpos[:] = _teleop["snap"][0]
+                            mj_data.qvel[:] = _teleop["snap"][1]
+                            mujoco.mj_forward(mj_model, mj_data)
+                            print("[TELEOP] Backspace guard: state restored")
+                    else:
+                        _ev = _sh.on_key(_kc)
+                        if _kc == _teleop["KEY_SPACE"]:
+                            _sh.stop_here(float(support_xy[0]),
+                                          float(support_xy[1]), _t_yaw)
+                        if _ev is not None:
+                            print(f"[KEY] {_ev}")
+                _tel_cmd = _sh.step(
+                    CONTROL_DT, float(support_xy[0]), float(support_xy[1]),
+                    _t_yaw, pitch_rad=_t_pitch, roll_rad=_t_roll)
+                if _sh.events and _sh.events[-1] == "SAFETY_LETGO":
+                    print("[TELEOP] SAFETY_LETGO — tilt limit, cruise released")
+                _sh.events.clear()
+                height_ref = _tel_cmd["height_ref"]
+                eq_joint = _teleop["hp"].q_ref(_sh.height_servo(
+                    float(centroidal.com_pos[2]), CONTROL_DT,
+                    pitch_rad=_t_pitch, roll_rad=_t_roll))
+                height_floor = 0.20   # sit-down envelope needs a low floor
+                if _teleop["push_left"] > 0:
+                    mj_data.xfrc_applied[1, 0:3] = _teleop["push_vec"]  # body 1 = torso
+                    _teleop["push_left"] -= 1
+                if step % 100 == 0:
+                    print(f"[TELEOP] t={step * CONTROL_DT:6.1f}s vx={_sh.vx:+.2f} "
+                          f"wz={_sh.wz:+.2f} h={_sh.h:.3f} "
+                          f"pos_err={np.hypot(_tel_cmd['teleop_target_x_m'] - support_xy[0], _tel_cmd['teleop_target_y_m'] - support_xy[1]):.3f} "
+                          f"yaw={np.degrees(_t_yaw):+.0f}°", flush=True)
+
         # ── Pack input & call JAX ────────────────────────────────────────
         jax_input = pack_input_k2_standalone(
             pitch_x_rad=float(centroidal.body_pitch_x),
@@ -1589,6 +1689,13 @@ def main():
             est_world_vx_m_s=float(centroidal.com_vel[0]),
             est_world_vy_m_s=float(centroidal.com_vel[1]),
             est_yaw_rate_rad_s=float(centroidal.body_yaw_rate_z),
+            # Teleop command fields (all zero when teleop is off)
+            teleop_active=(1.0 if _tel_cmd is not None else 0.0),
+            teleop_cmd_vx_m_s=(_tel_cmd["teleop_cmd_vx_m_s"] if _tel_cmd else 0.0),
+            teleop_target_x_m=(_tel_cmd["teleop_target_x_m"] if _tel_cmd else 0.0),
+            teleop_target_y_m=(_tel_cmd["teleop_target_y_m"] if _tel_cmd else 0.0),
+            teleop_target_yaw_rad=(_tel_cmd["teleop_target_yaw_rad"] if _tel_cmd else 0.0),
+            teleop_cmd_yaw_rate_rad_s=(_tel_cmd["teleop_cmd_yaw_rate_rad_s"] if _tel_cmd else 0.0),
         )
         jax_tau, jax_state, jax_diag = jax_step_fn(jax_state, jax_input, jax_params)
 
