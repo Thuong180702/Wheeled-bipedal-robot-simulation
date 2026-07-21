@@ -242,6 +242,25 @@ def generate_height_recovery_state(
     d.qpos[2] = start_z
     mujoco.mj_forward(model, d)
 
+    # Ground-projection guard: start_z perturbs ONLY the base while the legs
+    # keep the keyframe posture, so a downward perturbation (the "high_*"
+    # variants start = target-0.10 < keyframe base 0.53) spawns the wheels
+    # INSIDE the floor. MuJoCo then ejects the penetration violently at t=0
+    # (measured: |qvel| 60→360 rad/s, robot launched to com 0.7 m and tumbled),
+    # which the settle logged as a controller fall — a seed artifact, NOT a
+    # balance failure (a geometry-consistent seed holds fine). Lift the base so
+    # the lowest wheel rests just above the floor; an upward perturbation is
+    # unaffected (it settles by dropping onto the wheels as before).
+    _pen = 0.0
+    for _gname in ("l_wheel_collision", "r_wheel_collision"):
+        _gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, _gname)
+        if _gid >= 0:
+            _bottom = float(d.geom_xpos[_gid][2]) - float(model.geom_rbound[_gid])
+            _pen = max(_pen, -_bottom)
+    if _pen > 0.0:
+        d.qpos[2] += _pen + 0.002   # 2 mm clearance
+        mujoco.mj_forward(model, d)
+
     if v3_ctrl is not None and v3_ctrl.get("initialized", False):
         v3_ctrl["jax_state"] = pack_state_k2()
         # Recover toward the natural CoM (V3 does not track distinct height
