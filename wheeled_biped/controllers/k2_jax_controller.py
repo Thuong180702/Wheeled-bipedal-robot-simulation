@@ -3066,8 +3066,19 @@ def k2_jax_controller_step(
     # (byte-identical + Python parity).
     _kp_soft = params_flat[_IDX_ANCHOR_KP_PITCH_SOFT]
     _kp_on = (_anchor_ki > 0.0) & (_kp_soft > 0.0)
+    # Softness gate: ballistic velocity (envelope >= 0.30, clearly ABOVE the
+    # kp-soft cycle band ~0.20-0.28) OR large displacement (>= 10-25 cm).
+    # Gating on the quiet band itself was SELF-REFERENTIAL: soft kp sustains a
+    # cycle whose envelope (~0.20-0.28) sits inside the 0.18-0.30 band, so the
+    # gate dithered for ~6 s before the ringdown could die (audited: user saw
+    # the long wobble, then the freq-up/amplitude-down moment as kp snapped to
+    # 50 and the boost engaged). Near home the cycle envelope can never reach
+    # the 0.30 velocity edge and displacement is small -> stiff immediately.
+    _kp_soft_gate = jnp.maximum(
+        _jax_smoothstep01((_act_ema - 0.30) / (0.45 - 0.30)),
+        _jax_smoothstep01((jnp.abs(sag_pos_err) - 0.10) / (0.25 - 0.10)))
     _kp_pitch_eff = jnp.where(
-        _kp_on, _kp_soft + (50.0 - _kp_soft) * _anchor_quiet, 50.0)
+        _kp_on, 50.0 - (50.0 - _kp_soft) * _kp_soft_gate, 50.0)
 
     # === Step 4b: Sagittal torque assembly ===
     # === Step 4b: APCR1ND gating computation (Phase 4+ full port) ===
