@@ -1451,40 +1451,90 @@ def main():
             _teleop["keys"].append(int(keycode))
 
         # HOLD-TO-DRIVE needs real press/release events; the MuJoCo viewer
-        # callback has none (teleop v1: every repeat-timing model was jerky).
-        # pynput listens at the OS level (grant the terminal app permission in
-        # System Settings → Privacy & Security → Input Monitoring if keys are
-        # unresponsive). Falls back to the press-cruise model if unavailable.
+        # callback delivers key-down only (teleop v1: every repeat-timing
+        # model was jerky). Event-source chain:
+        #   1) AppKit LOCAL event monitor — events of OUR OWN app (the
+        #      mjpython viewer window). Permission-free (macOS Input
+        #      Monitoring only gates GLOBAL taps) and lets us CONSUME
+        #      Backspace before the viewer's raw keyframe reset fires.
+        #   2) pynput global listener (needs Input Monitoring permission).
+        #   3) press-cruise fallback via the viewer callback.
+        from wheeled_biped.teleop_shaper import (
+            KEY_UP as _KU, KEY_DOWN as _KD, KEY_LEFT as _KL,
+            KEY_RIGHT as _KR, KEY_PGUP as _KPU, KEY_PGDN as _KPD)
+        _teleop["pyn_events"] = 0
         try:
-            from pynput import keyboard as _pk
-            from wheeled_biped.teleop_shaper import (
-                KEY_UP as _KU, KEY_DOWN as _KD, KEY_LEFT as _KL,
-                KEY_RIGHT as _KR, KEY_PGUP as _KPU, KEY_PGDN as _KPD)
-            _PKMAP = {_pk.Key.up: _KU, _pk.Key.down: _KD, _pk.Key.left: _KL,
-                      _pk.Key.right: _KR, _pk.Key.page_up: _KPU,
-                      _pk.Key.page_down: _KPD}
+            from AppKit import NSEvent
+            # macOS virtual keycodes
+            _MACMAP = {126: _KU, 125: _KD, 123: _KL, 124: _KR,
+                       116: _KPU, 121: _KPD}
+            _MAC_SPACE, _MAC_BS = 49, 51
+            _MASK_DOWN, _MASK_UP = (1 << 10), (1 << 11)
 
-            def _pyn_press(k):
-                _teleop["pyn_events"] = _teleop.get("pyn_events", 0) + 1
-                if k in _PKMAP:
-                    _teleop["held"].add(_PKMAP[k])
-                elif k == _pk.Key.space:
-                    _teleop["push_edge"] = True
-                elif k == _pk.Key.backspace:
-                    _teleop["keys"].append(_T_KEY_BS)
+            def _mac_handler(event):
+                try:
+                    _et = event.type()
+                    _kc = int(event.keyCode())
+                    if _et == 10:  # KeyDown
+                        if _kc in _MACMAP:
+                            if not event.isARepeat():
+                                _teleop["held"].add(_MACMAP[_kc])
+                                _teleop["pyn_events"] += 1
+                            return event
+                        if _kc == _MAC_SPACE:
+                            if not event.isARepeat():
+                                _teleop["push_edge"] = True
+                                _teleop["pyn_events"] += 1
+                            return None   # consume: keep it from the viewer
+                        if _kc == _MAC_BS:
+                            print("[TELEOP] Backspace blocked (viewer keyframe "
+                                  "reset would drop the robot)")
+                            return None   # consume BEFORE the viewer sees it
+                    elif _et == 11:  # KeyUp
+                        if _kc in _MACMAP:
+                            _teleop["held"].discard(_MACMAP[_kc])
+                            _teleop["pyn_events"] += 1
+                except Exception:
+                    pass
+                return event
 
-            def _pyn_release(k):
-                _teleop["pyn_events"] = _teleop.get("pyn_events", 0) + 1
-                if k in _PKMAP:
-                    _teleop["held"].discard(_PKMAP[k])
-
-            _pyn_listener = _pk.Listener(on_press=_pyn_press,
-                                         on_release=_pyn_release, daemon=True)
-            _pyn_listener.start()
+            _teleop["_mac_monitor"] = (
+                NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
+                    _MASK_DOWN | _MASK_UP, _mac_handler))
             _teleop["pynput_ok"] = True
-        except Exception as _pyn_e:  # pragma: no cover
-            print(f"[TELEOP] pynput unavailable ({_pyn_e}) — falling back to "
-                  "press-cruise keys via the viewer window")
+            print("[TELEOP] hold-to-drive input: AppKit local monitor "
+                  "(no permission needed; keep the viewer window focused)")
+        except Exception as _ak_e:
+            try:
+                from pynput import keyboard as _pk
+                _PKMAP = {_pk.Key.up: _KU, _pk.Key.down: _KD,
+                          _pk.Key.left: _KL, _pk.Key.right: _KR,
+                          _pk.Key.page_up: _KPU, _pk.Key.page_down: _KPD}
+
+                def _pyn_press(k):
+                    _teleop["pyn_events"] += 1
+                    if k in _PKMAP:
+                        _teleop["held"].add(_PKMAP[k])
+                    elif k == _pk.Key.space:
+                        _teleop["push_edge"] = True
+                    elif k == _pk.Key.backspace:
+                        _teleop["keys"].append(_T_KEY_BS)
+
+                def _pyn_release(k):
+                    _teleop["pyn_events"] += 1
+                    if k in _PKMAP:
+                        _teleop["held"].discard(_PKMAP[k])
+
+                _pyn_listener = _pk.Listener(on_press=_pyn_press,
+                                             on_release=_pyn_release,
+                                             daemon=True)
+                _pyn_listener.start()
+                _teleop["pynput_ok"] = True
+                print("[TELEOP] hold-to-drive input: pynput (needs Input "
+                      "Monitoring permission for your terminal)")
+            except Exception as _pyn_e:  # pragma: no cover
+                print(f"[TELEOP] AppKit ({_ak_e}) and pynput ({_pyn_e}) "
+                      "unavailable — press-cruise keys via the viewer window")
 
     if args.visual:
         _vsync_hz = float(max(5.0, min(args.visual_sync_hz, 120.0)))
@@ -1507,10 +1557,16 @@ def main():
         if _teleop is not None:
             viewer = mujoco.viewer.launch_passive(
                 mj_model, mj_data, key_callback=_teleop_key_cb)
-            print("[TELEOP] Viewer up. Controls: ↑/↓ velocity cruise, ←/→ turn "
-                  "cruise, Space stop+anchor, PgUp/PgDn (fn+↑/↓) stand/sit, "
-                  "X random push. (Letter keys also toggle viewer visuals — "
-                  "that is a MuJoCo viewer built-in.)")
+            if _teleop["pynput_ok"]:
+                print("[TELEOP] Viewer up. HOLD-TO-DRIVE: hold ↑/↓ to drive, "
+                      "←/→ to turn — release = stop + anchor. Hold PgUp/PgDn "
+                      "(fn+↑/↓) stand/sit. Space = random push. Backspace "
+                      "blocked. (Letter keys toggle viewer visuals — MuJoCo "
+                      "built-in.)")
+            else:
+                print("[TELEOP] Viewer up. PRESS-CRUISE: ↑/↓ step speed, ←/→ "
+                      "step turn, Space stop+anchor, PgUp/PgDn (fn+↑/↓) "
+                      "stand/sit, X random push.")
         else:
             viewer = mujoco.viewer.launch_passive(mj_model, mj_data)
         viewer.sync()
@@ -1670,15 +1726,10 @@ def main():
                         # press-cruise interface so keys keep working.
                         if _teleop.get("pyn_events", 0) == 0:
                             _teleop["pynput_ok"] = False
-                            print("[TELEOP] pynput sees no keyboard events — "
-                                  "macOS Input Monitoring permission is "
-                                  "missing for your terminal app.\n"
-                                  "         → System Settings → Privacy & "
-                                  "Security → Input Monitoring → enable your "
-                                  "terminal, then restart --teleop for "
-                                  "hold-to-drive.\n"
-                                  "         Falling back to PRESS-CRUISE keys "
-                                  "(↑/↓/←/→ step speed, Space=stop, X=push).")
+                            print("[TELEOP] hold-to-drive input source saw no "
+                                  "keyboard events — falling back to "
+                                  "PRESS-CRUISE keys (↑/↓/←/→ step speed, "
+                                  "Space=stop, X=push).")
                             # fall through: handle THIS key in cruise mode
                         else:
                             continue  # pynput healthy: held-set owns drive keys
