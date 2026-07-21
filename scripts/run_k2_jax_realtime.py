@@ -1441,11 +1441,50 @@ def main():
             "snap": None,         # healthy-state snapshot (Backspace guard)
             "rng": np.random.default_rng(),
             "KEY_X": _T_KEY_X, "KEY_BS": _T_KEY_BS, "KEY_SPACE": _T_KEY_SPACE,
+            "held": set(),        # true hold state (pynput press/release)
+            "push_edge": False,   # Space pressed (edge-triggered push)
+            "pynput_ok": False,
         }
 
         def _teleop_key_cb(keycode):
             # Viewer thread: enqueue only (list.append is atomic in CPython)
             _teleop["keys"].append(int(keycode))
+
+        # HOLD-TO-DRIVE needs real press/release events; the MuJoCo viewer
+        # callback has none (teleop v1: every repeat-timing model was jerky).
+        # pynput listens at the OS level (grant the terminal app permission in
+        # System Settings → Privacy & Security → Input Monitoring if keys are
+        # unresponsive). Falls back to the press-cruise model if unavailable.
+        try:
+            from pynput import keyboard as _pk
+            from wheeled_biped.teleop_shaper import (
+                KEY_UP as _KU, KEY_DOWN as _KD, KEY_LEFT as _KL,
+                KEY_RIGHT as _KR, KEY_PGUP as _KPU, KEY_PGDN as _KPD)
+            _PKMAP = {_pk.Key.up: _KU, _pk.Key.down: _KD, _pk.Key.left: _KL,
+                      _pk.Key.right: _KR, _pk.Key.page_up: _KPU,
+                      _pk.Key.page_down: _KPD}
+
+            def _pyn_press(k):
+                _teleop["pyn_events"] = _teleop.get("pyn_events", 0) + 1
+                if k in _PKMAP:
+                    _teleop["held"].add(_PKMAP[k])
+                elif k == _pk.Key.space:
+                    _teleop["push_edge"] = True
+                elif k == _pk.Key.backspace:
+                    _teleop["keys"].append(_T_KEY_BS)
+
+            def _pyn_release(k):
+                _teleop["pyn_events"] = _teleop.get("pyn_events", 0) + 1
+                if k in _PKMAP:
+                    _teleop["held"].discard(_PKMAP[k])
+
+            _pyn_listener = _pk.Listener(on_press=_pyn_press,
+                                         on_release=_pyn_release, daemon=True)
+            _pyn_listener.start()
+            _teleop["pynput_ok"] = True
+        except Exception as _pyn_e:  # pragma: no cover
+            print(f"[TELEOP] pynput unavailable ({_pyn_e}) — falling back to "
+                  "press-cruise keys via the viewer window")
 
     if args.visual:
         _vsync_hz = float(max(5.0, min(args.visual_sync_hz, 120.0)))
@@ -1611,9 +1650,38 @@ def main():
                 print(f"[TELEOP] ACTIVE at t={step * CONTROL_DT:.1f}s — anchored at "
                       f"({support_xy[0]:+.2f}, {support_xy[1]:+.2f}), h={centroidal.com_pos[2]:.3f}")
             _sh = _teleop["shaper"]
+            if _sh is not None and _teleop["pynput_ok"]:
+                # HOLD-TO-DRIVE: held keys → cruise; release → auto stop+anchor
+                if _teleop["push_edge"]:
+                    _teleop["push_edge"] = False
+                    _teleop["keys"].append(_teleop["KEY_X"])  # reuse push path
+                _sig = _sh.update_held(set(_teleop["held"]))
+                if _sig == "ANCHOR":
+                    _sh.stop_here(float(support_xy[0]), float(support_xy[1]), _t_yaw)
+                    print("[TELEOP] release → stop + anchored here")
             if _sh is not None:
                 while _teleop["keys"]:
                     _kc = _teleop["keys"].pop(0)
+                    if _teleop["pynput_ok"] and _kc not in (
+                            _teleop["KEY_X"], _teleop["KEY_BS"]):
+                        # A drive key arrived via the VIEWER while pynput has
+                        # never seen a single event → pynput is permission-
+                        # blocked (macOS Input Monitoring). Fall back to the
+                        # press-cruise interface so keys keep working.
+                        if _teleop.get("pyn_events", 0) == 0:
+                            _teleop["pynput_ok"] = False
+                            print("[TELEOP] pynput sees no keyboard events — "
+                                  "macOS Input Monitoring permission is "
+                                  "missing for your terminal app.\n"
+                                  "         → System Settings → Privacy & "
+                                  "Security → Input Monitoring → enable your "
+                                  "terminal, then restart --teleop for "
+                                  "hold-to-drive.\n"
+                                  "         Falling back to PRESS-CRUISE keys "
+                                  "(↑/↓/←/→ step speed, Space=stop, X=push).")
+                            # fall through: handle THIS key in cruise mode
+                        else:
+                            continue  # pynput healthy: held-set owns drive keys
                     if _kc == _teleop["KEY_X"]:
                         # Random push, IMPULSE-calibrated to the measured
                         # envelope (~4.5-7 N·s at nominal, smaller standing

@@ -74,7 +74,10 @@ class TeleopShaper:
     LAT = 0.05              # m lateral (wheels cannot close lateral error)
     # Height command
     H_STEP = 0.010          # m per PgUp/PgDn press
-    H_MIN, H_MAX = 0.354, 0.454   # validated dynamic envelope (±5 cm)
+    # Command ceiling sits 9 mm below the posture-table edge (0.454): at the
+    # edge the interpolation clips at s=1.0 and the height servo has no
+    # posture headroom left to close the ~9 mm gravity sag (measured).
+    H_MIN, H_MAX = 0.354, 0.445
     H_SLEW = 0.04           # m/s height ramp
 
     def __init__(self, x: float, y: float, yaw: float, height: float):
@@ -111,7 +114,11 @@ class TeleopShaper:
         that turned a recoverable 40 N lateral shove into a fall (measured:
         roll +2° → +52° in 1.6 s with the servo raising the posture).
         """
-        if not self.busy and abs(pitch_rad) < 0.05 and abs(roll_rad) < 0.035:
+        # Pitch gate 5°: the tall-stance EQUILIBRIUM pitch is ~3°+, which a
+        # 2.9° gate mistook for motion and froze the servo at max height
+        # (9 mm standing error, measured). Roll stays tight (2°) — that is
+        # the positive-feedback axis.
+        if not self.busy and abs(pitch_rad) < 0.09 and abs(roll_rad) < 0.035:
             err = self.h - float(com_z)
             self.h_trim = float(np.clip(self.h_trim + 0.5 * err * dt, -0.025, 0.025))
         return float(np.clip(self.h + self.h_trim,
@@ -147,8 +154,50 @@ class TeleopShaper:
         return ev
 
     def stop_here(self, x: float, y: float, yaw: float) -> None:
-        """Space semantics: re-anchor the target at the CURRENT pose."""
+        """Re-anchor the target at the CURRENT pose."""
         self.tx, self.ty, self.tyaw = float(x), float(y), float(yaw)
+
+    # ── hold-to-drive mode (real press/release via pynput; the MuJoCo viewer
+    # delivers no release events, so hold semantics are impossible there) ──
+    VX_HOLD_FWD = 0.40      # m/s while ↑ held
+    VX_HOLD_BACK = 0.30     # m/s while ↓ held
+    WZ_HOLD = 0.50          # rad/s while ←/→ held
+
+    def update_held(self, held: set) -> str | None:
+        """Map the currently-held key set to cruise setpoints.
+
+        Release-to-stop: when every drive key is released, the cruise zeroes
+        and the caller must re-anchor at the robot's CURRENT pose (returns
+        "ANCHOR" once on that transition). Height keys RAMP while held
+        (h_tgt slews toward the envelope edge at H_SLEW via step()).
+        """
+        up, dn = KEY_UP in held, KEY_DOWN in held
+        lf, rt = KEY_LEFT in held, KEY_RIGHT in held
+        pu, pd = KEY_PGUP in held, KEY_PGDN in held
+        # Safety let-go LATCH: after a let-go the drive stays suppressed until
+        # every drive key is RELEASED (else a still-held ↑ re-applies the
+        # cruise on the very next step and drives through the recovery —
+        # measured fall). Like a motor-fault latch: lift off, then re-press.
+        if getattr(self, "letgo_latch", False):
+            if not (up or dn or lf or rt):
+                self.letgo_latch = False
+            else:
+                up = dn = lf = rt = False
+        was_driving = (self.vx_tgt != 0.0 or self.wz_tgt != 0.0)
+        self.vx_tgt = (self.VX_HOLD_FWD if up and not dn
+                       else -self.VX_HOLD_BACK if dn and not up else 0.0)
+        self.wz_tgt = (self.WZ_HOLD if lf and not rt
+                       else -self.WZ_HOLD if rt and not lf else 0.0)
+        if pu and not pd:
+            self.h_tgt = self.H_MAX
+        elif pd and not pu:
+            self.h_tgt = self.H_MIN
+        else:
+            self.h_tgt = self.h   # freeze height where the ramp stopped
+        if was_driving and self.vx_tgt == 0.0 and self.wz_tgt == 0.0:
+            self.events.append("RELEASE->ANCHOR")
+            return "ANCHOR"
+        return None
 
     # Safety let-go: a human driver releases the stick when shoved; the cruise
     # must not keep driving THROUGH a disturbance recovery (measured: a 50 N
@@ -170,6 +219,7 @@ class TeleopShaper:
             self.vx_tgt = self.wz_tgt = 0.0
             self.vx = self.wz = 0.0
             self.stop_here(sup_x, sup_y, est_yaw)
+            self.letgo_latch = True   # hold-mode: require full release to re-arm
             self.events.append("SAFETY_LETGO")
         # Slew applied cruise toward setpoints
         def slew(cur, tgt, rate):

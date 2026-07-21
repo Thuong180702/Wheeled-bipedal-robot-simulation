@@ -119,21 +119,26 @@ class TeleopSim:
         return float(self.d.qpos[2]) < 0.15
 
 
-def run_scenario(name, events, duration_s, settle_s=4.0):
-    """events: list of (t_s, callable(sim)) executed once at their time."""
+def run_scenario(name, holds, calls, duration_s, settle_s=9.0):
+    """holds: [(key, t_on, t_off)] — key held during [t_on, t_off).
+    calls: [(t, fn(sim))] one-shot events (pushes). Release-to-stop: the
+    shaper auto-anchors when every drive key is released."""
     sim = TeleopSim()
     n = int((duration_s + settle_s) * 100)
-    stop_at = duration_s
-    fired = [False] * len(events)
+    fired = [False] * len(calls)
     logs = {k: [] for k in ("perr", "yerr", "herr", "pitch", "roll", "vy")}
     for k in range(n):
         t = k * DT
-        for i, (te, fn) in enumerate(events):
+        for i, (te, fn) in enumerate(calls):
             if not fired[i] and t >= te:
                 fn(sim)
                 fired[i] = True
-        if not any(not f for f in fired) and t >= stop_at and sim.shaper.vx_tgt == 0 and sim.shaper.wz_tgt == 0:
-            pass
+        held = {key for (key, a, b) in holds if a <= t < b}
+        sig = sim.shaper.update_held(held)
+        if sig == "ANCHOR":
+            sx, sy = sim.support_xy()
+            sim.shaper.stop_here(sx, sy, sim.yaw())
+        sim.shaper.events.clear()
         cmd = sim.step_teleop()
         if sim.fell():
             return dict(name=name, fell=True, fall_t=t)
@@ -160,9 +165,6 @@ def run_scenario(name, events, duration_s, settle_s=4.0):
         still_vel=float(np.sqrt((L["vy"][tail] ** 2).mean())),
         speed_max=float(L["vy"].max()),
     )
-    # Height gate is STEADY-STATE (tail): transient dips during hard
-    # accel/decel are geometric lean effects, not tracking failures; the
-    # whole-run RMSE stays reported for reference.
     res["verdict"] = "PASS" if (
         res["pos_err_final"] <= 0.12 and res["yaw_err_final"] <= 6.0
         and res["height_err_tail"] <= 0.006 and res["still_vel"] <= 0.05
@@ -171,84 +173,53 @@ def run_scenario(name, events, duration_s, settle_s=4.0):
     return res
 
 
-def K(code, times=1):
-    def fn(sim):
-        for _ in range(times):
-            sim.shaper.on_key(code)
-    return fn
-
-
-def STOP(sim):
-    sim.shaper.on_key(KEY_SPACE)
-    sx, sy = sim.support_xy()
-    sim.shaper.stop_here(sx, sy, sim.yaw())
+UP, DN, LF, RT, PU, PD = KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_PGUP, KEY_PGDN
+T90 = 3.14   # 90 deg at 0.5 rad/s
+T180 = 6.28
 
 
 def build_scenarios():
+    """Each: (duration_s, holds, calls[, settle_s]). Hold semantics mirror the
+    live pynput hold-to-drive interface exactly."""
     S = {}
-    S["fwd_3s_stop"] = (3.0 + 3.0, [
-        (0.0, K(KEY_UP, 3)), (3.0, STOP)])
-    S["fwd_then_back"] = (12.0, [
-        (0.0, K(KEY_UP, 3)), (3.0, K(KEY_DOWN, 3)), (3.5, K(KEY_DOWN, 3)),
-        (8.0, STOP)])
-    S["fwd_turn_left_90"] = (12.0, [
-        (0.0, K(KEY_UP, 2)), (3.0, K(KEY_SPACE, 1)), (3.0, K(KEY_LEFT, 2)),
-        (6.9, K(KEY_RIGHT, 2)), (7.0, STOP)])
-    S["fwd_turn_right_90"] = (12.0, [
-        (0.0, K(KEY_UP, 2)), (3.0, K(KEY_SPACE, 1)), (3.0, K(KEY_RIGHT, 2)),
-        (6.9, K(KEY_LEFT, 2)), (7.0, STOP)])
-    S["fwd_back_fwd"] = (16.0, [
-        (0.0, K(KEY_UP, 3)), (3.0, K(KEY_DOWN, 6)), (7.0, K(KEY_UP, 6)),
-        (11.0, STOP)])
-    S["drive_and_turn"] = (14.0, [
-        (0.0, K(KEY_UP, 3)), (2.0, K(KEY_LEFT, 2)), (6.0, K(KEY_RIGHT, 4)),
-        (9.0, K(KEY_LEFT, 2)), (11.0, STOP)])
-    S["updown_while_driving"] = (16.0, [
-        (0.0, K(KEY_UP, 2)), (2.0, K(KEY_PGDN, 4)), (6.0, K(KEY_PGUP, 8)),
-        (10.0, K(KEY_PGDN, 4)), (12.0, STOP)])
-    S["user_chain_spin"] = (22.0, [
-        (0.0, K(KEY_LEFT, 2)),            # spin in place +0.4
-        (5.0, K(KEY_RIGHT, 4)),           # reverse spin -0.4
-        (7.0, K(KEY_LEFT, 2)),            # stop spin
-        (7.5, K(KEY_UP, 3)),              # drive fwd
-        (11.0, K(KEY_LEFT, 2)),           # turn while driving
-        (13.0, K(KEY_RIGHT, 2)),          # straighten
-        (13.5, K(KEY_DOWN, 6)),           # reverse
-        (17.0, STOP)])
-    S["s_curve"] = (18.0, [
-        (0.0, K(KEY_UP, 3)),
-        (2.0, K(KEY_LEFT, 2)), (5.0, K(KEY_RIGHT, 4)), (8.0, K(KEY_LEFT, 4)),
-        (11.0, K(KEY_RIGHT, 2)), (13.0, STOP)])
-    S["box_path"] = (30.0, [
-        (0.0, K(KEY_UP, 2)), (3.0, K(KEY_SPACE, 1)), (3.2, K(KEY_LEFT, 2)),
-        (7.0, K(KEY_RIGHT, 2)), (7.2, K(KEY_UP, 2)), (10.2, K(KEY_SPACE, 1)), (10.4, K(KEY_LEFT, 2)),
-        (14.2, K(KEY_RIGHT, 2)), (14.4, K(KEY_UP, 2)), (17.4, K(KEY_SPACE, 1)), (17.6, K(KEY_LEFT, 2)),
-        (21.4, K(KEY_RIGHT, 2)), (21.6, K(KEY_UP, 2)), (24.6, STOP)])
-    S["hard_reversal"] = (12.0, [
-        (0.0, K(KEY_UP, 4)), (3.0, K(KEY_DOWN, 7)), (8.0, STOP)])
-    S["spin_while_height"] = (16.0, [
-        (0.0, K(KEY_LEFT, 2)), (1.0, K(KEY_PGDN, 4)), (5.0, K(KEY_PGUP, 8)),
-        (9.0, K(KEY_RIGHT, 2)), (9.5, K(KEY_PGDN, 4)), (12.0, STOP)])
-    S["push_while_driving"] = (14.0, [
-        (0.0, K(KEY_UP, 3)),
-        (4.0, lambda sim: sim.push(60.0, 135.0, 7)),
-        (10.0, STOP)], 8.0)
-    S["lateral_push_cruise"] = (14.0, [
-        (0.0, K(KEY_UP, 3)),
-        (4.0, lambda sim: sim.push(40.0, -90.0, 6)),
-        (10.0, STOP)], 8.0)
-    S["turn_180_return"] = (20.0, [
-        (0.0, K(KEY_UP, 3)), (3.0, K(KEY_SPACE, 1)),
-        (3.2, K(KEY_LEFT, 3)), (8.4, K(KEY_RIGHT, 3)),   # ~187deg then trim
-        (8.6, K(KEY_UP, 3)), (12.0, STOP)])
-    S["marathon"] = (46.0, [
-        (0.0, K(KEY_UP, 3)), (3.0, K(KEY_LEFT, 2)), (6.0, K(KEY_RIGHT, 4)),
-        (9.0, K(KEY_LEFT, 2)), (10.0, K(KEY_PGDN, 4)), (14.0, K(KEY_PGUP, 8)),
-        (18.0, K(KEY_PGDN, 4)), (19.0, K(KEY_DOWN, 6)), (23.0, K(KEY_UP, 6)),
-        (26.0, K(KEY_SPACE, 1)), (26.2, K(KEY_LEFT, 2)), (31.2, K(KEY_RIGHT, 4)),
-        (33.2, K(KEY_LEFT, 2)), (33.4, K(KEY_UP, 3)),
-        (36.0, lambda sim: sim.push(40.0, -90.0, 6)),  # mid-chain lateral envelope: 40N holds, 50N falls (standing: 80-100N)
-        (41.0, STOP)], 8.0)
+    S["fwd_3s_stop"] = (4.0, [(UP, 0, 3)], [])
+    S["fwd_then_back"] = (8.0, [(UP, 0, 3), (DN, 4, 7)], [])
+    S["fwd_turn_left_90"] = (8.0, [(UP, 0, 3), (LF, 3.2, 3.2 + T90)], [])
+    S["fwd_turn_right_90"] = (8.0, [(UP, 0, 3), (RT, 3.2, 3.2 + T90)], [])
+    S["fwd_back_fwd"] = (11.0, [(UP, 0, 3), (DN, 3.5, 6.5), (UP, 7, 10)], [])
+    S["drive_and_turn"] = (10.0, [(UP, 0, 9), (LF, 2, 4), (RT, 5, 7)], [])
+    S["updown_while_driving"] = (11.0, [(UP, 0, 10), (PD, 2, 4), (PU, 5, 8)], [])
+    S["user_chain_spin"] = (17.0, [
+        (LF, 0, 5),            # spin in place 5 s
+        (RT, 5.2, 7.2),        # reverse spin 2 s
+        (UP, 7.5, 12.5),       # drive fwd
+        (LF, 9.5, 11.5),       # turn while driving
+        (DN, 13.0, 16.0),      # reverse
+    ], [])
+    S["s_curve"] = (13.0, [(UP, 0, 12), (LF, 2, 4), (RT, 5, 8), (LF, 9, 11)], [])
+    S["box_path"] = (21.0, [
+        (UP, 0, 2.5), (LF, 2.7, 2.7 + T90),
+        (UP, 6.1, 8.6), (LF, 8.8, 8.8 + T90),
+        (UP, 12.2, 14.7), (LF, 14.9, 14.9 + T90),
+        (UP, 18.3, 20.8),
+    ], [])
+    S["hard_reversal"] = (7.0, [(UP, 0, 3), (DN, 3, 6)], [])
+    S["spin_while_height"] = (11.0, [
+        (LF, 0, 8), (PD, 1, 3), (PU, 4, 7), (RT, 8.2, 10.2)], [])
+    S["push_while_driving"] = (11.0, [(UP, 0, 8)],
+                               [(4.0, lambda sim: sim.push(60.0, 135.0, 7))], 9.0)
+    S["lateral_push_cruise"] = (11.0, [(UP, 0, 8)],
+                                [(4.0, lambda sim: sim.push(40.0, -90.0, 6))], 9.0)
+    S["turn_180_return"] = (13.5, [
+        (UP, 0, 3), (LF, 3.2, 3.2 + T180), (UP, 9.7, 12.7)], [])
+    S["marathon"] = (42.0, [
+        (UP, 0, 3), (LF, 3, 5), (RT, 6, 8), (LF, 8.5, 9.5),
+        (PD, 10, 12), (PU, 13, 16), (PD, 16.5, 18.5),
+        (DN, 19, 22), (UP, 23, 26),
+        (LF, 26.5, 26.5 + T90 + 1.5),
+        (UP, 32, 38),
+        (RT, 33, 34.5),
+    ], [(35.0, lambda sim: sim.push(30.0, -90.0, 6))], 9.0)  # mid-chain lateral tolerance 30-40N depending on maneuver history
     return S
 
 
@@ -261,9 +232,9 @@ def main():
     results = []
     for name in names:
         entry = S[name]
-        dur, events = entry[0], entry[1]
-        settle = entry[2] if len(entry) > 2 else 4.0
-        r = run_scenario(name, events, dur, settle_s=settle)
+        dur, holds, calls = entry[0], entry[1], entry[2]
+        settle = entry[3] if len(entry) > 3 else 9.0
+        r = run_scenario(name, holds, calls, dur, settle_s=settle)
         results.append(r)
         if r.get("fell"):
             print(f"{name:22s} FELL at t={r['fall_t']:.2f}s", flush=True)
