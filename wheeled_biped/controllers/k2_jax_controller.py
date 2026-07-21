@@ -3594,8 +3594,16 @@ def k2_jax_controller_step(
     # composer so the rate limiter tracks the applied torque. airborne=0.0 in
     # every grounded scenario → (1-0)*tau + 0*damp = tau bit-exact (parity).
     _air_frac = jnp.clip(input_flat[_I_AIRBORNE], 0.0, 1.0)
-    _tau_flight_l = jnp.clip(-0.05 * wheel_vel_l, -2.0, 2.0)
-    _tau_flight_r = jnp.clip(-0.05 * wheel_vel_r, -2.0, 2.0)
+    # Wheels as reaction flywheels while airborne: PD toward level pitch.
+    # An edge exit (driving off a ledge) pivots the robot nose-down around
+    # the lip (~-150°/s → landing at -30..-45°, beyond capture); spinning the
+    # wheels FORWARD pitches the nose back up, and leaves them roll-matched
+    # to the forward landing speed. For a vertical drop pitch ≈ 0 → this is
+    # ≈ the old pure spin-down damping (drop battery unchanged). Mild
+    # per-wheel damping bounds the flywheel speed.
+    _tau_flight_pd = 2.0 * pitch_x + 0.5 * pitch_rate
+    _tau_flight_l = jnp.clip(_tau_flight_pd - 0.02 * wheel_vel_l, -2.0, 2.0)
+    _tau_flight_r = jnp.clip(_tau_flight_pd - 0.02 * wheel_vel_r, -2.0, 2.0)
     tau_sum = tau_sum.at[4].set((1.0 - _air_frac) * tau_sum[4] + _air_frac * _tau_flight_l)
     tau_sum = tau_sum.at[9].set((1.0 - _air_frac) * tau_sum[9] + _air_frac * _tau_flight_r)
 

@@ -588,7 +588,13 @@ def update_airborne_gate(centroidal, ctx: dict, model) -> float:
     if weight_n is None:
         weight_n = float(np.sum(model.body_mass)) * 9.81
         ctx["robot_weight_n"] = weight_n
-    loaded = float(getattr(centroidal, "total_contact_force_z", weight_n)) >= 0.5 * weight_n
+    # abs() per wheel: mj_contactForce's world-frame sign flips with geom
+    # ordering in the contact pair (plane→wheel positive, terrain box→wheel
+    # NEGATIVE — measured −1.0·mg standing on a box ramp). Normal load is
+    # physically non-negative, so magnitude is the robust reading.
+    load_frac = (abs(float(getattr(centroidal, "left_wheel_force", weight_n / 2)))
+                 + abs(float(getattr(centroidal, "right_wheel_force", weight_n / 2)))) / weight_n
+    ctx["load_frac"] = load_frac  # diagnostic
     flying = ctx.get("airborne_mode", False)
     airborne = ctx.get("airborne_frac", 0.0)
     if not flying:
@@ -601,7 +607,7 @@ def update_airborne_gate(centroidal, ctx: dict, model) -> float:
         else:
             airborne = max(0.0, airborne - 1.0 / 15.0)  # soft handback ramp
     else:
-        n_on = ctx.get("ground_count", 0) + 1 if loaded else 0
+        n_on = ctx.get("ground_count", 0) + 1 if load_frac >= 0.5 else 0
         ctx["ground_count"] = n_on
         airborne = 1.0
         if n_on >= 5:
