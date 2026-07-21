@@ -1141,6 +1141,7 @@ def k2_jax_sagittal_torque_assembly(
     effective_k_position, effective_max_position_tau,
     kp_cp, kd_com_vy,
     wheel_torque_sign,
+    wheel_vel_cmd_rad_s=0.0,   # commanded wheel speed (teleop cruise FF); 0 = damp to zero
     pitch_bias_comp_tau=0.0,
     position_integral_tau=0.0,
     external_position_trim=0.0,  # adaptive_bias_trim contribution (Stage 4H)
@@ -1199,8 +1200,8 @@ def k2_jax_sagittal_torque_assembly(
     tau_balance_before_pos = (
         tau_pitch + tau_pitch_rate + tau_sagittal_velocity + tau_support_velocity
         + tau_cp + tau_com_vy
-        + 0.5 * (-effective_k_wheel_velocity * wheel_vel_left_rad_s
-                 - effective_k_wheel_velocity * wheel_vel_right_rad_s)
+        + 0.5 * (-effective_k_wheel_velocity * (wheel_vel_left_rad_s - wheel_vel_cmd_rad_s)
+                 - effective_k_wheel_velocity * (wheel_vel_right_rad_s - wheel_vel_cmd_rad_s))
     )
     pos_lower = -max_tau_wheel - tau_balance_before_pos
     pos_upper = max_tau_wheel - tau_balance_before_pos
@@ -1212,8 +1213,16 @@ def k2_jax_sagittal_torque_assembly(
     )
     tau_position = jnp.clip(tau_position, -effective_max_position_tau, effective_max_position_tau)
 
-    tau_wheel_vel_left = -effective_k_wheel_velocity * wheel_vel_left_rad_s
-    tau_wheel_vel_right = -effective_k_wheel_velocity * wheel_vel_right_rad_s
+    # Teleop cruise feedforward: damp the wheels toward the COMMANDED speed
+    # (cmd_vx/r), not toward zero. Without it the wheel damping brakes the
+    # spinning wheels while the position loop drives forward — two large
+    # opposing terms (~±4 Nm) nearly cancel, a fragile height-dependent
+    # equilibrium that surges whenever the balance shifts (e.g. a height
+    # transition). With it the wheel loop holds cmd_vx directly and the
+    # position term relaxes to drift-trim. wheel_vel_cmd_rad_s = 0 (autonomous)
+    # reduces to the original damp-to-zero → byte-identical.
+    tau_wheel_vel_left = -effective_k_wheel_velocity * (wheel_vel_left_rad_s - wheel_vel_cmd_rad_s)
+    tau_wheel_vel_right = -effective_k_wheel_velocity * (wheel_vel_right_rad_s - wheel_vel_cmd_rad_s)
 
     tau_common_unclipped = (
         tau_pitch + tau_pitch_rate + tau_sagittal_velocity + tau_support_velocity
@@ -2927,6 +2936,14 @@ def k2_jax_controller_step(
     #   continuous_max_position_tau=True   → SCHEDULED: 4.0→6.0 at z=0.393→0.300
     from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import K2_NOTCH_LOW_Q_V1 as _k2_sch
     kpos = 40.0        # K2: vd_k_position=40.0 (constructor arg, not scheduled)
+    # Cruise position relief (teleop): with the wheel-velocity FF holding cmd_vx,
+    # the position term must relax or it over-drives (measured ±11° pitch limit
+    # cycle); relaxed to 0.25×, it only trims drift while the wheel loop carries
+    # the speed. Swept 1.0/0.5/0.25/0.1/0.0: 0.25 is the knee — pitch_p2p 1.4°
+    # AND speed 0.40 accurate at every height (0.1/0.0 smoother but speed
+    # overshoots as position drift-trim vanishes). _t_busy=0 off-teleop → kpos
+    # unchanged → autonomous byte-identical.
+    _CRUISE_KPOS_SCALE = 0.25
     kwheel = 0.5        # K2: base k_wheel_velocity
     kd_pitch = 10.0     # K2: base kd_pitch (not scheduled)
     # Continuous max_position_tau scheduling
@@ -3265,6 +3282,9 @@ def k2_jax_controller_step(
         sagittal_velocity_m_s=sag_vel - _t_cmd_vx,
         sagittal_position_error_m=_anchor_eff_err,
         wheel_vel_left_rad_s=wheel_vel_l, wheel_vel_right_rad_s=wheel_vel_r,
+        # Wheel-velocity FF for teleop cruise: forward motion → wheel_qvel < 0
+        # (measured), effective rolling radius ~0.064 m; _t_cmd_vx=0 off-teleop.
+        wheel_vel_cmd_rad_s=-_t_cmd_vx / 0.064,
         support_velocity_m_s=support_vel,
         kp_pitch=_kp_pitch_eff, effective_pitch_scale=1.0, effective_pitch_tau_cap=0.0,
         effective_kd_pitch=kd_pitch,
@@ -3272,7 +3292,7 @@ def k2_jax_controller_step(
         effective_velocity_damping_scale=_velocity_damping_scale + _anchor_damping_extra,
         effective_support_velocity_gain=0.0, effective_support_velocity_scale=1.0,
         effective_k_wheel_velocity=kwheel,
-        effective_k_position=kpos,
+        effective_k_position=kpos * (1.0 - (1.0 - _CRUISE_KPOS_SCALE) * _t_busy),
         # Phase 7 fix: use Python's runtime effective_max_position_tau when available
         # (captured from sagittal controller in both-synced mode; includes T6F/T6I raises).
         # Falls back to height-scheduled max_pos_tau in standalone JAX mode.

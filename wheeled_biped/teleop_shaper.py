@@ -72,17 +72,11 @@ class TeleopShaper:
     LEAD = 0.09             # m ahead (below tau_position saturation 4Nm/k40=0.10)
     TRAIL = 0.30            # m behind (loose — the overshoot anchor must stay)
     LAT = 0.05              # m lateral (wheels cannot close lateral error)
-    # While actively cruising the leash tightens to a small symmetric window:
-    # the loose 0.30 trail lets the robot overshoot the moving target ~0.19 m,
-    # and k_position=40 on that error saturates the 4-6 Nm cap → a bang-bang
-    # surge/brake ~0.5 Hz limit cycle (measured ±6° pitch, speed 0.26↔0.57 at
-    # cmd 0.40). Tight during cruise hands the drive to the velocity command
-    # (measured: 0.07 → ±2.6° pitch, speed p2p 0.09). Loose again when idle so
-    # the anchor overshoot stays (symmetric-tight-while-idle made the WIP
-    # wander — v2 lesson #5). NOTE: intermediate 0.10-0.20 RE-introduces relay
-    # chatter (measured worse than loose) — stay tight or stay loose.
-    LEAD_DRIVE = 0.07
-    TRAIL_DRIVE = 0.07
+    # (The sagittal cruise surge/brake limit cycle is fixed IN THE CONTROLLER —
+    # wheel-velocity FF + cruise position relief — not by tightening this leash.
+    # An earlier tight-cruise-leash band-aid was reverted: the principled fix
+    # works with the loose anchor leash, which also rides out a mid-cruise push
+    # better than a tight leash that would fight the ballistic catch.)
     # Yaw leash: bound the target heading to the robot's ACTUAL heading, exactly
     # as LEAD/TRAIL bound position. A sustained turn under-delivers (the robot
     # sustains ~0.2 rad/s for a 0.5 command), so an unleashed target yaw runs
@@ -269,17 +263,12 @@ class TeleopShaper:
 
         # Leash in the ROBOT frame (relative to the support center, using the
         # robot's estimated heading): lead/trail along forward, lat sideways.
-        # Tight while cruising (kills the surge/brake limit cycle), loose when
-        # idle (keeps the anchor overshoot).
-        busy = self.vx_tgt != 0.0 or self.wz_tgt != 0.0
-        lead = self.LEAD_DRIVE if busy else self.LEAD
-        trail = self.TRAIL_DRIVE if busy else self.TRAIL
         rel = np.array([self.tx - sup_x, self.ty - sup_y])
         rf = np.array([-np.sin(est_yaw), np.cos(est_yaw)])   # robot forward
         rl = np.array([-rf[1], rf[0]])                        # robot left
         a = float(rel @ rf)   # ahead(+)/behind(−)
         b = float(rel @ rl)   # left(+)/right(−)
-        a_c = float(np.clip(a, -trail, lead))
+        a_c = float(np.clip(a, -self.TRAIL, self.LEAD))
         b_c = float(np.clip(b, -self.LAT, self.LAT))
         if a_c != a or b_c != b:
             p = np.array([sup_x, sup_y]) + rf * a_c + rl * b_c
