@@ -91,8 +91,8 @@ from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller impor
     K2_JAX_DEDICATED_DEFAULT_V1,
     K2_JAX_DEDICATED_DEFAULT_V2 as _K2_AUTH_SCHED,  # V2 rollback alias
     K2_JAX_DEDICATED_DEFAULT_V3 as _K3_AUTH_SCHED,   # V3 — previous default / rollback
-    K2_JAX_DEDICATED_DEFAULT_V3_HOMING as _K3H_AUTH_SCHED,  # V3_HOMING — OFFICIAL DEFAULT (2026-07-19)
-    K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR as _K3A_AUTH_SCHED,  # V3_ANCHOR — anchored standing (2026-07-21)
+    K2_JAX_DEDICATED_DEFAULT_V3_HOMING as _K3H_AUTH_SCHED,  # V3_HOMING — rollback (was default 2026-07-19)
+    K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR as _K3A_AUTH_SCHED,  # V3_ANCHOR — OFFICIAL DEFAULT (promoted 2026-07-21)
     K2_JAX_DEDICATED_DEFAULT_V1_DRIFT_FIXED,
     K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE,
     K2_JAX_DEDICATED_DEFAULT_V2_HEADING_HEIGHT_TWIST_CANDIDATE_V2,
@@ -287,7 +287,7 @@ def parse_args():
                    help="Save generated push config to JSON file")
     p.add_argument("--load-random-push-config", type=str, default=None,
                    help="Load push config from JSON file (for exact replay)")
-    p.add_argument("--profile", type=str, default="k2_jax_dedicated_default_v3_homing",
+    p.add_argument("--profile", type=str, default="k2_jax_dedicated_default_v3_anchor",
                    help="Sagittal authority profile name (default: k2_jax_dedicated_default_v3_homing; "
                         "rollback to k2_jax_dedicated_default_v3 for the no-homing V3)")
     # ── V3 + WBC assist (diagnostic overlay; default OFF = untouched V3 path) ──
@@ -815,16 +815,18 @@ def main():
     # K2_JAX_DEDICATED_DEFAULT_V1 is kept as historical reference.
     _PROFILE_MAP = {
         "k2_notch_low_q_v1": K2_NOTCH_LOW_Q_V1,
-        # V3_ANCHOR (2026-07-21): V3_HOMING + anchored standing (leashed
-        # position PI: stands still at the latched home ~1 mm RMS instead of
-        # the ±4 cm limit cycle; returns to the anchor after pushes). Quick
-        # battery: push 50/90 N fwd/back/lat + height sweep = parity or
-        # better vs V3_HOMING. Full 48-scenario suite pending before formal
-        # promotion — rollback: --profile k2_jax_dedicated_default_v3_homing.
+        # OFFICIAL DEFAULT (promoted 2026-07-21): V3_HOMING + anchored standing
+        # (position PI + quiet-stance damping boost + scheduled pitch stiffness
+        # + settled-trust heading gate). Stands still at the latched home
+        # ~0.3 mm RMS (vs ±4 cm limit cycle), returns to the anchor after
+        # pushes, yaw restored within ~5 s of settling. Promotion suite
+        # (--quick, 48 scenarios): 0 falls, 48× ASSIST_EQUIVALENT. Battery
+        # 50/90 N fwd/back/lat fresh+idle = 100% pass; 24-dir polar min 70 N.
         "k2_jax_dedicated_default_v3_anchor": _K3A_AUTH_SCHED,
         "K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR": _K3A_AUTH_SCHED,
-        # OFFICIAL DEFAULT (promoted 2026-07-19): V3 + post-push homing (F5/F12
-        # leg un-splay + yaw/position return) + all audit fixes F1–F13/F6b/F8b.
+        # V3_HOMING (rollback — previous default, promoted 2026-07-19): V3 +
+        # post-push homing (F5/F12 leg un-splay + yaw/position return) + all
+        # audit fixes F1–F13/F6b/F8b.
         "k2_jax_dedicated_default_v3_homing": _K3H_AUTH_SCHED,
         "K2_JAX_DEDICATED_DEFAULT_V3_HOMING": _K3H_AUTH_SCHED,
         # V3 (rollback — previous default, no homing)

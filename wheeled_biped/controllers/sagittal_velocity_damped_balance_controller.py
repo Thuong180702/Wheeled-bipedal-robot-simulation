@@ -3747,7 +3747,8 @@ K2_JAX_DEDICATED_DEFAULT_V3 = replace(
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# K2_JAX_DEDICATED_DEFAULT_V3_HOMING — OFFICIAL DEFAULT (promoted 2026-07-19)
+# K2_JAX_DEDICATED_DEFAULT_V3_HOMING — rollback (default 2026-07-19 → 2026-07-21,
+# superseded by K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR)
 # V3 + post-push HOMING (audit F5/F12). Realtime runner defaults to this profile;
 # rollback to K2_JAX_DEDICATED_DEFAULT_V3 (no homing) if needed. Validated: quick
 # 48-scenario suite 0 falls and ≥ WBC-assist on all metrics; push recovery returns
@@ -3784,7 +3785,9 @@ K2_JAX_DEDICATED_DEFAULT_V3_HOMING = replace(
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR — V3_HOMING + anchored standing
+# K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR — OFFICIAL DEFAULT (promoted 2026-07-21)
+# V3_HOMING + anchored standing. Promotion suite (--quick, 48 scenarios):
+# 0 falls, 48× ASSIST_EQUIVALENT. Rollback: K2_JAX_DEDICATED_DEFAULT_V3_HOMING.
 # ═══════════════════════════════════════════════════════════════════════════════
 # Root cause (instrumented idle, 2026-07-21): with P-only position control the
 # robot parks ~6 cm from home where tau_position (+1.37 Nm mean) cancels the
