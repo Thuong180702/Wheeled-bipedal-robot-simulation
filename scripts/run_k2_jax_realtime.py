@@ -1321,6 +1321,10 @@ def main():
     # ── 10. Termination ──────────────────────────────────────────────────
     height_floor = achieved_com_z - 0.05
     max_steps = args.steps
+    if args.teleop:
+        # Interactive session: run until the viewer window is closed,
+        # not until a step budget runs out mid-drive.
+        max_steps = 10 ** 9
 
     # ── 11. Pre-computed constants ───────────────────────────────────────
     height_ref = float(target_com_z)
