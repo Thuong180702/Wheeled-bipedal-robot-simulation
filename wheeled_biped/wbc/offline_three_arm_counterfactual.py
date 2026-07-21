@@ -232,6 +232,12 @@ def init_v3_controller(
             homing_kp_hip_roll=getattr(_profile, "homing_kp_hip_roll", 0.0),
             homing_kp_hip_yaw=getattr(_profile, "homing_kp_hip_yaw", 0.0),
             homing_max_tau=getattr(_profile, "homing_max_tau", 4.0),
+            anchor_position_ki=getattr(_profile, "anchor_position_ki", 0.0),
+            anchor_integral_cap_nm=getattr(_profile, "anchor_integral_cap_nm", 0.0),
+            anchor_integral_leak_per_step=getattr(_profile, "anchor_integral_leak_per_step", 0.0),
+            anchor_kvel_boost_scale=getattr(_profile, "anchor_kvel_boost_scale", 0.0),
+            anchor_leash_m=getattr(_profile, "anchor_leash_m", 0.0),
+            anchor_slew_m_s=getattr(_profile, "anchor_slew_m_s", 0.0),
         )
 
         # ── Pack JAX state ──────────────────────────────────────────────────

@@ -817,6 +817,21 @@ class SagittalAuthoritySchedule:
     homing_kp_hip_yaw: float = 0.0       # Nm/rad hip_yaw restoring boost
     homing_max_tau: float = 4.0          # Nm per-joint smooth tanh bound
 
+    # ── Anchor position integral (V3_ANCHOR): PI position hold ──────────────
+    # The P-only position loop parks the robot bias/k_position from home
+    # (equilibrium-pitch torque bias exceeds the ABS trim cap). The integral
+    # supplies the bias torque so the standing point converges to the latched
+    # home. Adaptation freezes (continuous gates) when tilted, in bad contact,
+    # or during commanded height transitions. ki = 0 disables (old behavior).
+    anchor_position_ki: float = 0.0            # Nm/(m·s) integral gain
+    anchor_integral_cap_nm: float = 0.0        # Nm anti-windup clamp
+    anchor_integral_leak_per_step: float = 0.0  # per-step leak (forgetting)
+    anchor_kvel_boost_scale: float = 0.0       # extra damping scale at quiet stance
+    # (gated in JAX step by proximity/stability/height/quiet-EMA gates)
+    anchor_leash_m: float = 0.0                # RESERVED param slot (leash mechanism
+    # removed — it acted as a phase-lagged relay; superseded by the proximity gate)
+    anchor_slew_m_s: float = 0.0               # RESERVED param slot (unused)
+
     # ── Heading hip-yaw stabilizer (low-authority soft heading impedance) ──
     # Acts on hip-yaw joints [1,6] with very low authority smooth bounded torque.
     # Corrects slow yaw drift without wheel differential. Yields to poor
@@ -3764,6 +3779,37 @@ K2_JAX_DEDICATED_DEFAULT_V3_HOMING = replace(
     drift_k_pos=2.0,           # Nm/m — weak sagittal position return
     drift_hgate_heading_low=2.0,   # widen heading height-gate to cm scale (F10)
     drift_hgate_heading_high=12.0,
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR — V3_HOMING + anchored standing
+# ═══════════════════════════════════════════════════════════════════════════════
+# Root cause (instrumented idle, 2026-07-21): with P-only position control the
+# robot parks ~6 cm from home where tau_position (+1.37 Nm mean) cancels the
+# untrimmed equilibrium-pitch bias (tau_pitch −1.23 Nm mean; ABS trim caps at
+# 0.35 Nm), and oscillates ±4–6 cm (limit cycle, under-damped).
+# This profile makes the latched home (position/heading/posture) a true anchor:
+#   - anchor position integral: supplies the bias torque → steady-state error → 0
+#   - raised velocity_damping_scale: shrinks the idle limit-cycle amplitude
+# Balance keeps absolute priority: integral adaptation freezes (continuous
+# gates) when tilted/pushed or during height transitions; heading return,
+# posture homing, and far-range drift return are inherited from V3_HOMING.
+K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR = replace(
+    K2_JAX_DEDICATED_DEFAULT_V3_HOMING,
+    profile_name="k2_jax_dedicated_default_v3_anchor",
+    # ARCHITECTURE: anchor = HOMING + prox(|err|)·[integral + damping boost].
+    # Every anchor mechanism is confined to the anchor neighborhood (master
+    # proximity gate, full ≤5 cm / off ≥15 cm) — outside it the controller IS
+    # V3_HOMING, whose displaced-return behavior is proven. Modifying the
+    # displaced regime (error leash/tanh shaping) destabilized it every time.
+    anchor_position_ki=8.0,             # Nm/(m·s) — builds 1.3 Nm from 5 cm in ~3 s
+    anchor_integral_cap_nm=2.0,         # Nm — covers the ~1.3 Nm standing bias
+    anchor_integral_leak_per_step=2e-4,  # ~50 s forgetting time constant
+    # Idle damping boost (total ≈ ×3 at quiet stance): kills the ±4 cm limit
+    # cycle. Gated by prox × pitch/pitch-rate × height motion × a 1 s |sag_vel|
+    # EMA "quiet-stance" gate — instantaneous gates modulate at the post-push
+    # ringdown frequency and parametrically pumped it (measured).
+    anchor_kvel_boost_scale=1.9,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
