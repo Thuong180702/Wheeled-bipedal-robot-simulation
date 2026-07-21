@@ -178,6 +178,9 @@ class TestStateFieldAudit:
             "heading_hy_ref_yaw": "k2_jax_controller.py:2067 (heading reference latch)",
             "heading_hy_ref_latched": "k2_jax_controller.py:2066 (heading latch flag)",
             "heading_hy_integral": "k2_jax_controller.py:2078 (heading leaky integral)",
+            # Anchor position integral (V3_ANCHOR) — JAX-only, like drift/heading state
+            "anchor_integ_tau": "k2_jax_controller.py Step 4a2 (anchor position integral, ki=0 for non-anchor profiles)",
+            "anchor_activity_ema": "k2_jax_controller.py Step 4a2 (quiet-stance |sag_vel| EMA for the idle damping boost)",
         }
         for field in K2_JAX_STATE_FIELDS:
             # Generic check for prev_tau_N and abs_buf_N

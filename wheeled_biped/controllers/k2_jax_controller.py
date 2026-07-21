@@ -213,7 +213,19 @@ _IDX_HOMING_ENABLED = 84
 _IDX_HOMING_KP_HIP_ROLL = 85   # Nm/rad — hip_roll restoring (V3 posture kp_hip_roll=0)
 _IDX_HOMING_KP_HIP_YAW = 86    # Nm/rad — hip_yaw restoring boost (relieves scissor)
 _IDX_HOMING_MAX_TAU = 87       # Nm per-joint smooth tanh bound
-K2_JAX_PARAMS_SIZE_DRIFT = K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE + 34  # 88 (was 84)
+# ── Anchor position integral (V3_ANCHOR): the P-only position loop parks the
+# robot bias/k_position from home (equilibrium-pitch torque bias, ~1.3 Nm
+# measured, exceeds the ABS trim cap). The integral supplies the missing bias
+# torque so the standing point converges to the latched home. ──
+_IDX_ANCHOR_KI = 88            # Nm/(m·s) — integral gain on sagittal position error
+_IDX_ANCHOR_INTEG_CAP = 89     # Nm — integral clamp (anti-windup)
+_IDX_ANCHOR_LEAK = 90          # per-step leak factor (anti-windup forgetting)
+_IDX_ANCHOR_KVEL_BOOST = 91    # extra velocity_damping_scale at idle (stability-gated;
+                               # always-on ×3 damping broke 50-90N push recovery)
+_IDX_ANCHOR_LEASH_M = 92       # RESERVED (leash removed — phase-lagged relay; see Step 4a2)
+_IDX_ANCHOR_SLEW_M_S = 93      # RESERVED (unused)
+_IDX_ANCHOR_KP_PITCH_SOFT = 94  # softer pitch stiffness during recovery (0=off→keep 50)
+K2_JAX_PARAMS_SIZE_DRIFT = K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE + 41  # 95 (was 88)
 
 # Index constants for fast params access inside JIT
 _IDX_NOTCH_B0 = 0
@@ -312,6 +324,14 @@ def pack_params_stage2(
     homing_kp_hip_roll: float = 0.0,   # Nm/rad
     homing_kp_hip_yaw: float = 0.0,    # Nm/rad
     homing_max_tau: float = 4.0,       # Nm per-joint smooth tanh bound
+    # Anchor position integral (V3_ANCHOR) — 0.0 disables (old behavior)
+    anchor_position_ki: float = 0.0,           # Nm/(m·s)
+    anchor_integral_cap_nm: float = 0.0,       # Nm anti-windup clamp
+    anchor_integral_leak_per_step: float = 0.0,  # per-step leak
+    anchor_kvel_boost_scale: float = 0.0,      # extra damping scale at idle
+    anchor_leash_m: float = 0.0,               # m — 0 disables the leash
+    anchor_slew_m_s: float = 0.0,              # m/s — leash walk-home rate
+    anchor_kp_pitch_soft: float = 0.0,         # softer pitch kp during recovery (0=off)
 ) -> jnp.ndarray:
     """Pack K2 controller params into flat JAX params array (Stage 2 + drift + heading layout).
 
@@ -420,6 +440,14 @@ def pack_params_stage2(
     params = params.at[_IDX_HOMING_KP_HIP_ROLL].set(float(homing_kp_hip_roll))
     params = params.at[_IDX_HOMING_KP_HIP_YAW].set(float(homing_kp_hip_yaw))
     params = params.at[_IDX_HOMING_MAX_TAU].set(float(homing_max_tau))
+    # Anchor position integral (V3_ANCHOR)
+    params = params.at[_IDX_ANCHOR_KI].set(float(anchor_position_ki))
+    params = params.at[_IDX_ANCHOR_INTEG_CAP].set(float(anchor_integral_cap_nm))
+    params = params.at[_IDX_ANCHOR_LEAK].set(float(anchor_integral_leak_per_step))
+    params = params.at[_IDX_ANCHOR_KVEL_BOOST].set(float(anchor_kvel_boost_scale))
+    params = params.at[_IDX_ANCHOR_LEASH_M].set(float(anchor_leash_m))
+    params = params.at[_IDX_ANCHOR_SLEW_M_S].set(float(anchor_slew_m_s))
+    params = params.at[_IDX_ANCHOR_KP_PITCH_SOFT].set(float(anchor_kp_pitch_soft))
 
     return params
 
@@ -429,7 +457,10 @@ def unpack_params_stage2(params_flat: jnp.ndarray) -> dict:
     p = np.asarray(params_flat, dtype=np.float64)
     _ref_src_int = int(p[_IDX_MODE_DIV_REF_SOURCE])
     _ref_src = "target" if _ref_src_int == 0 else ("disabled" if _ref_src_int == 2 else "zero_only_for_debug")
-    _has_drift = len(p) >= K2_JAX_PARAMS_SIZE_DRIFT
+    # Drift extension boundary is fixed at the homing block end (index 87);
+    # newer arrays may carry further extensions (anchor: 88-90).
+    _has_drift = len(p) > _IDX_HOMING_MAX_TAU
+    _has_anchor = len(p) > _IDX_ANCHOR_LEAK
     result = {
         "notch_b0": float(p[_IDX_NOTCH_B0]),
         "notch_b1": float(p[_IDX_NOTCH_B1]),
@@ -499,6 +530,14 @@ def unpack_params_stage2(params_flat: jnp.ndarray) -> dict:
     # V5 emergency guard max tau
     _has_emergency = len(p) > _IDX_ANTI_TWIST_EMERGENCY_MAX_TAU
     result["anti_twist_emergency_max_tau"] = float(p[_IDX_ANTI_TWIST_EMERGENCY_MAX_TAU]) if _has_emergency else 0.25
+    # Anchor position integral
+    result["anchor_position_ki"] = float(p[_IDX_ANCHOR_KI]) if _has_anchor else 0.0
+    result["anchor_integral_cap_nm"] = float(p[_IDX_ANCHOR_INTEG_CAP]) if _has_anchor else 0.0
+    result["anchor_integral_leak_per_step"] = float(p[_IDX_ANCHOR_LEAK]) if _has_anchor else 0.0
+    result["anchor_kvel_boost_scale"] = float(p[_IDX_ANCHOR_KVEL_BOOST]) if len(p) > _IDX_ANCHOR_KVEL_BOOST else 0.0
+    result["anchor_leash_m"] = float(p[_IDX_ANCHOR_LEASH_M]) if len(p) > _IDX_ANCHOR_LEASH_M else 0.0
+    result["anchor_slew_m_s"] = float(p[_IDX_ANCHOR_SLEW_M_S]) if len(p) > _IDX_ANCHOR_SLEW_M_S else 0.0
+    result["anchor_kp_pitch_soft"] = float(p[_IDX_ANCHOR_KP_PITCH_SOFT]) if len(p) > _IDX_ANCHOR_KP_PITCH_SOFT else 0.0
     return result
 
 
@@ -1438,7 +1477,13 @@ _HEADING_HY_STATE_FIELDS = (
     "heading_hy_integral",       # soft integrator for heading correction (rad·s)
 )
 K2_JAX_STATE_FIELDS = K2_JAX_STATE_FIELDS + _HEADING_HY_STATE_FIELDS
-K2_JAX_STATE_SIZE: int = len(K2_JAX_STATE_FIELDS)  # 843
+# Anchor position integral + activity EMA state (+2)
+_ANCHOR_STATE_FIELDS = (
+    "anchor_integ_tau",     # Nm — accumulated position integral
+    "anchor_activity_ema",  # m/s — slow EMA of |sag_vel| (quiet-stance detector)
+)
+K2_JAX_STATE_FIELDS = K2_JAX_STATE_FIELDS + _ANCHOR_STATE_FIELDS
+K2_JAX_STATE_SIZE: int = len(K2_JAX_STATE_FIELDS)  # 845
 
 # Index constants for core state (unchanged)
 _S_NOTCH_X1, _S_NOTCH_X2, _S_NOTCH_Y1, _S_NOTCH_Y2 = 0, 1, 2, 3
@@ -1469,6 +1514,9 @@ _S_DRIFT_REF_LATCHED = 839
 _S_HEADING_HY_REF_YAW = 840
 _S_HEADING_HY_REF_LATCHED = 841
 _S_HEADING_HY_INTEGRAL = 842
+# Anchor position integral + activity EMA state indices (843-844)
+_S_ANCHOR_INTEG_TAU = 843
+_S_ANCHOR_ACT_EMA = 844
 
 
 def pack_state_k2(
@@ -1489,8 +1537,11 @@ def pack_state_k2(
     heading_hy_ref_yaw=0.0,
     heading_hy_ref_latched=0.0,
     heading_hy_integral=0.0,
+    # Anchor position integral + activity EMA (default: zero)
+    anchor_integ_tau=0.0,
+    anchor_activity_ema=0.0,
 ):
-    """Pack all K2 state into flat JAX array (843 with ring buffer + APCR1ND + drift + heading)."""
+    """Pack all K2 state into flat JAX array (845 with ring buffer + APCR1ND + drift + heading + anchor)."""
     s = jnp.zeros(K2_JAX_STATE_SIZE, dtype=jnp.float64)
     s = s.at[_S_NOTCH_X1].set(notch_x1)
     s = s.at[_S_NOTCH_X2].set(notch_x2)
@@ -1517,6 +1568,9 @@ def pack_state_k2(
     s = s.at[_S_HEADING_HY_REF_YAW].set(heading_hy_ref_yaw)
     s = s.at[_S_HEADING_HY_REF_LATCHED].set(heading_hy_ref_latched)
     s = s.at[_S_HEADING_HY_INTEGRAL].set(heading_hy_integral)
+    # Anchor position integral + activity EMA
+    s = s.at[_S_ANCHOR_INTEG_TAU].set(anchor_integ_tau)
+    s = s.at[_S_ANCHOR_ACT_EMA].set(anchor_activity_ema)
     # ABS fields initialized to zero by default (zeros array)
     return s
 
@@ -2540,12 +2594,29 @@ def k2_jax_drift_controller(
     )
     vel_damping_mult = 1.0 + push_damp_mult * push_inference  # 1.0→(1.0+push_damp_mult)
 
-    # Heading gate: reduce if hip-yaw diverging; uses narrower height gate
+    # Heading gate: reduce if hip-yaw diverging; uses narrower height gate.
+    # ANCHOR settled-trust: the hy_div throttle protects against fighting a
+    # DYNAMICALLY twisting stance, but it also blocked the yaw return forever
+    # after big diagonal pushes — the scissor is friction-pinned and creeps at
+    # only ~0.01 rad/s under 2 Nm of homing, so |div| stays >0.15 for 30 s+
+    # while the robot stands perfectly still with its heading 22° off
+    # (measured; raising homing/heading gains does NOT help — the gate is the
+    # blocker). When the anchor quiet-stance envelope says the robot is
+    # settled, trust the homing and let the wheel-differential return run:
+    # whole-body yaw needs no hip-yaw joint motion. Gated on anchor_ki>0 so
+    # every other profile keeps the original gate exactly.
+    _hy_div_term = 1.0 - _smoothstep01((hip_yaw_div - 0.05) / (0.15 - 0.05))
+    _anchor_on_h = params_flat[_IDX_ANCHOR_KI] > 0.0
+    _settled_trust = jnp.where(
+        _anchor_on_h,
+        1.0 - _smoothstep01((state_flat[_S_ANCHOR_ACT_EMA] - 0.18) / (0.30 - 0.18)),
+        0.0,
+    )
     heading_gate = (
         stability_gate
         * height_gate_heading
         * _smoothstep01((yaw_error_abs - 0.03) / (0.15 - 0.03))
-        * (1.0 - _smoothstep01((hip_yaw_div - 0.05) / (0.15 - 0.05)))
+        * jnp.maximum(_hy_div_term, _settled_trust)
     )
 
     # Position gate: weak, heavily gated (configurable smoothstep region); tightest height gate
@@ -2898,6 +2969,134 @@ def k2_jax_controller_step(
         _slow_mean - sign_err * exit_th,
     )
 
+    # === Step 4a2: Anchor position integral (V3_ANCHOR) ===
+    # The P-only position loop cannot stand AT home: an equilibrium-pitch torque
+    # bias (~1.3 Nm measured, above the ABS trim cap) parks the robot where
+    # tau_position and tau_pitch cancel — bias/k_position ≈ 6 cm from home.
+    # The integral supplies the bias torque so the standing point converges to
+    # the latched home. Anti-windup is continuous: adaptation is scaled by the
+    # same safety gate as the ABS trim (upright/contact/error-sane) and a
+    # height-motion gate (frozen during commanded height transitions, same
+    # cm-scale semantics as the heading height gate), plus leak decay + clamp.
+    # ki = 0 (default) keeps every existing profile byte-identical.
+    _anchor_ki = params_flat[_IDX_ANCHOR_KI]
+    _anchor_cap = params_flat[_IDX_ANCHOR_INTEG_CAP]
+    _anchor_leak = params_flat[_IDX_ANCHOR_LEAK]
+    _anchor_hgate = 1.0 - _jax_smoothstep01(
+        (jnp.abs(com_z - schedule_h) * 100.0 - 2.0) / (12.0 - 2.0))
+
+    # ── Master anchor proximity gate ──
+    # ARCHITECTURE (after 5 measured failure modes): every anchor mechanism is
+    # confined to the anchor neighborhood — outside it the controller IS
+    # V3_HOMING, whose displaced-return behavior is proven (never falls where
+    # this robot physically can recover). Attempts to modify the displaced
+    # regime all destabilized it: raw-error P+I railed the 4 Nm cap (zero
+    # stiffness → relaxation oscillation), a hard leash projection became a
+    # phase-lagged relay (±L square-wave force), tanh shaping removed the
+    # position gradient exactly where HOMING relies on its rail. Position is
+    # slowly-varying, so this gate adds no fast nonlinearity.
+    _anchor_prox = 1.0 - _jax_smoothstep01((jnp.abs(sag_pos_err) - 0.05) / (0.15 - 0.05))
+    _anchor_eff_err = sag_pos_err  # raw error — identical to HOMING
+    # Quiet-stance detector: asymmetric envelope follower on |sag_vel|.
+    # FAST attack (τ≈0.1 s): a push closes the boost within ~100 ms, before
+    # the ballistic catch. SLOW release (τ≈1.5 s): between oscillation peaks
+    # the envelope barely decays, so the boost coefficient tracks the cycle's
+    # AMPLITUDE ENVELOPE, never its phase — a coefficient that cannot follow
+    # 2–3 Hz cannot parametrically pump (instantaneous gates did; measured).
+    # A symmetric slow EMA was tried first: it settled at ~0.10 for the
+    # established post-push limit cycle, half-closing the old 0.05–0.15 gate —
+    # the boost was too weak to collapse the cycle and the robot stayed
+    # oscillating (bistable: calm start stayed calm, post-push cycle
+    # persisted). Envelope thresholds: cycle envelope ~0.12–0.15 → strong
+    # boost (collapses it); ballistic/ringdown envelope ≥0.3 → boost off.
+    # Band placement separates the two regimes by velocity amplitude alone:
+    # limit-cycle |sag_vel| peaks ≤ ~0.17 m/s (full boost — collapses it),
+    # ballistic catch 0.3–0.6 m/s (boost off within ~30 ms of a push; a
+    # 0.10-low-edge band left the gate ~0.9 open through a 50 N catch and it
+    # fell). Gate is FLAT (=1) over the whole cycle band, so envelope motion
+    # there cannot modulate the coefficient.
+    _act_ema = state_flat[_S_ANCHOR_ACT_EMA]
+    _act_dev = jnp.abs(sag_vel) - _act_ema
+    _act_ema = _act_ema + jnp.where(_act_dev > 0.0, 0.35, 0.0067) * _act_dev
+    state_flat = state_flat.at[_S_ANCHOR_ACT_EMA].set(_act_ema)
+    _anchor_quiet = 1.0 - _jax_smoothstep01((_act_ema - 0.18) / (0.30 - 0.18))
+
+    # Integral: adapts and APPLIES only near the anchor (× prox). Its value
+    # (the standing-at-home bias, ~1.3 Nm) persists while displaced so
+    # re-anchoring is immediate; margin gate keeps P+I off the torque cap.
+    _anchor_gate = jnp.where(_safety, 1.0, 0.0) * _anchor_hgate * _anchor_prox
+    _anchor_margin_gate = _jax_smoothstep01(
+        (max_pos_tau - jnp.abs(-kpos * _anchor_eff_err + state_flat[_S_ANCHOR_INTEG_TAU]))
+        / 1.0)
+    _anchor_integ = (
+        state_flat[_S_ANCHOR_INTEG_TAU]
+        - _anchor_ki * control_dt * _anchor_eff_err * _anchor_gate * _anchor_margin_gate
+    ) * (1.0 - _anchor_leak)
+    _anchor_integ = jnp.clip(_anchor_integ, -_anchor_cap, _anchor_cap)
+    state_flat = state_flat.at[_S_ANCHOR_INTEG_TAU].set(_anchor_integ)
+    _anchor_integ_applied = _anchor_integ * _anchor_prox
+
+    # Idle damping boost: extra sagittal velocity damping that kills the WIP
+    # limit cycle while standing, fading out continuously as pitch/pitch-rate
+    # rise (a push) or during height transitions — an always-on ×3 damping
+    # broke 50–90 N push recovery (the wheels must run toward the fall).
+    # NEVER gate this by |sag_vel|: a velocity-dependent damping coefficient
+    # creates a negative-slope force–velocity band ⇒ relaxation oscillation.
+    # Gate thresholds match the drift stability gate (pitch 2→12°, rate 2→15°/s).
+    _anchor_kvb = params_flat[_IDX_ANCHOR_KVEL_BOOST]
+    # Three gates cover three disjoint escape regimes (each measured):
+    #  - fast catch (|v| 0.3–0.6): velocity envelope closes in ~30 ms;
+    #  - calm-but-displaced (26 cm stall): wide proximity gate;
+    #  - GENTLE sustained push (e.g. 19 N × 8 steps → v≈0.19, UNDER the
+    #    envelope band; robot barely translates, so prox stays open — the
+    #    boost pinned the wheels and it tipped over in place): instantaneous
+    #    pitch/pitch-rate gate releases the boost as tipping starts.
+    # The pitch gate is modulation-safe HERE (unlike earlier, measured
+    # pumping): at true quiet stance pitch_rate ≤2 °/s → gate ≡ 1 constant;
+    # during ringdown the envelope gate is already ≈0, so the pitch gate's
+    # cycle-frequency modulation multiplies into nothing.
+    # Bands match the drift stability gate (2→12°, 2→15°/s). A tighter
+    # "eager-yield" 2→8°/s variant was tried and REGRESSED overall: the
+    # transitional cycle lives at 3–8°/s, so the tight band modulated there —
+    # idle 5× worse, ringdown 2× slower, 90 N fwd fell. With these bands one
+    # marginal case remains (50 N straight-back pushed right at t=2 s settle
+    # sits ~2 N under its threshold; threshold ≈48 N vs HOMING ≈55 N there).
+    _anchor_stab = (
+        _jax_smoothstep01((0.21 - jnp.abs(effective_pitch_x)) / (0.21 - 0.035))
+        * _jax_smoothstep01((0.262 - jnp.abs(pitch_rate_eff)) / (0.262 - 0.035))
+    )
+    _anchor_prox_boost = 1.0 - _jax_smoothstep01((jnp.abs(sag_pos_err) - 0.08) / (0.18 - 0.08))
+    _anchor_damping_extra = (
+        _anchor_kvb * _anchor_hgate * _anchor_prox_boost * _anchor_quiet * _anchor_stab)
+
+    # ── ANCHOR pitch-stiffness schedule (retune, measured) ──
+    # kp_pitch=50 gives a tight idle limit cycle (idle 1 mm) but is TOO stiff
+    # for push capture: the 360° map + fine sweep showed lowering it to ~35
+    # widens the recovery envelope broadly (min 40→60 N, median 75→90 N) —
+    # a softer pitch response overshoots less and keeps a wider capture region.
+    # But a global kp=35 destroys the anchor stand-still (idle 1→55 mm,
+    # ringdown stops decaying). So SCHEDULE it on the quiet-stance envelope:
+    # soft (35) while recovering (quiet≈0 → wide catch), stiff (50) once
+    # settled (quiet≈1 → tight idle). The envelope is slow (attack 30 ms /
+    # release 1.5 s), so kp never modulates at the 2–3 Hz cycle → no
+    # parametric pumping. Gated on _anchor_ki>0 → other profiles keep kp=50
+    # (byte-identical + Python parity).
+    _kp_soft = params_flat[_IDX_ANCHOR_KP_PITCH_SOFT]
+    _kp_on = (_anchor_ki > 0.0) & (_kp_soft > 0.0)
+    # Softness gate: ballistic velocity (envelope >= 0.30, clearly ABOVE the
+    # kp-soft cycle band ~0.20-0.28) OR large displacement (>= 10-25 cm).
+    # Gating on the quiet band itself was SELF-REFERENTIAL: soft kp sustains a
+    # cycle whose envelope (~0.20-0.28) sits inside the 0.18-0.30 band, so the
+    # gate dithered for ~6 s before the ringdown could die (audited: user saw
+    # the long wobble, then the freq-up/amplitude-down moment as kp snapped to
+    # 50 and the boost engaged). Near home the cycle envelope can never reach
+    # the 0.30 velocity edge and displacement is small -> stiff immediately.
+    _kp_soft_gate = jnp.maximum(
+        _jax_smoothstep01((_act_ema - 0.30) / (0.45 - 0.30)),
+        _jax_smoothstep01((jnp.abs(sag_pos_err) - 0.10) / (0.25 - 0.10)))
+    _kp_pitch_eff = jnp.where(
+        _kp_on, 50.0 - (50.0 - _kp_soft) * _kp_soft_gate, 50.0)
+
     # === Step 4b: Sagittal torque assembly ===
     # === Step 4b: APCR1ND gating computation (Phase 4+ full port) ===
     _apcr1nd_active, _new_apcr1nd_step, _new_apcr1nd_prev, \
@@ -2956,14 +3155,25 @@ def k2_jax_controller_step(
     # APCR1ND boost clip separately.
     effective_max_pos_tau = jnp.maximum(max_pos_tau, _boosted_cap)
 
+    # NOTE: raising the recovery position-torque cap above 4 Nm was TESTED
+    # (360° map, ANCHOR-gated, APCR-active) and REJECTED — it regressed the
+    # envelope (median 75→70 N; −90° 90→60, −135° 70→40). A strong position
+    # hold during recovery fights the ballistic catch (drags the wheels back
+    # to home instead of letting them run under the falling CoM). The 4 Nm
+    # cap is deliberate, not a bug; tau_position saturating at the fall is a
+    # symptom of that correct limit, not a relievable constraint.
+
     tau_sag, sag_diag = k2_jax_sagittal_torque_assembly(
         pitch_x_rad=effective_pitch_x, pitch_rate_rad_s=pitch_rate_eff,
-        sagittal_velocity_m_s=sag_vel, sagittal_position_error_m=sag_pos_err,
+        # Leashed error (== raw sag_pos_err when the leash is disabled) keeps
+        # the position channel linear; only tau_position/tau_cp consume this.
+        sagittal_velocity_m_s=sag_vel, sagittal_position_error_m=_anchor_eff_err,
         wheel_vel_left_rad_s=wheel_vel_l, wheel_vel_right_rad_s=wheel_vel_r,
         support_velocity_m_s=support_vel,
-        kp_pitch=50.0, effective_pitch_scale=1.0, effective_pitch_tau_cap=0.0,
+        kp_pitch=_kp_pitch_eff, effective_pitch_scale=1.0, effective_pitch_tau_cap=0.0,
         effective_kd_pitch=kd_pitch,
-        effective_k_velocity=_k_velocity, effective_velocity_damping_scale=_velocity_damping_scale,
+        effective_k_velocity=_k_velocity,
+        effective_velocity_damping_scale=_velocity_damping_scale + _anchor_damping_extra,
         effective_support_velocity_gain=0.0, effective_support_velocity_scale=1.0,
         effective_k_wheel_velocity=kwheel,
         effective_k_position=kpos,
@@ -2974,6 +3184,7 @@ def k2_jax_controller_step(
             effective_max_pos_tau_py > 0.0, effective_max_pos_tau_py, max_pos_tau),
         kp_cp=0.0, kd_com_vy=5.0,
         wheel_torque_sign=1.0,
+        position_integral_tau=_anchor_integ_applied,
         external_position_trim=_trim_to_apply,
     )
 

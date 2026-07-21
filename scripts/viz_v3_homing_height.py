@@ -46,14 +46,22 @@ def main():
                     help="height amplitude vs calibrated low/high (1.0=calibrated; >1 extrapolates)")
     ap.add_argument("--stride", type=int, default=4)
     ap.add_argument("--out", type=str, default="outputs/visual/v3_homing_height.gif")
+    ap.add_argument("--lo-setup", type=str, default=None,
+                    help="setup JSON path for the low end (default: calibrated low_small)")
+    ap.add_argument("--hi-setup", type=str, default=None,
+                    help="setup JSON path for the high end (default: calibrated high_small)")
+    ap.add_argument("--profile", type=str, default="K2_JAX_DEDICATED_DEFAULT_V3_HOMING",
+                    help="V3 controller profile (e.g. K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR)")
     args = ap.parse_args()
 
     model = mujoco.MjModel.from_xml_path(str(P.get_model_path()))
-    lo, hi, nom = _load("low_small"), _load("high_small"), _load("nominal")
+    lo = json.load(open(args.lo_setup)) if args.lo_setup else _load("low_small")
+    hi = json.load(open(args.hi_setup)) if args.hi_setup else _load("high_small")
+    nom = _load("nominal")
     q_lo, q_hi = _posture(lo), _posture(hi)
     z_lo, z_hi = float(lo["target_com_z_m"]), float(hi["target_com_z_m"])
 
-    v3 = init_v3_controller(profile_name="K2_JAX_DEDICATED_DEFAULT_V3_HOMING", model=model)
+    v3 = init_v3_controller(profile_name=args.profile, model=model)
     v3["jax_state"] = pack_state_k2()
 
     # Start at nominal posture
@@ -130,7 +138,7 @@ def main():
     imgs, W = [], frames[0].shape[1]
     for i, fr in enumerate(frames):
         im = Image.fromarray(fr).convert("RGB"); dr = ImageDraw.Draw(im)
-        dr.text((10, 8), "V3_HOMING", fill=(180, 220, 255))
+        dr.text((10, 8), args.profile.rsplit("DEFAULT_", 1)[-1], fill=(180, 220, 255))
         dr.text((10, 24), f"h_cmd={hcmds[i]:.3f}m  CoM={hactuals[i]:.3f}m", fill=(255, 220, 120))
         dr.text((10, 40), f"t={i*args.stride*0.01:4.1f}s", fill=(200, 200, 200))
         imgs.append(im)
