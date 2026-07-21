@@ -998,6 +998,7 @@ def main():
         anchor_kvel_boost_scale=getattr(_auth, "anchor_kvel_boost_scale", 0.0),
         anchor_leash_m=getattr(_auth, "anchor_leash_m", 0.0),
         anchor_slew_m_s=getattr(_auth, "anchor_slew_m_s", 0.0),
+        anchor_kp_pitch_soft=getattr(_auth, "anchor_kp_pitch_soft", 0.0),
     )
     jax_state = pack_state_k2()
     jax_step_fn = jax.jit(k2_jax_controller_step)

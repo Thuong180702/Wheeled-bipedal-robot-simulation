@@ -224,7 +224,8 @@ _IDX_ANCHOR_KVEL_BOOST = 91    # extra velocity_damping_scale at idle (stability
                                # always-on ×3 damping broke 50-90N push recovery)
 _IDX_ANCHOR_LEASH_M = 92       # RESERVED (leash removed — phase-lagged relay; see Step 4a2)
 _IDX_ANCHOR_SLEW_M_S = 93      # RESERVED (unused)
-K2_JAX_PARAMS_SIZE_DRIFT = K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE + 40  # 94 (was 88)
+_IDX_ANCHOR_KP_PITCH_SOFT = 94  # softer pitch stiffness during recovery (0=off→keep 50)
+K2_JAX_PARAMS_SIZE_DRIFT = K2_JAX_PARAMS_SIZE_STAGE2_EXT_STANDALONE + 41  # 95 (was 88)
 
 # Index constants for fast params access inside JIT
 _IDX_NOTCH_B0 = 0
@@ -330,6 +331,7 @@ def pack_params_stage2(
     anchor_kvel_boost_scale: float = 0.0,      # extra damping scale at idle
     anchor_leash_m: float = 0.0,               # m — 0 disables the leash
     anchor_slew_m_s: float = 0.0,              # m/s — leash walk-home rate
+    anchor_kp_pitch_soft: float = 0.0,         # softer pitch kp during recovery (0=off)
 ) -> jnp.ndarray:
     """Pack K2 controller params into flat JAX params array (Stage 2 + drift + heading layout).
 
@@ -445,6 +447,7 @@ def pack_params_stage2(
     params = params.at[_IDX_ANCHOR_KVEL_BOOST].set(float(anchor_kvel_boost_scale))
     params = params.at[_IDX_ANCHOR_LEASH_M].set(float(anchor_leash_m))
     params = params.at[_IDX_ANCHOR_SLEW_M_S].set(float(anchor_slew_m_s))
+    params = params.at[_IDX_ANCHOR_KP_PITCH_SOFT].set(float(anchor_kp_pitch_soft))
 
     return params
 
@@ -534,6 +537,7 @@ def unpack_params_stage2(params_flat: jnp.ndarray) -> dict:
     result["anchor_kvel_boost_scale"] = float(p[_IDX_ANCHOR_KVEL_BOOST]) if len(p) > _IDX_ANCHOR_KVEL_BOOST else 0.0
     result["anchor_leash_m"] = float(p[_IDX_ANCHOR_LEASH_M]) if len(p) > _IDX_ANCHOR_LEASH_M else 0.0
     result["anchor_slew_m_s"] = float(p[_IDX_ANCHOR_SLEW_M_S]) if len(p) > _IDX_ANCHOR_SLEW_M_S else 0.0
+    result["anchor_kp_pitch_soft"] = float(p[_IDX_ANCHOR_KP_PITCH_SOFT]) if len(p) > _IDX_ANCHOR_KP_PITCH_SOFT else 0.0
     return result
 
 
@@ -3048,6 +3052,23 @@ def k2_jax_controller_step(
     _anchor_damping_extra = (
         _anchor_kvb * _anchor_hgate * _anchor_prox_boost * _anchor_quiet * _anchor_stab)
 
+    # ── ANCHOR pitch-stiffness schedule (retune, measured) ──
+    # kp_pitch=50 gives a tight idle limit cycle (idle 1 mm) but is TOO stiff
+    # for push capture: the 360° map + fine sweep showed lowering it to ~35
+    # widens the recovery envelope broadly (min 40→60 N, median 75→90 N) —
+    # a softer pitch response overshoots less and keeps a wider capture region.
+    # But a global kp=35 destroys the anchor stand-still (idle 1→55 mm,
+    # ringdown stops decaying). So SCHEDULE it on the quiet-stance envelope:
+    # soft (35) while recovering (quiet≈0 → wide catch), stiff (50) once
+    # settled (quiet≈1 → tight idle). The envelope is slow (attack 30 ms /
+    # release 1.5 s), so kp never modulates at the 2–3 Hz cycle → no
+    # parametric pumping. Gated on _anchor_ki>0 → other profiles keep kp=50
+    # (byte-identical + Python parity).
+    _kp_soft = params_flat[_IDX_ANCHOR_KP_PITCH_SOFT]
+    _kp_on = (_anchor_ki > 0.0) & (_kp_soft > 0.0)
+    _kp_pitch_eff = jnp.where(
+        _kp_on, _kp_soft + (50.0 - _kp_soft) * _anchor_quiet, 50.0)
+
     # === Step 4b: Sagittal torque assembly ===
     # === Step 4b: APCR1ND gating computation (Phase 4+ full port) ===
     _apcr1nd_active, _new_apcr1nd_step, _new_apcr1nd_prev, \
@@ -3121,7 +3142,7 @@ def k2_jax_controller_step(
         sagittal_velocity_m_s=sag_vel, sagittal_position_error_m=_anchor_eff_err,
         wheel_vel_left_rad_s=wheel_vel_l, wheel_vel_right_rad_s=wheel_vel_r,
         support_velocity_m_s=support_vel,
-        kp_pitch=50.0, effective_pitch_scale=1.0, effective_pitch_tau_cap=0.0,
+        kp_pitch=_kp_pitch_eff, effective_pitch_scale=1.0, effective_pitch_tau_cap=0.0,
         effective_kd_pitch=kd_pitch,
         effective_k_velocity=_k_velocity,
         effective_velocity_damping_scale=_velocity_damping_scale + _anchor_damping_extra,

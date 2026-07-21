@@ -831,6 +831,8 @@ class SagittalAuthoritySchedule:
     anchor_leash_m: float = 0.0                # RESERVED param slot (leash mechanism
     # removed — it acted as a phase-lagged relay; superseded by the proximity gate)
     anchor_slew_m_s: float = 0.0               # RESERVED param slot (unused)
+    anchor_kp_pitch_soft: float = 0.0          # pitch kp during recovery (0=off→keep 50);
+    # scheduled stiff(50)→soft when displaced via the quiet-stance envelope
 
     # ── Heading hip-yaw stabilizer (low-authority soft heading impedance) ──
     # Acts on hip-yaw joints [1,6] with very low authority smooth bounded torque.
@@ -3810,6 +3812,11 @@ K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR = replace(
     # EMA "quiet-stance" gate — instantaneous gates modulate at the post-push
     # ringdown frequency and parametrically pumped it (measured).
     anchor_kvel_boost_scale=1.9,
+    # Pitch-stiffness schedule: soft (35) while recovering → wider push capture
+    # (360° min 40→60 N, median 75→90 N); returns to stiff (50) once settled so
+    # idle stand-still + ringdown decay are preserved. Gated by the slow
+    # quiet-stance envelope (no cycle-frequency modulation).
+    anchor_kp_pitch_soft=35.0,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -238,6 +238,7 @@ def init_v3_controller(
             anchor_kvel_boost_scale=getattr(_profile, "anchor_kvel_boost_scale", 0.0),
             anchor_leash_m=getattr(_profile, "anchor_leash_m", 0.0),
             anchor_slew_m_s=getattr(_profile, "anchor_slew_m_s", 0.0),
+            anchor_kp_pitch_soft=getattr(_profile, "anchor_kp_pitch_soft", 0.0),
         )
 
         # ── Pack JAX state ──────────────────────────────────────────────────
