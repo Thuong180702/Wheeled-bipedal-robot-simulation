@@ -85,6 +85,7 @@ from wheeled_biped.controllers.k2_jax_controller import (
     pack_state_k2,
 )
 from wheeled_biped.controllers.sagittal_balance_state import compute_support_center_xy
+from wheeled_biped.wbc.offline_three_arm_counterfactual import update_airborne_gate
 from wheeled_biped.controllers.orientation_utils import compute_robot_frame_orientation_from_quaternion
 from wheeled_biped.controllers.sagittal_velocity_damped_balance_controller import (
     K2_NOTCH_LOW_Q_V1,
@@ -1584,6 +1585,7 @@ def main():
         sim_start_time = time.perf_counter()
 
     t_loop_start = time.perf_counter()
+    _air_gate_ctx = {}  # flight-gate state (update_airborne_gate)
 
     # ══════════════════════════════════════════════════════════════════════
     # PRODUCTION HOT LOOP
@@ -1697,6 +1699,10 @@ def main():
             and centroidal.right_wheel_contact
             and centroidal.contact_force_valid
         )
+
+        # Flight gate (drop/bounce ballistic phase) — same state machine the
+        # drop battery validates; stays 0.0 whenever grounded (parity-safe).
+        airborne = update_airborne_gate(centroidal, _air_gate_ctx, mj_model)
 
         # ── Teleop: keys → shaper → target/height overrides ──────────────
         _tel_cmd = None
@@ -1841,6 +1847,7 @@ def main():
             teleop_target_y_m=(_tel_cmd["teleop_target_y_m"] if _tel_cmd else 0.0),
             teleop_target_yaw_rad=(_tel_cmd["teleop_target_yaw_rad"] if _tel_cmd else 0.0),
             teleop_cmd_yaw_rate_rad_s=(_tel_cmd["teleop_cmd_yaw_rate_rad_s"] if _tel_cmd else 0.0),
+            airborne=airborne,
         )
         jax_tau, jax_state, jax_diag = jax_step_fn(jax_state, jax_input, jax_params)
 

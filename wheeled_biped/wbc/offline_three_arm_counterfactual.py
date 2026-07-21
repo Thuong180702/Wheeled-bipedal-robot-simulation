@@ -564,6 +564,54 @@ def clone_three_sim_states(model: mujoco.MjModel, source_data: mujoco.MjData) ->
 # Task 3: compute_v3_torque_for_state
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def update_airborne_gate(centroidal, ctx: dict, model) -> float:
+    """Flight-gate state machine for the `airborne` controller input (0..1).
+
+    Engage: BOTH wheels off the ground for >= 2 consecutive steps (a push
+    that unloads one wheel never trips this — grounded scenarios stay 0.0,
+    which keeps the controller bit-exact / parity-safe).
+    Release: wheel normal load >= 0.5*m*g for >= 5 consecutive steps.
+    Binary contact cannot tell landing-bounce chatter (1-3 step touches at
+    near-zero load → WIP flails, spins wheels to ±100 rad/s) from a loaded
+    teeter (full weight on wheels → WIP MUST act); load can.
+    Handback: ramp 1 → 0 over 15 steps (150 ms) so wheel authority returns
+    gradually — an instant handback at large pitch slammed ~19 Nm into a
+    marginally loaded wheel and re-launched the robot.
+
+    ``ctx`` holds the persistent state (any dict that lives across steps).
+    Drop battery 0-60 cm passes 21/21 with these constants.
+    """
+    l_on = getattr(centroidal, "left_wheel_contact", True)
+    r_on = getattr(centroidal, "right_wheel_contact", True)
+    both_off = not (l_on or r_on)
+    weight_n = ctx.get("robot_weight_n")
+    if weight_n is None:
+        weight_n = float(np.sum(model.body_mass)) * 9.81
+        ctx["robot_weight_n"] = weight_n
+    loaded = float(getattr(centroidal, "total_contact_force_z", weight_n)) >= 0.5 * weight_n
+    flying = ctx.get("airborne_mode", False)
+    airborne = ctx.get("airborne_frac", 0.0)
+    if not flying:
+        n_off = ctx.get("airborne_count", 0) + 1 if both_off else 0
+        ctx["airborne_count"] = n_off
+        if n_off >= 2:
+            flying = True
+            airborne = 1.0
+            ctx["ground_count"] = 0
+        else:
+            airborne = max(0.0, airborne - 1.0 / 15.0)  # soft handback ramp
+    else:
+        n_on = ctx.get("ground_count", 0) + 1 if loaded else 0
+        ctx["ground_count"] = n_on
+        airborne = 1.0
+        if n_on >= 5:
+            flying = False
+            ctx["airborne_count"] = 0
+    ctx["airborne_mode"] = flying
+    ctx["airborne_frac"] = airborne
+    return airborne
+
+
 def compute_v3_torque_for_state(
     mj_data: mujoco.MjData,
     model: mujoco.MjModel,
@@ -629,6 +677,8 @@ def compute_v3_torque_for_state(
         and getattr(centroidal, "contact_force_valid", True)
     )
 
+    airborne = update_airborne_gate(centroidal, controller_context, model)
+
     # Equilibrium joint positions from controller context
     eq_joint = controller_context.get("eq_joint", _default_eq_joint())
 
@@ -672,6 +722,7 @@ def compute_v3_torque_for_state(
         teleop_target_y_m=float((teleop or {}).get("teleop_target_y_m", 0.0)),
         teleop_target_yaw_rad=float((teleop or {}).get("teleop_target_yaw_rad", 0.0)),
         teleop_cmd_yaw_rate_rad_s=float((teleop or {}).get("teleop_cmd_yaw_rate_rad_s", 0.0)),
+        airborne=airborne,
     )
 
     jax_tau, next_jax_state, jax_diag = jax_step_fn(jax_state, jax_input, jax_params)

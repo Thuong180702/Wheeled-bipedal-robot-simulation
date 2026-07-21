@@ -1620,10 +1620,14 @@ K2_JAX_INPUT_FIELDS: tuple[str, ...] = (
     "teleop_target_y_m",          # world-frame anchor target y (leashed)
     "teleop_target_yaw_rad",      # world-frame heading target
     "teleop_cmd_yaw_rate_rad_s",  # heading-rate feed-forward
+    # Flight gate (+1) — 1 only when BOTH wheels have been off the ground for
+    # a sustained window (ballistic phase of a drop/bounce). 0 in every
+    # grounded scenario → the flight wheel override is a no-op (parity-safe).
+    "airborne",
 )
-# Unified input size: 57 elements (42 base + 3 standalone + 6 drift estimator
-# + 6 teleop). Old shorter inputs are padded with zeros.
-K2_JAX_INPUT_SIZE: int = 57
+# Unified input size: 58 elements (42 base + 3 standalone + 6 drift estimator
+# + 6 teleop + 1 flight gate). Old shorter inputs are padded with zeros.
+K2_JAX_INPUT_SIZE: int = 58
 
 _I_PITCH_X, _I_PITCH_RATE, _I_ROLL_Y, _I_ROLL_RATE = 0, 1, 2, 3
 _I_YAW_ERR, _I_YAW_RATE, _I_COM_Z, _I_COM_VY = 4, 5, 6, 7
@@ -1651,6 +1655,8 @@ _I_TELEOP_TARGET_X = 53
 _I_TELEOP_TARGET_Y = 54
 _I_TELEOP_TARGET_YAW = 55
 _I_TELEOP_CMD_YAW_RATE = 56
+# Flight gate (index 57)
+_I_AIRBORNE = 57
 K2_JAX_INPUT_SIZE_STANDALONE = K2_JAX_INPUT_SIZE  # same unified size
 
 
@@ -1734,6 +1740,7 @@ def pack_input_k2_standalone(
     teleop_target_y_m=0.0,
     teleop_target_yaw_rad=0.0,
     teleop_cmd_yaw_rate_rad_s=0.0,
+    airborne=0.0,  # flight gate: 1 = both wheels off ground (sustained)
 ):
     """Pack raw-state K2 inputs into flat JAX array (51-element standalone + drift contract).
 
@@ -1809,6 +1816,7 @@ def pack_input_k2_standalone(
     inp[_I_TELEOP_TARGET_Y] = float(teleop_target_y_m)
     inp[_I_TELEOP_TARGET_YAW] = float(teleop_target_yaw_rad)
     inp[_I_TELEOP_CMD_YAW_RATE] = float(teleop_cmd_yaw_rate_rad_s)
+    inp[_I_AIRBORNE] = float(airborne)
     return jnp.asarray(inp)
 
 
@@ -3572,6 +3580,24 @@ def k2_jax_controller_step(
     tau_posture_with_yaw = tau_posture_with_yaw.at[6].add(_hz * _homing_tau(_h_kp_hy, qref_hy_r, q_hy_r, qd_hy_r))
 
     tau_sum = tau_sag + tau_posture_with_yaw + tau_lateral + k2_jax_empirical_support_ff()
+
+    # === Flight override (airborne input, index 57, continuous 0..1) ===
+    # With both wheels off the ground, the WIP balance loop's wheel torque has
+    # no ground reaction: it only spins the wheels up (±80 rad/s observed) and
+    # its reaction torque tumbles the base mid-air (drop tests: pitch +1.5° →
+    # -25° in 0.1 s of ballistic flight, then a nose-down crash). While
+    # airborne, replace ALL wheel torque with a small spin-down damping toward
+    # zero so the wheels land still. The input is a FRACTION: the harness
+    # ramps 1 → 0 over ~150 ms after landing so WIP authority returns
+    # gradually — an instant handback at large pitch slammed ~19 Nm into a
+    # marginally loaded wheel and re-launched the robot. Placed BEFORE the
+    # composer so the rate limiter tracks the applied torque. airborne=0.0 in
+    # every grounded scenario → (1-0)*tau + 0*damp = tau bit-exact (parity).
+    _air_frac = jnp.clip(input_flat[_I_AIRBORNE], 0.0, 1.0)
+    _tau_flight_l = jnp.clip(-0.05 * wheel_vel_l, -2.0, 2.0)
+    _tau_flight_r = jnp.clip(-0.05 * wheel_vel_r, -2.0, 2.0)
+    tau_sum = tau_sum.at[4].set((1.0 - _air_frac) * tau_sum[4] + _air_frac * _tau_flight_l)
+    tau_sum = tau_sum.at[9].set((1.0 - _air_frac) * tau_sum[9] + _air_frac * _tau_flight_r)
 
     tau_final, tau_clipped, sat_mask, rate_mask = k2_jax_torque_composer_step(
         tau_sum, prev_tau, params_flat)
