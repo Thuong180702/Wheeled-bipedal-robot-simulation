@@ -724,6 +724,34 @@ def check_termination(com_height, pitch_x_rad, roll_y_rad, height_floor_m):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# TELEOP PUSH-FORCE ARROW (viewer overlay)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _draw_push_arrow(viewer, mj_data, tel):
+    """Draw a red arrow at the torso showing the push direction + magnitude.
+    Held ~2.5 s after each push (the push itself is only 5-10 control steps)."""
+    scn = viewer.user_scn
+    if tel["push_arrow_left"] <= 0:
+        scn.ngeom = 0
+        return
+    tel["push_arrow_left"] -= 1
+    f = float(tel["push_arrow_f"])
+    d = np.asarray(tel["push_arrow_dir"], dtype=np.float64)
+    torso = np.array(mj_data.xpos[1], dtype=np.float64)  # body 1 = torso
+    L = float(np.clip(f * 0.006, 0.15, 0.6))             # arrow length ∝ force
+    head = torso                                         # arrowhead strikes torso
+    tail = torso - d * L                                 # force comes from behind
+    g = scn.geoms[0]
+    mujoco.mjv_initGeom(
+        g, mujoco.mjtGeom.mjGEOM_ARROW,
+        np.zeros(3), np.zeros(3), np.zeros(9),
+        np.array([1.0, 0.25, 0.1, 1.0], np.float32))
+    mujoco.mjv_connector(g, mujoco.mjtGeom.mjGEOM_ARROW, 0.02, tail, head)
+    g.label = f"{f:.0f} N"
+    scn.ngeom = 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1442,6 +1470,9 @@ def main():
             "activate_step": 200,
             "push_left": 0,
             "push_vec": np.zeros(3),
+            "push_arrow_left": 0,   # control steps to keep the force arrow drawn
+            "push_arrow_dir": np.zeros(3),
+            "push_arrow_f": 0.0,
             "snap": None,         # healthy-state snapshot (Backspace guard)
             "rng": np.random.default_rng(),
             "KEY_X": _T_KEY_X, "KEY_BS": _T_KEY_BS, "KEY_SPACE": _T_KEY_SPACE,
@@ -1751,9 +1782,14 @@ def main():
                         _imp = float(_teleop["rng"].uniform(1.5, 2.5 + 3.0 * _h_lo))
                         _f = _imp / (_dur * CONTROL_DT)
                         _a = _t_yaw + np.radians(_ang)
-                        _teleop["push_vec"] = np.array(
-                            [-np.sin(_a), np.cos(_a), 0.0]) * _f
+                        _pdir = np.array([-np.sin(_a), np.cos(_a), 0.0])
+                        _teleop["push_vec"] = _pdir * _f
                         _teleop["push_left"] = _dur
+                        # Force arrow: the push lasts only _dur steps (~0.05-0.1s),
+                        # too brief to read, so keep the arrow visible ~2.5 s.
+                        _teleop["push_arrow_dir"] = _pdir
+                        _teleop["push_arrow_f"] = _f
+                        _teleop["push_arrow_left"] = 250
                         print(f"[PUSH] {_f:.0f} N @ {_ang:.0f}° tu huong tien × {_dur} steps "
                               f"(impulse {_imp:.1f} N·s)")
                     elif _kc == _teleop["KEY_BS"]:
@@ -2098,6 +2134,8 @@ def main():
 
         # ── Viewer sync ──────────────────────────────────────────────────
         if viewer is not None:
+            if _teleop is not None:
+                _draw_push_arrow(viewer, mj_data, _teleop)
             sim_time_now = step * CONTROL_DT
             if sim_time_now - last_sync_sim_time >= visual_sync_interval_s:
                 viewer.sync()
