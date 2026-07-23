@@ -1249,6 +1249,48 @@ def k2_jax_sagittal_torque_assembly(
 
 
 # ===========================================================================
+# Per-leg posture gain grids (Jacobian-based, consistent foot stiffness).
+# Pre-computed from leg kinematics: for each leg height h, compute the 2×2
+# Jacobian J = ∂(x,z)_foot/∂(hp,kn), then K_joint = J^T·K_foot·J gives the
+# joint-space stiffness that produces the SAME foot-level stiffness at any
+# leg configuration. kd scales by √(kp) to maintain damping ratio ζ.
+# ===========================================================================
+_PER_LEG_GAIN_GRID_H = jnp.array(
+    [0.30, 0.31, 0.32, 0.33, 0.34, 0.35, 0.36, 0.37, 0.38, 0.39, 0.40,
+     0.41, 0.42, 0.43, 0.44, 0.45, 0.46, 0.47, 0.48, 0.49, 0.50, 0.51, 0.52],
+    dtype=jnp.float64)
+_PER_LEG_KP_HP_GRID = jnp.array(
+    [22.3, 24.2, 25.8, 27.1, 28.1, 28.8, 29.2, 29.4, 29.4, 29.4, 29.4,
+     29.6, 30.0, 30.8, 32.2, 34.1, 36.8, 40.4, 44.7, 50.0, 56.3, 63.4, 71.4],
+    dtype=jnp.float64)
+_PER_LEG_KP_KN_GRID = jnp.array(
+    [43.9, 46.7, 49.1, 51.0, 52.2, 52.8, 52.8, 52.0, 50.6, 48.7, 46.2,
+     43.2, 40.0, 36.6, 33.1, 29.6, 26.3, 23.4, 20.8, 18.8, 17.3, 16.5, 16.4],
+    dtype=jnp.float64)
+_PER_LEG_KD_HP_GRID = jnp.array(
+    [3.4, 3.6, 3.7, 3.8, 3.9, 3.9, 3.9, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0,
+     4.1, 4.1, 4.3, 4.4, 4.6, 4.9, 5.2, 5.5, 5.8, 6.2],
+    dtype=jnp.float64)
+_PER_LEG_KD_KN_GRID = jnp.array(
+    [5.2, 5.4, 5.5, 5.6, 5.7, 5.7, 5.7, 5.7, 5.6, 5.5, 5.4, 5.2, 5.0,
+     4.8, 4.5, 4.3, 4.1, 3.8, 3.6, 3.4, 3.3, 3.2, 3.2],
+    dtype=jnp.float64)
+_PER_LEG_KP_HY_GRID = jnp.array(
+    [11.2, 12.1, 12.9, 13.6, 14.1, 14.4, 14.6, 14.7, 14.7, 14.7, 14.7,
+     14.8, 15.0, 15.4, 16.1, 17.1, 18.4, 20.2, 22.4, 25.0, 28.1, 31.7, 35.7],
+    dtype=jnp.float64)
+_PER_LEG_KD_HY_GRID = jnp.array(
+    [2.6, 2.7, 2.8, 2.9, 2.9, 2.9, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0, 3.0,
+     3.0, 3.1, 3.2, 3.3, 3.5, 3.7, 3.9, 4.1, 4.4, 4.6],
+    dtype=jnp.float64)
+
+
+def _interp_per_leg_gain(h_leg, grid):
+    """Interpolate a per-leg gain from a pre-computed grid by leg height."""
+    return k2_jax_grid_interpolate(h_leg, _PER_LEG_GAIN_GRID_H, grid)
+
+
+# ===========================================================================
 # Stage 3: Shape posture, lateral roll, yaw, mode-div, support FF
 # ===========================================================================
 
@@ -1264,17 +1306,50 @@ def k2_jax_shape_posture_compute(
     kp_knee=40.0, kd_knee=5.0,
     kp_hip_roll=0.0, kd_hip_roll=0.0,
     posture_weight=1.0, contact_degraded_scale=1.0,
+    # Per-leg effective heights for Jacobian-based gain scheduling.
+    # Each leg gets independent gains based on its OWN height, computed from
+    # the leg Jacobian to maintain consistent foot-level stiffness regardless
+    # of how compressed or extended the leg is.
+    h_left=0.42, h_right=0.42,
 ):
-    """Shape/posture PD control — pure JAX function."""
+    """Shape/posture PD with Jacobian-based per-leg gains.
+
+    A leg's mechanical advantage changes with its configuration (height):
+    - Compressed leg (low h, bent knee): knee has good horizontal authority
+      but poor vertical → higher kp_kn, lower kp_hp
+    - Extended leg (high h, straight knee): hip_pitch has good vertical
+      authority → higher kp_hp, lower kp_kn
+
+    Gains are interpolated from pre-computed Jacobian grids to maintain
+    the same foot-level stiffness at any leg configuration.
+    """
+    # Per-leg gains from Jacobian grids
+    _kp_hp_l = _interp_per_leg_gain(h_left, _PER_LEG_KP_HP_GRID)
+    _kp_hp_r = _interp_per_leg_gain(h_right, _PER_LEG_KP_HP_GRID)
+    _kp_kn_l = _interp_per_leg_gain(h_left, _PER_LEG_KP_KN_GRID)
+    _kp_kn_r = _interp_per_leg_gain(h_right, _PER_LEG_KP_KN_GRID)
+    _kd_hp_l = _interp_per_leg_gain(h_left, _PER_LEG_KD_HP_GRID)
+    _kd_hp_r = _interp_per_leg_gain(h_right, _PER_LEG_KD_HP_GRID)
+    _kd_kn_l = _interp_per_leg_gain(h_left, _PER_LEG_KD_KN_GRID)
+    _kd_kn_r = _interp_per_leg_gain(h_right, _PER_LEG_KD_KN_GRID)
+    _kp_hy_l = _interp_per_leg_gain(h_left, _PER_LEG_KP_HY_GRID)
+    _kp_hy_r = _interp_per_leg_gain(h_right, _PER_LEG_KP_HY_GRID)
+    _kd_hy_l = _interp_per_leg_gain(h_left, _PER_LEG_KD_HY_GRID)
+    _kd_hy_r = _interp_per_leg_gain(h_right, _PER_LEG_KD_HY_GRID)
+
     error = q_ref - joint_pos
     authority = posture_weight * contact_degraded_scale
     tau = jnp.zeros(10, dtype=jnp.float64)
-    tau = tau.at[1].set(authority * (kp_hip_yaw * error[1] - kd_hip_yaw * joint_vel[1]))
-    tau = tau.at[6].set(authority * (kp_hip_yaw * error[6] - kd_hip_yaw * joint_vel[6]))
-    tau = tau.at[2].set(authority * (kp_hip_pitch * error[2] - kd_hip_pitch * joint_vel[2]))
-    tau = tau.at[7].set(authority * (kp_hip_pitch * error[7] - kd_hip_pitch * joint_vel[7]))
-    tau = tau.at[3].set(authority * (kp_knee * error[3] - kd_knee * joint_vel[3]))
-    tau = tau.at[8].set(authority * (kp_knee * error[8] - kd_knee * joint_vel[8]))
+    # Hip yaw: left=1, right=6 — per-leg gains
+    tau = tau.at[1].set(authority * (_kp_hy_l * error[1] - _kd_hy_l * joint_vel[1]))
+    tau = tau.at[6].set(authority * (_kp_hy_r * error[6] - _kd_hy_r * joint_vel[6]))
+    # Hip pitch: left=2, right=7 — per-leg gains
+    tau = tau.at[2].set(authority * (_kp_hp_l * error[2] - _kd_hp_l * joint_vel[2]))
+    tau = tau.at[7].set(authority * (_kp_hp_r * error[7] - _kd_hp_r * joint_vel[7]))
+    # Knee: left=3, right=8 — per-leg gains
+    tau = tau.at[3].set(authority * (_kp_kn_l * error[3] - _kd_kn_l * joint_vel[3]))
+    tau = tau.at[8].set(authority * (_kp_kn_r * error[8] - _kd_kn_r * joint_vel[8]))
+    # Hip roll: left=0, right=5 (kp=0 default; teleop splay gate overrides)
     tau = tau.at[0].set(authority * (kp_hip_roll * error[0] - kd_hip_roll * joint_vel[0]))
     tau = tau.at[5].set(authority * (kp_hip_roll * error[5] - kd_hip_roll * joint_vel[5]))
     diag = {"posture_tau_max_abs": jnp.max(jnp.abs(tau)),
@@ -3416,7 +3491,8 @@ def k2_jax_controller_step(
     _t_kd_hr = 2.0 * _t_hr_gate
     tau_posture, _ = k2_jax_shape_posture_compute(
         q_ref_full, joint_pos_full, joint_vel_full,
-        kp_hip_roll=_t_kp_hr, kd_hip_roll=_t_kd_hr)
+        kp_hip_roll=_t_kp_hr, kd_hip_roll=_t_kd_hr,
+        h_left=h_eff_l, h_right=h_eff_r)
 
     # === Step 6: Lateral roll ===
     # enable_stance_regularization=True matches Python behavior:
