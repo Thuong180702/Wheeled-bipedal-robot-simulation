@@ -860,10 +860,7 @@ def main():
     # ── 6. K2 JAX controller init ────────────────────────────────────────
     jax.config.update("jax_enable_x64", True)
 
-    vel_damp_scale = compute_velocity_damping_scale(variant_name)
-
-    if not args.quiet:
-        print(f"Profile: {args.profile}  |  velocity_damping_scale: {vel_damp_scale}")
+    # Moved below — must use the SELECTED profile, not hardcoded K2.
 
     t_compile = time.perf_counter()
 
@@ -962,6 +959,15 @@ def main():
         print(f"ERROR: Unknown profile '{args.profile}'")
         print(f"Available profiles: {', '.join(sorted(_PROFILE_MAP.keys()))}")
         return 1
+
+    # Use the SELECTED profile's velocity_damping_scale (was hardcoded to K2)
+    vel_damp_scale = float(getattr(_auth, "velocity_damping_scale", 1.0))
+    # Apply only if the variant matches (or if profile applies to all variants)
+    if variant_name and not _auth.is_active_for_variant(variant_name):
+        vel_damp_scale = 1.0
+
+    if not args.quiet:
+        print(f"Profile: {args.profile}  |  velocity_damping_scale: {vel_damp_scale}")
 
     # Startup drift controller info
     if not args.quiet:

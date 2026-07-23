@@ -3807,14 +3807,22 @@ K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR = replace(
     # proximity gate, full ≤5 cm / off ≥15 cm) — outside it the controller IS
     # V3_HOMING, whose displaced-return behavior is proven. Modifying the
     # displaced regime (error leash/tanh shaping) destabilized it every time.
-    anchor_position_ki=8.0,             # Nm/(m·s) — builds 1.3 Nm from 5 cm in ~3 s
+    # Reduce oscillation CYCLES (not just amplitude): halve position integral
+    # stiffness so the anchor spring is weaker → higher damping ratio ζ.
+    # ki=4.0 still builds 1.3 Nm from 5 cm in ~6 s (vs ~3 s at ki=8.0).
+    anchor_position_ki=4.0,             # was 8.0; weaker spring = fewer cycles
     anchor_integral_cap_nm=2.0,         # Nm — covers the ~1.3 Nm standing bias
-    anchor_integral_leak_per_step=2e-4,  # ~50 s forgetting time constant
-    # Idle damping boost (total ≈ ×3 at quiet stance): kills the ±4 cm limit
-    # cycle. Gated by prox × pitch/pitch-rate × height motion × a 1 s |sag_vel|
-    # EMA "quiet-stance" gate — instantaneous gates modulate at the post-push
-    # ringdown frequency and parametrically pumped it (measured).
-    anchor_kvel_boost_scale=1.9,
+    anchor_integral_leak_per_step=5e-3,  # ~2 s forgetting; prevents windup
+    anchor_kvel_boost_scale=5.0,         # GATED quiet-stance boost (was 1.9)
+    drift_k_vel=15.0,                    # was 10.0; drift sagittal damping
+    # UNGATED base damping kept low for clean acceleration.
+    # 15 × 1.5 = 22.5 Nm/(m/s). Settle ~5.4s, driving clean (no ripple).
+    velocity_damping_scale=1.5,
+    # Apply to ALL height variants (not just low-height ones). V3_ANCHOR is
+    # the anchor profile — the velocity damping scale should apply everywhere.
+    applies_to_variants=("nominal", "low_tiny", "high_tiny", "low_small",
+                         "high_small", "low_0p300", "low_0p330", "low_0p360",
+                         "extreme_height"),
     # Pitch-stiffness schedule: soft (35) while recovering → wider push capture
     # (360° min 40→60 N, median 75→90 N); returns to stiff (50) once settled so
     # idle stand-still + ringdown decay are preserved. Gated by the slow

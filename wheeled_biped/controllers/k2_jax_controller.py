@@ -2678,7 +2678,7 @@ def k2_jax_drift_controller(
     _anchor_on_h = params_flat[_IDX_ANCHOR_KI] > 0.0
     _settled_trust = jnp.where(
         _anchor_on_h,
-        1.0 - _smoothstep01((state_flat[_S_ANCHOR_ACT_EMA] - 0.18) / (0.30 - 0.18)),
+        1.0 - _smoothstep01((state_flat[_S_ANCHOR_ACT_EMA] - 0.25) / (0.50 - 0.25)),
         0.0,
     )
     heading_gate = (
@@ -3139,7 +3139,7 @@ def k2_jax_controller_step(
     _act_dev = jnp.abs(sag_vel) - _act_ema
     _act_ema = _act_ema + jnp.where(_act_dev > 0.0, 0.35, 0.0067) * _act_dev
     state_flat = state_flat.at[_S_ANCHOR_ACT_EMA].set(_act_ema)
-    _anchor_quiet = 1.0 - _jax_smoothstep01((_act_ema - 0.18) / (0.30 - 0.18))
+    _anchor_quiet = 1.0 - _jax_smoothstep01((_act_ema - 0.25) / (0.50 - 0.25))
 
     # Integral: adapts and APPLIES only near the anchor (× prox). Its value
     # (the standing-at-home bias, ~1.3 Nm) persists while displaced so

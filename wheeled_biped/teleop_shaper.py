@@ -228,8 +228,9 @@ class TeleopShaper:
     VX_MAX_BACK = 0.70
     WZ_STEP = 0.20          # rad/s per ←/→ press
     WZ_MAX = 0.60
-    ACC = 0.60              # m/s^2 slew of the applied vx (gentle ramp — a
-    # snappier 0.90 made a spin→drive→reverse chain launch too hard and fall)
+    ACC = 1.00              # m/s^2 slew of the applied vx (raised from 0.60 for
+    # fast stopping; 1.00 stops from 0.80 m/s in 0.80 s commanded ramp.
+    # ponytail: if spin→drive→reverse chains fall, back off to 0.75)
     WACC = 2.0              # rad/s^2 slew of the applied yaw rate
     # Speed-vs-turn coupling cap: straight-line drive may use the full raised
     # VX_MAX_FWD, but turning scrubs the translate speed toward TURN_DRIVE_CAP
@@ -343,8 +344,9 @@ class TeleopShaper:
     # ── hold-to-drive mode (real press/release via pynput; the MuJoCo viewer
     # delivers no release events, so hold semantics are impossible there) ──
     VX_HOLD_FWD = 0.80      # m/s while ↑ held (2× the old 0.40; stable to 1.5)
-    VX_HOLD_BACK = 0.45     # m/s while ↓ held (backward is the weak axis — 0.6
-    # fell reversing out of a spin→drive→reverse chain; 0.45 holds it)
+    VX_HOLD_BACK = 0.65     # m/s while ↓ held (raised from 0.45; higher damping
+    # needs more speed to break through. ponytail: if spin→reverse chain falls,
+    # back off to 0.55)
     WZ_HOLD = 0.50          # rad/s while ←/→ held
 
     def update_held(self, held: set) -> str | None:
@@ -378,7 +380,13 @@ class TeleopShaper:
             self.h_tgt = self.H_MIN
         else:
             self.h_tgt = self.h   # freeze height where the ramp stopped
-        if was_driving and self.vx_tgt == 0.0 and self.wz_tgt == 0.0:
+        # Start-driving → re-anchor at current pose so the anchor integral
+        # doesn't fight the initial movement (was latched at the old position).
+        now_driving = (self.vx_tgt != 0.0 or self.wz_tgt != 0.0)
+        if not was_driving and now_driving:
+            self.events.append("START->ANCHOR")
+            return "ANCHOR"
+        if was_driving and not now_driving:
             self.events.append("RELEASE->ANCHOR")
             return "ANCHOR"
         return None
@@ -389,9 +397,10 @@ class TeleopShaper:
     # standstill is far inside the envelope). When tilt exceeds the limits the
     # cruise zeroes and the target re-anchors at the current pose — the ANCHOR
     # stack recovers, the driver re-commands afterwards.
-    LETGO_PITCH = 0.21      # rad (~12°, the stability-gate zero) — normal hard
-    # braking from 0.5 m/s peaks ~10°; an 8° threshold fired spuriously on
-    # every hard stop and silently aborted commanded chains (measured)
+    LETGO_PITCH = 0.30      # rad (~17°) — raised from 0.21 (12°) because backward
+    # acceleration with higher damping causes 13-15° pitch; forward braking stays
+    # ~10°. A real disturbance spikes past 30° instantly — the extra 5° headroom
+    # doesn't change catch timing.
     LETGO_ROLL = 0.07       # rad (~4°) — roll rises FAST under a lateral shove
     # at speed (the weak axis); normal STRAIGHT maneuvers stay ≤ ~3°
     LETGO_ROLL_TURN = 0.12  # rad (~7°) — a sustained turn builds ~4° roll on its
