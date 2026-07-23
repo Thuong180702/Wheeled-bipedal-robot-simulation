@@ -22,8 +22,8 @@ from wheeled_biped.wbc.offline_three_arm_counterfactual import (
     compute_v3_torque_for_state, init_v3_controller)
 from wheeled_biped.controllers.k2_jax_controller import pack_state_k2
 from wheeled_biped.teleop_shaper import (
-    TeleopShaper, HeightPosture, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT,
-    KEY_PGUP, KEY_PGDN, KEY_SPACE)
+    TeleopShaper, HeightPosture, LegTerrainAdapter, measure_wheel_ground,
+    KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_PGUP, KEY_PGDN, KEY_SPACE)
 
 DV = "archive/cleanup_2026-06-13/output_summaries/balance_core_true_height_variants"
 DX = "archive/cleanup_2026-06-13/output_summaries/balance_core_extended_height_range"
@@ -65,6 +65,10 @@ class TeleopSim:
         # setup's nominal target dominated height RMSE otherwise).
         self.h0 = float(self.d.subtree_com[0][2])
         self.shaper = TeleopShaper(*self.support_xy(), self.yaw(), self.h0)
+        # Per-leg terrain adaptation: flat-stance wheel z0 per wheel + adapter.
+        self._wz0 = [float(self.d.xpos[self.lw][2]), float(self.d.xpos[self.rw][2])]
+        self._load_thresh_n = 0.2 * float(np.sum(self.model.body_mass)) * 9.81
+        self.terrain = LegTerrainAdapter(self.hp)
 
     def support_xy(self):
         c = 0.5 * (self.d.xpos[self.lw] + self.d.xpos[self.rw])
@@ -101,17 +105,68 @@ class TeleopSim:
         for _ in range(5):
             mujoco.mj_step(self.model, self.d)
 
+    def wheel_contacts(self):
+        cl = cr = False
+        for i in range(self.d.ncon):
+            c = self.d.contact[i]
+            b1 = self.model.geom_bodyid[c.geom1]
+            b2 = self.model.geom_bodyid[c.geom2]
+            if self.lw in (b1, b2):
+                cl = True
+            if self.rw in (b1, b2):
+                cr = True
+        return cl, cr
+
+    def wheel_loads(self):
+        """Per-wheel vertical contact force magnitude (N)."""
+        fl = fr = 0.0
+        f6 = np.zeros(6)
+        for i in range(self.d.ncon):
+            c = self.d.contact[i]
+            b1 = self.model.geom_bodyid[c.geom1]
+            b2 = self.model.geom_bodyid[c.geom2]
+            if self.lw in (b1, b2) or self.rw in (b1, b2):
+                mujoco.mj_contactForce(self.model, self.d, i, f6)
+                fz = abs(float((np.array(c.frame).reshape(3, 3).T @ f6[:3])[2]))
+                if self.lw in (b1, b2):
+                    fl += fz
+                else:
+                    fr += fz
+        return fl, fr
+
     def step_teleop(self):
+        # Per-leg terrain adaptation: each leg tracks its own ground; the
+        # controller's height command follows the MEAN ground; the letgo /
+        # servo roll inputs are compensated by the expected straddle roll
+        # (uncompensated ground difference) so a legitimate one-wheel-up
+        # stance is not mistaken for a fall. Flat ground degenerates to the
+        # previous symmetric behavior.
         sx, sy = self.support_xy()
         r_deg, p_deg = self.rpy()
+        fl, fr, czl, czr = measure_wheel_ground(self.model, self.d, self.lw, self.rw)
+        gz_l = czl if czl is not None else float(self.d.xpos[self.lw][2]) - self._wz0[0]
+        gz_r = czr if czr is not None else float(self.d.xpos[self.rw][2]) - self._wz0[1]
+        st = self.terrain.update(
+            DT, fl >= self._load_thresh_n, fr >= self._load_thresh_n,
+            gz_l, gz_r, roll_rad=np.radians(r_deg))
+        # Only the roll EXCESS beyond the geometric straddle band feeds the
+        # letgo/servo gates: the lateral balance loop holds the torso well
+        # inside the geometric prediction (measured −2.4° actual vs −10°
+        # geometric on a 15 cm curb) by loading the high-side wheel, so
+        # subtracting the prediction directly over-compensates and trips the
+        # 4° letgo forever. Band compensation is also sign-robust.
+        _roll = np.radians(r_deg)
+        _band = abs(self.terrain.expected_roll)
+        roll_c = np.sign(_roll) * max(0.0, abs(_roll) - _band)
         cmd = self.shaper.step(DT, sx, sy, self.yaw(),
-                               pitch_rad=np.radians(p_deg), roll_rad=np.radians(r_deg))
-        self.ctx["height_ref"] = cmd["height_ref"]
+                               pitch_rad=np.radians(p_deg), roll_rad=roll_c)
+        self.ctx["height_ref"] = cmd["height_ref"] + st["g_mid"]
         # Posture uses the servo-trimmed height (closes the ~7 mm standing
         # CoM hysteresis); the controller height_ref stays the raw command.
-        h_post = self.shaper.height_servo(float(self.d.subtree_com[0][2]), DT,
-                                          pitch_rad=np.radians(p_deg), roll_rad=np.radians(r_deg))
-        self.ctx["eq_joint"] = self.hp.q_ref(h_post)
+        h_post = self.shaper.height_servo(
+            float(self.d.subtree_com[0][2]) - st["g_mid"], DT,
+            pitch_rad=np.radians(p_deg), roll_rad=roll_c)
+        self.ctx["eq_joint"] = self.hp.q_ref_pair(*self.terrain.split(h_post))
         self._step(cmd)
         return cmd
 

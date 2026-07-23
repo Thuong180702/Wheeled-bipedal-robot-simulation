@@ -44,9 +44,171 @@ class HeightPosture:
         self.q_lo, self.q_hi = _posture(lo), _posture(hi)
         self.z_lo, self.z_hi = float(lo["target_com_z_m"]), float(hi["target_com_z_m"])
 
-    def q_ref(self, h: float) -> np.ndarray:
-        s = float(np.clip((h - self.z_lo) / (self.z_hi - self.z_lo), 0.0, 1.0))
-        return self.q_lo + s * (self.q_hi - self.q_lo)
+    def q_ref(self, h: float, clip: bool = True) -> np.ndarray:
+        s = (h - self.z_lo) / (self.z_hi - self.z_lo)
+        if clip:
+            s = np.clip(s, 0.0, 1.0)
+        return self.q_lo + float(s) * (self.q_hi - self.q_lo)
+
+    def q_ref_pair(self, h_left: float, h_right: float) -> np.ndarray:
+        """Per-leg posture: LEFT leg joints for h_left, RIGHT for h_right.
+
+        q_ref_pair(h, h) == q_ref(h) exactly for h inside the calibrated
+        range (flat ground degenerates to the symmetric posture). Outside it
+        the table is EXTRAPOLATED (LegTerrainAdapter.EXT_M bounds this to
+        ±5 cm; joint-limit margins verified: knee 2.35 < 2.7 at the fold
+        extreme) so a leg pair can span up to 20 cm of lateral step."""
+        return np.concatenate([self.q_ref(h_left, clip=False)[:5],
+                               self.q_ref(h_right, clip=False)[5:]])
+
+
+def measure_wheel_ground(model, data, lw_body: int, rw_body: int):
+    """Per-wheel (load_N, ground_z or None) from MuJoCo contact data.
+
+    Ground height = force-weighted mean CONTACT-POINT z. Deriving it from the
+    wheel-center z is only valid near level: at 20-38° roll (a lateral-push
+    catch) the loaded wheel's center rises ~2 cm geometrically, which read as
+    phantom high ground and folded exactly the leg carrying all the weight
+    (measured: roll ran 16°→62°). The contact point is exact at any tilt.
+    Force sign via abs(): mj_contactForce's world sign flips with geom
+    ordering (plane vs terrain-box contacts)."""
+    import mujoco
+    acc = {lw_body: [0.0, 0.0], rw_body: [0.0, 0.0]}   # [sum_F, sum_F*z]
+    f6 = np.zeros(6)
+    for i in range(data.ncon):
+        c = data.contact[i]
+        b1 = model.geom_bodyid[c.geom1]
+        b2 = model.geom_bodyid[c.geom2]
+        b = b1 if b1 in acc else (b2 if b2 in acc else None)
+        if b is None:
+            continue
+        mujoco.mj_contactForce(model, data, i, f6)
+        fz = abs(float((np.array(c.frame).reshape(3, 3).T @ f6[:3])[2]))
+        acc[b][0] += fz
+        acc[b][1] += fz * float(c.pos[2])
+    def _gz(b):
+        s, sz = acc[b]
+        return (sz / s) if s > 1e-9 else None
+    return acc[lw_body][0], acc[rw_body][0], _gz(lw_body), _gz(rw_body)
+
+
+class LegTerrainAdapter:
+    """Independent per-leg terrain adaptation (curbs, oblique ledges).
+
+    Each leg tracks ITS OWN ground height estimate so the torso stays LEVEL
+    across lateral height steps instead of rolling:
+
+    - wheel in contact  → its ground is measured (wheel z − flat-stance z0),
+      lightly low-passed against contact chatter;
+    - ONE wheel airborne → its ground estimate slews DOWNWARD at SEEK_RATE:
+      that leg extends looking for the ground while the grounded leg folds
+      (the shared torso descends), until contact returns or the posture
+      envelope clamps — the step-down reflex;
+    - BOTH wheels airborne (ballistic flight) → both estimates track the mean
+      wheel height, reproducing the pre-adapter symmetric behavior exactly.
+
+    Output: per-leg posture heights (h_cmd ± Δground/2, clamped to the
+    calibrated envelope), the mean ground offset for the controller's CoM
+    height command, and the UNCOMPENSATED height difference (residual beyond
+    the ±(z_hi−z_lo)/... envelope) which the torso must absorb as roll —
+    harnesses subtract expected_roll from the letgo/servo roll inputs so a
+    legitimate straddle is not mistaken for a fall.
+    """
+
+    SEEK_RATE = 0.50     # m/s base downward ground-seek while a wheel is airborne
+    SEEK_K = 50.0        # 1/s proportional boost: rate = SEEK_RATE + drop_m * K
+    # (0.35 lost the race on the 20 cm one-wheel curb dismount: the unloaded
+    # wheel hung ~11 cm above the floor while the robot tipped at 24° —
+    # the extending leg reached ground 0.14 s too late. Proportional seek
+    # fixes this: a 15 cm drop gets ~8.0 m/s (16× faster), converging the
+    # ground estimate in ~2 steps (0.02 s) — the leg extends DURING the
+    # fall instead of waiting for contact.)
+    G_LP = 0.35          # per-step low-pass on measured ground (chatter)
+    TRACK_M = 0.278      # lateral wheel separation (measured at settle)
+    EXT_M = 0.05         # per-leg extrapolation beyond the calibrated range
+
+    LVL_RATE = 0.15      # m/(rad·s): closed-loop leveling integrator gain
+    LVL_MAX = 0.06       # m: leveling trim authority
+
+    def __init__(self, hp: HeightPosture):
+        self.hp = hp
+        self.g = [0.0, 0.0]        # est ground under [left, right] wheel
+        self.lvl = 0.0             # leg-split leveling trim (m, +: left longer)
+        self.expected_roll = 0.0   # last computed uncompensated-roll (rad)
+
+    def update(self, dt: float, loaded_l: bool, loaded_r: bool,
+               gz_l: float, gz_r: float, roll_rad: float = 0.0) -> dict:
+        """Advance the per-wheel ground estimates.
+
+        gz_i = wheel-center z minus the flat-stance wheel z0 (per wheel).
+        loaded_i must mean REAL load (normal force ≥ ~0.2·mg), not mere
+        touching: a lightly-touching unloading wheel lifts a few cm and
+        polluted the estimate (+2.9 cm phantom ground on the 15 cm curb);
+        and a 50-100 ms contact flap during a wobble must FREEZE the
+        estimate, not trigger the down-seek (an instant seek dropped the
+        curb wheel's ground 15→9 cm and pumped the legs the wrong way)."""
+        meas = (gz_l, gz_r)
+        con = (loaded_l, loaded_r)
+        if not (con[0] or con[1]):
+            # ballistic: both track the mean wheel height (pre-adapter
+            # behavior); pre-arm the seek so a staggered landing extends the
+            # still-airborne leg immediately.
+            m = 0.5 * (meas[0] + meas[1])
+            self.g[0] += self.G_LP * (m - self.g[0])
+            self.g[1] += self.G_LP * (m - self.g[1])
+        else:
+            span = self.hp.z_hi - self.hp.z_lo + 2 * self.EXT_M
+            for i in (0, 1):
+                if con[i]:
+                    self.g[i] += self.G_LP * (meas[i] - self.g[i])
+                else:
+                    # The ONLY physically certain "my ground is gone" signal
+                    # is the wheel dropping BELOW its believed ground (>3 mm):
+                    # step-offs and oblique-ledge exits all start that way.
+                    # An unloaded wheel HOVERING at/above ground level is a
+                    # maneuver (push recovery, turn roll) — a timer-based
+                    # hanging-seek on that signature extended the leg mid
+                    # push-catch and fell (flat battery lateral_push_cruise).
+                    # Unloaded-but-not-fallen → FREEZE the estimate.
+                    if meas[i] < self.g[i] - 0.003:
+                        drop = self.g[i] - meas[i]  # > 0.003 m
+                        # Proportional seek: a small 3 mm wobble gets the base
+                        # SEEK_RATE; a 15 cm curb drop gets ~1.7 m/s (3.4×
+                        # faster), converging the ground estimate in ~0.09 s
+                        # instead of 0.30 s — the leg extends DURING the fall.
+                        rate = self.SEEK_RATE + self.SEEK_K * drop
+                        self.g[i] = max(min(self.g[i] - rate * dt,
+                                            meas[i]),
+                                        self.g[1 - i] - span)
+        # Closed-loop leveling: the h→leg-length table is not perfectly
+        # linear (and is extrapolated at the extremes), so a "level" split
+        # left a +6° systematic torso roll on the 10 cm curb — enough to trip
+        # the 4° letgo forever. Trim the split by the MEASURED roll instead
+        # of trusting the table: positive roll (left side low) → left leg
+        # longer. Integrates ONLY on a real ground step (|d| ≥ 2 cm) with
+        # both wheels loaded — on flat ground the dynamic roll of turning is
+        # NOT a terrain signal, and integrating it wound the legs into an
+        # 8.6° roll bias through a 180° turn (flat battery regression).
+        # Off-step the trim decays back to zero.
+        if con[0] and con[1] and abs(self.g[0] - self.g[1]) >= 0.02:
+            self.lvl = float(np.clip(self.lvl + self.LVL_RATE * dt * roll_rad,
+                                     -self.LVL_MAX, self.LVL_MAX))
+        else:
+            self.lvl -= self.lvl * min(1.0, dt / 1.0)
+        return dict(g_mid=0.5 * (self.g[0] + self.g[1]),
+                    d=self.g[0] - self.g[1])
+
+    def split(self, h_cmd: float) -> tuple[float, float]:
+        """Per-leg posture heights for a commanded torso height."""
+        d = self.g[0] - self.g[1]          # left ground minus right ground
+        lo, hi = self.hp.z_lo - self.EXT_M, self.hp.z_hi + self.EXT_M
+        h_l = float(np.clip(h_cmd - 0.5 * d + 0.5 * self.lvl, lo, hi))
+        h_r = float(np.clip(h_cmd + 0.5 * d - 0.5 * self.lvl, lo, hi))
+        residual = d - (h_r - h_l)         # height difference legs can't span
+        # Sign: left ground higher (residual > 0) tips the torso toward the
+        # RIGHT = NEGATIVE measured roll (calibrated on the 15 cm curb trace).
+        self.expected_roll = float(np.arctan2(-residual, self.TRACK_M))
+        return h_l, h_r
 
 # GLFW keycodes seen by mujoco.viewer key_callback (letters A-Z are all bound
 # to viewer render toggles — arrows/paging keys are safe; teleop v1 lesson).

@@ -1485,10 +1485,16 @@ def main():
         args.visual = True
         from wheeled_biped.teleop_shaper import (
             TeleopShaper as _TeleopShaper, HeightPosture as _HeightPosture,
+            LegTerrainAdapter as _LegTerrainAdapter,
+            measure_wheel_ground as _measure_wheel_ground,
             KEY_X as _T_KEY_X, KEY_BACKSPACE as _T_KEY_BS, KEY_SPACE as _T_KEY_SPACE)
+        _hp_live = _HeightPosture()
         _teleop = {
             "Shaper": _TeleopShaper,
-            "hp": _HeightPosture(),
+            "hp": _hp_live,
+            "terrain": _LegTerrainAdapter(_hp_live),
+            "wz0": None,      # per-wheel flat-stance z, captured at activation
+            "load_thresh_n": 0.2 * float(np.sum(mj_model.body_mass)) * 9.81,
             "keys": [],           # appended from the viewer thread
             "shaper": None,       # created once the startup transient settles
             "activate_step": 200,
@@ -1787,16 +1793,35 @@ def main():
                                           float(support_xy[1]), _t_yaw)
                         if _ev is not None:
                             print(f"[KEY] {_ev}")
+                # Per-leg terrain adaptation (curbs, oblique ledges): each
+                # leg tracks its own ground; the roll fed to the letgo/servo
+                # gates is only the EXCESS beyond the geometric straddle band.
+                _lwz = float(mj_data.xpos[l_wheel_id][2])
+                _rwz = float(mj_data.xpos[r_wheel_id][2])
+                if _teleop["wz0"] is None:
+                    _teleop["wz0"] = [_lwz, _rwz]   # activation = flat stance
+                _ad = _teleop["terrain"]
+                _fl, _fr, _czl, _czr = _measure_wheel_ground(
+                    mj_model, mj_data, l_wheel_id, r_wheel_id)
+                _st = _ad.update(
+                    CONTROL_DT,
+                    _fl >= _teleop["load_thresh_n"],
+                    _fr >= _teleop["load_thresh_n"],
+                    _czl if _czl is not None else _lwz - _teleop["wz0"][0],
+                    _czr if _czr is not None else _rwz - _teleop["wz0"][1],
+                    roll_rad=_t_roll)
+                _band = abs(_ad.expected_roll)
+                _roll_c = float(np.sign(_t_roll) * max(0.0, abs(_t_roll) - _band))
                 _tel_cmd = _sh.step(
                     CONTROL_DT, float(support_xy[0]), float(support_xy[1]),
-                    _t_yaw, pitch_rad=_t_pitch, roll_rad=_t_roll)
+                    _t_yaw, pitch_rad=_t_pitch, roll_rad=_roll_c)
                 if _sh.events and _sh.events[-1] == "SAFETY_LETGO":
                     print("[TELEOP] SAFETY_LETGO — tilt limit, cruise released")
                 _sh.events.clear()
-                height_ref = _tel_cmd["height_ref"]
-                eq_joint = _teleop["hp"].q_ref(_sh.height_servo(
-                    float(centroidal.com_pos[2]), CONTROL_DT,
-                    pitch_rad=_t_pitch, roll_rad=_t_roll))
+                height_ref = _tel_cmd["height_ref"] + _st["g_mid"]
+                eq_joint = _teleop["hp"].q_ref_pair(*_ad.split(_sh.height_servo(
+                    float(centroidal.com_pos[2]) - _st["g_mid"], CONTROL_DT,
+                    pitch_rad=_t_pitch, roll_rad=_roll_c)))
                 height_floor = 0.20   # sit-down envelope needs a low floor
                 if _teleop["push_left"] > 0:
                     mj_data.xfrc_applied[1, 0:3] = _teleop["push_vec"]  # body 1 = torso
