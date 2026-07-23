@@ -1624,10 +1624,12 @@ K2_JAX_INPUT_FIELDS: tuple[str, ...] = (
     # a sustained window (ballistic phase of a drop/bounce). 0 in every
     # grounded scenario → the flight wheel override is a no-op (parity-safe).
     "airborne",
+    # Per-leg effective heights from terrain adapter.
+    # 0.0 = unset → JAX falls back to schedule_h for flat-ground parity.
+    "leg_height_left_m",
+    "leg_height_right_m",
 )
-# Unified input size: 58 elements (42 base + 3 standalone + 6 drift estimator
-# + 6 teleop + 1 flight gate). Old shorter inputs are padded with zeros.
-K2_JAX_INPUT_SIZE: int = 58
+K2_JAX_INPUT_SIZE: int = 60
 
 _I_PITCH_X, _I_PITCH_RATE, _I_ROLL_Y, _I_ROLL_RATE = 0, 1, 2, 3
 _I_YAW_ERR, _I_YAW_RATE, _I_COM_Z, _I_COM_VY = 4, 5, 6, 7
@@ -1657,6 +1659,8 @@ _I_TELEOP_TARGET_YAW = 55
 _I_TELEOP_CMD_YAW_RATE = 56
 # Flight gate (index 57)
 _I_AIRBORNE = 57
+_I_LEG_HEIGHT_LEFT = 58
+_I_LEG_HEIGHT_RIGHT = 59
 K2_JAX_INPUT_SIZE_STANDALONE = K2_JAX_INPUT_SIZE  # same unified size
 
 
@@ -1669,9 +1673,10 @@ def pack_input_k2(
     hip_yaw_div_error, hip_yaw_div_rate,
     joint_pos, joint_vel, q_ref,
     support_position_error_m,
-    contact_valid=1.0,  # Phase 6M: contact state for ABS trim safety gate parity
+    contact_valid=1.0,
+    leg_height_left_m=0.0, leg_height_right_m=0.0,
 ):
-    """Pack all K2 inputs into flat JAX array (42).
+    """Pack all K2 inputs into flat JAX array (42→60).
 
     Uses NumPy intermediate to avoid per-element JAX dispatch overhead
     (~17 ms/step → ~0.01 ms/step on Windows with eager-mode .at[idx].set()).
@@ -1714,6 +1719,8 @@ def pack_input_k2(
     inp[_I_QREF_START:_I_QREF_START + 8] = _qref_slice
     inp[_I_SUPPORT_POS_ERR] = float(support_position_error_m)
     inp[_I_CONTACT_VALID] = float(contact_valid)
+    inp[_I_LEG_HEIGHT_LEFT] = float(leg_height_left_m)
+    inp[_I_LEG_HEIGHT_RIGHT] = float(leg_height_right_m)
     return jnp.asarray(inp)
 
 
@@ -1740,9 +1747,10 @@ def pack_input_k2_standalone(
     teleop_target_y_m=0.0,
     teleop_target_yaw_rad=0.0,
     teleop_cmd_yaw_rate_rad_s=0.0,
-    airborne=0.0,  # flight gate: 1 = both wheels off ground (sustained)
+    airborne=0.0,
+    leg_height_left_m=0.0, leg_height_right_m=0.0,
 ):
-    """Pack raw-state K2 inputs into flat JAX array (51-element standalone + drift contract).
+    """Pack raw-state K2 inputs into flat JAX array (standalone + drift + per-leg).
 
     Unlike pack_input_k2(), this accepts ONLY raw sensor/state values.
     No Python-computed sagittal outputs (pitch_x_error, sag_pos_error,
@@ -1817,6 +1825,8 @@ def pack_input_k2_standalone(
     inp[_I_TELEOP_TARGET_YAW] = float(teleop_target_yaw_rad)
     inp[_I_TELEOP_CMD_YAW_RATE] = float(teleop_cmd_yaw_rate_rad_s)
     inp[_I_AIRBORNE] = float(airborne)
+    inp[_I_LEG_HEIGHT_LEFT] = float(leg_height_left_m)
+    inp[_I_LEG_HEIGHT_RIGHT] = float(leg_height_right_m)
     return jnp.asarray(inp)
 
 
@@ -2885,6 +2895,24 @@ def k2_jax_controller_step(
                  0.9 * filtered_com_z + 0.1 * com_z)
     new_filtered_com_z = schedule_h
 
+    # Per-leg effective heights: terrain-adapter values when set, else schedule_h.
+    h_eff_l = jnp.where(input_flat[_I_LEG_HEIGHT_LEFT] > 0.0,
+                         input_flat[_I_LEG_HEIGHT_LEFT], schedule_h)
+    h_eff_r = jnp.where(input_flat[_I_LEG_HEIGHT_RIGHT] > 0.0,
+                         input_flat[_I_LEG_HEIGHT_RIGHT], schedule_h)
+    # Pitch scheduling height: body height above AVERAGE ground, computed as
+    # the mean of per-leg heights. On flat ground equals schedule_h. On a curb
+    # this is the correct body-relative height for pitch dynamics (physics FF,
+    # pitch eq), decoupled from the world-frame elevation g_mid.
+    pitch_schedule_h = 0.5 * (h_eff_l + h_eff_r)
+    # Per-leg wheel torque cap: elevated wheel (high leg → less normal force →
+    # less traction → lower torque cap to prevent slip-spike cycles).
+    # Ground wheel (low h): 5.0 Nm (unchanged). Elevated wheel (high h): 3.0 Nm.
+    _max_tau_wheel_l = 5.0 * k2_jax_scheduled_k_position(
+        h_eff_l, k_nominal=0.6, k_low_max=1.0, z_low=0.370, z_high=0.450)
+    _max_tau_wheel_r = 5.0 * k2_jax_scheduled_k_position(
+        h_eff_r, k_nominal=0.6, k_low_max=1.0, z_low=0.370, z_high=0.450)
+
     # === Step 2: Notch filter ===
     notch_out = notch_b0 * pitch_rate + notch_b1 * notch_x1 + notch_b2 * notch_x2 - notch_a1 * notch_y1 - notch_a2 * notch_y2
     new_notch_x1 = pitch_rate
@@ -2952,6 +2980,14 @@ def k2_jax_controller_step(
     # overshoots as position drift-trim vanishes). _t_busy=0 off-teleop → kpos
     # unchanged → autonomous byte-identical.
     _CRUISE_KPOS_SCALE = 0.25
+    # Terrain-asymmetry gate: further relax position tracking when legs are at
+    # significantly different heights (curb straddle). The ramp→curb transition
+    # creates a pitch disturbance that the position loop amplifies into a
+    # surge/brake cycle. Relaxing kpos to 0.15× on curbs reduces this coupling.
+    _terrain_asymmetry = jnp.abs(h_eff_l - h_eff_r)
+    _terrain_gate = _jax_smoothstep01((_terrain_asymmetry - 0.03) / (0.10 - 0.03))
+    # flat: gate=0, kpos_scale=0.25; curb: gate=1, kpos_scale=0.15
+    _kpos_terrain_scale = _CRUISE_KPOS_SCALE * (1.0 - 0.4 * _terrain_gate)
     kwheel = 0.5        # K2: base k_wheel_velocity
     kd_pitch = 10.0     # K2: base kd_pitch (not scheduled)
     # Continuous max_position_tau scheduling
@@ -2975,7 +3011,7 @@ def k2_jax_controller_step(
     cal_rate_limit = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["rate_limit_grid"])
     cal_lowpass_alpha = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["lowpass_grid"])
 
-    physics_ff_tau = k2_jax_grid_interpolate(schedule_h, ff_grid["grid_heights"], ff_grid["tau_eq_ff_grid"])
+    physics_ff_tau = k2_jax_grid_interpolate(pitch_schedule_h, ff_grid["grid_heights"], ff_grid["tau_eq_ff_grid"])
 
     # Low-band support
     lb_offset, _ = k2_jax_low_band_support_pitch_ref(
@@ -3015,7 +3051,7 @@ def k2_jax_controller_step(
 
     # Total pitch ref offset (physics FF + low-band static only for comparison)
     physics_pitch_eq = k2_jax_grid_interpolate(
-        schedule_h, ff_grid["grid_heights"], ff_grid["pitch_eq_grid"])
+        pitch_schedule_h, ff_grid["grid_heights"], ff_grid["pitch_eq_grid"])
     total_pitch_ref_offset_deg = new_ol_pitch_ref + lb_offset + physics_pitch_eq
 
     # Phase 3 standalone: compute effective pitch from raw body pitch + total offset.
@@ -3300,7 +3336,7 @@ def k2_jax_controller_step(
         effective_velocity_damping_scale=_velocity_damping_scale + _anchor_damping_extra,
         effective_support_velocity_gain=0.0, effective_support_velocity_scale=1.0,
         effective_k_wheel_velocity=kwheel,
-        effective_k_position=kpos * (1.0 - (1.0 - _CRUISE_KPOS_SCALE) * _t_busy),
+        effective_k_position=kpos * (1.0 - (1.0 - _kpos_terrain_scale) * _t_busy),
         # Phase 7 fix: use Python's runtime effective_max_position_tau when available
         # (captured from sagittal controller in both-synced mode; includes T6F/T6I raises).
         # Falls back to height-scheduled max_pos_tau in standalone JAX mode.
@@ -3578,6 +3614,12 @@ def k2_jax_controller_step(
     tau_posture_with_yaw = tau_posture_with_yaw.at[5].add(_hz * _homing_tau(_h_kp_hr, qref_hr_r, q_hr_r, qd_hr_r))
     tau_posture_with_yaw = tau_posture_with_yaw.at[1].add(_hz * _homing_tau(_h_kp_hy, qref_hy_l, q_hy_l, qd_hy_l))
     tau_posture_with_yaw = tau_posture_with_yaw.at[6].add(_hz * _homing_tau(_h_kp_hy, qref_hy_r, q_hy_r, qd_hy_r))
+
+    # Per-leg wheel torque cap: elevated wheel (high leg → less normal force →
+    # less traction) gets a lower cap to prevent slip→torque-spike→pitch-surge
+    # cycles during curb driving. Ground-level wheel keeps the full 5.0 Nm cap.
+    tau_sag = tau_sag.at[4].set(jnp.clip(tau_sag[4], -_max_tau_wheel_l, _max_tau_wheel_l))
+    tau_sag = tau_sag.at[9].set(jnp.clip(tau_sag[9], -_max_tau_wheel_r, _max_tau_wheel_r))
 
     tau_sum = tau_sag + tau_posture_with_yaw + tau_lateral + k2_jax_empirical_support_ff()
 

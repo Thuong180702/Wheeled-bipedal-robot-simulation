@@ -1718,6 +1718,7 @@ def main():
 
         # ── Teleop: keys → shaper → target/height overrides ──────────────
         _tel_cmd = None
+        _h_l = _h_r = 0.0
         if _teleop is not None:
             _t_yaw = float(centroidal.body_yaw_z)
             _t_pitch = float(centroidal.body_pitch_x)
@@ -1825,9 +1826,11 @@ def main():
                     print("[TELEOP] SAFETY_LETGO — tilt limit, cruise released")
                 _sh.events.clear()
                 height_ref = _tel_cmd["height_ref"] + _st["g_mid"]
-                eq_joint = _teleop["hp"].q_ref_pair(*_ad.split(_sh.height_servo(
+                _h_cmd = _sh.height_servo(
                     float(centroidal.com_pos[2]) - _st["g_mid"], CONTROL_DT,
-                    pitch_rad=_t_pitch, roll_rad=_roll_c)))
+                    pitch_rad=_t_pitch, roll_rad=_roll_c)
+                _h_l, _h_r = _ad.split(_h_cmd)
+                eq_joint = _teleop["hp"].q_ref_pair(_h_l, _h_r)
                 height_floor = 0.20   # sit-down envelope needs a low floor
                 if _teleop["push_left"] > 0:
                     mj_data.xfrc_applied[1, 0:3] = _teleop["push_vec"]  # body 1 = torso
@@ -1879,6 +1882,8 @@ def main():
             teleop_target_yaw_rad=(_tel_cmd["teleop_target_yaw_rad"] if _tel_cmd else 0.0),
             teleop_cmd_yaw_rate_rad_s=(_tel_cmd["teleop_cmd_yaw_rate_rad_s"] if _tel_cmd else 0.0),
             airborne=airborne,
+            leg_height_left_m=_h_l,
+            leg_height_right_m=_h_r,
         )
         jax_tau, jax_state, jax_diag = jax_step_fn(jax_state, jax_input, jax_params)
 

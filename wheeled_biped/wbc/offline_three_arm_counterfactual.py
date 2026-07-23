@@ -729,6 +729,8 @@ def compute_v3_torque_for_state(
         teleop_target_yaw_rad=float((teleop or {}).get("teleop_target_yaw_rad", 0.0)),
         teleop_cmd_yaw_rate_rad_s=float((teleop or {}).get("teleop_cmd_yaw_rate_rad_s", 0.0)),
         airborne=airborne,
+        leg_height_left_m=float(controller_context.get("leg_height_left_m", 0.0)),
+        leg_height_right_m=float(controller_context.get("leg_height_right_m", 0.0)),
     )
 
     jax_tau, next_jax_state, jax_diag = jax_step_fn(jax_state, jax_input, jax_params)

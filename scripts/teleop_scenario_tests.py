@@ -166,7 +166,10 @@ class TeleopSim:
         h_post = self.shaper.height_servo(
             float(self.d.subtree_com[0][2]) - st["g_mid"], DT,
             pitch_rad=np.radians(p_deg), roll_rad=roll_c)
-        self.ctx["eq_joint"] = self.hp.q_ref_pair(*self.terrain.split(h_post))
+        h_l, h_r = self.terrain.split(h_post)
+        self.ctx["eq_joint"] = self.hp.q_ref_pair(h_l, h_r)
+        self.ctx["leg_height_left_m"] = h_l
+        self.ctx["leg_height_right_m"] = h_r
         self._step(cmd)
         return cmd
 
