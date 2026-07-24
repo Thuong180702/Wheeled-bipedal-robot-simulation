@@ -3065,6 +3065,12 @@ def k2_jax_controller_step(
     _kpos_terrain_scale = _CRUISE_KPOS_SCALE * (1.0 - 0.4 * _terrain_gate)
     kwheel = 0.5        # K2: base k_wheel_velocity
     kd_pitch = 10.0     # K2: base kd_pitch (not scheduled)
+    # Pitch→wheel-velocity feedforward (curb-only): when the robot pitches on a
+    # curb, gravity's sagittal component causes acceleration/deceleration.
+    # Adding pitch_rate to the wheel command anticipatorily compensates,
+    # preventing the speed collapse that triggers surge/brake cycles.
+    # Positive pitch_rate (nose-up→deceleration) increases forward wheel cmd.
+    _pitch_wheel_ff = 1.5 * pitch_rate_eff * _terrain_gate  # rad/s wheel cmd adj
     # Continuous max_position_tau scheduling
     max_pos_tau = k2_jax_scheduled_k_position(
         schedule_h,
@@ -3403,7 +3409,9 @@ def k2_jax_controller_step(
         wheel_vel_left_rad_s=wheel_vel_l, wheel_vel_right_rad_s=wheel_vel_r,
         # Wheel-velocity FF for teleop cruise: forward motion → wheel_qvel < 0
         # (measured), effective rolling radius ~0.064 m; _t_cmd_vx=0 off-teleop.
-        wheel_vel_cmd_rad_s=-_t_cmd_vx / 0.064,
+        # Pitch→wheel FF (curb-only): compensates gravity-induced speed changes
+        # during pitch transients to prevent surge/brake cycles.
+        wheel_vel_cmd_rad_s=-_t_cmd_vx / 0.064 + _pitch_wheel_ff,
         support_velocity_m_s=support_vel,
         kp_pitch=_kp_pitch_eff, effective_pitch_scale=1.0, effective_pitch_tau_cap=0.0,
         effective_kd_pitch=kd_pitch,
@@ -3553,7 +3561,7 @@ def k2_jax_controller_step(
     _pr_boost = _jax_smoothstep01((_pitch_rate_abs - 0.035) / (0.262 - 0.035))  # 2→15 deg/s
     _com_z_vel_abs = jnp.abs(com_z - schedule_h) * 100.0
     _ht_gate = 1.0 - _jax_smoothstep01((_com_z_vel_abs - 0.005) / (0.03 - 0.005))
-    _kd_pitch_boost = 3.0 * _ht_gate  # Nm/(rad/s)
+    _kd_pitch_boost = 3.0 * _ht_gate + 7.0 * _anchor_prox  # Nm/(rad/s), +anchor proximity
     _tau_pitch_damp_boost = -_kd_pitch_boost * pitch_rate_eff * _pr_boost
     tau_sag = tau_sag.at[4].add(_tau_pitch_damp_boost)
     tau_sag = tau_sag.at[9].add(_tau_pitch_damp_boost)
