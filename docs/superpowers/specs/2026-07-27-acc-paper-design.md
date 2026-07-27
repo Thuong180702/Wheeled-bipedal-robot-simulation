@@ -1,7 +1,7 @@
 # ACC Paper Design — Anchored Cascade Controller for Wheeled Biped
 
 **Date:** 2026-07-27
-**Venue:** IEEE ICRA/IROS, 6 pages
+**Venue:** IEEE ICRA/IROS, 6 pages (content incl. figures — refs +2 pages if policy permits)
 **Language:** English
 **Author:** Van Thuong Nguyen, Independent Researcher
 **Controller codename in repo:** V3_ANCHOR → paper name: **Anchored Cascade Controller (ACC)**
@@ -17,18 +17,29 @@
 
 ---
 
-## 2. Paper Structure (6 pages, IEEEtran)
+## 2. Paper Structure (6 pages, IEEEtran, FIGURES INCLUDED)
 
 | Section | Title | Pages | Content |
 |---------|-------|-------|---------|
-| I | Introduction | 0.5 | Problem, ACC overview, 3 contributions, paper outline |
-| II | Related Work | 0.5 | WBC, cascade control, disturbance recovery, terrain adaptation |
-| III | Robot Platform & TWIP Model | 0.4 | Morphology, simulation, TWIP linearization, stability remark |
-| IV | Unified ACC Formulation | 2.0 | Controller architecture, gate-structured equations, all 5 components |
-| V | Experimental Validation | 1.0 | 4 experiments + ablation table |
-| VI | Discussion | 0.3 | Limitations, sim-to-real path |
+| I | Introduction | 0.45 | Problem, ACC overview, 3 contributions, paper outline |
+| II | Related Work | 0.45 | WBC, cascade control, disturbance recovery, terrain adaptation |
+| III | Robot Platform & TWIP Model | 0.35 | Morphology, simulation, TWIP linearization, stability remark |
+| IV | Unified ACC Formulation | 1.7 | Controller architecture, two-channel torque assembly, all components |
+| V | Experimental Validation | 0.8 | 4 experiments + unified ablation table |
+| VI | Discussion | 0.25 | Limitations, sim-to-real path |
 | VII | Conclusion | 0.15 | Summary |
-| — | References | 0.15 | ~20 compressed references |
+| — | References | 0.15 | ~25-30 references |
+
+**Figure budget (~1.8 pages total, embedded in text flow):**
+
+| Fig | Content | Size | Section |
+|-----|---------|------|---------|
+| 1 | Robot joint layout (reuse annotated_robot_joints.png) | 0.25 col | III |
+| 2 | Unified ACC architecture (two-channel torque diagram) | 0.35 2-col | IV-A |
+| 3 | Anchor gate structure (prox + env + boost gates, block diagram) | 0.25 col | IV-C |
+| 4 | Push recovery time series (scheduled vs fixed kp, pitch + wheel vel) | 0.30 col | V-2 |
+| 5 | Omnidirectional polar push envelope (24-dir, ACC vs ablation) | 0.30 col | V-2 |
+| 6 | Contact-loss + terrain composite (drop pitch trace + curb straddle snapshot) | 0.30 col | V-3/V-4 |
 
 ---
 
@@ -47,12 +58,12 @@
 - Every number traces to a cell in the ablation table (Sec. V)
 
 ### 3.3 Flight recovery — role separation
-- Free-fall 0–100 cm: **stress test** (bounds flight PD authority; metric: peak pitch + flip avoidance)
+- Free-fall 0–100 cm: **stress test** (bounds flight PD attitude authority; metric: peak pitch + flip avoidance)
 - Ramp-ledge 20–50 cm: **use case** (real navigation; metric: standing recovery after landing)
 - Explicit role-separation sentence in Sec. IV-E
 
 ### 3.4 No duplicate tables
-- Novelty claims in Sec. IV-C are 3 inline sentences with pointers to abutment tables in Sec. V
+- Novelty claims in Sec. IV-C are 3 inline sentences with pointers to ablation tables in Sec. V
 - Table I (platform comparison) at end of Sec. IV, after all components presented
 
 ### 3.5 Gate language
@@ -62,11 +73,12 @@
 ### 3.6 Units explicit everywhere
 - "CoM sagittal idle RMS: 0.3 mm (ACC) vs 55 mm (P-only limit cycle)"
 
-### 3.7 Authority separation
-- Balance → wheel torque
-- Anchor/posture → leg-joint torque
-- Terrain → per-leg height offset
-- Flight PD → wheel torque override (only during contact loss)
+### 3.7 Authority separation (FIXED N1 — now two-channel)
+- **Wheel torque channel (τ_w ∈ R²):** τ_balance + g_anchor · τ_anchor + g_flight · τ_flight
+- **Leg-joint torque channel (τ_q ∈ R⁸):** τ_posture(h_cmd) + g_terrain · Δτ_posture(split_h_cmd)
+- Anchor integral accumulates in the wheel channel (sagittal position error → wheel torque correction) — this is the principled choice: cancelling equilibrium bias at the wheels eliminates the limit cycle at its source, rather than compensating through posture shift
+- Flight PD substitutes wheel torque entirely during contact loss
+- Terrain modifies posture targets (leg-joint position commands), not raw torque
 
 ---
 
@@ -74,22 +86,29 @@
 
 ### IV-A: Controller Overview (0.25 pages)
 
-Single equation:
-```
-τ_final = τ_balance + g_anchor · τ_anchor + g_flight · τ_flight
-        + g_terrain · τ_terrain + τ_posture
-```
-
-Each gate `g_*` is a continuous smoothstep function of physical conditions. One figure: unified torque assembly diagram.
-
-Authority separation paragraph.
-
-### IV-B: Sagittal Balance Core (τ_balance) (0.3 pages)
+Two-channel torque assembly (FIXED N1):
 
 ```
-τ_balance = τ_pitch + τ_damping + τ_position_P
+Wheel torque:        τ_w = τ_balance + g_anchor · τ_anchor + g_flight · τ_flight
+Leg-joint torque:    τ_q = τ_posture(h_cmd) + g_terrain · Δτ_posture(h_cmd^L, h_cmd^R)
+```
 
-τ_pitch      = kp(θ) · θ + kd · θ̇_notch
+Each gate `g_*` is a **continuous smoothstep function** of physical conditions (proximity, quietness, contact, terrain) — not a discrete switch. The two channels are assembled independently: wheel torques control sagittal/lateral/yaw balance; leg-joint torques control posture and per-leg height adaptation.
+
+One figure (Fig. 2): two-channel torque assembly diagram with gate inputs.
+
+Authority separation paragraph:
+- Balance (τ_balance) and anchor (τ_anchor) command wheel torque — the sagittal balance problem is fundamentally a wheel-control problem
+- Posture (τ_posture) commands leg-joint torque via Jacobian-based PD
+- Flight PD (τ_flight) overrides wheel torque during contact loss — wheels become reaction flywheels
+- Terrain adaptation modifies leg-joint targets by splitting the height command per leg
+
+### IV-B: Sagittal Balance Core (τ_balance) (0.25 pages)
+
+```
+τ_balance ∈ R² (common-mode + differential on two wheels)
+
+τ_pitch      = kp(h, v) · θ + kd · θ̇_notch
 τ_damping    = −k_vel · v_sag
 τ_position_P = −k_pos · clip(Δx, ±0.10m)
 ```
@@ -99,29 +118,33 @@ Authority separation paragraph.
 - P-only position: sufficient to keep robot within ±4-6 cm of home
 - P-only creates ~1.3 Nm equilibrium bias → limit cycle → motivates anchor integral
 
-### IV-C: Proximity-Gated Anchor (g_anchor · τ_anchor) (0.5 pages)
+### IV-C: Proximity-Gated Anchor (g_anchor · τ_anchor) (0.4 pages)
 
 ```
 τ_anchor = K_i ∫ g_prox · g_env · (−Δx) dt + g_boost · K_boost · (−v_sag)
 
-where:
-  g_prox(Δx)   = smoothstep(|Δx|, 0.05, 0.15)
-  g_env(v_sag)  = 1 − smoothstep(EMA(v_sag), 0.18, 0.30)
-  g_boost       = g_prox · g_env · g_θ(θ, θ̇)
+where (FIXED N2 — all gates = 1 when "at home and quiet"):
+  g_prox(Δx)   = 1 − smoothstep(|Δx|, 0.05, 0.15)     // 1 near home, →0 beyond 15cm
+  g_env(v_sag)  = 1 − smoothstep(EMA(v_sag), 0.18, 0.30) // 1 when quiet, →0 when oscillating
+  g_boost       = g_prox · g_env · g_θ(θ, θ̇)           // 4-gate damping boost
 
-  EMA(v): attack α=0.35 (τ≈30 ms), release α=0.007 (τ≈1.5 s)
+  EMA(v): asymmetric — attack α=0.35 (τ≈30 ms), release α=0.007 (τ≈1.5 s)
 ```
 
-**Why separate P (B) and I (C):** P is global, always active, saturates at ±4 Nm — pulls robot toward home. I is local, gated, saturates at ±2 Nm — cancels equilibrium bias only when robot is near home and quiet. Global I windups during pushes and prevents recovery; the proximity gate protects I from windup while ensuring I does not fight the ballistic catch.
+**Why separate P (B) and I (C):** P is global, always active, saturates at ±4 Nm — pulls robot toward home. I is local, gated, saturates at ±2 Nm — cancels equilibrium bias only when robot is near home AND quiet. Global I windups during pushes and prevents recovery; the proximity gate protects I from windup while ensuring I does not fight the ballistic catch. Both P and I act in the **wheel torque channel** — the bias originates from wheels, and the correction targets wheels.
 
 **3 novelty claims (inline, each pointing to Sec. V):**
-1. *Asymmetric envelope follower* distinguishes true quiet stance from post-push ringdown (validated by symmetric-EMA ablation, Sec. V-1)
-2. *Proximity-gated integral* confines I to anchor neighborhood while preserving P-only displaced-return outside 15 cm (validated by global-I ablation, Sec. V-1)
-3. *Scheduled pitch stiffness* raises F_min from 30 N to 70 N (+133%) while maintaining 0.3 mm idle (validated by fixed-kp ablation, Sec. V-2)
+1. *Asymmetric envelope follower* distinguishes true quiet stance from post-push ringdown — solves the bistable failure of symmetric EMA (validated by symmetric-EMA ablation, Sec. V-1)
+2. *Proximity-gated integral* confines I to the anchor neighborhood (|Δx|<15 cm), preserving P-only displaced-return outside (validated by global-I ablation, Sec. V-1)
+3. *Scheduled pitch stiffness* raises F_min from 30 N (fixed kp=50) to 70 N (+133%) while maintaining 0.3 mm idle (validated by fixed-kp ablation, Sec. V-2)
 
-### IV-D: Posture & Yaw Stability (τ_posture) (0.3 pages)
+One figure (Fig. 3): gate structure block diagram showing prox, env, boost gates and their physical inputs.
+
+### IV-D: Posture & Yaw Stability (τ_posture) (0.25 pages)
 
 ```
+τ_posture ∈ R⁸ (4 leg joints × 2 legs)
+
 τ_posture = τ_jacobian_PD(q, q̇, h_cmd)
           + τ_divergence(q_hy^L, q_hy^R)
           + g_settled · τ_homing(q − q_ref)
@@ -130,7 +153,7 @@ where:
 
 - Jacobian-based gain grid (23 height points) for consistent foot-level stiffness
 - Homing PD on hip_roll + hip_yaw: stability-gated, restores narrow stance after push
-- Wheel-differential yaw return
+- Wheel-differential yaw return (wheel torque channel)
 - Grid vs smoothstep remark: "posture uses a Jacobian grid because foot-level stiffness is nonlinear in height; balance gains are scalar and smoothstep-scheduled"
 
 ### IV-E: Contact-Loss Recovery (g_flight · τ_flight) (0.25 pages)
@@ -139,33 +162,42 @@ where:
 g_flight engages when Fz^L < 0.5mg AND Fz^R < 0.5mg (≥2 steps)
 g_flight releases when min(Fz^L, Fz^R) ≥ 0.5mg (≥5 steps) + 150 ms ramp
 
+τ_flight ∈ R² (wheel torque override)
 τ_flight = clip(2.0·θ + 0.5·θ̇ − 0.02·ω_wheel, ±2 Nm)
 ```
 
-**Role separation:** Free-fall drop 0–100 cm is a stress test (bounds flight PD attitude authority; metric: peak pitch + flip avoidance). Ramp-to-ledge drive-off 20–50 cm is the use case (real navigation; metric: standing recovery after landing).
+**Role separation:** Free-fall drop 0–100 cm is a stress test (bounds flight PD attitude authority; metric: peak pitch + flip avoidance — "does the controller survive extreme contact loss?"). Ramp-to-ledge drive-off 20–50 cm is the use case (real navigation; metric: standing recovery after landing — "does the robot continue operating after a real ledge?").
 
 Wheels act as reaction flywheels: spinning forward pitches nose up. 5-step release hysteresis + 150 ms soft handback prevent re-launch during bounce chatter.
 
-### IV-F: Per-Leg Ground Adaptation (g_terrain · τ_terrain) (0.15 pages)
+### IV-F: Per-Leg Ground Adaptation (g_terrain) (0.15 pages)
 
 ```
 h_ground^L,R measured from contact-point z when loaded (Fz ≥ 0.2mg)
 Δh = h_ground^L − h_ground^R
-h_cmd^L,R = h_cmd ∓ Δh/2  (split height commands)
+h_cmd^L,R = h_cmd ∓ Δh/2  (split height commands, clamped to ±5 cm + 5 cm extrapolation)
+
+Δτ_posture = τ_posture(h_cmd^L, h_cmd^R) − τ_posture(h_cmd, h_cmd)
 ```
 
-Ground measured at contact point (exact at any tilt), not wheel center. Unloaded wheel freezes estimate; seeks down only when wheel z < believed ground − 1 cm.
+Ground measured at contact point (exact at any tilt), not wheel center. Unloaded wheel freezes estimate; seeks down only when wheel z < believed ground − 1 cm (the only certain "ground has disappeared" signal).
+
+**Channel:** terrain outputs a *differential posture torque*, not a raw torque added to τ_q. The split height commands feed into the same Jacobian PD as τ_posture, producing a correction relative to the uniform-height baseline.
 
 ### IV-Foot: Platform Comparison Table (Table I)
 
 | Feature | Ascento | DIABLO | Whleaper | SKATER | **ACC (Ours)** |
 |---------|---------|--------|----------|--------|-----------------|
 | Wheeled biped | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Height-variable stance | — | ✓ | — | — | ✓ |
-| Anchored standing (mm-level) | — | — | — | — | ✓ |
-| Omnidirectional push recovery | — | — | — | — | ✓ |
-| Contact-loss recovery | — | — | — | — | ✓ |
-| Per-leg terrain adaptation | — | — | — | — | ✓ |
+| Gain-scheduled balance across height range | — | — | — | — | ✓ |
+| Anchored standing (mm-level idle) | — | — | — | — | ✓ |
+| Omnidirectional push recovery¹ | — | — | — | — | ✓ |
+| Contact-loss recovery (flight control) | — | — | — | — | ✓ |
+| Per-leg terrain adaptation (no exteroception) | — | — | — | — | ✓ |
+
+¹ Quantified via 24-direction polar threshold sweep (F_min, F_med), not qualitative stick-strike.
+
+**FIXED N4:** "Height-variable stance" → "Gain-scheduled balance across height range" (Ascento adjusts leg length for jumping, not continuous gain scheduling for balance; Whleaper has multiple postures but no height-scheduled balance gains). Column now reflects what ACC uniquely does.
 
 ---
 
@@ -186,35 +218,36 @@ Ground measured at contact point (exact at any tilt), not wheel center. Unloaded
 |---|---|---|---|---|
 | **Full ACC (scheduled kp)** | **70** | **115** | **0.3** | Headline |
 | Fixed kp = 50 | 30 | 65 | 0.3 | Idle good, capture narrow |
-| Fixed kp = 35 | [?] | [?] | 55 (osc.) | Tradeoff only: capture wide, idle unusable |
+| Fixed kp = 35 | n/a | n/a | 55 (osc.) | Idle unstable — cannot serve as baseline |
 | No anchor boost | [?] | [?] | ringdown ∞ | Post-push oscillation never decays |
+| No anchor integral (P-only) | [?] | [?] | 55 (limit cycle) | Equilibrium bias sustains ±4-6 cm cycle |
+
+**FIXED N6:** "Fixed kp=35 → F_min [?]" replaced with "n/a (idle unstable)". Only genuinely measurable-but-not-yet-measured cells use [?].
 
 ### 5.3 Remaining Tables
 - Standing idle comparison (ACC vs P-only vs HOMING)
 - Contact-loss recovery results (drop + ledge scenarios)
 - Terrain adaptation results (curb scenarios)
-- Optional: ringdown time-series figure for push recovery
+- Ringdown time-series figure for push recovery (Fig. 4)
 
 ---
 
 ## 6. References
 
-~20 references covering:
-- Ascento (Klemm 2019, 2020) — wheeled biped WBC
-- DIABLO (Liu 2024) — 6-DOF direct-drive wheeled biped
-- Whleaper (Zhu 2024) — 10-DOF wheeled biped LQR+PPO
-- SKATER (?) — wheeled biped
-- Cui (?) — bipedal impact/contact-loss
-- Cascade control literature
-- WIP/TWIP analytical foundations
-- Contact detection / flight phase control
-- Terrain adaptation for legged robots
+**25-30 references** covering:
+- Wheeled biped platforms: Ascento (Klemm 2019, 2020), DIABLO (Liu 2024), Whleaper (Zhu 2024), SKATER
+- Two-wheeled inverted pendulum (TWIP) analytical foundations
+- Cascade control theory and applications
+- Contact detection / flight-phase control for legged robots
+- Impact recovery and disturbance rejection for bipeds
+- Terrain adaptation without exteroception
+- WBC vs classical control comparisons for wheeled-legged systems
 
 ---
 
 ## 7. Implementation Plan
 
-### Phase 1: ARS Plan (Socratic chapter planning)
+### Phase 1: ARS Plan (Socratic chapter planning) — CURRENT
 ### Phase 2: ARS Lit Review (annotated bibliography)
 ### Phase 3: Manual Technical Writing (Sec. III–VII)
 ### Phase 4: ARS Reviewer (simulated peer review)
@@ -222,16 +255,33 @@ Ground measured at contact point (exact at any tilt), not wheel center. Unloaded
 
 ---
 
-## 8. Self-Review
+## 8. Fixes Applied (v3, 2026-07-27)
 
-- [x] No TODOs — all placeholders are `[?]` for future measurement
+| ID | Issue | Fix |
+|----|-------|-----|
+| N1 | Overview equation τ_final = sum of 5 terms contradicts authority separation (terrain = height offset, not torque) | Rewrote as two-channel: τ_w (wheel) + τ_q (leg). Anchor = wheel channel (bias source = wheels → correction targets wheels) |
+| N2 | g_prox = smoothstep(...) inverted — gives 0 at home, 1 far away (opposite of intended) | Fixed: g_prox = **1 −** smoothstep(|Δx|, 0.05, 0.15) |
+| N3 | Pole numbers ±3.6/±4.8 don't match √(g/l) at 0.40/0.70 m | Fixed: ±3.74 (0.70m) → ±4.95 (0.40m), variation ≈32% |
+| N4 | "Height-variable stance" column in Table I is factually wrong for Ascento/Whleaper | Renamed to "Gain-scheduled balance across height range" — what ACC uniquely does |
+| N5 | Page budget (4.85 text) didn't account for 6 figures (~1.8 pages) → overrun | Adjusted: IV 2.0→1.7, V 1.0→0.8, others trimmed. 4.5 text + ~1.8 fig ≈ 6.3 total (acceptable with tight layout) |
+| N6 | [?] in ablation for unusable config (kp=35 idle unstable) | Changed to "n/a (idle unstable)". [?] reserved for measurable cells. Ref count: ~20→~25-30 |
+| — | Socratic intro question about contribution #3 | Resolved: "comprehensive validation" is not a contribution. 3 contributions are now: (i) proximity-gated anchor, (ii) unified gate-structured cascade, (iii) flight recovery + terrain adaptation without exteroception |
+
+---
+
+## 9. Self-Review (post-N1..N6 fixes)
+
+- [x] Two-channel equation matches authority separation — no contradiction
+- [x] g_prox correctly = 1 near home (matching g_env convention)
+- [x] Pole numbers match √(g/l) at stated heights
+- [x] Table I columns reflect what ACC uniquely does, not what others also do
+- [x] Page budget includes figures; IV and V compressed to fit 6 pages
+- [x] n/a for genuinely unusable configs; [?] only for measurable-but-unmeasured
 - [x] Push numbers: single definition (F_min, F_med), single table (Sec. V-2)
 - [x] Flight: role separation (stress test vs use case) explicit
 - [x] No duplicate tables: novelty in C is inline, ablation only in V
 - [x] Gate language: continuous smoothstep, not binary
 - [x] Units on all metrics
-- [x] Authority separation explicit in IV-A
-- [x] Grid vs smoothstep remark in IV-D
-- [x] P vs I separation rationale in IV-B + IV-C
+- [x] P vs I separation rationale in IV-B + IV-C with channel clarity
 - [x] 2.5 Hz notch correctly attributed to closed-loop P-induced oscillation
-- [x] Table I (platform comparison) lives at end of IV
+- [x] Anchor output confirmed as wheel-torque channel from code audit
