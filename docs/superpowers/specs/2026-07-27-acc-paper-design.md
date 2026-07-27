@@ -73,7 +73,19 @@
 ### 3.6 Units explicit everywhere
 - "CoM sagittal idle RMS: 0.3 mm (ACC) vs 55 mm (P-only limit cycle)"
 
-### 3.7 Authority separation (FIXED N1 — now two-channel)
+### 3.8 Introduction narrative — tension → resolution (from Q1)
+
+**¶2 (TENSION — two concrete axes, NOT the resolution):**
+- Stiffness axis: kp=50 → idle 0.3 mm ✅ / F_min=30 N ❌ vs kp=35 → capture wide ✅ / idle oscillates ❌
+- Integral axis: no-I → 1.3 Nm bias → 55 mm limit cycle ❌ vs global-I → windup during push ❌
+- "A single fixed stiffness cannot occupy both ends: kp=50 holds 0.3 mm idle but shrinks the capture basin to F_min=30 N, while kp=35 widens capture but lets idle oscillate. The same dilemma appears on the integral axis: omitting I leaves a 1.3 Nm equilibrium bias, yet a global I winds up during a push and blocks recovery."
+
+**¶3 (RESOLUTION — ACC breaks both trade-offs):**
+- Scheduled kp: kp=50 at anchor → 0.3 mm idle; kp=35 during ballistic recovery → F_min=70 N (+133% over fixed kp=50)
+- Proximity-gated I: I active only within |Δx|<15 cm after quiet-stance detection
+- Asymmetric envelope follower: the mechanism that reliably detects quiet stance
+
+### 3.9 Authority separation (FIXED N1 — now two-channel)
 - **Wheel torque channel (τ_w ∈ R²):** τ_balance + g_anchor · τ_anchor + g_flight · τ_flight
 - **Leg-joint torque channel (τ_q ∈ R⁸):** τ_posture(h_cmd) + g_terrain · Δτ_posture(split_h_cmd)
 - Anchor integral accumulates in the wheel channel (sagittal position error → wheel torque correction) — this is the principled choice: cancelling equilibrium bias at the wheels eliminates the limit cycle at its source, rather than compensating through posture shift
@@ -224,7 +236,22 @@ Ground measured at contact point (exact at any tilt), not wheel center. Unloaded
 
 **FIXED N6:** "Fixed kp=35 → F_min [?]" replaced with "n/a (idle unstable)". Only genuinely measurable-but-not-yet-measured cells use [?].
 
-### 5.3 Remaining Tables
+### 5.3 Ablation Truth-Table (definitive configuration matrix)
+
+Each row disables exactly ONE mechanism; all others kept at ACC defaults. This eliminates label ambiguity (e.g. "55 mm" was previously attributed to both "P-only" and "fixed kp=35").
+
+| Configuration | sched kp | integral I | prox gate | envelope | boost | → idle RMS | → F_min |
+|---|---|---|---|---|---|---|---|
+| **Full ACC** | ✓ | gated | ✓ | asym | ✓ | 0.3 mm | 70 N |
+| fixed kp=50 | ✗ (=50) | gated | ✓ | asym | ✓ | 0.3 mm | 30 N |
+| fixed kp=35 | ✗ (=35) | gated | ✓ | asym | ✓ | n/a (osc.) | n/a |
+| global-I | ✓ | global | ✗ | asym | ✓ | [?] | [?] |
+| symmetric-EMA | ✓ | gated | ✓ | sym | ✓ | [?] | [?] |
+| no-boost | ✓ | gated | ✓ | asym | ✗ | ringdown ∞ | [?] |
+
+Rows marked [?] are eval-only ablations (flag-off, no retraining) — feasible in ~1-2 days wall-clock on MJX.
+
+### 5.4 Remaining Tables
 - Standing idle comparison (ACC vs P-only vs HOMING)
 - Contact-loss recovery results (drop + ledge scenarios)
 - Terrain adaptation results (curb scenarios)
@@ -266,6 +293,16 @@ Ground measured at contact point (exact at any tilt), not wheel center. Unloaded
 | N5 | Page budget (4.85 text) didn't account for 6 figures (~1.8 pages) → overrun | Adjusted: IV 2.0→1.7, V 1.0→0.8, others trimmed. 4.5 text + ~1.8 fig ≈ 6.3 total (acceptable with tight layout) |
 | N6 | [?] in ablation for unusable config (kp=35 idle unstable) | Changed to "n/a (idle unstable)". [?] reserved for measurable cells. Ref count: ~20→~25-30 |
 | — | Socratic intro question about contribution #3 | Resolved: "comprehensive validation" is not a contribution. 3 contributions are now: (i) proximity-gated anchor, (ii) unified gate-structured cascade, (iii) flight recovery + terrain adaptation without exteroception |
+
+## 8b. Refinements from Socratic Q1–Q5
+
+| Q | Refinement | Where applied |
+|---|-----------|---------------|
+| Q1 | **Tension narrative:** ¶2 uses kp=50-vs-35 tradeoff + I none-vs-global tradeoff (two axes of tension); ¶3 shows ACC breaks both via scheduled kp + gated I. Do NOT use scheduled kp in ¶2 — scheduled is the resolution, not evidence of tension. | §3.8, Sec I draft |
+| Q2 | **SKATER kept.** Existing sub-D terrain critique changed from "exteroceptive" (unverifiable blanket claim) to "mechanism-based": existing = whole-body MPC/model-based replan; ACC = per-leg contact-point split, no terrain model. Table I terrain column renamed to "Proprioceptive per-leg ground adaptation (no terrain model)." | Sec II-D, Table I |
+| Q3 | **Pole-only in Sec III.** Add one sentence: "The pole-migration argument is purely motivational: it explains why a single fixed gain fails, not how ACC's gains are obtained. ACC does not solve an LQR; its scheduled gains are PD terms tuned per height band. A standard LQR appears only as a baseline in Sec. V." **Supplementary:** prepare 1-page K_LQR at 3 heights + Q,R for baseline LQR — reviewer may request. | Sec III, Supplementary |
+| Q4 | **Fig. 2 = two-channel gated block diagram** (not signal-summing diagram). Each gate drawn as multiplier (×) receiving physical condition inputs via dashed lines. Two separate channels (wheel-torque, leg-joint) terminate at robot actuators. Equation in IV-A must match figure. Anchor confirmed = wheel channel. | Fig. 2, IV-A |
+| Q5 | **Keep all [?] rows.** Eval-only (flag-off, no retrain) — feasible in 1-2 days MJX. Priority order if time-constrained: global-I + symmetric-EMA first (hold 2/3 novelty) → no-boost → kp=35 fill. Added ablation truth-table (§5.3) mapping each config to a unique on/off flag combination — eliminates label ambiguity. Fixed kp=35 → n/a (idle unstable; robot oscillates 55 mm, measuring F_min is meaningless). | §5.3 |
 
 ---
 
