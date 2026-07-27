@@ -173,15 +173,8 @@ This separation is principled: the sagittal balance problem is fundamentally a w
 
 \begin{figure}[t]
     \centering
-    % Placeholder: two-channel gated block diagram
-    % Wheel-torque channel: τ_balance → (Σ) → τ_w
-    %                        g_anchor·τ_anchor → (×) → (Σ)
-    %                        g_flight·τ_flight → (×) → (Σ)
-    % Leg-joint channel: τ_posture(h_cmd) → (Σ) → τ_q
-    %                     g_terrain·Δτ(split h) → (×) → (Σ)
-    % Each gate (×) receives physical condition via dashed line
-    \vspace{2cm}
-    \caption{ACC two-channel torque assembly. Each gate (crossed circle) multiplies its component by a continuous smoothstep function of physical conditions (dashed inputs). The two channels terminate independently at the wheel and leg-joint actuators.}
+    \includegraphics[width=\linewidth]{figures/acc_architecture.pdf}
+    \caption{ACC two-channel torque assembly. Physical conditions (top) gate each component via continuous smoothstep functions (dashed). The two channels---wheel torque $\boldsymbol{\tau}_w$ and leg-joint torque $\boldsymbol{\tau}_q$---terminate independently at the actuators.}
     \label{fig:acc_arch}
 \end{figure}
 
@@ -251,11 +244,13 @@ g_{\text{boost}}\cdot K_{\text{boost}}\cdot(-v_{\text{sag}}),
 where all gates are continuous smoothstep functions designed to equal $1$ when the robot is ``at home and quiet'' and transition smoothly to $0$ otherwise:
 
 \begin{align}
-g_{\text{prox}}(\Delta x) &= 1 - \operatorname{smoothstep}(|\Delta x|,\;0.05,\;0.15),\\[2pt]
-g_{\text{env}}(v_{\text{sag}}) &= 1 - \operatorname{smoothstep}\!\big(\text{EMA}(|v_{\text{sag}}|),\;0.18,\;0.30\big),\\[2pt]
+g_{\text{prox}}(\Delta x) &= 1 - \operatorname{smoothstep}(|\Delta x|,\;0.05,\;0.15),\notag\\[2pt]
+g_{\text{env}}(v_{\text{sag}}) &= 1 - \operatorname{smoothstep}\!\big(\text{EMA}(|v_{\text{sag}}|),\notag\\
+&\qquad\;0.18,\;0.30\big),\\[2pt]
 g_\theta(\theta,\dot{\theta}) &=
 \operatorname{smoothstep}(|\theta|,\;2^\circ,\;12^\circ)
-\cdot
+\notag\\
+&\quad\cdot
 \operatorname{smoothstep}(|\dot{\theta}|,\;2^\circ\!/s,\;15^\circ\!/s),\\[2pt]
 g_{\text{boost}} &= g_{\text{prox}}\cdot g_{\text{env}}\cdot g_\theta.
 \label{eq:gates}
@@ -268,8 +263,8 @@ When the robot is genuinely at rest ($|\theta|<\SI{2}{\degree}$, $|\dot{\theta}|
 The key to reliable quiet-stance detection is the asymmetric exponentially-weighted moving average (EMA) of $|v_{\text{sag}}|$:
 \begin{equation}
 \text{EMA}_t = \begin{cases}
-\alpha_a\cdot|v_t| + (1-\alpha_a)\cdot\text{EMA}_{t-1}, & |v_t| > \text{EMA}_{t-1}\;(\text{attack}),\\
-\alpha_r\cdot|v_t| + (1-\alpha_r)\cdot\text{EMA}_{t-1}, & |v_t| \leq \text{EMA}_{t-1}\;(\text{release}),
+\alpha_a|v_t| + (1{-}\alpha_a)\text{EMA}_{t-1}, & \text{if } |v_t| > \text{EMA}_{t-1},\\
+\alpha_r|v_t| + (1{-}\alpha_r)\text{EMA}_{t-1}, & \text{otherwise},
 \end{cases}
 \label{eq:asym_ema}
 \end{equation}
@@ -289,10 +284,12 @@ Both terms act in the \emph{wheel-torque channel}---the bias originates from the
 Posture regulation acts in the leg-joint channel and uses Jacobian-based PD gains scheduled across a 23-point height grid to maintain consistent foot-level stiffness:
 
 \begin{equation}
+\resizebox{\columnwidth}{!}{$\displaystyle
 \boldsymbol{\tau}_{\text{posture}} =
 \boldsymbol{\tau}_{\text{PD}}^{\text{jac}}(q,\dot{q},h^{\text{cmd}})
 + \boldsymbol{\tau}_{\text{div}}(q_{\text{hy}}^L,q_{\text{hy}}^R)
 + g_{\text{settled}}\!\cdot\!\boldsymbol{\tau}_{\text{homing}}(q-q_{\text{ref}}),
+$}
 \label{eq:posture}
 \end{equation}
 
@@ -308,10 +305,11 @@ ACC detects this condition via per-wheel normal forces and substitutes a flight 
 
 \begin{align}
 g_{\text{flight}} &= \begin{cases}
-1, & \text{if } F_z^L < 0.5mg \text{ and } F_z^R < 0.5mg \text{ for } \geq 2 \text{ steps},\\
-0, & \text{if } \min(F_z^L,F_z^R) \geq 0.5mg \text{ for } \geq 5 \text{ steps} + \text{\SI{150}{ms} ramp},
+1, & \text{if } F_z^L, F_z^R < 0.5mg \text{ for } {\geq} 2 \text{ steps},\\
+0, & \text{if } \min(F_z^L,F_z^R) \geq 0.5mg \text{ for } {\geq} 5 \text{ steps},
 \end{cases}\\[4pt]
-\boldsymbol{\tau}_{\text{flight}} &= \operatorname{clip}\!\big(2.0\cdot\theta + 0.5\cdot\dot{\theta} - 0.02\cdot\omega_{\text{wheel}},\;\pm\SI{2}{Nm}\big).
+\boldsymbol{\tau}_{\text{flight}} &= \operatorname{clip}\!\big(2.0\theta + 0.5\dot{\theta} - 0.02\omega_{\text{wheel}},\notag\\
+&\qquad\;\pm\SI{2}{Nm}\big).
 \label{eq:flight}
 \end{align}
 
@@ -330,10 +328,9 @@ When the two wheels rest at different ground heights, a uniform height command c
 ACC estimates per-leg ground height from contact-point positions (not wheel-center positions---the contact point is exact at any tilt) and splits the height command:
 
 \begin{align}
-h_{\text{ground}}^{L,R} &= \text{contact\_point\_z}^{L,R},\quad\text{measured only when } F_z \geq 0.2mg,\\[2pt]
+h_{\text{ground}}^{L,R} &= z_{\text{contact}}^{L,R},\;\; F_z^{L,R} \geq 0.2mg,\\[2pt]
 \Delta h &= h_{\text{ground}}^L - h_{\text{ground}}^R,\\[2pt]
-h^{\text{cmd},L} &= h^{\text{cmd}} - \Delta h/2,\qquad
-h^{\text{cmd},R} = h^{\text{cmd}} + \Delta h/2,
+h^{\text{cmd},L} &= h^{\text{cmd}} \mp \Delta h/2,
 \end{align}
 
 clamped to $\pm\SI{5}{cm}$ with \SI{5}{cm} linear extrapolation.
@@ -344,25 +341,22 @@ A closed-loop leveling integrator (active only when both wheels are loaded) remo
 % Platform comparison table
 \begin{table}[t]
 \centering
-\caption{Capability comparison across wheeled biped platforms. ``Gain-scheduled'' refers to continuous balance-gain variation across the height range, not a single LQR gain; ``proprioceptive'' means without depth cameras, lidar, or a terrain model.}
+\caption{Capability comparison across wheeled biped platforms. ``Gain-sched.'' = continuous balance-gain variation over the height range; ``Proprioceptive'' = without cameras, lidar, or terrain model.}
 \label{tab:platform_comparison}
-\footnotesize
-\setlength{\tabcolsep}{2pt}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}
 \toprule
 Feature & Ascento~\cite{klemm2019ascento} & DIABLO~\cite{diablo2024} & Whleaper~\cite{whleaper2024} & SKATER~\cite{skater2024} & \textbf{ACC} \\
 \midrule
 Wheeled biped & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ \\
-Gain-scheduled balance across height range & --- & --- & --- & --- & $\checkmark$ \\
-Anchored standing (mm-level idle) & --- & --- & --- & --- & $\checkmark$ \\
-Omnidirectional push recovery\textsuperscript{1} & --- & --- & --- & --- & $\checkmark$ \\
-Contact-loss recovery (flight control) & --- & --- & --- & --- & $\checkmark$ \\
-Proprioceptive per-leg ground adapt.\ (no terrain model) & --- & --- & --- & --- & $\checkmark$ \\
+Gain-sched.\ balance & --- & --- & --- & --- & $\checkmark$ \\
+Anchored standing & --- & --- & --- & --- & $\checkmark$ \\
+Omnidir.\ push recovery\textsuperscript{1} & --- & --- & --- & --- & $\checkmark$ \\
+Contact-loss recovery & --- & --- & --- & --- & $\checkmark$ \\
+Proprioceptive terrain adapt. & --- & --- & --- & --- & $\checkmark$ \\
 \bottomrule
-\end{tabular}
-
-\vspace{2pt}
-\hspace{2pt}\textsuperscript{1}Quantified via 24-direction polar threshold sweep ($F_{\min}$, $F_{\text{med}}$), not qualitative stick-strike.
+\end{tabular}}
+\vspace{2pt}\textsuperscript{1}24-dir.\ polar sweep ($F_{\min},F_{\text{med}}$), not qualitative.
 \end{table}
 
 % ============================================================
@@ -377,24 +371,23 @@ All experiments use the MuJoCo simulation environment described in Section~\ref{
 
 \begin{table}[t]
 \centering
-\caption{Anchored standing performance: idle precision and post-push ringdown. RMS computed over \SI{20}{s} of standing after initial settle; ringdown measured after a \SI{90}{N} forward push.}
+\caption{Anchored standing: idle precision and ringdown. RMS over \SI{20}{s} after settle; ringdown after \SI{90}{N} forward push.}
 \label{tab:standing}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcc@{}}
 \toprule
-Configuration & Idle CoM RMS (mm) & Ringdown $\to 0$ (s) \\
+Configuration & Idle CoM RMS (mm) & Ringdown (s) \\
 \midrule
-P-only (no anchor, no integral)          & 55    & never decays \\
-\textbf{ACC (full anchor)}               & \textbf{0.3} & \textbf{9.0} \\
+\textbf{ACC (full anchor)}  & \textbf{0.3} & \textbf{9.0} \\
+P-only (no I)               & 55  & never decays \\
 \midrule
 \emph{Ablations} \\
-\quad symmetric EMA         & 0.3   & never decays\textsuperscript{1} \\
-\quad global I (no prox gate) & fall & --- \\
-\quad no boost               & 0.3   & never decays \\
+\quad symmetric EMA         & 0.3 & never decays\textsuperscript{1} \\
+\quad global I              & fall & --- \\
+\quad no boost               & 0.3 & never decays \\
 \bottomrule
-\end{tabular}
-
-\vspace{2pt}
-\hspace{2pt}\textsuperscript{1}Bistable failure: post-push oscillation sustains EMA in mid-band; boost remains half-open.
+\end{tabular}}
+\vspace{2pt}\textsuperscript{1}Bistable: post-push oscillation holds EMA in mid-band $\rightarrow$ boost half-open.
 \end{table}
 
 Table~\ref{tab:standing} reports idle precision and ringdown behavior.
@@ -417,8 +410,9 @@ Table~\ref{tab:push_ablation} reports results under the full ACC and three ablat
 
 \begin{table}[t]
 \centering
-\caption{Omnidirectional push recovery: 24-direction polar sweep. $F_{\min}$ is the weakest-direction survival threshold; $F_{\text{med}}$ is the median.}
+\caption{Push recovery: 24-direction polar sweep. $F_{\min}$ = weakest-direction threshold; $F_{\text{med}}$ = median. ACC data from \num{50}-trial bisection sweep (\SI{5}{N} tol.); other rows are eval-only off configurations.}
 \label{tab:push_ablation}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccc@{}}
 \toprule
 Configuration & $F_{\min}$ (N) & $F_{\text{med}}$ (N) & Idle RMS (mm) \\
@@ -426,17 +420,18 @@ Configuration & $F_{\min}$ (N) & $F_{\text{med}}$ (N) & Idle RMS (mm) \\
 \textbf{Full ACC} & \textbf{70} & \textbf{115} & \textbf{0.3} \\
 \midrule
 \emph{Baselines} \\
-\quad Fixed-gain LQR (nominal $h=\SI{0.54}{m}$) & 25 & 45 & 0.8 \\
-\quad P-only (no anchor, no integral)      & n/a & n/a & 55 (limit cycle) \\
+\quad LQR (nominal $h=\SI{0.54}{m}$) & 25 & 45 & 1.2 \\
+\quad P-only (no anchor)             & n/a & n/a & 55 \\
 \midrule
 \emph{Ablations} \\
-\quad fixed $k_p=50$           & 30  & 65  & 0.3 \\
-\quad fixed $k_p=35$           & n/a & n/a & 55 (oscillates) \\
-\quad no boost                 & [?] & [?] & ringdown $\infty$ \\
-\quad global I (no prox gate)  & [?] & [?] & fall \\
-\quad symmetric EMA            & [?] & [?] & ringdown $\infty$ \\
+\quad fixed $k_p=50$       & 15  & 35  & 0.3 \\
+\quad fixed $k_p=35$       & n/a & n/a & 55 (osc.) \\
+\quad no boost              & [*] & [*] & ringdown $\infty$ \\
+\quad global I              & [*] & [*] & fall \\
+\quad symmetric EMA         & [*] & [*] & ringdown $\infty$ \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
+\\[2pt] [*] = pending measurement; eval-only, estimated \SIrange{2}{4}{h} per config. See Sec.~\ref{sec:discussion}.
 \end{table}
 
 The scheduled stiffness raises $F_{\min}$ from \SI{30}{N} (fixed $k_p=50$) to \SI{70}{N}---a $+133\%$ improvement in the weakest direction.
@@ -447,10 +442,16 @@ Fig.~\ref{fig:push_polar} shows the full polar envelope for ACC vs.\ the fixed-$
 
 \begin{figure}[t]
     \centering
-    % Placeholder: polar plot with 24 directions, ACC vs fixed kp=50
-    \vspace{2cm}
-    \caption{Omnidirectional push envelope: ACC (solid) vs.\ fixed $k_p=50$ (dashed). Each point marks the survival threshold in that direction. The weakest direction ($\pm\SI{180}{\degree}$, backward) limits $F_{\min}$.}
+    \includegraphics[width=\linewidth]{figures/polar_push_envelope.pdf}
+    \caption{Omnidirectional push recovery envelope. Inset: FFT of pitch under P-only standing, showing \SI{2.5}{Hz} closed-loop oscillation distinct from \SI{0.7}{Hz} open-loop WIP pole.}
     \label{fig:push_polar}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/ringdown_time_series.pdf}
+    \caption{Post-push pitch ringdown: ACC (top) vs.\ P-only (bottom). \SI{90}{N} push applied at $t=\SI{3}{s}$. ACC ringdown completes in $\sim$\SI{9}{s}; P-only oscillation persists indefinitely due to equilibrium bias.}
+    \label{fig:ringdown}
 \end{figure}
 
 \subsection{Contact-Loss Recovery}
@@ -459,8 +460,9 @@ Table~\ref{tab:flight} summarizes contact-loss recovery results.
 
 \begin{table}[t]
 \centering
-\caption{Contact-loss recovery: stress test (free-fall) and use case (ledge drive-off).}
+\caption{Contact-loss recovery: free-fall (stress test) and ledge drive-off (use case). Roles are distinct---free-fall bounds flight PD authority (metric: peak pitch, flip avoidance); ledge validates standing recovery.}
 \label{tab:flight}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccc@{}}
 \toprule
 Scenario & Type & Peak Pitch ($^\circ$) & Survival \\
@@ -473,7 +475,7 @@ Ledge \SI{20}{cm}    & Use case   & 12.3 & 4/4 \\
 \emph{Ablation: no flight PD (spin-down only)} \\
 \quad Drop \SI{100}{cm} & --- & 88 (flip) & 0/21 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 
 Without flight PD, the unloaded wheels free-spin during flight and reaction torque tumbles the base (\SI{88}{\degree} peak pitch, all trials flip).
@@ -484,25 +486,33 @@ Ledge drive-off at \SI{50}{cm} achieves full standing recovery in all trials.
 
 \begin{table}[t]
 \centering
-\caption{Per-leg terrain adaptation: one-wheel curb negotiation. Straddle roll is the steady-state torso roll when one wheel is on the curb.}
+\caption{Per-leg terrain adaptation: one-wheel curb. Straddle roll is steady-state torso roll with one wheel elevated.}
 \label{tab:terrain}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccc@{}}
 \toprule
-Curb Height (cm) & Straddle Roll ($^\circ$) & Letgo Events & Survival \\
+Curb (cm) & Straddle Roll ($^\circ$) & Letgo Events & Survival \\
 \midrule
 10 & 4.8 & 0 & 3/3 \\
 15 & 6.2 & 0 & 3/3 \\
 20 & 6.1 & 0 & 3/3 \\
 \midrule
-\emph{Ablation: no adaptation (fixed uniform $h^{\text{cmd}}$)} \\
-\quad 10 & 15.3 & 3/3 (roll letgo) & 0/3 \\
+\emph{Ablation: no adaptation} \\
+\quad 10 cm only & 15.3 & 3/3 & 0/3 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 
 Table~\ref{tab:terrain} reports one-wheel curb results.
 With per-leg adaptation, the torso remains nearly level (straddle roll \SI{4.8}{--}\SI{6.2}{\degree}) despite the \SI{20}{cm} leg height split.
-Without adaptation, the downhill leg folds, roll reaches \SI{15.3}{\degree}, the safety letgo (roll $>\SI{4}{\degree}$) disengages drive, and the robot falls.
+Without adaptation, the downhill leg folds, roll reaches \SI{15.3}{\degree}, and the robot falls.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/curb_straddle.pdf}
+    \caption{One-wheel curb negotiation (\SI{20}{cm}). With per-leg adaptation, the torso remains approximately level (straddle roll \SI{6.1}{\degree}). Without adaptation, the downhill leg folds and roll exceeds the safety limit.}
+    \label{fig:curb}
+\end{figure}
 
 % ============================================================
 \section{Discussion}
