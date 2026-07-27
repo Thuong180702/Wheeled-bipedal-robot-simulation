@@ -76,7 +76,7 @@ class PushSim:
                 mujoco.mj_step(self.model, self.data)
 
     def run_push(self, force_N, angle_deg):
-        angle_rad = np.deg2rad(angle_deg + 90)
+        angle_rad = np.deg2rad(angle_deg)
         force = np.array(
             [force_N*np.cos(angle_rad), force_N*np.sin(angle_rad), 0.0])
 
@@ -89,6 +89,8 @@ class PushSim:
             self.v3["jax_state"] = r["next_jax_state"]
             self.data.ctrl[:] = np.array(r["tau_v3"])
 
+            # Clear previous force, then set only during push window
+            self.data.xfrc_applied[self.torso, :3] = 0.0
             if step < PUSH_DUR:
                 self.data.xfrc_applied[self.torso, :3] = force
 

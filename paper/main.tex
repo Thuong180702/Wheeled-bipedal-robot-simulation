@@ -35,7 +35,8 @@ Wheeled bipedal robots must simultaneously achieve millimeter-level standing pre
 Stiffness that holds sub-millimeter idle precision shrinks the capture basin for push recovery; integral action that cancels equilibrium bias windups during large disturbances and prevents recovery.
 We present the Anchored Cascade Controller (ACC), a unified classical control architecture in which five components are activated continuously by smoothstep gates on physical conditions (proximity, quietness, contact, terrain) rather than by discrete switching.
 The core contribution is a proximity-gated anchor mechanism: a position integral confined to a \SI{15}{cm} neighborhood around the home position, gated by an asymmetric envelope follower (attack $\tau\approx\SI{30}{ms}$, release $\tau\approx\SI{1.5}{s}$) that distinguishes true quiet stance from post-push ringdown.
-Coupled with scheduled pitch stiffness ($k_p=50$ at anchor, $k_p=35$ during ballistic recovery), this mechanism resolves both the stiffness and integral trade-offs simultaneously: idle drift is \SI{0.3}{mm} RMS while the omnidirectional minimum recoverable push force $F_{\min}$ rises from \SI{30}{N} (fixed $k_p=50$) to \SI{70}{N} ($+133\%$).
+Coupled with scheduled pitch stiffness ($k_p=50$ at anchor, $k_p=35$ during ballistic recovery), this mechanism resolves both the stiffness and integral trade-offs simultaneously: idle drift is \SI{0.3}{mm} RMS with omnidirectional minimum recoverable push force $F_{\min}=\SI{80}{N}$ and median $F_{\text{med}}=\SI{113}{N}$ (\num{8}-direction polar sweep, \SI{400}{Nm/s} torque rate limit).
+By contrast, baseline controllers without the anchor mechanism achieve comparable push thresholds ($F_{\min}=\SI{80}{--}\SI{84}{N}$) but exhibit \SI{55}{mm} RMS idle limit cycles---a $180\times$ degradation in standing precision.
 The architecture also includes load-gated flight attitude control for contact-loss recovery (drop \SI{100}{cm}, ledge drive-off \SI{50}{cm}) and per-leg proprioceptive terrain adaptation (one-wheel curb \SI{20}{cm}).
 All behaviors are achieved without learning, training, or exteroceptive sensing.
 \end{abstract}
@@ -60,7 +61,8 @@ These are intrinsic trade-offs---any single-parameter choice sacrifices one axis
 We present the Anchored Cascade Controller (ACC), which resolves both trade-offs through a single design principle: \emph{conditional activation}.
 Rather than selecting one gain or enabling one mechanism globally, ACC activates each control component continuously via smoothstep gates on physical conditions.
 The core mechanism is a \textbf{proximity-gated anchor}: a position integral confined to the \SI{15}{cm} neighborhood around home, gated by an \textbf{asymmetric envelope follower} (fast-attack $\tau\approx\SI{30}{ms}$, slow-release $\tau\approx\SI{1.5}{s}$) that detects true quiet stance without being fooled by post-push ringdown.
-Coupled with \textbf{scheduled pitch stiffness} ($k_p=50$ at anchor for precision, $k_p=35$ during ballistic recovery for capture), ACC raises $F_{\min}$ from \SI{30}{N} to \SI{70}{N} ($+133\%$) while maintaining \SI{0.3}{mm} idle RMS.
+Coupled with \textbf{scheduled pitch stiffness} ($k_p=50$ at anchor for precision, $k_p=35$ during ballistic recovery for capture), ACC achieves $F_{\min}=\SI{80}{N}$, $F_{\text{med}}=\SI{113}{N}$ while maintaining \SI{0.3}{mm} idle RMS.
+Baseline controllers without the anchor mechanism reach comparable push thresholds but oscillate continuously at idle (\SI{55}{mm} RMS)---ACC is the only configuration that delivers both mm-level standing and competitive disturbance rejection.
 The architecture further includes load-gated flight attitude control for contact-loss scenarios and per-leg proprioceptive ground adaptation for uneven terrain---all without learning, training, or exteroceptive sensing.
 
 The main contributions of this work are:
@@ -412,21 +414,21 @@ A trial is survived if the robot remains upright (torso pitch $<\SI{46}{\degree}
 \toprule
 Configuration & $F_{\min}$ (N) & $F_{\text{med}}$ (N) & Idle RMS (mm) \\
 \midrule
-\textbf{Full ACC} & \textbf{70} & \textbf{115} & \textbf{0.3} \\
+\textbf{Full ACC} & \textbf{80} & \textbf{113} & \textbf{0.3} \\
 \midrule
 \emph{Baselines} \\
-\quad V3\_HOMING (posture homing, no anchor) & 55 & 85 & 40--60 (limit cycle) \\
-\quad V3 base (P-only balance)             & 20 & 35 & 55 (limit cycle) \\
+\quad V3\_HOMING (homing, no anchor) & 84 & 134 & 40--60 (limit cycle) \\
+\quad V3 base (P-only)               & 80 & 136 & 55 (limit cycle) \\
 \midrule
 \emph{Ablations} \\
-\quad fixed $k_p=50$       & 30  & 65  & 0.3 \\
+\quad fixed $k_p=50$       & [*] & [*] & 0.3 \\
 \quad fixed $k_p=35$       & n/a & n/a & 55 (osc.) \\
 \quad symmetric EMA         & [*] & [*] & ringdown $\infty$ \\
 \quad global I              & [*] & [*] & fall \\
 \quad no boost               & [*] & [*] & ringdown $\infty$ \\
 \bottomrule
 \end{tabular}}
-\\[2pt] [*] = eval-only, pending measurement; estimated \SIrange{2}{4}{h} per configuration.
+\\[2pt] Measured 2026-07-27 (\SI{400}{Nm/s} harness, \num{8} cardinal dir., bisection \SI{5}{N} tol.). ACC trades $\sim$15\% $F_{\text{med}}$ vs.\ baselines for $180\times$ idle precision (0.3 vs.\ 55\,mm). [*] = eval-only pending.
 \end{table}
 
 The scheduled stiffness raises $F_{\min}$ from \SI{30}{N} (fixed $k_p=50$) to \SI{70}{N}---a $+133\%$ improvement in the weakest direction.

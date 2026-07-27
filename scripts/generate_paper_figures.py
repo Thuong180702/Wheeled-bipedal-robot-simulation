@@ -24,11 +24,10 @@ OUT = '/Users/admin/Wheeled-bipedal-robot-simulation/paper/figures/'
 # ============================================================
 # Fig. X: Polar Push Envelope + FFT inset
 # ============================================================
-with open('/Users/admin/Wheeled-bipedal-robot-simulation/outputs/push_threshold_sweep_50_anchor_v2.json') as f:
-    data = json.load(f)['ANCHOR']
-
-angles_deg = np.array([t['ang_from_fwd_deg'] for t in data])
-thresh_N = np.array([t['thresh_N'] for t in data])
+# Use fresh measured data from 2026-07-27 sweep
+data = json.load(open('/Users/admin/Wheeled-bipedal-robot-simulation/outputs/push_sweep_acc_final2.json'))
+angles_deg = np.array([r['angle_deg'] for r in data['results']])
+thresh_N = np.array([r['threshold_N'] for r in data['results']])
 
 # Polar plot
 fig = plt.figure(figsize=(3.5, 3.2))
