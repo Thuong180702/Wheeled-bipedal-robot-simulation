@@ -40,7 +40,7 @@ class PushSim:
         self.hp = HeightPosture()
         self._fresh(profile)
 
-    def _fresh(self, profile):
+    def _fresh(self, profile, param_overrides=None):
         self.data = mujoco.MjData(self.model)
         # Use variant nominal pose (same as drop test)
         nom = json.load(open(
@@ -59,6 +59,12 @@ class PushSim:
         self.v3 = dict(init_v3_controller(
             profile_name=profile, model=self.model))
         self.v3["jax_state"] = pack_state_k2()
+        # Apply parameter overrides (JAX arrays are immutable)
+        if param_overrides:
+            params = self.v3["jax_params"]
+            for idx, val in param_overrides.items():
+                params = params.at[idx].set(float(val))
+            self.v3["jax_params"] = params
         self.ctx = P._build_v3_controller_context(
             self.model, self.data, self.v3,
             eq_joint=posture, height_ref=self.h0)
@@ -105,13 +111,13 @@ class PushSim:
                 return False
         return True
 
-    def bisect(self, angle_deg, reuse_controller=True):
+    def bisect(self, angle_deg, reuse_controller=True, param_overrides=None):
         lo, hi = FORCE_MIN, FORCE_MAX
         best = lo
         for i in range(N_BISECT):
             mid = (lo + hi) / 2
             if i == 0 or not reuse_controller:
-                self._fresh(PROFILE)
+                self._fresh(PROFILE, param_overrides)
             else:
                 # Quick reset: just reset physics, keep controller warm
                 self.data = mujoco.MjData(self.model)
@@ -142,11 +148,20 @@ def main():
     p.add_argument("--quick", action="store_true")
     p.add_argument("--profile", default=PROFILE)
     p.add_argument("--output", default="outputs/push_sweep_paper.json")
+    p.add_argument("--param", nargs=2, action='append',
+                   metavar=('IDX', 'VAL'), default=[],
+                   help="Override jax_params[idx]=val (repeatable)")
     a = p.parse_args()
     PROFILE = a.profile
 
+    param_overrides = {}
+    for idx_str, val_str in a.param:
+        param_overrides[int(idx_str)] = float(val_str)
+
     angles = np.arange(0, 360, 45) if a.quick else np.arange(0, 360, 15)
     print(f"Push Sweep: {len(angles)} dir, {PROFILE}")
+    if param_overrides:
+        print(f"Param overrides: {param_overrides}")
     print(f"Bisect: [{FORCE_MIN:.0f},{FORCE_MAX:.0f}]N, {N_BISECT}iter, "
           f"{TOLERANCE:.0f}N tol")
     print("="*60)
@@ -155,7 +170,7 @@ def main():
     results = []
     t0 = time.time()
     for i, ang in enumerate(angles):
-        th = sim.bisect(ang)
+        th = sim.bisect(ang, param_overrides=param_overrides)
         results.append({'angle_deg': float(ang), 'threshold_N': float(th)})
         e = time.time()-t0
         eta = e/(i+1)*(len(angles)-i-1)
