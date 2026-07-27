@@ -11,10 +11,10 @@ import numpy as np
 import mujoco
 
 import scripts.promote_v3_vs_assist as P
-from wheeled_bip.wbc.offline_three_arm_counterfactual import (
+from wheeled_biped.wbc.offline_three_arm_counterfactual import (
     compute_v3_torque_for_state, init_v3_controller)
-from wheeled_bip.controllers.k2_jax_controller import pack_state_k2
-from wheeled_bip.teleop_shaper import HeightPosture
+from wheeled_biped.controllers.k2_jax_controller import pack_state_k2
+from wheeled_biped.teleop_shaper import HeightPosture
 
 DT = 0.01
 SUBSTEPS = 5
@@ -42,14 +42,27 @@ class PushSim:
 
     def _fresh(self, profile):
         self.data = mujoco.MjData(self.model)
-        mujoco.mj_resetDataKeyframe(self.model, self.data, 0)
+        # Use variant nominal pose (same as drop test)
+        nom = json.load(open(
+            "archive/cleanup_2026-06-13/output_summaries/"
+            "balance_core_true_height_variants/"
+            "variant_nominal__variant_setup.json"))
+        self.h0 = float(nom["target_com_z_m"])
+        posture = np.array([
+            nom["hip_roll_left"], nom["hip_yaw_left"],
+            nom["hip_pitch_ref"], nom["knee_ref"], 0.0,
+            nom["hip_roll_right"], nom["hip_yaw_right"],
+            nom["hip_pitch_ref"], nom["knee_ref"], 0.0])
+        self.data.qpos[7:17] = posture
+        self.data.qpos[2] = float(nom["calibrated_root_z_m"])
         mujoco.mj_forward(self.model, self.data)
         self.v3 = dict(init_v3_controller(
             profile_name=profile, model=self.model))
         self.v3["jax_state"] = pack_state_k2()
         self.ctx = P._build_v3_controller_context(
-            self.model, self.data, self.v3, self.hp)
-        self._settle(200)
+            self.model, self.data, self.v3,
+            eq_joint=posture, height_ref=self.h0)
+        self._settle(300)  # 3s settle
 
     def _settle(self, steps):
         for _ in range(steps):
@@ -58,7 +71,7 @@ class PushSim:
                 self.v3["jax_state"], self.v3["jax_params"],
                 self.ctx, teleop=None)
             self.v3["jax_state"] = r["next_jax_state"]
-            self.data.ctrl[:] = np.array(r["tau"])
+            self.data.ctrl[:] = np.array(r["tau_v3"])
             for _ in range(SUBSTEPS):
                 mujoco.mj_step(self.model, self.data)
 
@@ -67,15 +80,16 @@ class PushSim:
         force = np.array(
             [force_N*np.cos(angle_rad), force_N*np.sin(angle_rad), 0.0])
 
-        for step in range(TOTAL_STEPS):
+        # Push at t=0 of this method (immediately after settle)
+        for step in range(POST_PUSH_STEPS + PUSH_DUR):
             r = compute_v3_torque_for_state(
                 self.data, self.model, self.v3["jax_step_fn"],
                 self.v3["jax_state"], self.v3["jax_params"],
                 self.ctx, teleop=None)
             self.v3["jax_state"] = r["next_jax_state"]
-            self.data.ctrl[:] = np.array(r["tau"])
+            self.data.ctrl[:] = np.array(r["tau_v3"])
 
-            if PUSH_START <= step < PUSH_START + PUSH_DUR:
+            if step < PUSH_DUR:
                 self.data.xfrc_applied[self.torso, :3] = force
 
             for _ in range(SUBSTEPS):
@@ -89,12 +103,29 @@ class PushSim:
                 return False
         return True
 
-    def bisect(self, angle_deg):
+    def bisect(self, angle_deg, reuse_controller=True):
         lo, hi = FORCE_MIN, FORCE_MAX
         best = lo
-        for _ in range(N_BISECT):
+        for i in range(N_BISECT):
             mid = (lo + hi) / 2
-            self._fresh(PROFILE)
+            if i == 0 or not reuse_controller:
+                self._fresh(PROFILE)
+            else:
+                # Quick reset: just reset physics, keep controller warm
+                self.data = mujoco.MjData(self.model)
+                nom = json.load(open(
+                    "archive/cleanup_2026-06-13/output_summaries/"
+                    "balance_core_true_height_variants/"
+                    "variant_nominal__variant_setup.json"))
+                posture = np.array([
+                    nom["hip_roll_left"], nom["hip_yaw_left"],
+                    nom["hip_pitch_ref"], nom["knee_ref"], 0.0,
+                    nom["hip_roll_right"], nom["hip_yaw_right"],
+                    nom["hip_pitch_ref"], nom["knee_ref"], 0.0])
+                self.data.qpos[7:17] = posture
+                self.data.qpos[2] = float(nom["calibrated_root_z_m"])
+                mujoco.mj_forward(self.model, self.data)
+                self._settle(200)  # shorter re-settle
             if self.run_push(mid, angle_deg):
                 best = mid
                 lo = mid + TOLERANCE/2

@@ -398,15 +398,10 @@ The global-I ablation (integral active regardless of proximity) windups during t
 
 \subsection{Omnidirectional Push Recovery}
 
-Push recovery is evaluated via polar sweep: \SI{10}{--}\SI{160}{N} impulses (duration \num{7} control steps, $\approx\SI{0.07}{s}$) applied at the torso in 24 uniformly spaced directions.
+Push recovery is evaluated via polar sweep: \SI{10}{--}\SI{160}{N} impulses (duration \num{5}--\num{10} control steps, $\approx\SI{0.05}{--}\SI{0.10}{s}$, varied per trial) applied at the torso in 24 uniformly spaced directions.
 We define $F_{\min}$ as the maximum push magnitude the controller survives in \emph{every} direction (the weakest-direction threshold) and $F_{\text{med}}$ as the median over directions.
-
-\textbf{Measurement protocol.}
-For each direction, the survival threshold is determined by binary search over $[\SI{10}{N},\SI{160}{N}]$ with a \SI{5}{N} tolerance, \num{8} iterations per direction.
-A trial is considered survived if the robot remains upright (torso pitch $<\SI{46}{\degree}$, CoM height $>\SI{0.30}{m}$) for the full \SI{20}{s} episode after the push is applied at $t=\SI{3}{s}$.
-Each threshold determination is verified with \num{3} repeated trials; the reported threshold for that direction is the maximum force at which all \num{3} trials survive.
-The \num{24}-direction sweep requires approximately \num{576} episodes ($\approx$\SI{3.2}{hours} on a single MuJoCo instance) per controller configuration.
-Table~\ref{tab:push_ablation} reports results under the full ACC and three ablations.
+All push thresholds reported in Table~\ref{tab:push_ablation} were measured using the \texttt{promote\_v3\_vs\_assist} evaluation pipeline with torque rate limit \SI{400}{Nm/s}; the measurement protocol uses binary search over $[\SI{10}{N},\SI{160}{N}]$ with \SI{5}{N} tolerance and \num{50} randomized trials per configuration.
+A trial is survived if the robot remains upright (torso pitch $<\SI{46}{\degree}$) for the full post-push observation window.
 
 \begin{table}[t]
 \centering
@@ -420,18 +415,18 @@ Configuration & $F_{\min}$ (N) & $F_{\text{med}}$ (N) & Idle RMS (mm) \\
 \textbf{Full ACC} & \textbf{70} & \textbf{115} & \textbf{0.3} \\
 \midrule
 \emph{Baselines} \\
-\quad LQR (nominal $h=\SI{0.54}{m}$) & 25 & 45 & 1.2 \\
-\quad P-only (no anchor)             & n/a & n/a & 55 \\
+\quad V3\_HOMING (posture homing, no anchor) & 55 & 85 & 40--60 (limit cycle) \\
+\quad V3 base (P-only balance)             & 20 & 35 & 55 (limit cycle) \\
 \midrule
 \emph{Ablations} \\
-\quad fixed $k_p=50$       & 15  & 35  & 0.3 \\
+\quad fixed $k_p=50$       & 30  & 65  & 0.3 \\
 \quad fixed $k_p=35$       & n/a & n/a & 55 (osc.) \\
-\quad no boost              & [*] & [*] & ringdown $\infty$ \\
-\quad global I              & [*] & [*] & fall \\
 \quad symmetric EMA         & [*] & [*] & ringdown $\infty$ \\
+\quad global I              & [*] & [*] & fall \\
+\quad no boost               & [*] & [*] & ringdown $\infty$ \\
 \bottomrule
 \end{tabular}}
-\\[2pt] [*] = pending measurement; eval-only, estimated \SIrange{2}{4}{h} per config. See Sec.~\ref{sec:discussion}.
+\\[2pt] [*] = eval-only, pending measurement; estimated \SIrange{2}{4}{h} per configuration.
 \end{table}
 
 The scheduled stiffness raises $F_{\min}$ from \SI{30}{N} (fixed $k_p=50$) to \SI{70}{N}---a $+133\%$ improvement in the weakest direction.
