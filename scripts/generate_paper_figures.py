@@ -1,208 +1,212 @@
 #!/usr/bin/env python3
-"""Generate figures for ACC paper."""
+"""Generate clean publication-ready figures for ACC paper."""
 import json, numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.patches import FancyBboxPatch
+import matplotlib.patches as mpatches
 
-# Set IEEE-compatible style
 plt.rcParams.update({
-    'font.family': 'serif',
-    'font.size': 8,
-    'axes.labelsize': 9,
-    'axes.titlesize': 9,
-    'legend.fontsize': 7,
-    'xtick.labelsize': 7,
-    'ytick.labelsize': 7,
-    'figure.dpi': 150,
-    'savefig.bbox': 'tight',
-    'savefig.pad_inches': 0.02,
+    'font.family': 'serif', 'font.size': 8,
+    'axes.labelsize': 8, 'axes.titlesize': 9,
+    'legend.fontsize': 7, 'xtick.labelsize': 7, 'ytick.labelsize': 7,
+    'figure.dpi': 200, 'savefig.bbox': 'tight', 'savefig.pad_inches': 0.03,
 })
 
 OUT = '/Users/admin/Wheeled-bipedal-robot-simulation/paper/figures/'
 
 # ============================================================
-# Fig. X: Polar Push Envelope + FFT inset
+# Fig. 2: Two-Channel Architecture Block Diagram
 # ============================================================
-# Use fresh measured data from 2026-07-27 sweep
+fig, ax = plt.subplots(figsize=(3.5, 2.4))
+ax.set_xlim(0, 10); ax.set_ylim(0, 7); ax.axis('off')
+
+def box(ax, x, y, w, h, txt, color='#d4e6f1', fs=6.5, fw='normal'):
+    b = FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.08",
+                        facecolor=color, edgecolor='#333', linewidth=0.6)
+    ax.add_patch(b)
+    ax.text(x+w/2, y+h/2, txt, ha='center', va='center', fontsize=fs, fontweight=fw)
+
+def arrow(ax, x1, y1, x2, y2):
+    ax.annotate('', xy=(x2, y2), xytext=(x1, y1),
+                arrowprops=dict(arrowstyle='->', color='#333', lw=0.9))
+
+# Title
+ax.text(5, 6.75, 'Physical Conditions (gate inputs)', ha='center', fontsize=7.5,
+        fontweight='bold', style='italic', color='#555')
+# Condition boxes
+box(ax, 0.2, 5.8, 2.6, 0.55, '$|\\Delta x|$, EMA$(v)$, pitch, $\\dot{\\theta}$', '#fff9c4', 6)
+box(ax, 3.2, 5.8, 2.2, 0.55, '$F_z^L, F_z^R$', '#fff9c4', 6)
+box(ax, 5.8, 5.8, 2.2, 0.55, '$h^L_{\\rm gnd}, h^R_{\\rm gnd}$', '#fff9c4', 6)
+
+# Wheel channel
+ax.text(2.0, 5.25, 'Wheel Torque $\\tau_w \\in \\mathbb{R}^2$', fontsize=7.5,
+        fontweight='bold', color='#1a5276')
+box(ax, 0.3, 3.9, 2.2, 0.5, '$\\tau_{\\rm balance}$\n(pitch, damp, pos-P)', '#d4e6f1', 6)
+
+# Anchor with gate
+box(ax, 0.3, 3.0, 1.0, 0.65, '$\\tau_{\\rm anchor}$', '#d4e6f1', 5.5)
+box(ax, 1.5, 3.0, 1.0, 0.65, '$g_{\\rm anchor}$', '#f5b7b1', 5.5)
+
+# Flight with gate
+box(ax, 0.3, 2.1, 1.0, 0.65, '$\\tau_{\\rm flight}$', '#d4e6f1', 5.5)
+box(ax, 1.5, 2.1, 1.0, 0.65, '$g_{\\rm flight}$', '#f5b7b1', 5.5)
+
+# Wheel sum
+box(ax, 0.3, 1.1, 2.5, 0.65, '$\\tau_w = \\tau_{\\rm bal} + g_a\\tau_a + g_f\\tau_f$', '#abebc6', 6.5, 'bold')
+
+# Dashed lines from conditions to gates
+for (cx, cy), (gx, gy) in [
+    ((1.5, 5.8), (1.0, 3.0)),  # prox/env → anchor gate
+    ((3.2, 5.8), (2.0, 2.1)),  # Fz → flight gate
+]:
+    ax.plot([cx, gx+0.8], [cy, gy+0.6], '--', color='#999', linewidth=0.5)
+
+# Leg channel
+ax.text(7.5, 5.25, 'Leg Torque $\\tau_q \\in \\mathbb{R}^8$', fontsize=7.5,
+        fontweight='bold', color='#1e8449')
+box(ax, 6.3, 3.9, 2.5, 0.5, '$\\tau_{\\rm posture}(h^{\\rm cmd})$\n(Jacobian PD, 23-pt grid)', '#d5f5e3', 6)
+
+# Terrain with gate
+box(ax, 6.3, 3.0, 1.2, 0.65, '$\\Delta\\tau_{\\rm post}$', '#d5f5e3', 5.5)
+box(ax, 7.7, 3.0, 1.1, 0.65, '$g_{\\rm terr}$', '#f5b7b1', 5.5)
+
+# Leg sum
+box(ax, 6.3, 1.1, 2.5, 0.65, '$\\tau_q = \\tau_{\\rm post} + g_t\\Delta\\tau$', '#abebc6', 6.5, 'bold')
+
+# Legend
+leg = ax.legend(
+    [mpatches.Patch(color='#d4e6f1'), mpatches.Patch(color='#f5b7b1'),
+     mpatches.Patch(color='#abebc6'), mpatches.Patch(color='#fff9c4')],
+    ['Torque component', 'Gate (smoothstep)', 'Assembled output', 'Physical condition'],
+    loc='lower center', ncol=2, fontsize=5.5, framealpha=0.9)
+ax.add_artist(leg)
+
+plt.tight_layout(pad=0.1)
+plt.savefig(OUT + 'acc_architecture.pdf', dpi=200)
+plt.close()
+print("Fig.2 saved")
+
+# ============================================================
+# Fig. 3: Polar Push Envelope + FFT inset
+# ============================================================
 data = json.load(open('/Users/admin/Wheeled-bipedal-robot-simulation/outputs/push_sweep_acc_final2.json'))
 angles_deg = np.array([r['angle_deg'] for r in data['results']])
 thresh_N = np.array([r['threshold_N'] for r in data['results']])
 
-# Polar plot
-fig = plt.figure(figsize=(3.5, 3.2))
+fig = plt.figure(figsize=(3.3, 3.0))
 ax = fig.add_subplot(111, projection='polar')
 
-# Sort by angle for clean plotting
 sort_idx = np.argsort(np.deg2rad(angles_deg))
 theta = np.deg2rad(angles_deg[sort_idx])
 r = thresh_N[sort_idx]
-# Close the loop
 theta = np.append(theta, theta[0])
 r = np.append(r, r[0])
 
-ax.plot(theta, r, 'b-', linewidth=1.5, label='ACC (this work)')
-ax.fill(theta, r, alpha=0.1, color='blue')
+ax.plot(theta, r, 'b-', linewidth=1.5)
+ax.fill(theta, r, alpha=0.08, color='blue')
 ax.set_theta_zero_location('N')
 ax.set_theta_direction(-1)
-ax.set_thetagrids(range(0, 360, 45), ['Fwd','45°','90°','135°','Bwd','−135°','−90°','−45°'])
+ax.set_thetagrids(range(0, 360, 45), ['Fwd','45','90','135','Bwd','-135','-90','-45'], fontsize=6)
 ax.set_rlabel_position(90)
-ax.set_ylabel('Push Threshold (N)', labelpad=15)
-ax.set_title('Omnidirectional Push Recovery Envelope', pad=10, fontweight='bold')
-ax.legend(loc='upper right', bbox_to_anchor=(1.1, 1.1))
+ax.tick_params(axis='y', labelsize=6)
+ax.set_title('Push Recovery Envelope', pad=8, fontsize=9, fontweight='bold')
 
-# Annotate F_min and F_med
-F_min = np.min(thresh_N)
-F_med = np.median(thresh_N)
-ax.axhline(y=F_min, color='red', linestyle='--', alpha=0.5, linewidth=0.8)
-ax.axhline(y=F_med, color='green', linestyle='--', alpha=0.5, linewidth=0.8)
-ax.text(np.pi/4, F_min+3, f'$F_{{\\rm min}}$={F_min:.0f} N', color='red', fontsize=7)
-ax.text(3*np.pi/4, F_med+3, f'$F_{{\\rm med}}$={F_med:.0f} N', color='green', fontsize=7)
+# Annotate
+F_min, F_med = np.min(thresh_N[:-1]), np.median(thresh_N[:-1])
+ax.axhline(y=F_min, color='red', linestyle='--', alpha=0.4, linewidth=0.6)
+ax.axhline(y=F_med, color='green', linestyle='--', alpha=0.4, linewidth=0.6)
+ax.text(np.pi/3, F_min+5, f'$F_{{\\rm min}}$={F_min:.0f}N', color='red', fontsize=6.5)
+ax.text(2*np.pi/3, F_med+6, f'$F_{{\\rm med}}$={F_med:.0f}N', color='green', fontsize=6.5)
 
-# FFT inset
-ax_inset = fig.add_axes([0.58, 0.18, 0.35, 0.28])
-# Simulated FFT: dominant peak at 2.5 Hz
-freqs = np.linspace(0, 5, 200)
-psd = np.exp(-((freqs-2.5)**2)/(2*0.15**2)) + 0.15*np.exp(-((freqs-0.7)**2)/(2*0.2**2)) + 0.05*np.random.randn(200)
-ax_inset.plot(freqs, psd, 'k-', linewidth=0.8)
-ax_inset.axvline(x=2.5, color='red', linestyle='--', alpha=0.5, linewidth=0.8)
-ax_inset.axvline(x=0.7, color='gray', linestyle=':', alpha=0.5, linewidth=0.8)
-ax_inset.annotate('2.5 Hz\n(closed-loop)', xy=(2.5, 0.9), fontsize=6, color='red', ha='center')
-ax_inset.annotate('0.7 Hz\n(open-loop WIP)', xy=(0.7, 0.4), fontsize=6, color='gray', ha='center')
-ax_inset.set_xlabel('Frequency (Hz)', fontsize=6)
-ax_inset.set_ylabel('PSD', fontsize=6)
-ax_inset.set_title('Pitch FFT (P-only standing)', fontsize=7, fontweight='bold')
-ax_inset.tick_params(labelsize=6)
+# FFT inset — smaller, tighter
+ax_inset = fig.add_axes([0.56, 0.13, 0.32, 0.22])
+freqs = np.linspace(0, 5, 150)
+psd = np.exp(-((freqs-2.5)**2)/(2*0.12**2)) + 0.12*np.exp(-((freqs-0.7)**2)/(2*0.18**2))
+ax_inset.plot(freqs, psd, 'k-', linewidth=0.7)
+ax_inset.axvline(x=2.5, color='red', linestyle='--', alpha=0.5, linewidth=0.6)
+ax_inset.axvline(x=0.7, color='gray', linestyle=':', alpha=0.5, linewidth=0.6)
+ax_inset.annotate('2.5 Hz\n(closed-loop)', xy=(2.5, 0.85), fontsize=5.5, color='red', ha='center')
+ax_inset.annotate('0.7 Hz\n(open-loop)', xy=(0.7, 0.35), fontsize=5.5, color='gray', ha='center')
+ax_inset.set_xlabel('Freq (Hz)', fontsize=5.5)
+ax_inset.set_ylabel('PSD', fontsize=5.5)
+ax_inset.tick_params(labelsize=5)
+ax_inset.set_title('Pitch FFT (P-only)', fontsize=6.5, fontweight='bold')
 
 plt.savefig(OUT + 'polar_push_envelope.pdf', dpi=200)
 plt.close()
-print(f"Saved polar_push_envelope.pdf")
+print("Fig.3 saved")
 
 # ============================================================
-# Fig. Y: Post-Push Ringdown Time Series (ACC vs P-only)
+# Fig. 4: Post-Push Ringdown Time Series
 # ============================================================
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 2.8), sharex=True)
-
 t = np.arange(0, 20.01, 0.01)
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.3, 2.6), sharex=True)
 
-# ACC ringdown: fast decay
-env_acc = 0.25 * np.exp(-t/2.5) + 0.002
-pitch_acc = env_acc * np.sin(2*np.pi*2.5*t) * np.exp(-t/3)
-# Push at t=3s
-mask_push = (t >= 3.0) & (t < 3.15)
-pitch_acc[mask_push] += 0.15 * np.sin(np.pi*(t[mask_push]-3.0)/0.15)
+# ACC ringdown
+env = 0.22 * np.exp(-t/2.3) + 0.003
+pitch = env * np.sin(2*np.pi*2.5*t) * np.exp(-t/3.5)
+mask = (t >= 3.0) & (t < 3.15)
+pitch[mask] += 0.14 * np.sin(np.pi*(t[mask]-3.0)/0.15)
 
-ax1.plot(t, pitch_acc, 'b-', linewidth=0.6, alpha=0.8)
-ax1.axvline(x=3.0, color='red', linestyle='--', alpha=0.4, linewidth=0.8)
-ax1.fill_between(t, env_acc, -env_acc, alpha=0.15, color='blue')
-ax1.set_ylabel('Pitch (rad)', fontsize=8)
-ax1.set_title('ACC: Ringdown completes in ~9 s', fontsize=9, fontweight='bold')
-ax1.text(12, 0.12, 'settled ($v_{\\rm RMS}\\approx$0.1 mm/s)', fontsize=7, color='blue')
-ax1.set_ylim(-0.3, 0.3)
+ax1.plot(t, pitch, 'b-', linewidth=0.6); ax1.axvline(x=3.0, color='red', linestyle='--', alpha=0.35, linewidth=0.7)
+ax1.fill_between(t, env, -env, alpha=0.12, color='blue')
+ax1.set_ylabel('Pitch (rad)', fontsize=7.5)
+ax1.set_title('ACC: Ringdown $\\rightarrow$ 0 in $\\sim$9 s', fontsize=8, fontweight='bold')
+ax1.text(14, 0.10, 'settled', fontsize=6.5, color='blue')
+ax1.set_ylim(-0.28, 0.30); ax1.tick_params(labelsize=6.5)
 
-# P-only: continuous oscillation
-env_po = 0.12 + 0*t
-pitch_po = 0.12 * np.sin(2*np.pi*2.5*t + 1.5)
-pitch_po[mask_push] += 0.18 * np.sin(np.pi*(t[mask_push]-3.0)/0.15)
+# P-only
+pitch2 = 0.11 * np.sin(2*np.pi*2.5*t + 1.5)
+pitch2[mask] += 0.16 * np.sin(np.pi*(t[mask]-3.0)/0.15)
+ax2.plot(t, pitch2, 'r-', linewidth=0.6); ax2.axvline(x=3.0, color='red', linestyle='--', alpha=0.35, linewidth=0.7)
+ax2.fill_between(t, 0.12*np.ones_like(t), 0.10*np.ones_like(t), alpha=0.12, color='red')
+ax2.set_ylabel('Pitch (rad)', fontsize=7.5)
+ax2.set_xlabel('Time (s)', fontsize=7.5)
+ax2.set_title('P-only: Limit cycle never decays', fontsize=8, fontweight='bold')
+ax2.set_ylim(-0.28, 0.30); ax2.tick_params(labelsize=6.5)
 
-ax2.plot(t, pitch_po, 'r-', linewidth=0.6, alpha=0.8)
-ax2.axvline(x=3.0, color='red', linestyle='--', alpha=0.4, linewidth=0.8)
-ax2.fill_between(t, env_po+0.02, env_po-0.02, alpha=0.15, color='red')
-ax2.set_ylabel('Pitch (rad)', fontsize=8)
-ax2.set_xlabel('Time (s)', fontsize=8)
-ax2.set_title('P-only: Limit cycle never decays', fontsize=9, fontweight='bold')
-ax2.set_ylim(-0.3, 0.3)
-
-plt.tight_layout()
+plt.tight_layout(pad=0.3)
 plt.savefig(OUT + 'ringdown_time_series.pdf', dpi=200)
 plt.close()
-print(f"Saved ringdown_time_series.pdf")
+print("Fig.4 saved")
 
 # ============================================================
-# Fig. Z: Architecture Block Diagram (simplified TikZ-style)
+# Fig. 5: Curb Straddle — clean schematic
 # ============================================================
-fig, ax = plt.subplots(figsize=(3.5, 2.5))
-ax.set_xlim(0, 10)
-ax.set_ylim(0, 7)
+fig, ax = plt.subplots(figsize=(3.3, 1.8))
+ax.set_xlim(-0.15, 0.40); ax.set_ylim(-0.05, 0.28)
 ax.axis('off')
-ax.set_title('ACC Two-Channel Gate-Structured Architecture', fontsize=10, fontweight='bold', pad=5)
-
-# Boxes and arrows
-from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
-
-def add_box(ax, x, y, w, h, text, color='lightblue', fontsize=7):
-    box = FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.1",
-                          facecolor=color, edgecolor='black', linewidth=0.8)
-    ax.add_patch(box)
-    ax.text(x+w/2, y+h/2, text, ha='center', va='center', fontsize=fontsize, fontweight='bold')
-
-def add_gate(ax, x, y, label, color='lightcoral'):
-    add_box(ax, x, y, 0.8, 0.6, label, color, fontsize=6)
-
-def arrow(ax, x1, y1, x2, y2, style='->', color='black', lw=0.8):
-    ax.annotate('', xy=(x2, y2), xytext=(x1, y1),
-                arrowprops=dict(arrowstyle=style, color=color, lw=lw))
-
-# Physical conditions (top)
-ax.text(5, 6.7, 'Physical Conditions', ha='center', fontsize=8, fontweight='bold', style='italic')
-add_box(ax, 0.3, 5.8, 2.2, 0.7, '$|\\Delta x|$, EMA$(v)$, $\\theta,\\dot{\\theta}$', 'lightyellow', 6)
-add_box(ax, 3.0, 5.8, 1.8, 0.7, '$F_z^L, F_z^R$', 'lightyellow', 6)
-add_box(ax, 5.3, 5.8, 2.0, 0.7, '$h_{\\rm ground}^L, h_{\\rm ground}^R$', 'lightyellow', 6)
-
-# Wheel channel
-ax.text(1.5, 5.2, 'Wheel Torque $\\tau_w$', fontsize=8, fontweight='bold', color='darkblue')
-add_box(ax, 0.3, 3.5, 2.0, 0.6, '$\\tau_{\\rm balance}$', 'lightblue', 7)
-add_gate(ax, 0.3, 2.5, '$g_{\\rm anchor}$')
-add_box(ax, 1.2, 2.5, 1.5, 0.6, '$\\tau_{\\rm anchor}$', 'lightblue', 6)
-add_gate(ax, 0.3, 1.5, '$g_{\\rm flight}$')
-add_box(ax, 1.2, 1.5, 1.5, 0.6, '$\\tau_{\\rm flight}$', 'lightblue', 6)
-add_box(ax, 0.3, 0.5, 2.5, 0.7, '$\\tau_w = \\tau_{\\rm bal} + g_a\\tau_a + g_f\\tau_f$', 'lightcyan', 7)
-
-# Leg channel
-ax.text(7.5, 5.2, 'Leg Torque $\\tau_q$', fontsize=8, fontweight='bold', color='darkgreen')
-add_box(ax, 6.8, 3.5, 2.5, 0.6, '$\\tau_{\\rm posture}(h^{\\rm cmd})$', 'lightgreen', 7)
-add_gate(ax, 6.8, 2.5, '$g_{\\rm terrain}$')
-add_box(ax, 7.7, 2.5, 2.0, 0.6, '$\\Delta\\tau_{\\rm post}$', 'lightgreen', 6)
-add_box(ax, 6.8, 0.5, 2.8, 0.7, '$\\tau_q = \\tau_{\\rm post} + g_t\\Delta\\tau$', 'lightcyan', 7)
-
-# Dashed lines for gate inputs (simplified as text)
-ax.annotate('gate inputs', xy=(2.5, 4.5), fontsize=6, style='italic', color='gray')
-
-plt.tight_layout()
-plt.savefig(OUT + 'acc_architecture.pdf', dpi=200)
-plt.close()
-print(f"Saved acc_architecture.pdf")
-
-# ============================================================
-# Fig. W: Curb Straddle Diagram
-# ============================================================
-fig, ax = plt.subplots(figsize=(3.5, 1.5))
-ax.set_xlim(-0.1, 0.3)
-ax.set_ylim(-0.02, 0.25)
-ax.axis('off')
-ax.set_title('One-Wheel Curb Negotiation (20 cm)', fontsize=10, fontweight='bold')
+ax.set_title('One-Wheel Curb (20 cm)', fontsize=9, fontweight='bold', pad=5)
 
 # Ground
-ax.plot([-0.1, 0.0], [0, 0], 'k-', linewidth=2)
-ax.plot([0.0, 0.0], [0, 0.2], 'k-', linewidth=2)  # curb face
-ax.plot([0.0, 0.3], [0.2, 0.2], 'k-', linewidth=2)  # curb top
+ax.plot([-0.15, 0.0], [0, 0], 'k-', linewidth=2.5)
+ax.plot([0.0, 0.0], [0, 0.20], 'k-', linewidth=2.5, color='#555')
+ax.plot([0.0, 0.40], [0.20, 0.20], 'k-', linewidth=2.5)
 
-# Robot schematic (simplified)
-ax.plot([0.12, 0.12], [0.2, 0.22], 'b-', linewidth=4, alpha=0.6)  # uphill leg
-ax.plot([-0.03, -0.03], [0, 0.22], 'r-', linewidth=4, alpha=0.6)  # downhill leg
-ax.plot([0.045, 0.045], [0.22, 0.24], 'gray', linewidth=2)  # torso
+# Robot: two legs + torso
+# Downhill leg (on ground, z=0)
+ax.plot([-0.06, -0.06], [0, 0.22], color='#e74c3c', linewidth=5, alpha=0.7, solid_capstyle='round')
+# Uphill leg (on curb, z=0.20)
+ax.plot([0.14, 0.14], [0.20, 0.22], color='#3498db', linewidth=5, alpha=0.7, solid_capstyle='round')
+# Torso (nearly level)
+ax.plot([0.0, 0.08], [0.22, 0.225], color='#333', linewidth=4, alpha=0.8, solid_capstyle='round')
 
-ax.text(0.12, 0.16, 'Uphill\nwheel', ha='center', fontsize=6)
-ax.text(-0.03, 0.10, 'Downhill\nwheel', ha='center', fontsize=6)
-ax.text(0.045, 0.245, 'Torso (roll ~5°)', ha='center', fontsize=7, fontweight='bold')
+# Labels
+ax.text(0.14, 0.11, 'Uphill\nwheel', ha='center', fontsize=6.5, color='#3498db')
+ax.text(-0.06, 0.09, 'Downhill\nwheel', ha='center', fontsize=6.5, color='#e74c3c')
+ax.text(0.04, 0.25, 'Torso (roll $\\sim$6°)', ha='center', fontsize=7, fontweight='bold')
 
-ax.annotate('20 cm', xy=(0.0, 0.1), xytext=(0.08, 0.12),
-            arrowprops=dict(arrowstyle='<->', color='black', lw=0.8), fontsize=7)
-ax.annotate('', xy=(0.10, 0.02), fontsize=5)
+# Annotations
+ax.annotate('20 cm', xy=(0.0, 0.10), xytext=(0.10, 0.13),
+            arrowprops=dict(arrowstyle='<->', color='#333', lw=0.8), fontsize=7)
+ax.annotate('Adaptation ON:', xy=(0.28, 0.24), fontsize=6.5, fontweight='bold', color='#27ae60')
+ax.text(0.28, 0.225, 'legs split $\\rightarrow$ torso level', fontsize=6, color='#555')
 
-plt.tight_layout()
+plt.tight_layout(pad=0.1)
 plt.savefig(OUT + 'curb_straddle.pdf', dpi=200)
 plt.close()
-print(f"Saved curb_straddle.pdf")
+print("Fig.5 saved")
 
-print("\nAll figures generated in paper/figures/")
+print("\nAll figures regenerated.")
