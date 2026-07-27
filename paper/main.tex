@@ -32,7 +32,7 @@ Email: vanthuong180702t@gmail.com
 % ============================================================
 \begin{abstract}
 Wheeled bipedal robots must simultaneously achieve millimeter-level standing precision, omnidirectional disturbance recovery, and operation across uneven terrain---capabilities that create fundamental trade-offs in controller design.
-Stiffness that holds sub-millimeter idle precision shrinks the capture basin for push recovery; integral action that cancels equilibrium bias windups during large disturbances and prevents recovery.
+Stiffness that holds sub-millimeter idle precision shrinks the capture basin for push recovery; integral action that cancels equilibrium bias winds up during large disturbances and prevents recovery.
 We present the Anchored Cascade Controller (ACC), a unified classical control architecture in which five components are activated continuously by smoothstep gates on physical conditions (proximity, quietness, contact, terrain) rather than by discrete switching.
 The core contribution is a proximity-gated anchor mechanism: a position integral confined to a \SI{15}{cm} neighborhood around the home position, gated by an asymmetric envelope follower (attack $\tau\approx\SI{30}{ms}$, release $\tau\approx\SI{1.5}{s}$) that distinguishes true quiet stance from post-push ringdown.
 Coupled with scheduled pitch stiffness and a gated damping boost, this mechanism resolves a fundamental trade-off: baseline controllers without the anchor achieve comparable push survival ($F_{\min}=\SI{80}{--}\SI{84}{N}$ across all configurations) but exhibit \SI{55}{mm} RMS idle limit cycles---a $180\times$ degradation in standing precision.
@@ -318,7 +318,7 @@ g_{\text{flight}} &= \begin{cases}
 \end{align}
 
 Spinning the wheels forward pitches the nose upward, countering the natural nose-down rotation during forward ledge descent.
-The \num{5}-step release hysteresis with \SI{150}{ms} soft handback prevents the controller from re-engaging balance torque during the bounce chatter of landing, which would otherwise re-launch the robot.
+The \num{5}-step release hysteresis plus a \SI{150}{ms} soft handback ramp prevents the controller from re-engaging balance torque during the bounce chatter of landing, which would otherwise re-launch the robot.
 
 \textbf{Role separation.}
 We distinguish two evaluation modes for contact-loss recovery.
@@ -360,7 +360,7 @@ Contact-loss recovery & --- & --- & --- & --- & $\checkmark$ \\
 Proprioceptive terrain adapt. & --- & --- & --- & --- & $\checkmark$ \\
 \bottomrule
 \end{tabular}}
-\vspace{2pt}\textsuperscript{1}24-dir.\ polar sweep ($F_{\min},F_{\text{med}}$), not qualitative.
+\vspace{2pt}\textsuperscript{1}8-dir.\ polar sweep ($F_{\min},F_{\text{med}}$), not qualitative.
 \end{table}
 
 % ============================================================
@@ -387,11 +387,11 @@ P-only (no I)               & 55  & never decays \\
 \midrule
 \emph{Ablations} \\
 \quad symmetric EMA         & 0.3 & never decays\textsuperscript{1} \\
-\quad global I              & fall & --- \\
+\quad global I              & fall & ---\textsuperscript{2} \\
 \quad no boost               & 0.3 & never decays \\
 \bottomrule
 \end{tabular}}
-\vspace{2pt}\textsuperscript{1}Bistable: post-push oscillation holds EMA in mid-band $\rightarrow$ boost half-open.
+\vspace{2pt}\textsuperscript{1}Bistable: post-push oscillation holds EMA in mid-band $\rightarrow$ boost half-open. \textsuperscript{2}Integral windup during sustained standing; the \num{7}-step push impulse is too brief to trigger windup (Table~\ref{tab:push_ablation} shows $F_{\min}{=}\SI{80}{N}$ for global I), but idle standing fails as the integral accumulates without bound.
 \end{table}
 
 Table~\ref{tab:standing} reports idle precision and ringdown behavior.
@@ -402,14 +402,14 @@ The global-I ablation (integral active regardless of proximity) windups during t
 
 \subsection{Omnidirectional Push Recovery}
 
-Push recovery is evaluated via polar sweep: \SI{10}{--}\SI{160}{N} impulses (duration \num{5}--\num{10} control steps, $\approx\SI{0.05}{--}\SI{0.10}{s}$, varied per trial) applied at the torso in 24 uniformly spaced directions.
+Push recovery is evaluated via polar sweep: \SI{10}{--}\SI{160}{N} impulses (duration \num{7} control steps, $\approx\SI{0.07}{s}$) applied at the torso in \num{8} uniformly spaced directions.
 We define $F_{\min}$ as the maximum push magnitude the controller survives in \emph{every} direction (the weakest-direction threshold) and $F_{\text{med}}$ as the median over directions.
-All push thresholds reported in Table~\ref{tab:push_ablation} were measured using the \texttt{promote\_v3\_vs\_assist} evaluation pipeline with torque rate limit \SI{400}{Nm/s}; the measurement protocol uses binary search over $[\SI{10}{N},\SI{160}{N}]$ with \SI{5}{N} tolerance and \num{50} randomized trials per configuration.
+All push thresholds reported in Table~\ref{tab:push_ablation} were measured using a standalone push sweep harness with torque rate limit \SI{400}{Nm/s}; the protocol uses binary search over $[\SI{10}{N},\SI{160}{N}]$ with \SI{5}{N} tolerance and \num{8} trials per configuration (one per direction).
 A trial is survived if the robot remains upright (torso pitch $<\SI{46}{\degree}$) for the full post-push observation window.
 
 \begin{table}[t]
 \centering
-\caption{Push recovery: 24-direction polar sweep. $F_{\min}$ = weakest-direction threshold; $F_{\text{med}}$ = median. ACC data from \num{50}-trial bisection sweep (\SI{5}{N} tol.); other rows are eval-only off configurations.}
+\caption{Push recovery: 24-direction polar sweep. $F_{\min}$ = weakest-direction threshold; $F_{\text{med}}$ = median. All data measured \num{8}-direction bisection sweep (\SI{5}{N} tol.); other rows are eval-only off configurations.}
 \label{tab:push_ablation}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccc@{}}
@@ -435,11 +435,11 @@ Configuration & $F_{\min}$ (N) & $F_{\text{med}}$ (N) & Idle RMS (mm) \\
 \\[2pt]\textsuperscript{1}Bistable envelope: symmetric EMA cannot distinguish quiet stance from ringdown; \textsuperscript{2}integral accumulates outside anchor neighborhood, causing windup during sustained pushes. All measured 2026-07-27 (\SI{400}{Nm/s} harness, \num{8} dir., bisection \SI{5}{N} tol.). Push thresholds cluster within $80$--$84$\,N across all configurations; the anchor mechanism determines idle precision ($0.3$ vs.\ $55$\,mm, $180\times$) and post-push ringdown (decay vs.\ perpetual oscillation), not peak push survival.
 \end{table}
 
-The scheduled stiffness raises $F_{\min}$ from \SI{30}{N} (fixed $k_p=50$) to \SI{70}{N}---a $+133\%$ improvement in the weakest direction.
-Fixed $k_p=35$ cannot serve as a baseline because idle is unstable (\SI{55}{mm} oscillation); its wider capture basin is achievable only by sacrificing standing precision---the tension that scheduled stiffness resolves.
-The remaining ablation rows are flagged for measurement and are feasible as eval-only configurations (no retraining required).
-
-Fig.~\ref{fig:push_polar} shows the full polar envelope for ACC vs.\ the fixed-$k_p=50$ ablation.
+Table~\ref{tab:push_ablation} reports the complete ablation results across all eight configurations.
+All configurations cluster at $F_{\min}\approx\SI{80}{N}$; the anchor mechanism does not increase the peak push threshold.
+Instead, it determines \textbf{idle precision}---\SI{0.3}{mm} for ACC with the gated integral vs.\ \SI{55}{mm} for the P-only baseline ($180\times$ degradation)---and \textbf{post-push ringdown}: the gated damping boost ensures ringdown converges to zero within \SI{9}{s}, whereas the no-boost and symmetric-EMA ablations oscillate indefinitely.
+The scheduled pitch stiffness ($k_p=50{\leftrightarrow}35$) has a negligible effect on push survival ($F_{\min}$ differs by only \SI{1}{N} from fixed $k_p{=}50$); its primary role is to maintain anchor-level idle precision while permitting the softer recovery stiffness.
+Fig.~\ref{fig:push_polar} shows the polar envelope for ACC.
 
 \begin{figure}[t]
     \centering
@@ -545,9 +545,9 @@ Every gate's necessity is supported by the ablation results in Section~\ref{sec:
     The controller is designed for hardware transfer (direct torque output, no learned components, physically interpretable parameters), but hardware validation remains future work.
     Torque rate limits (\SI{400}{Nm/s}) have been verified to match production actuator specifications.
 
-    \item \textbf{Ablation coverage.}
-    Three ablation rows in Table~\ref{tab:push_ablation} are pending measurement.
-    These are eval-only flag-off configurations; each requires approximately \num{2}--\num{4} hours of simulation time and will be completed before submission.
+    \item \textbf{Push direction resolution.}
+    The push sweep uses \num{8} cardinal directions; a full \num{24}-direction sweep would provide finer angular resolution.
+    The directional anisotropy (strongest at $\pm\SI{90}{\degree}$ lateral, weakest at $\pm\SI{45}{\degree}$ diagonal) is consistent across all eight tested configurations.
 \end{enumerate}
 
 % ============================================================
@@ -555,7 +555,7 @@ Every gate's necessity is supported by the ablation results in Section~\ref{sec:
 % ============================================================
 
 We presented the Anchored Cascade Controller, a unified classical control architecture for wheeled bipedal robots in which five components are activated continuously by smoothstep gates on physical conditions.
-The core proximity-gated anchor mechanism---combining a gated position integral with an asymmetric envelope follower and scheduled pitch stiffness---resolves the fundamental stiffness and integral trade-offs simultaneously: idle drift \SI{0.3}{mm} RMS with omnidirectional $F_{\min}=\SI{70}{N}$ ($+133\%$ over fixed stiffness).
+The core proximity-gated anchor mechanism---combining a gated position integral with an asymmetric envelope follower and scheduled pitch stiffness---resolves the fundamental stiffness and integral trade-offs simultaneously: idle drift \SI{0.3}{mm} RMS ($180\times$ improvement over the \SI{55}{mm} P-only limit cycle) with omnidirectional push survival $F_{\min}=\SI{80}{N}$, $F_{\text{med}}=\SI{113}{N}$ (on par with anchor-less baselines at $F_{\min}=\SI{80}{--}\SI{84}{N}$).
 The architecture also recovers from contact loss (drop \SI{100}{cm}, ledge \SI{50}{cm}) via load-gated reaction-wheel flight control and adapts to uneven terrain (curb \SI{20}{cm}) via proprioceptive per-leg ground estimation.
 All behaviors are achieved without learning, training, or exteroceptive sensing.
 Future work will focus on hardware transfer and on extending the conditional-activation principle to dynamic locomotion.
@@ -565,7 +565,7 @@ Future work will focus on hardware transfer and on extending the conditional-act
 % ============================================================
 \section*{Acknowledgment}
 A supplementary video demonstrating all reported behaviors---anchored standing, omnidirectional push recovery, contact-loss recovery (drop \SI{100}{cm}, ledge \SI{50}{cm}), and per-leg terrain adaptation (curb \SI{10}{--}\SI{20}{cm})---is included with this submission.
-Ablation data for the three pending rows in Table~\ref{tab:push_ablation} will be provided in the final version.
+All ablation results are reported in Table~\ref{tab:push_ablation}; structural ablations (symmetric EMA, global I) were obtained by temporary source-level parameter modification.
 
 \begin{thebibliography}{99}
 
@@ -628,10 +628,6 @@ J.~Pratt \emph{et al.},
 ``Capture Point: A Step Toward Humanoid Push Recovery,''
 in \emph{Proc. IEEE-RAS Int. Conf. Humanoid Robots}, pp. 200--207, 2006.
 
-\bibitem{reaction_wheel_attitude}
-M.~H.~Kaplan,
-\emph{Modern Spacecraft Dynamics and Control}. Wiley, 1976.
-
 \bibitem{legged_terrain_extero}
 M.~Hutter \emph{et al.},
 ``ANYmal---Toward Legged Robots for Harsh Environments,''
@@ -646,25 +642,6 @@ in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, pp. 4399--4406, 
 E.~Todorov, T.~Erez, and Y.~Tassa,
 ``MuJoCo: A Physics Engine for Model-Based Control,''
 in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 5026--5033, 2012.
-
-\bibitem{twip_grasser}
-F.~Grasser, A.~D'Arrigo, S.~Colombi, and A.~C.~Rufer,
-``JOE: A Mobile, Inverted Pendulum,''
-\emph{IEEE Trans. Industrial Electronics}, vol.~49, no.~1, pp. 107--114, 2002.
-
-\bibitem{chan2013twip}
-R.~P.~M.~Chan, K.~A.~Stol, and C.~R.~Halkyard,
-``Review of Modelling and Control of Two-Wheeled Robots,''
-\emph{Annual Reviews in Control}, vol.~37, no.~1, pp. 89--103, 2013.
-
-\bibitem{lqr_standard}
-B.~D.~O.~Anderson and J.~B.~Moore,
-\emph{Optimal Control: Linear Quadratic Methods}. Prentice-Hall, 1990.
-
-\bibitem{contact_detection_legged}
-M.~Focchi \emph{et al.},
-``High-Slope Terrain Locomotion for Torque-Controlled Quadruped Robots,''
-\emph{Autonomous Robots}, vol.~41, pp. 259--272, 2017.
 
 \end{thebibliography}
 
