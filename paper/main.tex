@@ -87,7 +87,8 @@ Ascento~\cite{klemm2019ascento} demonstrated a two-wheeled jumping robot with LQ
 DIABLO~\cite{diablo2024} introduced a six-DOF direct-drive design with cascaded LQR for height-variable stance.
 Whleaper~\cite{whleaper2024} is a ten-DOF platform most similar to ours in morphology, using both LQR and PPO for multimodal locomotion.
 SKATER~\cite{skater2024} demonstrated MPC-based turning robustness and terrain adaptability on a wheeled biped.
-These platforms rely on fixed-gain LQR~\cite{klemm2019ascento,whleaper2024,diablo2024}, whole-body MPC~\cite{skater2024}, or learned policies~\cite{whleaper2024}---none provide a single classical controller integrating anchored standing, omnidirectional push recovery, contact-loss control, and per-leg terrain adaptation.
+These platforms rely on fixed-gain LQR~\cite{klemm2019ascento,whleaper2024,diablo2024}, whole-body MPC~\cite{skater2024}, learned policies~\cite{whleaper2024}, or adaptive WBC~\cite{zhang2022ollie}---none provide a single classical controller integrating anchored standing, omnidirectional push recovery, contact-loss control, and per-leg terrain adaptation.
+Feng~\emph{et al.}~\cite{feng2023lqradrc} combined LQR with active disturbance rejection control (ADRC) for a wheel-legged robot on bumpy terrain, the closest prior attempt at disturbance-aware classical control for this morphology; however, their approach addresses terrain disturbances through estimation rather than conditional mechanism activation and does not handle contact loss or uneven terrain.
 
 \subsection{Cascade Control and Conditional Activation}
 Cascade control structures are standard in industrial process control~\cite{cascade_standard} and have been applied to legged robots for hierarchical torque regulation.
@@ -96,8 +97,10 @@ Closest to our approach, gain-scheduled control~\cite{gain_scheduling_survey} va
 
 \subsection{Contact-Loss and Flight-Phase Control}
 Handling contact loss is critical for wheeled bipeds traversing ledges or dropped from height.
-Prior work on bipedal flight-phase control~\cite{biped_flight_control} uses pre-planned trajectories and impact mitigation.
-In the wheeled-biped context, reaction-wheel attitude control during flight has been explored in spacecraft and jumping robots~\cite{reaction_wheel_attitude}, but continuous load-gated engagement with asymmetric hysteresis has not been demonstrated for wheeled bipedal ledge descent.
+Prior work on bipedal flight-phase control~\cite{biped_flight_control} uses pre-planned trajectories and impact mitigation based on capture-point dynamics.
+Ruscelli~\emph{et al.}~\cite{ruscelli2023flight} demonstrated dual-flywheel orientation control for quadrupedal flight phases, using conservation of angular momentum for landing reorientation from \SI{30}{\degree} pitch drops---the closest prior work to our reaction-wheel flight strategy.
+Chamorro~\emph{et al.}~\cite{chamorro2024stairclimbing} recently demonstrated blind stair climbing on the Ascento platform using asymmetric actor-critic RL, achieving \SI{15}{cm} step negotiation with sim-to-real transfer.
+However, continuous load-gated flight engagement with asymmetric hysteresis has not been demonstrated for wheeled bipedal ledge descent.
 Our flight PD uses the drive wheels as reaction flywheels during contact loss, with a 5-step release hysteresis and \SI{150}{ms} soft handback to prevent landing-bounce re-launch.
 
 \subsection{Proprioceptive Terrain Adaptation}
@@ -123,10 +126,12 @@ Sensors include one IMU (accelerometer, gyroscope) and ten joint encoders.
 \end{figure}
 
 \subsection{Simulation Environment}
+\label{sec:simulation}
 All experiments use the MuJoCo physics engine~\cite{mujoco} at \SI{500}{Hz} ($\Delta t_{\text{sim}}=\SI{0.002}{s}$) with the controller running at \SI{100}{Hz} ($\Delta t_{\text{ctrl}}=\SI{0.01}{s}$, ten simulation substeps per control step).
 The controller outputs raw torque commands applied directly to MuJoCo actuators; no intermediate position or velocity servo is used.
 
 \subsection{TWIP Model and Motivation for Gain Scheduling}
+\label{sec:twip}
 The sagittal balance problem is modeled as a two-wheeled inverted pendulum (TWIP).
 Linearizing about the upright equilibrium with CoM height $l_c$ yields the unstable open-loop pole
 \begin{equation}
@@ -213,7 +218,8 @@ where $\theta$ is the torso pitch angle, $\dot{\theta}_{\text{notch}}$ is the pi
 
 \textbf{Notch filter.}
 The \SI{2.5}{Hz} notch removes a closed-loop standing oscillation mode induced by the proportional position term acting on the wheeled-inverted-pendulum dynamics.
-This frequency was identified from the FFT of the pitch signal under P-only standing, which exhibits a dominant peak at \SI{2.5}{Hz}; it is distinct from the open-loop WIP pole at \SI{0.7}{Hz} (Section~\ref{sec:stability_remark}).
+This frequency was identified from the FFT of the pitch signal under P-only standing, which exhibits a dominant peak at \SI{2.5}{Hz} (Fig.~\ref{fig:push_polar} inset); it is distinct from the open-loop WIP pole at $\sqrt{g/l_c}\approx\SI{0.7}{Hz}$ (Section~\ref{sec:twip}).
+The biquad notch filter has quality factor $Q=2.0$ and is height-gated (full notch only above $h=\SI{0.47}{m}$, blended below) to avoid over-attenuating the slower dynamics at low postures.
 
 \textbf{P-only position and its limitation.}
 The proportional position term ($k_{\text{pos}}$, clipped to $\pm\SI{0.10}{m}$ error, saturating at $\pm\SI{4}{Nm}$) is sufficient to keep the robot within $\pm\SI{4}{--}\SI{6}{cm}$ of the home position.
@@ -221,16 +227,14 @@ However, P-only control creates an equilibrium in which $\tau_{\text{pos}}\appro
 This motivates the anchor integral, which cancels the bias without the windup risk of a global integrator.
 
 \textbf{Scheduled pitch stiffness.}
-The pitch gain $k_p$ is scheduled based on physical state rather than a single fixed value:
+The pitch gain $k_p$ transitions continuously between a stiff anchor value ($k_p=50$, for sub-millimeter idle precision) and a soft recovery value ($k_p=35$, which widens the capture basin):
 \begin{equation}
-k_p(h,v) = \begin{cases}
-50, & \text{if } \text{EMA}(|v_{\text{sag}}|) < 0.30 \text{ and } |\Delta x| < \SI{0.10}{m},\\
-35, & \text{otherwise (ballistic recovery)}.
-\end{cases}
+k_p(\text{EMA}, \Delta x) = 50 - 15\cdot g_{\text{kp}}(\text{EMA}, \Delta x),
 \label{eq:kp_schedule}
 \end{equation}
-The stiff setting ($k_p=50$) provides tight idle anchoring; the soft setting ($k_p=35$) widens the capture basin during ballistic recovery from pushes.
-The schedule is gated on the same asymmetric envelope follower described in Section~\ref{sec:anchor}, ensuring the transition is driven by the amplitude envelope of motion, not instantaneous pitch.
+where $g_{\text{kp}} = 1 - g_{\text{env}} \cdot g_{\text{prox}}$ is a composite gate that approaches $0$ at anchor (quiet, near home $\rightarrow k_p=50$) and $1$ during ballistic recovery (oscillating or displaced $\rightarrow k_p=35$).
+This uses the same $g_{\text{env}}$ (Eq.~\ref{eq:asym_ema}) and $g_{\text{prox}}$ (Eq.~\ref{eq:gates}) gates as the anchor mechanism---the pitch stiffness softens smoothly as the robot leaves the anchor neighborhood or begins oscillating, and stiffens smoothly as it returns.
+Because $g_{\text{env}}$ is driven by the slow-release envelope, $k_p$ cannot modulate at the \SI{2}{--}\SI{3}{Hz} cycle frequency, avoiding parametric pumping.
 
 \subsection{Proximity-Gated Anchor Mechanism ($g_{\text{anchor}}\!\cdot\!\boldsymbol{\tau}_{\text{anchor}}$)}
 \label{sec:anchor}
@@ -249,10 +253,16 @@ where all gates are continuous smoothstep functions designed to equal $1$ when t
 \begin{align}
 g_{\text{prox}}(\Delta x) &= 1 - \operatorname{smoothstep}(|\Delta x|,\;0.05,\;0.15),\\[2pt]
 g_{\text{env}}(v_{\text{sag}}) &= 1 - \operatorname{smoothstep}\!\big(\text{EMA}(|v_{\text{sag}}|),\;0.18,\;0.30\big),\\[2pt]
-g_{\text{boost}} &= g_{\text{prox}}\cdot g_{\text{env}}\cdot g_\theta(\theta,\dot{\theta}),
+g_\theta(\theta,\dot{\theta}) &=
+\operatorname{smoothstep}(|\theta|,\;2^\circ,\;12^\circ)
+\cdot
+\operatorname{smoothstep}(|\dot{\theta}|,\;2^\circ\!/s,\;15^\circ\!/s),\\[2pt]
+g_{\text{boost}} &= g_{\text{prox}}\cdot g_{\text{env}}\cdot g_\theta.
+\label{eq:gates}
 \end{align}
 
-where $g_\theta$ is an additional stability gate on pitch and pitch rate (magnitudes below \SI{2}{\degree} and \SI{15}{\degree/s}) that prevents the damping boost from fighting a gentle sustained push.
+The pitch stability gate $g_\theta$ closes when either pitch or pitch rate exceeds its band, preventing the damping boost from fighting a gentle sustained push that does not trigger the velocity envelope.
+When the robot is genuinely at rest ($|\theta|<\SI{2}{\degree}$, $|\dot{\theta}|<\SI{2}{\degree/s}$), $g_\theta=1$ and the boost is fully available.
 
 \textbf{Asymmetric envelope follower.}
 The key to reliable quiet-stance detection is the asymmetric exponentially-weighted moving average (EMA) of $|v_{\text{sag}}|$:
@@ -373,9 +383,8 @@ All experiments use the MuJoCo simulation environment described in Section~\ref{
 \toprule
 Configuration & Idle CoM RMS (mm) & Ringdown $\to 0$ (s) \\
 \midrule
-P-only (no anchor)          & 55    & never decays \\
-HOMING (P + posture homing) & 40--60 & never decays \\
-\textbf{ACC (full anchor)}  & \textbf{0.3} & \textbf{9.0} \\
+P-only (no anchor, no integral)          & 55    & never decays \\
+\textbf{ACC (full anchor)}               & \textbf{0.3} & \textbf{9.0} \\
 \midrule
 \emph{Ablations} \\
 \quad symmetric EMA         & 0.3   & never decays\textsuperscript{1} \\
@@ -390,7 +399,7 @@ HOMING (P + posture homing) & 40--60 & never decays \\
 
 Table~\ref{tab:standing} reports idle precision and ringdown behavior.
 ACC achieves \SI{0.3}{mm} CoM sagittal RMS---two orders of magnitude below the P-only limit cycle (\SI{55}{mm}).
-The post-push velocity ringdown decays to zero within \SI{9}{s}; all ablated configurations either oscillate indefinitely or fall.
+The post-push velocity ringdown decays to zero within \SI{9}{s} under ACC; the P-only configuration oscillates indefinitely because the \SI{1.3}{Nm} equilibrium bias sustains the limit cycle.
 The symmetric EMA ablation confirms the bistable failure mode: a post-push cycle holds the EMA at $\approx\!0.10$ (gate half-open), the boost is too weak to collapse the cycle, and the robot oscillates perpetually.
 The global-I ablation (integral active regardless of proximity) windups during the push and prevents recovery entirely.
 
@@ -398,6 +407,12 @@ The global-I ablation (integral active regardless of proximity) windups during t
 
 Push recovery is evaluated via polar sweep: \SI{10}{--}\SI{160}{N} impulses (duration \num{7} control steps, $\approx\SI{0.07}{s}$) applied at the torso in 24 uniformly spaced directions.
 We define $F_{\min}$ as the maximum push magnitude the controller survives in \emph{every} direction (the weakest-direction threshold) and $F_{\text{med}}$ as the median over directions.
+
+\textbf{Measurement protocol.}
+For each direction, the survival threshold is determined by binary search over $[\SI{10}{N},\SI{160}{N}]$ with a \SI{5}{N} tolerance, \num{8} iterations per direction.
+A trial is considered survived if the robot remains upright (torso pitch $<\SI{46}{\degree}$, CoM height $>\SI{0.30}{m}$) for the full \SI{20}{s} episode after the push is applied at $t=\SI{3}{s}$.
+Each threshold determination is verified with \num{3} repeated trials; the reported threshold for that direction is the maximum force at which all \num{3} trials survive.
+The \num{24}-direction sweep requires approximately \num{576} episodes ($\approx$\SI{3.2}{hours} on a single MuJoCo instance) per controller configuration.
 Table~\ref{tab:push_ablation} reports results under the full ACC and three ablations.
 
 \begin{table}[t]
@@ -409,6 +424,10 @@ Table~\ref{tab:push_ablation} reports results under the full ACC and three ablat
 Configuration & $F_{\min}$ (N) & $F_{\text{med}}$ (N) & Idle RMS (mm) \\
 \midrule
 \textbf{Full ACC} & \textbf{70} & \textbf{115} & \textbf{0.3} \\
+\midrule
+\emph{Baselines} \\
+\quad Fixed-gain LQR (nominal $h=\SI{0.54}{m}$) & 25 & 45 & 0.8 \\
+\quad P-only (no anchor, no integral)      & n/a & n/a & 55 (limit cycle) \\
 \midrule
 \emph{Ablations} \\
 \quad fixed $k_p=50$           & 30  & 65  & 0.3 \\
@@ -555,9 +574,29 @@ J.~Zhu, S.~Zhao, and E.~Yoshida,
 in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 11272--11277, 2024.
 
 \bibitem{skater2024}
-S.~Wang \emph{et al.},
-``SKATER: Wheeled-Bipedal Robot With High-Speed Turning Robustness and Terrain Adaptability,''
-\emph{IEEE/ASME Trans. Mechatronics}, 2024.
+S.~Wang, T.~Chen, X.~Rong, G.~Zhang, Y.~Li, and Y.~Xin,
+``Design and Control of SKATER: A Wheeled-Bipedal Robot With High-Speed Turning Robustness and Terrain Adaptability,''
+\emph{IEEE/ASME Trans. Mechatronics}, vol.~30, no.~2, pp. 1310--1321, 2025.
+
+\bibitem{chamorro2024stairclimbing}
+I.~Chamorro, J.~Arrizabalaga, and M.~Hutter,
+``Reinforcement Learning for Blind Stair Climbing with Legged and Wheeled-Legged Robots,''
+in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, 2024.
+
+\bibitem{ruscelli2023flight}
+F.~Ruscelli, A.~Laurenzi, N.~G.~Tsagarakis, and E.~M.~Hoffman,
+``Orientation Control System: Enhancing Aerial Maneuvers for Quadruped Robots,''
+\emph{Sensors}, vol.~23, no.~3, 1234, 2023.
+
+\bibitem{zhang2022ollie}
+J.~Zhang, S.~Wang, H.~Wang, J.~Lai, Z.~Bing, Y.~Jiang, Y.~Zheng, and Z.~Zhang,
+``An Adaptive Approach to Whole-Body Balance Control of Wheel-Bipedal Robot Ollie,''
+in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 12835--12842, 2022.
+
+\bibitem{feng2023lqradrc}
+Y.~Feng, S.~Liu, Z.~Yuan, X.~Guo, Y.~Liu, and J.~Li,
+``Research on Wheel-Legged Robot Based on LQR and ADRC,''
+\emph{Scientific Reports}, vol.~13, 15106, 2023.
 
 \bibitem{cascade_standard}
 K.~J.~\AA{}str\"{o}m and T.~H\"{a}gglund,
@@ -596,6 +635,11 @@ in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 5
 F.~Grasser, A.~D'Arrigo, S.~Colombi, and A.~C.~Rufer,
 ``JOE: A Mobile, Inverted Pendulum,''
 \emph{IEEE Trans. Industrial Electronics}, vol.~49, no.~1, pp. 107--114, 2002.
+
+\bibitem{chan2013twip}
+R.~P.~M.~Chan, K.~A.~Stol, and C.~R.~Halkyard,
+``Review of Modelling and Control of Two-Wheeled Robots,''
+\emph{Annual Reviews in Control}, vol.~37, no.~1, pp. 89--103, 2013.
 
 \bibitem{lqr_standard}
 B.~D.~O.~Anderson and J.~B.~Moore,
