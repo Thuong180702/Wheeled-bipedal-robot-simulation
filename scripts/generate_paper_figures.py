@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Generate clean publication-ready figures for ACC paper."""
-import json, numpy as np
+import json, numpy as np, sys, os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch
 import matplotlib.patches as mpatches
 
 plt.rcParams.update({
@@ -17,76 +16,12 @@ plt.rcParams.update({
 OUT = '/Users/admin/Wheeled-bipedal-robot-simulation/paper/figures/'
 
 # ============================================================
-# Fig. 2: Two-Channel Architecture Block Diagram
+# Fig. 2: ACC Two-Channel Architecture — see fig2_architecture.py
 # ============================================================
-fig, ax = plt.subplots(figsize=(3.5, 2.4))
-ax.set_xlim(0, 10); ax.set_ylim(0, 7); ax.axis('off')
-
-def box(ax, x, y, w, h, txt, color='#d4e6f1', fs=6.5, fw='normal'):
-    b = FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.08",
-                        facecolor=color, edgecolor='#333', linewidth=0.6)
-    ax.add_patch(b)
-    ax.text(x+w/2, y+h/2, txt, ha='center', va='center', fontsize=fs, fontweight=fw)
-
-def arrow(ax, x1, y1, x2, y2):
-    ax.annotate('', xy=(x2, y2), xytext=(x1, y1),
-                arrowprops=dict(arrowstyle='->', color='#333', lw=0.9))
-
-# Title
-ax.text(5, 6.75, 'Physical Conditions (gate inputs)', ha='center', fontsize=7.5,
-        fontweight='bold', style='italic', color='#555')
-# Condition boxes
-box(ax, 0.2, 5.8, 2.6, 0.55, '$|\\Delta x|$, EMA$(v)$, pitch, $\\dot{\\theta}$', '#fff9c4', 6)
-box(ax, 3.2, 5.8, 2.2, 0.55, '$F_z^L, F_z^R$', '#fff9c4', 6)
-box(ax, 5.8, 5.8, 2.2, 0.55, '$h^L_{\\rm gnd}, h^R_{\\rm gnd}$', '#fff9c4', 6)
-
-# Wheel channel
-ax.text(2.0, 5.25, 'Wheel Torque $\\tau_w \\in \\mathbb{R}^2$', fontsize=7.5,
-        fontweight='bold', color='#1a5276')
-box(ax, 0.3, 3.9, 2.2, 0.5, '$\\tau_{\\rm balance}$\n(pitch, damp, pos-P)', '#d4e6f1', 6)
-
-# Anchor with gate
-box(ax, 0.3, 3.0, 1.0, 0.65, '$\\tau_{\\rm anchor}$', '#d4e6f1', 5.5)
-box(ax, 1.5, 3.0, 1.0, 0.65, '$g_{\\rm anchor}$', '#f5b7b1', 5.5)
-
-# Flight with gate
-box(ax, 0.3, 2.1, 1.0, 0.65, '$\\tau_{\\rm flight}$', '#d4e6f1', 5.5)
-box(ax, 1.5, 2.1, 1.0, 0.65, '$g_{\\rm flight}$', '#f5b7b1', 5.5)
-
-# Wheel sum
-box(ax, 0.3, 1.1, 2.5, 0.65, '$\\tau_w = \\tau_{\\rm bal} + g_a\\tau_a + g_f\\tau_f$', '#abebc6', 6.5, 'bold')
-
-# Dashed lines from conditions to gates
-for (cx, cy), (gx, gy) in [
-    ((1.5, 5.8), (1.0, 3.0)),  # prox/env → anchor gate
-    ((3.2, 5.8), (2.0, 2.1)),  # Fz → flight gate
-]:
-    ax.plot([cx, gx+0.8], [cy, gy+0.6], '--', color='#999', linewidth=0.5)
-
-# Leg channel
-ax.text(7.5, 5.25, 'Leg Torque $\\tau_q \\in \\mathbb{R}^8$', fontsize=7.5,
-        fontweight='bold', color='#1e8449')
-box(ax, 6.3, 3.9, 2.5, 0.5, '$\\tau_{\\rm posture}(h^{\\rm cmd})$\n(Jacobian PD, 23-pt grid)', '#d5f5e3', 6)
-
-# Terrain with gate
-box(ax, 6.3, 3.0, 1.2, 0.65, '$\\Delta\\tau_{\\rm post}$', '#d5f5e3', 5.5)
-box(ax, 7.7, 3.0, 1.1, 0.65, '$g_{\\rm terr}$', '#f5b7b1', 5.5)
-
-# Leg sum
-box(ax, 6.3, 1.1, 2.5, 0.65, '$\\tau_q = \\tau_{\\rm post} + g_t\\Delta\\tau$', '#abebc6', 6.5, 'bold')
-
-# Legend
-leg = ax.legend(
-    [mpatches.Patch(color='#d4e6f1'), mpatches.Patch(color='#f5b7b1'),
-     mpatches.Patch(color='#abebc6'), mpatches.Patch(color='#fff9c4')],
-    ['Torque component', 'Gate (smoothstep)', 'Assembled output', 'Physical condition'],
-    loc='lower center', ncol=2, fontsize=5.5, framealpha=0.9)
-ax.add_artist(leg)
-
-plt.tight_layout(pad=0.1)
-plt.savefig(OUT + 'acc_architecture.pdf', dpi=200)
-plt.close()
-print("Fig.2 saved")
+fig2_script = os.path.join(os.path.dirname(__file__), 'fig2_architecture.py')
+with open(fig2_script) as f:
+    exec(compile(f.read(), fig2_script, 'exec'), {'__name__': '__main__'})
+print("Fig.2 saved (via fig2_architecture.py)")
 
 # ============================================================
 # Fig. 3: Polar Push Envelope + FFT inset
