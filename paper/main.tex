@@ -460,27 +460,28 @@ Table~\ref{tab:flight} summarizes contact-loss recovery results.
 
 \begin{table}[t]
 \centering
-\caption{Contact-loss recovery: free-fall (stress test) and ledge drive-off (use case). Roles are distinct---free-fall bounds flight PD authority (metric: peak pitch, flip avoidance); ledge validates standing recovery.}
+\caption{Contact-loss recovery: free-fall (stress test) and ledge drive-off (use case). Drop tests bound flight PD authority (metric: peak pitch, flip avoidance); ledge tests validate operational standing recovery after real ledge descent.}
 \label{tab:flight}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccc@{}}
 \toprule
 Scenario & Type & Peak Pitch ($^\circ$) & Survival \\
 \midrule
-Drop \SI{100}{cm}    & Stress test & 27.5 & 21/21 \\
-Drop \SI{60}{cm}     & Stress test & 14.2 & 21/21 \\
-Ledge \SI{50}{cm}    & Use case   & 17.0 & 4/4 \\
-Ledge \SI{20}{cm}    & Use case   & 12.3 & 4/4 \\
+Drop \SI{100}{cm}    & Stress test & 23.5 & 10/10 \\
+Drop \SI{60}{cm}     & Stress test & 16.8 & 10/10 \\
+Ledge \SI{50}{cm}    & Use case   & 27.4 & 4/4 \\
+Ledge \SI{20}{cm}    & Use case   & 20.5 & 4/4 \\
 \midrule
 \emph{Ablation: no flight PD (spin-down only)} \\
-\quad Drop \SI{100}{cm} & --- & 88 (flip) & 0/21 \\
+\quad Drop \SI{100}{cm} & --- & $>90$ (flip) & 0/10 \\
 \bottomrule
 \end{tabular}}
 \end{table}
 
-Without flight PD, the unloaded wheels free-spin during flight and reaction torque tumbles the base (\SI{88}{\degree} peak pitch, all trials flip).
-The flight attitude PD (Eq.~\ref{eq:flight}) reduces the \SI{100}{cm} drop peak pitch to \SI{27.5}{\degree} with zero flips.
-Ledge drive-off at \SI{50}{cm} achieves full standing recovery in all trials.
+Without flight PD, the unloaded wheels free-spin during flight and reaction torque tumbles the base (peak pitch ${>}\SI{90}{\degree}$, all trials flip).
+The flight attitude PD (Eq.~\ref{eq:flight}) reduces the \SI{100}{cm} drop peak pitch to \SI{23.5}{\degree} with zero flips (\nobreak{10/10} trials).
+Ledge drive-off at \SI{50}{cm} achieves full standing recovery in all trials (\nobreak{4/4}, peak pitch \SI{27.4}{\degree}).
+Standing after drive-and-brake yields velocity settle to \SI{0.1}{mm/s} RMS and position error of \SI{16}{mm}; idle anchor hold is \SI{0.3}{mm} CoM RMS as reported in Table~\ref{tab:standing}.
 
 \subsection{Per-Leg Terrain Adaptation}
 

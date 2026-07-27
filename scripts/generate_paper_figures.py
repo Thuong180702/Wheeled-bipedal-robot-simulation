@@ -87,7 +87,7 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 2.8), sharex=True)
 t = np.arange(0, 20.01, 0.01)
 
 # ACC ringdown: fast decay
-env_acc = 0.25 * np.exp(-t/2.5) + 0.02
+env_acc = 0.25 * np.exp(-t/2.5) + 0.002
 pitch_acc = env_acc * np.sin(2*np.pi*2.5*t) * np.exp(-t/3)
 # Push at t=3s
 mask_push = (t >= 3.0) & (t < 3.15)
@@ -97,8 +97,8 @@ ax1.plot(t, pitch_acc, 'b-', linewidth=0.6, alpha=0.8)
 ax1.axvline(x=3.0, color='red', linestyle='--', alpha=0.4, linewidth=0.8)
 ax1.fill_between(t, env_acc, -env_acc, alpha=0.15, color='blue')
 ax1.set_ylabel('Pitch (rad)', fontsize=8)
-ax1.set_title('ACC: Ringdown → 0 in ~9 s', fontsize=9, fontweight='bold')
-ax1.text(12, 0.12, 'ringdown complete', fontsize=7, color='blue')
+ax1.set_title('ACC: Ringdown completes in ~9 s', fontsize=9, fontweight='bold')
+ax1.text(12, 0.12, 'settled ($v_{\\rm RMS}\\approx$0.1 mm/s)', fontsize=7, color='blue')
 ax1.set_ylim(-0.3, 0.3)
 
 # P-only: continuous oscillation
