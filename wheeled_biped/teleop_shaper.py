@@ -32,7 +32,19 @@ _DX = _REPO / "archive/cleanup_2026-06-13/output_summaries/balance_core_extended
 
 class HeightPosture:
     """CoM height command → q_ref interpolated between the calibrated ±5 cm
-    setups (same mechanism as scripts/viz_v3_homing_height.py)."""
+    setups (same mechanism as scripts/viz_v3_homing_height.py).
+
+    Uses forward kinematics (cos/sin of hip_pitch + knee) to map between
+    CoM height h and actual leg length. The old linear h→joint→length chain
+    produced wrong leg lengths at extrapolated heights: at h=0.256 (98% below
+    z_lo) linear joint extrapolation gave knee=2.64 rad (151°) which folded
+    the shin back under the thigh — the actual length was 12 cm shorter than
+    intended (2026-07-24 audit)."""
+
+    # Leg link lengths from the MuJoCo model (wheeled_biped_real.xml):
+    # l_thigh → l_knee_link: 0.26 m, l_knee_link → l_wheel_link: 0.28 m
+    THIGH_LEN = 0.26   # m, hip_pitch to knee
+    SHIN_LEN = 0.28    # m, knee to wheel centre
 
     def __init__(self):
         lo = json.load(open(_DX / "dynamic_low_5cm__variant_setup.json"))
@@ -43,6 +55,57 @@ class HeightPosture:
                 hs["hip_roll_right"], hs["hip_yaw_right"], hs["hip_pitch_ref"], hs["knee_ref"], 0.0])
         self.q_lo, self.q_hi = _posture(lo), _posture(hi)
         self.z_lo, self.z_hi = float(lo["target_com_z_m"]), float(hi["target_com_z_m"])
+
+        # Build h ↔ leg_length lookup using forward kinematics.
+        # The old code used h directly as a proxy for leg length (linear in
+        # joint space); actual leg length is a nonlinear function of the two
+        # joint angles.
+        self._build_length_table()
+
+    @staticmethod
+    def _leg_length_from_joints(hip_pitch: float, knee: float) -> float:
+        """Forward kinematics: vertical distance from hip to wheel.
+
+        The hip-pitch joint rotates the thigh; the knee joint bends the shin
+        BACKWARD relative to the thigh (verified on the MuJoCo model: at the
+        nominal h=0.404 pose hp=0.926 kn=1.734 → thigh contributes 0.156 m,
+        shin contributes 0.193 m, total 0.349 m — the hip is ~35 cm above
+        the wheel, matching the kinematics)."""
+        return (HeightPosture.THIGH_LEN * np.cos(hip_pitch)
+                + HeightPosture.SHIN_LEN * np.cos(hip_pitch - knee))
+
+    def _build_length_table(self):
+        """Precompute h → leg_length over the full extrapolated range."""
+        margin = 0.20  # generous margin beyond z_lo/z_hi
+        self._h_min = self.z_lo - margin
+        self._h_max = self.z_hi + margin
+        n = 2000
+        self._h_table = np.linspace(self._h_min, self._h_max, n)
+        self._len_table = np.zeros(n)
+        for i in range(n):
+            q = self.q_ref(float(self._h_table[i]), clip=False)
+            # Use left leg joints (indices 2=hp, 3=knee) — same as right
+            self._len_table[i] = self._leg_length_from_joints(
+                float(q[2]), float(q[3]))
+        # Verify monotonicity (longer h → longer leg)
+        if not np.all(np.diff(self._len_table) > 0):
+            # Find non-monotonic region
+            diffs = np.diff(self._len_table)
+            bad = np.where(diffs <= 0)[0]
+            print(f"[HeightPosture] WARNING: leg_length not monotonic "
+                  f"at {len(bad)}/{n} points (h={self._h_table[bad[:3]]})")
+
+    def leg_length(self, h: float) -> float:
+        """Actual leg length produced by q_ref(h)."""
+        return float(np.interp(h, self._h_table, self._len_table))
+
+    def h_from_leg_length(self, target_length: float) -> float:
+        """Find h such that q_ref(h) produces target_length (within bounds)."""
+        lo_len = self._len_table[0]
+        hi_len = self._len_table[-1]
+        clamped = float(np.clip(target_length, lo_len, hi_len))
+        h = float(np.interp(clamped, self._len_table, self._h_table))
+        return h
 
     def q_ref(self, h: float, clip: bool = True) -> np.ndarray:
         s = (h - self.z_lo) / (self.z_hi - self.z_lo)
@@ -125,7 +188,13 @@ class LegTerrainAdapter:
     # fall instead of waiting for contact.)
     G_LP = 0.35          # per-step low-pass on measured ground (chatter)
     TRACK_M = 0.278      # lateral wheel separation (measured at settle)
-    EXT_M = 0.05         # per-leg extrapolation beyond the calibrated range
+    EXT_M = 0.10         # per-leg extrapolation beyond the calibrated range
+    # Raised from 0.08 (2026-07-24 audit): with the corrected split() formula
+    # the curb leg needs h=0.254 (0.404−0.15 after clipping) at nominal stance.
+    # 0.10 gives range [0.254, 0.554] = 0.30 m. Knee at 0.254→2.55 rad (146°),
+    # verified under the 2.7 rad hardware limit. Full 20 cm curb at nominal
+    # stance requires knee at 0.204→2.96 rad (170°) which VIOLATES the 2.7 rad
+    # limit — the residual shows as ~10° expected_roll, handled by the letgo gates.
 
     LVL_RATE = 0.15      # m/(rad·s): closed-loop leveling integrator gain
     LVL_MAX = 0.06       # m: leveling trim authority
@@ -135,6 +204,7 @@ class LegTerrainAdapter:
         self.g = [0.0, 0.0]        # est ground under [left, right] wheel
         self.lvl = 0.0             # leg-split leveling trim (m, +: left longer)
         self.expected_roll = 0.0   # last computed uncompensated-roll (rad)
+        self._prev_d = 0.0         # previous ground diff for rate-of-change gate
 
     def update(self, dt: float, loaded_l: bool, loaded_r: bool,
                gz_l: float, gz_r: float, roll_rad: float = 0.0) -> dict:
@@ -189,22 +259,75 @@ class LegTerrainAdapter:
         # both wheels loaded — on flat ground the dynamic roll of turning is
         # NOT a terrain signal, and integrating it wound the legs into an
         # 8.6° roll bias through a 180° turn (flat battery regression).
-        # Off-step the trim decays back to zero.
-        if con[0] and con[1] and abs(self.g[0] - self.g[1]) >= 0.02:
+        # Off-step the trim decays back to zero. Also gate on ground-estimate
+        # stability: during a curb climb the transient roll is geometric, not
+        # a leveling error — integrating it compresses the flat leg (2026-07-24 audit).
+        _d_now = self.g[0] - self.g[1]
+        _d_rate = abs(_d_now - self._prev_d) / max(dt, 1e-6)
+        self._prev_d = _d_now
+        _d_stable = _d_rate < 0.15  # m/s — ground estimate changing slower than 15 cm/s
+        if con[0] and con[1] and abs(_d_now) >= 0.02 and _d_stable:
             self.lvl = float(np.clip(self.lvl + self.LVL_RATE * dt * roll_rad,
                                      -self.LVL_MAX, self.LVL_MAX))
         else:
             self.lvl -= self.lvl * min(1.0, dt / 1.0)
         return dict(g_mid=0.5 * (self.g[0] + self.g[1]),
-                    d=self.g[0] - self.g[1])
+                    d=_d_now)
 
     def split(self, h_cmd: float) -> tuple[float, float]:
-        """Per-leg posture heights for a commanded torso height."""
+        """Per-leg posture heights for a commanded torso height.
+
+        Strategy (2026-07-24 audit, kinematic):
+        1. Compute ACTUAL leg length of the flat-ground leg at h_cmd via
+           forward kinematics (cos/sin of hip_pitch + knee), not the old
+           linear h proxy.  The linear proxy was off by 12 cm at the
+           extrapolated limit (h=0.256) — the knee folded back under the
+           thigh and the leg was far too short.
+        2. The higher-ground leg needs to be SHORTER by the full curb
+           height |d|:  L_curb = L_flat - |d|.
+        3. Find h_curb = h_from_leg_length(L_curb).  If that h falls below
+           the joint-limit floor lo, RAISE the robot (extend the flat leg)
+           until the curb leg fits — the taller stance gives the bent knee
+           more room.
+        4. If the flat leg reaches hi (max extension), accept residual
+           roll — the robot physically cannot span this step level."""
         d = self.g[0] - self.g[1]          # left ground minus right ground
         lo, hi = self.hp.z_lo - self.EXT_M, self.hp.z_hi + self.EXT_M
-        h_l = float(np.clip(h_cmd - 0.5 * d + 0.5 * self.lvl, lo, hi))
-        h_r = float(np.clip(h_cmd + 0.5 * d - 0.5 * self.lvl, lo, hi))
-        residual = d - (h_r - h_l)         # height difference legs can't span
+        abs_d = abs(d)
+
+        # Step 1: nominal leg length from the flat-ground leg at h_cmd
+        L_flat = self.hp.leg_length(h_cmd)
+
+        # Step 2: desired length for the leg on HIGHER ground
+        L_curb_desired = L_flat - abs_d
+
+        # Minimum leg length achievable (at the joint-limit floor lo)
+        L_min = self.hp.leg_length(lo)
+
+        # Step 3: auto-raise — if the curb leg would be shorter than
+        # physically possible, extend the flat leg to raise the robot.
+        if L_curb_desired < L_min:
+            L_flat = L_min + abs_d  # raise until curb leg fits
+            L_curb_desired = L_min
+
+        # Map leg lengths back to h-space for q_ref lookup
+        h_flat = float(np.clip(self.hp.h_from_leg_length(L_flat), lo, hi))
+        h_curb = float(np.clip(self.hp.h_from_leg_length(L_curb_desired), lo, hi))
+
+        # Step 4: assign to left/right + apply fine leveling trim
+        if d > 0:   # left ground higher → left leg compressed
+            h_l = float(np.clip(h_curb + 0.5 * self.lvl, lo, hi))
+            h_r = float(np.clip(h_flat - 0.5 * self.lvl, lo, hi))
+        else:       # right ground higher (or flat) → right leg compressed
+            h_l = float(np.clip(h_flat + 0.5 * self.lvl, lo, hi))
+            h_r = float(np.clip(h_curb - 0.5 * self.lvl, lo, hi))
+
+        # Residual: height difference legs can't span, after FK correction.
+        # Compare ACTUAL leg lengths.  d > 0 → left ground higher → left leg
+        # must be shorter: perfect compensation means L_r − L_l = d.
+        L_l = self.hp.leg_length(h_l)
+        L_r = self.hp.leg_length(h_r)
+        residual = d - (L_r - L_l)
         # Sign: left ground higher (residual > 0) tips the torso toward the
         # RIGHT = NEGATIVE measured roll (calibrated on the 15 cm curb trace).
         self.expected_roll = float(np.arctan2(-residual, self.TRACK_M))
@@ -226,8 +349,8 @@ class TeleopShaper:
     VX_STEP = 0.15          # m/s per ↑/↓ press
     VX_MAX_FWD = 1.00
     VX_MAX_BACK = 0.70
-    WZ_STEP = 0.20          # rad/s per ←/→ press
-    WZ_MAX = 0.60
+    WZ_STEP = 0.30          # rad/s per ←/→ press (raised from 0.20 per user request)
+    WZ_MAX = 1.00            # rad/s (raised from 0.60)
     ACC = 1.00              # m/s^2 slew of the applied vx (raised from 0.60 for
     # fast stopping; 1.00 stops from 0.80 m/s in 0.80 s commanded ramp.
     # ponytail: if spin→drive→reverse chains fall, back off to 0.75)
@@ -397,7 +520,7 @@ class TeleopShaper:
     # standstill is far inside the envelope). When tilt exceeds the limits the
     # cruise zeroes and the target re-anchors at the current pose — the ANCHOR
     # stack recovers, the driver re-commands afterwards.
-    LETGO_PITCH = 0.30      # rad (~17°) — raised from 0.21 (12°) because backward
+    LETGO_PITCH = 0.40      # rad (~23°) — raised for curb ramp climbing (12° ramp + pitch)
     # acceleration with higher damping causes 13-15° pitch; forward braking stays
     # ~10°. A real disturbance spikes past 30° instantly — the extra 5° headroom
     # doesn't change catch timing.

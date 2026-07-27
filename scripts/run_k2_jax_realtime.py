@@ -244,6 +244,9 @@ def parse_args():
                    help="Number of simulation steps (default: 3000)")
     p.add_argument("--model", type=str, default="assets/robot/wheeled_biped_real.xml",
                    help="MuJoCo model path")
+    p.add_argument("--terrain", type=str, default=None,
+                   help="Inject terrain: curb_N, ramp_N, curb_ledge_N, "
+                        "curb_then_ledge (curb 15cm → flat → ledge 25cm)")
     p.add_argument("--telemetry", type=str, default="off",
                    choices=["off", "summary", "decimated", "full"],
                    help="Telemetry mode (default: off)")
@@ -255,6 +258,15 @@ def parse_args():
                    help="Suppress all non-essential output")
     p.add_argument("--visual", action="store_true", default=False,
                    help="Launch MuJoCo viewer")
+    p.add_argument("--scripted-curb-test", action="store_true", default=False,
+                   help="Automated curb test: drive forward 5s, stop, hold 10s, "
+                        "log detailed telemetry every 25 steps.")
+    p.add_argument("--scripted-drive-s", type=float, default=10.0,
+                   help="Drive duration for scripted-curb-test (default: 10s)")
+    p.add_argument("--scripted-settle-s", type=float, default=5.0,
+                   help="Settle duration after stop for scripted test (default: 5s)")
+    p.add_argument("--record-video", type=str, default=None,
+                   help="Save offscreen-rendered MP4 video to this path (headless)")
     p.add_argument("--teleop", action="store_true", default=False,
                    help="Interactive keyboard teleop (implies --visual; on macOS run "
                         "with mjpython). Keys: arrow Up/Down = velocity cruise, "
@@ -719,7 +731,7 @@ def build_height_qref_interpolator(setup_dir="outputs/physical_target_height_set
 def check_termination(com_height, pitch_x_rad, roll_y_rad, height_floor_m):
     if com_height < height_floor_m:
         return True, f"height_too_low ({com_height:.3f} < {height_floor_m:.3f})"
-    if abs(pitch_x_rad) > 0.785 or abs(roll_y_rad) > 0.785:
+    if abs(pitch_x_rad) > 1.309 or abs(roll_y_rad) > 1.047:  # 75 deg pitch, 60 deg roll (matches ramp_step_tests)
         return True, f"orientation_fail p={pitch_x_rad:.3f} r={roll_y_rad:.3f}"
     return False, ""
 
@@ -783,6 +795,77 @@ def main():
     args = parse_args()
 
     # ── 1. Model & data ──────────────────────────────────────────────────
+    # Terrain injection: build curb or ramp-step terrain on the fly
+    if args.terrain:
+        from scripts.ramp_step_tests import build_curb_xml, build_terrain_xml
+        from pathlib import Path as _Path
+        import numpy as _np
+        if args.terrain == "curb_then_ledge":
+            h_curb, h_ledge = 0.15, 0.25
+            rlen_c = h_curb / np.tan(np.radians(12.0))
+            rlen_l = h_ledge / np.tan(np.radians(12.0))
+            yc1, yc2 = 0.5, 0.5+rlen_c  # curb ramp
+            yc3 = yc2 + 1.3               # curb top end
+            yc4 = yc3 + rlen_c             # curb down end
+            yl1 = yc4 + 0.7                # ledge ramp start
+            yl2 = yl1 + rlen_l             # ledge top
+            yl3 = yl2 + 0.8                # ledge end
+            t = 0.05; x_c, hw = 0.20, 0.18
+            comm = ('condim="6" contype="1" conaffinity="1" friction="0.8 0.005 0.0001" '
+                    'solref="0.002 1" solimp="0.95 0.99 0.001 0.5 2" rgba="0.55 0.45 0.35 1"')
+            s = np.sin(np.radians(12.0)); c = np.cos(np.radians(12.0))
+            a = float(np.hypot(rlen_c, h_curb))/2+0.02
+            geoms = (
+                f'<geom name="cb_up" type="box" size="{hw} {a} {t}" '
+                f'pos="{x_c} {(yc1+yc2)/2+t*s:.4f} {h_curb/2-t*c:.4f}" euler="{np.radians(12.0):.6f} 0 0" {comm}/>\n'
+                f'<geom name="cb_top" type="box" size="{hw} {(yc3-yc2)/2} {h_curb/2}" '
+                f'pos="{x_c} {(yc2+yc3)/2:.4f} {h_curb/2:.4f}" {comm}/>\n'
+                f'<geom name="cb_dn" type="box" size="{hw} {a} {t}" '
+                f'pos="{x_c} {(yc3+yc4)/2-t*s:.4f} {h_curb/2+t*c:.4f}" euler="-{np.radians(12.0):.6f} 0 0" {comm}/>\n'
+                f'<geom name="ld_up" type="box" size="0.8 {rlen_l/2+0.02} {t}" '
+                f'pos="0 {yl1+rlen_l/2:.4f} {h_ledge/2-t*c:.4f}" euler="{np.radians(12.0):.6f} 0 0" {comm}/>\n'
+                f'<geom name="ld_plat" type="box" size="0.8 {(yl3-yl2)/2} {h_ledge/2}" '
+                f'pos="0 {(yl2+yl3)/2:.4f} {h_ledge/2:.4f}" {comm}/>\n'
+            )
+            xml_out = _Path('assets/robot') / '_tmp_curb_then_ledge.xml'
+            xml_out.write_text(_Path(args.model).read_text().replace('  </worldbody>', geoms + '  </worldbody>'))
+            xml = xml_out
+            print(f"Terrain: curb 15cm (left) → flat → ledge 25cm drive-off")
+        elif args.terrain.startswith("curb_ledge_"):
+            h = float(args.terrain.split("_")[2]) / 100.0
+            SLOPE_RAD = _np.radians(12.0); FLAT_END_Y = 0.5
+            ramp_len = h / _np.tan(SLOPE_RAD)
+            y0, y1 = FLAT_END_Y, FLAT_END_Y + ramp_len
+            y_edge = 3.0; t = 0.05
+            common = ('condim=\"6\" contype=\"1\" conaffinity=\"1\" friction=\"0.8 0.005 0.0001\" '
+                      'solref=\"0.002 1\" solimp=\"0.95 0.99 0.001 0.5 2\" rgba=\"0.55 0.45 0.35 1\"')
+            x_c, hw = 0.20, 0.18
+            a = float(_np.hypot(ramp_len, h)) / 2 + 0.02
+            cy = (y0 + y1) / 2 + t * _np.sin(SLOPE_RAD)
+            cz = h / 2 - t * _np.cos(SLOPE_RAD)
+            geoms = (
+                f'    <geom name=\"curb_ramp\" type=\"box\" size=\"{hw} {a} {t}\" '
+                f'pos=\"{x_c} {cy:.4f} {cz:.4f}\" euler=\"{SLOPE_RAD:.6f} 0 0\" {common}/>\\n'
+                f'    <geom name=\"curb_top\" type=\"box\" size=\"{hw} {(y_edge-y1)/2} {h/2}\" '
+                f'pos=\"{x_c} {(y1+y_edge)/2:.4f} {h/2:.4f}\" {common}/>\\n'
+                f'    <geom name=\"ledge\" type=\"box\" size=\"0.8 0.6 {h/2}\" '
+                f'pos=\"0 {y_edge+0.5:.4f} {h/2:.4f}\" {common}/>\\n'
+            )
+            xml_out = _Path('assets/robot') / f'_tmp_curb_ledge_{int(h*100)}.xml'
+            xml_out.write_text(_Path(args.model).read_text().replace('  </worldbody>', geoms + '  </worldbody>'))
+            xml = xml_out
+            print(f"Terrain: curb {int(h*100)}cm + ledge drive-off (left-wheel curb → full-width drop at y={y_edge:.1f}m)")
+        elif args.terrain.startswith("curb_"):
+            h = float(args.terrain.split("_")[1]) / 100.0
+            xml, geo = build_curb_xml(h)
+            print(f"Terrain: curb {int(h*100)}cm (left-wheel only)")
+        elif args.terrain.startswith("ramp_"):
+            h = float(args.terrain.split("_")[1]) / 100.0
+            xml, geo = build_terrain_xml(h, sign=1)
+            print(f"Terrain: ramp+ledge {int(h*100)}cm drive-off")
+        else:
+            raise ValueError(f"Unknown terrain: {args.terrain}. Use curb_N or ramp_N.")
+        args.model = str(xml)
     if not args.quiet:
         print(f"Model: {args.model}")
     mj_model = mujoco.MjModel.from_xml_path(args.model)
@@ -830,8 +913,8 @@ def main():
     initial_yaw_z = float(yaw_z_eq)
 
     # Wheel body IDs & support center
-    l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel")
-    r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel")
+    l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
+    r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
 
     def get_wheel_xpos(body_id):
         return tuple(float(mj_data.xpos[body_id][i]) for i in range(3))
@@ -1485,10 +1568,26 @@ def main():
     last_sync_sim_time = -999.0
     sim_start_time = 0.0
 
+    # ── Video recording (headless offscreen render) ─────────────────────────
+    _record_video_path = getattr(args, "record_video", None)
+    _record_renderer = None
+    _record_cam = None
+    _record_frames = []
+    if _record_video_path:
+        _record_renderer = mujoco.Renderer(mj_model, height=360, width=640)
+        _record_cam = mujoco.MjvCamera()
+        _record_cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+        _record_cam.lookat[:] = [0.0, 0.0, 0.4]
+        _record_cam.distance = 3.0
+        _record_cam.azimuth = 155.0
+        _record_cam.elevation = -12.0
+        _record_frame_counter = 0
+
     # ── Teleop init ─────────────────────────────────────────────────────
     _teleop = None
-    if args.teleop:
-        args.visual = True
+    if args.teleop or args.scripted_curb_test:
+        if args.teleop:
+            args.visual = True
         from wheeled_biped.teleop_shaper import (
             TeleopShaper as _TeleopShaper, HeightPosture as _HeightPosture,
             LegTerrainAdapter as _LegTerrainAdapter,
@@ -1503,7 +1602,7 @@ def main():
             "load_thresh_n": 0.2 * float(np.sum(mj_model.body_mass)) * 9.81,
             "keys": [],           # appended from the viewer thread
             "shaper": None,       # created once the startup transient settles
-            "activate_step": 200,
+            "activate_step": 200 if args.teleop else 50,
             "push_left": 0,
             "push_vec": np.zeros(3),
             "push_arrow_left": 0,   # control steps to keep the force arrow drawn
@@ -1734,13 +1833,14 @@ def main():
                 print(f"[TELEOP] ACTIVE at t={step * CONTROL_DT:.1f}s — anchored at "
                       f"({support_xy[0]:+.2f}, {support_xy[1]:+.2f}), h={centroidal.com_pos[2]:.3f}")
             _sh = _teleop["shaper"]
-            if _sh is not None and _teleop["pynput_ok"]:
+            if _sh is not None and _teleop["pynput_ok"] and not args.scripted_curb_test:
                 # HOLD-TO-DRIVE: poll physical keys → held set + edges, then
                 # held keys → cruise; release → auto stop+anchor
                 _poll_keys(_teleop)
                 if _teleop["push_edge"]:
                     _teleop["push_edge"] = False
                     _teleop["keys"].append(_teleop["KEY_X"])  # reuse push path
+                _teleop["_last_held"] = set(_teleop["held"])  # save for letgo auto-resume
                 _sig = _sh.update_held(set(_teleop["held"]))
                 if _sig == "ANCHOR":
                     _sh.stop_here(float(support_xy[0]), float(support_xy[1]), _t_yaw)
@@ -1819,12 +1919,53 @@ def main():
                     roll_rad=_t_roll)
                 _band = abs(_ad.expected_roll)
                 _roll_c = float(np.sign(_t_roll) * max(0.0, abs(_t_roll) - _band))
-                _tel_cmd = _sh.step(
-                    CONTROL_DT, float(support_xy[0]), float(support_xy[1]),
-                    _t_yaw, pitch_rad=_t_pitch, roll_rad=_roll_c)
+                if args.scripted_curb_test:
+                    # Scripted drive sequence: forward at 0.25 m/s for drive_s, then stop + settle
+                    _sc_t = step * CONTROL_DT
+                    _sc_drive_s = args.scripted_drive_s
+                    _sc_total_s = _sc_drive_s + args.scripted_settle_s
+                    if _sc_t < _sc_drive_s:
+                        # curb: drive backward (-Y) toward one-wheel curb
+                        # ramp: drive forward (+Y) slower for safe drop
+                        # flat: drive forward
+                        if (args.terrain or "").startswith("curb_"):
+                            _sc_vx = -0.40  # slower for one-wheel curb climb
+                        elif (args.terrain or "").startswith("ramp_"):
+                            _sc_vx = +0.40
+                        else:
+                            _sc_vx = +0.80
+                    else:
+                        _sc_vx = 0.0
+                    if _sc_t >= _sc_drive_s and _teleop.get("_sc_anchor_step") is None:
+                        _teleop["_sc_anchor_step"] = step
+                        _sh.stop_here(float(support_xy[0]), float(support_xy[1]), _t_yaw)
+                        print(f"\n=== STOP+ANCHOR at t={_sc_t:.1f}s, "
+                              f"pos=({support_xy[0]:.3f},{support_xy[1]:.3f}) ===\n")
+                    if _sc_t >= _sc_total_s:
+                        break  # end simulation after settle period
+                    # Disable letgo during scripted test (curb climbing tilts a lot)
+                    _sh.vx_tgt = _sc_vx
+                    _sh.wz_tgt = 0.0
+                    _sh.vx = _sc_vx  # instant, no slew
+                    _sh.wz = 0.0
+                    _tel_cmd = _sh.step(
+                        CONTROL_DT, float(support_xy[0]), float(support_xy[1]),
+                        _t_yaw, pitch_rad=0.0, roll_rad=0.0)  # disable letgo
+                else:
+                    _tel_cmd = _sh.step(
+                        CONTROL_DT, float(support_xy[0]), float(support_xy[1]),
+                        _t_yaw, pitch_rad=_t_pitch, roll_rad=_roll_c)
                 if _sh.events and _sh.events[-1] == "SAFETY_LETGO":
-                    print("[TELEOP] SAFETY_LETGO — tilt limit, cruise released")
-                _sh.events.clear()
+                    print("[TELEOP] SAFETY_LETGO — tilt limit, auto-resume in 0.5s")
+                    _teleop["letgo_pause"] = 50  # 0.5s pause then auto-resume
+                if _teleop.get("letgo_pause", 0) > 0:
+                    _teleop["letgo_pause"] -= 1
+                    if _teleop["letgo_pause"] == 0:
+                        _sh.letgo_latch = False
+                        # Re-apply held keys to resume driving
+                        _sh.update_held(_teleop.get("_last_held", set()))
+                if not args.scripted_curb_test:
+                    _sh.events.clear()
                 height_ref = _tel_cmd["height_ref"] + _st["g_mid"]
                 _h_cmd = _sh.height_servo(
                     float(centroidal.com_pos[2]) - _st["g_mid"], CONTROL_DT,
@@ -1835,11 +1976,28 @@ def main():
                 if _teleop["push_left"] > 0:
                     mj_data.xfrc_applied[1, 0:3] = _teleop["push_vec"]  # body 1 = torso
                     _teleop["push_left"] -= 1
-                if step % 100 == 0:
-                    print(f"[TELEOP] t={step * CONTROL_DT:6.1f}s vx={_sh.vx:+.2f} "
-                          f"wz={_sh.wz:+.2f} h={_sh.h:.3f} "
-                          f"pos_err={np.hypot(_tel_cmd['teleop_target_x_m'] - support_xy[0], _tel_cmd['teleop_target_y_m'] - support_xy[1]):.3f} "
-                          f"yaw={np.degrees(_t_yaw):+.0f}°", flush=True)
+                if step % 50 == 0 or (args.scripted_curb_test and step % 25 == 0):
+                    _gdiff = _ad.g[0] - _ad.g[1]
+                    if args.scripted_curb_test:
+                        print(f"[TEST] t={step*CONTROL_DT:5.1f}s cmd={_sc_vx:+.2f} "
+                              f"pitch={np.degrees(_t_pitch):+.1f}° p_rate={float(centroidal.body_pitch_rate_x):+.3f} "
+                              f"gL={_ad.g[0]:.4f} gR={_ad.g[1]:.4f} "
+                              f"hL={_h_l:.4f} hR={_h_r:.4f} "
+                              f"tL={float(jax_tau[4]):+.2f} tR={float(jax_tau[9]):+.2f} "
+                              f"wL={float(joint_vel[4]):+.1f} wR={float(joint_vel[9]):+.1f} "
+                              f"pe={np.hypot(_tel_cmd['teleop_target_x_m']-support_xy[0],_tel_cmd['teleop_target_y_m']-support_xy[1]):.3f} "
+                              f"yaw={np.degrees(_t_yaw):+.0f}° "
+                              f"L={'L' if _fl>=_teleop['load_thresh_n'] else '_'}"
+                              f"{'R' if _fr>=_teleop['load_thresh_n'] else '_'}",
+                              flush=True)
+                    else:
+                        print(f"[TELEOP] t={step * CONTROL_DT:6.1f}s vx={_sh.vx:+.2f} "
+                              f"wz={_sh.wz:+.2f} h={_sh.h:.3f} "
+                              f"pos_err={np.hypot(_tel_cmd['teleop_target_x_m'] - support_xy[0], _tel_cmd['teleop_target_y_m'] - support_xy[1]):.3f} "
+                              f"yaw={np.degrees(_t_yaw):+.0f}° "
+                              f"gL={_ad.g[0]:.3f} gR={_ad.g[1]:.3f} "
+                              f"hL={_h_l:.3f} hR={_h_r:.3f} lvl={_ad.lvl:+.3f} "
+                              f"roll={np.degrees(_t_roll):+.1f}°", flush=True)
 
         # ── Pack input & call JAX ────────────────────────────────────────
         jax_input = pack_input_k2_standalone(
@@ -1886,6 +2044,26 @@ def main():
             leg_height_right_m=_h_r,
         )
         jax_tau, jax_state, jax_diag = jax_step_fn(jax_state, jax_input, jax_params)
+
+        # ── Terrain debug: log wheel torques + terrain gate when on curb ──
+        if _teleop is not None and step % 25 == 0:
+            _ad_dbg = _teleop.get("terrain")
+            if _ad_dbg is not None:
+                _gdiff = _ad_dbg.g[0] - _ad_dbg.g[1]
+                if abs(_gdiff) > 0.005:
+                    _twl = float(jax_diag[79])
+                    _twr = float(jax_diag[84])
+                    _twl_f = float(jax_tau[4])
+                    _twr_f = float(jax_tau[9])
+                    _p_rate = float(centroidal.body_pitch_rate_x)
+                    _vxl = float(joint_vel[4])
+                    _vxr = float(joint_vel[9])
+                    print(f"[WHEEL] t={step*CONTROL_DT:.1f}s "
+                          f"tau_L={_twl:+.2f}/{_twl_f:+.2f}Nm "
+                          f"tau_R={_twr:+.2f}/{_twr_f:+.2f}Nm "
+                          f"p_rate={_p_rate:+.3f} wvL={_vxl:+.1f} wvR={_vxr:+.1f} r/s "
+                          f"gL={_ad_dbg.g[0]:.3f} gR={_ad_dbg.g[1]:.3f}",
+                          flush=True)
 
         # ── Apply torque ─────────────────────────────────────────────────
         tau = np.array(jax_tau, dtype=np.float64)
@@ -2151,6 +2329,14 @@ def main():
 
         step += 1
 
+        # ── Video recording: capture frame every 3rd step (~33 fps) ────────
+        if _record_renderer is not None and step % 3 == 0:
+            sx_c = float(mj_data.subtree_com[0][0]) if hasattr(mj_data, 'subtree_com') else float(support_xy[0])
+            sy_c = float(mj_data.subtree_com[0][1]) if hasattr(mj_data, 'subtree_com') else float(support_xy[1])
+            _record_cam.lookat[:] = [sx_c, sy_c, 0.4]
+            _record_renderer.update_scene(mj_data, camera=_record_cam)
+            _record_frames.append(_record_renderer.render().copy())
+
         # ── Viewer sync ──────────────────────────────────────────────────
         if viewer is not None:
             if _teleop is not None:
@@ -2170,6 +2356,31 @@ def main():
     # ══════════════════════════════════════════════════════════════════════
     # END HOT LOOP
     # ══════════════════════════════════════════════════════════════════════
+
+    # ── Write recorded video ─────────────────────────────────────────────
+    if _record_renderer is not None and _record_frames:
+        import shutil as _shutil, subprocess as _sp
+        _record_renderer.close()
+        _vpath = Path(_record_video_path)
+        _vpath.parent.mkdir(parents=True, exist_ok=True)
+        _h, _w = _record_frames[0].shape[:2]
+        if _shutil.which("ffmpeg"):
+            _cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo",
+                    "-pix_fmt", "rgb24", "-s", f"{_w}x{_h}", "-r", "33",
+                    "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-preset", "fast", "-crf", "23", str(_vpath)]
+            _proc = _sp.Popen(_cmd, stdin=_sp.PIPE)
+            for _f in _record_frames:
+                _proc.stdin.write(_f.tobytes())
+            _proc.stdin.close()
+            _proc.wait(timeout=60)
+            print(f"\nVideo saved: {_vpath} ({len(_record_frames)} frames)")
+        else:
+            from PIL import Image as _PILImage
+            _record_frames[0].save(str(_vpath.with_suffix(".gif")), save_all=True,
+                           append_images=[_PILImage.fromarray(f) for f in _record_frames[1:]],
+                           duration=33, loop=0)
+            print(f"\nVideo saved: {_vpath.with_suffix('.gif')} (GIF, {len(_record_frames)} frames)")
 
     # ── Post-simulation viewer hold ─────────────────────────────────────
     if viewer is not None and visual_hold:

@@ -2980,13 +2980,6 @@ def k2_jax_controller_step(
     # this is the correct body-relative height for pitch dynamics (physics FF,
     # pitch eq), decoupled from the world-frame elevation g_mid.
     pitch_schedule_h = 0.5 * (h_eff_l + h_eff_r)
-    # Per-leg wheel torque cap: elevated wheel (high leg → less normal force →
-    # less traction → lower torque cap to prevent slip-spike cycles).
-    # Ground wheel (low h): 5.0 Nm (unchanged). Elevated wheel (high h): 3.0 Nm.
-    _max_tau_wheel_l = 5.0 * k2_jax_scheduled_k_position(
-        h_eff_l, k_nominal=0.6, k_low_max=1.0, z_low=0.370, z_high=0.450)
-    _max_tau_wheel_r = 5.0 * k2_jax_scheduled_k_position(
-        h_eff_r, k_nominal=0.6, k_low_max=1.0, z_low=0.370, z_high=0.450)
 
     # === Step 2: Notch filter ===
     notch_out = notch_b0 * pitch_rate + notch_b1 * notch_x1 + notch_b2 * notch_x2 - notch_a1 * notch_y1 - notch_a2 * notch_y2
@@ -2997,7 +2990,7 @@ def k2_jax_controller_step(
 
     # Height gate for notch blend — uses schedule_h (same as Python's schedule_height_ref),
     # not raw height_ref, so gate tracks actual/filtered height when no command is provided.
-    notch_gate = smoothstep_gate_jax(schedule_h, 0.42, 0.48)
+    notch_gate = smoothstep_gate_jax(pitch_schedule_h, 0.41, 0.47)
     pitch_rate_eff = (1.0 - notch_gate) * pitch_rate + notch_gate * notch_out
 
     # === Phase 3 standalone: compute derived sagittal quantities from raw state ===
@@ -3071,32 +3064,39 @@ def k2_jax_controller_step(
     # preventing the speed collapse that triggers surge/brake cycles.
     # Positive pitch_rate (nose-up→deceleration) increases forward wheel cmd.
     _pitch_wheel_ff = 1.5 * pitch_rate_eff * _terrain_gate  # rad/s wheel cmd adj
-    # Continuous max_position_tau scheduling
+    # Continuous max_position_tau scheduling — body-relative height.
     max_pos_tau = k2_jax_scheduled_k_position(
-        schedule_h,
+        pitch_schedule_h,
         k_nominal=float(_k2_sch.max_position_tau_nominal),   # 4.0
         k_low_max=float(_k2_sch.max_position_tau_low_max),    # 6.0
         z_low=float(_k2_sch.k_position_z_low),                # 0.300
         z_high=float(_k2_sch.k_position_z_high),              # 0.393
     )
+    # Terrain-asymmetry boost: on a one-wheel curb the sagittal
+    # position torque needs more headroom during rapid descent.
+    # Gated by |_t_cmd_vx| so it has zero effect when anchored —
+    # the higher cap during standing causes overshoot and drift.
+    # (_t_busy is not yet defined at this point; use cmd_vx directly.)
+    _driving_gate = _jax_smoothstep01((jnp.abs(_t_cmd_vx) - 0.01) / (0.05 - 0.01))
+    max_pos_tau = max_pos_tau + 5.0 * _terrain_gate * _driving_gate
 
     # === Step 3: Calibrated outer loop + physics FF ===
     # Grids pre-built at module load — safe to reference in JIT as constants
     cal_grid = _calibrated_grid_cache
     ff_grid = _physics_ff_grid_cache
 
-    cal_kp = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["kp_grid"])
-    cal_kd = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["kd_grid"])
-    cal_theta_max = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["theta_max_grid"])
-    cal_deadband = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["deadband_grid"])
-    cal_rate_limit = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["rate_limit_grid"])
-    cal_lowpass_alpha = k2_jax_grid_interpolate(schedule_h, cal_grid["grid_heights"], cal_grid["lowpass_grid"])
+    cal_kp = k2_jax_grid_interpolate(pitch_schedule_h, cal_grid["grid_heights"], cal_grid["kp_grid"])
+    cal_kd = k2_jax_grid_interpolate(pitch_schedule_h, cal_grid["grid_heights"], cal_grid["kd_grid"])
+    cal_theta_max = k2_jax_grid_interpolate(pitch_schedule_h, cal_grid["grid_heights"], cal_grid["theta_max_grid"])
+    cal_deadband = k2_jax_grid_interpolate(pitch_schedule_h, cal_grid["grid_heights"], cal_grid["deadband_grid"])
+    cal_rate_limit = k2_jax_grid_interpolate(pitch_schedule_h, cal_grid["grid_heights"], cal_grid["rate_limit_grid"])
+    cal_lowpass_alpha = k2_jax_grid_interpolate(pitch_schedule_h, cal_grid["grid_heights"], cal_grid["lowpass_grid"])
 
     physics_ff_tau = k2_jax_grid_interpolate(pitch_schedule_h, ff_grid["grid_heights"], ff_grid["tau_eq_ff_grid"])
 
     # Low-band support
     lb_offset, _ = k2_jax_low_band_support_pitch_ref(
-        schedule_h, support_pos_err, 0.320, 0.004, 1.4, 3.0, 1.0)
+        pitch_schedule_h, support_pos_err, 0.320, 0.004, 1.4, 3.0, 1.0)
 
     # Outer loop: update state — active K2 mechanism.
     support_error_rate_raw = jnp.where(
@@ -3452,6 +3452,23 @@ def k2_jax_controller_step(
     tau_sag = tau_sag.at[4].set(_tau_common_boosted + sag_diag["tau_wheel_vel_left"])
     tau_sag = tau_sag.at[9].set(_tau_common_boosted + sag_diag["tau_wheel_vel_right"])
 
+    # Symmetrize wheel-velocity damping on asymmetric terrain (curb).
+    # Must run BEFORE APCR1ND so the override sees the corrected values.
+    # On a one-wheel curb the two wheels spin at different speeds →
+    # per-wheel damping τ=-kw·Δwv produces asymmetric torque → yaw moment.
+    # Blend toward the average velocity; gate on terrain × driving so
+    # flat/ramp are byte-identical and anchored standing is unaffected.
+    _wv_avg0 = 0.5 * (wheel_vel_l + wheel_vel_r)
+    _wv_cmd0 = -_t_cmd_vx / 0.064 + _pitch_wheel_ff
+    _tau_wv_sym0 = -kwheel * (_wv_avg0 - _wv_cmd0)
+    _drive_asym_gate0 = _terrain_gate * _driving_gate
+    _damp_corr_l0 = (_tau_wv_sym0 - sag_diag["tau_wheel_vel_left"]) * _drive_asym_gate0
+    _damp_corr_r0 = (_tau_wv_sym0 - sag_diag["tau_wheel_vel_right"]) * _drive_asym_gate0
+    tau_sag = tau_sag.at[4].add(_damp_corr_l0)
+    tau_sag = tau_sag.at[9].add(_damp_corr_r0)
+    sag_diag["tau_wheel_vel_left"] = sag_diag["tau_wheel_vel_left"] + _damp_corr_l0
+    sag_diag["tau_wheel_vel_right"] = sag_diag["tau_wheel_vel_right"] + _damp_corr_r0
+
     # === Step 4c: APCR1ND wheel damping override (K2 parity fix) ===
     _old_tau_wvl = sag_diag["tau_wheel_vel_left"]
     _old_tau_wvr = sag_diag["tau_wheel_vel_right"]
@@ -3533,7 +3550,7 @@ def k2_jax_controller_step(
 
     # === Step 9: Support feedforward ===
     tau_support_ff = k2_jax_support_feedforward_compute(
-        support_pos_err, schedule_h)
+        support_pos_err, pitch_schedule_h)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Phase 4 Candidate E: Continuous pitch-damping enhancement
@@ -3586,9 +3603,24 @@ def k2_jax_controller_step(
         jnp.abs(hy_div_err),
     )
 
+    # Terrain-asymmetry gate on antisymmetric drift torque.
+    # On a one-wheel curb the drift heading controller applies differential
+    # wheel torque to correct yaw error, but the yaw moment comes from the
+    # terrain (left wheel climbing, right on flat) — not from real drift.
+    # Pushing MORE torque to the slipping curb wheel and BRAKING the
+    # high-traction flat wheel creates positive yaw feedback (measured:
+    # +11°→-85° in 0.2 s).  Gate out the antisymmetric component on
+    # terrain so only symmetric velocity/position damping remains.
+    # Flat/ramp (_terrain_gate=0): byte-identical.
+    _drift_sym = 0.5 * (_tau_drift_l + _tau_drift_r)
+    _drift_anti = 0.5 * (_tau_drift_l - _tau_drift_r)
+    _drift_anti_gated = _drift_anti * (1.0 - _terrain_gate)
+    _tau_drift_l_gated = _drift_sym + _drift_anti_gated
+    _tau_drift_r_gated = _drift_sym - _drift_anti_gated
+
     # Add drift torques to sagittal (wheels) BEFORE composer
-    tau_sag = tau_sag.at[4].add(_tau_drift_l)
-    tau_sag = tau_sag.at[9].add(_tau_drift_r)
+    tau_sag = tau_sag.at[4].add(_tau_drift_l_gated)
+    tau_sag = tau_sag.at[9].add(_tau_drift_r_gated)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Step 9.6: Heading hip-yaw stabilizer (low-authority soft heading impedance)
@@ -3698,12 +3730,6 @@ def k2_jax_controller_step(
     tau_posture_with_yaw = tau_posture_with_yaw.at[5].add(_hz * _homing_tau(_h_kp_hr, qref_hr_r, q_hr_r, qd_hr_r))
     tau_posture_with_yaw = tau_posture_with_yaw.at[1].add(_hz * _homing_tau(_h_kp_hy, qref_hy_l, q_hy_l, qd_hy_l))
     tau_posture_with_yaw = tau_posture_with_yaw.at[6].add(_hz * _homing_tau(_h_kp_hy, qref_hy_r, q_hy_r, qd_hy_r))
-
-    # Per-leg wheel torque cap: elevated wheel (high leg → less normal force →
-    # less traction) gets a lower cap to prevent slip→torque-spike→pitch-surge
-    # cycles during curb driving. Ground-level wheel keeps the full 5.0 Nm cap.
-    tau_sag = tau_sag.at[4].set(jnp.clip(tau_sag[4], -_max_tau_wheel_l, _max_tau_wheel_l))
-    tau_sag = tau_sag.at[9].set(jnp.clip(tau_sag[9], -_max_tau_wheel_r, _max_tau_wheel_r))
 
     tau_sum = tau_sag + tau_posture_with_yaw + tau_lateral + k2_jax_empirical_support_ff()
 

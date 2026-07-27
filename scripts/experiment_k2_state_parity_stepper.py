@@ -86,8 +86,8 @@ def build_jax_controller(height_setup: dict, mj_model, mj_data, variant_name: st
     pitch_x_eq_rad, roll_y_eq_rad, yaw_z_eq = compute_robot_frame_orientation_from_quaternion(quat)
 
     # Support center equilibrium
-    l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel")
-    r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel")
+    l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
+    r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
 
     def get_wheel_xpos(body_id):
         return tuple(float(mj_data.xpos[body_id][i]) for i in range(3))
@@ -224,8 +224,8 @@ def extract_state(mj_model, mj_data, centroidal_estimator, prev_com_pos):
     joint_pos = mj_data.qpos[7:17]
     joint_vel = mj_data.qvel[6:16]
 
-    l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel")
-    r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel")
+    l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
+    r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
 
     def get_wheel_xpos(body_id):
         return tuple(float(mj_data.xpos[body_id][i]) for i in range(3))
@@ -763,8 +763,8 @@ def experiment_f_dedicated_physics_source_torque(height_label: str, steps: int =
     sag_axis_x = float(np.sin(yaw_z_eq))
     sag_axis_y = float(np.cos(yaw_z_eq))
 
-    l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel")
-    r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel")
+    l_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
+    r_wheel_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
     def get_wheel_xpos(body_id):
         return tuple(float(mj_data.xpos[body_id][i]) for i in range(3))
     support_eq = compute_support_center_xy(get_wheel_xpos(l_wheel_id), get_wheel_xpos(r_wheel_id))
