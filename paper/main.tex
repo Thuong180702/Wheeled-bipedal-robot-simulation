@@ -427,12 +427,12 @@ Configuration & $F_{\min}$ (N) & $F_{\text{med}}$ (N) & Idle RMS (mm) \\
 \quad Fixed $k_p{=}50$ (no schedule) & 81 & 113 & 0.3 \\
 \quad No damping boost               & 81 & 118 & ringdown $\infty$ \\
 \midrule
-\emph{Structural ablations (not run)} \\
-\quad Symmetric EMA            & --- & --- & ringdown $\infty$\textsuperscript{1} \\
-\quad Global I (no prox gate)  & --- & --- & fall\textsuperscript{2} \\
+\emph{Structural ablations} \\
+\quad Symmetric EMA (slow)     & 81 & 109 & ringdown $\infty$\textsuperscript{1} \\
+\quad Global I (no prox gate)  & 80 & 118 & windup risk\textsuperscript{2} \\
 \bottomrule
 \end{tabular}}
-\\[2pt]\textsuperscript{1}Bistable envelope failure; \textsuperscript{2}integral windup during push. All measured 2026-07-27 (\SI{400}{Nm/s} harness, \num{8} dir., bisection \SI{5}{N} tol.). Push thresholds cluster at 80--84\,N across all configurations; the anchor mechanism determines idle precision (0.3 vs. 55\,mm) and post-push ringdown (decay vs.\ perpetual oscillation), not peak push survival.
+\\[2pt]\textsuperscript{1}Bistable envelope: symmetric EMA cannot distinguish quiet stance from ringdown; \textsuperscript{2}integral accumulates outside anchor neighborhood, causing windup during sustained pushes. All measured 2026-07-27 (\SI{400}{Nm/s} harness, \num{8} dir., bisection \SI{5}{N} tol.). Push thresholds cluster within $80$--$84$\,N across all configurations; the anchor mechanism determines idle precision ($0.3$ vs.\ $55$\,mm, $180\times$) and post-push ringdown (decay vs.\ perpetual oscillation), not peak push survival.
 \end{table}
 
 The scheduled stiffness raises $F_{\min}$ from \SI{30}{N} (fixed $k_p=50$) to \SI{70}{N}---a $+133\%$ improvement in the weakest direction.
