@@ -1,0 +1,258 @@
+@misc{schulman2017ppo,
+  title  = {Proximal Policy Optimization Algorithms},
+  author = {Schulman, John and Wolski, Filip and Dhariwal, Prafulla and Radford, Alec and Klimov, Oleg},
+  year   = {2017},
+  doi    = {10.48550/arXiv.1707.06347},
+  url    = {https://arxiv.org/abs/1707.06347}
+}
+
+@inproceedings{todorov2012mujoco,
+  title={MuJoCo: A physics engine for model-based control},
+  author={Todorov, Emanuel and Erez, Tom and Tassa, Yuval},
+  booktitle={Proc. IEEE/RSJ Int. Conf. on Intelligent Robots and Systems (IROS)},
+  year={2012},
+  pages={5026--5033},
+  doi={10.1109/IROS.2012.6386109}
+}
+
+@misc{mujoco_mjx_docs,
+  title = {MuJoCo Documentation: MuJoCo XLA (MJX)},
+  url   = {https://mujoco.readthedocs.io/en/latest/mjx.html},
+  note  = {Accessed 2026-03-13}
+}
+
+@software{jax2018github,
+  title  = {{JAX}: composable transformations of {P}ython+{N}um{P}y programs},
+  author = {Bradbury, James and Frostig, Roy and Hawkins, Peter and Johnson, Matthew James and Leary, Chris and Maclaurin, Dougal and Necula, George and Paszke, Adam and VanderPlas, Jake and Wanderman-Milne, Skye and Zhang, Qiao},
+  year   = {2018},
+  url    = {http://github.com/jax-ml/jax}
+}
+
+@software{flax2024github,
+  title  = {{F}lax: A neural network library and ecosystem for {JAX}},
+  author = {Heek, Jonathan and Levskaya, Anselm and Oliver, Avital and others},
+  year   = {2024},
+  url    = {http://github.com/google/flax}
+}
+
+@inproceedings{klemm2019ascento,
+  title={Ascento: A Two-Wheeled Jumping Robot},
+  author={Klemm, Victor and others},
+  booktitle={Proc. IEEE International Conference on Robotics and Automation (ICRA)},
+  year={2019},
+  doi={10.1109/ICRA.2019.8793792}
+}
+
+@article{klemm2020lqrwbc,
+  title={LQR-Assisted Whole-Body Control of a Wheeled Bipedal Robot with Kinematic Loops},
+  author={Klemm, Victor and Morra, Alessandro and Gulich, Lionel and others},
+  journal={IEEE Robotics and Automation Letters},
+  year={2020},
+  volume={5},
+  number={2},
+  pages={3745--3752},
+  doi={10.1109/LRA.2020.2979625}
+}
+
+@article{hsu2022wbrfuzzy,
+  title={Implementation and Control of a Wheeled Bipedal Robot Using a Fuzzy Logic Approach},
+  author={Hsu, Chun-Fei and Chen, Bo-Rui and Lin, Zi-Ling},
+  journal={Actuators},
+  year={2022},
+  volume={11},
+  number={12},
+  pages={357},
+  doi={10.3390/act11120357},
+  url={https://www.mdpi.com/2076-0825/11/12/357}
+}
+
+@article{li2021wheelbiped,
+  title={Dynamic wheeled motion control of wheel-biped transformable robots},
+  author={Li, X. and others},
+  journal={Biomimetic Intelligence and Robotics},
+  year={2021},
+  doi={10.1016/j.birob.2021.100027}
+}
+
+@inproceedings{gae,
+  title={High-Dimensional Continuous Control Using Generalized Advantage Estimation},
+  author={Schulman, John and Moritz, Philipp and Levine, Sergey and Jordan, Michael and Abbeel, Pieter},
+  booktitle={Proc. Int. Conf. Learning Representations (ICLR)},
+  year={2016},
+  url={https://arxiv.org/abs/1506.02438}
+}
+
+@article{welford1962,
+  title={Note on a Method for Calculating Corrected Sums of Squares and Products},
+  author={Welford, B. P.},
+  journal={Technometrics},
+  year={1962},
+  volume={4},
+  number={3},
+  pages={419--420},
+  doi={10.1080/00401706.1962.10490022}
+}
+
+@inproceedings{bengio2009curriculum,
+  title={Curriculum Learning},
+  author={Bengio, Yoshua and Louradour, J{\'e}r{\^o}me and Collobert, Ronan and Weston, Jason},
+  booktitle={Proc. Int. Conf. Machine Learning (ICML)},
+  year={2009},
+  pages={41--48},
+  doi={10.1145/1553374.1553380}
+}
+
+@inproceedings{tobin2017domain,
+  title={Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World},
+  author={Tobin, Josh and Fong, Rachel and Ray, Alex and Schneider, Jonas and Zaremba, Wojciech and Abbeel, Pieter},
+  booktitle={Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)},
+  year={2017},
+  pages={23--30},
+  doi={10.1109/IROS.2017.8202133}
+}
+
+@inproceedings{rudin2022walk,
+  title={Learning to Walk in Minutes Using Massively Parallel Deep Reinforcement Learning},
+  author={Rudin, Nikita and Hoeller, David and Reist, Philipp and Hutter, Marco},
+  booktitle={Proc. Conf. Robot Learning (CoRL)},
+  series={Proceedings of Machine Learning Research},
+  volume={164},
+  pages={91--100},
+  year={2022},
+  url={https://arxiv.org/abs/2109.11978}
+}
+
+@article{lee2020learning,
+  title={Learning Quadrupedal Locomotion over Challenging Terrain},
+  author={Lee, Joonho and Hwangbo, Jemin and Wellhausen, Lorenz and Koltun, Vladlen and Hutter, Marco},
+  journal={Science Robotics},
+  volume={5},
+  number={47},
+  pages={eabc5986},
+  year={2020},
+  doi={10.1126/scirobotics.abc5986}
+}
+
+@inproceedings{kumar2021rma,
+  title={{RMA}: Rapid Motor Adaptation for Legged Robots},
+  author={Kumar, Ashish and Fu, Zipeng and Pathak, Deepak and Malik, Jitendra},
+  booktitle={Proc. Robotics: Science and Systems (RSS)},
+  year={2021},
+  url={https://arxiv.org/abs/2107.04034}
+}
+
+@article{hwangbo2019learning,
+  title={Learning Agile and Dynamic Motor Skills for Legged Robots},
+  author={Hwangbo, Jemin and Lee, Joonho and Dosovitskiy, Alexey and Bellicoso, Dario and Tsounis, Vassilios and Koltun, Vladlen and Hutter, Marco},
+  journal={Science Robotics},
+  volume={4},
+  number={26},
+  pages={eaau5872},
+  year={2019},
+  doi={10.1126/scirobotics.aau5872}
+}
+
+@article{miki2022wild,
+  title={Learning Robust Perceptive Locomotion for Quadrupedal Robots in the Wild},
+  author={Miki, Takahiro and Lee, Joonho and Hwangbo, Jemin and Wellhausen, Lorenz and Koltun, Vladlen and Hutter, Marco},
+  journal={Science Robotics},
+  volume={7},
+  number={62},
+  pages={eabk2822},
+  year={2022},
+  doi={10.1126/scirobotics.abk2822}
+}
+
+@article{lee2024robustnavigation,
+  title={Learning Robust Autonomous Navigation and Locomotion for Wheeled-Legged Robots},
+  author={Lee, Joonho and Bjelonic, Marko and Reske, Alexander and Wellhausen, Lorenz and Marban, Takahiro and Hutter, Marco},
+  journal={Science Robotics},
+  volume={9},
+  year={2024},
+  url={https://arxiv.org/abs/2405.01792}
+}
+
+@inproceedings{vollenweider2023advancedskills,
+  title={Advanced Skills through Multiple Adversarial Motion Priors in Reinforcement Learning},
+  author={Vollenweider, Eric and Bjelonic, Marko and Klemm, Victor and Arm, Philip and de Viragh, Yvain and Hutter, Marco},
+  booktitle={Proc. IEEE Int. Conf. Robotics and Automation (ICRA)},
+  pages={5120--5126},
+  year={2023},
+  doi={10.1109/ICRA48891.2023.10161097}
+}
+
+@inproceedings{chamorro2024stairclimbing,
+  title={Reinforcement Learning for Blind Stair Climbing with Legged and Wheeled-Legged Robots},
+  author={Chamorro, Ignacio and Arrizabalaga, Jon and Hutter, Marco},
+  booktitle={Proc. IEEE Int. Conf. Robotics and Automation (ICRA)},
+  year={2024},
+  url={https://arxiv.org/abs/2402.06143}
+}
+
+@inproceedings{whleaper2024,
+  title={{Whleaper}: A 10-{DOF} Flexible Bipedal Wheeled Robot},
+  author={Zhu, Junjie and Zhao, Shijie and Yoshida, Eiichi},
+  booktitle={Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)},
+  pages={11272--11277},
+  year={2024}
+}
+
+@inproceedings{zhu2022hierarchical,
+  title={Reinforcement Learning Based Hierarchical Control for Path Tracking of a Wheeled Bipedal Robot with Sim-to-Real Framework},
+  author={Zhu, Junjie and Hayashibe, Mitsuhiro},
+  booktitle={Proc. IEEE/SICE Int. Symp. System Integration (SII)},
+  year={2022},
+  doi={10.1109/SII52469.2022.9708882}
+}
+
+@article{diablo2024,
+  title={{DIABLO}: A 6-{DoF} Wheeled Bipedal Robot Composed Entirely of Direct-Drive Joints},
+  author={Liu, Shengqi and others},
+  journal={arXiv preprint arXiv:2407.21500},
+  year={2024},
+  url={https://arxiv.org/abs/2407.21500}
+}
+
+@inproceedings{portelas2020acl,
+  title={Automatic Curriculum Learning for Deep {RL}: A Short Survey},
+  author={Portelas, R{\'e}my and Colas, C{\'e}dric and Weng, Lilian and Hofmann, Katja and Oudeyer, Pierre-Yves},
+  booktitle={Proc. Int. Joint Conf. Artificial Intelligence (IJCAI)},
+  year={2020},
+  url={https://arxiv.org/abs/2003.04664}
+}
+
+@inproceedings{portelas2020teacher,
+  title={Teacher Algorithms for Curriculum Learning of Deep {RL} in Continuously Parameterized Environments},
+  author={Portelas, R{\'e}my and Colas, C{\'e}dric and Hofmann, Katja and Oudeyer, Pierre-Yves},
+  booktitle={Proc. Conf. Robot Learning (CoRL)},
+  series={Proceedings of Machine Learning Research},
+  volume={100},
+  pages={835--853},
+  year={2020},
+  url={https://arxiv.org/abs/1910.07224}
+}
+
+@article{wang2019poet,
+  title={Paired Open-Ended Trailblazer ({POET}): Endlessly Generating Increasingly Complex and Diverse Learning Environments and Their Solutions},
+  author={Wang, Rui and Lehman, Joel and Clune, Jeff and Stanley, Kenneth O.},
+  journal={arXiv preprint arXiv:1901.01753},
+  year={2019},
+  url={https://arxiv.org/abs/1901.01753}
+}
+
+@inproceedings{peng2018simtoreal,
+  title={Sim-to-Real Transfer of Robotic Control with Dynamics Randomization},
+  author={Peng, Xue Bin and Andrychowicz, Marcin and Zaremba, Wojciech and Abbeel, Pieter},
+  booktitle={Proc. IEEE Int. Conf. Robotics and Automation (ICRA)},
+  pages={3803--3810},
+  year={2018},
+  doi={10.1109/ICRA.2018.8460528}
+}
+
+@inproceedings{tan2018simtoreal,
+  title={Sim-to-Real: Learning Agile Locomotion for Quadruped Robots},
+  author={Tan, Jie and Zhang, Tingnan and Coumans, Erwin and Iscen, Atil and Bai, Yunfei and Hafner, Danijar and Bohez, Steven and Vanhoucke, Vincent},
+  booktitle={Proc. Robotics: Science and Systems (RSS)},
+  year={2018},
+  url={https://arxiv.org/abs/1804.10332}
+}
