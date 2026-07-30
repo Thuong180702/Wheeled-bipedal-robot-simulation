@@ -1,0 +1,83 @@
+# ============================================================
+# configs/baseline_full_lqr.yaml
+# ============================================================
+# Configuration for the FULL-STATE LQR baseline.
+#
+# This controller derives LQR gains from finite-difference linearization
+# of the complete 10-DOF MuJoCo plant at standing equilibrium — NOT a
+# simplified 4-state TWIP model.  It addresses the limitation that prior
+# LQR baselines used only a simplified analytical model.
+#
+# Used by: scripts/eval_balance.py --controller baseline_full_lqr
+# ============================================================
+
+# --- Environment ---
+task:
+  env: BalanceEnv
+  initial_min_height: 0.40
+
+# --- Low-level PID (ENABLED — normalized targets through PID servo) ---
+# Same PID path as baseline_lqr.yaml for apples-to-apples comparison.
+# The only difference is the LQR gain derivation (full 10-DOF FD vs. 4-state TWIP).
+low_level_pid:
+  enabled: true
+  action_smoothing_alpha: 0.4       # match balance.yaml
+  anti_windup_limit: 0.4
+  wheel_vel_limit: 20.0
+  kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+  ki: [0.8,  0.4,  1.0,  1.0,  0.1, 0.8,  0.4,  1.0,  1.0,  0.1]
+  kd: [3.0,  2.0,  4.0,  4.0,  0.0, 3.0,  2.0,  4.0,  4.0,  0.0]
+  action_delay_steps: 0
+
+# --- Sensor noise (disabled for nominal eval) ---
+sensor_noise:
+  enabled: false
+  lin_vel_mode: "clean"
+  lin_vel_std: 0.0
+  ang_vel_std: 0.0
+  gravity_std: 0.0
+  joint_pos_std: 0.0
+  joint_vel_std: 0.0
+
+# --- Termination (matches BalanceEnv defaults) ---
+termination:
+  max_tilt_rad: 0.8
+  min_height: 0.30
+
+# --- Full-State LQR controller parameters ---
+# The controller performs finite-difference linearization of the full
+# 10-DOF MuJoCo plant at the standing equilibrium, then solves the
+# continuous-time algebraic Riccati equation for a 25-state LQR.
+#
+# State (25-dim):
+#   0-1:   pitch, pitch_rate
+#   2-3:   roll, roll_rate
+#   4-5:   fwd_vel, yaw_rate
+#   6-15:  joint positions (10)
+#   16-25: joint velocities (10)
+#   22-24: fwd_pos_drift, yaw_error, pitch_error_int  (integrated)
+#
+# Control (10-dim): actuator torques → normalized targets through PID servo.
+baseline_full_lqr:
+  # Finite-difference step sizes
+  eps_state: 0.0001    # state perturbation [rad or rad/s]
+  eps_ctrl: 0.01        # control perturbation [Nm]
+
+  # Q diagonal weights (29-dim state)
+  q_pitch: 500.0        # pitch stabilisation (primary)
+  q_pitch_rate: 50.0    # pitch rate damping
+  q_roll: 300.0         # roll stabilisation
+  q_roll_rate: 30.0     # roll rate damping
+  q_fwd_vel: 100.0      # forward velocity regulation
+  q_fwd_pos: 50.0       # position drift penalty
+  q_yaw_err: 200.0      # yaw error regulation
+  q_yaw_rate: 50.0      # yaw rate damping
+  q_joint_pos: 10.0     # joint posture (loose — IK handles target)
+  q_joint_vel: 5.0      # joint velocity damping
+  q_pitch_int: 100.0    # pitch error integral
+
+  # R diagonal (10-dim input, higher = softer gains)
+  r_global: 10.0         # global control penalty scale
+  r_wheel_scale: 0.5     # wheels are cheap to actuate
+  r_hr_yaw_scale: 1.0   # hip roll/yaw moderate
+  r_hp_knee_scale: 0.2   # hip pitch/knee powerful actuators

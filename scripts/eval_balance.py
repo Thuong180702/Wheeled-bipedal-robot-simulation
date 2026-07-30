@@ -1408,7 +1408,13 @@ def evaluate(
         help=(
             "Controller to evaluate. Choices: 'rl' (default, uses checkpoint), "
             "'baseline_lqr' (classical LQR balance baseline; no checkpoint needed), "
-            "'lqr_ik' (height-dependent LQR/IK prior for residual RL; no checkpoint needed)."
+            "'baseline_lqr_aw' (LQR + integral anti-windup baseline; no checkpoint needed), "
+            "'baseline_lqr_torque' (FAIR LQR — old feedback structure, direct torque space; no checkpoint needed), "
+            "'baseline_coupled_lqr' (coupled 6-state 3D LQR baseline; no checkpoint needed), "
+            "'baseline_pi_aw' (PI + anti-windup baseline; no checkpoint needed), "
+            "'lqr_ik' (height-dependent LQR/IK prior for residual RL; no checkpoint needed), "
+            "'baseline_full_lqr' (full-state LQR from FD linearization — research artifact), "
+            "'baseline_coupled_lqr_torque' (6-state coupled 3D LQR — direct torque, no checkpoint needed)."
         ),
     ),
     baseline_config: str = typer.Option(
@@ -1450,8 +1456,8 @@ def evaluate(
     expanded_scenarios = _expand_scenarios(scenarios)
 
     # Validate controller choice
-    if controller not in ("rl", "baseline_lqr", "lqr_ik"):
-        console.print(f"[red]Unknown controller '{controller}'. Choices: rl, baseline_lqr, lqr_ik[/red]")
+    if controller not in ("rl", "baseline_lqr", "baseline_lqr_aw", "baseline_lqr_torque", "baseline_coupled_lqr", "baseline_pi_aw", "lqr_ik", "baseline_full_lqr", "baseline_coupled_lqr_torque"):
+        console.print(f"[red]Unknown controller '{controller}'. Choices: rl, baseline_lqr, baseline_lqr_aw, baseline_lqr_torque, baseline_coupled_lqr, baseline_pi_aw, lqr_ik, baseline_full_lqr, baseline_coupled_lqr_torque[/red]")
         raise typer.Exit(1)
 
     if controller == "rl" and not checkpoint:
@@ -1486,6 +1492,12 @@ def evaluate(
     all_results: list[ScenarioMetrics] = []
     # Used to inject LQR metadata into JSON output (set in baseline path below)
     _lqr_metadata: dict | None = None
+    _lqr_aw_metadata: dict | None = None
+    _lqr_torque_metadata: dict | None = None
+    _lqr_coupled_metadata: dict | None = None
+    _pi_aw_metadata: dict | None = None
+    _lqr_ik_metadata: dict | None = None
+    _lqr_full_metadata: dict | None = None
 
     # ── Baseline LQR controller path ──────────────────────────────────────────
     if controller == "baseline_lqr":
@@ -1561,6 +1573,522 @@ def evaluate(
             all_results.append(metrics)
 
         console.print(_rich_table(all_results, title="Results — LQR Baseline"))
+
+    # ── LQR + Integral Anti-Windup controller path ────────────────────────────
+    if controller == "baseline_lqr_aw":
+        from wheeled_biped.controllers import LQRIntegralAWController
+        from wheeled_biped.utils.config import get_model_path
+
+        bl_aw_cfg_path = PROJECT_ROOT / baseline_config
+        if not bl_aw_cfg_path.exists():
+            console.print(f"[red]Baseline config not found: {bl_aw_cfg_path}[/red]")
+            raise typer.Exit(1)
+
+        with open(bl_aw_cfg_path) as f:
+            bl_aw_cfg = yaml.safe_load(f)
+
+        # Validate obs mode: LQR requires 42-dim obs
+        _bl_aw_lv_mode = bl_aw_cfg.get("sensor_noise", {}).get("lin_vel_mode", "clean")
+        if _bl_aw_lv_mode == "disabled":
+            console.print(
+                "[red]LQR+AW baseline requires lin_vel_mode='clean' or 'noisy' (42-dim obs), "
+                f"but {baseline_config} has lin_vel_mode='disabled'. "
+                "Update baseline_lqr_anti_windup.yaml.[/red]"
+            )
+            raise typer.Exit(1)
+
+        bl_aw_params = bl_aw_cfg.get("baseline_lqr_aw", {})
+        lqr_aw_controller = LQRIntegralAWController(
+            model_path=str(get_model_path()),
+            config=bl_aw_cfg,
+            lqr_q=tuple(bl_aw_params.get("lqr_q", [10.0, 2.0, 3.0, 0.3])),
+            lqr_r=float(bl_aw_params.get("lqr_r", 0.8)),
+            kp_roll=float(bl_aw_params.get("kp_roll", 0.4)),
+            kd_roll=float(bl_aw_params.get("kd_roll", 0.08)),
+            kp_yaw=float(bl_aw_params.get("kp_yaw", 2.5)),
+            kd_yaw=float(bl_aw_params.get("kd_yaw", 0.2)),
+            ki_lean=float(bl_aw_params.get("ki_lean", 2.0)),
+            i_limit_lean=float(bl_aw_params.get("i_limit_lean", 3.0)),
+        )
+        console.print(f"[bold]LQR + Integral AW Baseline[/bold] gains: {lqr_aw_controller.gains_info()}\n")
+
+        _lqr_aw_metadata = {
+            "gains": lqr_aw_controller.gains_info(),
+            "is_stateful": True,
+            "lin_vel_mode": _bl_aw_lv_mode,
+            "anti_windup_type": "conditional_integration",
+            "integral_channel": "pitch/lean error → additive wheel velocity",
+            "assumptions": (
+                "Requires lin_vel_mode='clean' or 'noisy' (42-dim obs). "
+                "Same LQR/IK/roll/yaw gains as baseline_lqr — only difference "
+                "is the symmetric integral term with conditional-integration AW. "
+                "Stateful: integrates forward position drift + pitch error integral. "
+                "The integral anti-windup uses conditional integration: integration "
+                "freezes when wheel velocity command saturates. "
+                "This is the standard industrial strategy that ACC's asymmetric "
+                "anchor mechanism (fast-attack τ≈30ms, slow-release τ≈1.5s) "
+                "aims to improve upon."
+            ),
+        }
+
+        bl_aw_mj_model = _load_mj_model(bl_aw_cfg)
+        ckpt_label_bl_aw = "baseline_lqr_aw"
+
+        for scenario in expanded_scenarios:
+            console.print(f"  [cyan]→[/cyan] {scenario} ({num_episodes} episodes) …")
+            metrics = _run_scenario(
+                scenario=scenario,
+                checkpoint_path=ckpt_label_bl_aw,
+                mj_model=bl_aw_mj_model,
+                params=None,
+                obs_rms=None,
+                model=None,
+                config=bl_aw_cfg,
+                num_episodes=num_episodes,
+                num_steps=num_steps,
+                seeds=seeds,
+                controller=lqr_aw_controller,
+            )
+            if no_binary_search:
+                metrics.max_recoverable_push_n = float("nan")
+            all_results.append(metrics)
+
+        console.print(_rich_table(all_results, title="Results — LQR + Integral AW"))
+
+    # ── Fair LQR Torque controller path ───────────────────────────────────────
+    if controller == "baseline_lqr_torque":
+        from wheeled_biped.controllers.fair_lqr_torque import FairLQRTorqueController
+        from wheeled_biped.utils.config import get_model_path
+
+        # Auto-select torque config if user didn't override the default
+        if baseline_config == "configs/baseline_lqr.yaml":
+            bl_tq_cfg_path = PROJECT_ROOT / "configs" / "baseline_lqr_torque.yaml"
+        else:
+            bl_tq_cfg_path = PROJECT_ROOT / baseline_config
+        if not bl_tq_cfg_path.exists():
+            console.print(f"[red]Baseline torque config not found: {bl_tq_cfg_path}[/red]")
+            raise typer.Exit(1)
+
+        with open(bl_tq_cfg_path) as f:
+            bl_tq_cfg = yaml.safe_load(f)
+
+        # Validate obs mode: LQR torque requires 42-dim obs
+        _bl_tq_lv_mode = bl_tq_cfg.get("sensor_noise", {}).get("lin_vel_mode", "clean")
+        if _bl_tq_lv_mode == "disabled":
+            console.print(
+                "[red]Fair LQR torque baseline requires lin_vel_mode='clean' or 'noisy' (42-dim obs), "
+                f"but {baseline_config} has lin_vel_mode='disabled'. "
+                "Update baseline_lqr_torque.yaml.[/red]"
+            )
+            raise typer.Exit(1)
+
+        # Verify PID is disabled (required for direct torque operation)
+        _bl_tq_pid_enabled = bl_tq_cfg.get("low_level_pid", {}).get("enabled", True)
+        if _bl_tq_pid_enabled:
+            console.print(
+                "[yellow]Warning: low_level_pid.enabled=true in baseline_lqr_torque.yaml. "
+                "Fair LQR torque controller expects direct torque mode (PID disabled). "
+                "The PID layer will add servo lag, negating the fairness improvement. "
+                "Set low_level_pid.enabled=false for proper comparison.[/yellow]"
+            )
+
+        bl_tq_params = bl_tq_cfg.get("baseline_lqr_torque", {})
+        lqr_torque_controller = FairLQRTorqueController(
+            model_path=str(get_model_path()),
+            config=bl_tq_cfg,
+            lqr_q=tuple(bl_tq_params.get("lqr_q", [10.0, 2.0, 3.0, 0.3])),
+            lqr_r=float(bl_tq_params.get("lqr_r", 0.8)),
+            kp_roll=float(bl_tq_params.get("kp_roll", 55.0)),
+            kd_roll=float(bl_tq_params.get("kd_roll", 5.5)),
+            ki_roll=float(bl_tq_params.get("ki_roll", 0.0)),
+            kp_yaw=float(bl_tq_params.get("kp_yaw", 2.5)),
+            kd_yaw=float(bl_tq_params.get("kd_yaw", 0.25)),
+            tau_s=float(bl_tq_params.get("tau_s", 0.0)),
+        )
+        console.print(f"[bold]Fair LQR Torque Baseline[/bold] gains: {lqr_torque_controller.gains_info()}\n")
+
+        _lqr_torque_metadata = {
+            "gains": lqr_torque_controller.gains_info(),
+            "is_stateful": True,
+            "action_space": "direct_torque",
+            "pid_enabled": _bl_tq_pid_enabled,
+            "lin_vel_mode": _bl_tq_lv_mode,
+            "assumptions": (
+                "Operates in DIRECT TORQUE SPACE — same action space as ACC. "
+                "Coupled 3-D LQR: sagittal TWIP + lateral inverted pendulum + yaw double integrator, "
+                "jointly optimised through one Riccati solve. "
+                "Uses same torque limits and 400 Nm/s rate limit as ACC. "
+                "Requires lin_vel_mode='clean' or 'noisy' (42-dim obs). "
+                "Stateful: integrates forward position drift per episode. "
+                "This is the FAIR baseline for ACC comparison."
+            ),
+        }
+
+        bl_tq_mj_model = _load_mj_model(bl_tq_cfg)
+        ckpt_label_bl_tq = "baseline_lqr_torque"
+
+        for scenario in expanded_scenarios:
+            console.print(f"  [cyan]→[/cyan] {scenario} ({num_episodes} episodes) …")
+            metrics = _run_scenario(
+                scenario=scenario,
+                checkpoint_path=ckpt_label_bl_tq,
+                mj_model=bl_tq_mj_model,
+                params=None,
+                obs_rms=None,
+                model=None,
+                config=bl_tq_cfg,
+                num_episodes=num_episodes,
+                num_steps=num_steps,
+                seeds=seeds,
+                controller=lqr_torque_controller,
+            )
+            if no_binary_search:
+                metrics.max_recoverable_push_n = float("nan")
+            all_results.append(metrics)
+
+        console.print(_rich_table(all_results, title="Results — Fair LQR Torque"))
+
+    # ── Coupled 6-state 3D LQR controller path ─────────────────────────────
+    if controller == "baseline_coupled_lqr":
+        from wheeled_biped.controllers.coupled_lqr_3d import CoupledLQR3DBalanceController
+        from wheeled_biped.utils.config import get_model_path
+
+        if baseline_config == "configs/baseline_lqr.yaml":
+            bl_cl_cfg_path = PROJECT_ROOT / "configs" / "baseline_coupled_lqr.yaml"
+        else:
+            bl_cl_cfg_path = PROJECT_ROOT / baseline_config
+        if not bl_cl_cfg_path.exists():
+            console.print(f"[red]Coupled LQR config not found: {bl_cl_cfg_path}[/red]")
+            raise typer.Exit(1)
+
+        with open(bl_cl_cfg_path) as f:
+            bl_cl_cfg = yaml.safe_load(f)
+
+        _bl_cl_lv_mode = bl_cl_cfg.get("sensor_noise", {}).get("lin_vel_mode", "clean")
+        if _bl_cl_lv_mode == "disabled":
+            console.print(
+                "[red]Coupled LQR baseline requires lin_vel_mode='clean' or 'noisy' (42-dim obs), "
+                f"but {bl_cl_cfg_path} has lin_vel_mode='disabled'. "
+                "Update baseline_coupled_lqr.yaml.[/red]"
+            )
+            raise typer.Exit(1)
+
+        bl_cl_params = bl_cl_cfg.get("coupled_lqr", {})
+        coupled_lqr_controller = CoupledLQR3DBalanceController(
+            model_path=str(get_model_path()),
+            config=bl_cl_cfg,
+            lqr_q=tuple(bl_cl_params.get("lqr_q", [10.0, 2.0, 3.0, 0.5, 3.0, 0.3])),
+            lqr_r=tuple(bl_cl_params.get("lqr_r", [0.8, 1.0])),
+        )
+        console.print(
+            f"[bold]Coupled 6-State 3D LQR Baseline[/bold]\n"
+            f"  States: pitch, pitch_rate, roll, roll_rate, fwd_vel, fwd_pos_drift\n"
+            f"  LQR Inputs (2): wheel_common_vel, hip_roll_angle\n"
+            f"  Yaw: separate PD (kp=2.5, kd=0.2)\n"
+            f"  Action path: PID servo (same as original LQR baseline)\n"
+            f"  Gains K (2×6):\n{coupled_lqr_controller.gains_info()['lqr_gains_K']}\n"
+        )
+
+        _lqr_coupled_metadata = {
+            "gains": coupled_lqr_controller.gains_info(),
+            "is_stateful": True,
+            "lin_vel_mode": _bl_cl_lv_mode,
+            "state_dim": 6,
+            "input_dim": 2,
+            "action_path": "PID_servo",
+            "assumptions": (
+                "Requires lin_vel_mode='clean' or 'noisy' (42-dim obs). "
+                "Coupled 6-state 3D LQR jointly models pitch, roll, and yaw "
+                "with a single optimal gain matrix.  Direct torque output "
+                "bypasses the PID servo layer (~0.25s lag).  Rate-limited "
+                "at 400 Nm/s — same as ACC.  Stateful: integrates forward "
+                "position drift per episode."
+            ),
+        }
+
+        bl_cl_mj_model = _load_mj_model(bl_cl_cfg)
+        ckpt_label_bl_cl = "baseline_coupled_lqr"
+
+        for scenario in expanded_scenarios:
+            console.print(f"  [cyan]→[/cyan] {scenario} ({num_episodes} episodes) …")
+            metrics = _run_scenario(
+                scenario=scenario,
+                checkpoint_path=ckpt_label_bl_cl,
+                mj_model=bl_cl_mj_model,
+                params=None,
+                obs_rms=None,
+                model=None,
+                config=bl_cl_cfg,
+                num_episodes=num_episodes,
+                num_steps=num_steps,
+                seeds=seeds,
+                controller=coupled_lqr_controller,
+            )
+            if no_binary_search:
+                metrics.max_recoverable_push_n = float("nan")
+            all_results.append(metrics)
+
+        console.print(_rich_table(all_results, title="Results — Coupled 6-State 3D LQR"))
+
+    # ── Full-State LQR (FD-linearized) controller path ─────────────────────
+    if controller == "baseline_full_lqr":
+        from wheeled_biped.controllers.full_lqr import FullStateLQRController
+        from wheeled_biped.utils.config import get_model_path
+
+        # Auto-select full_lqr config if user didn't override the default
+        if baseline_config == "configs/baseline_lqr.yaml":
+            bl_fl_cfg_path = PROJECT_ROOT / "configs" / "baseline_full_lqr.yaml"
+        else:
+            bl_fl_cfg_path = PROJECT_ROOT / baseline_config
+        if not bl_fl_cfg_path.exists():
+            console.print(f"[red]Full LQR config not found: {bl_fl_cfg_path}[/red]")
+            raise typer.Exit(1)
+
+        with open(bl_fl_cfg_path) as f:
+            bl_fl_cfg = yaml.safe_load(f)
+
+        # Validate obs mode: full LQR requires 42-dim obs
+        _bl_fl_lv_mode = bl_fl_cfg.get("sensor_noise", {}).get("lin_vel_mode", "clean")
+        if _bl_fl_lv_mode == "disabled":
+            console.print(
+                "[red]Full-State LQR baseline requires lin_vel_mode='clean' or 'noisy' (42-dim obs), "
+                f"but {bl_fl_cfg_path} has lin_vel_mode='disabled'. "
+                "Update baseline_full_lqr.yaml.[/red]"
+            )
+            raise typer.Exit(1)
+
+        bl_fl_params = bl_fl_cfg.get("baseline_full_lqr", {})
+        full_lqr_controller = FullStateLQRController(
+            model_path=str(get_model_path()),
+            config=bl_fl_cfg,
+            eps_state=float(bl_fl_params.get("eps_state", 1e-4)),
+            eps_ctrl=float(bl_fl_params.get("eps_ctrl", 0.01)),
+            q_config=bl_fl_params,
+        )
+        console.print(f"[bold]Full-State LQR Baseline[/bold] gains: {full_lqr_controller.gains_info()}\n")
+
+        _lqr_full_metadata = {
+            "gains": full_lqr_controller.gains_info(),
+            "is_stateful": True,
+            "lin_vel_mode": _bl_fl_lv_mode,
+            "linearization": "finite-difference, full 10-DOF MuJoCo plant, 25-state LQR",
+            "assumptions": (
+                "Requires lin_vel_mode='clean' or 'noisy' (42-dim obs). "
+                "LQR gains derived from central-difference finite-difference linearization "
+                "of the complete 10-DOF MuJoCo plant at standing equilibrium (0.65 m). "
+                "State: 22-dim open-loop (pitch, roll, lin_vel, ang_vel, joint_pos, joint_vel) "
+                "+ 3 integrated (fwd_pos_drift, yaw_error, pitch_error_int). "
+                "Output: normalized position/velocity targets through PID servo layer "
+                "(same path as baseline_lqr for apples-to-apples comparison). "
+                "Single-point linearization; height scheduling deferred."
+            ),
+        }
+
+        bl_fl_mj_model = _load_mj_model(bl_fl_cfg)
+        ckpt_label_bl_fl = "baseline_full_lqr"
+
+        for scenario in expanded_scenarios:
+            console.print(f"  [cyan]→[/cyan] {scenario} ({num_episodes} episodes) …")
+            metrics = _run_scenario(
+                scenario=scenario,
+                checkpoint_path=ckpt_label_bl_fl,
+                mj_model=bl_fl_mj_model,
+                params=None,
+                obs_rms=None,
+                model=None,
+                config=bl_fl_cfg,
+                num_episodes=num_episodes,
+                num_steps=num_steps,
+                seeds=seeds,
+                controller=full_lqr_controller,
+            )
+            if no_binary_search:
+                metrics.max_recoverable_push_n = float("nan")
+            all_results.append(metrics)
+
+        console.print(_rich_table(all_results, title="Results — Full-State LQR (FD-linearized)"))
+
+    # ── Coupled 6-State 3D LQR — Direct Torque path ───────────────────────
+    if controller == "baseline_coupled_lqr_torque":
+        from wheeled_biped.controllers.coupled_lqr_3d_torque import CoupledLQR3DTorqueController
+        from wheeled_biped.utils.config import get_model_path
+
+        bl_clt_cfg_path = PROJECT_ROOT / "configs" / "baseline_coupled_lqr_torque.yaml"
+        if not bl_clt_cfg_path.exists():
+            console.print(f"[red]Coupled LQR Torque config not found: {bl_clt_cfg_path}[/red]")
+            raise typer.Exit(1)
+
+        with open(bl_clt_cfg_path) as f:
+            bl_clt_cfg = yaml.safe_load(f)
+
+        _bl_clt_lv_mode = bl_clt_cfg.get("sensor_noise", {}).get("lin_vel_mode", "clean")
+        if _bl_clt_lv_mode == "disabled":
+            console.print(
+                "[red]Coupled LQR Torque baseline requires lin_vel_mode='clean' or 'noisy' (42-dim obs).[/red]"
+            )
+            raise typer.Exit(1)
+
+        # Warn if PID is not disabled (direct torque needs PID off)
+        _clt_pid_enabled = bl_clt_cfg.get("low_level_pid", {}).get("enabled", True)
+        if _clt_pid_enabled:
+            console.print(
+                "[yellow]Warning: low_level_pid.enabled=true in baseline_coupled_lqr_torque.yaml. "
+                "Direct torque mode requires PID disabled for fair comparison.[/yellow]"
+            )
+
+        bl_clt_params = bl_clt_cfg.get("baseline_coupled_lqr_torque", {})
+        coupled_lqr_torque_controller = CoupledLQR3DTorqueController(
+            model_path=str(get_model_path()),
+            config=bl_clt_cfg,
+            lqr_q=tuple(bl_clt_params.get("lqr_q", [10.0, 1.0, 3.0, 0.3, 3.0, 0.3])),
+            lqr_r=tuple(bl_clt_params.get("lqr_r", [0.005, 0.002])),
+            kp_leg=tuple(bl_clt_params.get("kp_leg", [55, 40, 70, 70, 0, 55, 40, 70, 70, 0])),
+            kd_leg=tuple(bl_clt_params.get("kd_leg", [3, 2, 4, 4, 0, 3, 2, 4, 4, 0])),
+            kp_yaw=float(bl_clt_params.get("kp_yaw", 2.5)),
+            kd_yaw=float(bl_clt_params.get("kd_yaw", 0.25)),
+        )
+        console.print(f"[bold]Coupled 6-State LQR (Direct Torque)[/bold] gains: {coupled_lqr_torque_controller.gains_info()}\n")
+
+        _lqr_full_metadata = {
+            "gains": coupled_lqr_torque_controller.gains_info(),
+            "is_stateful": True,
+            "lin_vel_mode": _bl_clt_lv_mode,
+            "assumptions": (
+                "6-state coupled pitch-roll LQR with direct torque output. "
+                "Analytic A/B matrices (pendulum dynamics). "
+                "Yaw handled by separate PD. "
+                "Leg posture via PD position control. "
+                "Same state-space as CoupledLQR3DBalanceController but "
+                "direct torque actuation removes ~0.25s PID servo lag."
+            ),
+        }
+
+        bl_clt_mj_model = _load_mj_model(bl_clt_cfg)
+        ckpt_label_bl_clt = "baseline_coupled_lqr_torque"
+
+        for scenario in expanded_scenarios:
+            console.print(f"  [cyan]→[/cyan] {scenario} ({num_episodes} episodes) …")
+            metrics = _run_scenario(
+                scenario=scenario,
+                checkpoint_path=ckpt_label_bl_clt,
+                mj_model=bl_clt_mj_model,
+                params=None,
+                obs_rms=None,
+                model=None,
+                config=bl_clt_cfg,
+                num_episodes=num_episodes,
+                num_steps=num_steps,
+                seeds=seeds,
+                controller=coupled_lqr_torque_controller,
+            )
+            if no_binary_search:
+                metrics.max_recoverable_push_n = float("nan")
+            all_results.append(metrics)
+
+        console.print(_rich_table(all_results, title="Results — Coupled 6-State LQR (Direct Torque)"))
+
+    # ── PI + AW baseline controller path ─────────────────────────────────────
+    if controller == "baseline_pi_aw":
+        from wheeled_biped.controllers.pi_aw_baseline import PiAwController
+        from wheeled_biped.utils.config import get_model_path
+
+        # Auto-select PI+AW config if user didn't override the default
+        if baseline_config == "configs/baseline_lqr.yaml":
+            bl_pi_cfg_path = PROJECT_ROOT / "configs" / "baseline_pi_aw.yaml"
+        else:
+            bl_pi_cfg_path = PROJECT_ROOT / baseline_config
+        if not bl_pi_cfg_path.exists():
+            console.print(f"[red]PI+AW config not found: {bl_pi_cfg_path}[/red]")
+            raise typer.Exit(1)
+
+        with open(bl_pi_cfg_path) as f:
+            bl_pi_cfg = yaml.safe_load(f)
+
+        # Validate obs mode: PI+AW requires 42-dim obs
+        _bl_pi_lv_mode = bl_pi_cfg.get("sensor_noise", {}).get("lin_vel_mode", "clean")
+        if _bl_pi_lv_mode == "disabled":
+            console.print(
+                "[red]PI+AW baseline requires lin_vel_mode='clean' or 'noisy' (42-dim obs), "
+                f"but {bl_pi_cfg_path} has lin_vel_mode='disabled'. "
+                "Update baseline_pi_aw.yaml.[/red]"
+            )
+            raise typer.Exit(1)
+
+        # Validate PID is disabled (PI+AW uses direct torque)
+        _bl_pi_pid_enabled = bl_pi_cfg.get("low_level_pid", {}).get("enabled", True)
+        if _bl_pi_pid_enabled:
+            console.print(
+                "[yellow]Warning: low_level_pid.enabled=true in baseline_pi_aw.yaml. "
+                "PI+AW operates in direct torque space; PID servo should be disabled "
+                "for fair comparison with ACC.[/yellow]"
+            )
+
+        bl_pi_params = bl_pi_cfg.get("baseline_pi_aw", {})
+        pi_aw_controller = PiAwController(
+            model_path=str(get_model_path()),
+            config=bl_pi_cfg,
+            aw_mode=str(bl_pi_params.get("aw_mode", "conditional")),
+            ki_pos=float(bl_pi_params.get("ki_pos", 8.0)),
+            i_limit=float(bl_pi_params.get("i_limit", 5.0)),
+            lqr_q=tuple(bl_pi_params.get("lqr_q", [10.0, 2.0, 3.0, 0.3])),
+            lqr_r=float(bl_pi_params.get("lqr_r", 0.8)),
+            kp_roll=float(bl_pi_params.get("kp_roll", 55.0)),
+            kd_roll=float(bl_pi_params.get("kd_roll", 5.5)),
+            ki_roll=float(bl_pi_params.get("ki_roll", 0.0)),
+            kp_yaw=float(bl_pi_params.get("kp_yaw", 2.5)),
+            kd_yaw=float(bl_pi_params.get("kd_yaw", 0.25)),
+            tau_s=float(bl_pi_params.get("tau_s", 0.0)),
+        )
+        gi = pi_aw_controller.gains_info()
+        console.print(
+            f"[bold]PI + AW Baseline[/bold] "
+            f"(aw_mode={gi['aw_mode']}): "
+            f"ki_pos={gi['ki_pos_rads_per_ms']:.1f} rad/s/(m·s), "
+            f"i_limit={gi['i_limit_rads']:.1f} rad/s, "
+            f"LQR K={[f'{k:.2f}' for k in gi['lqr_gains_K']]}\n"
+        )
+
+        _pi_aw_metadata = {
+            "gains": pi_aw_controller.gains_info(),
+            "is_stateful": True,
+            "lin_vel_mode": _bl_pi_lv_mode,
+            "aw_mode": bl_pi_params.get("aw_mode", "conditional"),
+            "pid_enabled": _bl_pi_pid_enabled,
+            "action_space": "direct_torque",
+            "assumptions": (
+                "Requires lin_vel_mode='clean' or 'noisy' (42-dim obs). "
+                "Direct-torque PI controller — same action space as ACC and "
+                "FairLQRTorqueController.  Sagittal balance uses P(lean) + "
+                "I(position error with AW) + D(lean_rate).  Leg/roll/yaw "
+                "channels identical to FairLQRTorqueController. "
+                "Three AW variants available: deadzone (±5cm), "
+                "back_calculation (saturation-triggered), conditional (±15cm)."
+            ),
+        }
+
+        bl_pi_mj_model = _load_mj_model(bl_pi_cfg)
+        ckpt_label_bl_pi = "baseline_pi_aw"
+
+        for scenario in expanded_scenarios:
+            console.print(f"  [cyan]→[/cyan] {scenario} ({num_episodes} episodes) …")
+            metrics = _run_scenario(
+                scenario=scenario,
+                checkpoint_path=ckpt_label_bl_pi,
+                mj_model=bl_pi_mj_model,
+                params=None,
+                obs_rms=None,
+                model=None,
+                config=bl_pi_cfg,
+                num_episodes=num_episodes,
+                num_steps=num_steps,
+                seeds=seeds,
+                controller=pi_aw_controller,
+            )
+            if no_binary_search:
+                metrics.max_recoverable_push_n = float("nan")
+            all_results.append(metrics)
+
+        console.print(_rich_table(all_results, title="Results — PI + AW"))
 
     # ── LQR/IK prior controller path ──────────────────────────────────────────
     if controller == "lqr_ik":
@@ -1742,6 +2270,16 @@ def evaluate(
     }
     if _lqr_metadata is not None:
         json_data["baseline_lqr"] = _lqr_metadata
+    if _lqr_aw_metadata is not None:
+        json_data["baseline_lqr_aw"] = _lqr_aw_metadata
+    if _lqr_torque_metadata is not None:
+        json_data["baseline_lqr_torque"] = _lqr_torque_metadata
+    if _lqr_coupled_metadata is not None:
+        json_data["baseline_coupled_lqr"] = _lqr_coupled_metadata
+    if _pi_aw_metadata is not None:
+        json_data["baseline_pi_aw"] = _pi_aw_metadata
+    if _lqr_full_metadata is not None:
+        json_data["baseline_full_lqr"] = _lqr_full_metadata
     if controller == "lqr_ik":
         json_data["lqr_ik"] = _lqr_ik_metadata
     with open(json_path, "w", encoding="utf-8") as jf:
@@ -1755,6 +2293,26 @@ def evaluate(
             bl_results = [r for r in all_results if r.checkpoint == "baseline_lqr"]
             if bl_results:
                 table_str = _build_summary_table(bl_results, "LQR Baseline")
+                tf.write(table_str + "\n\n")
+        elif controller == "baseline_lqr_aw":
+            bl_aw_results = [r for r in all_results if r.checkpoint == "baseline_lqr_aw"]
+            if bl_aw_results:
+                table_str = _build_summary_table(bl_aw_results, "LQR + Integral AW Baseline")
+                tf.write(table_str + "\n\n")
+        elif controller == "baseline_lqr_torque":
+            bl_tq_results = [r for r in all_results if r.checkpoint == "baseline_lqr_torque"]
+            if bl_tq_results:
+                table_str = _build_summary_table(bl_tq_results, "Fair LQR Torque Baseline")
+                tf.write(table_str + "\n\n")
+        elif controller == "baseline_full_lqr":
+            bl_fl_results = [r for r in all_results if r.checkpoint == "baseline_full_lqr"]
+            if bl_fl_results:
+                table_str = _build_summary_table(bl_fl_results, "Full-State LQR (FD-linearized)")
+                tf.write(table_str + "\n\n")
+        elif controller == "baseline_pi_aw":
+            bl_pi_results = [r for r in all_results if r.checkpoint == "baseline_pi_aw"]
+            if bl_pi_results:
+                table_str = _build_summary_table(bl_pi_results, "PI + AW Baseline")
                 tf.write(table_str + "\n\n")
         else:
             for ckpt_path in checkpoint:

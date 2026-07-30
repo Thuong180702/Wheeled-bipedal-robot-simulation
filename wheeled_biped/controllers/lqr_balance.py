@@ -225,12 +225,13 @@ def _build_height_ik(
     model_path: str,
     n_scan: int = 25,
 ) -> tuple[np.ndarray, np.ndarray, float, float]:
-    """Scan MuJoCo FK to build a polynomial height → joint angle mapping.
+    """Scan MuJoCo physics to build a polynomial height → joint angle mapping.
 
     Scans hip_pitch from 0.0 → 1.35 rad with knee = 2*hip_pitch (symmetric
-    2-link fold), computes torso height via MuJoCo forward kinematics, and
-    fits a degree-2 polynomial for each of hip_pitch and knee as a function
-    of height.
+    2-link fold).  At each configuration the robot is settled via damped
+    physics steps so that wheels contact the ground and torso height reflects
+    the true kinematic height above the floor.  A degree-2 polynomial is then
+    fit for each of hip_pitch and knee as a function of height.
 
     Returns
     -------
@@ -272,6 +273,15 @@ def _build_height_ik(
         mj_data.qpos[8] = 0.0
         mj_data.qpos[12] = 0.0
         mj_data.qpos[13] = 0.0
+
+        mujoco.mj_forward(mj_model, mj_data)
+
+        # Settle: damped physics steps so the robot rests on its wheels.
+        # Without this, qpos[2] (base free-joint z) does not reflect the
+        # true torso height above ground — it stays at the keyframe value.
+        for _ in range(300):
+            mujoco.mj_step(mj_model, mj_data)
+            mj_data.qvel[:] = 0.0  # heavy damping for fast settle
 
         mujoco.mj_forward(mj_model, mj_data)
         h = float(mj_data.qpos[2])

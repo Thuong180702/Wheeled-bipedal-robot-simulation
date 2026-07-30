@@ -1,0 +1,61 @@
+# ============================================================
+# configs/baseline_coupled_lqr_torque.yaml
+# ============================================================
+# Configuration for the COUPLED 6-STATE 3D LQR — DIRECT TORQUE baseline.
+#
+# Same 6-state LQR model as baseline_coupled_lqr.yaml but outputs
+# direct torques (bypassing PID servo), removing the ~0.25s servo lag.
+# This is the strongest classical baseline: properly derived gains
+# for pitch + roll + yaw, direct torque actuation.
+#
+# Used by: scripts/eval_balance.py --controller baseline_coupled_lqr_torque
+# ============================================================
+
+# --- Environment ---
+task:
+  env: BalanceEnv
+  initial_min_height: 0.40
+
+# --- Low-level PID DISABLED — direct torque mode ---
+low_level_pid:
+  enabled: false
+  action_smoothing_alpha: 0.0
+  anti_windup_limit: 0.4
+  wheel_vel_limit: 20.0
+  kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+  ki: [0.8,  0.4,  1.0,  1.0,  0.1, 0.8,  0.4,  1.0,  1.0,  0.1]
+  kd: [3.0,  2.0,  4.0,  4.0,  0.0, 3.0,  2.0,  4.0,  4.0,  0.0]
+  action_delay_steps: 0
+  max_torque_rate: 400.0
+
+# --- Sensor noise (disabled for nominal eval) ---
+sensor_noise:
+  enabled: false
+  lin_vel_mode: "clean"
+  lin_vel_std: 0.0
+  ang_vel_std: 0.0
+  gravity_std: 0.0
+  joint_pos_std: 0.0
+  joint_vel_std: 0.0
+
+# --- Termination ---
+termination:
+  max_tilt_rad: 0.8
+  min_height: 0.30
+
+# --- Coupled 6-State 3D LQR — Direct Torque parameters ---
+baseline_coupled_lqr_torque:
+  # 6-state LQR cost diagonal: [pitch, pitch_rate, roll, roll_rate, fwd_vel, fwd_pos]
+  lqr_q: [10.0, 1.0, 3.0, 0.3, 3.0, 0.3]
+
+  # 2-input LQR cost diagonal: [tau_wheel_common, tau_hip_roll]
+  # Smaller R than PID servo path (direct torque is cheaper to actuate)
+  lqr_r: [0.005, 0.002]
+
+  # Leg posture PD (for hip_pitch, knee, hip_yaw position control)
+  kp_leg: [55.0, 40.0, 70.0, 70.0, 0.0, 55.0, 40.0, 70.0, 70.0, 0.0]
+  kd_leg: [3.0, 2.0, 4.0, 4.0, 0.0, 3.0, 2.0, 4.0, 4.0, 0.0]
+
+  # Yaw PD
+  kp_yaw: 2.5
+  kd_yaw: 0.25

@@ -1,0 +1,157 @@
+<mxfile host="app.diagrams.net" agent="Claude">
+  <diagram name="Fig2-ACC-Architecture" id="fig2-acc">
+    <mxGraphModel dx="838" dy="608" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=18;fontStyle=1;fontColor=#000000;" value="ACC Two-Channel Torque Assembly" vertex="1">
+          <mxGeometry height="30" width="400" x="214" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="cond_header" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=13;fontStyle=1;fontColor=#666666;" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;Physical Conditions — Smoothstep Gate Inputs&lt;/font&gt;" vertex="1">
+          <mxGeometry height="25" width="400" x="214" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="cond_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#999999;fontSize=10;align=center;verticalAlign=middle;" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Proximity |Δx|  ·  Quietness EMA(|v|)  ·  Stability θ, θ̇  ·  Contact Fzᴸ, Fzᴿ  ·  Terrain hᴸ_gnd, hᴿ_gnd&lt;/font&gt;" vertex="1">
+          <mxGeometry height="30" width="580" x="124" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="hdr_left" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#1a5276;" value="Wheel Torque    τ_w" vertex="1">
+          <mxGeometry height="25" width="200" x="136.5" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="hdr_right" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#1e8449;" value="Leg-Joint Torque    τ_q" vertex="1">
+          <mxGeometry height="25" width="200" x="489" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="w_comp1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d4e6f1;strokeColor=#555555;fontSize=10;align=center;verticalAlign=middle;" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;τ_balance&lt;/b&gt;&lt;br&gt;Sagittal Balance Core (pitch PD + vel. damp + pos-P + lateral + yaw)&amp;nbsp;&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;always active&lt;/font&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="225" x="124" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="w_plus1" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;fontColor=#555555;" value="+" vertex="1">
+          <mxGeometry height="20" width="50" x="211.5" y="245" as="geometry" />
+        </mxCell>
+        <mxCell id="w_comp2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d4e6f1;strokeColor=#555555;fontSize=12;align=center;verticalAlign=middle;" value="&lt;b&gt;g_anchor ·&amp;nbsp;τ_anchor&lt;/b&gt;&lt;br&gt;Proximity-Gated Anchor (integral + damping boost) gated by g_prox, g_env" vertex="1">
+          <mxGeometry height="60" width="225" x="124" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="w_plus2" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;fontColor=#555555;" value="+" vertex="1">
+          <mxGeometry height="20" width="50" x="211.5" y="335" as="geometry" />
+        </mxCell>
+        <mxCell id="w_comp3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d4e6f1;strokeColor=#555555;fontSize=12;align=center;verticalAlign=middle;" value="&lt;b&gt;g_flight ·&amp;nbsp;τ_flight&lt;/b&gt;&lt;br&gt;Contact-Loss Recovery (reaction-wheel attitude PD) gated by g_flight" vertex="1">
+          <mxGeometry height="60" width="225" x="124" y="365" as="geometry" />
+        </mxCell>
+        <mxCell id="w_arrow" edge="1" parent="1" source="w_comp3" style="endArrow=classic;html=1;strokeColor=#777777;strokeWidth=1.5;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="w_out" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="236.5" y="490" as="sourcePoint" />
+            <mxPoint x="236.5" y="520" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="w_out" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#abebc6;strokeColor=#555555;fontSize=12;align=center;verticalAlign=middle;fontColor=#1a5276;" value="&lt;b style=&quot;color: rgb(0, 0, 0);&quot;&gt;τ_w =&amp;nbsp;τ_bal + g_anc·τ_anc + g_flt·τ_flt&lt;/b&gt;" vertex="1">
+          <mxGeometry height="45" width="225" x="124" y="460" as="geometry" />
+        </mxCell>
+        <mxCell id="l_comp1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5f5e3;strokeColor=#555555;fontSize=10;align=center;verticalAlign=middle;" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;&lt;b&gt;τ_posture(h_cmd)&lt;/b&gt;&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;Posture &amp;amp; Yaw Stability (Jacobian PD + hip-yaw divergence + homing) always active, height-scheduled&lt;/font&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="225" x="479" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="l_plus1" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=20;fontStyle=1;fontColor=#555555;" value="+" vertex="1">
+          <mxGeometry height="20" width="50" x="566.5" y="245" as="geometry" />
+        </mxCell>
+        <mxCell id="l_comp2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5f5e3;strokeColor=#555555;fontSize=12;align=center;verticalAlign=middle;" value="&lt;b&gt;g_terrain · Δτ_posture&lt;/b&gt;&lt;br&gt;Per-Leg Ground Adaptation (split height commands + leveling integrator) gated by g_terrain" vertex="1">
+          <mxGeometry height="60" width="225" x="479" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="l_arrow" edge="1" parent="1" source="l_comp2" style="endArrow=classic;html=1;strokeColor=#777777;strokeWidth=1.5;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="l_out" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="589" y="390" as="sourcePoint" />
+            <mxPoint x="589" y="520" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l_out" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#abebc6;strokeColor=#555555;fontSize=12;align=center;verticalAlign=middle;fontColor=#1e8449;" value="&lt;b style=&quot;color: rgb(0, 0, 0);&quot;&gt;τ_q =&amp;nbsp;τ_post + g_terr·Δτ_post&lt;/b&gt;" vertex="1">
+          <mxGeometry height="45" width="225" x="479" y="460" as="geometry" />
+        </mxCell>
+        <mxCell id="divider" edge="1" parent="1" style="endArrow=none;html=1;strokeColor=#cccccc;strokeWidth=2;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="414" y="140" as="sourcePoint" />
+            <mxPoint x="414" y="520" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dash_anchor" edge="1" parent="1" source="cond_box" style="endArrow=none;html=1;strokeColor=#c0392b;strokeWidth=1;dashed=1;opacity=40;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="w_comp2" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <Array as="points">
+              <mxPoint x="110" y="105" />
+              <mxPoint x="110" y="300" />
+            </Array>
+            <mxPoint x="300" y="120" as="sourcePoint" />
+            <mxPoint x="100" y="300" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dash_flight" edge="1" parent="1" source="cond_box" style="endArrow=none;html=1;strokeColor=#c0392b;strokeWidth=1;dashed=1;opacity=40;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="w_comp3" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <Array as="points">
+              <mxPoint x="110" y="105" />
+              <mxPoint x="110" y="395" />
+            </Array>
+            <mxPoint x="300" y="120" as="sourcePoint" />
+            <mxPoint x="124" y="395" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dash_terrain" edge="1" parent="1" source="cond_box" style="endArrow=none;html=1;strokeColor=#c0392b;strokeWidth=1;dashed=1;opacity=40;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="l_comp2" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <Array as="points">
+              <mxPoint x="720" y="105" />
+              <mxPoint x="720" y="300" />
+            </Array>
+            <mxPoint x="530" y="120" as="sourcePoint" />
+            <mxPoint x="704" y="300" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="gate_header" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=11;fontStyle=1;fontColor=light-dark(#919191, #6a6a6a);" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Smoothstep Gate Definitions&lt;/font&gt;" vertex="1">
+          <mxGeometry height="20" width="300" x="264" y="530" as="geometry" />
+        </mxCell>
+        <mxCell id="gate1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#cccccc;fontSize=12;align=center;verticalAlign=middle;" value="g_prox = 1−ss(|Δx|, 0.05, 0.15)    g_env = 1−ss(EMA|v|, 0.18, 0.30)" vertex="1">
+          <mxGeometry height="25" width="580" x="124" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="gate2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8daef;strokeColor=#cccccc;fontSize=9;align=center;verticalAlign=middle;" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Asymmetric EMA: α_attack=0.35 (τ≈30ms), α_release=0.007 (τ≈1.5s)    k_p = 50−15·(1−g_env·g_prox)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="25" width="580" x="124" y="595" as="geometry" />
+        </mxCell>
+        <mxCell id="gate3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#cccccc;fontSize=9;align=center;verticalAlign=middle;" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;g_flight: Fz &amp;lt; 0.5mg for ≥2 steps, release ≥5 steps + 150ms ramp    g_terrain: |Δh| &amp;gt; 2cm, unloaded freeze&lt;/font&gt;" vertex="1">
+          <mxGeometry height="25" width="580" x="124" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="note" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=10;fontStyle=3;fontColor=light-dark(#919191, #787878);" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;Both channels assembled independently → final 10-DoF torque command&lt;/font&gt;" vertex="1">
+          <mxGeometry height="20" width="500" x="164" y="670" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontStyle=1;fontColor=#666666;" value="Legend" vertex="1">
+          <mxGeometry height="15" width="80" x="376" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d4e6f1;strokeColor=#555555;" value="" vertex="1">
+          <mxGeometry height="12" width="16" x="100" y="720" as="geometry" />
+        </mxCell>
+        <mxCell id="leg1_text" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontColor=#555555;" value="Wheel torque" vertex="1">
+          <mxGeometry height="16" width="80" x="120" y="718" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5f5e3;strokeColor=#555555;" value="" vertex="1">
+          <mxGeometry height="12" width="16" x="205" y="720" as="geometry" />
+        </mxCell>
+        <mxCell id="leg2_text" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontColor=#555555;" value="Leg-joint torque" vertex="1">
+          <mxGeometry height="16" width="85" x="225" y="718" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#abebc6;strokeColor=#555555;" value="" vertex="1">
+          <mxGeometry height="12" width="16" x="316" y="720" as="geometry" />
+        </mxCell>
+        <mxCell id="leg3_text" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontColor=#555555;" value="Channel output" vertex="1">
+          <mxGeometry height="16" width="80" x="336" y="718" as="geometry" />
+        </mxCell>
+        <mxCell id="leg4_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#555555;" value="" vertex="1">
+          <mxGeometry height="12" width="16" x="421" y="720" as="geometry" />
+        </mxCell>
+        <mxCell id="leg4_text" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontColor=#555555;" value="Physical condition" vertex="1">
+          <mxGeometry height="16" width="90" x="441" y="718" as="geometry" />
+        </mxCell>
+        <mxCell id="leg5_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#555555;" value="" vertex="1">
+          <mxGeometry height="12" width="16" x="536" y="720" as="geometry" />
+        </mxCell>
+        <mxCell id="leg5_text" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontColor=#555555;" value="Gate definition" vertex="1">
+          <mxGeometry height="16" width="80" x="556" y="718" as="geometry" />
+        </mxCell>
+        <mxCell id="leg6_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8daef;strokeColor=#555555;" value="" vertex="1">
+          <mxGeometry height="12" width="16" x="641" y="720" as="geometry" />
+        </mxCell>
+        <mxCell id="leg6_text" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontColor=#555555;" value="Scheduled gain" vertex="1">
+          <mxGeometry height="16" width="80" x="663" y="718" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

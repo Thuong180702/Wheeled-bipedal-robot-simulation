@@ -1,0 +1,83 @@
+# ============================================================
+# configs/baseline_lqr_anti_windup.yaml
+# ============================================================
+# Configuration for running the LQR + Integral Anti-Windup baseline.
+#
+# This controller adds a symmetric integral term with conditional-
+# integration anti-windup to the standard LQR balance architecture.
+# It is the natural comparator for ACC's asymmetric anchor mechanism:
+#
+#   LQR only       → pure P-type feedback, no memory
+#   LQR + Int AW   → PI-type with symmetric time constant + standard AW
+#   ACC            → P + asymmetric anchor (fast attack, slow release)
+#
+# Used by: scripts/eval_balance.py --controller baseline_lqr_aw
+#
+# The integral anti-windup uses conditional integration:
+# integration of pitch error is frozen when the wheel velocity
+# command is saturated.  This is the standard industrial strategy.
+# ============================================================
+
+# --- Environment ---
+task:
+  env: BalanceEnv
+  initial_min_height: 0.40
+
+# --- Low-level PID (same as baseline_lqr.yaml; shared PID layer) ---
+low_level_pid:
+  enabled: true
+  action_smoothing_alpha: 0.4
+  anti_windup_limit: 0.4
+  wheel_vel_limit: 20.0
+  kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+  ki: [0.8,  0.4,  1.0,  1.0,  0.1, 0.8,  0.4,  1.0,  1.0,  0.1]
+  kd: [3.0,  2.0,  4.0,  4.0,  0.0, 3.0,  2.0,  4.0,  4.0,  0.0]
+  action_delay_steps: 0
+
+# --- Sensor noise (disabled for nominal eval) ---
+sensor_noise:
+  enabled: false
+  lin_vel_mode: "clean"
+  lin_vel_std: 0.0
+  ang_vel_std: 0.0
+  gravity_std: 0.0
+  joint_pos_std: 0.0
+  joint_vel_std: 0.0
+
+# --- Termination (matches BalanceEnv defaults) ---
+termination:
+  max_tilt_rad: 0.8
+  min_height: 0.30
+
+# --- LQR + Integral Anti-Windup parameters ---
+# These are forwarded to LQRIntegralAWController.__init__() by eval_balance.py.
+#
+# The LQR gains (lqr_q, lqr_r, kp_roll, kd_roll, kp_yaw, kd_yaw) are
+# IDENTICAL to baseline_lqr.yaml — only the integral channel is added.
+# This ensures any performance difference is attributable to the integral
+# mechanism, not to different feedback gains.
+baseline_lqr_aw:
+  # LQR cost diagonal: [pitch, pitch_rate, fwd_vel, fwd_pos]
+  # Same as baseline_lqr.yaml
+  lqr_q: [10.0, 2.0, 3.0, 0.3]
+  lqr_r: 0.8
+
+  # Roll balance PD gains (same as baseline_lqr.yaml)
+  kp_roll: 0.4
+  kd_roll: 0.08
+
+  # Yaw hold PD gains (same as baseline_lqr.yaml)
+  kp_yaw: 2.5
+  kd_yaw: 0.2
+
+  # ── Integral anti-windup parameters (NEW — not in baseline_lqr) ──
+  # ki_lean: integral gain on pitch/lean error
+  #   Physical meaning: rad/s of wheel command per accumulated rad·s of lean
+  #   Default 2.0 provides moderate integral correction (~10% of full wheel
+  #   range per 1 s of 0.1 rad lean)
+  ki_lean: 2.0
+
+  # i_limit_lean: anti-windup clamp on the integral state (rad/s)
+  #   Default 3.0 limits integral contribution to 15% of wheel range (20 rad/s)
+  #   This prevents integral windup during prolonged disturbances
+  i_limit_lean: 3.0

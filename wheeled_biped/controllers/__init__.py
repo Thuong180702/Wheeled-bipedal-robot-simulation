@@ -37,6 +37,12 @@ TorqueOwnershipValidator
 """
 
 from wheeled_biped.controllers.lqr_balance import LQRBalanceController
+from wheeled_biped.controllers.lqr_anti_windup import LQRIntegralAWController
+from wheeled_biped.controllers.fair_lqr_torque import FairLQRTorqueController
+from wheeled_biped.controllers.coupled_lqr_3d import CoupledLQR3DBalanceController
+from wheeled_biped.controllers.full_lqr import FullStateLQRController
+from wheeled_biped.controllers.coupled_lqr_3d_torque import CoupledLQR3DTorqueController
+from wheeled_biped.controllers.pi_aw_baseline import PiAwController
 from wheeled_biped.controllers import balance_core_types
 from wheeled_biped.controllers.balance_core_torque_composer import BalanceCoreTorqueComposer
 from wheeled_biped.controllers.contact_supervisor import ContactSupervisor
@@ -49,6 +55,12 @@ from .hip_yaw_ownership import HIP_YAW_MODE_OWNERS, OwnershipError, validate_own
 
 __all__ = [
     "LQRBalanceController",
+    "LQRIntegralAWController",
+    "FairLQRTorqueController",
+    "CoupledLQR3DBalanceController",
+    "FullStateLQRController",
+    "CoupledLQR3DTorqueController",
+    "PiAwController",
     "balance_core_types",
     "BalanceCoreTorqueComposer",
     "ContactSupervisor",

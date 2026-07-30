@@ -1,0 +1,54 @@
+# ============================================================
+# configs/baseline_coupled_lqr.yaml
+# ============================================================
+# Configuration for the coupled 6-state 3D LQR baseline.
+#
+# This controller jointly models pitch, roll, and yaw in a single LQR
+# with direct torque output (bypassing PID servo).  It addresses the
+# limitation of the 4-state TWIP + decoupled PD baseline.
+#
+# Used by scripts/eval_balance.py --controller coupled_lqr
+# ============================================================
+
+# --- Environment ---
+task:
+  env: BalanceEnv
+  initial_min_height: 0.40
+
+# --- Low-level PID (ENABLED — normalized targets through PID servo) ---
+# The controller outputs normalized position/velocity targets in [-1,1],
+# same as the original LQR baseline.  PID handles low-level tracking.
+low_level_pid:
+  enabled: true
+  action_smoothing_alpha: 0.4     # match balance.yaml
+  anti_windup_limit: 0.4
+  wheel_vel_limit: 20.0
+  kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+  ki: [0.8,  0.4,  1.0,  1.0,  0.1, 0.8,  0.4,  1.0,  1.0,  0.1]
+  kd: [3.0,  2.0,  4.0,  4.0,  0.0, 3.0,  2.0,  4.0,  4.0,  0.0]
+  action_delay_steps: 0
+
+# --- Sensor noise (disabled for nominal eval) ---
+sensor_noise:
+  enabled: false
+  lin_vel_mode: "clean"
+  lin_vel_std: 0.0
+  ang_vel_std: 0.0
+  gravity_std: 0.0
+  joint_pos_std: 0.0
+  joint_vel_std: 0.0
+
+# --- Termination ---
+termination:
+  max_tilt_rad: 0.8
+  min_height: 0.30
+
+# --- Coupled 3D LQR parameters ---
+coupled_lqr:
+  # 6-state LQR cost diagonal: [pitch, pitch_rate, roll, roll_rate, fwd_vel, fwd_pos]
+  # Matches original LQR Q + adds roll terms
+  lqr_q: [10.0, 2.0, 3.0, 0.5, 3.0, 0.3]
+
+  # 2-input LQR cost diagonal: [wheel_common_vel, hip_roll_angle]
+  # Yaw handled by separate PD (kp=2.5, kd=0.2)
+  lqr_r: [0.8, 1.0]

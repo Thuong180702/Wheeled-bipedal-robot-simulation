@@ -121,13 +121,13 @@ def build_curb_xml(h: float, sign: int = -1) -> tuple[Path, dict]:
 
 
 def run_curb(h: float, duration_s: float = 30.0, frames: list | None = None,
-             frame_stride: int = 2, cam=None, renderer=None):
+             frame_stride: int = 2, cam=None, renderer=None, seed: int = 0):
     """Drive the one-wheel curb end to end: mount (one-wheel ramp), straddle
     the full 2 m, dismount off the curb end, stop and anchor."""
     from scripts.teleop_scenario_tests import KEY_DOWN
     xml, g = build_curb_xml(h)
     try:
-        sim = RampStepSim(xml)
+        sim = RampStepSim(xml, seed=seed)
     finally:
         xml.unlink()
     logs = {k: [] for k in ("pitch", "roll", "vxy")}
@@ -229,18 +229,18 @@ class RampStepSim(TeleopSim):
     adaptation live in the BASE class (LegTerrainAdapter) — one code path
     for the flat battery, the terrain courses, and the live viewer."""
 
-    def __init__(self, xml_path: Path):
+    def __init__(self, xml_path: Path, seed: int = 0):
         orig = P.get_model_path
         P.get_model_path = lambda: xml_path
         try:
-            super().__init__()
+            super().__init__(seed=seed)
         finally:
             P.get_model_path = orig
 
 
 def run_ramp_step(h: float, duration_s: float = 30.0, frames: list | None = None,
                   frame_stride: int = 2, cam=None, renderer=None, approach_vx: float = 1.0,
-                  course: str = "up_off", edge_angle_deg: float = 30.0):
+                  course: str = "up_off", edge_angle_deg: float = 30.0, seed: int = 0):
     """Courses:
     up_off   — forward up the ramp, across the platform, off the ledge (default)
     up_down  — forward up the ramp, anchor mid-platform 2.5 s, then REVERSE
@@ -258,7 +258,7 @@ def run_ramp_step(h: float, duration_s: float = 30.0, frames: list | None = None
     xml, g = build_terrain_xml(
         h, sign=sign, edge_angle_deg=edge_angle_deg if course == "diag_off" else 0.0)
     try:
-        sim = RampStepSim(xml)
+        sim = RampStepSim(xml, seed=seed)
     finally:
         xml.unlink()
     # Full-speed approach: at 0.8 m/s the trailing knee descends onto the

@@ -38,7 +38,7 @@ class DropSim:
     """Same controller path as the teleop battery, but the robot starts
     airborne: root z = standing z + h_drop, qvel = 0, autonomous (no teleop)."""
 
-    def __init__(self, h_drop_m, tilt_pitch_deg=0.0):
+    def __init__(self, h_drop_m, tilt_pitch_deg=0.0, seed: int = 0):
         self.model = mujoco.MjModel.from_xml_path(str(P.get_model_path()))
         self.torso = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "torso")
         self.lw = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
@@ -52,6 +52,10 @@ class DropSim:
             mujoco.mj_resetDataKeyframe(self.model, d, 0)
         d.qpos[7:17] = _posture(nom)
         d.qpos[2] = float(nom["calibrated_root_z_m"]) + h_drop_m
+        # Small IC noise for statistical power
+        _rng = np.random.default_rng(seed)
+        d.qpos[7:17] += _rng.normal(0.0, 0.003, 10)
+        d.qpos[2] += _rng.normal(0.0, 0.0015)
         if tilt_pitch_deg:
             half = np.radians(tilt_pitch_deg) / 2.0
             d.qpos[3:7] = [np.cos(half), np.sin(half), 0.0, 0.0]
@@ -88,8 +92,8 @@ class DropSim:
             mujoco.mj_step(self.model, self.d)
 
 
-def run_drop(h_drop_m, tilt_pitch_deg=0.0, duration_s=12.0):
-    sim = DropSim(h_drop_m, tilt_pitch_deg)
+def run_drop(h_drop_m, tilt_pitch_deg=0.0, duration_s=12.0, seed: int = 0):
+    sim = DropSim(h_drop_m, tilt_pitch_deg, seed=seed)
     n = int(duration_s / DT)
     logs = {k: [] for k in ("z", "com_z", "pitch", "roll", "vxy", "vz")}
     touchdown_k = None

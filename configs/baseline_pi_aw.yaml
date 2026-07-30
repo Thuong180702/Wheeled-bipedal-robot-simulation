@@ -1,0 +1,81 @@
+# ============================================================
+# configs/baseline_pi_aw.yaml
+# ============================================================
+# Configuration for the PI + Anti-Windup baseline controller.
+#
+# This is the SIMPLEST classical baseline for the precision-vs-push
+# trade-off: a direct-torque PI controller on sagittal balance with
+# three anti-windup variants.  It answers the question every control
+# engineer will ask: "Why not just use PI + AW?"
+#
+# Three AW variants (selected via aw_mode):
+#   deadzone          — integrator active only within ±5 cm position error
+#   back_calculation  — saturation-triggered back-calculation AW
+#   conditional       — integrator active only within ±15 cm proximity
+#                       (symmetric spatial gate, no envelope follower)
+#
+# This controller operates in DIRECT TORQUE SPACE (low_level_pid.enabled: false)
+# — same action space as ACC and FairLQRTorqueController.
+#
+# Used by: scripts/eval_balance.py --controller baseline_pi_aw
+# ============================================================
+
+# --- Environment ---
+task:
+  env: BalanceEnv
+  initial_min_height: 0.40
+
+# --- Low-level PID DISABLED — direct torque mode ---
+low_level_pid:
+  enabled: false
+  action_smoothing_alpha: 0.0
+  anti_windup_limit: 0.4
+  wheel_vel_limit: 20.0
+  kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
+  ki: [0.8,  0.4,  1.0,  1.0,  0.1, 0.8,  0.4,  1.0,  1.0,  0.1]
+  kd: [3.0,  2.0,  4.0,  4.0,  0.0, 3.0,  2.0,  4.0,  4.0,  0.0]
+  action_delay_steps: 0
+  max_torque_rate: 400.0
+
+# --- Sensor noise (disabled for nominal eval) ---
+sensor_noise:
+  enabled: false
+  lin_vel_mode: "clean"
+  lin_vel_std: 0.0
+  ang_vel_std: 0.0
+  gravity_std: 0.0
+  joint_pos_std: 0.0
+  joint_vel_std: 0.0
+
+# --- Termination (matches BalanceEnv defaults) ---
+termination:
+  max_tilt_rad: 0.8
+  min_height: 0.30
+
+# --- PI + AW controller parameters ---
+baseline_pi_aw:
+  # Anti-windup variant: "deadzone", "back_calculation", or "conditional"
+  aw_mode: "conditional"
+
+  # Integral gain on forward position error [rad/s per m·s]
+  #  8.0 rad/s/(m·s) → 0.01 m drift × 1 s = 0.08 rad/s wheel velocity contribution.
+  #  Through kp_wheel ≈ 4 Nm/(rad/s), effective torque = 0.32 Nm after 1s at 1cm drift.
+  ki_pos: 8.0
+
+  # Anti-windup clamp on integral contribution [rad/s]
+  #  5.0 rad/s = 25% of 20 rad/s wheel velocity range
+  i_limit: 5.0
+
+  # LQR gains (identical to FairLQRTorqueController)
+  lqr_q: [10.0, 2.0, 3.0, 0.3]
+  lqr_r: 0.8
+  tau_s: 0.25
+
+  # Roll balance PD gains
+  kp_roll: 55.0
+  kd_roll: 5.5
+  ki_roll: 8.0
+
+  # Yaw hold PD gains
+  kp_yaw: 2.5
+  kd_yaw: 0.25

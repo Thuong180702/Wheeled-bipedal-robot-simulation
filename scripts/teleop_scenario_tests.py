@@ -37,8 +37,9 @@ def _posture(hs):
 
 
 class TeleopSim:
-    def __init__(self):
+    def __init__(self, seed: int = 0):
         self.model = mujoco.MjModel.from_xml_path(str(P.get_model_path()))
+        self._seed = seed
         self.torso = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "torso")
         self.lw = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "l_wheel_link")
         self.rw = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "r_wheel_link")
@@ -51,6 +52,10 @@ class TeleopSim:
             mujoco.mj_resetDataKeyframe(self.model, d, 0)
         d.qpos[7:17] = _posture(nom)
         d.qpos[2] = float(nom["calibrated_root_z_m"])
+        # Small IC noise for statistical power (σ≈0.17° joint, ~1.5mm CoM)
+        _rng = np.random.default_rng(seed)
+        d.qpos[7:17] += _rng.normal(0.0, 0.003, 10)
+        d.qpos[2] += _rng.normal(0.0, 0.0015)
         mujoco.mj_forward(self.model, d)
         self.d = d
         self.push_left = 0
