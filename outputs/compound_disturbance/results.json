@@ -1,0 +1,49 @@
+{
+  "test": "compound_disturbance",
+  "timestamp": "2026-07-27T21:37:44",
+  "results": {
+    "scenario_a": {
+      "name": "Push during squat transition (0.65\u21920.50m)",
+      "n_trials": 5,
+      "F_max_N_mean": 15.2,
+      "F_max_N_std": 0.0,
+      "peak_pitch_deg_mean": 10.112552686704486,
+      "per_trial_forces": [
+        15.2,
+        15.2,
+        15.2,
+        15.2,
+        15.2
+      ],
+      "per_trial_peaks": [
+        10.112552686704486,
+        10.112552686704486,
+        10.112552686704486,
+        10.112552686704486,
+        10.112552686704486
+      ]
+    },
+    "scenario_b": {
+      "name": "Sequential forward (90N) \u2192 backward (60N) push",
+      "n_trials": 5,
+      "fwd_N": 90.0,
+      "bwd_N": 60.0,
+      "survival": "5/5",
+      "ringdown_s_mean": 0.0,
+      "ringdown_s_std": 0.0,
+      "peak_pitch_deg_mean": 11.726754348971195,
+      "per_trial_ringdowns": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "baseline_static": {
+      "F_max_N_mean": 94.4,
+      "F_max_N_std": 0.0
+    },
+    "degradation_pct": 83.9
+  }
+}

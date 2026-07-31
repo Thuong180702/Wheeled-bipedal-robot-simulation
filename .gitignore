@@ -26,6 +26,38 @@ MANIFEST
 
 # ─── Training outputs (checkpoints, logs, telemetry) ─────────────────────────
 outputs/
+# ...except the raw result files the paper's tables and figures are built from.
+# The Code and Data Availability statement in paper/main.tex promises these, so
+# they must stay in the repo (~1.5 MB total).
+!outputs/
+outputs/*
+!outputs/acc_ringdown_v3_anchor.json
+!outputs/paper_statistics/
+outputs/paper_statistics/*
+!outputs/paper_statistics/ablation_n10_results.json
+!outputs/paper_statistics/ablation_n10_L2_5.json
+!outputs/paper_statistics/push_ci_all_ablations.json
+!outputs/paper_statistics/robustness_sweep.json
+!outputs/paper_statistics/delay_stability_sweep.json
+!outputs/paper_statistics/gate_activation_timeseries.json
+!outputs/paper_statistics/lqr_baselines_verified.json
+!outputs/paper_statistics/acc_lqr_comparison.json
+!outputs/paper_verification/
+outputs/paper_verification/*
+!outputs/paper_verification/idle_ladder.json
+!outputs/flight_terrain_n10/
+outputs/flight_terrain_n10/*
+!outputs/flight_terrain_n10/results.json
+!outputs/rate_limit_sweep/
+outputs/rate_limit_sweep/*
+!outputs/rate_limit_sweep/results.json
+!outputs/rate_limit_sweep/results_corrected.json
+!outputs/rate_limit_sweep/slew_probe.json
+!outputs/compound_disturbance/
+outputs/compound_disturbance/*
+!outputs/compound_disturbance/results.json
+!outputs/compound_disturbance/results_corrected.json
+
 runs/
 wandb/
 logs/

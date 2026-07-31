@@ -1,0 +1,79 @@
+{
+  "test": "rate_limit_sweep_corrected",
+  "protocol": {
+    "units": "Nm/s (published run used Nm/s / DT = 100x)",
+    "perturbation": "joints N(0,0.005) rad, root z N(0,0.001) m",
+    "base_seed": 20260731,
+    "bisect_iters": 6,
+    "bisect_range_N": [
+      10,
+      160
+    ]
+  },
+  "results": [
+    {
+      "rate_limit_Nm_s": 100,
+      "idle_rms_mm_mean": 0.6951090784268905,
+      "idle_rms_mm_std": 0.04600427469310384,
+      "idle_peak_slew_Nm_s": 1.6583267140732536,
+      "push_F_max_N_mean": 92.47999999999999,
+      "push_F_max_N_std": 1.0733126291999016,
+      "push_F_max_all": [
+        92.0,
+        94.4,
+        92.0,
+        92.0,
+        92.0
+      ],
+      "n_trials": 5
+    },
+    {
+      "rate_limit_Nm_s": 200,
+      "idle_rms_mm_mean": 0.7379552361869736,
+      "idle_rms_mm_std": 0.03119007473605068,
+      "idle_peak_slew_Nm_s": 0.5948585424205162,
+      "push_F_max_N_mean": 94.4,
+      "push_F_max_N_std": 0.0,
+      "push_F_max_all": [
+        94.4,
+        94.4,
+        94.4,
+        94.4,
+        94.4
+      ],
+      "n_trials": 5
+    },
+    {
+      "rate_limit_Nm_s": 400,
+      "idle_rms_mm_mean": 0.731616312236157,
+      "idle_rms_mm_std": 0.024547768776466715,
+      "idle_peak_slew_Nm_s": 0.6342319213047263,
+      "push_F_max_N_mean": 94.4,
+      "push_F_max_N_std": 0.0,
+      "push_F_max_all": [
+        94.4,
+        94.4,
+        94.4,
+        94.4,
+        94.4
+      ],
+      "n_trials": 5
+    },
+    {
+      "rate_limit_Nm_s": 800,
+      "idle_rms_mm_mean": 0.7294184518989343,
+      "idle_rms_mm_std": 0.023263751671344663,
+      "idle_peak_slew_Nm_s": 0.514986861062653,
+      "push_F_max_N_mean": 94.4,
+      "push_F_max_N_std": 0.0,
+      "push_F_max_all": [
+        94.4,
+        94.4,
+        94.4,
+        94.4,
+        94.4
+      ],
+      "n_trials": 5
+    }
+  ]
+}

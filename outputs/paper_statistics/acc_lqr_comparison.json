@@ -1,0 +1,20 @@
+{
+  "test": "acc_lqr_comparison",
+  "profile": "K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR",
+  "n_trials": 10,
+  "duration_s": 20.0,
+  "control_hz": 100,
+  "sim_hz": 500,
+  "fell_count": 0,
+  "fall_rate_pct": 0.0,
+  "survival_s_mean": 25.0,
+  "survival_s_std": 0.0,
+  "pitch_rms_deg_mean": 0.05987274956486477,
+  "pitch_rms_deg_std": 0.005684790338885074,
+  "roll_rms_deg_mean": 0.010124189957920854,
+  "roll_rms_deg_std": 0.0010738841199054222,
+  "height_rms_mm_mean": 0.17898576451265347,
+  "height_rms_mm_std": 0.015372460549176794,
+  "torque_rms_Nm_mean": 3.2770544674699487,
+  "torque_rms_Nm_std": 0.003353345737948893
+}

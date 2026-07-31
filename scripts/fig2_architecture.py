@@ -14,10 +14,12 @@ OUT = '/Users/admin/Wheeled-bipedal-robot-simulation/paper/figures/acc_architect
 
 # ─── Layout ───
 XL, XR, XC = 2.0, 8.0, 5.0             # left col, right col, centre divider
-BW   = 3.2                               # uniform box width
+BW   = 3.5                               # uniform box width
 BFS  = 4.9                               # box content fontsize
 GAP  = 1.1                               # vertical gap between boxes
 OUT_H = 0.5                              # output box height
+OUT_W = 4.0                              # output box width (text is long)
+OUT_FS = 4.6                             # output box fontsize
 
 # ─── Pre-compute all box texts (wrapped), find max lines ───
 BOX_TEXTS = {
@@ -44,29 +46,39 @@ Y_PLUS2  = Y_COMP3 + BH + GAP/2
 Y_COMP2  = Y_COMP3 + BH + GAP
 Y_PLUS1  = Y_COMP2 + BH + GAP/2
 Y_COMP1  = Y_COMP2 + BH + GAP
-Y_HEAD   = Y_COMP1 + BH + 0.25
+Y_HEAD   = Y_COMP1 + BH + 0.50
 Y_COND   = Y_HEAD + 0.6
 Y_TITLE  = Y_COND + 1.0
 
-# Bottom section
-Y_GATE_HDR = Y_OUT - 0.3
-Y_GATE1    = Y_GATE_HDR - 0.7
-Y_GATE2    = Y_GATE1 - 0.7
-Y_GATE3    = Y_GATE2 - 0.7
-Y_NOTE     = Y_GATE3 - 0.65
+# Bottom section — gate boxes are stacked dynamically below, since their height
+# depends on how many lines the definition text wraps to.
+Y_GATE_HDR = Y_OUT - 0.45
 
-Y_MIN = Y_NOTE - 0.8
 Y_MAX = Y_TITLE + 0.4
 
 # ═══════════════════════════════════════════════════
 # SETUP
 # ═══════════════════════════════════════════════════
 fig, ax = plt.subplots(figsize=(3.45, 5.0))
-ax.set_xlim(0, 10); ax.set_ylim(Y_MIN, Y_MAX); ax.axis('off')
+ax.set_xlim(0, 10); ax.axis('off')   # ylim set once the gate stack is laid out
 
 # ═══════════════════════════════════════════════════
 # HELPERS
 # ═══════════════════════════════════════════════════
+GATE_ITEMS = []   # (text, rect) pairs; every box is checked for text containment
+
+def fit_text(t, rect, pad_px=4):
+    """Shrink a text until it fits inside its own box. Wrapping the multi-line
+    component labels would break their line structure, so scale the font instead."""
+    for _ in range(12):
+        fig.canvas.draw()
+        tb = t.get_window_extent(fig.canvas.get_renderer())
+        rb = rect.get_window_extent(fig.canvas.get_renderer())
+        over = max(tb.width - (rb.width - 2*pad_px), tb.height - (rb.height - 2*pad_px))
+        if over <= 0:
+            return
+        t.set_fontsize(t.get_fontsize() * 0.94)
+
 def draw_box(x, y, txt, fc, tc, fw='bold'):
     """Uniform box with pre-wrapped text centred inside."""
     rect = mpatches.FancyBboxPatch(
@@ -74,18 +86,22 @@ def draw_box(x, y, txt, fc, tc, fw='bold'):
         boxstyle='round,pad=0.2', facecolor=fc,
         edgecolor='#555', linewidth=0.6, zorder=5)
     ax.add_patch(rect)
-    ax.text(x, y + BH/2, txt, ha='center', va='center',
-            fontsize=BFS, fontweight=fw, color=tc, zorder=6)
+    t = ax.text(x, y + BH/2, txt, ha='center', va='center',
+                fontsize=BFS, fontweight=fw, color=tc, zorder=6)
+    fit_text(t, rect)
+    GATE_ITEMS.append((t, rect))
 
 def draw_out(x, y, txt, fc, tc):
     """Shorter output box."""
     rect = mpatches.FancyBboxPatch(
-        (x - BW/2, y), BW, OUT_H,
+        (x - OUT_W/2, y), OUT_W, OUT_H,
         boxstyle='round,pad=0.12', facecolor=fc,
         edgecolor='#555', linewidth=0.6, zorder=5)
     ax.add_patch(rect)
-    ax.text(x, y + OUT_H/2, txt, ha='center', va='center',
-            fontsize=BFS, fontweight='bold', color=tc, zorder=6)
+    t = ax.text(x, y + OUT_H/2, txt, ha='center', va='center',
+                fontsize=OUT_FS, fontweight='bold', color=tc, zorder=6)
+    fit_text(t, rect)
+    GATE_ITEMS.append((t, rect))
 
 def plus(x, y):
     ax.text(x, y, '+', fontsize=11, fontweight='bold', color='#555',
@@ -95,17 +111,36 @@ def arrow(x, yt, yb):
     ax.annotate('', xy=(x, yb), xytext=(x, yt),
                 arrowprops=dict(arrowstyle='->', color='#777', lw=1.0), zorder=4)
 
+GATE_FS = 4.4           # gate-definition font size
+_wrap_cache = {}
+
+def gate_wrap(txt):
+    """Chars per line that actually fit the 9.6-wide box, measured not guessed."""
+    if txt not in _wrap_cache:
+        probe = ax.text(0, 0, txt, fontsize=GATE_FS, alpha=0)
+        fig.canvas.draw()
+        w_px = probe.get_window_extent(fig.canvas.get_renderer()).width
+        probe.remove()
+        box_px = 9.2 / (ax.get_xlim()[1] - ax.get_xlim()[0]) * ax.bbox.width
+        _wrap_cache[txt] = max(20, int(len(txt) * box_px / w_px))
+    return _wrap_cache[txt]
+
+def gate_h(txt):
+    return 0.2 + 0.13 * len(textwrap.wrap(txt, width=gate_wrap(txt)))
+
 def gate_box(x, y, txt, fc='#fce4ec'):
-    lines = textwrap.wrap(txt, width=54)
-    n = len(lines)
-    gh = 0.2 + 0.13 * n
+    """Draw a full-width definition box with its BOTTOM edge at y."""
+    lines = textwrap.wrap(txt, width=gate_wrap(txt))
+    gh = 0.2 + 0.13 * len(lines)
     rect = mpatches.FancyBboxPatch(
         (x - 4.8, y), 9.6, gh,
         boxstyle='round,pad=0.1', facecolor=fc,
         edgecolor='#ccc', linewidth=0.4, zorder=5)
     ax.add_patch(rect)
-    ax.text(x, y + gh/2, '\n'.join(lines), ha='center', va='center',
-            fontsize=4.4, color='#444', zorder=6)
+    t = ax.text(x, y + gh/2, '\n'.join(lines), ha='center', va='center',
+                fontsize=GATE_FS, color='#444', zorder=6)
+    GATE_ITEMS.append((t, rect))
+    return gh
 
 # ═══════════════════════════════════════════════════
 # TITLE + PHYSICAL CONDITIONS
@@ -123,10 +158,10 @@ gate_box(XC, Y_COND - 0.1, cond, '#fff9c4')
 # ═══════════════════════════════════════════════════
 # CHANNEL HEADERS
 # ═══════════════════════════════════════════════════
-ax.text(XL, Y_HEAD, 'Wheel Torque    τ_w', ha='center',
-        fontsize=7.5, fontweight='bold', color='#1a5276')
-ax.text(XR, Y_HEAD, 'Leg-Joint Torque    τ_q', ha='center',
-        fontsize=7.5, fontweight='bold', color='#1e8449')
+HDR_L = ax.text(XL, Y_HEAD, 'Wheel Torque  τ_w', ha='center',
+                fontsize=7.5, fontweight='bold', color='#1a5276')
+HDR_R = ax.text(XR, Y_HEAD, 'Leg-Joint Torque  τ_q', ha='center',
+                fontsize=7.5, fontweight='bold', color='#1e8449')
 
 # ═══════════════════════════════════════════════════
 # WHEEL CHANNEL — 3 comps + 2 plus + arrow + output
@@ -151,20 +186,23 @@ draw_out(XR, Y_OUT, 'τ_q = τ_post + g_terr·Δτ_post', '#abebc6', '#1e8449')
 # ═══════════════════════════════════════════════════
 # DASHED GATE CONNECTIONS
 # ═══════════════════════════════════════════════════
-# Left: prox/env → anchor + flight
-ax.plot([XL-0.6, 0.15, 0.15, XL-0.6],
-        [Y_COND-0.55, Y_COND-0.55, Y_PLUS2, Y_PLUS2],
-        '--', color='#c0392b', linewidth=0.7, zorder=0, alpha=0.5)
-ax.plot([XL-0.6, XL-0.6], [Y_PLUS2, Y_COMP3+BH*0.55],
-        '--', color='#c0392b', linewidth=0.7, zorder=0, alpha=0.5)
-ax.plot([XL-0.6, XL-0.6], [Y_PLUS2, Y_COMP2+BH*0.55],
-        '--', color='#c0392b', linewidth=0.7, zorder=0, alpha=0.5)
-# Right: terrain → terrain
-ax.plot([XR+0.6, 9.85, 9.85, XR+0.6],
-        [Y_COND-0.55, Y_COND-0.55, Y_PLUS1, Y_PLUS1],
-        '--', color='#c0392b', linewidth=0.7, zorder=0, alpha=0.5)
-ax.plot([XR+0.6, XR+0.6], [Y_PLUS1, Y_COMP2+BH*0.55],
-        '--', color='#c0392b', linewidth=0.7, zorder=0, alpha=0.5)
+# Routed down the inner corridor between each column and the centre divider.
+# The outer margins are no longer wide enough: the boxes reach x = 0.05 / 9.95
+# and the channel headers are wider still, so an outer rail would cross both.
+BOX_L, BOX_R = XL + BW/2 + 0.2, XR - BW/2 - 0.2     # inner padded box edges
+RAIL_L, RAIL_R = BOX_L + 0.45, BOX_R - 0.45
+DASH = dict(ls='--', color='#c0392b', linewidth=0.7, zorder=0, alpha=0.55)
+
+def gate_feed(rail, box_edge, y_from, y_targets):
+    ax.plot([rail, rail], [y_from, min(y_targets)], **DASH)
+    for y in y_targets:
+        ax.plot([rail, box_edge], [y, y], **DASH)
+
+# prox / env / flight gates → anchor and contact-loss boxes (wheel channel)
+gate_feed(RAIL_L, BOX_L, Y_COND - 0.28,
+          [Y_COMP2 + BH*0.5, Y_COMP3 + BH*0.5])
+# terrain gate → per-leg adaptation box (leg channel)
+gate_feed(RAIL_R, BOX_R, Y_COND - 0.28, [Y_COMP2 + BH*0.5])
 
 # ═══════════════════════════════════════════════════
 # CENTRE DIVIDER (short, decorative)
@@ -178,15 +216,25 @@ ax.plot([XC, XC], [Y_OUT - 0.2, Y_HEAD + 0.1],
 ax.text(XC, Y_GATE_HDR, 'Smoothstep Gate Definitions', ha='center',
         fontsize=5.5, fontweight='bold', color='#999')
 
-gate_box(XC, Y_GATE1,
-         'g_prox = 1−ss(|Δx|, 0.05, 0.15)    g_env = 1−ss(EMA|v|, 0.18, 0.30)',
-         '#fce4ec')
-gate_box(XC, Y_GATE2,
-         'Asymmetric EMA: α_attack=0.35 (τ≈30ms), α_release=0.007 (τ≈1.5s)    k_p = 50−15·(1−g_env·g_prox)',
-         '#e8daef')
-gate_box(XC, Y_GATE3,
-         'g_flight: Fz < 0.5mg for ≥2 steps, release ≥5 steps + 150ms ramp    g_terrain: |Δh| > 2cm, unloaded freeze',
-         '#fce4ec')
+GATE_DEFS = [
+    ('g_prox = 1−ss(|Δx|; 0.05 m, 0.15 m)   │   '
+     'g_env = 1−ss(EMA(|v_sag|); 0.25 m/s, 0.50 m/s)', '#fce4ec'),
+    ('Asymmetric EMA on |v_sag|:  α_attack = 0.35 (τ ≈ 23 ms)   │   '
+     'α_release = 0.0067 (τ ≈ 1.5 s)   │   pitch stiffness fixed at k_p = 50', '#e8daef'),
+    ('g_flight: Fz < 0.5 mg for ≥2 steps, release ≥5 steps + 150 ms ramp   │   '
+     'g_terrain: per-leg ground estimate, frozen while unloaded '
+     '(seek on 3 mm drop-below); leveling trim on |Δh| ≥ 2 cm', '#fce4ec'),
+]
+
+_y = Y_GATE_HDR - 0.20
+for _txt, _fc in GATE_DEFS:
+    _y -= gate_h(_txt)
+    gate_box(XC, _y, _txt, _fc)
+    _y -= 0.30                     # gap (boxstyle pad adds 0.1 per edge)
+
+Y_NOTE = _y - 0.28
+Y_MIN = Y_NOTE - 1.15
+ax.set_ylim(Y_MIN, Y_MAX)
 
 # ═══════════════════════════════════════════════════
 # BOTTOM NOTE + LEGEND
@@ -199,7 +247,7 @@ leg = ax.legend(
      mpatches.Patch(color='#abebc6'), mpatches.Patch(color='#fff9c4'),
      mpatches.Patch(color='#fce4ec'), mpatches.Patch(color='#e8daef')],
     ['Wheel torque', 'Leg-joint torque', 'Channel output',
-     'Physical condition', 'Gate definition', 'Scheduled gain'],
+     'Physical condition', 'Gate definition', 'Gate parameters'],
     loc='lower center', ncol=3, fontsize=4.5, framealpha=0.85,
     bbox_to_anchor=(0.5, 0.0))
 ax.add_artist(leg)
@@ -231,6 +279,21 @@ for i in range(len(text_items)):
         if x_ov <= 15 and y_ov <= 15:      # ignore ≤15px trivial touches
             continue
         overlaps.append((ti_t, tj_t, x_ov, y_ov))
+
+# channel headers must clear the dashed gate rails and each other
+_inv = ax.transData.inverted()
+for _h, _rail in ((HDR_L, RAIL_L), (HDR_R, RAIL_R)):
+    _b = _h.get_window_extent(renderer)
+    _x0, _x1 = _inv.transform((_b.x0, 0))[0], _inv.transform((_b.x1, 0))[0]
+    if _x0 - 0.05 < _rail < _x1 + 0.05:
+        overlaps.append((_h.get_text(), 'CROSSES GATE RAIL', 0, 0))
+
+# text must stay inside its own definition box (wrapping can outgrow it)
+for t, rect in GATE_ITEMS:
+    tb = t.get_window_extent(renderer)
+    rb = rect.get_window_extent(renderer)
+    if tb.x0 < rb.x0 - 1 or tb.x1 > rb.x1 + 1 or tb.y0 < rb.y0 - 1 or tb.y1 > rb.y1 + 1:
+        overlaps.append((t.get_text()[:40], 'OVERFLOWS ITS BOX', 0, 0))
 
 if overlaps:
     print(f"\n*** {len(overlaps)} OVERLAPS ***")

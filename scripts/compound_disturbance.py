@@ -1,8 +1,22 @@
 #!/usr/bin/env python3
-"""Compound-disturbance scenarios for ACC paper (Task 12).
+"""Compound-disturbance scenarios for ACC paper (Table "compound").
 
-Scenario A: Push during squat transition (height change + disturbance)
-Scenario B: Sequential forward→backward push (direction reversal)
+Scenario A: forward push delivered at the midpoint of a commanded height ramp of
+            size dh about the nominal CoM-z, swept over DH_STEPS. dh=0 is the
+            matched static control -- same protocol, no height command -- so the
+            rows differ only in the commanded transition.
+Scenario B: sequential forward -> backward push (direction reversal).
+
+Two defects in the version that produced the first published numbers are fixed
+here and are worth naming, because both silently corrupted the reported result:
+  1. Scenario A ramped to an absolute 0.50 m from the 0.404 m nominal CoM-z,
+     i.e. a ~10 cm RISE into the extrapolated region of the posture map, while
+     being described as a "0.65 -> 0.50 m squat" (a base-z label). The command is
+     now a signed offset from nominal so the label cannot drift from the code.
+  2. trial_id was accepted but never used, so every "trial" was the same
+     deterministic run and the reported std was structurally zero. Trials now
+     draw an independent initial posture from the same distribution as the main
+     push protocol (scripts/replicate_ablation_n10.py).
 
 Usage:
   mjpython scripts/compound_disturbance.py
@@ -25,7 +39,12 @@ OUT_DIR = ROOT / "outputs" / "compound_disturbance"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 DT = 0.01; SUBSTEPS = 5
 SETTLE_S = 3.0
-N_TRIALS = 5
+N_TRIALS = 10
+BASE_SEED = 20260731
+# Commanded height offsets from the nominal CoM-z. +-5 cm stays inside the
+# calibrated posture band (0.354-0.454 m); +-10 cm is extrapolated. 0.0 is the
+# matched static control and must stay in this list.
+DH_STEPS = [0.0, +0.05, -0.05, +0.10, -0.10]
 
 def _setup():
     model = mujoco.MjModel.from_xml_path(str(P.get_model_path()))
@@ -41,10 +60,12 @@ def _setup():
         nom["hip_pitch_ref"], nom["knee_ref"], 0.0])
     return model, torso_id, nom, h0, posture
 
-def _fresh_data(model, nom, posture):
+def _fresh_data(model, nom, posture, seed):
+    """Fresh state with the main push protocol's initial-posture perturbation."""
+    rng = np.random.default_rng(seed)
     data = mujoco.MjData(model)
-    data.qpos[7:17] = posture
-    data.qpos[2] = float(nom["calibrated_root_z_m"])
+    data.qpos[7:17] = posture + rng.normal(0.0, 0.005, size=10)
+    data.qpos[2] = float(nom["calibrated_root_z_m"]) + rng.normal(0.0, 0.001)
     mujoco.mj_forward(model, data)
     return data
 
@@ -79,15 +100,18 @@ def _check_fell(data):
 # =========================================================================
 # Scenario A: Push during squat transition
 # =========================================================================
-def run_scenario_a(trial_id, push_N):
-    """Robot squats 0.65→0.50m while receiving forward push mid-transition."""
+def run_scenario_a(seed, push_N, dh):
+    """Forward push at the midpoint of a 1 s commanded ramp of dh (signed, m).
+
+    dh is an offset from the nominal CoM-z, NOT an absolute height: dh=0 gives
+    the matched static control.
+    """
     model, torso_id, nom, h0_start, posture = _setup()
-    data = _fresh_data(model, nom, posture)
+    data = _fresh_data(model, nom, posture, seed)
     v3, ctx = _init_ctrl(model, data, posture, h0_start)
     _settle(model, data, v3, ctx)
 
-    # Transition: ramp height command from 0.65→0.50 over 1s
-    h_target = 0.50
+    h_target = h0_start + dh
     ramp_steps = int(1.0 / DT)
     push_start = ramp_steps // 2  # push at midpoint of transition
     push_dur = 7
@@ -124,16 +148,15 @@ def run_scenario_a(trial_id, push_N):
     peak_pitch = float(np.max(np.abs(pitch_log))) if pitch_log else 0.0
     peak_roll = float(np.max(np.abs(roll_log))) if roll_log else 0.0
 
-    return {"trial": trial_id, "push_N": push_N, "fell": fell,
+    return {"seed": seed, "push_N": push_N, "dh_m": dh, "fell": fell,
             "fell_step": fell_step, "peak_pitch_deg": peak_pitch,
             "peak_roll_deg": peak_roll,
             "final_height_m": float(data.qpos[2]) if not fell else 0.0}
 
-def binary_search_a(trial_id, lo=10.0, hi=120.0, iters=6):
+def binary_search_a(seed, dh, lo=10.0, hi=130.0, iters=6):
     for _ in range(iters):
         mid = (lo + hi) / 2.0
-        r = run_scenario_a(trial_id, mid)
-        if not r["fell"]:
+        if not run_scenario_a(seed, mid, dh)["fell"]:
             lo = mid
         else:
             hi = mid
@@ -142,10 +165,10 @@ def binary_search_a(trial_id, lo=10.0, hi=120.0, iters=6):
 # =========================================================================
 # Scenario B: Sequential forward→backward push (direction reversal)
 # =========================================================================
-def run_scenario_b(trial_id, fwd_N, bwd_N):
+def run_scenario_b(seed, fwd_N, bwd_N):
     """Forward push followed by backward push 2s later."""
     model, torso_id, nom, h0, posture = _setup()
-    data = _fresh_data(model, nom, posture)
+    data = _fresh_data(model, nom, posture, seed)
     v3, ctx = _init_ctrl(model, data, posture, h0)
     _settle(model, data, v3, ctx)
 
@@ -195,9 +218,15 @@ def run_scenario_b(trial_id, fwd_N, bwd_N):
     else:
         ringdown_s = float("inf")
 
-    return {"trial": trial_id, "fwd_N": fwd_N, "bwd_N": bwd_N,
+    # Peak pitch reached after the reversal window closes -- the quantity that
+    # says whether the second impulse re-excited the robot at all.
+    peak_after_reversal = (float(np.max(np.abs(pitch_log[post2:])))
+                           if not fell and len(pitch_log) > post2 else None)
+
+    return {"seed": seed, "fwd_N": fwd_N, "bwd_N": bwd_N,
             "fell": fell, "fell_phase": fell_phase, "fell_step": fell_step,
             "peak_pitch_deg": peak_pitch, "peak_roll_deg": peak_roll,
+            "peak_pitch_after_reversal_deg": peak_after_reversal,
             "ringdown_s": ringdown_s}
 
 # =========================================================================
@@ -206,44 +235,47 @@ def main():
     print("COMPOUND-DISTURBANCE SCENARIOS")
     print("=" * 60)
 
-    results = {}
+    results = {"scenario_a": {}}
+    h0 = _setup()[3]
 
-    # ── Scenario A ──
-    print("\n--- Scenario A: Push during squat transition ---")
-    a_forces = []
-    a_peaks = []
-    for t in range(N_TRIALS):
-        f = binary_search_a(t, lo=10.0, hi=120.0, iters=6)
-        # Also get peak pitch at max survived force
-        r = run_scenario_a(t, f)
-        a_forces.append(f)
-        a_peaks.append(r["peak_pitch_deg"])
-        print(f"  Trial {t+1}/{N_TRIALS}: survived {f:.0f}N, peak pitch={r['peak_pitch_deg']:.1f}°")
+    # ── Scenario A: push at the midpoint of a dh height ramp ──
+    for dh in DH_STEPS:
+        label = "static" if dh == 0.0 else f"{dh:+.2f}m"
+        print(f"\n--- Scenario A: dh={label} (command {h0:.3f}→{h0+dh:.3f} m CoM-z) ---")
+        a_forces, a_peaks = [], []
+        for t in range(N_TRIALS):
+            seed = BASE_SEED + t
+            f = binary_search_a(seed, dh)
+            r = run_scenario_a(seed, f, dh)   # peak pitch at that trial's F_max
+            a_forces.append(f)
+            a_peaks.append(r["peak_pitch_deg"])
+            print(f"  Trial {t+1}/{N_TRIALS}: survived {f:.1f}N, peak pitch={r['peak_pitch_deg']:.1f}°")
 
-    f_mean = float(np.mean(a_forces))
-    f_std = float(np.std(a_forces, ddof=1)) if len(a_forces) > 1 else 0.0
-    p_mean = float(np.mean(a_peaks))
-    print(f"  → F_max (transition) = {f_mean:.0f} ± {f_std:.0f} N")
+        f_mean = float(np.mean(a_forces))
+        f_std = float(np.std(a_forces, ddof=1)) if len(a_forces) > 1 else 0.0
+        print(f"  → F_max = {f_mean:.1f} ± {f_std:.1f} N")
 
-    results["scenario_a"] = {
-        "name": "Push during squat transition (0.65→0.50m)",
-        "n_trials": N_TRIALS,
-        "F_max_N_mean": f_mean, "F_max_N_std": f_std,
-        "peak_pitch_deg_mean": p_mean,
-        "per_trial_forces": a_forces, "per_trial_peaks": a_peaks,
-    }
+        results["scenario_a"][label] = {
+            "dh_m": dh, "h_cmd_m": h0 + dh, "n_trials": N_TRIALS,
+            "F_max_N_mean": f_mean, "F_max_N_std": f_std,
+            "peak_pitch_deg_mean": float(np.mean(a_peaks)),
+            "peak_pitch_deg_std": float(np.std(a_peaks, ddof=1)) if len(a_peaks) > 1 else 0.0,
+            "per_trial_forces": a_forces, "per_trial_peaks": a_peaks,
+        }
+
+    static_F = results["scenario_a"]["static"]["F_max_N_mean"]
 
     # ── Scenario B ──
     print("\n--- Scenario B: Sequential forward→backward push ---")
     # Fixed forces: 90N forward, 60N backward (from paper ringdown baseline)
     b_survived = 0
-    b_peaks = []
-    b_ringdowns = []
+    b_peaks, b_ringdowns, b_after = [], [], []
     for t in range(N_TRIALS):
-        r = run_scenario_b(t, fwd_N=90.0, bwd_N=60.0)
+        r = run_scenario_b(BASE_SEED + 500 + t, fwd_N=90.0, bwd_N=60.0)
         if not r["fell"]:
             b_survived += 1
             b_ringdowns.append(r["ringdown_s"])
+            b_after.append(r["peak_pitch_after_reversal_deg"])
         b_peaks.append(r["peak_pitch_deg"])
         status = f"survived, ringdown={r['ringdown_s']:.1f}s" if not r["fell"] else f"FELL at {r['fell_phase']}"
         print(f"  Trial {t+1}/{N_TRIALS}: {status}, peak={r['peak_pitch_deg']:.1f}°")
@@ -260,30 +292,18 @@ def main():
         "survival": f"{b_survived}/{N_TRIALS}",
         "ringdown_s_mean": rd_mean, "ringdown_s_std": rd_std,
         "peak_pitch_deg_mean": float(np.mean(b_peaks)),
+        "peak_pitch_after_reversal_deg_mean": float(np.mean(b_after)) if b_after else None,
+        "peak_pitch_after_reversal_deg_std": (float(np.std(b_after, ddof=1))
+                                              if len(b_after) > 1 else 0.0),
         "per_trial_ringdowns": b_ringdowns,
     }
 
-    # ── Baseline comparison (static forward push) ──
-    print("\n--- Baseline: static forward push (for comparison) ---")
-    from scripts.sweep_rate_limit import run_push as static_push, binary_search as bs_static
-    model, torso_id, nom, h0, posture = _setup()
-    static_forces = []
-    for t in range(N_TRIALS):
-        f = bs_static(model, torso_id, nom, posture, h0, 400, 6000 + t, lo=10.0, hi=160.0)
-        static_forces.append(f)
-        print(f"  Trial {t+1}/{N_TRIALS}: {f:.0f}N")
-    sf_mean = float(np.mean(static_forces))
-    sf_std = float(np.std(static_forces, ddof=1)) if len(static_forces) > 1 else 0.0
-    print(f"  → Static F_max = {sf_mean:.0f} ± {sf_std:.0f} N")
-
-    degradation = (sf_mean - f_mean) / sf_mean * 100 if sf_mean > 0 else 0
-    print(f"\n  Degradation during transition: {degradation:.0f}% ({sf_mean:.0f}→{f_mean:.0f} N)")
-
-    results["baseline_static"] = {"F_max_N_mean": sf_mean, "F_max_N_std": sf_std}
-    results["degradation_pct"] = round(degradation, 1)
-
     # Save
     out = {"test": "compound_disturbance", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+           "protocol": {"n_trials": N_TRIALS, "base_seed": BASE_SEED,
+                        "perturbation": "joints N(0,0.005) rad, root z N(0,0.001) m",
+                        "nominal_com_z_m": h0, "dh_steps_m": DH_STEPS,
+                        "bisect_range_N": [10.0, 130.0], "bisect_iters": 6},
            "results": results}
     json.dump(out, (OUT_DIR / "results.json").open("w"), indent=2, default=str)
     print(f"\nSaved → {OUT_DIR / 'results.json'}")
@@ -292,8 +312,11 @@ def main():
     print(f"\n{'='*60}")
     print("PAPER-READY: Compound-Disturbance Results")
     print(f"{'='*60}")
-    print(f"  Scenario A (push + squat):  F_max = {f_mean:.0f} ± {f_std:.0f} N  (static: {sf_mean:.0f} N, degradation: {degradation:.0f}%)")
-    print(f"  Scenario B (fwd→bwd seq):  survival = {b_survived}/{N_TRIALS}, ringdown = {rd_mean:.1f} ± {rd_std:.1f} s")
+    for label, r in results["scenario_a"].items():
+        d = (r["F_max_N_mean"] - static_F) / static_F * 100 if static_F else 0.0
+        print(f"  A dh={label:>7s}: F_max = {r['F_max_N_mean']:5.1f} ± {r['F_max_N_std']:.1f} N"
+              f"  ({d:+.1f}% vs static)  peak pitch = {r['peak_pitch_deg_mean']:.1f}°")
+    print(f"  B (fwd→bwd seq):  survival = {b_survived}/{N_TRIALS}, ringdown = {rd_mean:.1f} ± {rd_std:.1f} s")
 
 if __name__ == "__main__":
     main()

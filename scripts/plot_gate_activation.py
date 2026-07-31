@@ -28,8 +28,8 @@ PUSH_DUR = d["metadata"]["push_dur_steps"] * d["metadata"]["dt_s"]
 
 # ── Figure ──
 plt.rcParams.update({
-    "font.size": 8, "axes.labelsize": 9, "axes.titlesize": 9,
-    "legend.fontsize": 7, "xtick.labelsize": 7, "ytick.labelsize": 7,
+    "font.size": 9, "axes.labelsize": 10, "axes.titlesize": 10,
+    "legend.fontsize": 9, "xtick.labelsize": 8.5, "ytick.labelsize": 8.5,
     "lines.linewidth": 1.0, "figure.dpi": 150,
 })
 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(7.0, 5.0), sharex=True)
@@ -43,10 +43,12 @@ ax1.plot(t, abs_vel, color="#4A90D9", alpha=0.35, lw=0.6, label=r"$|v_{\mathrm{s
 ax1.plot(t, ema, color="#D94A4A", lw=1.4, label=r"EMA envelope")
 ax1.axhline(0.25, color="grey", ls="--", lw=0.6, alpha=0.5)
 ax1.axhline(0.50, color="grey", ls="--", lw=0.6, alpha=0.5)
-ax1.text(19.2, 0.255, r"$g_{\mathrm{env}}$ low", fontsize=6, color="grey", va="bottom")
-ax1.text(19.2, 0.505, r"$g_{\mathrm{env}}$ high", fontsize=6, color="grey", va="bottom")
+ax1.text(19.6, 0.255, r"$g_{\mathrm{env}}$ low", fontsize=9, color="grey",
+         va="bottom", ha="right")
+ax1.text(19.6, 0.515, r"$g_{\mathrm{env}}$ high", fontsize=9, color="grey",
+         va="bottom", ha="right")
 ax1.set_ylabel(r"Velocity (m/s)")
-ax1.set_ylim(-0.02, 0.65)
+ax1.set_ylim(-0.02, 0.80)
 ax1.legend(loc="upper right", framealpha=0.8, ncol=2)
 ax1.set_title("Envelope follower + gate activation during push-recovery cycle")
 
@@ -55,20 +57,22 @@ ax2.plot(t, g_prox, color="#2E8B57", lw=1.2, label=r"$g_{\mathrm{prox}}$ (proxim
 ax2.plot(t, g_env, color="#CD853F", lw=1.2, label=r"$g_{\mathrm{env}}$ (quiet-stance)")
 ax2.plot(t, g_stab, color="#9370DB", lw=1.2, label=r"$g_{\theta}$ (pitch stability)")
 ax2.set_ylabel("Gate state")
-ax2.set_ylim(-0.05, 1.12)
+ax2.set_ylim(-0.05, 1.55)
 ax2.legend(loc="upper right", framealpha=0.8, ncol=3)
 ax2.set_yticks([0, 0.5, 1])
 
 # ── Panel 3: Composite output ──
 ax3.plot(t, g_boost, color="#1E3A5F", lw=1.4, label=r"$g_{\mathrm{boost}}$ (damping boost)")
 ax3.set_ylabel(r"$g_{\mathrm{boost}}$")
-ax3.set_ylim(-0.05, 1.12)
-ax3.set_xlabel("Time (s)")
+ax3.set_ylim(-0.05, 1.42)
+ax3.set_yticks([0, 0.5, 1])
+ax3.set_xlabel("Time (s)", labelpad=4)
 ax3.legend(loc="upper right", framealpha=0.8)
 
 # Annotations
-ax2.annotate("push\n(90 N)", xy=(PUSH_T0 + 0.03, 0.15), fontsize=7, color="#333333",
-            xytext=(PUSH_T0 + 0.5, 0.25), arrowprops=dict(arrowstyle="->", lw=0.8, color="#555555"))
+ax2.annotate("push\n(90 N)", xy=(PUSH_T0 + 0.02, 0.10), fontsize=9, color="#333333",
+             ha="center", va="center", xytext=(PUSH_T0 - 1.3, 0.42),
+             arrowprops=dict(arrowstyle="->", lw=0.8, color="#555555"))
 
 plt.tight_layout(pad=0.8)
 out_path = ROOT / "paper" / "figures" / "gate_activation.pdf"

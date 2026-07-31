@@ -1,0 +1,43 @@
+{
+  "LQR_TWIP": {
+    "survival_s_mean": 0.5199999999999999,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 0.036862897558848404,
+    "roll_rms_deg": 24.214217840115978,
+    "height_rmse_mm": 370.60438681256204,
+    "torque_rms_nm": 92.06658692670482,
+    "n_episodes": 20
+  },
+  "LQR_AW": {
+    "survival_s_mean": 0.5199999999999999,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 0.03732493769107622,
+    "roll_rms_deg": 24.18862567827008,
+    "height_rmse_mm": 370.69765178839543,
+    "torque_rms_nm": 92.0664818349978,
+    "n_episodes": 20
+  },
+  "LQR_DT": {
+    "survival_s_mean": 0.74,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 1.7110568829812915,
+    "roll_rms_deg": 21.144312391685908,
+    "height_rmse_mm": 135.3940067450948,
+    "torque_rms_nm": 9.20106386870893,
+    "n_episodes": 20
+  },
+  "LQR_6State": {
+    "survival_s_mean": 0.5199999999999999,
+    "fall_rate": 1.0,
+    "pitch_rms_deg": 0.04330531446123868,
+    "roll_rms_deg": 24.19661558745395,
+    "height_rmse_mm": 370.6195289566121,
+    "torque_rms_nm": 92.055292065676,
+    "n_episodes": 20
+  },
+  "_metadata": {
+    "timestamp": "2026-07-28T17:05:00",
+    "note": "Means verified. STDs not captured \u2014 eval_results.json lacks per-episode variance.",
+    "paper_note": "LQR TWIP = LQR+AW = 6-St. LQR because AW never triggers + PID servo bottleneck."
+  }
+}

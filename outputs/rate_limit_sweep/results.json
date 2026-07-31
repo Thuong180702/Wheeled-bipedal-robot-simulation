@@ -1,0 +1,49 @@
+{
+  "test": "rate_limit_sweep",
+  "timestamp": "2026-07-27T21:30:23",
+  "n_trials": 5,
+  "results": [
+    {
+      "rate_limit_Nm_s": 200,
+      "idle_rms_mm_mean": 0.7872409577916926,
+      "idle_rms_mm_std": 0.0,
+      "push_F_max_N_mean": 94.6,
+      "push_F_max_N_std": 0.0
+    },
+    {
+      "rate_limit_Nm_s": 300,
+      "idle_rms_mm_mean": 0.7872409577916926,
+      "idle_rms_mm_std": 0.0,
+      "push_F_max_N_mean": 94.6,
+      "push_F_max_N_std": 0.0
+    },
+    {
+      "rate_limit_Nm_s": 400,
+      "idle_rms_mm_mean": 0.7872409577916926,
+      "idle_rms_mm_std": 0.0,
+      "push_F_max_N_mean": 94.6,
+      "push_F_max_N_std": 0.0
+    },
+    {
+      "rate_limit_Nm_s": 500,
+      "idle_rms_mm_mean": 0.7872409577916926,
+      "idle_rms_mm_std": 0.0,
+      "push_F_max_N_mean": 94.6,
+      "push_F_max_N_std": 0.0
+    },
+    {
+      "rate_limit_Nm_s": 600,
+      "idle_rms_mm_mean": 0.7872409577916926,
+      "idle_rms_mm_std": 0.0,
+      "push_F_max_N_mean": 94.6,
+      "push_F_max_N_std": 0.0
+    },
+    {
+      "rate_limit_Nm_s": 800,
+      "idle_rms_mm_mean": 0.7872409577916926,
+      "idle_rms_mm_std": 0.0,
+      "push_F_max_N_mean": 94.6,
+      "push_F_max_N_std": 0.0
+    }
+  ]
+}

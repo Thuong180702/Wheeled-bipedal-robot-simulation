@@ -22,7 +22,7 @@ OUT_DIR = ROOT / "outputs" / "rate_limit_sweep"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 DT = 0.01; SUBSTEPS = 5
 SETTLE_S = 3.0; IDLE_S = 20.0
-RATE_LIMITS = [200, 300, 400, 500, 600, 800]  # Nm/s
+RATE_LIMITS = [100, 200, 400, 800]  # Nm/s (8x span; reported in the paper)
 N_TRIALS = 5
 
 def _setup():
@@ -39,21 +39,31 @@ def _setup():
         nom["hip_pitch_ref"], nom["knee_ref"], 0.0])
     return model, torso_id, nom, h0, posture
 
-def _fresh_data(model, nom, posture):
+def _fresh_data(model, nom, posture, seed=None):
+    """Fresh state; with a seed, perturb the initial posture like the main push
+    protocol (replicate_ablation_n10.py). Without it every trial is identical --
+    which is what silently made the published sweep's N=5 std a constant 0."""
     data = mujoco.MjData(model)
-    data.qpos[7:17] = posture
-    data.qpos[2] = float(nom["calibrated_root_z_m"])
+    jitter_q, jitter_z = 0.0, 0.0
+    if seed is not None:
+        rng = np.random.default_rng(seed)
+        jitter_q = rng.normal(0.0, 0.005, size=10)
+        jitter_z = rng.normal(0.0, 0.001)
+    data.qpos[7:17] = posture + jitter_q
+    data.qpos[2] = float(nom["calibrated_root_z_m"]) + jitter_z
     mujoco.mj_forward(model, data)
     return data
 
 def run_idle(model, torso_id, nom, posture, h0, rate_limit, seed):
     """Run idle trial, return CoM RMS in mm."""
-    data = _fresh_data(model, nom, posture)
+    data = _fresh_data(model, nom, posture, seed)
     v3 = dict(init_v3_controller(profile_name=PROFILE, model=model))
     v3["jax_state"] = pack_state_k2()
-    # Patch rate limit in params
+    # Patch rate limit in params. params[18:28] is max_torque_rate in Nm/s and
+    # the controller multiplies it by control_dt itself -- dividing by DT here
+    # (as this script used to) overshoots 100x and disables the limiter.
     params = np.array(v3["jax_params"])
-    params[18:28] = rate_limit / DT  # convert Nm/s → Nm/step
+    params[18:28] = float(rate_limit)
     v3["jax_params"] = params
     ctx = P._build_v3_controller_context(model, data, v3, eq_joint=posture, height_ref=h0)
 
@@ -83,11 +93,11 @@ def run_idle(model, torso_id, nom, posture, h0, rate_limit, seed):
 
 def run_push(model, torso_id, nom, posture, h0, rate_limit, force_N, seed):
     """Test survival against forward push."""
-    data = _fresh_data(model, nom, posture)
+    data = _fresh_data(model, nom, posture, seed)
     v3 = dict(init_v3_controller(profile_name=PROFILE, model=model))
     v3["jax_state"] = pack_state_k2()
     params = np.array(v3["jax_params"])
-    params[18:28] = rate_limit / DT
+    params[18:28] = float(rate_limit)          # Nm/s -- see run_idle
     v3["jax_params"] = params
     ctx = P._build_v3_controller_context(model, data, v3, eq_joint=posture, height_ref=h0)
 

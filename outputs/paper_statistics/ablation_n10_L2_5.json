@@ -1,0 +1,25 @@
+{
+  "L2_5": {
+    "n_reps": 10,
+    "n_directions": 8,
+    "F_min_mean": 75.5078125,
+    "F_min_std": 0.9447220470849788,
+    "F_med_mean": 132.02734375,
+    "F_med_std": 2.2797974397714795,
+    "F_min_ci95": 0.6757704406705709,
+    "F_med_ci95": 1.6307549638188363
+  },
+  "_metadata": {
+    "n_reps": 10,
+    "n_directions": 8,
+    "binary_search_tol_N": 5.0,
+    "binary_search_iters": 8,
+    "force_range_N": [
+      10.0,
+      160.0
+    ],
+    "total_elapsed_min": 21.41715151866277,
+    "timestamp": "2026-07-30T18:49:11",
+    "git_commit": "f92640c"
+  }
+}

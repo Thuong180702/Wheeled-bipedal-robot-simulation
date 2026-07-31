@@ -1,0 +1,37 @@
+{
+  "default": {
+    "fell": false,
+    "peak_slew_max": 400.0,
+    "peak_slew_leg": 400.0,
+    "peak_slew_wheel": 400.0,
+    "default_rate": 400.0
+  },
+  "200": {
+    "fell": false,
+    "peak_slew_max": 200.00000000000003,
+    "peak_slew_leg": 200.00000000000003,
+    "peak_slew_wheel": 200.00000000000003,
+    "default_rate": 400.0
+  },
+  "400": {
+    "fell": false,
+    "peak_slew_max": 400.0,
+    "peak_slew_leg": 400.0,
+    "peak_slew_wheel": 400.0,
+    "default_rate": 400.0
+  },
+  "800": {
+    "fell": false,
+    "peak_slew_max": 800.0,
+    "peak_slew_leg": 711.8292075279904,
+    "peak_slew_wheel": 800.0,
+    "default_rate": 400.0
+  },
+  "100": {
+    "fell": false,
+    "peak_slew_max": 100.00000000000009,
+    "peak_slew_leg": 100.00000000000009,
+    "peak_slew_wheel": 100.00000000000001,
+    "default_rate": 400.0
+  }
+}
