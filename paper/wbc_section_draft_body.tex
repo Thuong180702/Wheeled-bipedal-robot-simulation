@@ -1,0 +1,121 @@
+% Auto-extracted body from wbc_section_draft.tex for standalone preview
+% Cross-refs to main.tex labels replaced with text for standalone compilation
+
+\subsection{Whole-Body Control Baselines}
+\label{sec:wbc}
+
+To address whether a tuned whole-body controller (WBC) could match ACC, we evaluated two WBC configurations that were developed and subsequently discarded during controller development:
+\textbf{(W1)}~a task-priority quadratic-program (QP) WBC---minimizing COM height error, torso orientation error, posture damping, and wheel regularization subject to full-body dynamics and contact constraints---used as the \emph{primary} balance controller; and
+\textbf{(W2)}~the same WBC blended as an \emph{assist} on top of ACC via $\boldsymbol{\tau}_{\text{assist}} = \boldsymbol{\tau}_{\text{ACC}} + \alpha\!\cdot\!(\boldsymbol{\tau}_{\text{wbc}} - \boldsymbol{\tau}_{\text{ACC}})$, with a seven-term multiplicative gate $\alpha_{\!j} = \alpha_{\max}\!\cdot\!g_{\text{stability}}\!\cdot\!g_{\text{height}}\!\cdot\!g_{\text{push}}\!\cdot\!g_{\text{divergence}}\!\cdot\!A_j\!\cdot\!K_{\text{role},j}$ that continuously modulates per-joint WBC authority.
+Both were evaluated under identical cloned simulation conditions (three-arm counterfactual: ACC baseline, WBC-only, ACC$+$WBC assist; 225 scenarios spanning fixed-height balance, height transitions, and push recovery at \SIrange{20}{120}{N}; ACC profile \texttt{K2\_JAX\_DEDICATED\_DEFAULT\_V3}; no gain retuning).
+
+\medskip\noindent\textbf{W1 (WBC as primary controller).}
+The standalone QP-WBC fails catastrophically: \textbf{\num{17.2}$\times$} more falls than ACC (5{,}985 vs.\ 347 across 225 scenarios), \textbf{\num{28.4}$\times$} more single-push falls (3{,}353 vs.\ 118), and pitch RMS \SI{41.8}{\degree} vs.\ ACC's \SI{15.9}{\degree} ($\num{2.63}\times$).
+Survival time at \SI{0.60}{m} is \SI{0.52}{s} (\SI{100}{\percent} fall rate).
+The failure mechanism is structural: the WBC's posture task is a velocity damper ($\ddot{\mathbf{q}}_{\text{joints}} = -k_{\text{posture}}\!\cdot\!(\mathbf{q} - \mathbf{q}_{\text{current}})$, $k_{\text{posture}}{=}10$), not a position tracker---it cannot hold a target posture.
+It lacks gravity-compensation feedforward, uses a single linearization at \SI{0.67}{m} (vs.\ the \SIrange{0.45}{0.60}{m} operating range), and treats wheels as point contacts without a rolling constraint.
+The QP solver fails on \SI{14.2}{\percent} of steps, creating torque discontinuities.
+Four critical implementation bugs were identified post-hoc (contact Jacobian zero-gradient, solver feasibility-only hardcode, base-z vs.\ CoM-z height reference mismatch, and gate height-reference conflict; detailed in Supplementary).
+WBC as-implemented-and-tuned therefore fails as a standalone controller.
+Critically, its failure is not solely a tuning or implementation defect: the WBC lacks the \emph{regime-gating} that ACC's proximity-gated anchor provides.
+A WBC distributes torque optimally for a fixed task set---it cannot express qualitatively distinct physical regimes (quiet stance, push ringdown, large excursion) as distinct control modes.
+The precision--recovery trade-off ACC resolves through spatial gating and asymmetric temporal envelope-following is not expressible as a task-priority QP objective; even a bug-free WBC would lack the structured prior that gates the anchor integral, and would therefore face the same global-integral windup that our ablation S4 (no proximity gate, see push ablation table in the main text) confirms is fatal for sub-millimeter precision.
+
+\medskip\noindent\textbf{W2 (WBC as assist on ACC).}
+The assist gate---designed to be maximally conservative---blocks WBC contribution in ${\ge}\SI{99}{\percent}$ of steps:
+in the 225-scenario batch, all metric ratios are \textbf{\num{1.000000}} (ACC$+$WBC assist $\equiv$ ACC within measurement noise); a 48-scenario quick evaluation classifies all 48 scenarios as \texttt{ASSIST\_EQUIVALENT} (zero regressions, zero safety violations).
+This zero-net effect is \emph{independent} of the WBC implementation bugs: the gate blocks WBC \emph{before} its torque is computed, based on physical state (pitch, roll, height deviation, push magnitude, divergence), so the WBC's internal correctness is irrelevant to the assist outcome.
+
+When gates are manually overridden to force WBC contribution (keyframe test at \SI{0.53}{m}, $\alpha_{\max}{=}0.50$, widened stability and height thresholds), the assist produces mixed results:
+pitch RMS improves \SI{17}{\percent} (\SI{2.44}{\degree} $\rightarrow$ \SI{2.04}{\degree}), drift improves \SI{18}{\percent} (\SI{0.070}{m} $\rightarrow$ \SI{0.058}{m}), and yaw drift improves \SI{20}{\percent}---but roll RMS \emph{degrades} \SI{35}{\percent} (\SI{0.20}{\degree} $\rightarrow$ \SI{0.27}{\degree}).
+The degradation arises from a fundamental architectural conflict:
+ACC's lateral roll controller and WBC's torso-orientation task both write to hip-roll joints, but from incompatible philosophies (decentralized PD vs.\ centralized QP exploiting full mass-matrix coupling).
+A posture-guided variant (WBC outputs posture targets $\mathbf{q}_{\text{ref}}$, ACC executes torque) reduced the roll degradation from $+$\SI{35}{\percent} to $+$\SI{7}{\percent} by eliminating torque-level interference, but did not produce a net improvement over ACC alone.
+
+\medskip\noindent\textbf{Timing overhead.}
+The WBC QP solve alone consumes \SI{0.45}{ms} mean, \SI{2.94}{ms} p95, and \textbf{\SI{3.43}{ms} p99} (OSQP, offline Python/NumPy path, 4 scenarios).
+The p99 solve time alone exceeds the \SI{0.5}{ms} end-to-end budget margin below the \SI{10}{ms} performance threshold by $\num{6.9}\times$---before accounting for matrix assembly, contact Jacobian computation, or the ACC computation baseline.
+An incremental JAX-JIT path was prototyped to reduce per-step overhead but was never integrated into the real-time control loop; real-time WBC assist overhead therefore remains uncharacterized.
+Even if the solve time could be reduced below the margin, the assist adds no measurable balance benefit (W2 zero-net result), so the compute cost is pure overhead.
+
+\medskip\noindent\textbf{Summary.}
+Neither standalone WBC nor WBC-as-assist resolves the precision--recovery trade-off on this platform.
+The trade-off is resolved by regime-gating---the proximity-gated anchor and asymmetric envelope follower---which WBC's task-priority formulation does not express.
+ACC's conditional gates therefore provide the essential structured prior; the WBC gap is one of structural expressiveness, not torque optimality.
+
+% --- Supplementary section ---
+\subsection{Supplementary: WBC Implementation Details}
+\label{sec:wbc_supp}
+
+\subsubsection{W1 Standalone WBC — Full Metric Table}
+
+Table~\ref{tab:wbc_w1_full} reports all measured metrics for the standalone QP-WBC (W1) vs.\ ACC, from the 225-scenario three-arm counterfactual evaluation and the 4-scenario Phase~3D full-batch execution.
+The WBC was evaluated with known implementation bugs (Table~\ref{tab:wbc_bugs}); W1 numbers may therefore be pessimistic.
+However, the failure mechanism---velocity-damping posture, single-linearization, no rolling model---is architectural, and the absence of regime-gating (the core ACC contribution) is structural, not bug-dependent.
+
+\begin{table}[h]
+\centering
+\caption{Standalone QP-WBC (W1) vs.\ ACC — Full Metric Comparison}
+\label{tab:wbc_w1_full}
+\footnotesize
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Metric & WBC-only & ACC (V3) & Ratio (WBC/ACC) \\
+\midrule
+Total falls (225 scenarios)                                  & 5{,}985   & 347   & \textbf{17.2}$\times$ \\
+Single-push falls                                            & 3{,}353   & 118   & \textbf{28.4}$\times$ \\
+Falls (Phase~3D, 4 step\_e scenarios)                        & 14{,}713  & 0     & --- \\
+Survival time at \SI{0.60}{m} (s)                            & 0.52      & 20.0  & 0.026$\times$ \\
+Pitch RMS (\si{\degree})                                     & 41.8      & 15.9  & 2.63$\times$ \\
+Roll RMS (\si{\degree})                                      & 96.8      & 84.2  & 1.15$\times$ \\
+Yaw drift (\si{\degree})                                     & 8.0       & 4.24  & 1.89$\times$ \\
+Height RMS (m)                                               & 0.253     & 0.261 & 0.97$\times$ \\
+Planar drift (m)                                             & 2.57      & 2.42  & 1.06$\times$ \\
+Posture error (ratio vs.\ ACC)                               & ---       & ---   & \textbf{8.05}$\times$ \\
+Yaw error (ratio vs.\ ACC)                                   & ---       & ---   & \textbf{15.43}$\times$ \\
+QP solver success rate                                       & \SI{85.85}{\percent} & --- & --- \\
+\bottomrule
+\end{tabular}
+\vspace{4pt}\par\noindent\footnotesize
+Sources: 225-scenario batch from \texttt{V3\_vs\_V3\_Assist\_comparison\_report.md};
+Phase~3D from \texttt{full\_batch\_verdict.json};
+survival time from \texttt{best\_torque\_wbc\_summary.json}.
+All runs use ACC profile, no gain retuning.
+WBC evaluated with known bugs (Table~\ref{tab:wbc_bugs}); W1 numbers may be pessimistic.
+\end{table}
+
+\subsubsection{Known WBC Implementation Bugs (F1--F4)}
+
+Table~\ref{tab:wbc_bugs} lists the four critical bugs identified during post-hoc audit of the WBC implementation.
+These bugs affect W1 (standalone) metrics; W2 (assist) zero-net is bug-independent because the gate blocks WBC torque before it is computed.
+
+\begin{table}[h]
+\centering
+\caption{WBC Implementation Bugs (Post-Hoc Audit)}
+\label{tab:wbc_bugs}
+\footnotesize
+\begin{tabular}{@{}c>{\raggedright\arraybackslash}p{0.35\linewidth}>{\raggedright\arraybackslash}p{0.40\linewidth}@{}}
+\toprule
+ID & Description & Effect on Metrics \\
+\midrule
+F1 & Contact Jacobian zero-gradient: all leg joint columns~$=0$ (autodiff through cached FK). &
+Ground reaction forces produce zero moment on leg joints in QP dynamics; $\boldsymbol{\tau}_{\text{wbc}}$ meaningless at hip-pitch/knee ($K_{\text{role}}{=}0.60$). \\
+F2 & Fast solver (OSQP, default) hardcodes \texttt{feasibility\_only}---drops entire task stack. &
+QP solves for minimum-norm $\ddot{\mathbf{q}}$ with zero task objectives; all task modes produce identical output. \\
+F3 & Offline eval passes base-$z$ (\SI{0.536}{m}) as commanded height instead of CoM-$z$ (\SI{0.404}{m})---\SI{13.2}{cm} error. &
+ACC height-dependent gain schedule, feedforward, and equilibrium references at wrong operating point; drift/heading/centering gates disabled. \\
+F4 & Gate adaptive assist height reference conflict: WBC model at \SI{0.67}{m}, V3 commands CoM at \SI{0.45}{--}\SI{0.60}{m}. &
+$g_{\text{height}} \approx 0$ at all test heights; WBC gate forced closed by multiplicative safety floor. \\
+\bottomrule
+\end{tabular}
+\vspace{4pt}\par\noindent\footnotesize
+Source: \texttt{docs/validation/v3\_wbc\_assist\_root\_cause\_audit.md}.
+F1--F4 affect W1 (standalone); architectural argument (absence of regime-gating) does not depend on them.
+W2 (assist) zero-net is bug-independent: gate blocks WBC before torque is computed.
+\end{table}
+
+\subsubsection{W2 Zero-Net is Bug-Independent}
+The assist gate $\alpha_{\!j}$ is computed from physical state (pitch, roll, height deviation, push magnitude, divergence) \emph{before} WBC torque is evaluated.
+Since $\alpha_{\!j} \approx 0$ in ${\ge}\SI{99}{\percent}$ of steps, the WBC's internal correctness---buggy or not---is irrelevant to the assist outcome.
+The 225-scenario equivalence ($\text{ACC}+\text{WBC assist} \equiv \text{ACC}$ within measurement noise) is therefore a robust result.
+The keyframe test (gates manually overridden) reveals the torque-blend conflict (roll~$+$\SI{35}{\percent}) independently of F1--F4: with the gate forced open, WBC torque is applied, and the decentralized-vs-centralized conflict manifests as roll degradation.

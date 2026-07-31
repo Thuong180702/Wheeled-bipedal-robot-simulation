@@ -67,7 +67,7 @@ Preliminary PPO training (5.4M steps, single seed, in our \texttt{BalanceEnv}) s
 
 We present the Anchored Conditionally-Gated Controller (ACC), addressing both dilemmas through \emph{conditional activation}.
 The core mechanism is a \textbf{proximity-gated anchor}: a position integral confined to a \SI{15}{cm} neighborhood, enabled by an \textbf{asymmetric envelope follower} ($\tau_{\text{attack}}{\approx}\SI{23}{ms}$, $\tau_{\text{release}}{\approx}\SI{1.5}{s}$) that distinguishes quiet stance from post-push ringdown.
-Coupled with a \textbf{gated damping boost}, ACC achieves $0.73{\pm}0.07$\,mm CoM RMS ($N{=}10$) under idealized conditions (clean sensors, \SI{0}{ms} delay) and omnidirectional push survival ($F_{\min}{=}\SI{83}{N}$, $F_{\text{med}}{=}\SI{117}{N}$)---sub-millimeter precision at equivalent push performance to the P-only baseline (no integral action), a ${\sim}53{\times}$ RMS improvement. Idle precision requires both the spatial proximity gate and velocity-envelope gating: the gate alone (L2.5, \SI{49.8}{mm} RMS) sustains a limit cycle indistinguishable from the global integral (L2), while the envelope follower provides the temporal gating that breaks the cycle; S2 (no boost) and S3 (symmetric EMA) both retain sub-millimeter idle precision (\SI{0.73}{mm}), whereas S4 (no proximity gate) windups---confirming that idle precision requires the proximity gate plus any velocity-envelope gating, but neither the asymmetric envelope specifically nor the damping boost; the asymmetric envelope and boost are essential only for post-push ringdown (S2, S3 ringdown = never; Table~\ref{tab:push_ablation}).
+Coupled with a \textbf{gated damping boost}, ACC achieves $0.73{\pm}0.07$\,mm CoM RMS ($N{=}10$) under idealized conditions (clean sensors, \SI{0}{ms} delay) and omnidirectional push survival ($F_{\min}{=}\SI{83}{N}$, $F_{\text{med}}{=}\SI{117}{N}$)---sub-millimeter precision at equivalent push performance to the P-only baseline (no integral action), a ${\sim}53{\times}$ RMS improvement. Idle precision requires both the spatial proximity gate and the asymmetric envelope follower: the gate alone (L2.5, \SI{49.8}{mm} RMS) sustains a limit cycle indistinguishable from the global integral (L2), while the envelope follower provides the temporal gating that breaks the cycle; S2 (no boost) and S3 (symmetric EMA) both retain sub-millimeter idle precision, whereas S4 (no proximity gate) windups---showing that idle precision requires the proximity gate but neither the damping boost nor the asymmetric envelope; these are essential only for post-push ringdown (S2, S3 ringdown = never; Table~\ref{tab:push_ablation}).
 Six classical baselines---four 4-state TWIP variants (LQR, LQR+AW, LQR-DT, PI+AW) and two 6-state coupled variants (servo and direct-torque)---all fail (\SI{100}{\percent} fall rate), confirming that platform complexity, not servo lag alone, dominates the failure. Preliminary model-free PPO (5.4M steps, single seed) suffers an \SI{85}{\percent} fall rate; removing the PID servo path (Direct Torque LQR) yields only a $\sim$38\% improvement with persistent 100\% falls.
 
 The main contributions are:
@@ -88,7 +88,6 @@ Handle~\cite{boston_dynamics_handle2017} pioneered wheeled-leg coordination; Swi
 BITeno~\cite{wada2019biteno}, DIABLO~\cite{diablo2024}, Whleaper~\cite{whleaper2024} (closest to our morphology, uses LQR+PPO residual architecture), and SKATER~\cite{skater2024} applied LQR, PPO, and MPC for balancing and locomotion. Whleaper's LQR+PPO hybrid is the closest prior structured-controller-plus-learned-residual architecture; ACC targets the same paradigm with a stronger classical prior.
 Zamani et al.~\cite{zamani2020coupled} demonstrated coupled pitch-roll LQR ($\theta_{\text{RMS}}{\approx}\SI{1.5}{\degree}$, $\phi_{\text{RMS}}{\approx}\SI{2.0}{\degree}$) on a rigid two-wheeled platform without articulated legs, where torque commands act directly on wheels---a structurally simpler control problem with fewer unstable modes and no leg-height dynamics. Our 6-state LQR replicates their coupled structure on a legged morphology and fails; the 4-state Direct Torque LQR---removing the servo path and re-optimizing roll gain ($k_{p,\text{roll}}{=}55.0$)---also fails (\SI{100}{\percent} fall rate, \SI{0.72}{s}). Both LQR variants use gains derived from a simplified 4-state TWIP model, not a full 10-DOF linearization of the articulated-leg plant (see Limitation~7); these results are therefore empirical---demonstrating that the specific LQR implementations tested fail---not a proof that LQR is structurally insufficient. Two facts---Zamani succeeds on a rigid two-wheeler, both our LQR variants fail on articulated legs---indicate that platform complexity (articulated legs, height dynamics), not servo lag alone, is the dominant factor differentiating Zamani's result.
 Cascade control~\cite{cascade_standard,herzog2016wbc} and WBC~\cite{bellicoso2018wbc} use fixed-gain nested loops without conditional gates; gain scheduling~\cite{gain_scheduling_survey} varies parameters continuously with one variable rather than responding to qualitatively distinct physical regimes.
-We additionally benchmarked a task-priority QP whole-body controller both standalone and as an assist layer on ACC (\S\ref{sec:wbc}); it fails to resolve the precision--recovery trade-off because its fixed task-priority formulation lacks conditional regime-gating.
 Split-range, selector, and override architectures~\cite{shinskey1996,astrom2005advanced} already implement continuous blending in process control. ACC adopts this principle; its contribution is the synthesis of physically-motivated gating surfaces (spatial proximity, temporal velocity envelope, pitch safety-interlock) derived from wheeled-biped failure modes rather than generic process-variable limits.
 ACC's conditional gates connect to hybrid/switched systems~\cite{liberzon2003switching}, where continuous dynamics are partitioned by discrete switching surfaces; smoothstep softens these to $C^1$ transitions.
 A recent review~\cite{liu2024review} surveys wheel-legged biped platforms and control approaches, noting the absence of a unified classical solution.
@@ -414,7 +413,7 @@ $F_z$ thresh.\ (flight / terrain) & 0.5 / 0.2 & $\times mg$ \\
 % ============================================================
 
 We evaluate ACC across four scenario classes, each mapped to the component it tests and paired with targeted ablations.
-ACC evaluation at \SI{500}{Hz} simulation / \SI{100}{Hz} control; PPO and LQR baselines at \SI{50}{Hz}. ACC benefits from a 2$\times$ control bandwidth advantage (\SI{100}{Hz} vs.\ \SI{50}{Hz}); to separate architecture from rate, we evaluate ACC at \SI{50}{Hz} with recomputed discrete EMA coefficients ($\alpha_a{=}1{-}\exp(-0.02/0.023){\approx}0.58$, $\alpha_r{=}1{-}\exp(-0.02/1.5){\approx}0.013$) and anchor integral leak (\num{0.010} per step, preserving $\tau{\approx}\SI{2.0}{s}$). At \SI{50}{Hz}, ACC achieves $\SI{0.05}{mm}$ idle RMS---preserving sub-millimeter precision and demonstrating the anchor architecture is not rate-dependent for steady-state regulation---while push recovery degrades below \SI{30}{N} (vs.\ \SI{83}{N} at \SI{100}{Hz}), confirming disturbance rejection benefits from the higher rate. The lower idle RMS at \SI{50}{Hz} (vs.\ \SI{0.73}{mm} at \SI{100}{Hz}) reflects reduced high-frequency noise injection from halved control updates; the recomputed EMA coefficients ($\alpha_r{\approx}0.013$ vs.\ $0.007$) also produce a faster release decay, further suppressing residual integral accumulation during quiet stance. All at \SI{400}{Nm/s} torque rate limit per joint.
+ACC evaluation at \SI{500}{Hz} simulation / \SI{100}{Hz} control; PPO and LQR baselines at \SI{50}{Hz}. ACC benefits from a 2$\times$ control bandwidth advantage (\SI{100}{Hz} vs.\ \SI{50}{Hz}); to separate architecture from rate, we evaluate ACC at \SI{50}{Hz} with recomputed discrete EMA coefficients ($\alpha_a{=}1{-}\exp(-0.02/0.023){\approx}0.58$, $\alpha_r{=}1{-}\exp(-0.02/1.5){\approx}0.013$) and anchor integral leak (\num{0.010} per step, preserving $\tau{\approx}\SI{2.0}{s}$). At \SI{50}{Hz}, ACC achieves $\SI{0.05}{mm}$ idle RMS---preserving sub-millimeter precision and demonstrating the anchor architecture is not rate-dependent for steady-state regulation---while push recovery degrades below \SI{30}{N} (vs.\ \SI{83}{N} at \SI{100}{Hz}), confirming disturbance rejection benefits from the higher rate. All at \SI{400}{Nm/s} torque rate limit per joint.
 RNG seeds are deterministic: idle standing uses $\text{seed} = 20260727 + \text{trial\_id}$; push ablation uses $\text{seed} = 20260728 \times 100 + \text{rep}$; LQR baselines cycle seeds $\{0, 42, 123\}$ across episodes.
 
 \subsection{Anchored Standing}
@@ -429,7 +428,7 @@ RNG seeds are deterministic: idle standing uses $\text{seed} = 20260727 + \text{
 Configuration & Idle RMS (mm) & Ringdown (s) & Between-trial CV \\
 \midrule
 \textbf{ACC (full anchor)}  & $\mathbf{0.73}\,{\pm}\,\mathbf{0.07}$ & \textbf{9.0} & 10.0\% ($N{=}10$) \\
-P-only (no I)               & ${\sim}$39  & never decays & ${\sim}$30\% \\
+P-only (no I)               & 55  & never decays & ${\sim}$30\% \\
 \midrule
 \emph{Ablations} \\
 \quad symmetric EMA         & 0.73 & never\textsuperscript{1} & ${<}5\%$ \\
@@ -441,11 +440,11 @@ P-only (no I)               & ${\sim}$39  & never decays & ${\sim}$30\% \\
 \textsuperscript{1}Bistable: post-push cycle holds EMA in mid-band $\rightarrow$ boost half-open.
 \textsuperscript{2}Integral windup prevents standing.
 \textsuperscript{3}Idle precision matches ACC (\SI{0.73}{mm}); the proximity gate alone determines idle precision---neither the damping boost nor the asymmetric envelope affects steady-state standing (cf.\ S2, S3 in Table~\ref{tab:push_ablation}).
-ACC 95\%CI (between-trial SD, $t_{9,0.025}{=}2.262$, SEM${=}\text{SD}/\sqrt{10}$): $[0.68,0.78]$\,mm. Noise floor: \SI{0.002}{mm} CoM X RMS (SNR 289$\times$). P-only limit cycle: $[40,60]$\,mm p-p, RMS${\approx}\SI{39}{mm}$ ($N{=}1$).
+ACC 95\%CI (between-trial SD, $t_{9,0.025}{=}2.262$, SEM${=}\text{SD}/\sqrt{10}$): $[0.68,0.78]$\,mm. Noise floor: \SI{0.002}{mm} CoM X RMS (SNR 289$\times$). P-only limit cycle: $[40,60]$\,mm p-p ($N{=}1$).
 \end{table}
 
 Table~\ref{tab:standing} reports idle precision and ringdown.
-ACC achieves \SI{0.73}{mm} CoM sagittal RMS ($N{=}10$, 95\%CI $[0.68,0.78]$\,mm)---sub-millimeter precision well below the P-only limit cycle (\SI{55}{mm} peak-to-peak, \SI{39}{mm} RMS). Ablation L2.5 (proximity gate only, no envelope, no boost) achieves \SI{49.8}{mm} RMS---essentially identical to L2's global integral limit cycle---confirming that the spatial gate alone is \emph{not} sufficient for sub-millimeter precision. The asymmetric envelope follower provides essential temporal gating: it restricts integral accumulation to truly quiet stance (velocity envelope ${<}\SI{0.25}{m/s}$), preventing the integral from sustaining a limit cycle during small oscillations within the \SI{15}{cm} spatial band. S2 (no boost) and S3 (symmetric EMA) both retain \SI{0.73}{mm} idle precision, whereas S4 (no proximity gate) windups---confirming that idle precision requires the proximity gate plus any velocity-envelope gating, but neither the asymmetric envelope specifically nor the damping boost. The boost and asymmetric envelope are essential only for post-push ringdown (S2, S3 ringdown = never; Table~\ref{tab:push_ablation}). ACC's unique contribution is simultaneous precision and ringdown.
+ACC achieves \SI{0.73}{mm} CoM sagittal RMS ($N{=}10$, 95\%CI $[0.68,0.78]$\,mm)---sub-millimeter precision well below the P-only limit cycle (\SI{55}{mm} peak-to-peak, \SI{39}{mm} RMS). Ablation L2.5 (proximity gate only, no envelope, no boost) achieves \SI{49.8}{mm} RMS---essentially identical to L2's global integral limit cycle---confirming that the spatial gate alone is \emph{not} sufficient for sub-millimeter precision. The asymmetric envelope follower provides essential temporal gating: it restricts integral accumulation to truly quiet stance (velocity envelope ${<}\SI{0.25}{m/s}$), preventing the integral from sustaining a limit cycle during small oscillations within the \SI{15}{cm} spatial band. S2 (no boost) and S3 (symmetric EMA) both retain \SI{0.73}{mm} idle precision, whereas S4 (no proximity gate) windups---together showing that idle precision requires the proximity gate but neither the damping boost nor the asymmetric envelope. The boost and asymmetric envelope are essential only for post-push ringdown (S2, S3 ringdown = never; Table~\ref{tab:push_ablation}). ACC's unique contribution is simultaneous precision and ringdown.
 Post-push velocity ringdown decays within \SI{9}{s} under ACC; P-only oscillates indefinitely because the \SI{1.3}{Nm} equilibrium bias sustains the limit cycle.
 The symmetric EMA ablation confirms bistable failure: a post-push cycle holds the EMA at $\approx\!0.10$ (gate half-open), and the robot oscillates perpetually.
 The global-I ablation windups during the push and prevents recovery entirely.
@@ -492,7 +491,7 @@ S5 & $-$Pitch gate $g_\theta$   & \textbf{8.8${\pm}$0.6}\textsuperscript{5} & \t
 \textsuperscript{5}Below measurement floor (\SI{10}{N}); robot cannot survive minimal push.
 \textsuperscript{6}S1 (fixed $k_p{=}50$) is the canonical ACC configuration. S0 (scheduled $k_p$, softened from 50 to 35 during pushes) was tested and rejected---it did not improve push survival.
 \textsuperscript{7}L2$\rightarrow$L3 = canonical ACC (S1, fixed $k_p{=}50$); bundles four mechanisms (prox.\ gate, asym.\ EMA, boost, pitch gate). S2--S5 isolates each subtractively.
-\textsuperscript{8}L2.5 (prox.\ gate only, no EMA, no boost): idle RMS \textbf{\SI{49.8}{mm}} ($N{=}10$), confirming the proximity gate alone is insufficient for sub-millimeter precision; the envelope follower provides essential temporal gating (see text).
+\textsuperscript{8}L2.5 (L2\,+\,prox.\ gate only, no EMA envelope, no boost) achieves \textbf{\SI{49.8}{mm}} idle RMS ($N{=}10$)---essentially identical to L2's ${\sim}\SI{55}{mm}$ limit cycle, confirming the proximity gate alone is \emph{not} sufficient for sub-millimeter precision (the subtractive S4 confirms loss of gate $\rightarrow$ precision collapse). The asymmetric envelope follower provides essential temporal gating: without it, the integral accumulates during small oscillations within the \SI{15}{cm} spatial band, sustaining a limit cycle. Sub-millimeter precision requires the spatial proximity gate \emph{and} the envelope follower working in concert; the damping boost is required only for ringdown (cf.\ S2).
 Welch's unpaired $t$-test (two-sided, $N{=}10$ per group, independent trials; Welch--Satterthwaite $\text{df}{\in}[9,18]$; uncorrected $p$, Bonferroni-adj.\ $\alpha{=}0.007$, see \S\ref{sec:discussion}): L0$\rightarrow$L1 $+$\SI{4.8}{N} ($p{<}0.001$); L1$\rightarrow$L2 $+$\SI{1.3}{N} (n.s.); L2$\rightarrow$L2.5 $-$\SI{0.6}{N} (n.s., gate alone adds nothing); L2.5$\rightarrow$L3 $+$\SI{7.3}{N} ($p{<}0.001$). Anchor's decisive contribution: ${\sim}53{\times}$ idle precision. S5 (pitch gate) critical safety ($F_{\min}{=}\SI{8.8}{N}$); S3+S2 required for ringdown. With $N{=}10$, 95\%CI half-width ${\approx}0.72{\times}$std ($t_{0.025,9}{=}2.262$, single-group $\text{df}{=}9$); sub-\SI{2}{N} differences (e.g., S1 vs.\ S3 $\Delta F_{\min}{=}\SI{1.2}{N}$, CI$_{95}$(S1)${\approx}{\pm}\SI{0.7}{N}$, CI$_{95}$(S3)${\approx}{\pm}\SI{1.6}{N}$) remain non-significant.
 \end{table}
 
@@ -613,59 +612,6 @@ Neither servo-lag removal nor preliminary PPO training (5.4M steps, single seed)
 
 
 % ============================================================
-\subsection{Whole-Body Control Baselines}
-\label{sec:wbc}
-% ============================================================
-
-To address whether a tuned whole-body controller (WBC) could match ACC, we evaluated two WBC configurations that were developed and subsequently discarded during controller development:
-\textbf{(W1)}~a task-priority quadratic-program (QP) WBC---minimizing COM height error, torso orientation error, posture damping, and wheel regularization subject to full-body dynamics and contact constraints---used as the \emph{primary} balance controller; and
-\textbf{(W2)}~the same WBC blended as an \emph{assist} on top of ACC via $\boldsymbol{\tau}_{\text{assist}} = \boldsymbol{\tau}_{\text{ACC}} + \alpha\!\cdot\!(\boldsymbol{\tau}_{\text{wbc}} - \boldsymbol{\tau}_{\text{ACC}})$, with a seven-term multiplicative gate $\alpha_{j} = \alpha_{\max}\!\cdot\!g_{\text{stability}}\!\cdot\!g_{\text{height}}\!\cdot\!g_{\text{push}}\!\cdot\!g_{\text{divergence}}\!\cdot\!A_j\!\cdot\!K_{\text{role},j}$ that continuously modulates per-joint WBC authority.
-Both were evaluated under identical cloned simulation conditions (three-arm counterfactual: ACC baseline, WBC-only, ACC$+$WBC assist; 225 scenarios spanning fixed-height balance, height transitions, and push recovery at \SIrange{20}{120}{N}; ACC profile \texttt{K2\_JAX\_DEDICATED\_DEFAULT\_V3}; no gain retuning).
-
-\medskip\noindent\textbf{W1 (WBC as primary controller).}
-The standalone QP-WBC fails catastrophically: \textbf{\num{17.2}$\times$} more falls than ACC (5{,}985 vs.\ 347 across 225 scenarios), \textbf{\num{28.4}$\times$} more single-push falls (3{,}353 vs.\ 118), and pitch RMS \SI{41.8}{\degree} vs.\ ACC's \SI{15.9}{\degree} ($\num{2.63}\times$).\footnote{The \SI{15.9}{\degree} here is ACC's pitch RMS averaged over the mixed 225-scenario batch (including pushes and height transitions), not the clean standing value of \SI{0.060}{\degree} reported in Table~\ref{tab:lqr_baselines}.}
-Survival time at \SI{0.60}{m} is \SI{0.52}{s} (\SI{100}{\percent} fall rate).
-The failure mechanism is structural: the WBC's posture task is a velocity damper ($\ddot{\mathbf{q}}_{\text{joints}} = -k_{\text{posture}}\!\cdot\!(\mathbf{q} - \mathbf{q}_{\text{current}})$, $k_{\text{posture}}{=}10$), not a position tracker---it cannot hold a target posture.
-It lacks gravity-compensation feedforward, uses a single linearization at \SI{0.67}{m} (vs.\ the \SIrange{0.45}{0.60}{m} operating range), and treats wheels as point contacts without a rolling constraint.
-The QP solver fails on \SI{14.2}{\percent} of steps, creating torque discontinuities.
-Four critical implementation bugs were identified post-hoc (contact Jacobian zero-gradient, solver feasibility-only hardcode, base-z vs.\ CoM-z height reference mismatch, and gate height-reference conflict; detailed in Appendix~\ref{sec:wbc_supp}).
-WBC as-implemented-and-tuned therefore fails as a standalone controller.
-Critically, its failure is not solely a tuning or implementation defect: the WBC lacks the \emph{regime-gating} that ACC's proximity-gated anchor provides.
-A WBC distributes torque optimally for a fixed task set---it cannot express qualitatively distinct physical regimes (quiet stance, push ringdown, large excursion) as distinct control modes.
-The precision--recovery trade-off ACC resolves through spatial gating and asymmetric temporal envelope-following is not expressible as a task-priority QP objective; even a bug-free WBC would lack the structured prior that gates the anchor integral, and would therefore face the same global-integral windup that our ablation S4 (no proximity gate, Table~\ref{tab:push_ablation}) confirms is fatal for sub-millimeter precision.
-
-\medskip\noindent\textbf{W2 (WBC as assist on ACC).}
-The assist gate---designed to be maximally conservative---blocks WBC contribution in ${\ge}\SI{99}{\percent}$ of steps:
-in the 225-scenario batch, all metric ratios are \textbf{\num{1.000000}} (ACC$+$WBC assist $\equiv$ ACC within measurement noise); a 48-scenario quick evaluation classifies all 48 scenarios as \texttt{ASSIST\_EQUIVALENT} (zero regressions, zero safety violations).
-This zero-net effect is \emph{independent} of the WBC implementation bugs: the gate blocks WBC \emph{before} its torque is computed, based on physical state (pitch, roll, height deviation, push magnitude, divergence), so the WBC's internal correctness is irrelevant to the assist outcome.
-
-When gates are manually overridden to force WBC contribution (keyframe test at \SI{0.53}{m}, $\alpha_{\max}{=}0.50$, widened stability and height thresholds), the assist produces mixed results:
-pitch RMS improves \SI{17}{\percent} (\SI{2.44}{\degree} $\rightarrow$ \SI{2.04}{\degree}), drift improves \SI{18}{\percent} (\SI{0.070}{m} $\rightarrow$ \SI{0.058}{m}), and yaw drift improves \SI{20}{\percent}---but roll RMS \emph{degrades} \SI{35}{\percent} (\SI{0.20}{\degree} $\rightarrow$ \SI{0.27}{\degree}).
-The degradation arises from a fundamental architectural conflict:
-ACC's lateral roll controller and WBC's torso-orientation task both write to hip-roll joints, but from incompatible philosophies (decentralized PD vs.\ centralized QP exploiting full mass-matrix coupling).
-A posture-guided variant (WBC outputs posture targets $\mathbf{q}_{\text{ref}}$, ACC executes torque) reduced the roll degradation from $+$\SI{35}{\percent} to $+$\SI{7}{\percent} by eliminating torque-level interference, but did not produce a net improvement over ACC alone.
-
-\medskip\noindent\textbf{Timing overhead.}
-The WBC QP solve alone consumes \SI{0.45}{ms} mean, \SI{2.94}{ms} p95, and \textbf{\SI{3.43}{ms} p99} (OSQP, offline Python/NumPy path, 4 scenarios).
-The p99 solve time alone exceeds the \SI{0.5}{ms} end-to-end budget margin below the \SI{10}{ms} performance threshold by $\num{6.9}\times$---before accounting for matrix assembly, contact Jacobian computation, or the ACC computation baseline.
-An incremental JAX-JIT path was prototyped to reduce per-step overhead but was never integrated into the real-time control loop; real-time WBC assist overhead therefore remains uncharacterized.
-Even if the solve time could be reduced below the margin, the assist adds no measurable balance benefit (W2 zero-net result), so the compute cost is pure overhead.
-
-\medskip\noindent\textbf{Summary.}
-Neither standalone WBC nor WBC-as-assist resolves the precision--recovery trade-off on this platform.
-The trade-off is resolved by regime-gating---the proximity-gated anchor and asymmetric envelope follower---which WBC's task-priority formulation does not express.
-ACC's conditional gates therefore provide the essential structured prior; the WBC gap is one of structural expressiveness, not torque optimality.
-
-% --- Reviewer-defense note (NOT for publication) ---
-% Q: "How do you know ACC isn't worse than a properly tuned WBC/MPC?"
-% Defense: (1) W2 zero-net is bug-INDEPENDENT (gate blocks before torque compute).
-% (2) W1 as-implemented fails AND lacks regime-gating → even bug-free WBC
-%     can't express ACC's anchor. Architectural argument rests on S4 ablation
-%     (no proximity gate → windup, 49.8mm RMS), which proves the gate IS the
-%     essential contribution. (3) MPC: genuinely deferred (ill-conditioning).
-
-
-% ============================================================
 \subsection{Architectural Analysis}
 \label{sec:analysis}
 % ============================================================
@@ -739,7 +685,7 @@ ACC achieves all demonstrated behaviors without neural network training, is hypo
 Each gate was added after tracing a measured failure mode to its root cause: (i)~bistable envelope; (ii)~global-I windup; (iii)~parametric pumping; (iv)~hard-leash oscillation; (v)~self-referential stiffness. All thresholds frozen prior to the ablation sweep (Table~\ref{tab:push_ablation}).
 
 \textbf{Statistical power.}
-Welch's $t$-test, Bonferroni-adj.\ $\alpha{=}0.007$ (7 comparisons); L0$\rightarrow$L1 and L2$\rightarrow$L3 significant ($p{<}0.001$, Cohen's $d{\approx}5.3,6.4$). Primary claims (${\sim}53{\times}$ idle precision, S5 collapse) are unambiguous. Flight/terrain: $N{=}10$, Clopper--Pearson 95\%CI $[0.69,1.00]$.
+Welch's $t$-test, Bonferroni-adj.\ $\alpha{=}0.007$ (7 comparisons); L0$\rightarrow$L1 and L2$\rightarrow$L3 significant ($p{<}0.001$, Cohen's $d{\approx}5.3,2.0$). Primary claims (${\sim}53{\times}$ idle precision, S5 collapse) are unambiguous. Flight/terrain: $N{=}10$, Clopper--Pearson 95\%CI $[0.69,1.00]$.
 
 \textbf{Limitations.}
 (1)~Backward push is weakest ($F_{\min}$ drops ${\sim}$50\% vs.\ median), inherent to fore/aft geometry.
@@ -750,12 +696,12 @@ Welch's $t$-test, Bonferroni-adj.\ $\alpha{=}0.007$ (7 comparisons); L0$\rightar
 (6)~Push survival degrades \SI{84}{\percent} during height transitions (shared torque budget).
 (7)~Six classical baselines---four 4-state TWIP variants (LQR, LQR+AW, LQR-DT, PI+AW) and two 6-state coupled variants (servo and direct-torque)---all fail (\SI{100}{\percent}). A full-state LQR from finite-difference linearization of the complete 10-DOF MuJoCo plant was attempted but produced unreliable gain matrices due to ill-conditioned contact dynamics at the standing equilibrium ($\kappa(A){\approx}10^{10}$); robust linearization of articulated-leg contact dynamics at unstable equilibria is an open challenge. The hip-roll coupling $b_{r,h}{=}-5.0$ in the 6-state LQR is empirical; a sensitivity sweep is deferred.
 (8)~Architectural generality across morphologies remains to be demonstrated.
-(9)~Push ablation at $N{=}10$ has min.\ detectable effect ${\sim}\SI{3.2}{N}$; sub-\SI{2}{N} differences non-significant (see Statistical power). The PPO baseline (5.4M steps, single seed) may not be fully converged; the \SI{85}{\percent} fall rate is reported as observed, not as an upper bound on RL performance for this platform. A task-priority QP whole-body controller was benchmarked both standalone and as an assist on ACC and did not resolve the precision--recovery trade-off (\S\ref{sec:wbc}); re-running with known implementation bugs fixed is deferred (the architectural argument---absence of regime-gating in a fixed-task-priority formulation---does not depend on it). A tuned convex MPC on the full 10-DOF plant remains deferred because finite-difference linearization at the standing equilibrium is ill-conditioned ($\kappa(A){\approx}10^{10}$, Limitation~7), so robust full-plant MPC is an open prerequisite rather than a missing comparison.
+(9)~Push ablation at $N{=}10$ has min.\ detectable effect ${\sim}\SI{3.2}{N}$; sub-\SI{2}{N} differences non-significant (see Statistical power). The PPO baseline (5.4M steps, single seed) may not be fully converged; the \SI{85}{\percent} fall rate is reported as observed, not as an upper bound on RL performance for this platform. Advanced WBC/MPC methods are deferred.
 
 \textbf{Deployment Risks and Mitigations.}
 ACC uses raw torque, \SI{400}{Nm/s} rate limit, standard sensors (IMU $+$ encoders). We distinguish two latency thresholds: a \textbf{performance} threshold (${\sim}\SI{10}{ms}$) where $F_{\max}$ bifurcates \SI{96}{N}${\rightarrow}{\sim}\SI{47}{N}$, and a \textbf{stability} threshold (${>}\SI{150}{ms}$, clean sensors, $N{=}5$, zero falls) where the robot actually falls. ACC's gates (proximity, envelope, pitch) depend on physical state, not timing precision---the architecture is intrinsically delay-tolerant for stability. The \SI{150}{ms}$+$ stability threshold is consistent across all physical gating mechanisms: the proximity gate (spatial, \SI{15}{cm}), asymmetric envelope (temporal, $\tau_r{\approx}\SI{1.5}{s}$), and damping boost are all state-driven rather than schedule-driven.
 
-Estimated non-RTOS worst-case budget: sensor readout ${\sim}\SI{1}{ms}$ $+$ state estimation ${\sim}\SI{2}{ms}$ $+$ ACC computation ${\sim}\SI{3}{ms}$ $+$ actuation latency ${\sim}\SI{3.5}{ms}$ $=$ ${\approx}\SI{9.5}{ms}$ end-to-end. The \SI{0.5}{ms} margin below the \SI{10}{ms} performance threshold means any single jitter source (OS scheduling preemption, bus contention) can degrade push recovery margin temporarily; the stability margin remains ${>}\SI{140}{ms}$. On a real-time OS with a dedicated balance-loop microcontroller (e.g., \SI{1}{kHz} RT Linux or bare-metal MCU), jitter is typically ${<}\SI{0.1}{ms}$, recovering \SIrange{2}{4}{ms} of budget and making the performance margin comfortable. Neither scenario has been validated on hardware---latency characterization with an oscilloscope and jitter histogram is required before deployment. The discarded WBC-assist variant (\S\ref{sec:wbc}) is excluded from the hardware path not only because it adds no measurable balance benefit (\num{225}-scenario equivalence), but because its QP solve alone (p99~\SI{3.43}{ms}) exceeds the \SI{0.5}{ms} margin below the \SI{10}{ms} performance threshold by $\num{6.9}\times$ in the offline path; JAX-JIT incremental integration was prototyped but not validated, and the zero-net benefit makes further optimization moot. Hardware degradation: \SI{0.73}{mm} $\rightarrow$ projected \SI{1}{--}\SI{3}{mm} (encoder quantization, backlash, stiction, tire compliance, IMU noise; cf.\ Table~\ref{tab:robustness}). Staged commissioning: static torque $\rightarrow$ standing $\rightarrow$ push recovery $\rightarrow$ flight (tethered) $\rightarrow$ terrain.
+Estimated non-RTOS worst-case budget: sensor readout ${\sim}\SI{1}{ms}$ $+$ state estimation ${\sim}\SI{2}{ms}$ $+$ ACC computation ${\sim}\SI{3}{ms}$ $+$ actuation latency ${\sim}\SI{3.5}{ms}$ $=$ ${\approx}\SI{9.5}{ms}$ end-to-end. The \SI{0.5}{ms} margin below the \SI{10}{ms} performance threshold means any single jitter source (OS scheduling preemption, bus contention) can degrade push recovery margin temporarily; the stability margin remains ${>}\SI{140}{ms}$. On a real-time OS with a dedicated balance-loop microcontroller (e.g., \SI{1}{kHz} RT Linux or bare-metal MCU), jitter is typically ${<}\SI{0.1}{ms}$, recovering \SIrange{2}{4}{ms} of budget and making the performance margin comfortable. Neither scenario has been validated on hardware---latency characterization with an oscilloscope and jitter histogram is required before deployment. Hardware degradation: \SI{0.73}{mm} $\rightarrow$ projected \SI{1}{--}\SI{3}{mm} (encoder quantization, backlash, stiction, tire compliance, IMU noise; cf.\ Table~\ref{tab:robustness}). Staged commissioning: static torque $\rightarrow$ standing $\rightarrow$ push recovery $\rightarrow$ flight (tethered) $\rightarrow$ terrain.
 
 We presented ACC, a two-channel torque assembly where a PD balance core is augmented by a proximity-gated anchor integral achieving $0.73{\pm}0.07$\,mm idle CoM RMS ($N{=}10$, 95\%CI $[0.68,0.78]$\,mm) with omnidirectional push survival ($F_{\min}{=}\SI{83}{N}$, $F_{\text{med}}{=}\SI{117}{N}$).
 Six classical baselines---four 4-state TWIP variants (LQR, LQR+AW, LQR-DT, PI+AW) and two 6-state coupled variants (servo and direct-torque)---all fail (\SI{100}{\percent}); adding integral action to LQR-optimal feedback does not prevent the fall, confirming ACC's structured prior as the essential contribution.
@@ -771,84 +717,6 @@ Future work: hardware validation, EMA settle-time characterization, and extendin
 Saturation-triggered AW triggers on actuator saturation; on this platform, position error grows to \SI{10}{--}\SI{30}{cm} during a push while wheels stay within their \SI{20}{rad/s} range, so saturation-triggered AW never activates. A static dead-zone either over-restricts or under-restricts; ACC's proximity gate with continuous smoothstep avoids both. State-gated conditional integration is practiced in process control; ACC couples spatial gating with asymmetric envelope-detected damping, providing temporal gating absent in static-threshold schemes. AW-augmented baselines (LQR+AW, PI+AW) are evaluated in Table~\ref{tab:lqr_baselines}; broader AW taxonomy comparison is deferred.
 
 \vspace{-4pt}\noindent Code and parameters at \url{https://github.com/thuong180702/Wheeled-bipedal-robot-simulation} (commit \texttt{f92640c}).
-
-% ============================================================
-\vspace{-6pt}\section*{Appendix B. WBC Baseline Implementation Details}
-\label{sec:wbc_supp}
-% ============================================================
-
-\subsection*{B.1 Standalone WBC (W1) --- Full Metric Table}
-
-Table~\ref{tab:wbc_w1_full} reports all measured metrics for the standalone QP-WBC (W1) vs.\ ACC, from the 225-scenario three-arm counterfactual evaluation and the 4-scenario Phase~3D full-batch execution.
-The WBC was evaluated with known implementation bugs (Table~\ref{tab:wbc_bugs}); W1 numbers may therefore be pessimistic.
-However, the failure mechanism---velocity-damping posture, single-linearization, no rolling model---is architectural, and the absence of regime-gating (the core ACC contribution) is structural, not bug-dependent.
-
-\begin{table}[h]
-\centering
-\caption{Standalone QP-WBC (W1) vs.\ ACC --- Full Metric Comparison}
-\label{tab:wbc_w1_full}
-\footnotesize
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.33\columnwidth}ccc@{}}
-\toprule
-Metric & WBC-only & ACC (V3) & Ratio (WBC/ACC) \\
-\midrule
-Total falls (225 scenarios)                                  & 5{,}985   & 347   & \textbf{17.2}$\times$ \\
-Single-push falls                                            & 3{,}353   & 118   & \textbf{28.4}$\times$ \\
-Falls (Phase~3D, 4 step\_e scenarios)                        & 14{,}713  & 0     & --- \\
-Survival time at \SI{0.60}{m} (s)                            & 0.52      & 20.0  & 0.026$\times$ \\
-Pitch RMS (\si{\degree})                                     & 41.8      & 15.9  & 2.63$\times$ \\
-Roll RMS (\si{\degree})                                      & 96.8      & 84.2  & 1.15$\times$ \\
-Yaw drift (\si{\degree})                                     & 8.0       & 4.24  & 1.89$\times$ \\
-Height RMS (m)                                               & 0.253     & 0.261 & 0.97$\times$ \\
-Planar drift (m)                                             & 2.57      & 2.42  & 1.06$\times$ \\
-Posture error (ratio vs.\ ACC)                               & ---       & ---   & 8.05$\times$ \\
-Yaw error (ratio vs.\ ACC)                                   & ---       & ---   & 15.43$\times$ \\
-QP solver success rate                                       & \SI{85.85}{\percent} & --- & --- \\
-\bottomrule
-\end{tabular}
-\vspace{4pt}\par\noindent\footnotesize
-Sources: 225-scenario batch (see \texttt{V3\_vs\_V3\_Assist\_comparison\_report.md});
-Phase~3D (\texttt{full\_batch\_verdict.json});
-survival time (\texttt{best\_torque\_wbc\_summary.json}).
-All runs with ACC profile, no gain retuning.
-WBC evaluated with known bugs (Table~\ref{tab:wbc_bugs}); W1 numbers may be pessimistic.
-\end{table}
-
-\subsection*{B.2 Known WBC Implementation Bugs (F1--F4)}
-
-Table~\ref{tab:wbc_bugs} lists the four critical bugs identified during post-hoc audit of the WBC implementation.
-These bugs affect W1 (standalone) metrics; W2 (assist) zero-net is bug-independent because the gate blocks WBC torque before it is computed.
-
-\begin{table}[h]
-\centering
-\caption{WBC Implementation Bugs (Post-Hoc Audit)}
-\label{tab:wbc_bugs}
-\footnotesize
-\begin{tabularx}{\columnwidth}{@{}c>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
-\toprule
-ID & Description & Effect on Metrics \\
-\midrule
-F1 & Contact Jacobian zero-gradient: leg joint columns~$=0$ (autodiff through cached FK). &
-Ground reaction forces produce zero moment on leg joints; $\boldsymbol{\tau}_{\text{wbc}}$ meaningless at hip-pitch/knee ($K_{\text{role}}{=}0.60$). \\
-F2 & Fast solver hardcodes \texttt{feasibility\_only}---drops entire task stack. &
-QP finds minimum-norm $\ddot{\mathbf{q}}$; all task modes produce identical output. \\
-F3 & Offline eval passes base-$z$ (\SI{0.536}{m}) as height cmd.\ instead of CoM-$z$ (\SI{0.404}{m})---\SI{13.2}{cm} error. &
-ACC gain schedule and feedforward at wrong operating point; drift/heading/centering gates disabled. \\
-F4 & Gate height conflict: WBC at \SI{0.67}{m}, V3 commands CoM at \SI{0.45}{--}\SI{0.60}{m}. &
-$g_{\text{height}} {\approx} 0$ at all test heights; WBC gate forced closed. \\
-\bottomrule
-\end{tabularx}
-\vspace{4pt}\par\noindent\footnotesize
-Source: \texttt{docs/validation/v3\_wbc\_assist\_root\_cause\_audit.md}.
-F1--F4 affect W1 (standalone); architectural argument (absence of regime-gating) does not depend on them.
-W2 (assist) zero-net is bug-independent: gate blocks WBC before torque is computed.
-\end{table}
-
-\subsection*{B.3 W2 Zero-Net is Bug-Independent}
-The assist gate $\alpha_{j}$ is computed from physical state (pitch, roll, height deviation, push magnitude, divergence) \emph{before} WBC torque is evaluated.
-Since $\alpha_{j} \approx 0$ in ${\ge}\SI{99}{\percent}$ of steps, the WBC's internal correctness---buggy or not---is irrelevant to the assist outcome.
-The 225-scenario equivalence ($\text{ACC}+\text{WBC assist} \equiv \text{ACC}$ within measurement noise) is therefore a robust result.
-The keyframe test (gates manually overridden) reveals the torque-blend conflict (roll~$+$\SI{35}{\percent}) independently of F1--F4: with the gate forced open, WBC torque is applied, and the decentralized-vs-centralized conflict manifests as roll degradation.
 
 \begin{thebibliography}{99}
 \setlength{\itemsep}{0pt}
@@ -1029,24 +897,5 @@ D.~Liberzon,
 Birkh\"{a}user, 2003.
 
 \end{thebibliography}
-
-% ============================================================
-% §E — MUST-EXTRACT (deferred measurement tasks)
-% None are fabrication-blocking for the current argument.
-% ============================================================
-%
-% [NEEDS-EXTRACT-1] V3-only per-step compute time
-%   Command:
-%     python scripts/phase3d_full_batch_execution.py \
-%       --mode quick --single-arm --scenarios step_e_nominal \
-%       --total-steps 11000 --warmup-steps 1000 \
-%       --output-dir outputs/wbc_timing/v3_only_timing
-%   Extract: mean/p95/p99 of full_step_times. Repeat x3 seeds.
-%
-% [NEEDS-EXTRACT-2] ACC+WBC assist JAX-JIT incremental path timing
-%   Status: DEFERRED — incremental QP never integrated into production path.
-%
-% [NEEDS-EXTRACT-3] WBC with F1-F4 fixed (W1 re-evaluation)
-%   Status: DEFERRED per D3. Reviewer may request.
 
 \end{document}
