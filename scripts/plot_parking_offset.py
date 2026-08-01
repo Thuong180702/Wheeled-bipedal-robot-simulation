@@ -25,7 +25,7 @@ def g(tag, key):
     return v["mean"] if isinstance(v, dict) else v
 
 
-B = "acc_baseline"
+B = "baseline_n10"
 
 plt.rcParams.update({
     "font.size": 9, "axes.labelsize": 9.5, "axes.titlesize": 9.5,
@@ -75,8 +75,8 @@ kk = np.linspace(0, 340, 400)
 ax2.plot(kk, 1000.0 * (tau_p - trim) / (KPOS + kk), "-", color="#333333",
          label="closed form (see caption)")
 ax2.plot(kdc, emeas, "o", ms=5, color="#cc5544", mec="black", mew=0.5,
-         label="measured, $N{=}3$")
-ax2.axhline(abs(g("pitcheq_fix_n3", "sag_pos_err_mm")), ls=":", lw=1.0,
+         label="measured")
+ax2.axhline(abs(g("pitcheq_fix_n10", "sag_pos_err_mm")), ls=":", lw=1.0,
             color="#44aa77")
 ax2.text(58, 1.2, "feedforward pitch recalibrated,\n"
                   "$k_{I,\\mathrm{dc}}$ unchanged: 0.05 mm",

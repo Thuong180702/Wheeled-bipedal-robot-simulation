@@ -5,7 +5,19 @@ static torque balance of the 27 mm sagittal parking offset.
 
 | File | Backs |
 |---|---|
-| `parking_offset_diag.json` | Appendix C, all four tables and Fig. 7. One entry per run, keyed by `--tag`. `acc_baseline` = ACC as published, N=3, at the nominal height h=0.4040 m (Appendix C-A torque table, C-B pitch decomposition, and the `k_i=4` row of C-D); `ki_10 … ki_160` = the rest of the gain sweep (C-D); `leak_5e4` = the leak sweep (C-E); `heightchk_*` / `fix_*` = the four off-nominal heights of the C-F before/after table, and `pitcheq_fix_n3` its nominal-height row (N=3); `decomp`, `decomp2` are earlier single-trial probes, superseded by `acc_baseline`. Produced by `scripts/diagnose_parking_offset.py`. |
+| `parking_offset_diag.json` | Appendix C, all four tables and Fig. 7. One entry per run, keyed by `--tag`. Produced by `scripts/diagnose_parking_offset.py`. |
+
+Tags inside `parking_offset_diag.json`:
+
+| Tag | Backs |
+|---|---|
+| `baseline_n10` | **The paper's baseline.** ACC as published, N=10 under the full idle protocol, nominal height h=0.4040 m. Appendix C-A torque table, C-B pitch decomposition, the `k_i=4` row of C-D, and Fig. 7a. Reproduces Table III's −27.0 ± 0.009 mm (measures −26.961 ± 0.0094). |
+| `pitcheq_fix_n10` | Feedforward pitch reference recalibrated by −1.461°, N=10. The nominal row of the C-F before/after table and the dotted line in Fig. 7b. |
+| `ki_10 … ki_160` | The rest of the 40× gain sweep, C-D and Fig. 7b (N=3 each). |
+| `leak_5e4` | The leak sweep, C-E. |
+| `heightchk_*` / `fix_*` | The four off-nominal heights of the C-F table, before/after (single trial each). |
+| `acc_baseline`, `pitcheq_fix_n3` | The N=3 predecessors of the two N=10 runs. Agree to three decimals; kept as the audit trail. |
+| `decomp`, `decomp2`, `pitcheq_fix` | Earlier single-trial probes, superseded. `acc_baseline` and `decomp` predate the pitch-axis fix, so their `pitch_deg` is the ZYX pitch (lateral) — see the second trap below. Every other field in them is axis-independent and still valid. |
 | `push_acc_published_ki4.json` | Appendix C-F push table, row "ACC as published". Reproduces the 82.8 N weakest bearing of Table VI, validating the harness. |
 | `push_ki40.json`, `push_ki160.json` | Appendix C-F push table, rows `k_i=40` and `k_i=160`. |
 | `push_ff_pitch_recalibrated.json` | Appendix C-F push table, row "feedforward pitch recalibrated". |
@@ -17,8 +29,12 @@ other table in the paper was measured on the published configuration.
 ## Reproducing
 
 ```bash
-# torque decomposition + closed-form check, ACC as published
-.venv/bin/python scripts/diagnose_parking_offset.py 3 --tag acc_baseline
+# torque decomposition + closed-form check, ACC as published (~45 s)
+.venv/bin/python scripts/diagnose_parking_offset.py 10 --tag baseline_n10
+
+# the same with the feedforward pitch reference recalibrated
+.venv/bin/python scripts/diagnose_parking_offset.py 10 \
+    --pitch-eq-bias=-1.461 --tag pitcheq_fix_n10
 
 # one gain-sweep point
 .venv/bin/python scripts/diagnose_parking_offset.py 3 --ki 40 --tag ki_40
@@ -45,7 +61,9 @@ other table in the paper was measured on the published configuration.
 
 `diagnose_parking_offset.py` writes into
 `outputs/paper_verification/parking_offset_diag.json`, accumulating one key per
-`--tag`; the copy here is the snapshot the paper was written against.
+`--tag`; the copy here is the snapshot the paper was written against. That is a
+read-modify-write of a single file, so **run these sequentially** — two in
+parallel will lose one of the results.
 
 ## Two traps when reading these files
 
