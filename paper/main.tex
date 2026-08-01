@@ -88,7 +88,7 @@ Coupled with a \textbf{gated damping boost}, ACC achieves $0.294{\pm}0.015$\,mm 
 A factorial ablation measured under a single protocol (Table~\ref{tab:standing}) locates the mechanism more precisely than the gate structure suggests, and reveals a decoupling of mechanisms that contrasts with the architecture's design rationale on two of its three counts. First, the quiet-stance \emph{steadiness} comes from the gated \emph{damping} terms, not from the anchor integral: disabling the integral outright while leaving every gate intact leaves sagittal repeatability sub-millimeter (it in fact improves, \SI{0.294}{mm}$\rightarrow$\SI{0.089}{mm}), whereas reverting the two velocity-damping coefficients reinstates the full limit cycle (\SI{25.2}{mm}). What the integral buys is not steadiness but \emph{accuracy}---it removes \SI{4.2}{mm} of sagittal parking offset---and it buys that at a $3{\times}$ cost in steadiness. The two properties are produced by different mechanisms and trade against each other, which is why they are reported as separate columns rather than as a single planar number. Second, the proximity gate and the asymmetric envelope are provably inert during quiet stance---ablating either reproduces ACC bit-for-bit---because the robot never leaves the gate's inner band nor the envelope's release branch while standing still; their contribution is windup prevention and ringdown under disturbance, and only a displacement experiment can measure it. Third, the pitch safety gate is load-bearing even with no disturbance applied: removing it causes divergence from the initial-condition noise alone in \num{10}/\num{10} trials. The gates are thus enabling conditions that make an otherwise inadmissible damping and integral configuration safe, rather than the proximate source of the precision.
 Six classical baselines---four 4-state TWIP variants (LQR, LQR+AW, LQR-DT, PI+AW) and two 6-state coupled variants (servo and direct-torque)---all fail (\SI{100}{\percent} fall rate), confirming that platform complexity, not servo lag alone, dominates the failure. The preliminary model-free PPO reference (5.4M steps, single seed) falls in \SI{85}{\percent} of multi-height transitions; removing the PID servo path (Direct Torque LQR) yields only a ${\sim}$\SI{38}{\percent} improvement with persistent \SI{100}{\percent} falls.
 
-The paper is positioned within \emph{structured classical priors} rather than within learned control. The object of study is a hand-designed, fully interpretable torque assembly whose gating encodes the plant's measured failure modes explicitly, and whose intended downstream role is to serve as the nominal base action of a residual-learning stack---the setting in which a policy corrects a structured prior instead of searching the space unaided~\cite{whleaper2024}. The classical controllers are therefore the comparison of record; the model-free run of \S\ref{sec:baselines} is evidence about the difficulty of the unaided problem, and is not offered as a bound on either method.
+The paper is positioned within \emph{structured classical priors} rather than within learned control. The object of study is a hand-designed, fully interpretable torque assembly whose gating encodes the plant's measured failure modes explicitly, and whose intended downstream role is to serve as the nominal base action of a residual-learning stack---the setting in which a policy corrects a structured prior instead of searching the space unaided~\cite{johannink2019residual,silver2018residual}. The classical controllers are therefore the comparison of record; the model-free run of \S\ref{sec:baselines} is evidence about the difficulty of the unaided problem, and is not offered as a bound on either method.
 
 The main contributions are:
 \begin{enumerate}
@@ -105,21 +105,21 @@ The main contributions are:
 \subsection{Wheeled Bipedal Platforms and Classical Control}
 Ascento~\cite{klemm2019ascento} demonstrated two-wheeled jumping with LQR balancing, later extended to WBC with kinematic loops~\cite{klemm2020lqrwbc}.
 Handle~\cite{boston_dynamics_handle2017} pioneered wheeled-leg coordination; wheeled quadrupeds combined driving with walking through whole-body motion control and planning~\cite{bjelonic2019wheeled}.
-DIABLO~\cite{diablo2024}, Whleaper~\cite{whleaper2024} (closest to our morphology, uses LQR+PPO residual architecture), and SKATER~\cite{skater2024} applied LQR, PPO, and MPC for balancing and locomotion. Whleaper's LQR+PPO hybrid is the closest prior structured-controller-plus-learned-residual architecture; ACC targets the same paradigm with a stronger classical prior.
+Ollie~\cite{zhang2022ollie} adapts whole-body balance control on a two-wheeled biped, and wheeled quadrupeds have since been driven by whole-body MPC with online gait sequencing~\cite{bjelonic2021mpc}. DIABLO~\cite{diablo2024} pairs an LQR balance controller with separate yaw, split-angle, height, and roll loops; SKATER~\cite{skater2024} uses a hierarchical MPC whole-body controller with centrifugal-force compensation and terrain adaptation. Whleaper~\cite{whleaper2024} is closest to our morphology (10 DOF, three hip DOFs per leg); it applies LQR to balanced sliding and a separately trained PPO policy to walking, \emph{switching} between the two by locomotion mode rather than composing them on a shared control output. Composition of a classical prior with a learned residual on one output is the residual-RL construction~\cite{johannink2019residual,silver2018residual}, applied recently to wheeled-biped balance~\cite{zhang2025residualwbr}; ACC is designed to supply the classical prior in that construction rather than to replace the learned part.
 Coupled pitch--roll LQR is standard on rigid two-wheeled platforms, where torque acts directly on the wheels and there are neither articulated legs nor leg-height dynamics---a structurally simpler problem with fewer unstable modes. Our 6-state LQR reproduces that coupled structure on a legged morphology and fails; the 4-state Direct Torque LQR---removing the servo path and re-optimizing roll gain ($k_{p,\text{roll}}{=}55.0$)---also fails (\SI{100}{\percent} fall rate, \SI{0.72}{s}). Because the direct-torque variant carries no servo lag at all and still falls (\S\ref{sec:baselines}), actuation lag alone cannot account for the outcome; the articulated-leg morphology and its height dynamics are the dominant remaining factor. Both LQR variants use gains derived from a simplified 4-state TWIP model, not a full 10-DOF linearization of the articulated-leg plant (see Limitation~7); these results are therefore empirical---demonstrating that the specific LQR implementations tested fail---not a proof that LQR is structurally insufficient.
-Cascade control~\cite{cascade_standard,herzog2016wbc} and WBC~\cite{bellicoso2018wbc} use fixed-gain nested loops without conditional gates; gain scheduling~\cite{gain_scheduling_survey} varies parameters continuously with one variable rather than responding to qualitatively distinct physical regimes.
+Cascade control~\cite{cascade_standard} and whole-body control via hierarchical inverse dynamics or task-priority quadratic programs~\cite{herzog2016wbc,bellicoso2018wbc,escande2014hqp} use fixed-gain nested or strictly prioritized loops without conditional gates; gain scheduling~\cite{gain_scheduling_survey,leith2000gainsched} varies parameters continuously with one scheduling variable rather than responding to qualitatively distinct physical regimes.
 We additionally benchmarked a task-priority QP whole-body controller both standalone and as an assist layer on ACC (\S\ref{sec:wbc}); it fails to resolve the precision--recovery trade-off because its fixed task-priority formulation lacks conditional regime-gating.
 Split-range, selector, and override architectures~\cite{shinskey1996,astrom2005advanced} already implement continuous blending in process control. ACC adopts this principle; its contribution is the synthesis of physically-motivated gating surfaces (spatial proximity, temporal velocity envelope, pitch safety-interlock) derived from wheeled-biped failure modes rather than generic process-variable limits.
-ACC's conditional gates connect to hybrid/switched systems~\cite{liberzon2003switching}, where continuous dynamics are partitioned by discrete switching surfaces; smoothstep softens these to $C^1$ transitions.
+ACC's conditional gates connect to hybrid/switched systems~\cite{liberzon2003switching}, where continuous dynamics are partitioned by discrete switching surfaces, and to hysteresis-based switching logic~\cite{hespanha2003hysteresis}, which deliberately breaks the symmetry of a switching surface to prevent chattering---the same asymmetry ACC realizes in continuous time through its fast-attack/slow-release envelope. Smoothstep softens these surfaces to $C^1$ transitions.
 A recent review~\cite{liu2024review} surveys wheel-legged biped platforms and control approaches, noting the absence of a unified classical solution.
 
 \subsection{Disturbance Rejection, Anti-Windup, and ACC's Distinction}
 DOB~\cite{ohnishi1993dob,chen2000dob} and ADRC~\cite{han2009adrc,feng2023lqradrc} provide temporal disturbance estimation but cannot distinguish a push from post-push ringdown---both occupy the same frequency band.
-Saturation-triggered conditional-integration AW triggers on actuator saturation; ACC's anchor uses \textbf{spatial, physics-conditioned gating}: the proximity gate confines integration to a \SI{15}{cm} neighborhood, and the asymmetric envelope distinguishes quiet stance from ringdown via velocity envelope---replacing the estimation-speed-vs-noise trade-off with a time-domain attack-vs-release trade-off.
+Classical anti-windup---back-calculation, conditional integration, and the unified observer-based framework~\cite{astrom1989windup,kothare1994antiwindup,tarbouriech2009aw}---triggers on \emph{actuator saturation}; ACC's anchor uses \textbf{spatial, physics-conditioned gating}: the proximity gate confines integration to a \SI{15}{cm} neighborhood, and the asymmetric envelope distinguishes quiet stance from ringdown via velocity envelope---replacing the estimation-speed-vs-noise trade-off with a time-domain attack-vs-release trade-off.
 Push recovery via capture-point~\cite{englsberger2015dcm,pratt2006capturepoint} and flight-phase control~\cite{roscia2023flight} is complementary.
 Blind stair climbing via RL was shown on Ascento~\cite{chamorro2024stairclimbing}.
-Terrain adaptation uses exteroceptive~\cite{legged_terrain_extero} or proprioceptive~\cite{blind_terrain_proprio,bellicoso2016terrain} sensing; ACC extends proprioceptive contact-point estimation to wheeled bipeds.
-Gated control for humanoid balancing was explored by Hyon et al.~\cite{hyon2007gated}; ACC extends conditional gating to wheeled bipeds with continuous smoothstep transitions.
+Terrain adaptation uses exteroceptive elevation mapping~\cite{legged_terrain_extero,fankhauser2018rough}, learned policies that fuse proprioception with terrain estimates~\cite{lee2020challenging,miki2022perceptive}, or purely proprioceptive contact sensing~\cite{blind_terrain_proprio,bellicoso2016terrain,camurri2017contact}; ACC extends proprioceptive contact-point estimation to wheeled bipeds.
+Hyon and Cheng~\cite{hyon2007gated} achieved full-body humanoid balancing by gravity compensation with optimal contact-force distribution, making the robot passive to external forces without measuring them. ACC shares the requirement of reacting to unmeasured pushes but meets it by switching regime on proprioceptive gating variables rather than by redistributing contact forces.
 
 % ============================================================
 \section{Robot Platform}
@@ -303,7 +303,7 @@ The key to reliable quiet-stance detection is the asymmetric exponentially-weigh
 \end{equation}
 with time constants $\tau_{\text{attack}}{\approx}\SI{23}{ms}$ and $\tau_{\text{release}}{\approx}\SI{1.5}{s}$ as the primary specification; the discrete coefficients are derived via $\alpha_a=1-\exp(-\Delta t / \tau_{\text{attack}})\approx 0.35$ and $\alpha_r=1-\exp(-\Delta t / \tau_{\text{release}})\approx 0.007$ at \SI{100}{Hz} ($\Delta t{=}\SI{0.01}{s}$).
 This asymmetry is essential: a symmetric EMA is \emph{bistable}---post-push oscillation holds the EMA in a middle band where the gate is half-open and the boost cannot collapse the cycle (validated by the symmetric-EMA ablation, Section~\ref{sec:results}).
-The fast-attack/slow-release envelope jumps to $1$ only when oscillation truly decays, and drops to $0$ within $\sim\SI{25}{ms}$ of a disturbance. The concept traces to peak-hold and envelope-detector circuits~\cite{astrom2005advanced}; ACC's innovation is coupling envelope detection to a spatial proximity gate for integral conditioning. Fig.~\ref{fig:gate_activation} illustrates the complete gate activation sequence during a push-recovery cycle.
+The fast-attack/slow-release envelope jumps to $1$ only when oscillation truly decays, and drops to $0$ within $\sim\SI{25}{ms}$ of a disturbance. The mechanism is a peak-hold/envelope detector with asymmetric time constants; ACC's contribution is coupling envelope detection to a spatial proximity gate for integral conditioning. Fig.~\ref{fig:gate_activation} illustrates the complete gate activation sequence during a push-recovery cycle.
 
 \textbf{EMA initialization.}
 EMA$_0{=}0$ biases $g_{\text{env}}{\approx}1$ for $\sim$\SI{7.5}{s} at startup, decaying as velocity noise accumulates.
@@ -452,10 +452,9 @@ with a \SI{1}{s} time constant.
 Metric & Ascento & DIABLO & Whleaper & SKATER & \textbf{ACC (Ours)} \\
 \midrule
 Balance &
-  LQR &
-  Cascaded\newline LQR &
-  LQR + PPO &
-  Convex\newline MPC &
+  LQR &  LQR +\newline aux.\ loops &
+  LQR / PPO\newline (per mode) &
+  Hierarch.\newline MPC &
   \textbf{Gated PD\newline + anchor I} \\
 \midrule
 Idle precision &
@@ -1130,7 +1129,7 @@ the drop envelope.
 To establish that ACC is not merely a tuned linear controller, we compare six classical baselines---four 4-state TWIP variants (LQR, LQR+AW, LQR-DT, PI+AW) and two 6-state coupled variants (servo and direct-torque)---together with a preliminary model-free PPO run reported as a reference point rather than as a seventh baseline (all share identical environment setups):
 
 \begin{enumerate}
-\item \textbf{LQR}---4-state TWIP with decoupled roll/yaw PD through a PID servo layer ($\sim$\SI{0.25}{s} lag).
+\item \textbf{LQR}---4-state TWIP~\cite{grasser2002joe,pathak2005wip} with decoupled roll/yaw PD through a PID servo layer ($\sim$\SI{0.25}{s} lag).
 \item \textbf{LQR + Integral AW}---Same as (1) plus pitch-error integral with conditional AW (clamped $\pm\SI{3.0}{rad/s}$).
 \item \textbf{LQR (Direct Torque)}---Re-optimized for direct-torque plant ($\tau_s{=}0$, $k_{p,\text{roll}}{=}55.0$), outputting torques directly.
 \item \textbf{Coupled 6-State 3D LQR}---Extends (1) with roll states $(\phi,\dot{\phi})$.
@@ -1563,7 +1562,7 @@ Welch's $t$-test, Bonferroni-adj.\ $\alpha{=}0.007$ (7 comparisons); L0$\rightar
 (7)~Six classical baselines---four 4-state TWIP variants (LQR, LQR+AW, LQR-DT, PI+AW) and two 6-state coupled variants (servo and direct-torque)---all fail (\SI{100}{\percent}). A full-state LQR from finite-difference linearization of the complete 10-DOF MuJoCo plant was attempted but produced unreliable gain matrices due to ill-conditioned contact dynamics at the standing equilibrium ($\kappa(A){\approx}10^{10}$); robust linearization of articulated-leg contact dynamics at unstable equilibria is an open challenge. The hip-roll coupling $b_{r,h}{=}-5.0$ in the 6-state LQR is empirical; a sensitivity sweep is deferred.
 (8)~\textbf{A \SI{27}{mm} sagittal parking offset persists on the very axis the anchor regulates; it is a finite-DC-gain effect, and it is removable.} ACC's position integral acts on the sagittal axis, yet the robot settles $\SI{-27.0}{mm}$ from the commanded home along that axis and then holds the offset to within \SI{0.009}{mm} SD across ten trials (Table~\ref{tab:standing}). Sagittal \emph{repeatability} is excellent (\SI{0.294}{mm}), so the deficit is a static bias rather than motion, and it is largely insensitive to the gate structure (every subtractive ablation that survives lands within \SI{0.2}{mm} of it). Earlier drafts attributed it to a mismatch between the latched home and the true torque-balance equilibrium, compounded by the CoM-$z$ versus base-$z$ convention gap (\S\ref{sec:height_convention}). Direct instrumentation of the sagittal torque decomposition (Appendix~\ref{sec:parking_supp}) shows that hypothesis to be wrong on the dominant term and right only on the remainder. At the parking point the gravity moment about the wheel axle is $\SI{0.0040}{Nm}$ (CoM lever \SI{0.050}{mm})---a settled wheeled inverted pendulum necessarily parks its mass over the contact line---and the anchor integral sits at \SI{0.198}{Nm}, \SI{10.0}{\percent} of its \SI{2.0}{Nm} clamp, so the offset is neither gravity-driven nor a windup or saturation artifact. What actually balances is a constant pitch-loop demand of $\SI{-1.259}{Nm}$, produced because the feedforward pitch reference commands $+\SI{3.476}{\degree}$ where the robot in fact balances at $+\SI{2.034}{\degree}$. The position loop must cancel that torque, and because the anchor integral is \emph{leaky} its DC gain is finite ($k_{I,\text{dc}}{=}k_i\Delta t(1{-}\lambda)/\lambda{=}\SI{7.96}{Nm/m}$, one fifth of $k_{pos}$), so a nonzero error is required to produce it: Eq.~\eqref{eq:parking} predicts \SI{24.88}{mm} against \SI{24.99}{mm} measured, and tracks a $40{\times}$ gain sweep and a five-point height sweep to within \SI{0.92}{\percent}. Only the residual \SIrange{1}{3}{mm} is a frame-convention gap. Two corrections were measured, neither yet promoted into the shipped profile because every table in this paper was measured on it: recalibrating the feedforward pitch reference removes \SI{92.5}{\percent} of the offset ($-27.0\rightarrow\SI{-2.0}{mm}$) with $F_{\min}$ unchanged (\SI{82.5}{N} vs.\ \SI{82.8}{N}, $p{=}0.55$) but a borderline \SI{4.5}{N} reduction in $F_{\text{med}}$ ($p{=}0.051$); raising $k_i$ from \num{4} to \num{160} removes \SI{80}{\percent} at no measurable push cost ($p{\geq}0.32$). Absolute positioning accuracy as published is therefore limited to ${\sim}\SI{27}{mm}$, but the limit is a design-parameter choice with a closed-form price, not an unexplained residual.
 (9)~Architectural generality across morphologies remains to be demonstrated.
-(10)~Push ablation at $N{=}10$ has min.\ detectable effect ${\sim}\SI{3.2}{N}$; sub-\SI{2}{N} differences non-significant (see Statistical power). The model-free PPO run (5.4M steps, single seed, no domain randomization, no hyperparameter search) does not meet the standard of a tuned reinforcement-learning baseline and is not presented as one; it is a difficulty probe on the unaided search problem, and the \SI{85}{\percent} fall rate is reported as observed rather than as an upper bound on RL performance for this platform. A properly resourced learning comparison---multiple seeds, domain randomization, a tuned reward---lies outside the scope of a structured-prior contribution and remains open; the natural form of that comparison is residual learning over the prior rather than learning against it. A task-priority QP whole-body controller was benchmarked both standalone and as an assist on ACC and did not resolve the precision--recovery trade-off (\S\ref{sec:wbc}). That benchmark has since been re-run with all four audited implementation defects repaired and across four task weightings: the standalone WBC still falls in 225 of 225 scenarios, and the assist still degrades every stability metric but roll wherever it is given authority. One caveat is not resolved by the re-run---roll RMS is the single axis on which the WBC blend beats ACC (\SI{14}{\percent} over the full batch, \SI{18}{\percent} on the matched subset), so the centralized formulation is not without merit on that axis; what the evidence establishes is that its advantage cannot be harvested by torque-level blending. A tuned convex MPC on the full 10-DOF plant remains deferred because finite-difference linearization at the standing equilibrium is ill-conditioned ($\kappa(A){\approx}10^{10}$, Limitation~7), so robust full-plant MPC is an open prerequisite rather than a missing comparison.
+(10)~Push ablation at $N{=}10$ has min.\ detectable effect ${\sim}\SI{3.2}{N}$; sub-\SI{2}{N} differences non-significant (see Statistical power). The model-free PPO run (5.4M steps, single seed, no domain randomization, no hyperparameter search) does not meet the standard of a tuned reinforcement-learning baseline and is not presented as one; it is a difficulty probe on the unaided search problem, and the \SI{85}{\percent} fall rate is reported as observed rather than as an upper bound on RL performance for this platform. A properly resourced learning comparison---multiple seeds, domain randomization~\cite{tobin2017domainrand,peng2018dynrand}, a tuned reward---lies outside the scope of a structured-prior contribution and remains open; the natural form of that comparison is residual learning over the prior rather than learning against it. A task-priority QP whole-body controller was benchmarked both standalone and as an assist on ACC and did not resolve the precision--recovery trade-off (\S\ref{sec:wbc}). That benchmark has since been re-run with all four audited implementation defects repaired and across four task weightings: the standalone WBC still falls in 225 of 225 scenarios, and the assist still degrades every stability metric but roll wherever it is given authority. One caveat is not resolved by the re-run---roll RMS is the single axis on which the WBC blend beats ACC (\SI{14}{\percent} over the full batch, \SI{18}{\percent} on the matched subset), so the centralized formulation is not without merit on that axis; what the evidence establishes is that its advantage cannot be harvested by torque-level blending. A tuned convex MPC on the full 10-DOF plant remains deferred because finite-difference linearization at the standing equilibrium is ill-conditioned ($\kappa(A){\approx}10^{10}$, Limitation~7), so robust full-plant MPC is an open prerequisite rather than a missing comparison.
 
 \textbf{Deployment Risks and Mitigations.}
 ACC uses raw torque, \SI{400}{Nm/s} rate limit, standard sensors (IMU $+$ encoders). We distinguish two latency thresholds: a \textbf{performance} threshold (${\sim}\SI{10}{ms}$) where $F_{\max}$ bifurcates \SI{96}{N}${\rightarrow}{\sim}\SI{47}{N}$, and a \textbf{stability} threshold (${>}\SI{150}{ms}$, clean sensors, $N{=}5$, zero falls) where the robot actually falls. ACC's gates (proximity, envelope, pitch) depend on physical state, not timing precision---the architecture is intrinsically delay-tolerant for stability. The \SI{150}{ms}$+$ stability threshold is consistent across all physical gating mechanisms: the proximity gate (spatial, \SI{15}{cm}), asymmetric envelope (temporal, $\tau_r{\approx}\SI{1.5}{s}$), and damping boost are all state-driven rather than schedule-driven.
@@ -2074,10 +2073,15 @@ J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford, and O.~Klimov,
 ``Proximal Policy Optimization Algorithms,''
 \emph{arXiv preprint arXiv:1707.06347}, 2017.
 
-\bibitem{whleaper2024}
-Y.~Zhu, S.~He, Z.~Qi, Z.~Yong, Y.~Qin, and J.~Chen,
-``Whleaper: A 10-DOF Flexible Bipedal Wheeled Robot,''
-in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 11272--11277, 2024.
+\bibitem{johannink2019residual}
+T.~Johannink, S.~Bahl, A.~Nair, J.~Luo, A.~Kumar, M.~Loskyll, J.~A.~Ojea, E.~Solowjow, and S.~Levine,
+``Residual Reinforcement Learning for Robot Control,''
+in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, pp. 6023--6029, 2019.
+
+\bibitem{silver2018residual}
+T.~Silver, K.~Allen, J.~Tenenbaum, and L.~Kaelbling,
+``Residual Policy Learning,''
+\emph{arXiv preprint arXiv:1812.06298}, 2018.
 
 \bibitem{boston_dynamics_handle2017}
 Boston Dynamics,
@@ -2089,10 +2093,30 @@ M.~Bjelonic, C.~D.~Bellicoso, Y.~de~Viragh, D.~Sako, F.~D.~Tresoldi, F.~Jenelten
 ``Keep Rollin'---Whole-Body Motion Control and Planning for Wheeled Quadrupedal Robots,''
 \emph{IEEE Robotics and Automation Letters}, vol.~4, no.~2, pp. 2116--2123, 2019.
 
+\bibitem{zhang2022ollie}
+J.~Zhang, S.~Wang, H.~Wang, J.~Lai, Z.~Bing, Y.~Jiang, Y.~Zheng, and Z.~Zhang,
+``An Adaptive Approach to Whole-Body Balance Control of Wheel-Bipedal Robot Ollie,''
+in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 12835--12842, 2022.
+
+\bibitem{bjelonic2021mpc}
+M.~Bjelonic, R.~Grandia, O.~Harley, C.~Galliard, S.~Zimmermann, and M.~Hutter,
+``Whole-Body MPC and Online Gait Sequence Generation for Wheeled-Legged Robots,''
+in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 8388--8395, 2021.
+
 \bibitem{diablo2024}
-D.~Liu \emph{et al.},
+D.~Liu, F.~Yang, X.~Liao, and X.~Lyu,
 ``DIABLO: A 6-DoF Wheeled Bipedal Robot Composed Entirely of Direct-Drive Joints,''
-\emph{arXiv preprint arXiv:2407.21500}, 2024.
+in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 3605--3612, 2024.
+
+\bibitem{whleaper2024}
+Y.~Zhu, S.~He, Z.~Qi, Z.~Yong, Y.~Qin, and J.~Chen,
+``Whleaper: A 10-DOF Flexible Bipedal Wheeled Robot,''
+in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 11272--11277, 2024.
+
+\bibitem{zhang2025residualwbr}
+J.~Zhang, B.~Lu, H.~Cao, and Y.~Fang,
+``Hybrid Balance Control for Wheeled Bipedal Robot via Residual Reinforcement Learning Optimization,''
+in \emph{Proc. 10th Asia-Pacific Conf. Intelligent Robot Systems (ACIRS)}, pp. 59--66, 2025.
 
 \bibitem{cascade_standard}
 K.~J.~\AA{}str\"{o}m and T.~H\"{a}gglund,
@@ -2108,10 +2132,20 @@ C.~D.~Bellicoso, F.~Jenelten, C.~Gehring, and M.~Hutter,
 ``Dynamic Locomotion Through Online Nonlinear Motion Optimization for Quadrupedal Robots,''
 \emph{IEEE Robotics and Automation Letters}, vol.~3, no.~3, pp. 2261--2268, 2018.
 
+\bibitem{escande2014hqp}
+A.~Escande, N.~Mansard, and P.-B.~Wieber,
+``Hierarchical Quadratic Programming: Fast Online Humanoid-Robot Motion Generation,''
+\emph{The Int. Journal of Robotics Research}, vol.~33, no.~7, pp. 1006--1028, 2014.
+
 \bibitem{gain_scheduling_survey}
 W.~J.~Rugh and J.~S.~Shamma,
 ``Research on Gain Scheduling,''
 \emph{Automatica}, vol.~36, no.~10, pp. 1401--1425, 2000.
+
+\bibitem{leith2000gainsched}
+D.~J.~Leith and W.~E.~Leithead,
+``Survey of Gain-Scheduling Analysis and Design,''
+\emph{Int. Journal of Control}, vol.~73, no.~11, pp. 1001--1025, 2000.
 
 \bibitem{shinskey1996}
 F.~G.~Shinskey,
@@ -2125,6 +2159,11 @@ K.~J.~\AA{}str\"{o}m and T.~H\"{a}gglund,
 D.~Liberzon,
 \emph{Switching in Systems and Control},
 Birkh\"{a}user, 2003.
+
+\bibitem{hespanha2003hysteresis}
+J.~P.~Hespanha, D.~Liberzon, and A.~S.~Morse,
+``Hysteresis-Based Switching Algorithms for Supervisory Control of Uncertain Systems,''
+\emph{Automatica}, vol.~39, no.~2, pp. 263--272, 2003.
 
 \bibitem{liu2024review}
 X.~Liu, Y.~Sun, S.~Wen, K.~Cao, Q.~Qi, X.~Zhang, H.~Shen, G.~Chen, J.~Xu, and A.~Ji,
@@ -2151,6 +2190,21 @@ X.~Feng, S.~Liu, Q.~Yuan, J.~Xiao, and D.~Zhao,
 ``Research on Wheel-Legged Robot Based on LQR and ADRC,''
 \emph{Scientific Reports}, vol.~13, 15122, 2023.
 
+\bibitem{astrom1989windup}
+K.~J.~\AA{}str\"{o}m and L.~Rundqwist,
+``Integrator Windup and How to Avoid It,''
+in \emph{Proc. American Control Conf. (ACC)}, pp. 1693--1698, 1989.
+
+\bibitem{kothare1994antiwindup}
+M.~V.~Kothare, P.~J.~Campo, M.~Morari, and C.~N.~Nett,
+``A Unified Framework for the Study of Anti-Windup Designs,''
+\emph{Automatica}, vol.~30, no.~12, pp. 1869--1883, 1994.
+
+\bibitem{tarbouriech2009aw}
+S.~Tarbouriech and M.~Turner,
+``Anti-Windup Design: An Overview of Some Recent Advances and Open Problems,''
+\emph{IET Control Theory \& Applications}, vol.~3, no.~1, pp. 1--19, 2009.
+
 \bibitem{englsberger2015dcm}
 J.~Englsberger, C.~Ott, and A.~Albu-Sch\"{a}ffer,
 ``Three-Dimensional Bipedal Walking Control Based on Divergent Component of Motion,''
@@ -2169,12 +2223,27 @@ F.~Roscia, A.~Cumerlotti, A.~Del~Prete, C.~Semini, and M.~Focchi,
 \bibitem{chamorro2024stairclimbing}
 S.~Chamorro, V.~Klemm, M.~de~la~Iglesia~Valls, C.~Pal, and R.~Siegwart,
 ``Reinforcement Learning for Blind Stair Climbing with Legged and Wheeled-Legged Robots,''
-in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, 2024.
+in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, pp. 8081--8087, 2024.
 
 \bibitem{legged_terrain_extero}
 M.~Hutter \emph{et al.},
 ``ANYmal---Toward Legged Robots for Harsh Environments,''
 \emph{Advanced Robotics}, vol.~31, no.~17, pp. 918--931, 2017.
+
+\bibitem{fankhauser2018rough}
+P.~Fankhauser, M.~Bjelonic, C.~D.~Bellicoso, T.~Miki, and M.~Hutter,
+``Robust Rough-Terrain Locomotion with a Quadrupedal Robot,''
+in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, pp. 5761--5768, 2018.
+
+\bibitem{lee2020challenging}
+J.~Lee, J.~Hwangbo, L.~Wellhausen, V.~Koltun, and M.~Hutter,
+``Learning Quadrupedal Locomotion over Challenging Terrain,''
+\emph{Science Robotics}, vol.~5, no.~47, eabc5986, 2020.
+
+\bibitem{miki2022perceptive}
+T.~Miki, J.~Lee, J.~Hwangbo, L.~Wellhausen, V.~Koltun, and M.~Hutter,
+``Learning Robust Perceptive Locomotion for Quadrupedal Robots in the Wild,''
+\emph{Science Robotics}, vol.~7, no.~62, eabk2822, 2022.
 
 \bibitem{blind_terrain_proprio}
 G.~Bledt \emph{et al.},
@@ -2186,6 +2255,11 @@ C.~D.~Bellicoso, C.~Gehring, J.~Hwangbo, P.~Fankhauser, and M.~Hutter,
 ``Perception-Less Terrain Adaptation Through Whole Body Control and Hierarchical Optimization,''
 in \emph{Proc. IEEE-RAS Int. Conf. Humanoid Robots (Humanoids)}, pp. 558--564, 2016.
 
+\bibitem{camurri2017contact}
+M.~Camurri, M.~Fallon, S.~Bazeille, A.~Radulescu, V.~Barasuol, D.~G.~Caldwell, and C.~Semini,
+``Probabilistic Contact Estimation and Impact Detection for State Estimation of Quadruped Robots,''
+\emph{IEEE Robotics and Automation Letters}, vol.~2, no.~2, pp. 1023--1030, 2017.
+
 \bibitem{hyon2007gated}
 S.-H.~Hyon and G.~Cheng,
 ``Gravity Compensation and Full-Body Balancing for Humanoid Robots,''
@@ -2196,10 +2270,30 @@ E.~Todorov, T.~Erez, and Y.~Tassa,
 ``MuJoCo: A Physics Engine for Model-Based Control,''
 in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 5026--5033, 2012.
 
+\bibitem{grasser2002joe}
+F.~Grasser, A.~D'Arrigo, S.~Colombi, and A.~C.~Rufer,
+``JOE: A Mobile, Inverted Pendulum,''
+\emph{IEEE Trans. Industrial Electronics}, vol.~49, no.~1, pp. 107--114, 2002.
+
+\bibitem{pathak2005wip}
+K.~Pathak, J.~Franch, and S.~K.~Agrawal,
+``Velocity and Position Control of a Wheeled Inverted Pendulum by Partial Feedback Linearization,''
+\emph{IEEE Trans. Robotics}, vol.~21, no.~3, pp. 505--513, 2005.
+
 \bibitem{grimminger2020torque}
 F.~Grimminger, A.~Meduri, M.~Khadiv, J.~Viereck, M.~W\"{u}thrich, L.~Wellhausen, \emph{et al.},
 ``An Open Torque-Controlled Modular Robot Architecture for Legged Locomotion Research,''
 \emph{IEEE Robotics and Automation Letters}, vol.~5, no.~2, pp. 3650--3657, 2020.
+
+\bibitem{tobin2017domainrand}
+J.~Tobin, R.~Fong, A.~Ray, J.~Schneider, W.~Zaremba, and P.~Abbeel,
+``Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World,''
+in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 23--30, 2017.
+
+\bibitem{peng2018dynrand}
+X.~B.~Peng, M.~Andrychowicz, W.~Zaremba, and P.~Abbeel,
+``Sim-to-Real Transfer of Robotic Control with Dynamics Randomization,''
+in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, pp. 3803--3810, 2018.
 
 \end{thebibliography}
 
