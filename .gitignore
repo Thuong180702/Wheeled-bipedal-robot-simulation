@@ -57,6 +57,10 @@ outputs/rate_limit_sweep/*
 outputs/compound_disturbance/*
 !outputs/compound_disturbance/results.json
 !outputs/compound_disturbance/results_corrected.json
+!outputs/rate_matched_baselines/
+outputs/rate_matched_baselines/*
+!outputs/rate_matched_baselines/results.json
+!outputs/wbc_audit_fix_verification.json
 
 runs/
 wandb/
@@ -121,3 +125,9 @@ assets/robot-urdf/export.log
 
 # ─── ROS colcon build log ─────────────────────────────────────────────────────
 log/
+!outputs/wbc_postfix_evidence/
+outputs/wbc_postfix_evidence/**
+!outputs/wbc_postfix_evidence/**/
+!outputs/wbc_postfix_evidence/**/*.jsonl
+!outputs/wbc_postfix_evidence/**/*.gz
+!outputs/wbc_postfix_evidence/README.md

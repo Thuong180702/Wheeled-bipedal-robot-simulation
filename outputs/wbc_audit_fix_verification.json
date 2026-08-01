@@ -1,0 +1,81 @@
+{
+  "all_pass": true,
+  "f1_tolerance": 0.001,
+  "checks": {
+    "F1_contact_jacobian": {
+      "contacts": [
+        {
+          "body": "l_wheel_link",
+          "metrics": {
+            "body_id": 6.0,
+            "body_name": "l_wheel_link",
+            "point_reconstruction_error": 5.402507733537343e-08,
+            "jacobian_full_max_abs_error": 4.1996144783951195e-08,
+            "jacobian_base_linear_max_abs_error": 0.0,
+            "jacobian_base_angular_max_abs_error": 4.1996144783951195e-08,
+            "jacobian_actuated_max_abs_error": 3.317621658196931e-08,
+            "jacobian_rotational_max_abs_error": 1.787806218622734e-07,
+            "verdict_jacobian_full": "PASS",
+            "verdict_jacobian_base_linear": "PASS",
+            "verdict_jacobian_base_angular": "PASS",
+            "verdict_jacobian_actuated": "PASS",
+            "verdict_rotational": "PASS"
+          }
+        },
+        {
+          "body": "r_wheel_link",
+          "metrics": {
+            "body_id": 11.0,
+            "body_name": "r_wheel_link",
+            "point_reconstruction_error": 3.537645840157033e-08,
+            "jacobian_full_max_abs_error": 3.537645840157033e-08,
+            "jacobian_base_linear_max_abs_error": 0.0,
+            "jacobian_base_angular_max_abs_error": 3.537645840157033e-08,
+            "jacobian_actuated_max_abs_error": 3.37380634540807e-08,
+            "jacobian_rotational_max_abs_error": 1.1921728926278519e-07,
+            "verdict_jacobian_full": "PASS",
+            "verdict_jacobian_base_linear": "PASS",
+            "verdict_jacobian_base_angular": "PASS",
+            "verdict_jacobian_actuated": "PASS",
+            "verdict_rotational": "PASS"
+          }
+        }
+      ],
+      "max_err": 4.1996144783951195e-08,
+      "mj_jac_compared": true,
+      "actuated_max_abs_error": 3.37380634540807e-08,
+      "leg_col_norms": [
+        0.041664,
+        0.432811,
+        0.403085,
+        0.306196,
+        0.06,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "max_leg_col_norm": 0.43281102180480957,
+      "jac_shape": [
+        3,
+        16
+      ],
+      "pass": true
+    },
+    "F2_feasibility_only_hardcode": {
+      "pass": true,
+      "takes_task_mode_param": true,
+      "feasibility_only_literal_call_lines": [
+        424
+      ],
+      "note": "remaining literal call sites are the task-independent constraint-builder fallback (hard constraints only)"
+    },
+    "F3_F4_height_reference": {
+      "pass": true,
+      "f3_height_ref_is_com_z": true,
+      "f4_gate_has_own_base_z_target": true,
+      "prefix_base_z_form_present": false
+    }
+  }
+}
