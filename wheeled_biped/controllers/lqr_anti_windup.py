@@ -67,6 +67,7 @@ from wheeled_biped.controllers.lqr_balance import (
     _OBS_YAW_ERROR,
     _WHEEL_RADIUS_M,
     _WHEEL_VEL_LIMIT,
+    _CONTROL_DT,
     _compute_lqr_gains,
     _norm_target,
 )
@@ -126,7 +127,7 @@ class LQRIntegralAWController:
         self._wheel_vel_limit: float = float(
             pid_cfg.get("wheel_vel_limit", _WHEEL_VEL_LIMIT)
         )
-        self._control_dt: float = 0.02
+        self._control_dt: float = _CONTROL_DT
 
         # ── LQR gains (same as LQRBalanceController) ──────────────────────────
         self._K_lqr = _compute_lqr_gains(

@@ -122,6 +122,10 @@ _JOINT_LIMITS: dict[str, tuple[float, float]] = {
 _ROBOT_MASS_KG = 8.1  # total mass (torso + legs + wheels)
 _COM_HEIGHT_NOM_M = 0.54  # CoM above wheel axis at nominal h = 0.65 m
 _WHEEL_RADIUS_M = 0.06  # from geom size="0.06 0.025"
+# Control period. 0.02 s (50 Hz) is the baselines' design rate; evaluation
+# harnesses override this module global before construction to re-run the
+# baselines at another rate (see scripts/eval_balance.py --control-hz).
+_CONTROL_DT = 0.02
 _WHEEL_VEL_LIMIT = 20.0  # rad/s — same as low_level_pid.wheel_vel_limit
 
 # Height command range — must match BalanceEnv
@@ -368,7 +372,7 @@ class LQRBalanceController:
 
         pid_cfg = self._config.get("low_level_pid", {})
         self._wheel_vel_limit: float = float(pid_cfg.get("wheel_vel_limit", _WHEEL_VEL_LIMIT))
-        self._control_dt: float = 0.02
+        self._control_dt: float = _CONTROL_DT
 
         # ── LQR gains ────────────────────────────────────────────────────────
         self._K_lqr = _compute_lqr_gains(

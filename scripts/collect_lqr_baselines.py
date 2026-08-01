@@ -2,7 +2,9 @@
 """Collect structured JSON for all 4 LQR baseline rows (Table III in paper).
 
 Runs each LQR variant with N episodes, saves per-episode metrics + aggregates.
-Matches paper methodology: 10s episodes (1000 steps), clean sensors, 100Hz ctrl.
+Matches paper methodology: 20s episodes (1000 steps), clean sensors, 50Hz ctrl
+(the baselines' design rate). For the rate-matched 50 Hz vs 100 Hz comparison
+see scripts/collect_rate_matched_baselines.py.
 
 Usage:
   .venv/bin/mjpython scripts/collect_lqr_baselines.py --n-episodes 20
@@ -29,7 +31,7 @@ def run_lqr_eval(controller_name: str, config_path: str, n_episodes: int,
     cmd = [
         sys.executable, str(ROOT / "scripts/eval_balance.py"),
         "--controller", controller_name,
-        "--config", config_path,
+        "--baseline-config", config_path,
         "--scenarios", "nominal",
         "--num-episodes", str(n_episodes),
         "--num-steps", "1000",

@@ -131,7 +131,46 @@ console = Console()
 # Constants
 # ---------------------------------------------------------------------------
 
-CONTROL_DT = 0.02  # seconds per control step
+CONTROL_DT = 0.02  # seconds per control step (50 Hz — the baselines' design rate)
+
+
+def _set_control_rate(hz: float) -> None:
+    """Retarget the whole evaluation path to a different control rate.
+
+    The baselines hard-code 0.02 s in two places: this module (PID integral,
+    substep count, telemetry, survival time) and a ``_CONTROL_DT`` module
+    global inside each classical controller (drift/integral accumulators, the
+    torque rate limiter, and the finite-difference linearization in
+    ``full_lqr``). All of them read the global at call/construction time, so
+    rebinding here before any controller is built is sufficient. The LQR
+    feedback gains themselves are continuous-time and rate-independent.
+    """
+    global CONTROL_DT
+    if abs(hz - 1.0 / CONTROL_DT) < 1e-9:
+        return
+    CONTROL_DT = 1.0 / float(hz)
+
+    from wheeled_biped.controllers import (
+        coupled_lqr_3d,
+        coupled_lqr_3d_torque,
+        fair_lqr_torque,
+        full_lqr,
+        lqr_anti_windup,
+        lqr_balance,
+    )
+
+    for mod in (
+        coupled_lqr_3d,
+        coupled_lqr_3d_torque,
+        fair_lqr_torque,
+        full_lqr,
+        lqr_anti_windup,
+        lqr_balance,
+    ):
+        assert hasattr(mod, "_CONTROL_DT"), mod.__name__
+        mod._CONTROL_DT = CONTROL_DT
+    full_lqr._N_PHYSICS_SUBSTEPS = int(round(CONTROL_DT / 0.002))
+    console.print(f"[cyan]Control rate set to {hz:g} Hz (dt={CONTROL_DT:.4f}s)[/cyan]")
 MIN_HEIGHT_CMD = 0.40  # metres (BalanceEnv.MIN_HEIGHT_CMD)
 MAX_HEIGHT_CMD = 0.70  # metres (BalanceEnv.MAX_HEIGHT_CMD)
 
@@ -1395,7 +1434,15 @@ def evaluate(
         ),
     ),
     num_episodes: int = typer.Option(20, help="Episodes per scenario per checkpoint."),
-    num_steps: int = typer.Option(1000, help="Max steps per episode (1000 = 20 s)."),
+    num_steps: int = typer.Option(1000, help="Max steps per episode (1000 = 20 s at 50 Hz)."),
+    control_hz: float = typer.Option(
+        50.0,
+        help=(
+            "Control rate in Hz. 50 is the classical baselines' design rate; "
+            "use 100 to rate-match them against ACC. Physics stays at 500 Hz, "
+            "so this only changes the number of substeps per control step."
+        ),
+    ),
     seeds: list[int] = typer.Option([0], help="Random seed(s). Repeat flag for multiple seeds."),
     output_dir: str = typer.Option(
         "", help="Output directory. Default: first checkpoint directory or ./baseline_eval."
@@ -1454,6 +1501,8 @@ def evaluate(
 
     # Expand sweep scenarios into per-parameter sub-scenarios
     expanded_scenarios = _expand_scenarios(scenarios)
+
+    _set_control_rate(control_hz)
 
     # Validate controller choice
     if controller not in ("rl", "baseline_lqr", "baseline_lqr_aw", "baseline_lqr_torque", "baseline_coupled_lqr", "baseline_pi_aw", "lqr_ik", "baseline_full_lqr", "baseline_coupled_lqr_torque"):
