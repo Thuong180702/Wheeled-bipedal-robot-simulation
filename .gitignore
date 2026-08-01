@@ -131,3 +131,11 @@ outputs/wbc_postfix_evidence/**
 !outputs/wbc_postfix_evidence/**/*.jsonl
 !outputs/wbc_postfix_evidence/**/*.gz
 !outputs/wbc_postfix_evidence/README.md
+
+# Parking-offset analysis evidence (Appendix: static torque balance)
+!outputs/parking_offset_evidence/
+outputs/parking_offset_evidence/**
+!outputs/parking_offset_evidence/**/
+!outputs/parking_offset_evidence/**/*.json
+!outputs/parking_offset_evidence/**/*.py
+!outputs/parking_offset_evidence/README.md

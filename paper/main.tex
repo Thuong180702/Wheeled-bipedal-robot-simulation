@@ -1559,7 +1559,7 @@ Welch's $t$-test, Bonferroni-adj.\ $\alpha{=}0.007$ (7 comparisons); L0$\rightar
 (5)~\textbf{ACC is not rate-portable downward, though the baseline comparison is now rate-matched.} The comparison confound has been removed in the measurable direction: every classical baseline was re-run at ACC's \SI{100}{Hz} and all six still fail at \SI{100}{\percent}, with survival unchanged or shorter and roll RMS unchanged or worse (Table~\ref{tab:rate_matched}, \S\ref{sec:rate_matched}). The gap in Table~\ref{tab:lqr_baselines} is therefore not a bandwidth artifact. What remains unresolved is the converse: ACC itself does not survive being slowed down. A \SI{50}{Hz} ACC evaluation with recomputed discrete coefficients ($\alpha_a{\approx}0.58$, $\alpha_r{\approx}0.013$, anchor leak~\num{0.010}) \emph{failed}---the robot collapsed to a mean CoM height of \SI{0.124}{m} (nominal \SI{0.404}{m}), and the sub-millimeter idle RMS and \SI{10}{N} push threshold recorded by that run are measurements taken on a fallen robot. We consequently do not claim that ACC's architectural contribution is rate-independent, and we do not yet know which of the two candidate mechanisms is responsible: excitation of high-frequency plant modes that the \SI{100}{Hz} loop suppresses, or the phase lag introduced by discretizing the asymmetric envelope at $\Delta t{=}\SI{20}{ms}$, where $\alpha_a{\approx}0.58$ leaves the attack filter barely more than one sample from deadbeat. Distinguishing them requires a loop-gain and phase-margin analysis of the linearized closed loop at both rates, together with a re-tuning of the ACC gains for the \SI{20}{ms} step; neither has been performed. The practical consequence is a deployment constraint rather than a comparison flaw: ACC as tuned requires a \SI{100}{Hz} loop, and the \SI{9.5}{ms} end-to-end budget estimated below leaves no room to relax it.
 (6)~\textbf{The commanded height range is bounded by the posture map, not by the anchor.} Within the calibrated band (\SIrange{0.354}{0.454}{m} CoM-$z$) a commanded transition costs at most \SI{2}{\percent} of push margin, but a ${+}\SI{10}{cm}$ rise into the extrapolated region collapses $F_{\max}$ by \SI{81}{\percent} (Table~\ref{tab:compound}); the mirror-image squat costs only \SI{15}{\percent}. Operating above the calibrated band under disturbance is therefore unsafe, and extending the band requires additional posture calibration points rather than a controller change. ACC has not been evaluated over a wide commanded-height sweep in the manner of a dedicated height-tracking study; only the $\pm\SI{5}{cm}$ and $\pm\SI{10}{cm}$ steps of \S\ref{sec:analysis} are measured.
 (7)~Six classical baselines---four 4-state TWIP variants (LQR, LQR+AW, LQR-DT, PI+AW) and two 6-state coupled variants (servo and direct-torque)---all fail (\SI{100}{\percent}). A full-state LQR from finite-difference linearization of the complete 10-DOF MuJoCo plant was attempted but produced unreliable gain matrices due to ill-conditioned contact dynamics at the standing equilibrium ($\kappa(A){\approx}10^{10}$); robust linearization of articulated-leg contact dynamics at unstable equilibria is an open challenge. The hip-roll coupling $b_{r,h}{=}-5.0$ in the 6-state LQR is empirical; a sensitivity sweep is deferred.
-(8)~\textbf{A \SI{27}{mm} sagittal parking offset persists on the very axis the anchor regulates.} ACC's position integral acts on the sagittal axis, yet the robot settles $\SI{-27.0}{mm}$ from the commanded home along that axis and then holds the offset to within \SI{0.009}{mm} SD across ten trials (Table~\ref{tab:standing}). Sagittal \emph{repeatability} is excellent (\SI{0.294}{mm}), so the deficit is a static bias rather than motion, and it is not a windup artifact: it is stationary, reproducible to a hundredth of a millimeter, and largely insensitive to the gate structure (every subtractive ablation that survives lands within \SI{0.2}{mm} of it). The most likely cause is a mismatch between the latched home position and the true torque-balance equilibrium---the controller is holding the position at which the anchor integral's output balances the standing pitch bias, not the position that was commanded---compounded by the CoM-$z$ versus base-$z$ convention gap (\S\ref{sec:height_convention}). Disabling the integral moves the offset the wrong way, to $\SI{-31.2}{mm}$ (M1, Table~\ref{tab:standing}), confirming the integral removes \SI{4.2}{mm} of it but not the bulk. Absolute positioning accuracy is therefore limited to ${\sim}\SI{27}{mm}$ and is the binding constraint on any task requiring it; this is the design's principal open weakness. Calibrating the latched home against the measured equilibrium, and raising the anchor gain now that windup is gated, are the two direct routes to closing it. Both are untested.
+(8)~\textbf{A \SI{27}{mm} sagittal parking offset persists on the very axis the anchor regulates; it is a finite-DC-gain effect, and it is removable.} ACC's position integral acts on the sagittal axis, yet the robot settles $\SI{-27.0}{mm}$ from the commanded home along that axis and then holds the offset to within \SI{0.009}{mm} SD across ten trials (Table~\ref{tab:standing}). Sagittal \emph{repeatability} is excellent (\SI{0.294}{mm}), so the deficit is a static bias rather than motion, and it is largely insensitive to the gate structure (every subtractive ablation that survives lands within \SI{0.2}{mm} of it). Earlier drafts attributed it to a mismatch between the latched home and the true torque-balance equilibrium, compounded by the CoM-$z$ versus base-$z$ convention gap (\S\ref{sec:height_convention}). Direct instrumentation of the sagittal torque decomposition (Appendix~\ref{sec:parking_supp}) shows that hypothesis to be wrong on the dominant term and right only on the remainder. At the parking point the gravity moment about the wheel axle is $\SI{0.0034}{Nm}$ (CoM lever \SI{0.043}{mm})---a settled wheeled inverted pendulum necessarily parks its mass over the contact line---and the anchor integral sits at \SI{0.198}{Nm}, \SI{10.0}{\percent} of its \SI{2.0}{Nm} clamp, so the offset is neither gravity-driven nor a windup or saturation artifact. What actually balances is a constant pitch-loop demand of $\SI{-1.257}{Nm}$, produced because the feedforward pitch reference commands $+\SI{3.476}{\degree}$ where the robot in fact balances at $+\SI{2.035}{\degree}$. The position loop must cancel that torque, and because the anchor integral is \emph{leaky} its DC gain is finite ($k_{I,\text{dc}}{=}k_i\Delta t(1{-}\lambda)/\lambda{=}\SI{7.96}{Nm/m}$, one fifth of $k_{pos}$), so a nonzero error is required to produce it: Eq.~\eqref{eq:parking} predicts \SI{24.86}{mm} against \SI{24.99}{mm} measured, and tracks a $40{\times}$ gain sweep and a five-point height sweep to within \SI{0.92}{\percent}. Only the residual \SIrange{1}{3}{mm} is a frame-convention gap. Two corrections were measured, neither yet promoted into the shipped profile because every table in this paper was measured on it: recalibrating the feedforward pitch reference removes \SI{92.5}{\percent} of the offset ($-27.0\rightarrow\SI{-2.0}{mm}$) with $F_{\min}$ unchanged (\SI{82.5}{N} vs.\ \SI{82.8}{N}, $p{=}0.55$) but a borderline \SI{4.5}{N} reduction in $F_{\text{med}}$ ($p{=}0.051$); raising $k_i$ from \num{4} to \num{160} removes \SI{80}{\percent} at no measurable push cost ($p{\geq}0.32$). Absolute positioning accuracy as published is therefore limited to ${\sim}\SI{27}{mm}$, but the limit is a design-parameter choice with a closed-form price, not an unexplained residual.
 (9)~Architectural generality across morphologies remains to be demonstrated.
 (10)~Push ablation at $N{=}10$ has min.\ detectable effect ${\sim}\SI{3.2}{N}$; sub-\SI{2}{N} differences non-significant (see Statistical power). The PPO baseline (5.4M steps, single seed) may not be fully converged; the \SI{85}{\percent} fall rate is reported as observed, not as an upper bound on RL performance for this platform. A task-priority QP whole-body controller was benchmarked both standalone and as an assist on ACC and did not resolve the precision--recovery trade-off (\S\ref{sec:wbc}). That benchmark has since been re-run with all four audited implementation defects repaired and across four task weightings: the standalone WBC still falls in 225 of 225 scenarios, and the assist still degrades every stability metric but roll wherever it is given authority. One caveat is not resolved by the re-run---roll RMS is the single axis on which the WBC blend beats ACC (\SI{14}{\percent} over the full batch, \SI{18}{\percent} on the matched subset), so we cannot claim the centralized formulation has nothing to offer, only that it cannot be harvested by torque-level blending. A tuned convex MPC on the full 10-DOF plant remains deferred because finite-difference linearization at the standing equilibrium is ill-conditioned ($\kappa(A){\approx}10^{10}$, Limitation~7), so robust full-plant MPC is an open prerequisite rather than a missing comparison.
 
@@ -1574,7 +1574,7 @@ ACC tolerates moderate noise, is insensitive to the actuator slew bound over an 
 Future work: hardware validation, EMA settle-time characterization, and extending conditional activation to locomotion and as a structured prior for residual RL.
 
 \section*{Code and Data Availability}
-The controller, the MuJoCo model, every evaluation script referenced above, and the raw result files backing each table are available at \url{https://github.com/thuong180702/Wheeled-bipedal-robot-simulation} (branch \texttt{main}; a release tag will be minted at publication). Each main results table names its producing script and its raw result file in the note directly beneath it (Tables~\ref{tab:standing}, \ref{tab:push_ablation}, \ref{tab:flight_ext}, \ref{tab:robustness} and \ref{tab:compound}); the remaining sweeps are cited inline at the point where they are discussed. The two superseded experiments of \S\ref{sec:analysis} ship both the original and the corrected result files, so the correction itself is auditable. The raw per-step records behind the whole-body-control results of \S\ref{sec:wbc}---the 225-scenario three-arm campaign, the task-weight ablation, the gated and ungated assist runs, and the per-step gate trace---are collected under \path{outputs/wbc_postfix_evidence/}, whose \path{README.md} maps each file to the table it produces.
+The controller, the MuJoCo model, every evaluation script referenced above, and the raw result files backing each table are available at \url{https://github.com/thuong180702/Wheeled-bipedal-robot-simulation} (branch \texttt{main}; a release tag will be minted at publication). Each main results table names its producing script and its raw result file in the note directly beneath it (Tables~\ref{tab:standing}, \ref{tab:push_ablation}, \ref{tab:flight_ext}, \ref{tab:robustness} and \ref{tab:compound}); the remaining sweeps are cited inline at the point where they are discussed. The two superseded experiments of \S\ref{sec:analysis} ship both the original and the corrected result files, so the correction itself is auditable. The raw per-step records behind the whole-body-control results of \S\ref{sec:wbc}---the 225-scenario three-arm campaign, the task-weight ablation, the gated and ungated assist runs, and the per-step gate trace---are collected under \path{outputs/wbc_postfix_evidence/}, whose \path{README.md} maps each file to the table it produces. The torque decomposition, gain sweep, height sweep and push-validation records behind Appendix~\ref{sec:parking_supp} are collected the same way under \path{outputs/parking_offset_evidence/}.
 
 % ============================================================
 % REFERENCES
@@ -1778,6 +1778,266 @@ The claim that survives is the one measured in both configurations of
 \S\ref{sec:wbc}---running the assist \emph{without} the gate admits WBC torque
 on \SI{100}{\percent} of steps and degrades every stability metric but roll,
 which is evidence about the blend itself rather than about the gate's tuning.
+
+% ============================================================
+\section{Static Torque Balance of the Sagittal Parking Offset}
+\label{sec:parking_supp}
+% ============================================================
+
+Limitation~8 reports a $\SI{-27.0}{mm}$ sagittal parking offset on the axis the
+anchor integral regulates. This appendix replaces the hypothesis carried by
+earlier drafts with a measured torque decomposition, derives the offset in
+closed form, validates the derivation against a $40{\times}$ gain sweep and a
+five-point height sweep, and reports the measured cost of two corrections.
+All runs use the idle protocol of Table~\ref{tab:standing} (identical seeds,
+\SI{5}{s} settle, \SI{20}{s} window) with the controller's internal sagittal
+torque decomposition logged alongside the gravity moment about the wheel axles
+(\path{scripts/diagnose_parking_offset.py}; raw records under
+\path{outputs/parking_offset_evidence/}). Sagittal is world $y$ on this
+platform; the $x$ columns of the raw records are lateral.
+
+\subsection{The offset is neither gravity-driven nor a saturated integral}
+
+Two natural explanations fail on direct measurement (Fig.~\ref{fig:parking}a,
+$N{=}3$, values averaged over the measurement window):
+
+\begin{center}\footnotesize
+\begin{tabular}{lr}
+\hline
+Gravity moment about the wheel axle & \SI{+0.0034}{Nm} \\
+CoM lever arm about the axle & \SI{0.043}{mm} \\
+Anchor integral $I$ & \SI{0.198}{Nm} (\SI{10.0}{\percent} of cap) \\
+Integral clamp $I_{\max}$ & \SI{2.0}{Nm} \\
+Pitch-loop torque $\tau_{\text{pitch}}$ & \SI{-1.2574}{Nm} \\
+Position-loop torque $\tau_{\text{position}}$ & \SI{+1.2618}{Nm} \\
+Adaptive bias trim $\tau_{\text{trim}}$ & \SI{+0.0654}{Nm} \\
+Controller position error $e$ & \SI{-24.99}{mm} \\
+Base parking offset $\bar{s}$ & \SI{-26.96}{mm} \\
+\hline
+\end{tabular}
+\end{center}
+
+\emph{Gravity is not the load.} The moment is \SI{0.0034}{Nm} because the CoM
+sits \SI{0.043}{mm} from the axle line. This is not a coincidence of tuning: a
+wheeled inverted pendulum that has stopped accelerating has necessarily brought
+its contact patch under its CoM, whatever its absolute position. The parking
+offset is a displacement of the whole machine relative to the commanded home,
+not a static lean, so no relation of the form
+$\tau_{\text{gravity}}(\bar{s})\approx\tau_{\text{integral}}$ can hold.
+
+\emph{The integral is not saturated.} $I$ reaches \SI{10.0}{\percent} of its
+clamp during quiet stance and never approaches it, so the offset is not a
+windup or anti-windup artifact and cannot be relieved by raising the clamp.
+This is consistent with the ablation result of Table~\ref{tab:standing}, where
+removing the proximity gate entirely (S4) reproduces ACC bit-for-bit.
+
+What does balance is $\tau_{\text{pitch}}$ against $\tau_{\text{position}}$,
+to within \SI{0.004}{Nm}.
+
+\subsection{Origin of the constant pitch torque}
+
+The sagittal pitch term is $\tau_{\text{pitch}}=k_{p,\theta}(\theta-\theta_{\text{ref}})$
+with $k_{p,\theta}=\SI{50}{Nm/rad}$ at idle. Decomposing the commanded
+reference at the nominal standing height $h{=}\SI{0.4040}{m}$:
+
+\begin{center}\footnotesize
+\begin{tabular}{lr}
+\hline
+Feedforward equilibrium-pitch calibration & $+\SI{3.4963}{\degree}$ \\
+Support-position outer loop (PD, $k_p{=}\SI{0.8145}{\degree/m}$) & $-\SI{0.0203}{\degree}$ \\
+Low-band support term (gated off at this height) & $\phantom{+}\SI{0.0000}{\degree}$ \\
+\hline
+Commanded reference $\theta_{\text{ref}}$ & $+\SI{3.4760}{\degree}$ \\
+Measured body pitch $\theta$ & $+\SI{2.0350}{\degree}$ \\
+\hline
+Residual $\theta-\theta_{\text{ref}}$ & $-\SI{1.4409}{\degree}$ \\
+$\Rightarrow \tau_{\text{pitch}}$ & \SI{-1.2574}{Nm} \\
+\hline
+\end{tabular}
+\end{center}
+
+The decomposition closes to four decimal places. The offset therefore
+originates in a \SI{1.44}{\degree} calibration error of the feedforward
+equilibrium-pitch map at this operating point, not in the anchor at all. Note
+that the outer loop, which does observe the \SI{25}{mm} error, contributes
+$\SI{0.02}{\degree}$ against the $\SI{1.44}{\degree}$ it would need: its
+integral channel is disabled, so it too has finite DC gain.
+
+\subsection{Closed form}
+
+Writing the sagittal wheel torque during quiet stance as
+$\tau_{\text{pitch}}+\tau_{\text{position}}$, with the position law unsaturated
+($|\tau_{\text{position}}|\approx\SI{1.3}{Nm}$ against a \SI{4.0}{Nm} cap),
+
+\begin{equation}
+\tau_{\text{position}} = -k_{pos}\,e + I + \tau_{\text{trim}}.
+\label{eq:poslaw}
+\end{equation}
+
+The implemented anchor integral is \emph{leaky}---Eq.~\eqref{eq:anchor} writes
+the ideal integral for clarity, but the discrete update applied at every step is
+
+\begin{equation}
+I_{k+1} = (1-\lambda)\bigl(I_k - k_i\,\Delta t\,g_{\text{prox}}g_{\text{env}}\,e_k\bigr),
+\label{eq:leaky}
+\end{equation}
+
+with $\lambda{=}\num{5e-3}$ per step (Table~\ref{tab:parameters}). A leaky
+integrator is a first-order lag, not an integrator: at a fixed point with the
+gates open, Eq.~\eqref{eq:leaky} gives $I^{*}=-k_{I,\text{dc}}\,e$ with
+
+\begin{equation}
+k_{I,\text{dc}} = k_i\,\Delta t\,\frac{1-\lambda}{\lambda}
+= \num{4.0}\cdot\num{0.01}\cdot\frac{\num{0.995}}{\num{0.005}}
+= \SI{7.96}{Nm/m},
+\label{eq:kidc}
+\end{equation}
+
+which is one fifth of $k_{pos}{=}\SI{40}{Nm/m}$, not infinity. Substituting
+into Eq.~\eqref{eq:poslaw} and imposing zero net sagittal torque:
+
+\begin{equation}
+e_{ss} = \frac{|\tau_{\text{pitch}}| - \tau_{\text{trim}}}
+              {k_{pos} + k_i\,\Delta t\,(1-\lambda)/\lambda}
+       = \frac{\num{1.2574}-\num{0.0654}}{\num{40}+\num{7.96}}
+       = \SI{24.86}{mm},
+\label{eq:parking}
+\end{equation}
+
+against \SI{24.99}{mm} measured---an error of \SI{0.45}{\percent}. The
+remaining \SI{2.0}{mm} between $e$ and the base offset $\bar{s}$ is the
+base-frame versus support-centre convention gap, which is the part of the
+earlier hypothesis that survives.
+
+The conclusion is structural rather than incidental: \emph{no element of ACC's
+sagittal position chain has infinite DC gain.} The anchor integral is leaky by
+design and the outer loop's integral channel is disabled, so a constant
+disturbance torque must be paid for with a constant position error. The
+\SI{27}{mm} is the price of that design choice, in millimetres per newton-metre.
+
+\begin{figure}[!t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/parking_offset.pdf}
+    \caption{Static torque balance of the sagittal parking offset.
+    (a) Measured sagittal torques at the $\bar{s}{=}\SI{-27}{mm}$ parking point.
+    The gravity moment about the wheel axle is \SI{0.0034}{Nm} and the anchor
+    integral sits at \SI{10}{\percent} of its clamp, so the offset is neither
+    gravity-driven nor a saturation artifact; the balance is between the
+    pitch and position loops.
+    (b) Steady-state position error against integrator DC gain
+    $k_{I,\text{dc}}$ of Eq.~\eqref{eq:kidc}, swept over $k_i\in[4,160]$ at
+    fixed leak. The curve is Eq.~\eqref{eq:parking} evaluated with the
+    baseline $\tau_{\text{pitch}}$; using each run's own measured
+    $\tau_{\text{pitch}}$ the closed form tracks all twelve gain and height
+    points to within \SI{0.92}{\percent}. The dotted line is the same
+    controller with the feedforward pitch reference recalibrated and
+    $k_{I,\text{dc}}$ left unchanged.}
+    \label{fig:parking}
+\end{figure}
+
+\subsection{Validation across a forty-fold gain sweep}
+
+Sweeping $k_i$ from \num{4} to \num{160} at fixed leak moves $k_{I,\text{dc}}$
+over $40{\times}$ and the offset follows Eq.~\eqref{eq:parking} throughout
+(Fig.~\ref{fig:parking}b):
+
+\begin{center}\footnotesize
+\begin{tabular}{rrrrr}
+\hline
+$k_i$ & $k_{I,\text{dc}}$ & $e$ meas. & $e$ pred. & window jitter \\
+ & (Nm/m) & (mm) & (mm) & (mm) \\
+\hline
+\textbf{4} & \textbf{7.96} & \textbf{-24.99} & \textbf{-24.87} & \textbf{0.298} \\
+10 & 19.90 & -20.42 & -20.34 & 0.302 \\
+20 & 39.80 & -15.49 & -15.54 & 0.147 \\
+40 & 79.60 & -10.57 & -10.67 & 0.208 \\
+60 & 119.40 & -7.96 & -8.01 & 0.168 \\
+80 & 159.20 & -6.40 & -6.41 & 0.094 \\
+120 & 238.80 & -4.59 & -4.58 & 0.114 \\
+160 & 318.40 & -3.56 & -3.56 & 0.066 \\
+\hline
+\end{tabular}
+\end{center}
+
+Steadiness improves monotonically with $k_i$ over this range rather than
+degrading, which is the opposite of the integral/steadiness trade-off measured
+at $k_i{=}0$ in Table~\ref{tab:standing} and indicates that the $3{\times}$
+steadiness cost reported there is paid at the first newton-metre of integral
+authority, not progressively.
+
+\subsection{The leak sets memory, not accuracy}
+
+Because $k_{I,\text{dc}}$ depends on both $k_i$ and $\lambda$, reducing the
+leak also raises DC gain---but it is the wrong knob. Cutting
+$\lambda$ from \num{5e-3} to \num{5e-4} raises $k_{I,\text{dc}}$ to
+\SI{79.96}{Nm/m} and does reduce the offset to \SI{-16.31}{mm}, but window
+jitter degrades from \SI{0.298}{mm} to \SI{3.463}{mm}, a factor of \num{12},
+and the measured error (\SI{-14.34}{mm}) does not reach its DC prediction
+(\SI{-10.41}{mm}) because the forgetting time constant
+$\tau{=}\Delta t/\lambda$ has grown to \SI{20}{s} and no longer settles inside
+the measurement window. Since $\tau$ is independent of $k_i$, the two
+parameters separate cleanly: $k_i$ sets DC gain, $\lambda$ sets the memory
+horizon. They were conflated in the original tuning, where $\lambda$ was chosen
+for a \SI{2}{s} forgetting time and $k_i$ was lowered from \num{8} to \num{4}
+to reduce limit cycling---which, per the sweep above, cost accuracy without
+buying steadiness.
+
+\subsection{Two measured corrections and their cost}
+
+The height dependence of the calibration error was checked on the five
+posture-calibrated height variants, applying the correction measured at each
+point:
+
+\begin{center}\footnotesize
+\begin{tabular}{rrrrr}
+\hline
+$h$ (m) & correction & $\bar{s}$ before & $\bar{s}$ after & reduction \\
+ & (\SI{}{\degree}) & (mm) & (mm) & \\
+\hline
+0.394 & $-1.622$ & $-28.77$ & $-1.16$ & \SI{96.0}{\percent} \\
+0.399 & $-1.974$ & $-34.53$ & $-1.20$ & \SI{96.5}{\percent} \\
+\textbf{0.404} & $\mathbf{-1.461}$ & $\mathbf{-26.96}$ & $\mathbf{-2.02}$ & \textbf{\SI{92.5}{\percent}} \\
+0.409 & $-0.943$ & $-19.29$ & $-2.83$ & \SI{85.3}{\percent} \\
+0.414 & $-1.295$ & $-25.11$ & $-2.92$ & \SI{88.4}{\percent} \\
+\hline
+\end{tabular}
+\end{center}
+
+The controller's own position error falls to ${\leq}\SI{0.12}{mm}$ at every
+height and the anchor integral to \SI{0.4}{\percent} of its clamp; what remains
+is the \SIrange{1}{3}{mm} frame-convention gap. The required correction is not
+a constant (it spans \SIrange{0.94}{1.97}{\degree} over \SI{2}{cm}), so this is
+a per-height recalibration of the feedforward map rather than a single scalar.
+
+Both corrections were then put through the full push protocol of
+\S\ref{sec:push} ($N{=}10$ repetitions $\times$ 8 bearings, binary search over
+\SIrange{10}{160}{N} at \SI{5}{N} tolerance; Welch's $t$ against the published
+arm):
+
+\begin{center}\footnotesize
+\begin{tabular}{lrr}
+\hline
+Arm & $F_{\min}$ (N) & $F_{\text{med}}$ (N) \\
+\hline
+ACC as published ($k_i{=}4$) & 82.8(10) & 116.8(47) \\
+$k_i{=}40$ & 81.8(18)\,\,$p{=}0.14$ & 116.8(70)\,\,$p{=}0.98$ \\
+$k_i{=}160$ & 81.9(27)\,\,$p{=}0.32$ & 115.3(36)\,\,$p{=}0.43$ \\
+Feedforward pitch recalibrated & 82.5(12)\,\,$p{=}0.55$ & 112.4(49)\,\,$p{=}0.05$ \\
+\hline
+\end{tabular}
+\end{center}
+
+The published arm reproduces the \SI{82.8}{N} weakest bearing of
+\S\ref{sec:push} exactly, validating the harness. Raising $k_i$ by $40{\times}$
+costs nothing measurable on either statistic and removes \SI{80}{\percent} of
+the offset; the feedforward recalibration removes \SI{92.5}{\percent} and
+leaves $F_{\min}$ unchanged, but shows a \SI{4.5}{N} (\SI{3.8}{\percent})
+reduction in $F_{\text{med}}$ at $p{=}0.051$, which at this sample size we
+report as unresolved rather than as null. Neither correction is promoted into
+the shipped profile for this paper, because every table reported here was
+measured on the published configuration and adopting a change would invalidate
+that evidence base; they are reported as measured, reproducible routes to
+closing the limitation.
 
 \begin{thebibliography}{99}
 \setlength{\itemsep}{0pt}
