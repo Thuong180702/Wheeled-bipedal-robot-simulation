@@ -119,8 +119,11 @@ class HeightPosture:
         q_ref_pair(h, h) == q_ref(h) exactly for h inside the calibrated
         range (flat ground degenerates to the symmetric posture). Outside it
         the table is EXTRAPOLATED (LegTerrainAdapter.EXT_M bounds this to
-        ±5 cm; joint-limit margins verified: knee 2.35 < 2.7 at the fold
-        extreme) so a leg pair can span up to 20 cm of lateral step."""
+        ±10 cm → h ∈ [0.254, 0.554]) so a leg pair can span a 20 cm lateral
+        step with zero kinematic residual. Joint-limit margin at that step:
+        commanded knee 2.58 < 2.7 rad (0.12 rad headroom); at the 0.254 m
+        floor it is 2.65 rad, so the extrapolation bound and the knee limit
+        bind at nearly the same place."""
         return np.concatenate([self.q_ref(h_left, clip=False)[:5],
                                self.q_ref(h_right, clip=False)[5:]])
 

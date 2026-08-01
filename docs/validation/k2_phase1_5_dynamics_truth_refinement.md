@@ -1,12 +1,12 @@
 # K2 Phase 1.5 — Dynamics Truth Layer Refinement Report
 
-**Generated:** 2026-07-02T04:42:58.507679+00:00
-**Model:** `F:\ROBOTCUATAO\Wheeled-bipedal-robot-simulation\assets\robot\wheeled_biped_real.xml`
+**Generated:** 2026-08-01T03:56:17.689563+00:00
+**Model:** `/Users/admin/Wheeled-bipedal-robot-simulation/assets/robot/wheeled_biped_real.xml`
 **Total robot mass:** 8.100 kg
 
 ## 1. Executive Summary
 
-**Phase 2A Readiness Verdict: `READY_FOR_PHASE_2A_JAX_KINEMATICS_PORT`**
+**Phase 2A Readiness Verdict: `PARTIAL_READY`**
 
 - Model loaded with **11 joints**, **12 bodies**, **10 actuators**
 - State snapshot: qpos/qvel finite → **True/True**
@@ -125,14 +125,14 @@
 - **Joint positions:** ['0.0000', '0.0000', '0.9261', '1.7484', '0.0000', '0.0000', '0.0000', '0.9261', '1.7484', '0.0000']
 - **qpos finite:** True
 - **qvel finite:** True
-- **COM position:** [-7.408496604254533e-08, -0.013535414193508717, 0.40020012440172836]
+- **COM position:** [-7.408496605625179e-08, -0.013535414193508712, 0.40020012440172825]
 - **COM velocity:** [0.0, 0.0, 0.0]
 
 ## 8. COM Check
 
-- **COM position:** [-7.408496604254533e-08, -0.013535414193508717, 0.40020012440172836]
+- **COM position:** [-7.408496605625179e-08, -0.013535414193508712, 0.40020012440172825]
 - **Base Z:** 0.531943
-- **COM relative to base Z:** -0.1317428755982717
+- **COM relative to base Z:** -0.1317428755982718
 - **Plausible:** True
 
 ## 9. Contact Inspection Summary
@@ -170,10 +170,10 @@ Only actuated joint columns (v[6:16]) are checked.
 | Target | Max Abs Error | Max Rel Error | Verdict |
 |--------|--------------|---------------|---------|
 | `torso` | 0.000000e+00 | 0.000000e+00 | **PASS** |
-| `l_wheel_link` | 6.277328e-10 | 1.665642e-09 | **PASS** |
-| `r_wheel_link` | 6.280457e-10 | 1.667278e-09 | **PASS** |
-| `l_knee_link` | 3.642454e-10 | 1.666764e-09 | **PASS** |
-| `r_knee_link` | 3.643741e-10 | 1.667096e-09 | **PASS** |
+| `l_wheel_link` | 6.280104e-10 | 1.666443e-09 | **PASS** |
+| `r_wheel_link` | 6.279071e-10 | 1.667279e-09 | **PASS** |
+| `l_knee_link` | 3.640372e-10 | 1.666392e-09 | **PASS** |
+| `r_knee_link` | 3.643743e-10 | 1.668122e-09 | **PASS** |
 
 ### 10.3 Per-Joint FD Detail (torso)
 
@@ -232,11 +232,57 @@ with the Phase 1 absolute-sign-only measurement.
 ## 13. Mass Matrix (CPU MuJoCo)
 
 - **Available via CPU:** True
-- **Shape:** [16, 16]
-- **Finite:** True
-- **Symmetric:** True
-- **Diagonal positive:** True
-- **Condition number:** 1010.7165073632176
+- **Shape:** N/A
+- **Finite:** False
+- **Symmetric:** N/A
+- **Diagonal positive:** N/A
+- **Condition number:** N/A
+- **Error:** mj_fullM(): incompatible function arguments. The following argument types are supported:
+    1. (m: mujoco._structs.MjModel, d: mujoco._structs.MjData, dst: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.c_contiguous"]) -> None
+
+Invoked with: <mujoco._structs.MjModel object at 0x10f3f4db0>, array([[0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]]), array([ 8.10000000e+00,  8.10000000e+00,  0.00000000e+00,  8.10000000e+00,
+        0.00000000e+00,  0.00000000e+00,  4.00904968e-01, -1.09636855e-01,
+        1.06711729e+00,  0.00000000e+00,  4.34027382e-01, -7.09689089e-07,
+        6.00088225e-07,  0.00000000e+00, -1.06711729e+00,  1.12640604e-01,
+       -5.79790507e-02,  8.78369396e-06,  0.00000000e+00, -6.00088225e-07,
+        1.09636855e-01,  4.20094085e-02,  1.92504032e-02, -2.89918678e-02,
+        1.17975735e-03, -2.19266091e-07, -2.39912850e-02,  5.48165708e-02,
+        1.05412464e-01, -2.25454686e-02, -2.25457238e-02,  1.14188793e-01,
+        2.22733541e-03,  2.39941350e-02, -2.14168882e-06, -3.16941746e-01,
+        9.73630029e-02, -8.87307957e-04, -4.13635309e-03, -3.29917528e-02,
+       -1.29710873e-02, -1.10999477e-01,  1.05067865e-01, -2.50920123e-01,
+        3.90859327e-06,  5.08783200e-02, -2.44673575e-02, -2.06440945e-03,
+        1.91736301e-03,  1.28425600e-02, -1.38271697e-02,  3.56744561e-02,
+        1.02286936e-01,  9.50028560e-02, -1.92797877e-07,  8.18832000e-03,
+        1.88320000e-04, -1.88320000e-04, -3.09617516e-11, -8.71879362e-11,
+       -8.40487051e-10,  1.28706089e-09,  1.88320000e-04,  6.85275742e-14,
+       -1.66220341e-13,  1.44185902e-18,  4.20099720e-02,  1.92505892e-02,
+       -2.89871829e-02, -1.17816074e-03, -2.19281328e-07,  2.39946984e-02,
+        5.48202841e-02,  1.05383483e-01, -2.25402110e-02, -2.25402131e-02,
+        1.14152638e-01, -2.22833334e-03, -2.39925420e-02,  9.59750458e-08,
+       -3.16866466e-01,  9.73621294e-02,  8.86787305e-04,  4.13624843e-03,
+        3.29925996e-02,  1.29689801e-02, -1.10987270e-01,  1.05062798e-01,
+       -2.50921190e-01,  4.20252032e-07,  5.08783200e-02, -2.44669207e-02,
+        2.06431826e-03, -1.91719229e-03, -1.28423604e-02,  1.38276006e-02,
+        3.56684594e-02,  1.02289293e-01,  9.50003184e-02,  2.28000371e-07,
+        8.18832000e-03,  1.88320000e-04, -1.88320000e-04, -8.31476194e-10,
+        1.10573630e-09,  3.52446962e-10, -8.31499237e-10,  1.88320000e-04,
+       -1.61916866e-13,  8.11970238e-14,  6.61550758e-19])
 
 - **Available via MJX:** False
 - **MJX note:** mj_fullM / mjData.qM are CPU-only. MJX does not expose the mass matrix directly. For future real-time/JAX WBC, the mass matrix must be computed via a separate JAX port or accessed through the MJX C++ internals.
@@ -275,21 +321,62 @@ These limitations mean that a pure-MJX/JIT WBC requires a dedicated dynamics/kin
 
 ## 15. Phase 2A Readiness Verdict
 
-**Verdict: `READY_FOR_PHASE_2A_JAX_KINEMATICS_PORT`**
+**Verdict: `PARTIAL_READY`**
 
-All structural checks pass and all 10 torque sign conventions are MEASURED.
-The actuator limit checker correctly identifies zero-in-range for all actuators.
-The dynamics truth layer is ready to proceed to:
-
-> **Phase 2A — JAX-compatible kinematics / COM / Jacobian port**
-
-Note: this does NOT mean ready for real-time QP-WBC. Phase 2A only covers
-porting kinematics, COM computation, and Jacobian computation to JAX/MJX.
+All structural checks pass, but one or more torque signs remain ambiguous
+or key physics quantities (mass matrix, Jacobians, contact forces) are only
+available through CPU MuJoCo and must be ported to JAX/MJX before they can
+be used in a real-time QP-WBC pipeline.
 
 ## 16. Remaining Items Before Phase 2A
 
-- ✅ No blocking issues.
-- Next step: Port Jacobian computation + COM + mass matrix to JAX for MJX compatibility.
+- ⚠️ Mass matrix contains non-finite values
+- ⚠️ Mass matrix error: mj_fullM(): incompatible function arguments. The following argument types are supported:
+    1. (m: mujoco._structs.MjModel, d: mujoco._structs.MjData, dst: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.c_contiguous"]) -> None
+
+Invoked with: <mujoco._structs.MjModel object at 0x10f3f4db0>, array([[0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+       [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]]), array([ 8.10000000e+00,  8.10000000e+00,  0.00000000e+00,  8.10000000e+00,
+        0.00000000e+00,  0.00000000e+00,  4.00904968e-01, -1.09636855e-01,
+        1.06711729e+00,  0.00000000e+00,  4.34027382e-01, -7.09689089e-07,
+        6.00088225e-07,  0.00000000e+00, -1.06711729e+00,  1.12640604e-01,
+       -5.79790507e-02,  8.78369396e-06,  0.00000000e+00, -6.00088225e-07,
+        1.09636855e-01,  4.20094085e-02,  1.92504032e-02, -2.89918678e-02,
+        1.17975735e-03, -2.19266091e-07, -2.39912850e-02,  5.48165708e-02,
+        1.05412464e-01, -2.25454686e-02, -2.25457238e-02,  1.14188793e-01,
+        2.22733541e-03,  2.39941350e-02, -2.14168882e-06, -3.16941746e-01,
+        9.73630029e-02, -8.87307957e-04, -4.13635309e-03, -3.29917528e-02,
+       -1.29710873e-02, -1.10999477e-01,  1.05067865e-01, -2.50920123e-01,
+        3.90859327e-06,  5.08783200e-02, -2.44673575e-02, -2.06440945e-03,
+        1.91736301e-03,  1.28425600e-02, -1.38271697e-02,  3.56744561e-02,
+        1.02286936e-01,  9.50028560e-02, -1.92797877e-07,  8.18832000e-03,
+        1.88320000e-04, -1.88320000e-04, -3.09617516e-11, -8.71879362e-11,
+       -8.40487051e-10,  1.28706089e-09,  1.88320000e-04,  6.85275742e-14,
+       -1.66220341e-13,  1.44185902e-18,  4.20099720e-02,  1.92505892e-02,
+       -2.89871829e-02, -1.17816074e-03, -2.19281328e-07,  2.39946984e-02,
+        5.48202841e-02,  1.05383483e-01, -2.25402110e-02, -2.25402131e-02,
+        1.14152638e-01, -2.22833334e-03, -2.39925420e-02,  9.59750458e-08,
+       -3.16866466e-01,  9.73621294e-02,  8.86787305e-04,  4.13624843e-03,
+        3.29925996e-02,  1.29689801e-02, -1.10987270e-01,  1.05062798e-01,
+       -2.50921190e-01,  4.20252032e-07,  5.08783200e-02, -2.44669207e-02,
+        2.06431826e-03, -1.91719229e-03, -1.28423604e-02,  1.38276006e-02,
+        3.56684594e-02,  1.02289293e-01,  9.50003184e-02,  2.28000371e-07,
+        8.18832000e-03,  1.88320000e-04, -1.88320000e-04, -8.31476194e-10,
+        1.10573630e-09,  3.52446962e-10, -8.31499237e-10,  1.88320000e-04,
+       -1.61916866e-13,  8.11970238e-14,  6.61550758e-19])
 
 ---
 
