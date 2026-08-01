@@ -1934,9 +1934,13 @@ def compare_three_arm_rollout(
     wbc_solve_successes = sum(
         1 for e in wbc_entries if e.get("wbc_result", {}).get("solve_success", False)
     )
-    assist_attempts = sum(1 for e in assist_entries if "wbc_result" in e)
+    # The assist arm's per-step record is written under "assist_result" (see
+    # phase3d_full_batch_execution.py); reading "wbc_result" here made both
+    # counters structurally zero regardless of what the solver did.
+    assist_attempts = sum(1 for e in assist_entries if "assist_result" in e)
     assist_solve_successes = sum(
-        1 for e in assist_entries if e.get("wbc_result", {}).get("solve_success", False)
+        1 for e in assist_entries
+        if e.get("assist_result", {}).get("solve_success", False)
     )
 
     # ── Classification ────────────────────────────────────────────────────
@@ -1992,6 +1996,7 @@ def compare_three_arm_rollout(
             "wbc_only_success_rate": wbc_solve_successes / wbc_attempts if wbc_attempts > 0 else 0.0,
             "assist_successes": assist_solve_successes,
             "assist_total": assist_attempts,
+            "assist_success_rate": assist_solve_successes / assist_attempts if assist_attempts > 0 else 0.0,
         },
         "classification": {
             "wbc_only": wbc_classification,
