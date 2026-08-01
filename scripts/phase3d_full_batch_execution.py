@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import subprocess
 import sys
 import time
@@ -1060,6 +1061,30 @@ def run_three_arm_rollout(
         "assist_wbc_failures": assist_wbc_failures,
         "warm_start_used": warm_start,
     }
+
+    # Opt-in per-step assist-gate trace, enabled by the WBC_GATE_TRACE env var.
+    # Every suite writer below strips *_entries before serialising, so the gate
+    # values (alpha and the g_* factors) that live in assist_result are
+    # otherwise unrecoverable from a finished run. Hooking the single rollout
+    # return covers all five suites without touching any of them, and the whole
+    # block is inert when the variable is unset.
+    _trace_path = os.environ.get("WBC_GATE_TRACE")
+    if _trace_path:
+        _gate_keys = ("alpha", "g_stability", "g_height", "g_push",
+                      "g_divergence", "g_posture", "g_combined_raw",
+                      "clipping_count", "saturation_count",
+                      "max_abs_assist_raw", "max_abs_assist_clipped")
+        with open(_trace_path, "a") as _tf:
+            for _e in assist_entries:
+                _r = _e.get("assist_result") or {}
+                _tf.write(json.dumps({
+                    "scenario": scenario_name,
+                    "step": _e.get("step"),
+                    "assist_active": _e.get("assist_active"),
+                    "adaptive_mode": _e.get("adaptive_mode"),
+                    "push_active": _e.get("push_active"),
+                    **{_k: _r.get(_k) for _k in _gate_keys},
+                }) + "\n")
 
     return {
         "scenario": scenario_name,
