@@ -79,7 +79,7 @@ Wheeled biped robots need millimeter-level standing precision, omnidirectional p
 
 The difficulty is fundamental: lowering $k_p$ widens the capture basin at the cost of balance stiffness; omitting integral action leaves a \SI{1.3}{Nm} equilibrium bias that sustains a persistent, predominantly \emph{sagittal} limit cycle regardless of $k_p$ (measured at $N{=}10$: \SI{69.7}{mm} peak-to-peak sagittally against \SI{13.4}{mm} laterally, \SI{49.1}{mm} planar RMS from the commanded pose)---the oscillation lies on the one axis the wheels can drive, which is both why it persists and why it is the axis every mechanism in this paper is aimed at---yet a global integral winds up during pushes.
 
-Preliminary PPO training (5.4M steps, single seed, in our \texttt{BalanceEnv}) showed limited height generalization: the policy stood at a single height (Surv ${\approx}\SI{3.20}{s}$, vs.\ \SI{0.52}{s} for LQR) but failed to generalize across \SIrange{0.40}{0.70}{m} base-$z$ (\S\ref{sec:height_convention})---height RMSE ${>}\SI{50}{mm}$, \SI{85}{\percent} falls on squat transitions---consistent with known difficulty of model-free RL on coupled pitch--height dynamics~\cite{xin2022centroidal}. This run is retained throughout as a \emph{difficulty probe}, not as a reinforcement-learning baseline. Its purpose is to characterize how hard unaided model-free search is on the coupled pitch--height state space of a 10-DOF wheeled biped, and thereby to make explicit what a structured prior supplies in its place; it is single-seed, without domain randomization or a hyperparameter search, and no claim about the attainable performance of RL on this platform is drawn from it.
+Preliminary PPO~\cite{schulman2017ppo} training (5.4M steps, single seed, in our \texttt{BalanceEnv}) showed limited height generalization: the policy stood at a single height (Surv ${\approx}\SI{3.20}{s}$, vs.\ \SI{0.52}{s} for LQR) but failed to generalize across \SIrange{0.40}{0.70}{m} base-$z$ (\S\ref{sec:height_convention})---height RMSE ${>}\SI{50}{mm}$, \SI{85}{\percent} falls on squat transitions---with the failures concentrated on precisely the coupled pitch--height dynamics that a posture map and gate schedule encode explicitly. This run is retained throughout as a \emph{difficulty probe}, not as a reinforcement-learning baseline. Its purpose is to characterize how hard unaided model-free search is on the coupled pitch--height state space of a 10-DOF wheeled biped, and thereby to make explicit what a structured prior supplies in its place; it is single-seed, without domain randomization or a hyperparameter search, and no claim about the attainable performance of RL on this platform is drawn from it.
 
 We present the Anchored Conditionally-Gated Controller (ACC), addressing both dilemmas through \emph{conditional activation}.
 The core mechanism is a \textbf{proximity-gated anchor}: a position integral confined to a \SI{15}{cm} neighborhood, enabled by an \textbf{asymmetric envelope follower} ($\tau_{\text{attack}}{\approx}\SI{23}{ms}$, $\tau_{\text{release}}{\approx}\SI{1.5}{s}$) that distinguishes quiet stance from post-push ringdown.
@@ -104,9 +104,9 @@ The main contributions are:
 
 \subsection{Wheeled Bipedal Platforms and Classical Control}
 Ascento~\cite{klemm2019ascento} demonstrated two-wheeled jumping with LQR balancing, later extended to WBC with kinematic loops~\cite{klemm2020lqrwbc}.
-Handle~\cite{boston_dynamics_handle2017} pioneered wheeled-leg coordination; Swiss-Mile~\cite{swissmile2021} combined driving with quadrupedal walking.
-BITeno~\cite{wada2019biteno}, DIABLO~\cite{diablo2024}, Whleaper~\cite{whleaper2024} (closest to our morphology, uses LQR+PPO residual architecture), and SKATER~\cite{skater2024} applied LQR, PPO, and MPC for balancing and locomotion. Whleaper's LQR+PPO hybrid is the closest prior structured-controller-plus-learned-residual architecture; ACC targets the same paradigm with a stronger classical prior.
-Zamani et al.~\cite{zamani2020coupled} demonstrated coupled pitch-roll LQR ($\theta_{\text{RMS}}{\approx}\SI{1.5}{\degree}$, $\phi_{\text{RMS}}{\approx}\SI{2.0}{\degree}$) on a rigid two-wheeled platform without articulated legs, where torque commands act directly on wheels---a structurally simpler control problem with fewer unstable modes and no leg-height dynamics. Our 6-state LQR replicates their coupled structure on a legged morphology and fails; the 4-state Direct Torque LQR---removing the servo path and re-optimizing roll gain ($k_{p,\text{roll}}{=}55.0$)---also fails (\SI{100}{\percent} fall rate, \SI{0.72}{s}). Both LQR variants use gains derived from a simplified 4-state TWIP model, not a full 10-DOF linearization of the articulated-leg plant (see Limitation~7); these results are therefore empirical---demonstrating that the specific LQR implementations tested fail---not a proof that LQR is structurally insufficient. Two facts---Zamani succeeds on a rigid two-wheeler, both our LQR variants fail on articulated legs---indicate that platform complexity (articulated legs, height dynamics), not servo lag alone, is the dominant factor differentiating Zamani's result.
+Handle~\cite{boston_dynamics_handle2017} pioneered wheeled-leg coordination; wheeled quadrupeds combined driving with walking through whole-body motion control and planning~\cite{bjelonic2019wheeled}.
+DIABLO~\cite{diablo2024}, Whleaper~\cite{whleaper2024} (closest to our morphology, uses LQR+PPO residual architecture), and SKATER~\cite{skater2024} applied LQR, PPO, and MPC for balancing and locomotion. Whleaper's LQR+PPO hybrid is the closest prior structured-controller-plus-learned-residual architecture; ACC targets the same paradigm with a stronger classical prior.
+Coupled pitch--roll LQR is standard on rigid two-wheeled platforms, where torque acts directly on the wheels and there are neither articulated legs nor leg-height dynamics---a structurally simpler problem with fewer unstable modes. Our 6-state LQR reproduces that coupled structure on a legged morphology and fails; the 4-state Direct Torque LQR---removing the servo path and re-optimizing roll gain ($k_{p,\text{roll}}{=}55.0$)---also fails (\SI{100}{\percent} fall rate, \SI{0.72}{s}). Because the direct-torque variant carries no servo lag at all and still falls (\S\ref{sec:baselines}), actuation lag alone cannot account for the outcome; the articulated-leg morphology and its height dynamics are the dominant remaining factor. Both LQR variants use gains derived from a simplified 4-state TWIP model, not a full 10-DOF linearization of the articulated-leg plant (see Limitation~7); these results are therefore empirical---demonstrating that the specific LQR implementations tested fail---not a proof that LQR is structurally insufficient.
 Cascade control~\cite{cascade_standard,herzog2016wbc} and WBC~\cite{bellicoso2018wbc} use fixed-gain nested loops without conditional gates; gain scheduling~\cite{gain_scheduling_survey} varies parameters continuously with one variable rather than responding to qualitatively distinct physical regimes.
 We additionally benchmarked a task-priority QP whole-body controller both standalone and as an assist layer on ACC (\S\ref{sec:wbc}); it fails to resolve the precision--recovery trade-off because its fixed task-priority formulation lacks conditional regime-gating.
 Split-range, selector, and override architectures~\cite{shinskey1996,astrom2005advanced} already implement continuous blending in process control. ACC adopts this principle; its contribution is the synthesis of physically-motivated gating surfaces (spatial proximity, temporal velocity envelope, pitch safety-interlock) derived from wheeled-biped failure modes rather than generic process-variable limits.
@@ -114,7 +114,7 @@ ACC's conditional gates connect to hybrid/switched systems~\cite{liberzon2003swi
 A recent review~\cite{liu2024review} surveys wheel-legged biped platforms and control approaches, noting the absence of a unified classical solution.
 
 \subsection{Disturbance Rejection, Anti-Windup, and ACC's Distinction}
-DOB~\cite{ohnishi1993dob,chen2000dob,cui2019dob} and ADRC~\cite{han2009adrc,feng2023lqradrc} provide temporal disturbance estimation but cannot distinguish a push from post-push ringdown---both occupy the same frequency band.
+DOB~\cite{ohnishi1993dob,chen2000dob} and ADRC~\cite{han2009adrc,feng2023lqradrc} provide temporal disturbance estimation but cannot distinguish a push from post-push ringdown---both occupy the same frequency band.
 Saturation-triggered conditional-integration AW triggers on actuator saturation; ACC's anchor uses \textbf{spatial, physics-conditioned gating}: the proximity gate confines integration to a \SI{15}{cm} neighborhood, and the asymmetric envelope distinguishes quiet stance from ringdown via velocity envelope---replacing the estimation-speed-vs-noise trade-off with a time-domain attack-vs-release trade-off.
 Push recovery via capture-point~\cite{englsberger2015dcm,pratt2006capturepoint} and flight-phase control~\cite{roscia2023flight} is complementary.
 Blind stair climbing via RL was shown on Ascento~\cite{chamorro2024stairclimbing}.
@@ -2059,40 +2059,77 @@ V.~Klemm, A.~Morra, L.~Gulich, \emph{et al.},
 ``LQR-Assisted Whole-Body Control of a Wheeled Bipedal Robot with Kinematic Loops,''
 \emph{IEEE Robotics and Automation Letters}, vol.~5, no.~2, pp. 3745--3752, 2020.
 
-\bibitem{diablo2024}
-D.~Liu \emph{et al.},
-``DIABLO: A 6-DoF Wheeled Bipedal Robot Composed Entirely of Direct-Drive Joints,''
-\emph{arXiv preprint arXiv:2407.21500}, 2024.
+\bibitem{skater2024}
+Y.~Wang, T.~Chen, X.~Rong, G.~Zhang, Y.~Li, and Y.~Xin,
+``Design and Control of SKATER: A Wheeled-Bipedal Robot With High-Speed Turning Robustness and Terrain Adaptability,''
+\emph{IEEE/ASME Trans. Mechatronics}, vol.~30, no.~2, pp. 1310--1321, 2025.
+
+\bibitem{hwangbo2019rl}
+J.~Hwangbo, J.~Lee, A.~Dosovitskiy, D.~Bellicoso, V.~Tsounis, V.~Koltun, and M.~Hutter,
+``Learning Agile and Dynamic Motor Skills for Legged Robots,''
+\emph{Science Robotics}, vol.~4, no.~26, eaau5872, 2019.
+
+\bibitem{schulman2017ppo}
+J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford, and O.~Klimov,
+``Proximal Policy Optimization Algorithms,''
+\emph{arXiv preprint arXiv:1707.06347}, 2017.
 
 \bibitem{whleaper2024}
 Y.~Zhu, S.~He, Z.~Qi, Z.~Yong, Y.~Qin, and J.~Chen,
 ``Whleaper: A 10-DOF Flexible Bipedal Wheeled Robot,''
 in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 11272--11277, 2024.
 
-\bibitem{skater2024}
-Y.~Wang, T.~Chen, X.~Rong, G.~Zhang, Y.~Li, and Y.~Xin,
-``Design and Control of SKATER: A Wheeled-Bipedal Robot With High-Speed Turning Robustness and Terrain Adaptability,''
-\emph{IEEE/ASME Trans. Mechatronics}, vol.~30, no.~2, pp. 1310--1321, 2025.
+\bibitem{boston_dynamics_handle2017}
+Boston Dynamics,
+``Introducing Handle,''
+\emph{YouTube video}, Mar. 2017. [Online]. Available: \url{https://youtu.be/-7xvqQeoA8c}
 
-\bibitem{chamorro2024stairclimbing}
-S.~Chamorro, V.~Klemm, M.~de~la~Iglesia~Valls, C.~Pal, and R.~Siegwart,
-``Reinforcement Learning for Blind Stair Climbing with Legged and Wheeled-Legged Robots,''
-in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, 2024.
+\bibitem{bjelonic2019wheeled}
+M.~Bjelonic, C.~D.~Bellicoso, Y.~de~Viragh, D.~Sako, F.~D.~Tresoldi, F.~Jenelten, and M.~Hutter,
+``Keep Rollin'---Whole-Body Motion Control and Planning for Wheeled Quadrupedal Robots,''
+\emph{IEEE Robotics and Automation Letters}, vol.~4, no.~2, pp. 2116--2123, 2019.
 
-\bibitem{roscia2023flight}
-F.~Roscia, A.~Cumerlotti, A.~Del~Prete, C.~Semini, and M.~Focchi,
-``Orientation Control System: Enhancing Aerial Maneuvers for Quadruped Robots,''
-\emph{Sensors}, vol.~23, no.~3, 1234, 2023.
+\bibitem{diablo2024}
+D.~Liu \emph{et al.},
+``DIABLO: A 6-DoF Wheeled Bipedal Robot Composed Entirely of Direct-Drive Joints,''
+\emph{arXiv preprint arXiv:2407.21500}, 2024.
 
-\bibitem{englsberger2015dcm}
-J.~Englsberger, C.~Ott, and A.~Albu-Sch\"{a}ffer,
-``Three-Dimensional Bipedal Walking Control Based on Divergent Component of Motion,''
-\emph{IEEE Trans. Robotics}, vol.~31, no.~2, pp. 355--368, 2015.
+\bibitem{cascade_standard}
+K.~J.~\AA{}str\"{o}m and T.~H\"{a}gglund,
+\emph{PID Controllers: Theory, Design, and Tuning}, 2nd~ed.\ Instrument Society of America, 1995.
 
-\bibitem{feng2023lqradrc}
-X.~Feng, S.~Liu, Q.~Yuan, J.~Xiao, and D.~Zhao,
-``Research on Wheel-Legged Robot Based on LQR and ADRC,''
-\emph{Scientific Reports}, vol.~13, 15122, 2023.
+\bibitem{herzog2016wbc}
+A.~Herzog, N.~Rotella, S.~Mason, F.~Grimminger, S.~Schaal, and L.~Righetti,
+``Momentum Control with Hierarchical Inverse Dynamics on a Torque-Controlled Humanoid,''
+\emph{Autonomous Robots}, vol.~40, no.~3, pp. 473--491, 2016.
+
+\bibitem{bellicoso2018wbc}
+C.~D.~Bellicoso, F.~Jenelten, C.~Gehring, and M.~Hutter,
+``Dynamic Locomotion Through Online Nonlinear Motion Optimization for Quadrupedal Robots,''
+\emph{IEEE Robotics and Automation Letters}, vol.~3, no.~3, pp. 2261--2268, 2018.
+
+\bibitem{gain_scheduling_survey}
+W.~J.~Rugh and J.~S.~Shamma,
+``Research on Gain Scheduling,''
+\emph{Automatica}, vol.~36, no.~10, pp. 1401--1425, 2000.
+
+\bibitem{shinskey1996}
+F.~G.~Shinskey,
+\emph{Process Control Systems: Application, Design, and Tuning}, 4th~ed.\ McGraw-Hill, 1996.
+
+\bibitem{astrom2005advanced}
+K.~J.~\AA{}str\"{o}m and T.~H\"{a}gglund,
+\emph{Advanced PID Control}, ISA, 2006.
+
+\bibitem{liberzon2003switching}
+D.~Liberzon,
+\emph{Switching in Systems and Control},
+Birkh\"{a}user, 2003.
+
+\bibitem{liu2024review}
+X.~Liu, Y.~Sun, S.~Wen, K.~Cao, Q.~Qi, X.~Zhang, H.~Shen, G.~Chen, J.~Xu, and A.~Ji,
+``Development of Wheel-Legged Biped Robots: A Review,''
+\emph{Journal of Bionic Engineering}, vol.~21, no.~2, pp. 607--634, 2024.
 
 \bibitem{ohnishi1993dob}
 K.~Ohnishi, M.~Shibata, and T.~Murakami,
@@ -2109,72 +2146,30 @@ J.~Han,
 ``From PID to Active Disturbance Rejection Control,''
 \emph{IEEE Trans. Industrial Electronics}, vol.~56, no.~3, pp. 900--906, 2009.
 
-\bibitem{bellicoso2016terrain}
-C.~D.~Bellicoso, C.~Gehring, J.~Hwangbo, P.~Fankhauser, and M.~Hutter,
-``Perception-Less Terrain Adaptation Through Whole Body Control and Hierarchical Optimization,''
-in \emph{Proc. IEEE-RAS Int. Conf. Humanoid Robots (Humanoids)}, pp. 558--564, 2016.
+\bibitem{feng2023lqradrc}
+X.~Feng, S.~Liu, Q.~Yuan, J.~Xiao, and D.~Zhao,
+``Research on Wheel-Legged Robot Based on LQR and ADRC,''
+\emph{Scientific Reports}, vol.~13, 15122, 2023.
 
-\bibitem{bellicoso2018wbc}
-C.~D.~Bellicoso, F.~Jenelten, C.~Gehring, and M.~Hutter,
-``Dynamic Locomotion Through Online Nonlinear Motion Optimization for Quadrupedal Robots,''
-\emph{IEEE Robotics and Automation Letters}, vol.~3, no.~3, pp. 2261--2268, 2018.
-
-\bibitem{cascade_standard}
-K.~J.~\AA{}str\"{o}m and T.~H\"{a}gglund,
-\emph{PID Controllers: Theory, Design, and Tuning}, 2nd~ed.\ Instrument Society of America, 1995.
-
-\bibitem{astrom2005advanced}
-K.~J.~\AA{}str\"{o}m and T.~H\"{a}gglund,
-\emph{Advanced PID Control}, ISA, 2006.
-
-\bibitem{shinskey1996}
-F.~G.~Shinskey,
-\emph{Process Control Systems: Application, Design, and Tuning}, 4th~ed.\ McGraw-Hill, 1996.
-
-\bibitem{gain_scheduling_survey}
-W.~J.~Rugh and J.~S.~Shamma,
-``Research on Gain Scheduling,''
-\emph{Automatica}, vol.~36, no.~10, pp. 1401--1425, 2000.
-
-\bibitem{boston_dynamics_handle2017}
-Boston Dynamics,
-``Introducing Handle,''
-\emph{YouTube video}, Mar. 2017. [Online]. Available: \url{https://youtu.be/-7xvqQeoA8c}
-
-\bibitem{swissmile2021}
-M.~Bjelonic, P.~K.~Sankar, C.~D.~Bellicoso, and M.~Hutter,
-``Proprioceptive Control for Hybrid Wheeled-Legged Locomotion: The Swiss-Mile Experience,''
-in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, pp. 6088--6095, 2021.
-
-\bibitem{wada2019biteno}
-T.~Wada, T.~Kinugasa, K.~Yoshida, and Y.~Sugahara,
-``Development of a Wheeled Biped Robot ``BITeno'' Using Reaction Wheel Stabilization,''
-\emph{J. Robotics and Mechatronics}, vol.~31, no.~5, pp. 729--738, 2019.
-
-\bibitem{grimminger2020torque}
-F.~Grimminger, A.~Meduri, M.~Khadiv, J.~Viereck, M.~W\"{u}thrich, L.~Wellhausen, \emph{et al.},
-``An Open Torque-Controlled Modular Robot Architecture for Legged Locomotion Research,''
-\emph{IEEE Robotics and Automation Letters}, vol.~5, no.~2, pp. 3650--3657, 2020.
-
-\bibitem{herzog2016wbc}
-A.~Herzog, N.~Rotella, S.~Mason, F.~Grimminger, S.~Schaal, and L.~Righetti,
-``Momentum Control with Hierarchical Inverse Dynamics on a Torque-Controlled Humanoid,''
-\emph{Autonomous Robots}, vol.~40, no.~3, pp. 473--491, 2016.
-
-\bibitem{schulman2017ppo}
-J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford, and O.~Klimov,
-``Proximal Policy Optimization Algorithms,''
-\emph{arXiv preprint arXiv:1707.06347}, 2017.
-
-\bibitem{hwangbo2019rl}
-J.~Hwangbo, J.~Lee, A.~Dosovitskiy, D.~Bellicoso, V.~Tsounis, V.~Koltun, and M.~Hutter,
-``Learning Agile and Dynamic Motor Skills for Legged Robots,''
-\emph{Science Robotics}, vol.~4, no.~26, eaau5872, 2019.
+\bibitem{englsberger2015dcm}
+J.~Englsberger, C.~Ott, and A.~Albu-Sch\"{a}ffer,
+``Three-Dimensional Bipedal Walking Control Based on Divergent Component of Motion,''
+\emph{IEEE Trans. Robotics}, vol.~31, no.~2, pp. 355--368, 2015.
 
 \bibitem{pratt2006capturepoint}
 J.~Pratt, J.~Carff, S.~Drakunov, and A.~Goswami,
 ``Capture Point: A Step Toward Humanoid Push Recovery,''
 in \emph{Proc. IEEE-RAS Int. Conf. Humanoid Robots}, pp. 200--207, 2006.
+
+\bibitem{roscia2023flight}
+F.~Roscia, A.~Cumerlotti, A.~Del~Prete, C.~Semini, and M.~Focchi,
+``Orientation Control System: Enhancing Aerial Maneuvers for Quadruped Robots,''
+\emph{Sensors}, vol.~23, no.~3, 1234, 2023.
+
+\bibitem{chamorro2024stairclimbing}
+S.~Chamorro, V.~Klemm, M.~de~la~Iglesia~Valls, C.~Pal, and R.~Siegwart,
+``Reinforcement Learning for Blind Stair Climbing with Legged and Wheeled-Legged Robots,''
+in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, 2024.
 
 \bibitem{legged_terrain_extero}
 M.~Hutter \emph{et al.},
@@ -2186,40 +2181,25 @@ G.~Bledt \emph{et al.},
 ``Contact Model Fusion for Event-Based Locomotion in Unstructured Terrains,''
 in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, pp. 4399--4406, 2018.
 
-\bibitem{liu2024review}
-X.~Liu, Y.~Sun, S.~Wen, K.~Cao, Q.~Qi, X.~Zhang, H.~Shen, G.~Chen, J.~Xu, and A.~Ji,
-``Development of Wheel-Legged Biped Robots: A Review,''
-\emph{Journal of Bionic Engineering}, vol.~21, no.~2, pp. 607--634, 2024.
+\bibitem{bellicoso2016terrain}
+C.~D.~Bellicoso, C.~Gehring, J.~Hwangbo, P.~Fankhauser, and M.~Hutter,
+``Perception-Less Terrain Adaptation Through Whole Body Control and Hierarchical Optimization,''
+in \emph{Proc. IEEE-RAS Int. Conf. Humanoid Robots (Humanoids)}, pp. 558--564, 2016.
+
+\bibitem{hyon2007gated}
+S.-H.~Hyon and G.~Cheng,
+``Gravity Compensation and Full-Body Balancing for Humanoid Robots,''
+in \emph{Proc. IEEE-RAS Int. Conf. Humanoid Robots}, pp. 214--221, 2006.
 
 \bibitem{mujoco}
 E.~Todorov, T.~Erez, and Y.~Tassa,
 ``MuJoCo: A Physics Engine for Model-Based Control,''
 in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 5026--5033, 2012.
 
-\bibitem{zamani2020coupled}
-M.~Zamani, R.~Orr, and H.~Sadjadi,
-``A Coupled 3D LQR for Two-Wheeled Balancing Robots,''
-in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, pp. 8761--8767, 2020.
-
-\bibitem{cui2019dob}
-R.~Cui, Y.~Li, and W.~Yan,
-``Disturbance Observer Based Control for a Wheeled Bipedal Robot,''
-\emph{IEEE Access}, vol.~7, pp. 112531--112540, 2019.
-
-\bibitem{xin2022centroidal}
-Y.~Xin, T.~Chen, and X.~Rong,
-``Centroidal Dynamics for Coupled Pitch-Roll Control of Wheeled Bipedal Robots,''
-\emph{IEEE Robotics and Automation Letters}, vol.~7, no.~4, pp. 10892--10899, 2022.
-
-\bibitem{hyon2007gated}
-S.-H.~Hyon and G.~Cheng,
-``Gravity Compensation and Full-Body Balancing for Humanoid Robots,''
-in \emph{Proc. IEEE-RAS Int. Conf. Humanoid Robots}, pp. 214--221, 2007.
-
-\bibitem{liberzon2003switching}
-D.~Liberzon,
-\emph{Switching in Systems and Control},
-Birkh\"{a}user, 2003.
+\bibitem{grimminger2020torque}
+F.~Grimminger, A.~Meduri, M.~Khadiv, J.~Viereck, M.~W\"{u}thrich, L.~Wellhausen, \emph{et al.},
+``An Open Torque-Controlled Modular Robot Architecture for Legged Locomotion Research,''
+\emph{IEEE Robotics and Automation Letters}, vol.~5, no.~2, pp. 3650--3657, 2020.
 
 \end{thebibliography}
 
