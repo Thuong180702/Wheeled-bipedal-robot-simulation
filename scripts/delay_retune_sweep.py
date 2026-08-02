@@ -139,19 +139,24 @@ def binary_search(model, torso_id, nom, posture, h0, noise_cfg, delay_sub, seed,
     return round(lo, 1)
 
 
-def run_idle_trial(model, nom, posture, h0, noise_cfg, seed, profile_name):
-    """Zero-delay idle standing RMS (mm), same protocol as robustness_sweep's.
+def run_idle_trial(model, nom, posture, h0, noise_cfg, seed, profile_name,
+                   delay_sub=0):
+    """Idle standing RMS (mm) under transport delay, robustness_sweep protocol.
 
-    This is the price side of the retune: velocity damping that buys delay
-    margin is also the term that sets quiet-stance steadiness, so a delay-
-    hardened arm has to be quoted with its idle cost or the comparison is
-    one-sided.
+    Two uses.  At `delay_sub=0` this is the price side of the retune: velocity
+    damping that buys delay margin is also the term that sets quiet-stance
+    steadiness, so a delay-hardened arm has to be quoted with its idle cost or
+    the comparison is one-sided.  At `delay_sub>0` it locates the delay at
+    which the controller stops standing at all -- a bound below the push
+    envelope's, since holding still is the easier task.
     """
+    from collections import deque
     from scripts.robustness_sweep import SETTLE_S, N_IDLE_S
     rng = np.random.default_rng(seed)
     data = _fresh_data(model, nom, posture)
     v3, ctx = fresh_v3(model, posture, h0, profile_name)
     ctx["data"] = data
+    buf = deque([np.zeros(model.nu)] * delay_sub, maxlen=max(delay_sub, 1))
 
     def step_once(record):
         saved = _inject_noise(data, noise_cfg, rng) if noise_cfg else None
@@ -161,24 +166,37 @@ def run_idle_trial(model, nom, posture, h0, noise_cfg, seed, profile_name):
         v3["jax_state"] = r["next_jax_state"]
         if saved:
             _restore_true(data, saved)
-        data.ctrl[:] = np.array(r["tau_v3"])
+        tau = np.array(r["tau_v3"])
         for _ in range(SUBSTEPS):
+            # Read before append -- same operator as run_push_trial.
+            if delay_sub > 0:
+                data.ctrl[:] = buf[0]
+                buf.append(tau)
+            else:
+                data.ctrl[:] = tau
             mujoco.mj_step(model, data)
         return float(data.subtree_com[0][0]) if record else None
 
-    for _ in range(int(SETTLE_S / DT)):
-        step_once(False)
-
-    com = []
-    for _ in range(int(N_IDLE_S / DT)):
-        com.append(step_once(True))
+    def fallen():
         quat = data.qpos[3:7]
         pitch = float(np.arcsin(np.clip(
             2 * (quat[0] * quat[2] - quat[3] * quat[1]), -1, 1)))
-        if abs(pitch) > 0.8 or data.qpos[2] < 0.30:
-            return dict(fell=True, rms_mm=float("nan"))
+        return abs(pitch) > 0.8 or data.qpos[2] < 0.30
+
+    for i in range(int(SETTLE_S / DT)):
+        step_once(False)
+        if fallen():
+            return dict(fell=True, rms_mm=float("nan"), survived_s=i * DT)
+
+    com = []
+    for i in range(int(N_IDLE_S / DT)):
+        com.append(step_once(True))
+        if fallen():
+            return dict(fell=True, rms_mm=float("nan"),
+                        survived_s=SETTLE_S + i * DT)
     a = np.array(com)
-    return dict(fell=False, rms_mm=float(np.std(a - np.mean(a))) * 1000.0)
+    return dict(fell=False, rms_mm=float(np.std(a - np.mean(a))) * 1000.0,
+                survived_s=SETTLE_S + N_IDLE_S)
 
 
 def main():
@@ -211,15 +229,22 @@ def main():
         tag = " (baseline)" if v == baseline_val else ""
         if args.idle:
             res = [run_idle_trial(model, nom, posture, h0, noise_cfg,
-                                  args.base_seed + 1000 + t, pname)
+                                  args.base_seed + 1000 + t, pname,
+                                  delay_sub=args.delay_sub)
                    for t in range(args.trials)]
             rms = [r["rms_mm"] for r in res]
+            falls = sum(r["fell"] for r in res)
             arms.append(dict(knob=knob, value=v, is_baseline=v == baseline_val,
-                             falls=sum(r["fell"] for r in res),
-                             idle_rms_mm_mean=float(np.nanmean(rms)),
-                             idle_rms_mm=rms))
-            print(f"  [idle {args.noise}] {knob}={v:<6g} "
-                  f"idle_RMS={np.nanmean(rms):7.3f} mm{tag}", flush=True)
+                             falls=falls, n_trials=args.trials,
+                             idle_rms_mm_mean=float(np.nanmean(rms))
+                             if falls < args.trials else float("nan"),
+                             idle_rms_mm=rms,
+                             survived_s=[r["survived_s"] for r in res]))
+            verdict = (f"FELL {falls}/{args.trials} "
+                       f"(t={np.mean([r['survived_s'] for r in res]):.2f}s)"
+                       if falls else f"idle_RMS={np.nanmean(rms):7.3f} mm")
+            print(f"  [idle {delay_ms:.0f}ms {args.noise}] {knob}={v:<6g} "
+                  f"{verdict}{tag}", flush=True)
             continue
         f = [binary_search(model, torso_id, nom, posture, h0, noise_cfg,
                            args.delay_sub, args.base_seed + 1000 + t, pname)
@@ -237,7 +262,8 @@ def main():
                elapsed_min=(time.time() - t0) / 60.0)
     d = OUT_DIR / "delay_retune"
     d.mkdir(parents=True, exist_ok=True)
-    p = d / (f"retune_{knob}_{args.noise}_" + ("idle" if args.idle else f"{int(delay_ms)}ms") + ".json")
+    kind = f"idle{int(delay_ms)}ms" if args.idle else f"{int(delay_ms)}ms"
+    p = d / f"retune_{knob}_{args.noise}_{kind}.json"
     json.dump(out, p.open("w"), indent=2)
     print(f"\n{knob} @ {delay_ms:.0f}ms {args.noise} "
           f"({out['elapsed_min']:.1f} min) → {p}")
