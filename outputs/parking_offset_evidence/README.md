@@ -22,9 +22,21 @@ Tags inside `parking_offset_diag.json`:
 | `push_ki40.json`, `push_ki160.json` | Appendix C-F push table, rows `k_i=40` and `k_i=160`. |
 | `push_ff_pitch_recalibrated.json` | Appendix C-F push table, row "feedforward pitch recalibrated". |
 | `push_measure.py` | The push harness used for the four files above: §V-B protocol, N=10 repetitions × 8 bearings, binary search 10–160 N at 5 N tolerance. |
+| `robustness_ki20.json`, `robustness_ki40.json`, `robustness_ki80.json` | Appendix C, "Why the gain is not raised" — the falls column, arms `k_i = 20/40/80`. Each is the two noise+delay cells (`med` noise × 10 ms and 30 ms) at N=20, produced by `scripts/collect_robustness_sweep.py` in a detached worktree with only `anchor_position_ki` changed. |
 
-Neither correction is promoted into the shipped `V3_ANCHOR` profile — every
-other table in the paper was measured on the published configuration.
+The `k_i = 4` row of that table is the shipped profile, so its data is the
+paper's main robustness file, `outputs/paper_statistics/robustness_sweep.json`
+(all 12 cells, N=20; the `med_10ms` and `med_30ms` cells are the comparable
+ones). The `k_i = 160` arm ran the full 12-cell grid rather than the two cells
+and is archived under `outputs/ki_promotion_campaign_2026-08-01/`, together
+with that arm's idle-ladder, push-ablation, flight/terrain, delay-stability,
+rate-limit and compound re-measurements. All arms use identical trial seeds
+(`BASE_SEED*100 + delay_steps*10 + trial`), so the comparison is paired.
+
+Neither correction is promoted into the shipped `V3_ANCHOR` profile. For the
+feedforward recalibration the reason is the unresolved 4.5 N F_med cost; for
+`k_i` it is the measured fall-rate regression above (Cochran–Armitage trend on
+log2 k_i: z = 2.34, p = 0.019).
 
 ## Reproducing
 
@@ -38,6 +50,15 @@ other table in the paper was measured on the published configuration.
 
 # one gain-sweep point
 .venv/bin/python scripts/diagnose_parking_offset.py 3 --ki 40 --tag ki_40
+
+# the noise+delay cost of one gain-sweep point (~10 min). Run from a detached
+# worktree with anchor_position_ki edited, so the shipped profile is untouched:
+#   git worktree add --detach /tmp/wt_ki40 HEAD && ln -s "$PWD/.venv" /tmp/wt_ki40/.venv
+#   sed -i '' 's/anchor_position_ki=4\.0,/anchor_position_ki=40.0,/' \
+#       /tmp/wt_ki40/wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py
+# then restrict the grid to the two cells that carry the effect:
+#   NOISE_LEVELS -> {"med": ...} and DELAY_STEPS = [1, 3] in collect_robustness_sweep.py
+.venv/bin/mjpython scripts/collect_robustness_sweep.py --n-trials 20
 
 # the feedforward correction at a non-nominal height (note: the bias flag
 # needs the `=` form; the space form is silently dropped). --variant names

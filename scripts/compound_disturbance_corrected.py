@@ -179,5 +179,5 @@ if __name__ == "__main__":
         "settle_s": agg([r["settle_s"] for r in surv]) if surv else None}
     print(f"  B: {len(surv)}/{N_TRIALS} survived, "
           f"peak={np.mean([r['peak_pitch_deg'] for r in b]):.1f} deg  [{time.time()-t0:.0f}s]", flush=True)
-    json.dump(out, open(HERE / "compound_corrected.json", "w"), indent=2)
+    json.dump(out, open(ROOT / "outputs/compound_disturbance/results_corrected.json", "w"), indent=2)
     print("done")

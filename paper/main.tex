@@ -62,7 +62,7 @@ Email: nvthuong180702@gmail.com
 \begin{abstract}
 Wheeled bipedal robots face a fundamental trade-off: stiffness for sub-millimeter precision shrinks push-recovery capture, while integral action that cancels equilibrium bias winds up during disturbances.
 We present the Anchored Conditionally-Gated Controller (ACC), a two-channel torque assembly whose core mechanism is a proximity-gated anchor: a position integral confined to a \SI{15}{cm} neighborhood, enabled by an asymmetric envelope follower ($\tau_{\text{attack}}{\approx}\SI{23}{ms}$, $\tau_{\text{release}}{\approx}\SI{1.5}{s}$) that distinguishes quiet stance from post-push ringdown.
-ACC delivers omnidirectional push recovery ($F_{\min}{=}\SI{83}{N}$, $F_{\text{med}}{=}\SI{117}{N}$, \num{8}-direction sweep, $N{=}10$) together with sub-millimeter quiet-stance precision. We report accuracy (RMS from commanded home) and repeatability (RMS about the trial mean) separately, and resolve both on the sagittal axis---the actuated inverted-pendulum direction---rather than pooling them into a planar norm diluted by an axis this class of platform cannot drive. Under idealized conditions (clean sensors, \SI{0}{ms} delay, stiff contact, MuJoCo), ACC holds $0.294{\pm}0.015$\,mm sagittal repeatability ($N{=}10$), a $59{\times}$ improvement over a proportional-only baseline measured under one unified protocol. Accuracy is a full order of magnitude worse on the same axis: the robot parks $\SI{27.0}{mm}$ from the commanded home and then holds that offset to \SI{0.009}{mm}, and this gap is treated as the design's principal open weakness. A factorial ablation ($N{=}10$ per row) separates the two: the gated damping terms produce the steadiness (removing the boost costs a factor of \num{16} in sagittal repeatability), while the anchor integral produces \SI{4.2}{mm} of the accuracy at a $3{\times}$ cost in steadiness; the proximity gate and asymmetric envelope are inert during quiet stance and decisive only under disturbance. Precision degrades by a factor of \num{5.5} at \SI{10}{ms} actuation delay, and to a hardware-projected \SIrange{1}{3}{mm} once encoder quantization, backlash, stiction, and IMU noise are accounted for; $F_{\max}$ bifurcates from \SI{96}{N} to \SI{47}{N} at any non-zero delay.
+ACC delivers omnidirectional push recovery ($F_{\min}{=}\SI{83}{N}$, $F_{\text{med}}{=}\SI{117}{N}$, \num{8}-direction sweep, $N{=}10$) together with sub-millimeter quiet-stance precision. We report accuracy (RMS from commanded home) and repeatability (RMS about the trial mean) separately, and resolve both on the sagittal axis---the actuated inverted-pendulum direction---rather than pooling them into a planar norm diluted by an axis this class of platform cannot drive. Under idealized conditions (clean sensors, \SI{0}{ms} delay, stiff contact, MuJoCo), ACC holds $0.294{\pm}0.015$\,mm sagittal repeatability ($N{=}10$), a $59{\times}$ improvement over a proportional-only baseline measured under one unified protocol. Accuracy is a full order of magnitude worse on the same axis: the robot parks $\SI{27.0}{mm}$ from the commanded home and then holds that offset to \SI{0.009}{mm}, and this gap is treated as the design's principal open weakness. A factorial ablation ($N{=}10$ per row) separates the two: the gated damping terms produce the steadiness (removing the boost costs a factor of \num{16} in sagittal repeatability), while the anchor integral produces \SI{4.2}{mm} of the accuracy at a $3{\times}$ cost in steadiness; the proximity gate and asymmetric envelope are inert during quiet stance and decisive only under disturbance. Precision degrades by a factor of \num{5.5} at \SI{10}{ms} actuation delay, and to a hardware-projected \SIrange{1}{3}{mm} once encoder quantization, backlash, stiction, and IMU noise are accounted for. Actuator latency is the sharpest deployment constraint: resolved at \SI{2}{ms} granularity, $F_{\max}$ is flat to within \SI{2.4}{\percent} out to \SI{6}{ms} and then collapses by \SI{45}{\percent}---a cliff between \SI{6}{ms} and \SI{8}{ms}, below the \SI{9.5}{ms} end-to-end budget we estimate for a non-real-time implementation.
 Six classical baselines---four 4-state TWIP variants (LQR, LQR+AW, LQR-DT, PI+AW) and two 6-state coupled variants (servo and direct-torque)---all fail (\SI{100}{\percent} fall rate, $N{=}20$, all at ACC's \SI{100}{Hz} control rate); a preliminary model-free PPO run (5.4M steps, single seed, no domain randomization) falls in \SI{85}{\percent} of multi-height transitions---reported as a difficulty probe on unaided policy search, not as a tuned reinforcement-learning baseline; removing the PID servo path (4-state Direct Torque LQR) improves survival from \SI{0.32}{s} to \SI{0.60}{s} but does not prevent the fall.
 Flight recovery (\SI{100}{cm} drop, \SI{50}{cm} ledge) and per-leg terrain adaptation (\SIrange{10}{20}{cm} one-wheel curb) are demonstrated at $N{=}10$ per condition and ablated: the per-leg height split is necessary at every curb height tested (\num{0}/\num{10} without it), whereas the airborne wheel-torque override proves to be a variance-bounding refinement rather than an enabling mechanism at these scales, a negative result. Core claims rest on $N{\geq}5$.
 \end{abstract}
@@ -1375,50 +1375,149 @@ ACC's conditional gates therefore provide the essential structured prior; the WB
 We evaluate ACC under four dimensions: noise/delay robustness (Table~\ref{tab:robustness}), gate parameter sensitivity, torque rate-limit invariance, and compound-disturbance recovery.
 
 \emph{Robustness to sensor noise and actuator delay.}
-A factorial sweep over four noise levels and three delays ($N{=}5$ per cell), extended along the clean-delay axis to \SI{150}{ms}, reveals two distinct delay regimes: a \textbf{performance threshold} where $F_{\max}$ bifurcates (\SIrange{94}{96}{N} at \SI{0}{ms} vs.\ \SIrange{41}{50}{N} at any delay, idle RMS $5.5{\times}$), and a \textbf{stability threshold} above \SI{150}{ms}---the robot survives all tested clean delays (\SIrange{10}{150}{ms}, $N{=}5$, zero falls) with stable post-bifurcation performance ($F_{\max}{\approx}\SI{49}{N}$, idle ${\approx}\SI{2.5}{mm}$).
-ACC's gates depend on physical state (position, velocity envelope, orientation), not tight timing; jitter that crosses the \SI{10}{ms} performance threshold degrades push margin temporarily but does not cause a fall.
-High noise causes fall regardless of delay; the asymmetric EMA cannot distinguish noise from motion, forcing anchor disengagement.
-Idle repeatability degrades from \SI{0.42}{mm} (clean) to \SI{34.00}{mm} under medium sensor noise---an \num{81}-fold loss. The comparison that makes this concrete is against the un-anchored baseline on the same axis: L0 holds $R_{\text{lat}}=\SI{3.675}{mm}$ (Table~\ref{tab:standing}), so under medium sensor noise ACC is roughly an order of magnitude \emph{worse} than having no anchor at all. The mechanism is the one described above---the envelope gate cannot separate sensor noise from real motion, so it releases the integral and then re-engages it repeatedly---and the practical consequence is that ACC as presented requires a filtered velocity estimate, not a raw one. Two caveats attach to the absolute values in this table. First, its idle column is measured on the \emph{lateral} axis (world $x$), not the sagittal one of Table~\ref{tab:standing}, so the two are not directly comparable in level; the like-for-like clean reference here is ACC's lateral $R_{\text{lat}}=\SI{0.730}{mm}$, and the \SI{0.42}{mm} entry is lower still because of the shorter settling allowance (\SI{3}{s} here vs.\ \SI{5}{s} there): with EMA$_0{=}0$ the envelope gate opens fully at the start of the trial, so a window that begins earlier captures more of the strongly-anchored transient and less of the steady state. Second, the noise and delay \emph{ratios} are unaffected by either issue, since every cell in the table is measured identically; it is the degradation factors, not the absolute millimeters, that this table is used for. Re-running the sweep with sagittal resolution and EMA$_0{=}1.0$ initialization would remove both caveats and is deferred.
+A factorial sweep over four noise levels and a delay axis ($N{=}20$ per cell, \num{240} trials) was extended along the clean-delay axis by a separate $N{=}5$ sweep. An audit of the harness (\path{scripts/collect_robustness_sweep.py}) found that its delay line holds a \emph{single} slot overwritten every control step, so any non-zero delay request applies exactly one control period of transport lag irrespective of the value requested; the delay argument sets only a negligible warm-up window. The cells reported in earlier drafts as \SI{30}{ms}, \SI{50}{ms}, \SI{100}{ms} and \SI{150}{ms} are consequently all \SI{10}{ms} cells, and the extended sweep inherits the defect because it invokes the same measurement script. Table~\ref{tab:robustness} therefore states a two-level delay axis (\SI{0}{ms} and \SI{10}{ms}) and retains the affected cells as what they in fact are---independent seed-samples of one \SI{10}{ms} configuration. The consequence for the claims is specific and we state it plainly: \emph{no delay above \SI{10}{ms} has been tested on this platform}, so no stability threshold is claimed, and the delay axis proper is resolved instead by the dedicated sweep of Table~\ref{tab:delay_cliff}. What the repeats do establish is that the post-bifurcation state is reproducible rather than marginal: over \num{50} clean trials in five independent samples, $F_{\max}$ lands in \SIrange{45.3}{49.4}{N} and idle RMS in \SIrange{2.23}{2.61}{mm}, with zero falls in all fifty. Against the \SI{0}{ms} reference (\SI{95.7}{N}, \SI{0.43}{mm}) that is a bifurcation of $F_{\max}$ to roughly half and a $5.6{\times}$ rise in idle RMS.
+Delay at \SI{10}{ms} is therefore benign for stability and costly for performance---consistent with ACC's gates depending on physical state (position, velocity envelope, orientation) rather than on tight timing---but whether that remains true at larger delays is untested rather than established.
+Noise alone is likewise survivable up to the medium level (\num{0} falls in \num{20} at \SI{0}{ms} delay).
+What ACC does not tolerate is the \emph{conjunction}: medium noise together with \SI{10}{ms} of delay costs \num{7} falls in \num{40} trials, the only sub-catastrophic falls anywhere in the grid. High noise is unrecoverable at every delay (\num{60}/\num{60}); the asymmetric envelope cannot distinguish noise from motion, forcing anchor disengagement, and the residual P-only mode cannot hold the platform.
+That conjunction is the binding constraint on the design, and \S\ref{sec:parking_supp} shows it is what prices the one gain change that would otherwise remove ACC's parking offset.
+Idle repeatability degrades from \SI{0.43}{mm} (clean) to \SI{30.82}{mm} under medium sensor noise at zero delay---a \num{71}-fold loss. The comparison that makes this concrete is against the un-anchored baseline on the same axis: L0 holds $R_{\text{lat}}=\SI{3.675}{mm}$ (Table~\ref{tab:standing}), so under medium sensor noise ACC is roughly an order of magnitude \emph{worse} than having no anchor at all. The mechanism is the one described above---the envelope gate cannot separate sensor noise from real motion, so it releases the integral and then re-engages it repeatedly---and the practical consequence is that ACC as presented requires a filtered velocity estimate, not a raw one. Three caveats attach to the absolute values in this table. First, its idle column is measured on the \emph{lateral} axis (world $x$), not the sagittal one of Table~\ref{tab:standing}, so the two are not directly comparable in level; the like-for-like clean reference here is ACC's lateral $R_{\text{lat}}=\SI{0.730}{mm}$, and the \SI{0.43}{mm} entry is lower still because of the shorter settling allowance (\SI{3}{s} here vs.\ \SI{5}{s} there): with EMA$_0{=}0$ the envelope gate opens fully at the start of the trial, so a window that begins earlier captures more of the strongly-anchored transient and less of the steady state. Second, that column averages surviving trials only, so in the two cells that produce falls it is mildly optimistic---a configuration that falls more can report a \emph{better} idle number, and the falls column must be read first. Third, the noise and delay \emph{ratios} are unaffected by any of these issues, since every cell in the table is measured identically; it is the degradation factors, not the absolute millimeters, that this table is used for. Re-running the sweep with sagittal resolution and EMA$_0{=}1.0$ initialization would remove the first caveat and is deferred.
 
 \begin{table}[t]
 \centering
-\caption{Robustness to sensor noise and actuator delay. Idle RMS: lateral (world $x$) CoM std.\ over \SI{20}{s} after \SI{3}{s} settle (EMA$_0{=}0$ transient), $N{=}5$. $F_{\max}$: binary-search lateral (world $+x$) push, $\pm\SI{5}{N}$ tolerance, $N{=}5$.}
+\caption{Robustness to sensor noise and actuator delay. Falls: trials terminated by a fall, out of $N$. Idle RMS: lateral (world $x$) CoM std.\ over \SI{20}{s} after \SI{3}{s} settle (EMA$_0{=}0$ transient), \emph{surviving trials only}. $F_{\max}$: binary-search lateral (world $+x$) push, $\pm\SI{5}{N}$ tolerance, search floor \SI{10}{N}. Noise$\times$delay grid $N{=}20$; extended rows $N{=}5$. Lettered rows (a)--(e) are \emph{independent seed-samples of the same \SI{10}{ms} configuration}, not distinct delays---see note $\ddagger$. The delay axis proper is resolved in Table~\ref{tab:delay_cliff}.}
 \label{tab:robustness}
 \footnotesize
-\begin{tabular}{@{}lcccc@{}}
+\begin{tabular}{@{}lccccc@{}}
 \toprule
-\multirow{2}{*}{Condition} & \multicolumn{2}{c}{Idle RMS (mm)} & \multicolumn{2}{c@{}}{$F_{\max}$ (N)} \\
-\cmidrule(lr){2-3} \cmidrule(lr){4-5}
-& Mean & $\pm$Std & Mean & $\pm$Std \\
+\multirow{2}{*}{Condition} & \multirow{2}{*}{Falls} & \multicolumn{2}{c}{Idle RMS (mm)} & \multicolumn{2}{c@{}}{$F_{\max}$ (N)} \\
+\cmidrule(lr){3-4} \cmidrule(lr){5-6}
+& & Mean & $\pm$Std & Mean & $\pm$Std \\
 \midrule
-Clean,     \SI{0}{ms} delay  & 0.42 & 0.03 & 96 & 1 \\
-Clean,     \SI{10}{ms} delay & 2.30 & 0.16 & 47 & 2 \\
-Clean,     \SI{30}{ms} delay & 2.62 & 0.22 & 46 & 3 \\
-Clean,     \SI{50}{ms} delay & 2.61 & 0.42 & 49 & 8 \\
-Clean,     \SI{100}{ms} delay& 2.23 & 0.25 & 48 & 4 \\
-Clean,     \SI{150}{ms} delay& 2.40 & 0.22 & 45 & 1 \\
+Clean,     \SI{0}{ms} delay  & 0/20 & 0.43 & 0.06 & 95.7 & 0.8 \\
+Clean,     \SI{10}{ms} delay (a) & 0/20 & 2.40 & 0.25 & 45.5 & 3.1 \\
+Clean,     \SI{10}{ms} delay (b) & 0/20 & 2.51 & 0.24 & 49.4 & 6.7 \\
+Clean,     \SI{10}{ms} delay (c)$^\dagger$ & 0/5 & 2.61 & 0.42 & 49.1 & 7.6 \\
+Clean,     \SI{10}{ms} delay (d)$^\dagger$ & 0/5 & 2.23 & 0.25 & 48.3 & 3.8 \\
+Clean,     \SI{10}{ms} delay (e)$^\dagger$ & 0/5 & 2.40 & 0.22 & 45.3 & 1.5 \\
 \midrule
-Low noise, \SI{0}{ms} delay  & 6.33 & 2.57 & 96 & 1 \\
-Low noise, \SI{10}{ms} delay & 12.82 & 3.93 & 47 & 2 \\
-Low noise, \SI{30}{ms} delay & 7.31 & 2.51 & 50 & 1 \\
+Low noise, \SI{0}{ms} delay  & 0/20 & 5.86 & 2.53 & 96.0 & 1.0 \\
+Low noise, \SI{10}{ms} delay (a) & 0/20 & 10.88 & 3.61 & 49.9 & 9.1 \\
+Low noise, \SI{10}{ms} delay (b) & 0/20 & 7.46 & 4.10 & 51.0 & 3.5 \\
 \midrule
-Med noise, \SI{0}{ms} delay  & 34.00 & 11.28 & 94 & 3 \\
-Med noise, \SI{10}{ms} delay & 41.66 & 23.24 & 45 & 10 \\
-Med noise, \SI{30}{ms} delay & 35.10 & 16.83 & 41 & 10 \\
+Med noise, \SI{0}{ms} delay  & 0/20 & 30.82 & 12.13 & 93.5 & 5.2 \\
+Med noise, \SI{10}{ms} delay (a) & \textbf{4/20} & 31.44 & 14.08 & 45.1 & 15.3 \\
+Med noise, \SI{10}{ms} delay (b) & \textbf{3/20} & 31.81 & 15.46 & 46.5 & 16.3 \\
 \midrule
-High noise, \SI{0}{ms} delay & 3.00 & 0.55 & 95 & 3 \\
-High noise, \SI{10}{ms} delay & 3.00 & 0.55 & 95 & 3 \\
-High noise, \SI{30}{ms} delay & \multicolumn{2}{c}{--- (fell)} & \multicolumn{2}{c}{--- (fell)} \\
+High noise, \SI{0}{ms} delay & 20/20 & \multicolumn{2}{c}{--- (all fell)} & \multicolumn{2}{c@{}}{---} \\
+High noise, \SI{10}{ms} delay (a) & 20/20 & \multicolumn{2}{c}{--- (all fell)} & \multicolumn{2}{c@{}}{---} \\
+High noise, \SI{10}{ms} delay (b) & 20/20 & \multicolumn{2}{c}{--- (all fell)} & \multicolumn{2}{c@{}}{---} \\
 \bottomrule
 \end{tabular}
 \vspace{2pt}\tabnote\noindent
-Noise (1-$\sigma$): low = \SI{0.01}{rad/s} (ang.\ vel.), \SI{0.01}{m/s^2} (grav.), \SI{0.001}{rad} (joint pos.); med = $5\times$ low; high = $10\times$ low. Two distinct delay regimes: \textbf{performance} bifurcation at ${\sim}\SI{10}{ms}$ ($F_{\max}$: \SI{96}{N}$\rightarrow{\sim}\SI{47}{N}$); \textbf{stability} threshold ${>}\SI{150}{ms}$ (zero falls at all tested clean delays, $N{=}5$; post-bifurcation idle ${\approx}\SI{2.5}{mm}$, $F_{\max}{\approx}$\,\SIrange{45}{49}{N}).
-The apparent medium$\rightarrow$high noise improvement (\SI{34}{mm}$\rightarrow$\SI{3}{mm}) occurs because high noise holds EMA above threshold, disengaging the anchor into P-only mode. Non-monotonic low-noise RMS (\SI{12.82}{mm} at \SI{10}{ms} vs.\ \SI{7.31}{mm} at \SI{30}{ms}) reflects resonance: \SI{10}{ms} phase-shifts the anchor into intermittent engage/release; at \SI{30}{ms} EMA stays above threshold (medium noise follows the same pattern).
+$^\dagger$Rows from the separate extended sweep, $N{=}5$; all other rows $N{=}20$. Noise (1-$\sigma$): low = \SI{0.01}{rad/s} (ang.\ vel.), \SI{0.01}{m/s^2} (grav.), \SI{0.001}{rad} (joint pos.); med = $5\times$ low; high = $10\times$ low.
+$^\ddagger$\emph{Harness correction.} These cells were requested at \SI{0}{ms}, \SI{10}{ms} and \SI{30}{ms} (and, for the extended rows, \SI{50}{ms}, \SI{100}{ms} and \SI{150}{ms}), but the harness stores the delayed command in one slot overwritten every control step, so every non-zero request applied exactly one control period (\SI{10}{ms}) of lag. The rows are retained unaltered and relabelled: they are five clean and two per-noise-level independent samples at \SI{10}{ms}, and the spread among them is seed variation within one configuration. No delay above \SI{10}{ms} is measured anywhere in this table, and none is claimed.
+Performance bifurcation at \SI{10}{ms} ($F_{\max}$: \SI{95.7}{N}$\rightarrow{\sim}\SI{46}{N}$, idle \SI{0.43}{mm}${\rightarrow}{\approx}\,$\SI{2.5}{mm}) is reproducible across all five clean samples with zero falls in \num{50} trials.
+High noise is unrecoverable at both delays (\num{60} of \num{60} trials): it holds the velocity envelope above threshold, disengaging the anchor, and the residual P-only mode cannot hold the platform under that noise level. The low-noise idle spread (\SI{10.88}{mm} in sample (a) vs.\ \SI{7.46}{mm} in sample (b)) is between two samples of the same configuration and is therefore seed variation; earlier drafts read it as a delay-dependent resonance, which the harness correction rules out.
+Because the idle column averages survivors only, the medium-noise rows are mildly optimistic where falls occur; the falls column is the primary metric for those cells.
 \tabnote\noindent
 Produced by \path{scripts/collect_robustness_sweep.py} (noise$\times$delay grid,
 raw output \path{outputs/paper_statistics/robustness_sweep.json}) and
-\path{scripts/collect_delay_stability_sweep.py} (clean-delay stability threshold,
+\path{scripts/collect_delay_stability_sweep.py} (extended clean-delay rows,
 raw output \path{outputs/paper_statistics/delay_stability_sweep.json}).
+Both archived outputs predate the delay-line repair described in note~$\ddagger$
+and are reported here as the \SI{10}{ms} measurements they are; the scripts have
+since been corrected, so a re-run yields genuinely distinct delays and will not
+reproduce the lettered rows.
+\end{table}
+
+\emph{Resolving the delay axis.}
+The grid above quantises delay to the control period, and its non-zero cells collapsed onto a single one; the knee was therefore located separately with the transport delay applied per \emph{physics} substep (\SI{2}{ms} at \SI{500}{Hz}). This resolves the axis five times more finely and is also the more faithful model, since a real actuator's latency is not quantised to the controller's period. On clean sensing the harness is deterministic---every multi-seed cell returned identical values across all seeds---so single-seed cells are exact rather than sampled.
+Table~\ref{tab:delay_cliff} places the knee between \SI{6}{ms} and \SI{8}{ms}: $F_{\max}$ is flat to within \SI{2.4}{\percent} out to \SI{6}{ms} and then collapses by \SI{45}{\percent}. Beyond the knee the decline continues monotonically---\SI{41.6}{N} at \SI{12}{ms}, \SI{28.8}{N} at \SI{16}{ms}, and the search floor by \SI{20}{ms}, i.e.\ no recoverable push at all. The tail matters because it distinguishes a genuine loss of margin from a narrow phase-alignment notch, and it is the former. Two consequences follow. First, the transition is a cliff rather than a roll-off, so a design either clears it or does not; there is no graceful degradation to trade against. Second, the knee sits \emph{below} the \SI{10}{ms} figure the coarse grid implied, and therefore below the \SI{9.5}{ms} end-to-end budget estimated in \S\ref{sec:discussion}---the sign of that margin is negative, not positive (Limitation~4).
+Absolute levels are not directly comparable with Table~\ref{tab:robustness}, which uses a different push protocol: the two harnesses agree closely at \SI{0}{ms} (\SI{95.5}{N} vs.\ \SI{95.7}{N}) and both put the post-cliff value near half of it, but differ in level there (\SI{56.9}{N} vs.\ \SI{45.5}{N}). What this sweep establishes is the location of the knee, not the post-cliff level.
+
+\emph{Moving the knee: a delay-hardened variant.}
+Whether the knee is a property of the architecture or of the shipped gain set is a question the sweep can answer directly. Holding the delay at \SI{8}{ms}---just past the knee---and sweeping one profile constant at a time gives Table~\ref{tab:delay_screen}. The result is not a gently sloped optimum but a sharp \emph{local dip}: the shipped value of every one of the four constants tested scores \SI{51.0}{N}, while nearly every neighbouring value, in \emph{either} direction and on \emph{any} of the four, recovers \SIrange{78}{93}{N}. A margin that is genuinely exhausted does not behave that way. The shape is the signature of an unlucky phase alignment at one operating point, and it means the \SIrange{6}{8}{ms} knee is a tuning artefact rather than an architectural ceiling.
+
+Carrying the largest single-knob change forward---sagittal velocity damping doubled from \SI{22.5}{} to \SI{45}{Nm/(m/s)}, denoted ACC-DH---gives the second row of Table~\ref{tab:delay_cliff}. ACC-DH is identical to the shipped controller at \SIrange{0}{2}{ms}, no worse at any delay tested, and moves the knee outward by one grid step, from \SIrange{6}{8}{ms} to \SIrange{8}{10}{ms}: it holds \SI{93.2}{N} at \SI{8}{ms} where the shipped gains give \SI{51.0}{N}, and roughly doubles the surviving margin from \SI{12}{ms} to \SI{16}{ms}. Both arms reach the search floor by \SI{20}{ms}, so the retune buys headroom below the cliff and does not relocate the eventual failure. The residual dip at \SI{10}{ms} (\SI{60.4}{N}) is the one delay in the sweep that is a \emph{pure} one-control-period hold; every other cell mixes two consecutive commands within a control period, so it is not directly comparable with its neighbours.
+
+The measured price is small on the axes tested. Idle lateral RMS at zero delay rises from \SI{0.790}{mm} to \SI{0.801}{mm} ($+\SI{1.4}{\percent}$, $N{=}3$), which is inside the run-to-run spread of the quantity. Under the noise-plus-delay conjunction that produces the only sub-catastrophic falls in Table~\ref{tab:robustness}, ACC-DH is \emph{better} rather than worse: at \SI{8}{ms} with $N{=}5$, $F_{\max}$ rises from \SI{76.8}{N} to \SI{92.0}{N} under low noise and from \SI{84.3}{N} to \SI{90.2}{N} under medium, and the seed-to-seed spread contracts sharply (\SI{16.2}{N} to \SI{1.2}{N} standard deviation under low noise). The same table exposes a separate point worth stating: the shipped controller's \SI{8}{ms} dip is far deeper on clean sensing (\SI{51.0}{N}) than under noise (\SI{76.8}{N} and \SI{84.3}{N}), so sensor dither de-phases the deterministic worst case. The clean-sensing cliff of Table~\ref{tab:delay_cliff} is therefore a conservative bound, not an optimistic one.
+
+We report ACC-DH as an evaluation variant and do \emph{not} adopt it. The constant it changes is the ungated damping that also governs driving acceleration and settling, and its cost on the driving, terrain and flight axes has not been re-measured; the \num{48}-scenario qualification suite, not a single-axis sweep, is what decides a default. The claim made here is narrower and sufficient for the limitation it addresses: the delay knee is movable by tuning, at no measured cost to quiet stance and with a measured \emph{gain} under noise.
+
+\begin{table}[t]
+\centering
+\caption{Actuator-delay resolution sweep, clean sensing. Transport delay applied per physics substep (\SI{2}{ms} at \SI{500}{Hz}) rather than per control step, giving \SI{2}{ms} resolution. $F_{\max}$: binary-search lateral push, \num{7} iterations over \SIrange{10}{160}{N}. ACC: promoted default. ACC-DH: delay-hardened variant, sagittal velocity damping \SI{22.5}{}${\rightarrow}\SI{45}{Nm/(m/s)}$, reported but \emph{not} adopted. Clean sensing is deterministic ($\sigma{=}\num{0.0}$ in every multi-seed cell, $N$ up to \num{5}), so single-seed cells are exact.}
+\label{tab:delay_cliff}
+\footnotesize
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Delay (ms) & ACC $F_{\max}$ (N) & ACC-DH $F_{\max}$ (N) & Change \\
+\midrule
+0  & 95.5 & 95.5 & --- \\
+2  & 94.4 & 94.4 & --- \\
+4  & 93.2 & 94.4 & $+1.3\%$ \\
+6  & 93.2 & 94.4 & $+1.3\%$ \\
+\midrule
+8  & \textbf{51.0} & \textbf{93.2} & $\mathbf{+83\%}$ \\
+10 & 56.9 & 60.4 & $+6.2\%$ \\
+12 & 41.6 & 79.1 & $+90\%$ \\
+14 & 40.5 & 68.6 & $+69\%$ \\
+16 & 28.8 & 41.6 & $+44\%$ \\
+20 & \multicolumn{2}{c}{both at search floor (\SI{10}{N})} & --- \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}\tabnote\noindent
+The shipped controller's knee lies between \SI{6}{ms} and \SI{8}{ms}: flat to within \SI{2.4}{\percent} out to \SI{6}{ms}, then a \SI{45}{\percent} collapse, declining monotonically thereafter to no recoverable push by \SI{20}{ms}. ACC-DH moves the knee to \SIrange{8}{10}{ms} and is no worse at any delay tested. Substep granularity bounds the resolution at \SI{2}{ms}; neither knee is localized further.
+\tabnote\noindent
+The \SI{10}{ms} cell is the only pure one-control-period hold; the others mix two consecutive commands within a period, which is why $F_{\max}$ is not smooth across it in either row.
+\tabnote\noindent
+Produced by \path{scripts/delay_cliff_resolution.py} and
+\path{scripts/delay_retune_sweep.py}; raw output in
+\path{outputs/robustness_sweep/delay_cliff/} and \path{.../delay_retune/}.
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{One-knob gain screen at \SI{8}{ms} actuator delay, clean sensing, just past the shipped controller's knee. Each column sweeps a single profile constant with all others held at their promoted values; \textbf{bold} marks the shipped value. Same push protocol and bisection bracket as Table~\ref{tab:delay_cliff}, so cells are directly comparable with it. Clean sensing is deterministic, $N{=}1$.}
+\label{tab:delay_screen}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lr@{\;}lr@{}}
+\toprule
+Constant & \multicolumn{2}{c}{Value} & $F_{\max}$ (N) \\
+\midrule
+\multirow{6}{*}{velocity damping scale}
+  & 0.5  &      & 39.3 \\
+  & 0.75 &      & 42.8 \\
+  & 1.0  &      & 85.0 \\
+  & \textbf{1.5} & \textbf{(shipped)} & \textbf{51.0} \\
+  & 2.0  &      & 88.5 \\
+  & 3.0  &      & 93.2 \\
+\midrule
+\multirow{5}{*}{drift $k_{\text{vel}}$}
+  & 5    &      & 65.1 \\
+  & 10   &      & 92.0 \\
+  & \textbf{15} & \textbf{(shipped)} & \textbf{51.0} \\
+  & 25   &      & 90.9 \\
+  & 40   &      & 80.3 \\
+\midrule
+\multirow{6}{*}{anchor $k_p$ pitch (soft)}
+  & 20   &      & 85.0 \\
+  & 25   &      & 81.5 \\
+  & 30   &      & 85.0 \\
+  & \textbf{35} & \textbf{(shipped)} & \textbf{51.0} \\
+  & 45   &      & 78.0 \\
+  & 50   &      & 86.2 \\
+\midrule
+\multirow{4}{*}{anchor $k_{\text{vel}}$ boost scale}
+  & 0    &      & 85.0 \\
+  & 2.5  &      & 92.0 \\
+  & \textbf{5} & \textbf{(shipped)} & \textbf{51.0} \\
+  & 10   &      & 62.7 \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}\tabnote\noindent
+The shipped point is a sharp local dip on all four constants: every arm scores \SI{51.0}{N} at the shipped value and \SIrange{78}{93}{N} at most neighbours in both directions. This is phase alignment at one operating point, not an exhausted margin---which is why the knee is movable (Table~\ref{tab:delay_cliff}).
 \end{table}
 
 \emph{Gate parameter sensitivity and tuning.}
@@ -1565,28 +1664,28 @@ Welch's $t$-test, Bonferroni-adj.\ $\alpha{=}0.007$ (7 comparisons); L0$\rightar
 
 \textbf{Limitations.}
 (1)~The push envelope is anisotropic, and the anisotropy is structural rather than a deficiency to be tuned out: the two lateral bearings average \SI{97.5}{N} against \SI{131.8}{N} for the two sagittal ones because the wheels can drive the contact patch back under the CoM sagittally but produce no lateral ground force at all, and the weakest bearing is the oblique \SI{45}{\degree} ($\SI{82.8}{N}$, \SI{29}{\percent} below $F_{\text{med}}$), where neither mechanism has full authority. Raising the lateral bearing requires a centralized lateral task (\S\ref{sec:wbc}), not a gain change. What is genuinely unresolved is the \emph{chirality}: one oblique bearing survives \SI{40}{N} more than its mirror (Fig.~\ref{fig:push_polar}), reproducibly across trials, and we have not traced it to a mechanism.
-(2)~Oblique \SI{45}{\degree} ledge descent at ${\geq}\SI{20}{cm}$ exceeds lateral balance authority.
+(2)~\textbf{Oblique ledge descent fails in a straddle regime rather than above a step-height threshold, and the binding constraint is the per-leg span of \S\ref{sec:terrain}, not lateral balance authority.} An oblique exit releases the two wheels a stagger interval $w_{\text{track}}\tan\phi / v$ apart, and only within that interval can the leg split absorb the step. Instrumenting a \SI{30}{\degree}, \SI{20}{cm} exit at \SI{0.7}{m/s} shows the window closing in \SI{0.18}{s}: the split had commanded \SI{25}{mm} of differential leg travel against the \SI{200}{mm} step when the trailing wheel lost contact, and the torso subsequently absorbed the remainder, reaching $\SI{-33.1}{\degree}$ of roll against the $\arctan(0.20/w_{\text{track}}) = \SI{35.7}{\degree}$ that a wholly unspanned step predicts. The legs were not at their travel limit when contact was lost (\SI{99}{mm} of the calibrated range unused), so the proximate failure is a race rather than a saturation---but relieving it would not rescue the case, because the full \SI{20}{cm} is itself unspannable at nominal stance (\SI{170}{\degree} of knee flexion against the \SI{2.7}{rad} limit, \S\ref{sec:terrain}). The \SI{\pm 6}{cm} leveling trim is unavailable throughout, since its gate requires \emph{both} wheels loaded. Failure is consequently \emph{not} monotone in step height: on a deterministic course at one trial per cell, a \SI{45}{\degree} exit settles at \SI{30}{cm} and a \SI{30}{\degree} exit at \SI{40}{cm}, while both angles fail at \SI{20}{cm}. Two regimes separate them, set by whether the leading wheel reaches the lower ground before the trailing wheel releases---free fall over the step takes $\sqrt{2h/g}$, comparable to the stagger interval at the heights tested. A shallow step lands the leading wheel while the trailing wheel still bears on the platform and forces the straddle the legs cannot span; a deep step releases both wheels together and is handled by the flight path of \S\ref{sec:flight} (Table~\ref{tab:flight_ext}). We do not claim a calibrated boundary between the two regimes: the mapping was measured at one trial per cell over four heights and two angles, which fixes the mechanism but not the threshold. Widening the straddle regime requires knee range rather than gains; the alternative---detecting an unspannable step and committing deliberately to the launch regime---has not been evaluated.
 (3)~All results are simulation-only (MuJoCo); hardware validation remains future work.
-(4)~Push margin bifurcates at ${\sim}\SI{10}{ms}$ of actuator delay: $F_{\max}$ falls from ${\sim}\SI{95}{N}$ to ${\sim}\SI{45}{N}$ and idle RMS rises $5.5{\times}$, and the end-to-end budget estimated below leaves only \SI{0.5}{ms} of margin against that threshold. Stability is not the binding constraint---the robot survives every tested clean delay out to \SI{150}{ms} with zero falls ($N{=}5$, \S\ref{sec:analysis}), because ACC's gates key on physical state rather than on tight timing---but roughly half the usable push envelope is lost far below the rate at which it would fall.
+(4)~\textbf{The push-margin cliff sits below the estimated latency budget, and the delay tolerance above \SI{10}{ms} is unmeasured.} Push margin collapses across a knee between \SI{6}{ms} and \SI{8}{ms} of actuator delay: $F_{\max}$ holds within \SI{2.4}{\percent} of its \SI{0}{ms} value out to \SI{6}{ms} and then falls by \SI{45}{\percent} (Table~\ref{tab:delay_cliff}), with idle RMS rising $5.5{\times}$ across the same transition. The end-to-end budget estimated below is \SI{9.5}{ms}, so the design as specified sits \SIrange{2}{3.5}{ms} \emph{past} the cliff rather than short of it, and the real-time measures discussed there become the condition for clearing it rather than a comfort margin. Because the transition is a cliff and not a roll-off, that margin cannot be part-recovered: a budget of \SI{7.5}{ms} performs like \SI{10}{ms}, and one of \SI{5.5}{ms} like \SI{0}{ms}. Two further gaps are open. First, the substep sweep that locates the knee is clean-sensing only; the interaction with sensor noise---the conjunction that produces the only sub-catastrophic falls in Table~\ref{tab:robustness}---has been measured at \SI{10}{ms} but not across the knee. Second, \emph{no delay above \SI{10}{ms} has been tested}: an earlier draft reported zero falls out to \SI{150}{ms}, but the harness that produced those rows applies one control period of lag regardless of the delay requested (\S\ref{sec:analysis}), so we withdraw that claim entirely and assert no stability threshold. That ACC's gates key on physical state rather than on tight timing remains a structural argument for delay tolerance, not a measurement. What can be said in mitigation is that the knee belongs to the tuning and not to the architecture: a one-knob screen at \SI{8}{ms} finds the shipped gain set sitting in a sharp local dip, and doubling the sagittal velocity damping moves the knee to \SIrange{8}{10}{ms}---clear of the \SI{9.5}{ms} budget---at no measured cost to quiet stance and with improved margin under noise (Tables~\ref{tab:delay_cliff},~\ref{tab:delay_screen}). That variant is reported, not adopted, because the constant it changes also governs driving and settling and has not been re-qualified over the \num{48}-scenario suite; so the mitigation is demonstrated but not yet paid for. Measuring where the robot actually falls, and re-qualifying a delay-hardened default, are the two pieces of work this limitation names.
 (5)~\textbf{ACC is not rate-portable downward.} A \SI{50}{Hz} ACC evaluation with recomputed discrete coefficients ($\alpha_a{\approx}0.58$, $\alpha_r{\approx}0.013$, anchor leak~\num{0.010}) \emph{failed}---the robot collapsed to a mean CoM height of \SI{0.124}{m} (nominal \SI{0.404}{m}), and the sub-millimeter idle RMS and \SI{10}{N} push threshold recorded by that run are measurements taken on a fallen robot. Rate-independence of ACC's architectural contribution is therefore not claimed, and the responsible mechanism remains undetermined between two candidates: excitation of high-frequency plant modes that the \SI{100}{Hz} loop suppresses, or the phase lag introduced by discretizing the asymmetric envelope at $\Delta t{=}\SI{20}{ms}$, where $\alpha_a{\approx}0.58$ leaves the attack filter barely more than one sample from deadbeat. Distinguishing them requires a loop-gain and phase-margin analysis of the linearized closed loop at both rates, together with a re-tuning of the ACC gains for the \SI{20}{ms} step; neither has been performed. The practical consequence is a deployment constraint rather than a comparison flaw: ACC as tuned requires a \SI{100}{Hz} loop, and the \SI{9.5}{ms} end-to-end budget estimated below leaves no room to relax it.
 (6)~\textbf{The commanded height range is bounded by the posture map, not by the anchor.} Within the calibrated band (\SIrange{0.354}{0.454}{m} CoM-$z$) a commanded transition costs at most \SI{2}{\percent} of push margin, but a ${+}\SI{10}{cm}$ rise into the extrapolated region collapses $F_{\max}$ by \SI{81}{\percent} (Table~\ref{tab:compound}); the mirror-image squat costs only \SI{15}{\percent}. Operating above the calibrated band under disturbance is therefore unsafe, and extending the band requires additional posture calibration points rather than a controller change. ACC has not been evaluated over a wide commanded-height sweep in the manner of a dedicated height-tracking study; only the $\pm\SI{5}{cm}$ and $\pm\SI{10}{cm}$ steps of \S\ref{sec:analysis} are measured.
 (7)~The classical comparison is bounded by what could be linearized. A full-state LQR from finite-difference linearization of the complete 10-DOF MuJoCo plant was attempted but produced unreliable gain matrices due to ill-conditioned contact dynamics at the standing equilibrium ($\kappa(A){\approx}10^{10}$), so all six baselines of \S\ref{sec:baselines} derive from reduced 4- and 6-state models; robust linearization of articulated-leg contact dynamics at unstable equilibria is an open challenge. The hip-roll coupling $b_{r,h}{=}-5.0$ in the 6-state LQR is empirical; a sensitivity sweep is deferred.
-(8)~\textbf{Absolute sagittal accuracy is capped at ${\sim}\SI{27}{mm}$ by a deliberate design setting with a measured price, not by an unexplained residual.} ACC's position integral acts on the sagittal axis, yet the robot settles $\SI{-27.0}{mm}$ from the commanded home along that axis and then holds the offset to within \SI{0.009}{mm} SD across ten trials (Table~\ref{tab:standing}). Sagittal \emph{repeatability} is excellent (\SI{0.294}{mm}), so the deficit is a static bias rather than motion, and it is largely insensitive to the gate structure (every subtractive ablation that survives lands within \SI{0.2}{mm} of it). Direct instrumentation of the sagittal torque decomposition (Appendix~\ref{sec:parking_supp}) accounts for it completely. At the parking point the gravity moment about the wheel axle is $\SI{0.0040}{Nm}$ (CoM lever \SI{0.050}{mm})---a settled wheeled inverted pendulum necessarily parks its mass over the contact line---and the anchor integral sits at \SI{0.198}{Nm}, \SI{10.0}{\percent} of its \SI{2.0}{Nm} clamp, so the offset is neither gravity-driven nor a windup or saturation artifact. What actually balances is a constant pitch-loop demand of $\SI{-1.259}{Nm}$, produced because the feedforward pitch reference commands $+\SI{3.476}{\degree}$ where the robot in fact balances at $+\SI{2.034}{\degree}$. The position loop must cancel that torque, and because the anchor integral is \emph{leaky}---deliberately, so that it forgets a disturbance in ${\sim}\SI{2}{s}$ rather than accumulating one indefinitely---its DC gain is finite ($k_{I,\text{dc}}{=}k_i\Delta t(1{-}\lambda)/\lambda{=}\SI{7.96}{Nm/m}$, one fifth of $k_{pos}$), so a nonzero error is required to produce it: Eq.~\eqref{eq:parking} predicts \SI{24.88}{mm} against \SI{24.99}{mm} measured, and tracks a $40{\times}$ gain sweep and a five-point height sweep to within \SI{0.92}{\percent}. Only the residual \SIrange{1}{3}{mm} is a frame-convention gap (\S\ref{sec:height_convention}). The leak is the term that cannot simply be dialled away: a $10{\times}$ smaller $\lambda$ does cut the offset to \SI{-16.31}{mm}, but window jitter degrades twelvefold ($0.298\rightarrow\SI{3.463}{mm}$) and the forgetting horizon stretches to \SI{20}{s}---precisely the trade the shipped setting was chosen to avoid. The two cheaper routes were measured instead: raising $k_i$ from \num{4} to \num{160} removes \SI{80}{\percent} of the offset at no measurable push cost ($p{\geq}0.32$ on both $F_{\min}$ and $F_{\text{med}}$), and recalibrating the feedforward pitch reference removes \SI{92.5}{\percent} ($-27.0\rightarrow\SI{-2.0}{mm}$) with $F_{\min}$ unchanged (\SI{82.5}{N} vs.\ \SI{82.8}{N}, $p{=}0.55$), at the cost of a borderline \SI{4.5}{N} reduction in $F_{\text{med}}$ ($p{=}0.051$) and a per-height rather than scalar correction (\SIrange{0.94}{1.97}{\degree} over \SI{2}{cm}). Neither is promoted into the shipped profile, because every table in this paper was measured on it. What remains genuinely open is therefore narrow: whether that \SI{4.5}{N} cost survives a larger sample, and the \SIrange{1}{3}{mm} convention gap.
+(8)~\textbf{Absolute sagittal accuracy is capped at ${\sim}\SI{27}{mm}$ by a deliberate design setting with a measured price, not by an unexplained residual.} ACC's position integral acts on the sagittal axis, yet the robot settles $\SI{-27.0}{mm}$ from the commanded home along that axis and then holds the offset to within \SI{0.009}{mm} SD across ten trials (Table~\ref{tab:standing}). Sagittal \emph{repeatability} is excellent (\SI{0.294}{mm}), so the deficit is a static bias rather than motion, and it is largely insensitive to the gate structure (every subtractive ablation that survives lands within \SI{0.2}{mm} of it). Direct instrumentation of the sagittal torque decomposition (Appendix~\ref{sec:parking_supp}) accounts for it completely. At the parking point the gravity moment about the wheel axle is $\SI{0.0040}{Nm}$ (CoM lever \SI{0.050}{mm})---a settled wheeled inverted pendulum necessarily parks its mass over the contact line---and the anchor integral sits at \SI{0.198}{Nm}, \SI{10.0}{\percent} of its \SI{2.0}{Nm} clamp, so the offset is neither gravity-driven nor a windup or saturation artifact. What actually balances is a constant pitch-loop demand of $\SI{-1.259}{Nm}$, produced because the feedforward pitch reference commands $+\SI{3.476}{\degree}$ where the robot in fact balances at $+\SI{2.034}{\degree}$. The position loop must cancel that torque, and because the anchor integral is \emph{leaky}---deliberately, so that it forgets a disturbance in ${\sim}\SI{2}{s}$ rather than accumulating one indefinitely---its DC gain is finite ($k_{I,\text{dc}}{=}k_i\Delta t(1{-}\lambda)/\lambda{=}\SI{7.96}{Nm/m}$, one fifth of $k_{pos}$), so a nonzero error is required to produce it: Eq.~\eqref{eq:parking} predicts \SI{24.88}{mm} against \SI{24.99}{mm} measured, and tracks a $40{\times}$ gain sweep and a five-point height sweep to within \SI{0.92}{\percent}. Only the residual \SIrange{1}{3}{mm} is a frame-convention gap (\S\ref{sec:height_convention}). The leak is the term that cannot simply be dialled away: a $10{\times}$ smaller $\lambda$ does cut the offset to \SI{-16.31}{mm}, but window jitter degrades twelvefold ($0.298\rightarrow\SI{3.463}{mm}$) and the forgetting horizon stretches to \SI{20}{s}---precisely the trade the shipped setting was chosen to avoid. The two cheaper routes were measured instead, and both carry a price. Raising $k_i$ from \num{4} to \num{160} removes \SI{79.5}{\percent} of the offset and costs nothing on \emph{push} ($p{\geq}0.32$ on both $F_{\min}$ and $F_{\text{med}}$), but a five-point gain sweep re-measured across the whole evaluation suite locates the cost elsewhere: in the noise-plus-delay cells of Table~\ref{tab:robustness}, the fall rate rises monotonically in trend with $k_i$ (\num{7}, \num{13}, \num{10}, \num{14}, \num{17} falls in \num{40} at $k_i{=}\num{4},\num{20},\num{40},\num{80},\num{160}$; Cochran--Armitage trend on $\log_2 k_i$, $z{=}2.34$, $p{=}0.019$; $k_i{=}160$ alone $p{=}0.027$ against the shipped setting). The cost is graded rather than a threshold, so no intermediate gain is safe: $k_i{=}40$ appears clean ($p{=}0.59$) only because \num{40} trials cannot resolve \SI{17.5}{\percent} from \SI{25}{\percent}. Recalibrating the feedforward pitch reference removes \SI{92.5}{\percent} ($-27.0\rightarrow\SI{-2.0}{mm}$) with $F_{\min}$ unchanged (\SI{82.5}{N} vs.\ \SI{82.8}{N}, $p{=}0.55$), at the cost of a borderline \SI{4.5}{N} reduction in $F_{\text{med}}$ ($p{=}0.051$) and a per-height rather than scalar correction (\SIrange{0.94}{1.97}{\degree} over \SI{2}{cm}). Neither is promoted into the shipped profile. The \SI{27}{mm} is therefore not an unpaid debt but a purchased margin: it buys a leak short enough to forget a disturbance in \SI{2}{s} and an integral gain low enough that medium sensor noise combined with actuator delay does not tip the platform. What remains genuinely open is narrow: whether the \SI{4.5}{N} pitch-recalibration cost survives a larger sample, whether a lead-compensated or bandwidth-limited integral could raise DC gain without raising mid-band gain (\S\ref{sec:parking_supp}), and the \SIrange{1}{3}{mm} convention gap.
 (9)~Architectural generality across morphologies remains to be demonstrated.
 (10)~Push ablation at $N{=}10$ has min.\ detectable effect ${\sim}\SI{3.2}{N}$; sub-\SI{2}{N} differences non-significant (see Statistical power). The model-free PPO run (5.4M steps, single seed, no domain randomization, no hyperparameter search) does not meet the standard of a tuned reinforcement-learning baseline and is not presented as one; it is a difficulty probe on the unaided search problem, and the \SI{85}{\percent} fall rate is reported as observed rather than as an upper bound on RL performance for this platform. A properly resourced learning comparison---multiple seeds, domain randomization~\cite{tobin2017domainrand,peng2018dynrand}, a tuned reward---lies outside the scope of a structured-prior contribution and remains open; the natural form of that comparison is residual learning over the prior rather than learning against it. A task-priority QP whole-body controller was benchmarked both standalone and as an assist on ACC and did not resolve the precision--recovery trade-off (\S\ref{sec:wbc}). One caveat remains open there---roll RMS is the single axis on which the WBC blend beats ACC (\SI{14}{\percent} over the full batch, \SI{18}{\percent} on the matched subset), so the centralized formulation is not without merit on that axis; what the evidence establishes is that its advantage cannot be harvested by torque-level blending. A tuned convex MPC on the full 10-DOF plant remains deferred because finite-difference linearization at the standing equilibrium is ill-conditioned ($\kappa(A){\approx}10^{10}$, Limitation~7), so robust full-plant MPC is an open prerequisite rather than a missing comparison.
 
 \textbf{Deployment Risks and Mitigations.}
-ACC uses raw torque, \SI{400}{Nm/s} rate limit, standard sensors (IMU $+$ encoders). We distinguish two latency thresholds: a \textbf{performance} threshold (${\sim}\SI{10}{ms}$) where $F_{\max}$ bifurcates \SI{96}{N}${\rightarrow}{\sim}\SI{47}{N}$, and a \textbf{stability} threshold (${>}\SI{150}{ms}$, clean sensors, $N{=}5$, zero falls) where the robot actually falls. ACC's gates (proximity, envelope, pitch) depend on physical state, not timing precision---the architecture is intrinsically delay-tolerant for stability. The \SI{150}{ms}$+$ stability threshold is consistent across all physical gating mechanisms: the proximity gate (spatial, \SI{15}{cm}), asymmetric envelope (temporal, $\tau_r{\approx}\SI{1.5}{s}$), and damping boost are all state-driven rather than schedule-driven.
+ACC uses raw torque, \SI{400}{Nm/s} rate limit, standard sensors (IMU $+$ encoders). The binding latency figure is a \textbf{performance cliff between \SI{6}{ms} and \SI{8}{ms}}, across which $F_{\max}$ falls \SI{95.5}{N}${\rightarrow}\SI{51}{N}$ (Table~\ref{tab:delay_cliff}); below \SI{6}{ms} the cost is under \SI{2.4}{\percent}. We do \emph{not} state a companion stability threshold. Zero falls were observed in \num{50} clean trials at \SI{10}{ms}, but no larger delay has been measured (\S\ref{sec:analysis}), so the delay at which the robot actually falls is unknown. The architectural expectation is that it is far above the performance cliff, because ACC's gates depend on physical state rather than timing precision---the proximity gate is spatial (\SI{15}{cm}), the asymmetric envelope temporal but slow ($\tau_r{\approx}\SI{1.5}{s}$), and the damping boost state-driven rather than schedule-driven---but that expectation is untested and must not be commissioned against.
 
-Estimated non-RTOS worst-case budget: sensor readout ${\sim}\SI{1}{ms}$ $+$ state estimation ${\sim}\SI{2}{ms}$ $+$ ACC computation ${\sim}\SI{3}{ms}$ $+$ actuation latency ${\sim}\SI{3.5}{ms}$ $=$ ${\approx}\SI{9.5}{ms}$ end-to-end. The \SI{0.5}{ms} margin below the \SI{10}{ms} performance threshold means any single jitter source (OS scheduling preemption, bus contention) can degrade push recovery margin temporarily; the stability margin remains ${>}\SI{140}{ms}$. On a real-time OS with a dedicated balance-loop microcontroller (e.g., \SI{1}{kHz} RT Linux or bare-metal MCU), jitter is typically ${<}\SI{0.1}{ms}$, recovering \SIrange{2}{4}{ms} of budget and making the performance margin comfortable. Neither scenario has been validated on hardware---latency characterization with an oscilloscope and jitter histogram is required before deployment. The discarded WBC-assist variant (\S\ref{sec:wbc}) is excluded from the hardware path on control grounds, not compute grounds: post-repair its QP solve costs \SI{0.169}{ms} mean and \SI{0.30}{ms} p99 over \num{481000} solves and would fit the budget, but admitting its torque degrades pitch by $\num{2.5}\times$ and planar drift by $\num{2.0}\times$, while gating it to the point of harmlessness also gates it to \SI{2.5}{\percent} of its permitted authority. Hardware degradation: \SI{0.294}{mm} sagittal repeatability $\rightarrow$ projected \SIrange{1}{3}{mm} (encoder quantization, backlash, stiction, tire compliance, IMU noise; cf.\ Table~\ref{tab:robustness}). Staged commissioning: static torque $\rightarrow$ standing $\rightarrow$ push recovery $\rightarrow$ flight (tethered) $\rightarrow$ terrain.
+Estimated non-RTOS worst-case budget: sensor readout ${\sim}\SI{1}{ms}$ $+$ state estimation ${\sim}\SI{2}{ms}$ $+$ ACC computation ${\sim}\SI{3}{ms}$ $+$ actuation latency ${\sim}\SI{3.5}{ms}$ $=$ ${\approx}\SI{9.5}{ms}$ end-to-end---a budget assembled from assumed component figures, not a measurement. Read against a cliff at \SIrange{6}{8}{ms}, that budget is \emph{over} the threshold by \SIrange{2}{3.5}{ms}, so the non-RTOS configuration should be expected to deliver the post-cliff push envelope (${\sim}\SI{51}{N}$), not the nominal one. On a real-time OS with a dedicated balance-loop microcontroller (e.g., \SI{1}{kHz} RT Linux or bare-metal MCU), jitter is typically ${<}\SI{0.1}{ms}$ and \SIrange{2}{4}{ms} of budget is recoverable---which straddles the cliff rather than clearing it comfortably: \SI{9.5}{ms} less \SI{4}{ms} clears it, less \SI{2}{ms} does not. Real-time scheduling is therefore a requirement for full push margin rather than an optimization, and the loop-latency target is \SI{6}{ms} end-to-end, not \SI{10}{ms}. A second route to the same end is to move the cliff instead of the budget: doubling the sagittal velocity damping shifts the knee to \SIrange{8}{10}{ms}, which the \SI{9.5}{ms} estimate clears, at no measured cost to quiet stance (Table~\ref{tab:delay_cliff}). We report that variant without adopting it (\S\ref{sec:analysis}); a hardware build constrained to a non-RTOS budget is the case where re-qualifying it would be worth the cost. Neither scenario has been validated on hardware---latency characterization with an oscilloscope and jitter histogram is required before deployment, and it is the measurement that decides which side of the cliff a given build lands on. The discarded WBC-assist variant (\S\ref{sec:wbc}) is excluded from the hardware path on control grounds, not compute grounds: post-repair its QP solve costs \SI{0.169}{ms} mean and \SI{0.30}{ms} p99 over \num{481000} solves and would fit the budget, but admitting its torque degrades pitch by $\num{2.5}\times$ and planar drift by $\num{2.0}\times$, while gating it to the point of harmlessness also gates it to \SI{2.5}{\percent} of its permitted authority. Hardware degradation: \SI{0.294}{mm} sagittal repeatability $\rightarrow$ projected \SIrange{1}{3}{mm} (encoder quantization, backlash, stiction, tire compliance, IMU noise; cf.\ Table~\ref{tab:robustness}). Staged commissioning: static torque $\rightarrow$ standing $\rightarrow$ push recovery $\rightarrow$ flight (tethered) $\rightarrow$ terrain.
 
 We presented ACC, a two-channel torque assembly where a PD balance core is augmented by a proximity-gated anchor integral achieving $0.294{\pm}0.015$\,mm idle repeatability on the sagittal (actuated) axis---a $59{\times}$ improvement over the proportional-only baseline under one unified protocol ($N{=}10$; Table~\ref{tab:standing})---with omnidirectional push survival ($F_{\min}{=}\SI{83}{N}$, $F_{\text{med}}{=}\SI{117}{N}$). Absolute accuracy on that axis is an order of magnitude worse: the robot parks \SI{27.0}{mm} from the commanded home, holds that offset to \SI{0.009}{mm}, and closing it is the clearest remaining work on the design.
 Six classical baselines---four 4-state TWIP variants (LQR, LQR+AW, LQR-DT, PI+AW) and two 6-state coupled variants (servo and direct-torque)---all fail (\SI{100}{\percent}); adding integral action to LQR-optimal feedback does not prevent the fall, confirming ACC's structured prior as the essential contribution.
-ACC tolerates moderate noise, is insensitive to the actuator slew bound over an $8{\times}$ span (\SIrange{100}{800}{Nm/s}: \SI{2}{\percent} spread in $F_{\max}$, no resolvable change in lateral idle precision), exhibits a push-performance delay bifurcation at ${\sim}\SI{10}{ms}$ with stability maintained beyond \SI{150}{ms}, and handles contact loss and terrain without neural network training.
+ACC tolerates moderate noise, is insensitive to the actuator slew bound over an $8{\times}$ span (\SIrange{100}{800}{Nm/s}: \SI{2}{\percent} spread in $F_{\max}$, no resolvable change in lateral idle precision), and handles contact loss and terrain without neural network training. Its sharpest deployment constraint is actuator latency: push margin collapses across a cliff between \SI{6}{ms} and \SI{8}{ms}, below the \SI{9.5}{ms} end-to-end budget we estimate for a non-real-time implementation.
 The contribution is thus a \emph{structured classical prior}: an interpretable controller whose gating encodes the plant's measured failure modes, and whose intended downstream role is to supply the nominal base action of a residual-learning stack rather than to compete with a fully resourced learned policy. Future work: hardware validation, EMA settle-time characterization, a properly resourced learning comparison (multiple seeds, domain randomization, tuned reward), and extending conditional activation to locomotion and to residual RL over the prior.
 
 \section*{Code and Data Availability}
-The controller, the MuJoCo model, every evaluation script referenced above, and the raw result files backing each table are available at \url{https://github.com/thuong180702/Wheeled-bipedal-robot-simulation} (branch \texttt{main}; a release tag will be minted at publication). Each main results table names its producing script and its raw result file in the note directly beneath it (Tables~\ref{tab:standing}, \ref{tab:push_ablation}, \ref{tab:flight_ext}, \ref{tab:robustness} and \ref{tab:compound}); the remaining sweeps are cited inline at the point where they are discussed. The two superseded experiments of \S\ref{sec:analysis} ship both the original and the corrected result files, so the correction itself is auditable. The raw per-step records behind the whole-body-control results of \S\ref{sec:wbc}---the 225-scenario three-arm campaign, the task-weight ablation, the gated and ungated assist runs, and the per-step gate trace---are collected under \path{outputs/wbc_postfix_evidence/}, whose \path{README.md} maps each file to the table it produces. The torque decomposition, gain sweep, height sweep and push-validation records behind Appendix~\ref{sec:parking_supp} are collected the same way under \path{outputs/parking_offset_evidence/}.
+The controller, the MuJoCo model, every evaluation script referenced above, and the raw result files backing each table are available at \url{https://github.com/thuong180702/Wheeled-bipedal-robot-simulation} (branch \texttt{main}; a release tag will be minted at publication). Each main results table names its producing script and its raw result file in the note directly beneath it (Tables~\ref{tab:standing}, \ref{tab:push_ablation}, \ref{tab:flight_ext}, \ref{tab:robustness} and \ref{tab:compound}); the remaining sweeps are cited inline at the point where they are discussed. The two superseded experiments of \S\ref{sec:analysis} ship both the original and the corrected result files, so the correction itself is auditable. The raw per-step records behind the whole-body-control results of \S\ref{sec:wbc}---the 225-scenario three-arm campaign, the task-weight ablation, the gated and ungated assist runs, and the per-step gate trace---are collected under \path{outputs/wbc_postfix_evidence/}, whose \path{README.md} maps each file to the table it produces. The torque decomposition, gain sweep, height sweep, push-validation and noise/delay records behind Appendix~\ref{sec:parking_supp} are collected the same way under \path{outputs/parking_offset_evidence/}; its \path{README.md} maps each file and each \texttt{--tag} to the table it produces, and gives the worktree recipe for reproducing a gain arm without disturbing the shipped profile.
 
 % ============================================================
 % REFERENCES
@@ -1976,7 +2075,62 @@ Steadiness improves monotonically with $k_i$ over this range rather than
 degrading, which is the opposite of the integral/steadiness trade-off measured
 at $k_i{=}0$ in Table~\ref{tab:standing} and indicates that the $3{\times}$
 steadiness cost reported there is paid at the first newton-metre of integral
-authority, not progressively.
+authority, not progressively. Every entry above is measured on clean sensing
+with no actuator delay; \S\ref{sec:parking_ki_cost} shows that this is exactly
+the condition under which raising $k_i$ looks free.
+
+\subsection{Why the gain is not raised: the noise--delay cost}
+\label{sec:parking_ki_cost}
+
+The sweep above and the push protocol below both make $k_i{=}160$ look free:
+the offset falls by \SI{79.5}{\percent}, clean-idle jitter improves, and
+neither $F_{\min}$ nor $F_{\text{med}}$ moves. Those three probes share a
+blind spot---all are run on clean sensing, and the push probe is a large
+transient rather than a sustained small one. Re-running the two cells of
+Table~\ref{tab:robustness} that combine medium sensor noise with actuator
+delay, at $N{=}20$ per cell and identical seeds across arms, prices the change:
+
+\begin{center}\footnotesize
+\begin{tabular}{rrrrrl}
+\hline
+$k_i$ & $k_{I,\text{dc}}$ & $\bar{s}$ & offset & falls & Fisher \\
+ & (Nm/m) & (mm) & removed & (of 40) & vs.\ $k_i{=}4$ \\
+\hline
+\textbf{4} & \textbf{7.96} & \textbf{-26.96} & \textbf{---} & \textbf{7} & \textbf{---} \\
+20 & 39.80 & -17.47 & \SI{35.2}{\percent} & 13 & $p{=}0.196$ \\
+40 & 79.60 & -12.55 & \SI{53.5}{\percent} & 10 & $p{=}0.586$ \\
+80 & 159.20 & -8.37 & \SI{68.9}{\percent} & 14 & $p{=}0.126$ \\
+160 & 318.40 & -5.53 & \SI{79.5}{\percent} & 17 & $p{=}0.027$ \\
+\hline
+\end{tabular}
+\end{center}
+
+A Cochran--Armitage trend test on $\log_2 k_i$ gives $z{=}2.34$, $p{=}0.019$:
+the fall rate rises with integral gain across the sweep, and pooling every
+arm above the shipped setting gives \num{54} falls in \num{160} against
+\num{7} in \num{40} ($p{=}0.055$). Because the cost is graded rather than a
+threshold, selecting the largest gain that is not individually significant
+would be an artifact of sample size---$k_i{=}40$ carries $p{=}0.59$ only
+because \num{40} trials cannot separate \SI{17.5}{\percent} from
+\SI{25}{\percent}. Zero-delay cells stay clean at every gain, and the idle,
+push, flight, terrain and rate-limit metrics are flat across the sweep, so
+the regression is specific to noise and delay \emph{together}. One trap is
+worth naming: the idle column of Table~\ref{tab:robustness} averages
+survivors only, so in these two cells the higher-gain arms report
+\emph{better} idle numbers while falling more often.
+
+The mechanism follows from Eq.~\eqref{eq:leaky}. The leaky integrator has
+transfer function $k_i\Delta t/(\lambda + s\Delta t)$: a DC gain of
+$k_i\Delta t/\lambda$ and a corner at $\lambda/\Delta t\approx\SI{0.5}{rad/s}$.
+Raising $k_i$ scales the response at \emph{every} frequency, so it lifts
+mid-band gain---with the \SI{90}{\degree} lag of an integrator---in precisely
+the band where the \SI{10}{ms} actuator delay of those cells has already
+consumed the phase margin. Lowering $\lambda$ raises DC gain alone, leaving mid-band
+untouched, but costs the memory horizon instead (next subsection). Neither
+single parameter separates the two roles; doing so requires a lead-compensated
+or explicitly bandwidth-limited integrator, which is a structural change to a
+controller whose present form is qualified over a \num{48}-scenario suite, and
+is left as future work.
 
 \subsection{The leak sets memory, not accuracy}
 
@@ -1992,8 +2146,12 @@ the measurement window. Since $\tau$ is independent of $k_i$, the two
 parameters separate cleanly: $k_i$ sets DC gain, $\lambda$ sets the memory
 horizon. They were conflated in the original tuning, where $\lambda$ was chosen
 for a \SI{2}{s} forgetting time and $k_i$ was lowered from \num{8} to \num{4}
-to reduce limit cycling---which, per the sweep above, cost accuracy without
-buying steadiness.
+to reduce limit cycling. The gain sweep shows that lowering $k_i$ bought no
+clean-idle steadiness, so the stated reason for that move was wrong; but
+\S\ref{sec:parking_ki_cost} shows it bought something the original tuning did
+not measure and could not have named---margin against the noise-plus-delay
+conjunction---so the setting is right for a reason other than the one
+recorded at the time.
 
 \subsection{Two measured corrections and their cost}
 
@@ -2044,15 +2202,27 @@ Feedforward pitch recalibrated & 82.5(12)\,\,$p{=}0.55$ & 112.4(49)\,\,$p{=}0.05
 
 The published arm reproduces the \SI{82.8}{N} weakest bearing of
 \S\ref{sec:push} exactly, validating the harness. Raising $k_i$ by $40{\times}$
-costs nothing measurable on either statistic and removes \SI{80}{\percent} of
-the offset; the feedforward recalibration removes \SI{92.5}{\percent} and
+costs nothing measurable on either push statistic and removes \SI{79.5}{\percent}
+of the offset; the feedforward recalibration removes \SI{92.5}{\percent} and
 leaves $F_{\min}$ unchanged, but shows a \SI{4.5}{N} (\SI{3.8}{\percent})
 reduction in $F_{\text{med}}$ at $p{=}0.051$, which at this sample size we
-report as unresolved rather than as null. Neither correction is promoted into
-the shipped profile for this paper, because every table reported here was
-measured on the published configuration and adopting a change would invalidate
-that evidence base; they are reported as measured, reproducible routes to
-closing the limitation.
+report as unresolved rather than as null.
+
+Neither correction is promoted into the shipped profile, and in the $k_i$ case
+the reason is not evidence-base consistency but a measured regression: the
+push protocol is blind to the failure mode that gain change introduces, which
+appears only when sustained sensor noise and actuator delay act together
+(\S\ref{sec:parking_ki_cost}). This is the substantive result of the appendix.
+The \SI{27}{mm} offset is not an unexamined residual, nor a defect awaiting a
+constant change; it is the position error that a deliberately leaky,
+deliberately low-gain integrator must pay in exchange for a \SI{2}{s}
+forgetting horizon and for phase margin against delay. Both alternatives were
+measured across the full evaluation suite rather than on the accuracy metric
+alone, which is what exposed the price. The feedforward recalibration remains
+the more promising route, since its cost is confined to one borderline
+statistic; resolving that at a larger sample, and testing whether a
+bandwidth-limited integrator can raise DC gain without raising mid-band gain,
+are the two concrete steps toward closing this limitation.
 
 \begin{thebibliography}{99}
 \setlength{\itemsep}{0pt}

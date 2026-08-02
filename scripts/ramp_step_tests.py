@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -65,11 +66,28 @@ def build_terrain_xml(h: float, sign: int = 1, edge_angle_deg: float = 0.0) -> t
         # far edge (the cliff) is exposed, crossing the path at ``phi``.
         # Rotating a single platform about the seam left its oblique near
         # FACE standing ~5 cm proud of the ramp surface mid-slope (wall).
-        fw, Lf = 1.2, 1.6
-        pw, pl = 1.2, 0.6
-        seam2 = y1 + 1.3
-        pcx = -np.sin(phi) * pl
-        pcy = seam2 + np.cos(phi) * pl
+        # The slab is anchored by its EXPOSED (cliff) edge, which must cross
+        # the driving line squarely at ``y_edge0``. Anchoring it by the buried
+        # edge — the construction used until 2026-08-02 — let the cliff edge
+        # drift sideways by 2*pl*sin(phi), so the slab's end CORNER reached the
+        # centreline at exactly tan(phi) = pw/(2*pl) = 1.2/1.2: at 45 deg the
+        # robot drove off the corner of a wedge (both wheels leaving together,
+        # i.e. a square ledge) and past 45 deg the exposed boundary was the
+        # slab's side edge, so 60 deg rendered as a mirrored 30 deg.
+        X_TRACK = 0.35            # half-width of ground the robot occupies
+        fw, pw = 1.2, 1.2
+        y_edge0 = y1 + 2.6        # cliff edge crosses x=0 here
+        # Keep the buried edge clear of the ramp top: it sits 2*pl/cos(phi)
+        # behind the cliff edge at the track's uphill corner.
+        pl = float(min(0.6, 0.5 * np.cos(phi)
+                       * ((y_edge0 - y1) - X_TRACK * np.tan(phi) - 0.15)))
+        pcx = np.sin(phi) * pl
+        pcy = y_edge0 - np.cos(phi) * pl
+        # Filler must bury the slab's near edge across the track yet stop
+        # short of the cliff across it; both bounds hold for pl >= X*sin(phi),
+        # so sit halfway between them.
+        Lf = 0.5 * ((y_edge0 - 2 * pl / np.cos(phi) + X_TRACK * np.tan(phi))
+                    + (y_edge0 - X_TRACK * np.tan(phi))) - y1
         half = phi / 2  # mirrored course flips the rotation sign
         geoms += (
             f'    <geom name="filler" type="box" size="{fw} {Lf/2} {h/2}" '
@@ -87,7 +105,10 @@ def build_terrain_xml(h: float, sign: int = 1, edge_angle_deg: float = 0.0) -> t
             f'pos="0 {sign * pcy:.4f} {h/2:.4f}" {common}/>\n'
         )
     xml = MODEL_XML.read_text()
-    out = MODEL_XML.parent / f"_tmp_ramp_step_{int(h*100)}_{'m' if sign < 0 else 'p'}.xml"
+    # PID in the name: two runs of the same height/sign in parallel otherwise
+    # share one temp file and each unlinks the other's model mid-load.
+    out = (MODEL_XML.parent /
+           f"_tmp_ramp_step_{int(h*100)}_{'m' if sign < 0 else 'p'}_{os.getpid()}.xml")
     out.write_text(xml.replace("  </worldbody>", geoms + "  </worldbody>"))
     return out, dict(y0=y0, y1=y1, y_edge=y1 + Lf, h=h, sign=sign, phi=phi,
                      pcx=pcx, pcy=pcy, pw=pw, pl=pl, fw=fw, fy1=y1 + Lf)
@@ -115,7 +136,7 @@ def build_curb_xml(h: float, sign: int = -1) -> tuple[Path, dict]:
         f'pos="{x_c} {sign * (y1 + 1.0):.4f} {h/2:.4f}" {common}/>\n'
     )
     xml = MODEL_XML.read_text()
-    out = MODEL_XML.parent / f"_tmp_curb_{int(h*100)}.xml"
+    out = MODEL_XML.parent / f"_tmp_curb_{int(h*100)}_{os.getpid()}.xml"
     out.write_text(xml.replace("  </worldbody>", geoms + "  </worldbody>"))
     return out, dict(y0=y0, y1=y1, y_end=y_end, h=h, sign=sign)
 
@@ -240,7 +261,8 @@ class RampStepSim(TeleopSim):
 
 def run_ramp_step(h: float, duration_s: float = 30.0, frames: list | None = None,
                   frame_stride: int = 2, cam=None, renderer=None, approach_vx: float = 1.0,
-                  course: str = "up_off", edge_angle_deg: float = 30.0, seed: int = 0):
+                  course: str = "up_off", edge_angle_deg: float = 30.0, seed: int = 0,
+                  overrun_m: float | None = None):
     """Courses:
     up_off   — forward up the ramp, across the platform, off the ledge (default)
     up_down  — forward up the ramp, anchor mid-platform 2.5 s, then REVERSE
@@ -312,7 +334,8 @@ def run_ramp_step(h: float, duration_s: float = 30.0, frames: list | None = None
             held = {KEY_UP} if phase == 0 else ({KEY_DOWN} if phase == 2 else set())
         else:
             drive = KEY_UP if course == "up_off" else KEY_DOWN
-            overrun = 1.5 if course == "back_off_fast" else 0.05
+            overrun = (1.5 if course == "back_off_fast" else 0.05) \
+                if overrun_m is None else overrun_m
             # BOTH wheels must clear the edge line before releasing: with an
             # oblique edge the support midpoint crosses while the uphill
             # wheel is still on top — releasing there parked the robot in a
@@ -420,6 +443,8 @@ def main():
                              "diag_off", "curb"])
     ap.add_argument("--angle", type=float, default=30.0,
                     help="edge angle (deg) for diag_off")
+    ap.add_argument("--overrun", type=float, default=None,
+                    help="metres of drive-through past the edge before release")
     ap.add_argument("--render", action="store_true", help="write MP4 per height")
     ap.add_argument("--out-dir", default="outputs/visual")
     args = ap.parse_args()
@@ -467,7 +492,8 @@ def main():
                 renderer.close()
             continue
         r = run_ramp_step(h, frames=frames, cam=cam, renderer=renderer,
-                          course=args.course, edge_angle_deg=args.angle)
+                          course=args.course, edge_angle_deg=args.angle,
+                          overrun_m=args.overrun)
         if r.get("fell"):
             print(f"{r['h_cm']:6.0f} {'FALL':>8} {str(r['reached_top'])[:1]:>5} "
                   f"{'—':>7} {'—':>9} {'—':>8} {'—':>8} {'—':>8} fall@{r['fall_t']:.1f}s")

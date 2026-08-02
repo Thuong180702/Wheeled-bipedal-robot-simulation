@@ -3807,10 +3807,37 @@ K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR = replace(
     # proximity gate, full ≤5 cm / off ≥15 cm) — outside it the controller IS
     # V3_HOMING, whose displaced-return behavior is proven. Modifying the
     # displaced regime (error leash/tanh shaping) destabilized it every time.
-    # Reduce oscillation CYCLES (not just amplitude): halve position integral
-    # stiffness so the anchor spring is weaker → higher damping ratio ζ.
-    # ki=4.0 still builds 1.3 Nm from 5 cm in ~6 s (vs ~3 s at ki=8.0).
-    anchor_position_ki=4.0,             # was 8.0; weaker spring = fewer cycles
+    # Position integral stiffness. History: 8.0 → 4.0 (weaker spring = fewer
+    # idle oscillation cycles). A 2026-08-01 campaign tried to raise it and
+    # was REJECTED on measured evidence — do not raise it again without
+    # repeating that campaign.
+    #
+    # The leaky integral has finite DC gain k_I,dc = ki·dt·(1−λ)/λ, so the
+    # standing bias torque leaves a steady-state sagittal offset ∝ 1/ki. The
+    # offset shrinks exactly as predicted (N=5 each, clean):
+    #     ki       4      20      40      80     160
+    #     k_I,dc  7.96   39.8    79.6   159.2   318.4   Nm/m
+    #     offset -27.0  -17.5   -12.5    -8.4    -5.5   mm
+    # but the robustness sweep's two noise+delay cells (med noise × 10/30 ms,
+    # N=20 per cell, identical seeds across arms) price it:
+    #     falls   7/40  13/40   10/40   14/40   17/40
+    # Cochran–Armitage trend on log2(ki): z=2.34, p=0.019; ki=160 alone is
+    # Fisher p=0.027 vs ki=4. The cost is graded, not a threshold, so no
+    # intermediate value is safe — ki=40 looks clean (p=0.59) only because
+    # N=40 cannot resolve 17.5% from 25%.
+    #
+    # Mechanism: H(s) = ki·dt/(λ + s·dt) — raising ki lifts DC gain AND
+    # mid-band gain (with 90° lag) in the band the 10–30 ms actuator delay
+    # already eats. Lowering λ lifts DC gain alone, but stretches forgetting
+    # to 20 s and degraded window jitter 12× (0.298 → 3.463 mm). Separating
+    # DC gain from mid-band gain needs a lead/filtered-PI restructure and a
+    # full 48-scenario re-qualification, not a constant change.
+    #
+    # All zero-delay cells stay clean at every ki, and idle/push/flight/
+    # terrain/rate-limit metrics were flat — the regression is specific to
+    # noise AND delay together. Note idle_rms at high ki looks *better* in
+    # the failing cells purely from survivor bias (fewer trials contribute).
+    anchor_position_ki=4.0,
     anchor_integral_cap_nm=2.0,         # Nm — covers the ~1.3 Nm standing bias
     anchor_integral_leak_per_step=5e-3,  # ~2 s forgetting; prevents windup
     anchor_kvel_boost_scale=5.0,         # GATED quiet-stance boost (was 1.9)
@@ -3828,6 +3855,45 @@ K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR = replace(
     # idle stand-still + ringdown decay are preserved. Gated by the slow
     # quiet-stance envelope (no cycle-frequency modulation).
     anchor_kp_pitch_soft=35.0,
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ACC_DELAY_HARDENED — evaluation variant, NOT promoted (2026-08-02)
+# ═══════════════════════════════════════════════════════════════════════════════
+# V3_ANCHOR with the ungated sagittal velocity damping doubled (15 × 1.5 = 22.5
+# → 15 × 3.0 = 45 Nm/(m/s)).  Exists to price the actuator-delay cliff; the
+# shipped default is unchanged and remains K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR.
+#
+# Motivation: a substep-resolution delay sweep (scripts/delay_cliff_resolution.py,
+# 2 ms granularity) put the push-margin knee between 6 and 8 ms — BELOW the
+# ~9.5 ms end-to-end budget estimated for a non-RTOS build. A one-knob screen at
+# 8 ms over four profile constants (scripts/delay_retune_sweep.py) found the
+# shipped gain set sitting in a sharp local dip: F_max 51.0 N at the shipped
+# value against 78–93 N at almost every neighbouring value of every knob, in
+# BOTH directions. That shape says phase alignment, not an exhausted margin.
+#
+# Measured, clean sensing, F_max (N), N=1 (this harness is deterministic clean):
+#   delay ms      0     2     4     6     8    10    12    14    16    20
+#   vds=1.5    95.5  94.4  93.2  93.2  51.0  56.9  41.6  40.5  28.8  10.0
+#   vds=3.0    95.5  94.4  94.4  94.4  93.2  60.4  79.1  68.6  41.6  10.0
+# → knee moves 6–8 ms → 8–10 ms; never worse at any delay; identical at 0–2 ms.
+# Both collapse to the 10 N search floor at 20 ms, so this buys headroom below
+# the cliff, not a different failure mode.
+#
+# Price measured so far: idle lateral RMS 0.790 → 0.801 mm (+1.4%, N=3, clean),
+# i.e. none resolvable. Under the noise+delay conjunction that is ACC's binding
+# constraint it is BETTER, not worse (8 ms, N=5: low 76.8 → 92.0, medium
+# 84.3 → 90.2 N).
+#
+# Why this is NOT promoted: velocity_damping_scale is the constant the V3_ANCHOR
+# comment above ties to "clean acceleration ... settle ~5.4 s, driving clean (no
+# ripple)". Doubling it is exactly the kind of change the 48-scenario promotion
+# suite exists to adjudicate, and driving/terrain/flight behaviour has NOT been
+# re-measured here. Promotion requires that suite.
+ACC_DELAY_HARDENED = replace(
+    K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR,
+    profile_name="acc_delay_hardened",
+    velocity_damping_scale=3.0,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════

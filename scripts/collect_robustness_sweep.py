@@ -70,6 +70,27 @@ CTX = {"centroidal_estimator": est, "initial_yaw_z": 0.0,
        "l_wheel_id": l_wheel_id, "r_wheel_id": r_wheel_id,
        "eq_joint": POSTURE, "height_ref": H0, "prev_com_pos": None}
 
+def _delay_line(delay_steps):
+    """FIFO of length delay_steps, zero-filled so the warm-up is a real hold.
+
+    Until 2026-08-02 this was a SINGLE slot overwritten every control step, so
+    every delay_steps > 0 applied exactly one control period of lag regardless
+    of the value requested -- the "30/50/100/150 ms" cells were all 10 ms.  The
+    archived robustness_sweep.json / delay_stability_sweep.json predate this
+    fix and are reported in the paper as the 10 ms cells they actually are;
+    re-running this script now produces genuinely distinct delays.
+    """
+    from collections import deque
+    return deque([np.zeros(model.nu)] * delay_steps, maxlen=max(delay_steps, 1))
+
+def _delayed(buf, tau, delay_steps):
+    """Read BEFORE append: buf[0] is the command written delay_steps ago."""
+    if delay_steps <= 0:
+        return tau
+    out = buf[0]
+    buf.append(tau.copy())
+    return out
+
 def settle(data, v3, steps=300):
     for _ in range(steps):
         r = compute_v3_torque_for_state(
@@ -88,7 +109,7 @@ def run_idle_trial(data, v3, noise_cfg, delay_steps, seed):
     window_samples = int(20.0 / DT)
     home_x = float(data.qpos[0])
     com_x_vals = np.zeros(window_samples)
-    delayed_action = None
+    delay_buf = _delay_line(delay_steps)
 
     for step in range(n_steps):
         r = compute_v3_torque_for_state(
@@ -97,12 +118,7 @@ def run_idle_trial(data, v3, noise_cfg, delay_steps, seed):
         v3["jax_state"] = r["next_jax_state"]
         tau = np.array(r["tau_v3"])
 
-        if delayed_action is not None and delay_steps > 0 and step >= delay_steps:
-            data.ctrl[:] = delayed_action
-        else:
-            data.ctrl[:] = tau
-        if delay_steps > 0:
-            delayed_action = tau.copy()
+        data.ctrl[:] = _delayed(delay_buf, tau, delay_steps)
 
         if noise_cfg.get("gyro", 0) > 0:
             data.qvel[3:6] += rng.normal(0, noise_cfg["gyro"], 3)
@@ -138,7 +154,7 @@ def run_push_bisect(data, v3, noise_cfg, delay_steps, seed):
         v3c = {"jax_step_fn": v3["jax_step_fn"],
                "jax_state": v3["jax_state"],
                "jax_params": v3["jax_params"]}
-        delayed_action = None
+        delay_buf = _delay_line(delay_steps)
         survived = True
 
         for step in range(POST_PUSH_STEPS + PUSH_DUR):
@@ -148,12 +164,7 @@ def run_push_bisect(data, v3, noise_cfg, delay_steps, seed):
             v3c["jax_state"] = r["next_jax_state"]
             tau = np.array(r["tau_v3"])
 
-            if delayed_action is not None and delay_steps > 0 and step >= delay_steps:
-                d.ctrl[:] = delayed_action
-            else:
-                d.ctrl[:] = tau
-            if delay_steps > 0:
-                delayed_action = tau.copy()
+            d.ctrl[:] = _delayed(delay_buf, tau, delay_steps)
 
             if noise_cfg.get("gyro", 0) > 0:
                 d.qvel[3:6] += rng.normal(0, noise_cfg["gyro"], 3)
