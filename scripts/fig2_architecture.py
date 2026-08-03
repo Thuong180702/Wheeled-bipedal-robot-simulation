@@ -18,16 +18,17 @@ BW   = 3.5                               # uniform box width
 BFS  = 4.9                               # box content fontsize
 GAP  = 1.1                               # vertical gap between boxes
 OUT_H = 0.5                              # output box height
-OUT_W = 4.0                              # output box width (text is long)
+OUT_W = 3.6                              # output box width (text is long; 4.0
+                                         # overhangs the axes and gets clipped)
 OUT_FS = 4.6                             # output box fontsize
 
 # ─── Pre-compute all box texts (wrapped), find max lines ───
 BOX_TEXTS = {
-    'balance':  ('τ_balance\nSagittal Balance Core\n(pitch PD + vel. damp + pos-P\n + lateral + yaw)\nalways active', '#d4e6f1', '#222'),
-    'anchor':   ('g_anchor · τ_anchor\nProximity-Gated Anchor\n(integral + damping boost)\ngated by g_prox, g_env', '#d4e6f1', '#222'),
-    'flight':   ('g_flight · τ_flight\nContact-Loss Recovery\n(reaction-wheel attitude PD)\ngated by g_flight', '#d4e6f1', '#222'),
-    'posture':  ('τ_posture(h_cmd)\nPosture & Yaw Stability\n(Jacobian PD + hip-yaw\ndivergence + homing)\nalways active, height-scheduled', '#d5f5e3', '#222'),
-    'terrain':  ('g_terrain · Δτ_posture\nPer-Leg Ground Adaptation\n(split height commands\n+ leveling integrator)\ngated by g_terrain', '#d5f5e3', '#222'),
+    'balance':  ('τ_balance\nSagittal Balance Core\n(pitch PD + vel. damp + pos-P\n + lateral + yaw)\nalways active', '#ececec', '#000'),
+    'anchor':   ('g_anchor · τ_anchor\nProximity-Gated Anchor\n(integral + damping boost)\ngated by g_prox, g_env', '#ececec', '#000'),
+    'flight':   ('g_flight · τ_flight\nContact-Loss Recovery\n(reaction-wheel attitude PD)\ngated by g_flight', '#ececec', '#000'),
+    'posture':  ('τ_posture(h_cmd)\nPosture & Yaw Stability\n(Jacobian PD + hip-yaw\ndivergence + homing)\nalways active, height-scheduled', '#ececec', '#000'),
+    'terrain':  ('g_terrain · Δτ_posture\nPer-Leg Ground Adaptation\n(split height commands\n+ leveling integrator)\ngated by g_terrain', '#ececec', '#000'),
 }
 
 def line_count(txt):
@@ -59,8 +60,11 @@ Y_MAX = Y_TITLE + 0.4
 # ═══════════════════════════════════════════════════
 # SETUP
 # ═══════════════════════════════════════════════════
-fig, ax = plt.subplots(figsize=(3.45, 5.0))
-ax.set_xlim(0, 10); ax.axis('off')   # ylim set once the gate stack is laid out
+fig, ax = plt.subplots(figsize=(3.45, 3.1))
+ax.set_xlim(0, 10); ax.axis('off')
+# The axes fills the figure: the channel headers and output boxes overhang the
+# data range, and a default-inset axes crops them out of the tight bbox.
+fig.subplots_adjust(left=0.03, right=0.97, bottom=0.01, top=0.99)   # ylim set once the gate stack is laid out
 
 # ═══════════════════════════════════════════════════
 # HELPERS
@@ -153,15 +157,15 @@ ax.text(XC, Y_COND + 0.55, 'Physical Conditions  —  Smoothstep Gate Inputs',
 
 cond = ('Proximity |Δx|  ·  Quietness EMA(|v|)  ·  Stability θ, θ̇  ·  '
         'Contact Fzᴸ, Fzᴿ  ·  Terrain hᴸ_gnd, hᴿ_gnd')
-gate_box(XC, Y_COND - 0.1, cond, '#fff9c4')
+gate_box(XC, Y_COND - 0.1, cond, '#ffffff')
 
 # ═══════════════════════════════════════════════════
 # CHANNEL HEADERS
 # ═══════════════════════════════════════════════════
 HDR_L = ax.text(XL, Y_HEAD, 'Wheel Torque  τ_w', ha='center',
-                fontsize=7.5, fontweight='bold', color='#1a5276')
+                fontsize=7.5, fontweight='bold', color='#000')
 HDR_R = ax.text(XR, Y_HEAD, 'Leg-Joint Torque  τ_q', ha='center',
-                fontsize=7.5, fontweight='bold', color='#1e8449')
+                fontsize=7.5, fontweight='bold', color='#000')
 
 # ═══════════════════════════════════════════════════
 # WHEEL CHANNEL — 3 comps + 2 plus + arrow + output
@@ -172,7 +176,7 @@ draw_box(XL, Y_COMP2, *BOX_TEXTS['anchor'])
 plus(XL, Y_PLUS2)
 draw_box(XL, Y_COMP3, *BOX_TEXTS['flight'])
 arrow(XL, Y_COMP3 - 0.05, Y_OUT + OUT_H + 0.08)
-draw_out(XL, Y_OUT, 'τ_w = τ_bal + g_anc·τ_anc + g_flt·τ_flt', '#abebc6', '#1a5276')
+draw_out(XL, Y_OUT, 'τ_w = τ_bal + g_anc·τ_anc + g_flt·τ_flt', '#c4c4c4', '#000')
 
 # ═══════════════════════════════════════════════════
 # LEG CHANNEL — 2 comps + 1 plus + arrow + output
@@ -181,7 +185,7 @@ draw_box(XR, Y_COMP1, *BOX_TEXTS['posture'])
 plus(XR, Y_PLUS1)
 draw_box(XR, Y_COMP2, *BOX_TEXTS['terrain'])
 arrow(XR, Y_COMP2 - 0.05, Y_OUT + OUT_H + 0.08)
-draw_out(XR, Y_OUT, 'τ_q = τ_post + g_terr·Δτ_post', '#abebc6', '#1e8449')
+draw_out(XR, Y_OUT, 'τ_q = τ_post + g_terr·Δτ_post', '#c4c4c4', '#000')
 
 # ═══════════════════════════════════════════════════
 # DASHED GATE CONNECTIONS
@@ -191,7 +195,7 @@ draw_out(XR, Y_OUT, 'τ_q = τ_post + g_terr·Δτ_post', '#abebc6', '#1e8449')
 # and the channel headers are wider still, so an outer rail would cross both.
 BOX_L, BOX_R = XL + BW/2 + 0.2, XR - BW/2 - 0.2     # inner padded box edges
 RAIL_L, RAIL_R = BOX_L + 0.45, BOX_R - 0.45
-DASH = dict(ls='--', color='#c0392b', linewidth=0.7, zorder=0, alpha=0.55)
+DASH = dict(ls='--', color='#555', linewidth=0.7, zorder=0, alpha=0.8)
 
 def gate_feed(rail, box_edge, y_from, y_targets):
     ax.plot([rail, rail], [y_from, min(y_targets)], **DASH)
@@ -211,46 +215,17 @@ ax.plot([XC, XC], [Y_OUT - 0.2, Y_HEAD + 0.1],
         color='#ccc', linewidth=1.2, zorder=0)
 
 # ═══════════════════════════════════════════════════
-# GATE DEFINITIONS
+# BOTTOM NOTE
 # ═══════════════════════════════════════════════════
-ax.text(XC, Y_GATE_HDR, 'Smoothstep Gate Definitions', ha='center',
-        fontsize=5.5, fontweight='bold', color='#999')
-
-GATE_DEFS = [
-    ('g_prox = 1−ss(|Δx|; 0.05 m, 0.15 m)   │   '
-     'g_env = 1−ss(EMA(|v_sag|); 0.25 m/s, 0.50 m/s)', '#fce4ec'),
-    ('Asymmetric EMA on |v_sag|:  α_attack = 0.35 (τ ≈ 23 ms)   │   '
-     'α_release = 0.0067 (τ ≈ 1.5 s)   │   pitch stiffness fixed at k_p = 50', '#e8daef'),
-    ('g_flight: Fz < 0.5 mg for ≥2 steps, release ≥5 steps + 150 ms ramp   │   '
-     'g_terrain: per-leg ground estimate, frozen while unloaded '
-     '(seek on 3 mm drop-below); leveling trim on |Δh| ≥ 2 cm', '#fce4ec'),
-]
-
-_y = Y_GATE_HDR - 0.20
-for _txt, _fc in GATE_DEFS:
-    _y -= gate_h(_txt)
-    gate_box(XC, _y, _txt, _fc)
-    _y -= 0.30                     # gap (boxstyle pad adds 0.1 per edge)
-
-Y_NOTE = _y - 0.28
-Y_MIN = Y_NOTE - 1.15
+# The gate definitions used to be spelled out in three boxes here. They repeat
+# Eqs. (10)-(13) of the manuscript verbatim, and carrying them made the figure
+# tall enough that its type shrank below 4 pt in a single column.
+Y_NOTE = Y_GATE_HDR - 0.30
+Y_MIN = Y_NOTE - 0.45
 ax.set_ylim(Y_MIN, Y_MAX)
 
-# ═══════════════════════════════════════════════════
-# BOTTOM NOTE + LEGEND
-# ═══════════════════════════════════════════════════
 ax.text(XC, Y_NOTE, 'Both channels assembled independently → final 10-DoF torque command',
-        ha='center', fontsize=5.0, color='#888', style='italic')
-
-leg = ax.legend(
-    [mpatches.Patch(color='#d4e6f1'), mpatches.Patch(color='#d5f5e3'),
-     mpatches.Patch(color='#abebc6'), mpatches.Patch(color='#fff9c4'),
-     mpatches.Patch(color='#fce4ec'), mpatches.Patch(color='#e8daef')],
-    ['Wheel torque', 'Leg-joint torque', 'Channel output',
-     'Physical condition', 'Gate definition', 'Gate parameters'],
-    loc='lower center', ncol=3, fontsize=4.5, framealpha=0.85,
-    bbox_to_anchor=(0.5, 0.0))
-ax.add_artist(leg)
+        ha='center', fontsize=5.0, color='#666', style='italic')
 
 # ═══════════════════════════════════════════════════
 # SELF-CHECK
@@ -303,6 +278,7 @@ if overlaps:
 else:
     print("Zero overlaps — PASSED")
 
-plt.savefig(OUT, dpi=300, bbox_inches='tight', pad_inches=0.02)
+plt.savefig(OUT, dpi=300, bbox_inches='tight', pad_inches=0.06)
+plt.savefig(OUT.replace('.pdf', '.png'), dpi=300, bbox_inches='tight', pad_inches=0.06)
 plt.close()
-print("Fig.2 saved to", OUT)
+print("Fig.2 saved to", OUT, "(+ .png)")

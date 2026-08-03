@@ -55,9 +55,12 @@ r_hi = np.append(r_mean + r_sd, r_mean[0] + r_sd[0])
 fig = plt.figure(figsize=(3.45, 3.15))
 ax = fig.add_subplot(111, projection='polar')
 
-ax.fill_between(theta, r_lo, r_hi, color='blue', alpha=0.18, linewidth=0, zorder=3)
-ax.plot(theta, r, 'b-', linewidth=1.5, zorder=4)
-ax.fill(theta, r, alpha=0.07, color='blue', zorder=1)
+# The journal prints in black and white, so nothing here may depend on hue:
+# the band is a grey fill, the envelope a black line, and F_min / F_max are told
+# apart by marker shape (circle vs. square) and by their own labels.
+ax.fill_between(theta, r_lo, r_hi, color='0.55', alpha=0.35, linewidth=0, zorder=3)
+ax.plot(theta, r, '-', color='black', linewidth=1.5, zorder=4)
+ax.fill(theta, r, alpha=0.10, color='0.4', zorder=1)
 ax.set_theta_zero_location('N')
 ax.set_theta_direction(-1)
 # Bearings are world-frame f = F*(cos T, sin T, 0). This robot's wheel axles lie
@@ -81,20 +84,20 @@ for lbl in ax.get_yticklabels():
 ax.set_title('Push Recovery Envelope ($N{=}10$)', pad=8, fontsize=9, fontweight='bold')
 
 # weakest and strongest bearing (means over the 10 reps)
-ax.axhline(y=F_min, color='red', linestyle='--', alpha=0.35, linewidth=0.6, zorder=2)
-ax.plot(np.deg2rad(angle_fmin), F_min, 'o', color='red', markersize=5, zorder=8)
+ax.axhline(y=F_min, color='black', linestyle='--', alpha=0.45, linewidth=0.6, zorder=2)
+ax.plot(np.deg2rad(angle_fmin), F_min, 'o', color='black', markersize=5, zorder=8)
 ax.text(np.deg2rad(angle_fmin - 18), 0.52 * F_min,
         f'$F_{{\\mathrm{{min}}}}$={F_min:.0f} N',
-        fontsize=9, color='red', ha='center', va='center', fontweight='bold', zorder=9,
+        fontsize=9, color='black', ha='center', va='center', fontweight='bold', zorder=9,
         bbox=dict(facecolor='white', edgecolor='none', alpha=0.85, pad=1.0))
 
-ax.axhline(y=F_max, color='#2196F3', linestyle='--', alpha=0.35, linewidth=0.6, zorder=2)
-ax.plot(np.deg2rad(angle_fmax), F_max, 'o', color='#2196F3', markersize=5, zorder=8)
+ax.axhline(y=F_max, color='black', linestyle=':', alpha=0.45, linewidth=0.6, zorder=2)
+ax.plot(np.deg2rad(angle_fmax), F_max, 's', color='black', markersize=5, zorder=8)
 # Keep the label inside the rlim (170) and off the rim so it cannot collide with
 # the angular tick ring; the white bbox guards against the radial grid lines.
 ax.text(np.deg2rad(angle_fmax + 26), 0.80 * F_max,
         f'$F_{{\\mathrm{{max}}}}$={F_max:.0f} N',
-        fontsize=9, color='#2196F3', ha='center', va='center', fontweight='bold', zorder=9,
+        fontsize=9, color='black', ha='center', va='center', fontweight='bold', zorder=9,
         bbox=dict(facecolor='white', edgecolor='none', alpha=0.85, pad=1.0))
 
 plt.savefig(OUT + 'polar_push_envelope.pdf', dpi=200)
@@ -118,9 +121,9 @@ t_push = ringdown['metadata']['push_start_s']
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.45, 3.2), sharex=True)
 
 # ═══ TOP: Pitch, Roll, Yaw ═══
-ax1.plot(t, pitch, 'b-', linewidth=0.8, label='Pitch')
-ax1.plot(t, roll, 'r-', linewidth=0.6, alpha=0.7, label='Roll')
-ax1.plot(t, yaw, 'g-', linewidth=0.5, alpha=0.6, label='Yaw')
+ax1.plot(t, pitch, '-', color='black', linewidth=0.8, label='Pitch')
+ax1.plot(t, roll, '--', color='0.35', linewidth=0.7, label='Roll')
+ax1.plot(t, yaw, ':', color='0.55', linewidth=0.7, label='Yaw')
 ax1.axvline(x=t_push, color='gray', linestyle='--', alpha=0.5, linewidth=0.8)
 ax1.set_ylabel('Angle (deg)', fontsize=7.5)
 ax1.set_title('ACC: Attitude after 90 N push', fontsize=8, fontweight='bold')
@@ -128,8 +131,8 @@ ax1.legend(fontsize=7, loc='upper right', ncol=3)
 ax1.tick_params(labelsize=7)
 
 # ═══ BOTTOM: X/Y position — anchor holds robot near home ═══
-ax2.plot(t, com_x, 'b-', linewidth=0.8, label='X (lateral, pushed)')
-ax2.plot(t, com_y, 'r-', linewidth=0.6, alpha=0.7, label='Y (sagittal)')
+ax2.plot(t, com_x, '-', color='black', linewidth=0.8, label='X (lateral, pushed)')
+ax2.plot(t, com_y, '--', color='0.4', linewidth=0.7, label='Y (sagittal)')
 ax2.axvline(x=t_push, color='gray', linestyle='--', alpha=0.5, linewidth=0.8)
 ax2.axhline(y=0.0, color='gray', linestyle=':', alpha=0.3, linewidth=0.5)
 ax2.set_ylabel('Position (m)', fontsize=7.5)
