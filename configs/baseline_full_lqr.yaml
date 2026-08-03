@@ -3,10 +3,21 @@
 # ============================================================
 # Configuration for the FULL-STATE LQR baseline.
 #
-# This controller derives LQR gains from finite-difference linearization
-# of the complete 10-DOF MuJoCo plant at standing equilibrium — NOT a
-# simplified 4-state TWIP model.  It addresses the limitation that prior
-# LQR baselines used only a simplified analytical model.
+# This controller derives LQR gains from finite-difference linearization of
+# the complete 16-DOF, 10-actuator MuJoCo plant about a solved standing
+# equilibrium — NOT a simplified 4- or 6-state analytical model.
+#
+# MEASURED OUTCOME: the design is numerically sound at every commanded height
+# (equilibrium residual 0.43 N of 79.46 N weight, reduced 30-state A full rank
+# and PBH-stabilizable, Riccati residual ~1e-14), and with a high control
+# weight it stands and tracks height for tens of seconds — but it is not
+# stabilizing.  Over a 60 s horizon every configuration falls (22–57 s mean
+# time-to-fall) with monotonically growing planar drift, no single r_scale
+# holds the whole 0.40–0.70 m band, and max recoverable push is 10–20 N
+# against ACC's 83 N.  Report it as a classical baseline that survives ~100x
+# longer than the reduced-order ones and still falls.  Do NOT evaluate it at a
+# 1000-step (10 s) horizon: that truncates the divergence and reports 0% falls.
+# Evidence: outputs/fullstate_lqr_corrected/.  See the full_lqr.py docstring.
 #
 # Used by: scripts/eval_balance.py --controller baseline_full_lqr
 # ============================================================
@@ -16,18 +27,21 @@ task:
   env: BalanceEnv
   initial_min_height: 0.40
 
-# --- Low-level PID (ENABLED — normalized targets through PID servo) ---
-# Same PID path as baseline_lqr.yaml for apples-to-apples comparison.
-# The only difference is the LQR gain derivation (full 10-DOF FD vs. 4-state TWIP).
+# --- Action path (DIRECT TORQUE — no PID servo) ---
+# The LQR is designed in torque, so it is emitted in torque.  Routing it
+# through a position/velocity servo, as an earlier revision did, discards the
+# design.  This matches baseline_coupled_lqr_torque, the other direct-torque
+# classical baseline.
 low_level_pid:
-  enabled: true
-  action_smoothing_alpha: 0.4       # match balance.yaml
+  enabled: false
+  action_smoothing_alpha: 0.0
   anti_windup_limit: 0.4
   wheel_vel_limit: 20.0
   kp: [55.0, 40.0, 70.0, 70.0, 4.0, 55.0, 40.0, 70.0, 70.0, 4.0]
   ki: [0.8,  0.4,  1.0,  1.0,  0.1, 0.8,  0.4,  1.0,  1.0,  0.1]
   kd: [3.0,  2.0,  4.0,  4.0,  0.0, 3.0,  2.0,  4.0,  4.0,  0.0]
   action_delay_steps: 0
+  max_torque_rate: 400.0            # same ceiling as ACC and the torque baseline
 
 # --- Sensor noise (disabled for nominal eval) ---
 sensor_noise:
@@ -45,39 +59,26 @@ termination:
   min_height: 0.30
 
 # --- Full-State LQR controller parameters ---
-# The controller performs finite-difference linearization of the full
-# 10-DOF MuJoCo plant at the standing equilibrium, then solves the
-# continuous-time algebraic Riccati equation for a 25-state LQR.
+# The controller solves a true static equilibrium (x*, u*) at the commanded
+# height, finite-differences the whole 50 Hz control step of the full 16-DOF
+# MuJoCo plant for the transition Jacobians, drops the two cyclic wheel-angle
+# states, and solves the discrete-time Riccati equation.
 #
-# State (25-dim):
-#   0-1:   pitch, pitch_rate
-#   2-3:   roll, roll_rate
-#   4-5:   fwd_vel, yaw_rate
-#   6-15:  joint positions (10)
-#   16-25: joint velocities (10)
-#   22-24: fwd_pos_drift, yaw_error, pitch_error_int  (integrated)
+# State (30-dim), all reconstructed from the 42-dim observation:
+#    0-1:   base x, y drift (integrated from body linear velocity)
+#      2:   base height error
+#    3-5:   roll, pitch (from body gravity), yaw error
+#   6-13:   eight leg joint angles (wheel angles excluded — cyclic)
+#  14-16:   base linear velocity
+#  17-19:   base angular velocity
+#  20-29:   ten joint velocities
 #
-# Control (10-dim): actuator torques → normalized targets through PID servo.
+# Control (10-dim): actuator torques, emitted directly.
+#
+# Q and R follow Bryson's rule from physically meaningful maximum deviations,
+# so the only free knob is r_scale, which uniformly trades control effort
+# against regulation.  It is tuned by sweep — see
+# scripts/derive_fullstate_lqr.py — rather than assumed.
 baseline_full_lqr:
-  # Finite-difference step sizes
-  eps_state: 0.0001    # state perturbation [rad or rad/s]
-  eps_ctrl: 0.01        # control perturbation [Nm]
-
-  # Q diagonal weights (29-dim state)
-  q_pitch: 500.0        # pitch stabilisation (primary)
-  q_pitch_rate: 50.0    # pitch rate damping
-  q_roll: 300.0         # roll stabilisation
-  q_roll_rate: 30.0     # roll rate damping
-  q_fwd_vel: 100.0      # forward velocity regulation
-  q_fwd_pos: 50.0       # position drift penalty
-  q_yaw_err: 200.0      # yaw error regulation
-  q_yaw_rate: 50.0      # yaw rate damping
-  q_joint_pos: 10.0     # joint posture (loose — IK handles target)
-  q_joint_vel: 5.0      # joint velocity damping
-  q_pitch_int: 100.0    # pitch error integral
-
-  # R diagonal (10-dim input, higher = softer gains)
-  r_global: 10.0         # global control penalty scale
-  r_wheel_scale: 0.5     # wheels are cheap to actuate
-  r_hr_yaw_scale: 1.0   # hip roll/yaw moderate
-  r_hp_knee_scale: 0.2   # hip pitch/knee powerful actuators
+  r_scale: 1.0
+  nominal_height_m: 0.65

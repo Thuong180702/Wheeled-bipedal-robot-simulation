@@ -169,7 +169,11 @@ def _set_control_rate(hz: float) -> None:
     ):
         assert hasattr(mod, "_CONTROL_DT"), mod.__name__
         mod._CONTROL_DT = CONTROL_DT
-    full_lqr._N_PHYSICS_SUBSTEPS = int(round(CONTROL_DT / 0.002))
+    # Name must match the module global: an earlier revision rebound
+    # ``_N_PHYSICS_SUBSTEPS``, which simply created an unused attribute and
+    # left the linearization at its 50 Hz default whatever --control-hz said.
+    assert hasattr(full_lqr, "_SUBSTEPS")
+    full_lqr._SUBSTEPS = int(round(CONTROL_DT / 0.002))
     console.print(f"[cyan]Control rate set to {hz:g} Hz (dt={CONTROL_DT:.4f}s)[/cyan]")
 MIN_HEIGHT_CMD = 0.40  # metres (BalanceEnv.MIN_HEIGHT_CMD)
 MAX_HEIGHT_CMD = 0.70  # metres (BalanceEnv.MAX_HEIGHT_CMD)
@@ -1828,6 +1832,7 @@ def evaluate(
             config=bl_cl_cfg,
             lqr_q=tuple(bl_cl_params.get("lqr_q", [10.0, 2.0, 3.0, 0.5, 3.0, 0.3])),
             lqr_r=tuple(bl_cl_params.get("lqr_r", [0.8, 1.0])),
+            b_roll_hip=float(bl_cl_params.get("b_roll_hip", -5.0)),
         )
         console.print(
             f"[bold]Coupled 6-State 3D LQR Baseline[/bold]\n"
@@ -1910,8 +1915,6 @@ def evaluate(
         full_lqr_controller = FullStateLQRController(
             model_path=str(get_model_path()),
             config=bl_fl_cfg,
-            eps_state=float(bl_fl_params.get("eps_state", 1e-4)),
-            eps_ctrl=float(bl_fl_params.get("eps_ctrl", 0.01)),
             q_config=bl_fl_params,
         )
         console.print(f"[bold]Full-State LQR Baseline[/bold] gains: {full_lqr_controller.gains_info()}\n")
@@ -1920,16 +1923,24 @@ def evaluate(
             "gains": full_lqr_controller.gains_info(),
             "is_stateful": True,
             "lin_vel_mode": _bl_fl_lv_mode,
-            "linearization": "finite-difference, full 10-DOF MuJoCo plant, 25-state LQR",
+            "linearization": (
+                f"central differences on the full {1.0 / CONTROL_DT:g} Hz "
+                "control step of the complete 16-DOF, 10-actuator MuJoCo "
+                "plant, about a solved static equilibrium; 30-state "
+                "discrete-time LQR"
+            ),
             "assumptions": (
                 "Requires lin_vel_mode='clean' or 'noisy' (42-dim obs). "
-                "LQR gains derived from central-difference finite-difference linearization "
-                "of the complete 10-DOF MuJoCo plant at standing equilibrium (0.65 m). "
-                "State: 22-dim open-loop (pitch, roll, lin_vel, ang_vel, joint_pos, joint_vel) "
-                "+ 3 integrated (fwd_pos_drift, yaw_error, pitch_error_int). "
-                "Output: normalized position/velocity targets through PID servo layer "
-                "(same path as baseline_lqr for apples-to-apples comparison). "
-                "Single-point linearization; height scheduling deferred."
+                "The equilibrium (x*, u*) is solved by damped Gauss-Newton at the "
+                "commanded height and re-solved per height (cached), so the design "
+                "is gain-scheduled rather than single-point. "
+                "State: 30-dim — base xy drift (integrated from body linear velocity, "
+                "not measured), base height error, roll/pitch/yaw error, eight leg "
+                "joint angles, and all sixteen velocities. The two wheel-angle states "
+                "are cyclic and are removed before the Riccati solve. "
+                "Q and R follow Bryson's rule; r_scale is tuned by sweep. "
+                "Output: direct torque, rate-limited to 400 Nm/s, the same action "
+                "path and ceiling as ACC and baseline_coupled_lqr_torque."
             ),
         }
 
@@ -1962,7 +1973,10 @@ def evaluate(
         from wheeled_biped.controllers.coupled_lqr_3d_torque import CoupledLQR3DTorqueController
         from wheeled_biped.utils.config import get_model_path
 
-        bl_clt_cfg_path = PROJECT_ROOT / "configs" / "baseline_coupled_lqr_torque.yaml"
+        if baseline_config == "configs/baseline_lqr.yaml":
+            bl_clt_cfg_path = PROJECT_ROOT / "configs" / "baseline_coupled_lqr_torque.yaml"
+        else:
+            bl_clt_cfg_path = PROJECT_ROOT / baseline_config
         if not bl_clt_cfg_path.exists():
             console.print(f"[red]Coupled LQR Torque config not found: {bl_clt_cfg_path}[/red]")
             raise typer.Exit(1)
@@ -1995,6 +2009,7 @@ def evaluate(
             kd_leg=tuple(bl_clt_params.get("kd_leg", [3, 2, 4, 4, 0, 3, 2, 4, 4, 0])),
             kp_yaw=float(bl_clt_params.get("kp_yaw", 2.5)),
             kd_yaw=float(bl_clt_params.get("kd_yaw", 0.25)),
+            b_roll_hip=float(bl_clt_params.get("b_roll_hip", -5.0)),
         )
         console.print(f"[bold]Coupled 6-State LQR (Direct Torque)[/bold] gains: {coupled_lqr_torque_controller.gains_info()}\n")
 

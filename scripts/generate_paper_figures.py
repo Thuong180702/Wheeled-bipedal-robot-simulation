@@ -33,7 +33,7 @@ print("Fig.2 saved (via fig2_architecture.py)")
 # param_overrides, which is the S0 *scheduled*-k_p variant the paper rejects.
 _ST = '/Users/admin/Wheeled-bipedal-robot-simulation/outputs/paper_statistics/'
 _abl = [json.load(open(_ST + f)) for f in
-        ('ablation_n10_results.json', 'ablation_n10_partial.json') if os.path.exists(_ST + f)]
+        ('ablation_n10_results_freshctx_S1.json',) if os.path.exists(_ST + f)]
 data = next(d['S1'] for d in _abl if 'S1' in d)   # whichever file the completed run landed in
 reps = {int(a): np.asarray(v) for a, v in data['all_reps'].items()}
 angles_deg = np.array(sorted(reps))

@@ -446,20 +446,26 @@ def main():
     ap.add_argument("--overrun", type=float, default=None,
                     help="metres of drive-through past the edge before release")
     ap.add_argument("--render", action="store_true", help="write MP4 per height")
+    ap.add_argument("--seeds", default="0",
+                    help="comma-separated IC seeds; each is an independent "
+                         "trial (TeleopSim jitters joints by 3 mrad and root "
+                         "height by 1.5 mm per seed)")
     ap.add_argument("--out-dir", default="outputs/visual")
     args = ap.parse_args()
     heights = [float(x) / 100.0 for x in args.heights.split(",")]
+    seeds = [int(x) for x in args.seeds.split(",")]
+    trials = [(h, s) for h in heights for s in seeds]
     print(f"course: {args.course}")
     if args.course == "curb":
         print(f"{'h(cm)':>6} {'verdict':>8} {'roll_max':>9} {'d_max_cm':>9} "
-              f"{'settle_s':>8} {'pitch_tl':>8} {'roll_tl':>8} {'still':>6}")
+              f"{'settle_s':>8} {'pitch_tl':>8} {'roll_tl':>8} {'still':>6} {'seed':>5}")
     else:
         print(f"{'h(cm)':>6} {'verdict':>8} {'top?':>5} {'t_edge':>7} {'pk_pitch':>9} "
-              f"{'settle_s':>8} {'pitch_tl':>8} {'herr_mm':>8} {'still':>6}")
+              f"{'settle_s':>8} {'pitch_tl':>8} {'herr_mm':>8} {'still':>6} {'seed':>5}")
     n_pass = 0
-    for h in heights:
+    for h, seed in trials:
         frames = cam = renderer = None
-        if args.render:
+        if args.render and seed == seeds[0]:
             from PIL import Image, ImageDraw
             if args.course == "curb":
                 xml, _ = build_curb_xml(h)
@@ -478,32 +484,32 @@ def main():
             cam.elevation = -12.0
             frames = []
         if args.course == "curb":
-            r = run_curb(h, frames=frames, cam=cam, renderer=renderer)
+            r = run_curb(h, frames=frames, cam=cam, renderer=renderer, seed=seed)
             if r.get("fell"):
-                print(f"{r['h_cm']:6.0f} {'FALL':>8} fall@{r['fall_t']:.1f}s")
+                print(f"{r['h_cm']:6.0f} {'FALL':>8} fall@{r['fall_t']:.1f}s  seed={seed}")
             else:
                 n_pass += r["verdict"] == "PASS"
                 st = f"{r['settle_s']:.2f}" if r["settle_s"] else "never"
                 print(f"{r['h_cm']:6.0f} {r['verdict']:>8} {r['roll_curb_max']:9.1f} "
                       f"{r['d_max']*100:9.1f} {st:>8} {r['pitch_tail']:8.1f} "
-                      f"{r['roll_tail']:8.1f} {r['still_vel']:6.3f}")
+                      f"{r['roll_tail']:8.1f} {r['still_vel']:6.3f} {seed:5d}")
             if frames:
                 _write_video(frames, Path(args.out_dir) / f"curb_{h*100:.0f}cm.mp4", h)
                 renderer.close()
             continue
         r = run_ramp_step(h, frames=frames, cam=cam, renderer=renderer,
                           course=args.course, edge_angle_deg=args.angle,
-                          overrun_m=args.overrun)
+                          overrun_m=args.overrun, seed=seed)
         if r.get("fell"):
             print(f"{r['h_cm']:6.0f} {'FALL':>8} {str(r['reached_top'])[:1]:>5} "
-                  f"{'—':>7} {'—':>9} {'—':>8} {'—':>8} {'—':>8} fall@{r['fall_t']:.1f}s")
+                  f"{'—':>7} {'—':>9} {'—':>8} {'—':>8} {'—':>8} fall@{r['fall_t']:.1f}s {seed:5d}")
         else:
             n_pass += r["verdict"] == "PASS"
             st = f"{r['settle_s']:.2f}" if r["settle_s"] else "never"
             tr = f"{r['t_release']:.1f}" if r["t_release"] else "—"
             print(f"{r['h_cm']:6.0f} {r['verdict']:>8} {str(r['reached_top'])[:1]:>5} "
                   f"{tr:>7} {r['peak_pitch_land']:9.1f} {st:>8} {r['pitch_tail']:8.1f} "
-                  f"{r['relz_err_tail']*1000:8.1f} {r['still_vel']:6.3f}")
+                  f"{r['relz_err_tail']*1000:8.1f} {r['still_vel']:6.3f} {seed:5d}")
         if frames:
             from PIL import Image, ImageDraw
             out = Path(args.out_dir)
@@ -528,7 +534,7 @@ def main():
             proc.wait()
             renderer.close()
             print(f"   wrote {path}")
-    print(f"\n{n_pass}/{len(heights)} PASS")
+    print(f"\n{n_pass}/{len(trials)} PASS")
 
 
 if __name__ == "__main__":

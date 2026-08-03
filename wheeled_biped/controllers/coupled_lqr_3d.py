@@ -66,6 +66,12 @@ _OBS_YAW_ERROR = 41
 _G = 9.81
 _ROBOT_MASS_KG = 8.1
 
+# Hip-roll-angle -> roll-acceleration coupling [1/s^2]. Empirical: the lateral
+# restoring effect of a hip roll offset is not available in closed form from the
+# planar model. Overridable via the `coupled_lqr.b_roll_hip` config key so the
+# sensitivity of the baseline to this constant can be swept.
+_B_ROLL_HIP_NOM = -5.0
+
 
 # ---------------------------------------------------------------------------
 # LQR computation
@@ -77,6 +83,7 @@ def _compute_coupled_lqr_gains(
     tau_s: float = 0.25,
     q_diag: tuple[float, ...] = (10.0, 2.0, 3.0, 0.5, 3.0, 0.3),
     r_diag: tuple[float, ...] = (0.8, 1.0),
+    b_roll_hip: float = _B_ROLL_HIP_NOM,
 ) -> np.ndarray:
     """Compute coupled 6-state 3D LQR gains (PID servo path, physical units).
 
@@ -109,7 +116,7 @@ def _compute_coupled_lqr_gains(
     # B matrix (6×2)
     b_p_w = -r_wheel / (l_com * tau_s)  # wheel vel → pitch accel
     b_v_w = r_wheel                      # wheel vel → fwd accel
-    b_r_h = -5.0                          # hip roll angle → roll accel (restoring)
+    b_r_h = b_roll_hip                   # hip roll angle → roll accel (restoring)
 
     B = np.array([
         [0.0,    0.0],
@@ -164,6 +171,7 @@ class CoupledLQR3DBalanceController:
         config: dict[str, Any] | None = None,
         lqr_q: tuple[float, ...] = (10.0, 2.0, 3.0, 0.5, 3.0, 0.3),
         lqr_r: tuple[float, ...] = (0.8, 1.0),
+        b_roll_hip: float = _B_ROLL_HIP_NOM,
     ) -> None:
         self._model_path = str(Path(model_path).resolve())
         self._config = config or {}
@@ -179,7 +187,9 @@ class CoupledLQR3DBalanceController:
             r_wheel=_WHEEL_RADIUS_M,
             q_diag=lqr_q,
             r_diag=lqr_r,
+            b_roll_hip=b_roll_hip,
         )
+        self._b_roll_hip = float(b_roll_hip)
 
         # ── Height IK ────────────────────────────────────────────────────
         from wheeled_biped.controllers.lqr_balance import _build_height_ik

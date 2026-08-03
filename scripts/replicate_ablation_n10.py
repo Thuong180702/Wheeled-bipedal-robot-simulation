@@ -70,16 +70,26 @@ r_wheel_id = mj.mj_name2id(model, mj.mjtObj.mjOBJ_BODY, "r_wheel_link")
 robot_mass = float(np.sum(model.body_mass))
 torso_inertia = np.array(model.body_inertia[1], dtype=np.float64)
 cfg = CentroidalStateEstimatorConfig(robot_mass=robot_mass, torso_inertia=torso_inertia)
-est = CentroidalStateEstimator(cfg, mj_model=model)
-CTX = {"centroidal_estimator": est, "initial_yaw_z": 0.0,
-       "l_wheel_id": l_wheel_id, "r_wheel_id": r_wheel_id,
-       "eq_joint": POSTURE, "height_ref": H0, "prev_com_pos": None}
+
+def make_ctx():
+    """One context per trial.
+
+    compute_v3_torque_for_state MUTATES this dict: it keeps prev_com_pos and
+    the airborne_mode / airborne_count / ground_count flight-mode latch there.
+    Sharing one context across bisection iterations lets a trial that ended in
+    the air hand the next trial a latched flight mode, so that trial starts
+    airborne and dies at almost any force.
+    """
+    return {"centroidal_estimator": CentroidalStateEstimator(cfg, mj_model=model),
+            "initial_yaw_z": 0.0,
+            "l_wheel_id": l_wheel_id, "r_wheel_id": r_wheel_id,
+            "eq_joint": POSTURE, "height_ref": H0, "prev_com_pos": None}
 
 def settle(data, v3, steps=300):
     for _ in range(steps):
         r = compute_v3_torque_for_state(
             data, model, v3["jax_step_fn"], v3["jax_state"],
-            v3["jax_params"], CTX, teleop=None)
+            v3["jax_params"], v3["ctx"], teleop=None)
         v3["jax_state"] = r["next_jax_state"]
         data.ctrl[:] = np.array(r["tau_v3"])
         for _ in range(SUBSTEPS):
@@ -92,7 +102,7 @@ def run_push(data, v3, force_N, angle_deg):
     for step in range(POST_PUSH_STEPS + PUSH_DUR):
         r = compute_v3_torque_for_state(
             data, model, v3["jax_step_fn"], v3["jax_state"],
-            v3["jax_params"], CTX, teleop=None)
+            v3["jax_params"], v3["ctx"], teleop=None)
         v3["jax_state"] = r["next_jax_state"]
         data.ctrl[:] = np.array(r["tau_v3"])
         data.xfrc_applied[torso_id, :3] = 0.0
@@ -123,6 +133,7 @@ def bisect_one_direction(angle_deg, seed):
         mj.mj_forward(model, data)
         v3 = dict(init_v3_controller(profile_name=PROFILE, model=model))
         v3["jax_state"] = pack_state_k2()
+        v3["ctx"] = make_ctx()
         # Apply parameter overrides
         params = v3["jax_params"]
         for idx, val in param_overrides.items():
@@ -337,7 +348,11 @@ def main():
         description="N≥5 replication for ablation rows L2 and S1–S5")
     parser.add_argument("--configs", nargs="+", default=None,
                         help="Specific config IDs to run (default: all)")
+    parser.add_argument("--tag", default="",
+                        help="suffix for the output filenames, so a partial "
+                             "re-run does not clobber a full previous result")
     args = parser.parse_args()
+    tag = f"_{args.tag}" if args.tag else ""
 
     configs = [c for c in CONFIGS
                if args.configs is None or c["id"] in args.configs]
@@ -393,7 +408,7 @@ def main():
             results[cfg["id"]] = {"error": "measurement_failed"}
 
         # Save incrementally
-        out_path = OUT_DIR / "ablation_n10_partial.json"
+        out_path = OUT_DIR / f"ablation_n10_partial{tag}.json"
         with open(out_path, "w") as f:
             json.dump(results, f, indent=2, default=str)
 
@@ -401,7 +416,7 @@ def main():
     restore_original()
 
     # ── Final save ──
-    out_path = OUT_DIR / "ablation_n10_results.json"
+    out_path = OUT_DIR / f"ablation_n10_results{tag}.json"
     results["_metadata"] = {
         "n_reps": 10,
         "n_directions": 8,

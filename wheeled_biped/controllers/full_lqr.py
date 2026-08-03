@@ -1,66 +1,100 @@
 """
-Full-state LQR balance controller — finite-difference linearization of the
-complete 10-DOF MuJoCo plant at standing equilibrium.
+Full-state LQR balance baseline — linearization of the complete MuJoCo plant.
 
 PURPOSE
 -------
-This controller derives LQR gains from a numerical finite-difference
-linearization of the FULL articulated-leg MuJoCo model (not a simplified
-4-state TWIP).  It addresses the CRITICAL review finding that prior LQR
-baselines used only a 4-state TWIP model.
+Every other classical baseline in this repository is designed on a reduced
+model: a 4-state TWIP, or a 6-state coupled sagittal/roll model.  This one is
+designed on the plant itself.  It linearizes the full 16-DOF, 10-actuator
+MuJoCo model about a solved standing equilibrium and solves the discrete-time
+Riccati equation on the result, so the comparison against the proposed
+controller is not bounded by the fidelity of a hand-written model.
 
-ARCHITECTURE
-------------
-1. OFFLINE (__init__, ~30s):
-   a. Load MuJoCo model, set standing equilibrium via damped settle.
-   b. Finite-difference linearization: perturb each state DOF ±ε, step physics
-      one control period, compute A_open (22×22) and B_open (22×10).
-   c. Augment with integrated states (fwd_pos_drift, yaw_error, pitch_int)
-      → A (25×25), B (25×10).
-   d. Design Q (25×25) and R (10×10) cost matrices.
-   e. Solve continuous-time algebraic Riccati equation → K (10×25).
+DERIVATION (offline, per commanded height, cached)
+--------------------------------------------------
+1. ``standing_equilibrium`` solves for a true static equilibrium (x*, u*) at
+   the commanded height.  The authored keyframe is *not* one — see that
+   function's docstring.
+2. ``control_rate_jacobians`` finite-differences the whole held-input control
+   step to get the transition Jacobians A (32x32) and B (32x10) at the rate
+   the controller actually runs.
+3. The two wheel-*angle* states are removed.  They are cyclic coordinates:
+   nothing in the dynamics depends on absolute wheel angle, and it is not
+   observable from the robot's observation vector either.  ``reduce_system``
+   asserts the first of those numerically.
+4. Bryson's rule sets Q and R from physically meaningful maximum deviations;
+   ``solve_discrete_are`` gives the gain K (10x30).
 
-2. ONLINE (compute_action, 50 Hz):
-   a. Extract state from 42-dim BalanceEnv observation.
-   b. Update integrated states (Euler integration).
-   c. Compute LQR feedback: u = -K @ x → 10-dim torque commands.
-   d. Map torques to normalised targets in [-1, 1].
-   e. Override hip_pitch/knee with height-IK feedforward.
-   f. Return 10-dim normalised action through the PID servo path.
+ONLINE (50 Hz)
+--------------
+The 30-dim state error is reconstructed from the 42-dim BalanceEnv
+observation, and the control is the LQR law about the equilibrium::
 
-STATE DEFINITION (29-dim)
--------------------------
-Open-loop (26):
-  0: pitch         [rad]      body pitch angle (forward-positive)
-  1: pitch_rate    [rad/s]    body pitch angular velocity
-  2: roll          [rad]      body roll angle (left-positive)
-  3: roll_rate     [rad/s]    body roll angular velocity
-  4: fwd_vel       [m/s]      forward velocity (front = +Y world)
-  5: yaw_rate      [rad/s]    yaw angular velocity
-  6-15: joint_pos  [rad]      10 actuated joint positions
- 16-25: joint_vel  [rad/s]    10 actuated joint velocities
+    tau = clip(u* - K @ dx, ctrl_min, ctrl_max)
 
-Integrated (3):
- 26: fwd_pos_drift [m]        integrated forward position
- 27: yaw_error     [rad]      accumulated yaw error
- 28: pitch_int     [rad·s]    integrated pitch error
+emitted as a **direct torque** action, rate-limited to the same 400 Nm/s as
+ACC and the direct-torque coupled baseline.  This is the natural action space
+for a torque-designed LQR; routing it through a position/velocity PID servo,
+as an earlier revision of this file did, discards the design.
 
-CONTROL INPUT (10-dim)
-----------------------
-Actuator torques [Nm], same order as action vector.
+MEASURED OUTCOME — read before citing this as a baseline
+--------------------------------------------------------
+The design is numerically sound at every commanded height in [0.40, 0.70] m:
+the equilibrium residual is 0.43 N of the 79.46 N body weight, the reduced
+30-state A is full rank and PBH-stabilizable, the Riccati relative residual is
+~1e-14, and the obs->state reconstruction is second-order accurate.  cond(A)
+is 2.6e7 at 100 Hz and 6.5e9 at 50 Hz; the large 50 Hz figure comes from a
+~1e-9 *smallest* singular value, i.e. from strongly contracting contact modes,
+and obstructs nothing.  Earlier drafts blamed the gains on that number; that
+was wrong.
+
+What it actually does: at 100 Hz with a high control weight it stands and
+tracks height well for tens of seconds -- r_scale=1000 at 0.65 m gives 0%
+falls over a 20 s horizon with 11.0 mm height RMSE and 0.12 deg pitch RMS --
+but it is not stabilizing.  Extending the horizon to 60 s falls 100% in every
+configuration tried (mean time-to-fall 22.2-57.0 s), with planar drift growing
+monotonically to 0.43-0.63 m.  The 20 s window truncates a slow divergence.
+No single weighting holds the band either: r_scale=100 stands 20 s at 0.60 and
+0.69 m but falls at 0.65 m, and r_scale=1000 does the reverse; random height
+in [0.40, 0.70] falls 45-80%.  Push recovery is where it separates from ACC
+outright -- 100% falls under the standard 50 N impulse, max recoverable push
+10-20 N against ACC's F_min = 83 N.
+
+So: cite it as a classical baseline that survives ~100x longer than the
+reduced-order ones (0.16-0.60 s -> 22-57 s) and still falls, not as one that
+could not be derived.  Evidence: outputs/fullstate_lqr_corrected/.
+
+Two defects had to be fixed to get here, both of which flatter the controller
+if left in.  (a) The shared ``_build_height_ik`` polynomial saturates -- 0.60,
+0.65 and 0.70 m all return near-straight legs standing at ~0.73 m -- so the
+design stood at a height it was never commanded and its survival came from not
+tracking height at all; ``standing_pose`` replaces it.  (b) eval_balance
+rebound ``_N_PHYSICS_SUBSTEPS``, a name this module does not define, so
+``--control-hz`` left the linearization at 50 Hz whatever it said.
+
+Things that were tried and changed nothing: tightening the contact solver
+(iterations 4->200, tol 1e-8->1e-14, bit-identical Jacobians), sweeping the
+finite-difference step over three decades, fitting A and B by least squares
+over the operating region instead of pointwise, and removing the remaining
+cyclic base-x/y states.  Contact-set flicker is not the mechanism: ncon is
+constant across all FD probes at each equilibrium.
+
+Self-check::
+
+    .venv/bin/python -m wheeled_biped.controllers.full_lqr
 """
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Any
 
 import mujoco
 import numpy as np
+from scipy.linalg import solve_discrete_are
 
 # ---------------------------------------------------------------------------
-# Constants (shared with lqr_balance.py)
+# Constants
 # ---------------------------------------------------------------------------
 
 _IDX = {
@@ -68,422 +102,390 @@ _IDX = {
     "r_hip_roll": 5, "r_hip_yaw": 6, "r_hip_pitch": 7, "r_knee": 8, "r_wheel": 9,
 }
 
-_JOINT_LIMITS: dict[str, tuple[float, float]] = {
-    "l_hip_roll": (-0.7, 0.7), "l_hip_yaw": (-0.4, 0.4),
-    "l_hip_pitch": (-0.5, 1.8), "l_knee": (-0.5, 2.7),
-    "l_wheel": (-1e6, 1e6),
-    "r_hip_roll": (-0.7, 0.7), "r_hip_yaw": (-0.4, 0.4),
-    "r_hip_pitch": (-0.5, 1.8), "r_knee": (-0.5, 2.7),
-    "r_wheel": (-1e6, 1e6),
-}
+_CONTROL_DT = 0.02          # 50 Hz control, matching BalanceEnv
+_SUBSTEPS = 10              # 0.02 / 0.002 = 10 physics steps per control step
+_MAX_TORQUE_RATE = 400.0    # Nm/s, same limit as ACC and the torque baseline
+_MIN_H, _MAX_H = 0.40, 0.70
 
-_WHEEL_RADIUS_M = 0.06
-_WHEEL_VEL_LIMIT = 20.0
-_CONTROL_DT = 0.02
-_PHYSICS_DT = 0.002
-_N_PHYSICS_SUBSTEPS = 10  # 0.02 / 0.002 = 10
-_MIN_H = 0.40
-_MAX_H = 0.70
+# Velocity-space indices of the two wheel DOFs.  Their *position* counterparts
+# are the cyclic states removed before the Riccati solve.
+WHEEL_DOFS = (10, 15)
 
-# Observation indices (42-dim BalanceEnv)
-_OBS_GRAV_X = 0
-_OBS_GRAV_Y = 1
-_OBS_LIN_VEL_Y = 4
-_OBS_ANG_VEL_X = 6
-_OBS_ANG_VEL_Y = 7
-_OBS_ANG_VEL_Z = 8
+# 42-dim BalanceEnv observation layout (lin_vel_mode = clean/noisy).
+_OBS_GRAVITY = slice(0, 3)
+_OBS_LIN_VEL = slice(3, 6)
+_OBS_ANG_VEL = slice(6, 9)
+_OBS_JOINT_POS = slice(9, 19)
+_OBS_JOINT_VEL = slice(19, 29)
+_OBS_CUR_HEIGHT = 40        # normalized to [0, 1] over [_MIN_H, _MAX_H]
 _OBS_YAW_ERROR = 41
-_OBS_JOINT_POS_START = 9
-_OBS_JOINT_VEL_START = 19
-
-# State indices
-_S_PITCH = 0
-_S_PITCH_RATE = 1
-_S_ROLL = 2
-_S_ROLL_RATE = 3
-_S_FWD_VEL = 4
-_S_YAWRATE = 5
-_S_JOINT_POS_START = 6   # 6..15
-_S_JOINT_VEL_START = 16  # 16..25
-_S_FWD_POS = 26
-_S_YAW_ERR = 27
-_S_PITCH_INT = 28
-
-_OPEN_LOOP_DIM = 26
-_INT_DIM = 3
-_STATE_DIM = 29
-_CTRL_DIM = 10
 
 
 # ---------------------------------------------------------------------------
-# Height IK (reused from lqr_balance.py)
+# Reference pose
 # ---------------------------------------------------------------------------
 
-def _norm_target(q_des: float, q_min: float, q_max: float) -> float:
-    """Convert desired joint angle [rad] to normalised target in [-1, 1]."""
-    return 2.0 * (q_des - q_min) / (q_max - q_min) - 1.0
-
-
-# ---------------------------------------------------------------------------
-# Finite-difference linearization
-# ---------------------------------------------------------------------------
-
-def _find_standing_equilibrium(
-    model: mujoco.MjModel,
-    target_height_m: float = 0.65,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Return the standing keyframe as the linearization equilibrium.
-
-    Uses the named 'standing' keyframe from the MuJoCo XML (hip_pitch=0.926,
-    knee=1.748, torso z=0.532 m).  This is the posture used by the existing
-    LQR controller and ACC — verified as a near-static equilibrium.
-
-    Returns (qpos_eq, qvel_eq, ctrl_eq, state_eq).
-    """
-    data = mujoco.MjData(model)
-
-    # Load standing keyframe
-    mujoco.mj_resetDataKeyframe(model, data, 0)  # keyframe 0 = "standing"
-    mujoco.mj_forward(model, data)
-
-    # Brief damped settle to let contact forces stabilize
-    # (5 steps at 0.002s with heavy damping — preserves posture, resolves contacts)
-    for _ in range(5):
-        mujoco.mj_step(model, data)
-        data.qvel[:] = 0.0
-    mujoco.mj_forward(model, data)
-
-    qacc_norm = float(np.linalg.norm(data.qacc))
-    print(f"[FullStateLQR] Keyframe qacc norm after settle: {qacc_norm:.2f}")
-
-    qpos_eq = data.qpos.copy()
-    qvel_eq = np.zeros(model.nv)  # damped — zero velocity
-    ctrl_eq = np.zeros(model.nu)
-
-    state_eq = _extract_open_loop_state(data)
-    return qpos_eq, qvel_eq, ctrl_eq, state_eq
-
-
-def _extract_open_loop_state(data: mujoco.MjData) -> np.ndarray:
-    """Extract 26-dim open-loop state from MuJoCo data."""
-    # Orientation → pitch, roll
-    R = np.array(data.xmat[1]).reshape(3, 3)
-    gravity_body = R.T @ np.array([0.0, 0.0, -1.0])
-    pitch = math.atan2(gravity_body[0], -gravity_body[2])
-    roll = math.atan2(gravity_body[1], -gravity_body[2])
-
-    # Angular velocity in body frame
-    body_ang_vel = R @ np.array(data.qvel[3:6])
-    pitch_rate = float(body_ang_vel[1])   # rotation about body Y
-    roll_rate = float(body_ang_vel[0])    # rotation about body X
-    yaw_rate = float(body_ang_vel[2])     # rotation about body Z
-
-    # Forward velocity (world Y, robot faces -Y → negate)
-    fwd_vel = -float(data.qvel[1])
-
-    # Joint positions and velocities
-    joint_pos = np.array(data.qpos[7:17], dtype=np.float64)
-    joint_vel = np.array(data.qvel[6:16], dtype=np.float64)
-
-    state = np.zeros(_OPEN_LOOP_DIM, dtype=np.float64)
-    state[_S_PITCH] = pitch
-    state[_S_PITCH_RATE] = pitch_rate
-    state[_S_ROLL] = roll
-    state[_S_ROLL_RATE] = roll_rate
-    state[_S_FWD_VEL] = fwd_vel
-    state[_S_YAWRATE] = yaw_rate
-    state[_S_JOINT_POS_START:_S_JOINT_POS_START + 10] = joint_pos
-    state[_S_JOINT_VEL_START:_S_JOINT_VEL_START + 10] = joint_vel
-    return state
-
-
-def _apply_open_loop_pert(
-    data: mujoco.MjData,
-    qpos0: np.ndarray,
-    qvel0: np.ndarray,
-    state_idx: int,
-    delta: float,
-) -> None:
-    """Apply perturbation δ to one open-loop state dimension.
-
-    Resets data to equilibrium first, then perturbs.
-    """
-    data.qpos[:] = qpos0
-    data.qvel[:] = qvel0
-    data.ctrl[:] = 0.0
-
-    if abs(delta) < 1e-12:
-        return
-
-    if state_idx == _S_PITCH:
-        # Rotate body quaternion about world Y axis by delta
-        cos_half = math.cos(delta / 2.0)
-        sin_half = math.sin(delta / 2.0)
-        qw, qx, qy, qz = data.qpos[3:7]
-        data.qpos[3] = cos_half * qw - sin_half * qy
-        data.qpos[4] = cos_half * qx - sin_half * qz
-        data.qpos[5] = sin_half * qw + cos_half * qy
-        data.qpos[6] = sin_half * qx + cos_half * qz
-    elif state_idx == _S_PITCH_RATE:
-        data.qvel[4] += delta  # world ang_vel Y
-    elif state_idx == _S_ROLL:
-        # Rotate body quaternion about world X axis by delta
-        cos_half = math.cos(delta / 2.0)
-        sin_half = math.sin(delta / 2.0)
-        qw, qx, qy, qz = data.qpos[3:7]
-        data.qpos[3] = cos_half * qw - sin_half * qx
-        data.qpos[4] = sin_half * qw + cos_half * qx
-        data.qpos[5] = cos_half * qy - sin_half * qz
-        data.qpos[6] = sin_half * qy + cos_half * qz
-    elif state_idx == _S_ROLL_RATE:
-        data.qvel[3] += delta  # world ang_vel X
-    elif state_idx == _S_FWD_VEL:
-        data.qvel[1] += (-delta)  # fwd_vel positive = robot moving toward -Y
-    elif state_idx == _S_YAWRATE:
-        data.qvel[5] += delta  # world ang_vel Z
-    elif _S_JOINT_POS_START <= state_idx < _S_JOINT_POS_START + 10:
-        jidx = state_idx - _S_JOINT_POS_START
-        data.qpos[7 + jidx] += delta
-    elif _S_JOINT_VEL_START <= state_idx < _S_JOINT_VEL_START + 10:
-        jidx = state_idx - _S_JOINT_VEL_START
-        data.qvel[6 + jidx] += delta
-
-
-def _step_plant_open_loop(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    ctrl: np.ndarray,
+def standing_pose(
+    m: mujoco.MjModel, height_m: float, tol: float = 1e-6,
 ) -> np.ndarray:
-    """Step MuJoCo physics and return the NEXT state (discrete-time).
+    """Symmetric standing pose whose wheels rest on the floor at ``height_m``.
 
-    Returns the 26-dim open-loop state after one control period (0.02s).
-    This is used for discrete-time Jacobian computation: A_disc = ∂x_next/∂x.
+    The legs form a parallel link (knee = 2 x hip returns the shank to
+    vertical), so torso height is a single monotone function of the hip angle.
+    That function is inverted here by bisection against the real wheel-contact
+    geometry.
+
+    The repo's shared ``_build_height_ik`` polynomial is deliberately not used.
+    It is fit over a narrow scan range (0.520-0.703 m) and saturates inside it:
+    asking for 0.60, 0.65 or 0.70 m all return nearly straight legs standing at
+    0.72-0.73 m, and below the scan range it extrapolates to hip angles of
+    3.8 rad, twice the joint limit.  Feeding that to the equilibrium solver
+    hands it the wrong pose, which it then correctly balances at the wrong
+    height.  Fixing the shared polynomial would move the six published
+    reduced-order baseline results, so the correction is kept local.
     """
-    data.ctrl[:] = ctrl
-    for _ in range(_N_PHYSICS_SUBSTEPS):
-        mujoco.mj_step(model, data)
+    gids = [
+        mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, n)
+        for n in ("l_wheel_collision", "r_wheel_collision")
+    ]
+    radius = float(m.geom_size[gids[0], 0])
+    d = mujoco.MjData(m)
+    key = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_KEY, "standing")
 
-    return _extract_open_loop_state(data)
+    def posed(hip: float) -> np.ndarray:
+        mujoco.mj_resetDataKeyframe(m, d, key)
+        for side in ("l", "r"):
+            d.qpos[7 + _IDX[f"{side}_hip_pitch"]] = hip
+            d.qpos[7 + _IDX[f"{side}_knee"]] = 2.0 * hip
+        d.qpos[2] = 1.0
+        mujoco.mj_forward(m, d)
+        # Lower the base until the lowest wheel just touches z = 0.
+        d.qpos[2] = 1.0 - (min(d.geom_xpos[g][2] for g in gids) - radius)
+        return d.qpos.copy()
 
-
-def _compute_fd_linearization(
-    model: mujoco.MjModel,
-    qpos0: np.ndarray,
-    qvel0: np.ndarray,
-    eps_state: float = 1e-4,
-    eps_ctrl: float = 0.01,
-) -> dict:
-    """Compute A_cont (26×26) and B_cont (26×10) via central-difference FD.
-
-    Uses the same approach as audit_mujoco_true_linearization.py:
-    1. Compute discrete-time Jacobian A_disc = ∂x_next/∂x
-    2. Convert to continuous-time: A_cont = (A_disc - I) / dt
-    3. Same for B.
-
-    Returns dict with A_open (continuous-time), B_open, and quality metrics.
-    """
-    n_s = _OPEN_LOOP_DIM
-    n_u = _CTRL_DIM
-
-    A_open = np.zeros((n_s, n_s))
-    B_open = np.zeros((n_s, n_u))
-    residuals = []
-
-    # ── A matrix: perturb each state ──
-    for i in range(n_s):
-        # Per-dimension epsilon: smaller for angles, larger for velocities
-        if i in (_S_PITCH, _S_ROLL):
-            eps_i = eps_state * 10  # 1e-3 for angular perturbations
-        elif i in (_S_PITCH_RATE, _S_ROLL_RATE, _S_YAWRATE):
-            eps_i = eps_state * 100  # 1e-2 for angular velocity
-        elif _S_JOINT_POS_START <= i < _S_JOINT_POS_START + 10:
-            eps_i = eps_state * 10
+    # Torso height decreases monotonically in hip over this span (0.73 -> 0.17 m).
+    lo, hi = 0.0, 1.6
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        if posed(mid)[2] > height_m:
+            lo = mid
         else:
-            eps_i = eps_state
-
-        # +eps
-        data_p = mujoco.MjData(model)
-        _apply_open_loop_pert(data_p, qpos0, qvel0, i, eps_i)
-        mujoco.mj_forward(model, data_p)
-        x_next_p = _step_plant_open_loop(model, data_p, np.zeros(n_u))
-
-        # -eps
-        data_m = mujoco.MjData(model)
-        _apply_open_loop_pert(data_m, qpos0, qvel0, i, -eps_i)
-        mujoco.mj_forward(model, data_m)
-        x_next_m = _step_plant_open_loop(model, data_m, np.zeros(n_u))
-
-        A_open[:, i] = (x_next_p - x_next_m) / (2.0 * eps_i)
-
-        # Residual check (forward difference vs central)
-        data_fwd = mujoco.MjData(model)
-        _apply_open_loop_pert(data_fwd, qpos0, qvel0, i, eps_i)
-        mujoco.mj_forward(model, data_fwd)
-        x_next_fwd = _step_plant_open_loop(model, data_fwd, np.zeros(n_u))
-
-        data_base = mujoco.MjData(model)
-        _apply_open_loop_pert(data_base, qpos0, qvel0, i, 0.0)
-        mujoco.mj_forward(model, data_base)
-        x_next_base = _step_plant_open_loop(model, data_base, np.zeros(n_u))
-
-        residuals.append(float(np.max(np.abs(A_open[:, i] - (x_next_fwd - x_next_base) / eps_i))))
-
-    # ── B matrix: perturb each control input ──
-    for j in range(n_u):
-        ctrl_p = np.zeros(n_u)
-        ctrl_p[j] = eps_ctrl
-        data_p = mujoco.MjData(model)
-        data_p.qpos[:] = qpos0
-        data_p.qvel[:] = qvel0
-        mujoco.mj_forward(model, data_p)
-        x_next_p = _step_plant_open_loop(model, data_p, ctrl_p)
-
-        ctrl_m = np.zeros(n_u)
-        ctrl_m[j] = -eps_ctrl
-        data_m = mujoco.MjData(model)
-        data_m.qpos[:] = qpos0
-        data_m.qvel[:] = qvel0
-        mujoco.mj_forward(model, data_m)
-        x_next_m = _step_plant_open_loop(model, data_m, ctrl_m)
-
-        B_open[:, j] = (x_next_p - x_next_m) / (2.0 * eps_ctrl)
-
-    # ── Convert discrete-time Jacobian to continuous-time ──
-    # A_disc = I + A_cont*dt + O(dt²)  →  A_cont ≈ (A_disc - I) / dt
-    A_cont = (A_open - np.eye(n_s)) / _CONTROL_DT
-    B_cont = B_open / _CONTROL_DT
-
-    # ── Quality ──
-    has_nan = bool(np.any(np.isnan(A_cont)) or np.any(np.isnan(B_cont)))
-    has_inf = bool(np.any(np.isinf(A_cont)) or np.any(np.isinf(B_cont)))
-    cond_A = float(np.linalg.cond(A_cont)) if not has_nan and not has_inf else float("inf")
-
-    return {
-        "A_open": A_cont,
-        "B_open": B_cont,
-        "quality": {
-            "max_fd_residual": float(np.max(np.abs(residuals))),
-            "mean_fd_residual": float(np.mean(np.abs(residuals))),
-            "cond_A": cond_A,
-            "has_nan": has_nan,
-            "has_inf": has_inf,
-            "finite": not has_nan and not has_inf,
-        },
-    }
+            hi = mid
+        if hi - lo < tol:
+            break
+    return posed(0.5 * (lo + hi))
 
 
 # ---------------------------------------------------------------------------
-# LQR gain computation
+# Equilibrium
 # ---------------------------------------------------------------------------
 
-def _build_augmented_system(
-    A_open: np.ndarray,
-    B_open: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Augment open-loop system with integrated states.
-
-    Integrated states:
-      - fwd_pos_drift: integrates fwd_vel (state index 4)
-      - yaw_error: integrates yaw_rate (state index 5)
-      - pitch_int: integrates pitch (state index 0)
-
-    Returns (A_aug, B_aug) of shapes (29, 29) and (29, 10).
-    """
-    n_s = _OPEN_LOOP_DIM
-    n_i = _INT_DIM
-    n_aug = n_s + n_i
-
-    A_aug = np.zeros((n_aug, n_aug))
-    B_aug = np.zeros((n_aug, _CTRL_DIM))
-
-    # Top-left: open-loop dynamics
-    A_aug[:n_s, :n_s] = A_open
-    B_aug[:n_s, :] = B_open
-
-    # Bottom-left: integration rows
-    # fwd_pos_drift ← fwd_vel (state 4)
-    A_aug[_S_FWD_POS, _S_FWD_VEL] = 1.0
-    # yaw_error ← yaw_rate (state 5)
-    A_aug[_S_YAW_ERR, _S_YAWRATE] = 1.0
-    # pitch_int ← pitch (state 0)
-    A_aug[_S_PITCH_INT, _S_PITCH] = 1.0
-
-    # ── Regularize: leaky integrators (τ ≈ 1e6 s, numerically necessary) ──
-    _eps_int = 1e-6
-    A_aug[_S_FWD_POS, _S_FWD_POS] = -_eps_int
-    A_aug[_S_YAW_ERR, _S_YAW_ERR] = -_eps_int
-    A_aug[_S_PITCH_INT, _S_PITCH_INT] = -_eps_int
-
-    # ── Regularize: tiny damping on open-loop states for CARE stability ──
-    _eps_ol = 1e-4
-    for i in range(_OPEN_LOOP_DIM):
-        A_aug[i, i] -= _eps_ol
-
-    return A_aug, B_aug
-
-
-def _design_q_r(q_config: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
-    """Design Q (29×29) and R (10×10) cost matrices.
-
-    Q: penalizes state deviation from equilibrium.
-    R: penalizes control effort.
-    """
-    qc = q_config or {}
-    n_aug = _STATE_DIM
-    n_u = _CTRL_DIM
-
-    Q = np.zeros((n_aug, n_aug))
-    # Pitch stabilisation — primary task
-    Q[_S_PITCH, _S_PITCH] = float(qc.get("q_pitch", 50000.0))
-    Q[_S_PITCH_RATE, _S_PITCH_RATE] = float(qc.get("q_pitch_rate", 5000.0))
-    # Roll stabilisation
-    Q[_S_ROLL, _S_ROLL] = float(qc.get("q_roll", 30000.0))
-    Q[_S_ROLL_RATE, _S_ROLL_RATE] = float(qc.get("q_roll_rate", 3000.0))
-    # Forward velocity regulation
-    Q[_S_FWD_VEL, _S_FWD_VEL] = float(qc.get("q_fwd_vel", 10000.0))
-    # Yaw rate damping
-    Q[_S_YAWRATE, _S_YAWRATE] = float(qc.get("q_yaw_rate", 5000.0))
-    # Joint posture (very loose — IK handles the target, LQR just damps)
-    q_jpos = float(qc.get("q_joint_pos", 1000.0))
-    q_jvel = float(qc.get("q_joint_vel", 500.0))
-    for i in range(10):
-        Q[_S_JOINT_POS_START + i, _S_JOINT_POS_START + i] = q_jpos
-        Q[_S_JOINT_VEL_START + i, _S_JOINT_VEL_START + i] = q_jvel
-    # Integrated states — prevent unbounded drift
-    Q[_S_FWD_POS, _S_FWD_POS] = float(qc.get("q_fwd_pos", 5000.0))
-    Q[_S_YAW_ERR, _S_YAW_ERR] = float(qc.get("q_yaw_err", 20000.0))
-    Q[_S_PITCH_INT, _S_PITCH_INT] = float(qc.get("q_pitch_int", 10000.0))
-
-    # R: penalize control effort — larger R = softer gains
-    # Values scaled to produce gains in the 1-100 range
-    r_global = float(qc.get("r_global", 0.1))
-    r_wheel = r_global * float(qc.get("r_wheel_scale", 0.5))    # wheels are cheap
-    r_hr_yaw = r_global * float(qc.get("r_hr_yaw_scale", 1.0))  # hip roll/yaw moderate
-    r_hp_knee = r_global * float(qc.get("r_hp_knee_scale", 0.2)) # hip pitch/knee expensive but essential
-    R = np.diag([
-        r_hr_yaw, r_hr_yaw, r_hp_knee, r_hp_knee, r_wheel,   # left
-        r_hr_yaw, r_hr_yaw, r_hp_knee, r_hp_knee, r_wheel,   # right
-    ])
-
-    return Q, R
-
-
-def _solve_lqr(
-    A: np.ndarray,
-    B: np.ndarray,
-    Q: np.ndarray,
-    R: np.ndarray,
+def _qacc_at(
+    m: mujoco.MjModel, d: mujoco.MjData, qpos: np.ndarray, u: np.ndarray
 ) -> np.ndarray:
-    """Solve continuous-time LQR: K = R^{-1} B^T P.
+    """Generalized acceleration at rest for pose ``qpos`` and input ``u``."""
+    d.qpos[:] = qpos
+    d.qvel[:] = 0.0
+    d.ctrl[:] = u
+    mujoco.mj_forward(m, d)
+    return d.qacc.copy()
 
-    P is the solution to A^T P + P A - P B R^{-1} B^T P + Q = 0.
-    A and B should be the continuous-time system matrices.
+
+def standing_equilibrium(
+    m: mujoco.MjModel, qpos_ref: np.ndarray, n_iter: int = 600,
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """Solve for a true static equilibrium (x*, u*) near the reference pose.
+
+    The authored ``standing`` keyframe is not an equilibrium: it places the
+    wheels several millimetres inside the floor, so the contact springs return
+    an order of magnitude more force than body weight and the plant is in a
+    violent transient at t=0.  Inverse dynamics at ``qacc = 0`` therefore
+    reports the torque needed to fight that penetration rather than the torque
+    needed to stand, and forward integration is no help either, because the
+    pose is an unstable equilibrium that topples during any settle.  Both of
+    those shortcuts were tried and both produce a linearization of a falling
+    robot.
+
+    The equilibrium is solved for directly instead: damped Gauss-Newton drives
+    ``qacc`` to zero with a finite-difference Jacobian.  Ten torques against
+    sixteen accelerations is underdetermined, so the pose is a free variable
+    too -- base height, base roll and pitch, and the eight leg angles.  Base
+    height in particular must be free, because the resting penetration (the
+    depth at which the contact springs carry exactly body weight) is part of
+    the equilibrium rather than an input to it.  Only the cyclic coordinates
+    are pinned: base x, y, yaw and the two wheel angles, none of which has a
+    restoring force and so none of which has a preferred value.  A weak
+    Tikhonov pull keeps the solution near ``qpos_ref`` rather than letting it
+    wander to some other equilibrium of the plant.
+
+    Returns (qpos_star, ctrl_star, residual), the residual being the norm of
+    the unbalanced generalized force at (x*, u*) in newtons.
     """
-    from scipy.linalg import solve_continuous_are
+    d = mujoco.MjData(m)
+    qpos = np.asarray(qpos_ref, dtype=np.float64).copy()
 
-    P = solve_continuous_are(A, B, Q, R)
-    K = np.linalg.inv(R) @ B.T @ P  # shape (n_u, n_x)
+    free = [i for i in range(m.nv) if i not in (0, 1, 5, *WHEEL_DOFS)]
+    n_pose, nu = len(free), m.nu
+    lo, hi = m.actuator_ctrlrange[:, 0], m.actuator_ctrlrange[:, 1]
+    u = np.zeros(nu)
+    eps_u, eps_q = 1e-4, 1e-6
+    w_pose, w_u = 30.0, 0.05      # Tikhonov weights on pose drift and torque
+
+    def perturbed(base: np.ndarray, idx: int, eps: float) -> np.ndarray:
+        dq = np.zeros(m.nv)
+        dq[idx] = eps
+        out = base.copy()
+        mujoco.mj_integratePos(m, out, dq, 1.0)
+        return out
+
+    def unbalanced_force(qpos_: np.ndarray, u_: np.ndarray) -> float:
+        # Reported as a generalized force, not as ||qacc||: the light hip DOFs
+        # (armature 0.02) turn a negligible torque into a large acceleration,
+        # so ||qacc|| overstates how far from equilibrium the pose is.
+        qacc = _qacc_at(m, d, qpos_, u_)
+        force = np.zeros(m.nv)
+        mujoco.mj_mulM(m, d, force, qacc)
+        return float(np.linalg.norm(force))
+
+    # Warm start: sink the base until the contact springs carry body weight.
+    # ``standing_pose`` puts the wheels at exact touch, where contact force is
+    # zero and the ~1e6 N/m contact spring makes a Gauss-Newton step wildly
+    # non-local -- a sub-millimetre move in base z swings the contact force by
+    # hundreds of newtons, and the iteration limit-cycles between 80 N and 54 N
+    # instead of converging.  Starting inside contact puts it in the smooth
+    # region.  The sink depth is well under a millimetre, so the commanded
+    # height is unaffected.
+    z_hi, z_lo = qpos[2], qpos[2] - 0.02
+    for _ in range(60):
+        qpos[2] = 0.5 * (z_hi + z_lo)
+        if _qacc_at(m, d, qpos, u)[2] > 0.0:
+            z_lo = qpos[2]              # too deep, springs over-support
+        else:
+            z_hi = qpos[2]
+    qpos[2] = 0.5 * (z_hi + z_lo)
+
+    best = (unbalanced_force(qpos, u), qpos.copy(), u.copy())
+
+    for _ in range(n_iter):
+        r0 = _qacc_at(m, d, qpos, u)
+        jac = np.zeros((m.nv, nu + n_pose))
+        for i in range(nu):
+            up = u.copy()
+            up[i] += eps_u
+            jac[:, i] = (_qacc_at(m, d, qpos, up) - r0) / eps_u
+        for k, i in enumerate(free):
+            jac[:, nu + k] = (
+                _qacc_at(m, d, perturbed(qpos, i, eps_q), u) - r0) / eps_q
+
+        dpose = np.zeros(m.nv)
+        mujoco.mj_differentiatePos(m, dpose, 1.0, qpos_ref, qpos)
+        reg = np.zeros((nu + n_pose, nu + n_pose))
+        reg[:nu, :nu] = w_u * np.eye(nu)
+        reg[nu:, nu:] = w_pose * np.eye(n_pose)
+        rhs = np.concatenate([-r0, -w_u * u, -w_pose * dpose[free]])
+        step, *_ = np.linalg.lstsq(np.vstack([jac, reg]), rhs, rcond=None)
+
+        u_next = np.clip(u + 0.3 * step[:nu], lo, hi)
+        dq = np.zeros(m.nv)
+        dq[free] = 0.3 * step[nu:]
+        qpos_next = qpos.copy()
+        mujoco.mj_integratePos(m, qpos_next, dq, 1.0)
+        if (np.linalg.norm(u_next - u) < 1e-12
+                and np.linalg.norm(qpos_next - qpos) < 1e-12):
+            break
+        u, qpos = u_next, qpos_next
+
+        # Keep the best iterate rather than whatever the last one happens to
+        # be: the tail of the iteration is not monotone.
+        f_now = unbalanced_force(qpos, u)
+        if f_now < best[0]:
+            best = (f_now, qpos.copy(), u.copy())
+
+    return best[1], best[2], best[0]
+
+
+# ---------------------------------------------------------------------------
+# Linearization
+# ---------------------------------------------------------------------------
+
+def _control_step(
+    m: mujoco.MjModel, d: mujoco.MjData, qpos_star: np.ndarray,
+    dx: np.ndarray, u: np.ndarray, substeps: int,
+) -> np.ndarray:
+    """Advance one held-input control step from x* + dx; return the new dx."""
+    d.qpos[:] = qpos_star
+    mujoco.mj_integratePos(m, d.qpos, dx[:m.nv], 1.0)
+    d.qvel[:] = dx[m.nv:]
+    d.ctrl[:] = u
+    mujoco.mj_forward(m, d)
+    for _ in range(substeps):
+        mujoco.mj_step(m, d)
+    dq = np.zeros(m.nv)
+    mujoco.mj_differentiatePos(m, dq, 1.0, qpos_star, d.qpos)
+    return np.concatenate([dq, d.qvel])
+
+
+def control_rate_jacobians(
+    m: mujoco.MjModel, qpos_star: np.ndarray, ctrl_star: np.ndarray,
+    substeps: int = _SUBSTEPS, eps_x: float = 1e-5, eps_u: float = 1e-4,
+) -> tuple[np.ndarray, np.ndarray]:
+    """A, B for one control step, by central differences on the step itself.
+
+    Differencing the whole multi-substep step is not merely a convenience over
+    composing the per-substep Jacobian as ``A_sub ** substeps``.  The
+    wheel--ground contact is a ~1e6 N/m spring, which the 2 ms linearization
+    sees as a mode with |lambda| ~ 50; raising that to the tenth power
+    amplifies it by ~1e17 and swamps every rigid-body mode, leaving a matrix
+    that is numerically rank-deficient.  Differencing the composite map lets
+    the contact solver resolve its own stiff mode internally, so the Jacobian
+    describes the dynamics the controller actually sees at the control rate.
+    """
+    d = mujoco.MjData(m)
+    nx = 2 * m.nv
+
+    A = np.zeros((nx, nx))
+    for i in range(nx):
+        dp, dm = np.zeros(nx), np.zeros(nx)
+        dp[i], dm[i] = eps_x, -eps_x
+        A[:, i] = (_control_step(m, d, qpos_star, dp, ctrl_star, substeps)
+                   - _control_step(m, d, qpos_star, dm, ctrl_star, substeps)
+                   ) / (2 * eps_x)
+
+    B = np.zeros((nx, m.nu))
+    zero = np.zeros(nx)
+    for j in range(m.nu):
+        up, um = ctrl_star.copy(), ctrl_star.copy()
+        up[j] += eps_u
+        um[j] -= eps_u
+        B[:, j] = (_control_step(m, d, qpos_star, zero, up, substeps)
+                   - _control_step(m, d, qpos_star, zero, um, substeps)
+                   ) / (2 * eps_u)
+    return A, B
+
+
+def kept_state_indices(nv: int) -> np.ndarray:
+    """Indices of the 32-dim state that survive into the reduced design.
+
+    The two wheel-angle *positions* are dropped; every velocity is kept.
+    """
+    pos = [i for i in range(nv) if i not in WHEEL_DOFS]
+    return np.array(pos + list(range(nv, 2 * nv)))
+
+
+def reduce_system(
+    A: np.ndarray, B: np.ndarray, nv: int, tol: float = 1e-3,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Drop the cyclic wheel-angle states from (A, B).
+
+    Deleting a state is only exact if nothing else depends on it, i.e. if its
+    columns in A are zero outside its own rows.  For an absolute wheel angle on
+    a translation-invariant plant that is true by symmetry, but it is asserted
+    here rather than assumed, because a modelling change (a wheel-angle-
+    dependent spring, a non-cylindrical wheel) would silently break it.
+    """
+    keep = kept_state_indices(nv)
+    drop = [i for i in range(2 * nv) if i not in set(keep.tolist())]
+    coupling = np.abs(A[np.ix_(keep, drop)]).max()
+    if coupling > tol:
+        raise AssertionError(
+            f"wheel angle is not cyclic: max |dA/d(wheel angle)| = {coupling:.3e} "
+            f"> {tol:.0e}; the reduced design would be invalid"
+        )
+    return A[np.ix_(keep, keep)], B[keep, :]
+
+
+def bryson_weights(
+    m: mujoco.MjModel, r_scale: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Q, R by Bryson's rule from physically meaningful maximum deviations.
+
+    ``r_scale`` uniformly scales R, trading control effort against regulation;
+    it is the single knob swept when tuning the baseline.
+    """
+    nv = m.nv
+    pos_max = np.empty(nv)
+    pos_max[0:2] = 0.05      # base x, y   [m]
+    pos_max[2] = 0.02        # base z      [m]
+    pos_max[3:5] = 0.10      # roll, pitch [rad]
+    pos_max[5] = 0.20        # yaw         [rad]
+    pos_max[6:] = 0.20       # joints      [rad]
+    vel_max = np.empty(nv)
+    vel_max[0:3] = 0.50
+    vel_max[3:6] = 1.00
+    vel_max[6:] = 2.00
+
+    q_full = np.concatenate([1.0 / pos_max**2, 1.0 / vel_max**2])
+    q_diag = q_full[kept_state_indices(nv)]
+
+    u_max = np.minimum(np.abs(m.actuator_ctrlrange[:, 1]), 30.0)
+    return np.diag(q_diag), np.diag(r_scale / u_max**2)
+
+
+def solve_lqr(
+    A: np.ndarray, B: np.ndarray, Q: np.ndarray, R: np.ndarray,
+    tol: float = 1e-9,
+) -> np.ndarray:
+    """Discrete-time LQR gain, with the Riccati residual verified.
+
+    A carries strongly contracting contact modes whose singular values reach
+    ~1e-9, so the intermediate products underflow and BLAS raises spurious
+    overflow/divide warnings.  Those are noise; what matters is whether the
+    returned P actually solves the equation, so the relative residual is
+    checked directly instead of trusting the absence of warnings.
+    """
+    P = solve_discrete_are(A, B, Q, R)
+    with np.errstate(all="ignore"):
+        S = R + B.T @ P @ B
+        K = np.linalg.solve(S, B.T @ P @ A)
+        residual = A.T @ P @ A - P - A.T @ P @ B @ K + Q
+        rel = float(np.abs(residual).max() / np.abs(P).max())
+    if not np.isfinite(K).all() or rel > tol:
+        raise AssertionError(
+            f"Riccati solution is unusable: relative residual {rel:.3e} "
+            f"(tolerance {tol:.0e}), K finite = {np.isfinite(K).all()}"
+        )
     return K
+
+
+def design(
+    m: mujoco.MjModel, qpos_ref: np.ndarray, r_scale: float,
+    substeps: int = _SUBSTEPS,
+) -> dict[str, Any]:
+    """Full offline pipeline: equilibrium -> Jacobians -> reduction -> gain."""
+    qpos_star, ctrl_star, residual = standing_equilibrium(m, qpos_ref)
+    A_full, B_full = control_rate_jacobians(m, qpos_star, ctrl_star, substeps)
+    A, B = reduce_system(A_full, B_full, m.nv)
+    Q, R = bryson_weights(m, r_scale)
+    K = solve_lqr(A, B, Q, R)
+
+    # A's smallest singular value is ~1e-9 (strongly contracting contact modes),
+    # so these products underflow harmlessly.  solve_lqr already asserts the
+    # Riccati residual, which is the check that matters.
+    with np.errstate(all="ignore"):
+        evals = np.linalg.eigvals(A)
+        unstable = evals[np.abs(evals) >= 1.0 - 1e-8]
+        pbh_ok = all(
+            np.linalg.matrix_rank(
+                np.hstack([A - lam * np.eye(A.shape[0]), B]), tol=1e-7,
+            ) == A.shape[0]
+            for lam in unstable
+        )
+        eig_closed = float(np.abs(np.linalg.eigvals(A - B @ K)).max())
+    return {
+        "qpos_star": qpos_star,
+        "ctrl_star": ctrl_star,
+        "K": K,
+        "residual_force_N": residual,
+        "base_z_m": float(qpos_star[2]),
+        "state_dim": int(A.shape[0]),
+        "cond_A": float(np.linalg.cond(A)),
+        "rank_A": int(np.linalg.matrix_rank(A)),
+        "max_abs_eig_open": float(np.abs(evals).max()),
+        "n_marginal_or_unstable_modes": int(len(unstable)),
+        "stabilizable_pbh": bool(pbh_ok),
+        "max_abs_eig_closed": eig_closed,
+        "max_abs_gain": float(np.abs(K).max()),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -491,254 +493,268 @@ def _solve_lqr(
 # ---------------------------------------------------------------------------
 
 class FullStateLQRController:
-    """LQR balance controller derived from full 10-DOF MuJoCo linearization.
+    """LQR balance baseline designed on the full MuJoCo linearization.
 
-    Usage
-    -----
-    ::
+    Usage::
 
-        ctrl = FullStateLQRController(
-            model_path="assets/robot/wheeled_biped_real.xml"
-        )
+        ctrl = FullStateLQRController(model_path="assets/robot/....xml")
         ctrl.reset(height_cmd_m=0.65)
-        action = ctrl.compute_action(obs)  # obs is 42-dim numpy array
+        action = ctrl.compute_action(obs)   # obs is 42-dim, action is 10-dim
     """
 
     def __init__(
         self,
         model_path: str,
         config: dict[str, Any] | None = None,
-        eps_state: float = 1e-4,
-        eps_ctrl: float = 0.01,
         q_config: dict | None = None,
+        **_ignored: Any,
     ) -> None:
         self._model_path = str(Path(model_path).resolve())
         self._config = config or {}
+        qc = q_config or {}
+
+        self._r_scale = float(qc.get("r_scale", 1.0))
+        self._substeps = int(qc.get("substeps", _SUBSTEPS))
+
+        self._model = mujoco.MjModel.from_xml_path(self._model_path)
+        self._ctrl_min = self._model.actuator_ctrlrange[:, 0].copy()
+        self._ctrl_max = self._model.actuator_ctrlrange[:, 1].copy()
 
         pid_cfg = self._config.get("low_level_pid", {})
-        self._wheel_vel_limit: float = float(
-            pid_cfg.get("wheel_vel_limit", _WHEEL_VEL_LIMIT)
+        self._max_torque_rate = float(
+            pid_cfg.get("max_torque_rate", _MAX_TORQUE_RATE)
         )
 
-        print("[FullStateLQR] Loading MuJoCo model and finding equilibrium...")
-        model = mujoco.MjModel.from_xml_path(self._model_path)
+        # Designs are cached per commanded height: the nominal scenario only
+        # ever needs one, the fixed-height sweep needs seven.
+        self._designs: dict[float, dict[str, Any]] = {}
+        self._height_cmd_m = float(qc.get("nominal_height_m", 0.65))
+        self._design = self._design_for(self._height_cmd_m)
 
-        # ── 1. Find standing equilibrium ─────────────────────────────────
-        self._qpos_eq, self._qvel_eq, self._ctrl_eq, self._state_eq = (
-            _find_standing_equilibrium(model, target_height_m=0.65)
-        )
+        self._xy_drift = np.zeros(2)
+        self._tau_prev = np.zeros(self._model.nu)
 
-        # ── 2. Finite-difference linearization ───────────────────────────
-        print(f"[FullStateLQR] Computing FD linearization "
-              f"(state={_OPEN_LOOP_DIM}d open-loop, {_STATE_DIM}d augmented, "
-              f"ctrl={_CTRL_DIM}d)...")
-        fd_result = _compute_fd_linearization(
-            model, self._qpos_eq, self._qvel_eq,
-            eps_state=eps_state, eps_ctrl=eps_ctrl,
-        )
-        self._A_open = fd_result["A_open"]
-        self._B_open = fd_result["B_open"]
-        self._fd_quality = fd_result["quality"]
+    # -- offline ------------------------------------------------------------
 
-        if self._fd_quality["has_nan"] or self._fd_quality["has_inf"]:
-            print(f"[FullStateLQR] WARNING: FD linearization has NaN/Inf! "
-                  f"cond(A)={self._fd_quality['cond_A']:.2e}")
+    def _reference_pose(self, height_m: float) -> np.ndarray:
+        """Standing pose that actually stands at ``height_m``."""
+        return standing_pose(self._model, float(np.clip(height_m, _MIN_H, _MAX_H)))
 
-        # ── 3. Augment with integrated states ────────────────────────────
-        self._A_aug, self._B_aug = _build_augmented_system(
-            self._A_open, self._B_open
-        )
+    def _design_for(self, height_m: float) -> dict[str, Any]:
+        key = round(float(height_m), 4)
+        if key not in self._designs:
+            self._designs[key] = design(
+                self._model, self._reference_pose(key), self._r_scale,
+                self._substeps,
+            )
+        return self._designs[key]
 
-        # ── 4. Design Q, R and solve LQR ────────────────────────────────
-        self._Q, self._R = _design_q_r(q_config)
-        self._K = _solve_lqr(self._A_aug, self._B_aug, self._Q, self._R)
-
-        # ── 5. Height IK ──────────────────────────────────────────────────
-        from wheeled_biped.controllers.lqr_balance import _build_height_ik
-
-        self._hip_poly, self._knee_poly, self._h_scan_min, self._h_scan_max = (
-            _build_height_ik(self._model_path)
-        )
-
-        # ── 6. Episode state ──────────────────────────────────────────────
-        self._height_cmd_m: float = 0.65
-        self._fwd_pos_drift: float = 0.0
-        self._yaw_error_accum: float = 0.0
-        self._pitch_int: float = 0.0
-
-        print(f"[FullStateLQR] Ready. K shape={self._K.shape}, "
-              f"cond(A_open)={self._fd_quality['cond_A']:.2e}, "
-              f"max FD residual={self._fd_quality['max_fd_residual']:.2e}")
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+    # -- online -------------------------------------------------------------
 
     def reset(self, height_cmd_m: float = 0.65) -> None:
-        """Reset per-episode state."""
         self._height_cmd_m = float(np.clip(height_cmd_m, _MIN_H, _MAX_H))
-        self._fwd_pos_drift = 0.0
-        self._yaw_error_accum = 0.0
-        self._pitch_int = 0.0
+        self._design = self._design_for(self._height_cmd_m)
+        self._xy_drift[:] = 0.0
+        self._tau_prev[:] = 0.0
+
+    def _state_error(self, obs: np.ndarray) -> np.ndarray:
+        """Reconstruct the 30-dim state error x - x* from the observation.
+
+        The mapping mirrors ``mj_differentiatePos`` on the free joint: the
+        orientation error reads out of body-frame gravity as (-g_y, g_x) with
+        yaw supplied directly by the observation, and base xy drift, which no
+        sensor reports, is integrated from body-frame linear velocity.  It is
+        verified against ``mj_differentiatePos`` in this module's self-check.
+        """
+        qpos_star = self._design["qpos_star"]
+        grav = obs[_OBS_GRAVITY]
+        lin_vel = obs[_OBS_LIN_VEL]
+        height = _MIN_H + float(obs[_OBS_CUR_HEIGHT]) * (_MAX_H - _MIN_H)
+
+        self._xy_drift += lin_vel[:2] * _CONTROL_DT
+
+        dq = np.empty(self._model.nv)
+        dq[0:2] = self._xy_drift
+        dq[2] = height - qpos_star[2]
+        dq[3] = -grav[1]
+        dq[4] = grav[0]
+        dq[5] = float(obs[_OBS_YAW_ERROR])
+        dq[6:] = obs[_OBS_JOINT_POS] - qpos_star[7:]
+
+        dv = np.concatenate([lin_vel, obs[_OBS_ANG_VEL], obs[_OBS_JOINT_VEL]])
+        return np.concatenate([dq, dv])[kept_state_indices(self._model.nv)]
 
     def compute_action(self, obs: np.ndarray) -> np.ndarray:
-        """Map 42-dim obs → 10-dim normalized action.
-
-        Parameters
-        ----------
-        obs : np.ndarray, shape (42,)
-            BalanceEnv observation.
-
-        Returns
-        -------
-        action : np.ndarray, shape (10,)
-            Normalised joint targets in [-1, 1].
-        """
+        """Map 42-dim obs -> 10-dim normalized direct-torque action."""
         obs = np.asarray(obs, dtype=np.float64)
         if obs.shape != (42,):
             raise ValueError(
                 f"FullStateLQRController requires 42-dim obs, got {obs.shape}"
             )
 
-        action = np.zeros(10, dtype=np.float64)
+        tau = self._design["ctrl_star"] - self._design["K"] @ self._state_error(obs)
+        tau = np.clip(tau, self._ctrl_min, self._ctrl_max)
 
-        # ── 1. Height IK ─────────────────────────────────────────────────
-        h_cmd = self._height_cmd_m
-        h_query = float(np.clip(h_cmd, self._h_scan_min, self._h_scan_max))
-        q_hip_des = float(np.clip(
-            np.polyval(self._hip_poly, h_query),
-            *_JOINT_LIMITS["l_hip_pitch"],
-        ))
-        q_knee_des = float(np.clip(
-            np.polyval(self._knee_poly, h_query),
-            *_JOINT_LIMITS["l_knee"],
-        ))
+        # Rate limit, same 400 Nm/s ceiling as ACC and the torque baseline.
+        max_step = self._max_torque_rate * _CONTROL_DT
+        tau = self._tau_prev + np.clip(tau - self._tau_prev, -max_step, max_step)
+        self._tau_prev = tau.copy()
 
-        t_hip = _norm_target(q_hip_des, *_JOINT_LIMITS["l_hip_pitch"])
-        t_knee = _norm_target(q_knee_des, *_JOINT_LIMITS["l_knee"])
-
-        action[_IDX["l_hip_pitch"]] = np.clip(t_hip, -1.0, 1.0)
-        action[_IDX["l_knee"]] = np.clip(t_knee, -1.0, 1.0)
-        action[_IDX["r_hip_pitch"]] = np.clip(t_hip, -1.0, 1.0)
-        action[_IDX["r_knee"]] = np.clip(t_knee, -1.0, 1.0)
-
-        # Hip yaw: hold at neutral
-        action[_IDX["l_hip_yaw"]] = _norm_target(0.0, *_JOINT_LIMITS["l_hip_yaw"])
-        action[_IDX["r_hip_yaw"]] = _norm_target(0.0, *_JOINT_LIMITS["r_hip_yaw"])
-
-        # ── 2. Extract open-loop state from obs ──────────────────────────
-        pitch = -float(obs[_OBS_GRAV_Y])
-        pitch_rate = float(obs[_OBS_ANG_VEL_X])
-        roll = float(obs[_OBS_GRAV_X])
-        roll_rate = float(obs[_OBS_ANG_VEL_Y])
-        fwd_vel = -float(obs[_OBS_LIN_VEL_Y])
-        yaw_rate = float(obs[_OBS_ANG_VEL_Z])
-        joint_pos = obs[_OBS_JOINT_POS_START:_OBS_JOINT_POS_START + 10].astype(np.float64)
-        joint_vel = obs[_OBS_JOINT_VEL_START:_OBS_JOINT_VEL_START + 10].astype(np.float64)
-
-        # ── 3. Update integrated states ──────────────────────────────────
-        self._fwd_pos_drift += fwd_vel * _CONTROL_DT
-        self._yaw_error_accum = float(obs[_OBS_YAW_ERROR])
-        self._pitch_int += pitch * _CONTROL_DT
-
-        # ── 4. Build full state vector ───────────────────────────────────
-        x = np.zeros(_STATE_DIM, dtype=np.float64)
-        x[_S_PITCH] = pitch
-        x[_S_PITCH_RATE] = pitch_rate
-        x[_S_ROLL] = roll
-        x[_S_ROLL_RATE] = roll_rate
-        x[_S_FWD_VEL] = fwd_vel
-        x[_S_YAWRATE] = yaw_rate
-        x[_S_JOINT_POS_START:_S_JOINT_POS_START + 10] = joint_pos
-        x[_S_JOINT_VEL_START:_S_JOINT_VEL_START + 10] = joint_vel
-        x[_S_FWD_POS] = self._fwd_pos_drift
-        x[_S_YAW_ERR] = self._yaw_error_accum
-        x[_S_PITCH_INT] = self._pitch_int
-
-        # ── 5. LQR feedback: u = -K @ x ─────────────────────────────────
-        # u is in torque space [Nm]
-        u_torque = -self._K @ x  # shape (10,)
-
-        # ── 6. Map torques to normalized targets ─────────────────────────
-        # Use same mapping as PID disabled mode:
-        # ctrl = ctrl_min + (action + 1)/2 * (ctrl_max - ctrl_min)
-        # → action = 2*(ctrl - ctrl_min)/(ctrl_max - ctrl_min) - 1
-        # But we're using PID servo path, so we convert torque to velocity
-        # targets for wheels and position targets for legs.
-
-        # For wheels: torque → velocity target via kp_wheel
-        # ω_des = τ / kp_wheel
-        kp_wheel = 4.0  # same as PID kp for wheels
-        omega_l = float(u_torque[_IDX["l_wheel"]] / kp_wheel)
-        omega_r = float(u_torque[_IDX["r_wheel"]] / kp_wheel)
-        omega_l = np.clip(omega_l, -self._wheel_vel_limit, self._wheel_vel_limit)
-        omega_r = np.clip(omega_r, -self._wheel_vel_limit, self._wheel_vel_limit)
-        action[_IDX["l_wheel"]] = np.clip(omega_l / self._wheel_vel_limit, -1.0, 1.0)
-        action[_IDX["r_wheel"]] = np.clip(omega_r / self._wheel_vel_limit, -1.0, 1.0)
-
-        # For hip_roll: torque → position offset via kp_leg
-        # Δq = τ / kp_leg
-        kp_hr = 55.0
-        q_hr_l = float(np.clip(
-            u_torque[_IDX["l_hip_roll"]] / kp_hr,
-            *_JOINT_LIMITS["l_hip_roll"],
-        ))
-        q_hr_r = float(np.clip(
-            u_torque[_IDX["r_hip_roll"]] / kp_hr,
-            *_JOINT_LIMITS["r_hip_roll"],
-        ))
-        action[_IDX["l_hip_roll"]] = np.clip(
-            _norm_target(q_hr_l, *_JOINT_LIMITS["l_hip_roll"]), -1.0, 1.0,
+        span = np.where(
+            (self._ctrl_max - self._ctrl_min) < 1e-9,
+            1.0, self._ctrl_max - self._ctrl_min,
         )
-        action[_IDX["r_hip_roll"]] = np.clip(
-            _norm_target(q_hr_r, *_JOINT_LIMITS["r_hip_roll"]), -1.0, 1.0,
-        )
+        action = 2.0 * (tau - self._ctrl_min) / span - 1.0
+        return np.clip(action, -1.0, 1.0).astype(np.float32)
 
-        return action.astype(np.float32)
-
-    # ------------------------------------------------------------------
-    # Introspection
-    # ------------------------------------------------------------------
+    # -- introspection ------------------------------------------------------
 
     def gains_info(self) -> dict[str, Any]:
-        """Return dict summarising controller parameters."""
-        # Eigenvalue analysis of closed-loop system
-        A_cl = self._A_aug - self._B_aug @ self._K
-        eigvals = np.linalg.eigvals(A_cl)
-        dominant_tc = float(1.0 / np.min(np.abs(eigvals.real[eigvals.real < -1e-9])))
-        unstable = int(np.sum(eigvals.real > 1e-9))
-
-        # Per-channel gain norms
-        K_abs = np.abs(self._K)
-        channel_norms = {
-            "pitch": float(np.linalg.norm(K_abs[:, _S_PITCH])),
-            "pitch_rate": float(np.linalg.norm(K_abs[:, _S_PITCH_RATE])),
-            "roll": float(np.linalg.norm(K_abs[:, _S_ROLL])),
-            "roll_rate": float(np.linalg.norm(K_abs[:, _S_ROLL_RATE])),
-            "fwd_vel": float(np.linalg.norm(K_abs[:, _S_FWD_VEL])),
-            "yaw_rate": float(np.linalg.norm(K_abs[:, _S_YAWRATE])),
-            "joint_pos": float(np.linalg.norm(K_abs[:, _S_JOINT_POS_START:_S_JOINT_POS_START+10])),
-            "joint_vel": float(np.linalg.norm(K_abs[:, _S_JOINT_VEL_START:_S_JOINT_VEL_START+10])),
-            "fwd_pos": float(np.linalg.norm(K_abs[:, _S_FWD_POS])),
-            "yaw_err": float(np.linalg.norm(K_abs[:, _S_YAW_ERR])),
-            "pitch_int": float(np.linalg.norm(K_abs[:, _S_PITCH_INT])),
-        }
-
+        d = self._design
         return {
             "controller_type": "FullStateLQRController",
-            "action_path": "PID_servo",
-            "linearization_method": "central_difference_finite_difference",
-            "state_dim": _STATE_DIM,
-            "open_loop_dim": _OPEN_LOOP_DIM,
-            "integrated_dim": _INT_DIM,
-            "control_dim": _CTRL_DIM,
-            "K_shape": list(self._K.shape),
-            "channel_gain_norms": channel_norms,
-            "dominant_time_constant_s": round(dominant_tc, 3),
-            "unstable_modes": unstable,
-            "fd_quality": self._fd_quality,
-            "q_diag": np.diag(self._Q).tolist(),
-            "r_diag": np.diag(self._R).tolist(),
+            "action_path": "direct_torque",
+            "linearization_method": "central_difference_on_full_control_step",
+            "control_rate_hz": round(1.0 / _CONTROL_DT, 1),
+            "design_height_m": self._height_cmd_m,
+            "state_dim": d["state_dim"],
+            "control_dim": int(self._model.nu),
+            "K_shape": list(d["K"].shape),
+            "r_scale": self._r_scale,
+            "equilibrium_base_z_m": round(d["base_z_m"], 6),
+            "equilibrium_residual_force_N": round(d["residual_force_N"], 6),
+            "equilibrium_torque_norm_Nm": round(
+                float(np.linalg.norm(d["ctrl_star"])), 4),
+            "cond_A": d["cond_A"],
+            "rank_A": d["rank_A"],
+            "max_abs_eig_open_loop": d["max_abs_eig_open"],
+            "n_marginal_or_unstable_modes": d["n_marginal_or_unstable_modes"],
+            "stabilizable_pbh": d["stabilizable_pbh"],
+            "max_abs_eig_closed_loop": d["max_abs_eig_closed"],
+            "max_abs_gain": d["max_abs_gain"],
+            "max_torque_rate_nm_s": self._max_torque_rate,
             "model_path": self._model_path,
-            "wheel_vel_limit_rads": self._wheel_vel_limit,
         }
+
+
+# ---------------------------------------------------------------------------
+# Self-check
+# ---------------------------------------------------------------------------
+
+def _self_check() -> None:
+    """Verify the two things the design silently depends on.
+
+    1. The observation-to-state reconstruction agrees with the quantity the
+       Jacobian was differentiated in, ``mj_differentiatePos``.
+    2. The equilibrium is one: the unbalanced force is a small fraction of
+       body weight, and the reduction assertion holds.
+    """
+    root = Path(__file__).resolve().parents[2]
+    xml = root / "assets" / "robot" / "wheeled_biped_real.xml"
+    m = mujoco.MjModel.from_xml_path(str(xml))
+    d = mujoco.MjData(m)
+    key = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_KEY, "standing")
+    mujoco.mj_resetDataKeyframe(m, d, key)
+    qpos_star = d.qpos.copy()
+    keep = kept_state_indices(m.nv)
+
+    ctrl = FullStateLQRController.__new__(FullStateLQRController)
+    ctrl._model = m
+    ctrl._design = {"qpos_star": qpos_star}
+    ctrl._xy_drift = np.zeros(2)
+
+    def worst_error(scale: float) -> float:
+        rng = np.random.default_rng(0)
+        worst = 0.0
+        for _ in range(5):
+            ctrl._xy_drift[:] = 0.0
+            dq_true = rng.normal(0, scale, m.nv)
+            qpos = qpos_star.copy()
+            mujoco.mj_integratePos(m, qpos, dq_true, 1.0)
+            d.qpos[:] = qpos
+            d.qvel[:] = rng.normal(0, 2.5 * scale, m.nv)
+            mujoco.mj_forward(m, d)
+
+            truth = np.zeros(m.nv)
+            mujoco.mj_differentiatePos(m, truth, 1.0, qpos_star, d.qpos)
+
+            # Synthesize the observation BalanceEnv would emit for this state.
+            quat = d.qpos[3:7]
+            qinv = np.array([quat[0], -quat[1], -quat[2], -quat[3]])
+            grav = np.zeros(3)
+            mujoco.mju_rotVecQuat(grav, np.array([0.0, 0.0, -1.0]), qinv)
+            lin_b = np.zeros(3)
+            mujoco.mju_rotVecQuat(lin_b, d.qvel[:3].copy(), qinv)
+            ang_b = np.zeros(3)
+            mujoco.mju_rotVecQuat(ang_b, d.qvel[3:6].copy(), qinv)
+            w, x, y, z = quat
+            yaw = np.arctan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+
+            obs = np.zeros(42)
+            obs[_OBS_GRAVITY] = grav
+            obs[_OBS_LIN_VEL] = lin_b
+            obs[_OBS_ANG_VEL] = ang_b
+            obs[_OBS_JOINT_POS] = d.qpos[7:]
+            obs[_OBS_JOINT_VEL] = d.qvel[6:]
+            obs[_OBS_CUR_HEIGHT] = (d.qpos[2] - _MIN_H) / (_MAX_H - _MIN_H)
+            obs[_OBS_YAW_ERROR] = yaw
+
+            got = ctrl._state_error(obs)
+            want = np.concatenate([truth, d.qvel])[keep]
+            # base xy is integrated, not measured; it is zero on the first step.
+            worst = max(worst, float(np.abs(got[2:] - want[2:]).max()))
+        return worst
+
+    # The reconstruction inverts two small-angle relations (body gravity to
+    # tilt, body-frame to world-frame velocity), so it is exact only to first
+    # order.  What must hold is that the residual is *second* order: halving
+    # the perturbation must quarter the error.  A wrong axis, sign or frame
+    # would leave a first-order residual and halve instead.
+    coarse, fine = worst_error(0.02), worst_error(0.01)
+    ratio = coarse / fine
+    assert 3.5 < ratio < 4.5, (
+        f"obs->state residual is not second order (error ratio {ratio:.2f}, "
+        f"expected ~4): the reconstruction has a first-order error"
+    )
+
+    # Equilibrium and reduction.
+    des = design(m, qpos_star, r_scale=1.0)
+    weight_N = float(m.body_subtreemass[1] * 9.81)
+    assert des["residual_force_N"] < 0.01 * weight_N, (
+        f"not an equilibrium: {des['residual_force_N']:.3f} N unbalanced "
+        f"vs {weight_N:.2f} N body weight"
+    )
+    assert des["rank_A"] == des["state_dim"], "reduced A is rank-deficient"
+    assert des["stabilizable_pbh"], "reduced system is not stabilizable"
+
+    # The design must actually stand at the commanded height across the whole
+    # band.  The shared ``_build_height_ik`` polynomial silently failed this
+    # (0.60, 0.65 and 0.70 m all designed a robot standing at ~0.73 m), which
+    # showed up only as a 7.6 cm height RMSE in evaluation.
+    for h in (_MIN_H, 0.50, 0.55, 0.60, _MAX_H):
+        pose = standing_pose(m, h)
+        assert abs(pose[2] - h) < 1e-4, (
+            f"standing_pose({h}) stands at {pose[2]:.5f} m"
+        )
+        q_eq, _, res = standing_equilibrium(m, pose)
+        assert res < 0.05 * weight_N, (
+            f"equilibrium at {h} m left {res:.3f} N unbalanced"
+        )
+        assert abs(q_eq[2] - h) < 5e-3, (
+            f"equilibrium at {h} m drifted to {q_eq[2]:.5f} m"
+        )
+    print(f"height reference exact and equilibrium solved over "
+          f"[{_MIN_H}, {_MAX_H}] m")
+
+    print(f"obs->state reconstruction is second order "
+          f"(err {coarse:.2e} -> {fine:.2e} on halving, ratio {ratio:.2f})")
+    print(f"equilibrium: base z = {des['base_z_m']:.6f} m, "
+          f"residual {des['residual_force_N']:.4f} N of {weight_N:.2f} N weight")
+    print(f"reduced system: {des['state_dim']} states, "
+          f"cond(A) = {des['cond_A']:.3e}, rank {des['rank_A']}, "
+          f"max|lambda| = {des['max_abs_eig_open']:.6f}, stabilizable")
+    print("all checks passed")
+
+
+if __name__ == "__main__":
+    _self_check()

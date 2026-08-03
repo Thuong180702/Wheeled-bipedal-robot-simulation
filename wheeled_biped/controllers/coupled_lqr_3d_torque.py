@@ -66,6 +66,11 @@ _OBS_YAW_ERROR = 41
 _G = 9.81
 _ROBOT_MASS_KG = 8.1
 
+# Same empirical hip-roll coupling as coupled_lqr_3d, before the 1/(m*l) scaling
+# that converts it from an angle input to a torque input. Overridable via the
+# `baseline_coupled_lqr_torque.b_roll_hip` config key for sensitivity sweeps.
+_B_ROLL_HIP_NOM = -5.0
+
 
 # ---------------------------------------------------------------------------
 # LQR computation (direct torque plant — no PID servo lag)
@@ -76,6 +81,7 @@ def _compute_coupled_lqr_gains_dt(
     r_wheel: float = _WHEEL_RADIUS_M,
     q_diag: tuple[float, ...] = (10.0, 1.0, 3.0, 0.3, 3.0, 0.3),
     r_diag: tuple[float, ...] = (0.005, 0.002),
+    b_roll_hip: float = _B_ROLL_HIP_NOM,
 ) -> np.ndarray:
     """Compute coupled 6-state LQR gains for DIRECT TORQUE plant.
 
@@ -113,7 +119,7 @@ def _compute_coupled_lqr_gains_dt(
     # τ_hip_roll → roll_accel: -5.0/(m_tot * l_com) [empirical, same as coupled_lqr_3d]
     b_p_w = -1.0 / (m_tot * l_com ** 2)   # wheel torque → pitch accel
     b_v_w = r_wheel / m_tot                # wheel torque → fwd accel
-    b_r_h = -5.0 / (m_tot * l_com)         # hip roll torque → roll accel (restoring)
+    b_r_h = b_roll_hip / (m_tot * l_com)   # hip roll torque → roll accel (restoring)
 
     B = np.array([
         [0.0,    0.0],
@@ -171,6 +177,7 @@ class CoupledLQR3DTorqueController:
         kd_leg: tuple[float, ...] = (3.0, 2.0, 4.0, 4.0, 0.0, 3.0, 2.0, 4.0, 4.0, 0.0),
         kp_yaw: float = 2.5,
         kd_yaw: float = 0.25,
+        b_roll_hip: float = _B_ROLL_HIP_NOM,
     ) -> None:
         self._model_path = str(Path(model_path).resolve())
         self._config = config or {}
@@ -181,7 +188,9 @@ class CoupledLQR3DTorqueController:
             r_wheel=_WHEEL_RADIUS_M,
             q_diag=lqr_q,
             r_diag=lqr_r,
+            b_roll_hip=b_roll_hip,
         )
+        self._b_roll_hip = float(b_roll_hip)
 
         # ── Torque limits ─────────────────────────────────────────────────
         try:
