@@ -76,7 +76,7 @@ Wheeled biped robot, conditionally-gated control, anchored standing, proximity-g
 \label{sec:intro}
 % ============================================================
 
-Wheeled biped robots need millimeter-level standing precision, omnidirectional push recovery, and terrain adaptation---but no single classical controller integrates all three: LQR handles balance~\cite{klemm2019ascento}, WBC posture~\cite{klemm2020lqrwbc}, MPC terrain~\cite{skater2024}, and RL locomotion~\cite{hwangbo2019rl}.
+Wheeled biped robots need millimeter-level standing precision, omnidirectional push recovery, and terrain adaptation---but no single classical controller integrates all three: LQR handles balance~\cite{klemm2019ascento}, WBC posture~\cite{klemm2020lqrwbc}, and MPC terrain~\cite{skater2024}; locomotion is then reached for separately again, through learned policies~\cite{hwangbo2019rl}.
 
 The difficulty is fundamental: lowering $k_p$ widens the capture basin at the cost of balance stiffness; omitting integral action leaves a \SI{1.3}{Nm} equilibrium bias that sustains a persistent, predominantly \emph{sagittal} limit cycle regardless of $k_p$ (measured at $N{=}10$: \SI{69.7}{mm} peak-to-peak sagittally against \SI{13.4}{mm} laterally, \SI{49.1}{mm} planar RMS from the commanded pose)---the oscillation lies on the one axis the wheels can drive, which is both why it persists and why it is the axis every mechanism in this paper is aimed at---yet a global integral winds up during pushes.
 
