@@ -41,6 +41,11 @@
 }
 \usepackage[numbered]{bookmark}
 
+% url.sty ships a stretchable inter-character glue; in a 234 pt justified
+% column that pulls a long repository URL apart into visible gaps. xurl
+% already permits a break at every character, so no stretch is needed.
+\Urlmuskip=0mu\relax
+
 % Figures live one level up, alongside the IEEE version; the journal logos
 % used by the class page style live next to this file.
 \graphicspath{{../}{logos/}}
@@ -84,6 +89,17 @@
 % first set in. Give the line breaker a little extra slack so that unbreakable
 % tokens (\path{}, \SIrange{}) do not force overfull lines.
 \setlength{\emergencystretch}{3em}
+
+% Float placement. The source was set for a 252 pt IEEE column; the journal's
+% is 234 pt, so several tables grow past the height a top-only float can
+% occupy. Without a float page in the allowed positions LaTeX defers such a
+% float indefinitely and drops it at the end of the document, silently. Allow
+% h/b/p everywhere and raise the per-page float counts so the queue drains
+% near the text that cites it.
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{5}
+\setcounter{dbltopnumber}{3}
 
 \renewcommand{\textfraction}{0.1}
 \renewcommand{\topfraction}{0.9}
@@ -225,7 +241,7 @@ the interval $[0.254, 0.554]\,$m, i.e.\ \SI{10}{cm} beyond the calibrated band a
 each end. This $\pm\SI{10}{cm}$ extrapolation bound, and not a $\pm\SI{5}{cm}$
 one, is what the per-leg height split (\S\ref{sec:terrain}) operates against.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/annotated_robot_joints.png}
     \caption{Robot joint layout with world coordinate frame (right-handed, Z up). In the model as built, both wheel axles lie along world $X$ and the two wheel links are separated by \SI{0.271}{m} along $X$; the rolling---and therefore sagittal---direction is world $Y$, and world $X$ is the lateral (track) axis. All axis-resolved results in this paper follow that convention, verified four independent ways in Sec.~\ref{sec:standing}. The CoM is located at the torso geometric center. Each leg: hip roll (HR), hip yaw (HY), hip pitch (HP), knee (KN), wheel (WH).}
@@ -275,7 +291,7 @@ Second, the gating variables are not control errors but physical quantities of t
 Third, ACC is not cascade control~\citep{cascade_standard}: there is no inner/outer loop hierarchy and no setpoint is passed between controllers.
 The contribution is therefore the \emph{synthesis}---which gating surfaces, on which variables, with which asymmetry---not the blending mechanism.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/acc_architecture.png}
     \caption{ACC two-channel torque assembly. Physical conditions gate each component via continuous smoothstep functions (dashed).}
@@ -376,7 +392,7 @@ The fast-attack/slow-release envelope jumps to $1$ only when oscillation truly d
 EMA$_0{=}0$ biases $g_{\text{env}}{\approx}1$ for $\sim$\SI{7.5}{s} at startup, decaying as velocity noise accumulates.
 Measurements use \SIrange{3}{5}{s} settle (see Table captions); hardware should initialize $\text{EMA}_0{=}1.0$.
 
-\begin{figure*}[t]
+\begin{figure*}[tp]
     \centering
     \includegraphics[width=\linewidth]{figures/gate_activation.pdf}
     \caption{Gate activation during a \SI{90}{N} lateral (world $+x$) push-recovery cycle (\SI{100}{Hz} control). \textbf{Top:} $|v_{\text{sag}}|$ and asymmetric EMA envelope; dashed lines mark the \SIrange{0.25}{0.50}{m/s} quiet-stance band. \textbf{Middle:} Individual gate states. \textbf{Bottom:} Composite damping boost $g_{\text{boost}}$. Grey shading: \num{7}-step push window. The three panels are the empirical basis for finding (iii) of \S\ref{sec:idle_mechanism}: $g_{\text{prox}}$ and $g_{\text{env}}$ both sit pinned at their quiet-stance values before the impulse and after the ringdown, which is why ablating either reproduces ACC bit-for-bit at idle, and why only a disturbance experiment can measure their contribution.}
@@ -509,7 +525,7 @@ leveling error and compresses the flat leg. Off-step, the trim decays to zero
 with a \SI{1}{s} time constant.
 
 % Platform comparison table — qualitative, not binary
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \footnotesize
 \caption{Capability comparison across wheeled biped platforms. ``---'' = not reported in cited work. Idle precision and push force are not standardized benchmarks; quantitative cross-platform comparison is limited by metric heterogeneity.}
@@ -579,7 +595,7 @@ Terrain &
 
 Table~\ref{tab:parameters} lists core parameters; the full set (50+ gains) is available in the supplementary material.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \footnotesize
 \caption{Core numerical parameters for the ACC balance controller. All values in SI units unless noted otherwise.}
@@ -726,7 +742,7 @@ measures the controller's ability to \emph{stay} put, not to \emph{come back}. T
 latter is measured by the push experiments of Sec.~\ref{sec:push}. This distinction
 turns out to matter for attributing the mechanism (Sec.~\ref{sec:idle_mechanism}).
 
-\begin{table*}[t]
+\begin{table*}[tp]
 \centering
 \caption{Idle standing precision across the full ablation ladder. All rows re-measured under the single protocol of Sec.~\ref{sec:standing}; values are mean${\pm}$SD over $N{=}10$ trials. See the note below the table for column definitions.}
 \label{tab:standing}
@@ -995,7 +1011,7 @@ protocols.}
 
 \emph{Single-bearing protocol.} Several auxiliary experiments---the robustness sweep (Table~\ref{tab:robustness}), the rate-limit sweep, the ringdown and gate-activation traces (Figs.~\ref{fig:gate_activation},~\ref{fig:ringdown}) and the compound-disturbance protocol (Table~\ref{tab:compound})---apply a single impulse along world $+x$ rather than repeating the full \num{8}-bearing sweep at eightfold cost. That bearing is \emph{lateral} and below median: the polar sweep places $\SI{0}{\degree}$ at $\SI{95.6}{N}$, third-weakest of the eight and \SI{11.1}{N} below $F_{\text{med}}$. Those experiments are therefore conservative probes of ACC's disturbance margin, and they are labelled lateral throughout rather than ``forward.'' The omnidirectional figures ($F_{\min}$, $F_{\text{med}}$) characterize the full envelope.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \footnotesize
 \caption{Factorial ablation of ACC components: push-recovery and ringdown metrics. Clean sensors, all rows $N{=}10$, mean${\pm}$std. See the note below the table for definitions and significance tests.}
@@ -1039,7 +1055,7 @@ Table~\ref{tab:push_ablation} reports the factorial ablation.
 Additively: L1 (homing) adds \SI{4.8}{N} over L0 ($p{<}\num{1e-9}$); L2 (global integral) adds nothing over L1 ($-\SI{0.1}{N}$, n.s.); L3 (full anchor) adds \SI{7.5}{N} over L2 ($p{<}\num{1e-6}$). The L2$\rightarrow$L3 step bundles four mechanisms at once, and the push metrics alone cannot separate them; Sec.~\ref{sec:idle_mechanism} performs that separation on the idle side. What the push data do show is that the proximity gate contributes nothing to push \emph{margin} on its own (L2$\rightarrow$L2.5, $+\SI{0.5}{N}$, n.s.), consistent with its role being windup prevention rather than capture-basin enlargement, and that the full anchor recovers a margin advantage over the ungated integral ($+\SI{7.5}{N}$) while simultaneously being the only configuration in the ladder that settles.
 Subtractively, the striking result is how flat the ablation is: every single-mechanism removal except the pitch gate leaves $F_{\min}$ within \SI{1.8}{N} of ACC, none of them significantly (\SIrange{0.087}{0.48}{} uncorrected $p$). Capture basin is set by the anchor as a whole---the L2.5$\rightarrow$L3 step---and not by any one of its four gates. This includes S0: gain scheduling is unnecessary, since fixing $k_p{=}50$ costs nothing measurable ($-\SI{1.3}{N}$, n.s.). It also includes the damping boost, whose value lies elsewhere. S2 is the dominant idle-precision mechanism and acts sagittally: removing it degrades sagittal repeatability sixteen-fold (\SI{0.294}{mm}${\rightarrow}\SI{4.772}{mm}$) while leaving lateral repeatability statistically unchanged (\SI{0.703}{mm} vs.\ ACC's \SI{0.730}{mm}, Table~\ref{tab:standing}), and its push margin is indistinguishable from ACC's ($\SI{80.8}{N}$ vs.\ \SI{82.3}{N}, $p{=}0.087$). The boost therefore buys sagittal steadiness and settling, not capture basin. The one mechanism the push data \emph{do} isolate is the pitch gate: removing it (S5) leaves the robot unable to survive the \SI{10}{N} floor of the search in any of \num{80} trials, and additionally causes \num{10}/\num{10} falls at pure idle. S3 (asymmetric EMA) and S2 are each individually required for ringdown.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/polar_push_envelope.pdf}
     \caption{Omnidirectional push envelope of ACC. This is the \emph{same} run
@@ -1088,7 +1104,7 @@ Subtractively, the striking result is how flat the ablation is: every single-mec
     \label{fig:push_polar}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/ringdown_time_series.pdf}
     \caption{Post-push recovery (\SI{90}{N} lateral, world $+x$, at $t{=}\SI{3}{s}$). \textbf{Top:} attitude angles; stabilization within \SI{2}{s}. \textbf{Bottom:} planar CoM position, which separates the two axes cleanly. The lateral push couples through roll into a large \emph{sagittal} excursion (\SI{-251}{mm} peak); the anchor drives that axis back to $\SI{+1.37}{mm}$ of home and holds it there at \SI{0.018}{mm} SD over the final \SI{2}{s}---a \SI{99.5}{\percent} recovery. On the pushed lateral axis, which has no actuator authority (Sec.~\ref{sec:standing}), the \SI{200}{mm} peak excursion decays only to a permanent $\SI{+36.2}{mm}$ offset, \SI{18}{\percent} of the peak. The contrast between the two traces is the clearest single illustration of what the anchor does and where it does not act.}
@@ -1214,7 +1230,7 @@ with \path{--seeds}; raw output \path{outputs/oblique_regime/diag30_fine.txt} an
 \SI{3}{mrad} and the root by \SI{1.5}{mm}, so the eight trials per cell sample
 initial conditions on an otherwise deterministic course.}
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \footnotesize
 \caption{Oblique ledge descent: settle count out of \num{8} independent initial
@@ -1243,7 +1259,7 @@ Produced by \path{scripts/ramp_step_tests.py --seeds}; raw output
 \path{outputs/oblique_regime/diag\{30,45\}_fine.txt}.
 \end{table}
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \caption{Contact-loss recovery and per-leg terrain adaptation, with the
 corresponding mechanism ablations. All at \SI{400}{Nm/s} rate limit,
@@ -1309,7 +1325,7 @@ height split is required for the curb task at every tested height, whereas the
 flight override is a variance-bounding refinement that only pays at the top of
 the drop envelope.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/curb_straddle.pdf}
     \caption{One-wheel curb (\SI{20}{cm}). With the per-leg height split:
@@ -1336,7 +1352,7 @@ To establish that ACC is not merely a tuned linear controller, we compare six cl
 
 Direct-torque LQR removes the servo path, eliminating both the PID gains and the measured actuation lag. PI+AW adds integral anti-windup on forward position to DT-LQR---the standard engineering fix for a DC position bias, with windup protection. The anti-windup logic is verified independently by \texttt{scripts/validate\_lqr\_aw.py}. The PPO run serves a different purpose from the six classical controllers. It is included not to benchmark the state of the art in reinforcement learning, but to characterize how hard unaided model-free search is on the coupled pitch--height state space of a 10-DOF wheeled biped, and thereby to make explicit the value of the structured gate design ACC supplies in its place. Every gain used for the six classical baselines is listed in Table~\ref{tab:baseline_gains}; we give them in full because the central claim of this subsection is a \emph{negative} one---that no member of this family stands---and a negative result is only as strong as the tuning behind it.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \footnotesize
 \caption{Baseline gain derivation. All weights follow Bryson's rule~\citep{bryson1975optimal}; see the note below the table.}
@@ -1367,7 +1383,7 @@ Servo lag & \SI{0.25}{s}, measured as the wheel-velocity \SI{90}{\percent} rise 
 Bryson's rule throughout ($Q_{ii}{=}1/x_{i,\max}^{2}$, $R{=}1/u_{\max}^{2}$); the \num{46}-configuration retuning sweep described in the text confirmed that no retuning within these ranges changes the outcome. The 4-state model is (pitch, pitch-rate, forward velocity, forward position); the 6-state model adds (roll, roll-rate). ``DT'' denotes direct torque, i.e.\ the PID servo path removed and $\tau_s{=}0$.
 \end{table}
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \footnotesize
 \caption{Classical baselines and the preliminary PPO reference vs.\ ACC, clean sensors. All rows at \SI{100}{Hz} control except the PPO reference, which is reported at the \SI{50}{Hz} rate its policy was trained at. Parenthesised $N$ is the episode count. See the note below the table.}
@@ -1413,7 +1429,7 @@ Neither servo-lag removal nor preliminary PPO training (5.4M steps, single seed)
 
 Table~\ref{tab:lqr_baselines} reports every classical baseline at ACC's \SI{100}{Hz}, so the headline comparison carries no control-bandwidth differential. Those gains were tuned for a \SI{50}{Hz} loop, however, and a reader is entitled to ask whether running them off their design rate is what produces the gap. Table~\ref{tab:rate_matched} answers that by giving both rates side by side.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \footnotesize
 \caption{Every classical controller at both control rates: its own \SI{50}{Hz} design rate and ACC's \SI{100}{Hz} (the rate used in Table~\ref{tab:lqr_baselines}). Physics is \SI{500}{Hz} throughout; only the substeps per control step change. See the note below the table.}
@@ -1516,7 +1532,7 @@ surrounding the solver is un-optimized Python, and production C++ whole-body
 controllers run at \SIrange{400}{1000}{Hz} on embedded hardware.
 The assist is excluded on control grounds alone: it degrades every stability metric but one wherever it is active, and does nothing wherever it is not.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \caption{Three-arm counterfactual under cloned initial conditions: ACC alone, standalone QP-WBC, and WBC blended as an assist on ACC with the authority gate disabled and enabled. All arms use the verified WBC implementation (Appendix~\ref{sec:wbc_supp}).}
 \label{tab:wbc_three_arm}
@@ -1582,7 +1598,7 @@ What ACC does not tolerate is the \emph{conjunction}: medium noise together with
 That conjunction is the binding constraint on the design, and \S\ref{sec:parking_supp} shows it is what prices the one gain change that would otherwise remove ACC's parking offset.
 Idle repeatability degrades from \SI{0.43}{mm} (clean) to \SI{30.82}{mm} under medium sensor noise at zero delay---a \num{71}-fold loss, and the sharpest single sensitivity in the design. The mechanism is the one described above: the envelope gate cannot separate sensor noise from real motion, so it releases the integral and re-engages it repeatedly. This locates the boundary of the anchored regime precisely. Below it the anchor delivers the precision of Table~\ref{tab:standing}; at medium noise it no longer pays for itself, the un-anchored L0 baseline holding $R_{\text{lat}}=\SI{3.675}{mm}$ on the same axis. The design requirement that follows is explicit and testable: ACC is specified against a filtered velocity estimate, which is a requirement on the state estimator rather than a limit on the controller. Measurement conventions for this table: the idle column is \emph{lateral} (world $x$), not the sagittal axis of Table~\ref{tab:standing}, and uses a \SI{3}{s} rather than \SI{5}{s} settling allowance, so its clean reference is the \SI{0.43}{mm} entry and not ACC's lateral $R_{\text{lat}}=\SI{0.730}{mm}$ (with EMA$_0{=}0$ an earlier window captures more of the strongly-anchored transient); it averages surviving trials only, so the falls column is read first; and every cell is measured identically, so the degradation \emph{factors} are the quantity this table establishes.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \caption{Robustness to sensor noise and actuator delay, $N{=}20$ per cell. Falls: trials terminated by a fall, out of $N$. Idle RMS: lateral (world $x$) CoM std.\ over \SI{20}{s} after \SI{3}{s} settle (EMA$_0{=}0$ transient), \emph{surviving trials only}. $F_{\max}$: binary-search lateral (world $+x$) push, $\pm\SI{5}{N}$ tolerance, search floor \SI{10}{N}. Delay is quantised to the control period here; the axis is resolved five times more finely in Table~\ref{tab:delay_cliff}.}
 \label{tab:robustness}
@@ -1639,7 +1655,7 @@ The measured price is small at zero delay and real under delay. Idle lateral RMS
 
 We report ACC-DH as an evaluation variant and do \emph{not} adopt it. The constant it changes is the ungated damping that also governs driving acceleration and settling, and its cost on the driving, terrain and flight axes has not been re-measured; the \num{48}-scenario qualification suite, not a single-axis sweep, is what decides a default. The claim made here is narrower and sufficient for the limitation it addresses: the delay knee is movable by tuning, at negligible cost to undelayed quiet stance and with a measured \emph{gain} under noise---but it buys push margin only, and leaves the \SIrange{14}{16}{ms} standing threshold where it was.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \caption{Actuator-delay resolution sweep, clean sensing. Transport delay applied per physics substep (\SI{2}{ms} at \SI{500}{Hz}) rather than per control step, giving \SI{2}{ms} resolution. $F_{\max}$: binary-search lateral push, \num{7} iterations over \SIrange{10}{160}{N}. ACC: promoted default. ACC-DH: delay-hardened variant, sagittal velocity damping \SI{22.5}{}${\rightarrow}\SI{45}{Nm/(m/s)}$, reported but \emph{not} adopted. Clean sensing is deterministic ($\sigma{=}\num{0.0}$ in every multi-seed cell, $N$ up to \num{5}), so single-seed cells are exact.}
 \label{tab:delay_cliff}
@@ -1671,7 +1687,7 @@ Produced by \path{scripts/delay_cliff_resolution.py} and
 \path{outputs/robustness_sweep/delay_cliff/} and \path{.../delay_retune/}.
 \end{table}
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \caption{One-knob gain screen at \SI{8}{ms} actuator delay, clean sensing, just past the shipped controller's knee. Each column sweeps a single profile constant with all others held at their promoted values; \textbf{bold} marks the shipped value. Same push protocol and bisection bracket as Table~\ref{tab:delay_cliff}, so cells are directly comparable with it. Clean sensing is deterministic, $N{=}1$.}
 \label{tab:delay_screen}
@@ -1768,7 +1784,7 @@ trial's own settled posture, which makes the $\Delta h{=}0$ row bit-identical to
 the static control.
 Table~\ref{tab:compound} reports the result.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \caption{Compound disturbance: lateral (world $+x$) push delivered at the midpoint of a
 \SI{1}{s} commanded height ramp $\Delta h$ about the \SI{0.404}{m} nominal
@@ -1898,6 +1914,9 @@ The controller, the MuJoCo model, every evaluation script referenced above, and 
 \appendix
 \makeatletter
 \renewcommand{\thesection}{\Alph{section}}
+\renewcommand{\thesubsection}{\Alph{section}.\arabic{subsection}}
+\renewcommand{\thesubsubsection}%
+  {\Alph{section}.\arabic{subsection}.\arabic{subsubsection}}
 \titleformat{\section}[hang]
   {\@normalspace\sffamily\large\bfseries\color{main}\raggedright}
   {Appendix~\thetitle.}{.5em}{}{}
@@ -1948,7 +1967,7 @@ the WBC-only arm at four weightings over an identical scenario set. The spread
 between best and worst is \num{0.1} percentage points of fallen fraction and
 \SI{0.03}{s} of upright time; all four collapse.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{WBC-only arm at four task weightings (\texttt{random\_push}, nominal height, seeds 201--205, identical scenarios). No weighting rescues the baseline.}
 \label{tab:wbc_taskweight}
@@ -1985,7 +2004,7 @@ On the one variant that remains open, the four state-dependent factors multiply
 to \num{0.461}, and the per-joint agreement and role terms reduce the admitted
 authority by a further ${\sim}\num{19}\times$, to $\bar\alpha{=}\num{0.0061}$.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Assist-gate decomposition. Top: the commanded-height term across the scenario matrix. Bottom: measured per-step gate factors on the one variant where the gate opens.}
 \label{tab:wbc_gate}
@@ -2032,7 +2051,7 @@ outcome. The checks are executable
 (\path{scripts/verify_wbc_audit_fixes.py}) and their raw output is archived at
 \path{outputs/wbc_audit_fix_verification.json}.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Verification of the WBC baseline implementation. Each row is an executable check run against the implementation used for every result in \S\ref{sec:wbc}; all four pass.}
 \label{tab:wbc_verification}
@@ -2209,7 +2228,7 @@ design and the outer loop's integral channel is disabled, so a constant
 disturbance torque must be paid for with a constant position error. The
 \SI{27}{mm} is the price of that design choice, in millimetres per newton-metre.
 
-\begin{figure}[!t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/parking_offset.pdf}
     \caption{Static torque balance of the sagittal parking offset.
