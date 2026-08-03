@@ -1567,7 +1567,13 @@ _ANCHOR_STATE_FIELDS = (
     "anchor_activity_ema",  # m/s — slow EMA of |sag_vel| (quiet-stance detector)
 )
 K2_JAX_STATE_FIELDS = K2_JAX_STATE_FIELDS + _ANCHOR_STATE_FIELDS
-K2_JAX_STATE_SIZE: int = len(K2_JAX_STATE_FIELDS)  # 845
+# Terrain-split slow reference (+1) — separates "climbing a step" from
+# "settled astride a step"; see the heading restore in k2_jax_controller_step.
+_TERRAIN_STATE_FIELDS = (
+    "terrain_split_slow",   # m — EMA of the commanded per-leg height split
+)
+K2_JAX_STATE_FIELDS = K2_JAX_STATE_FIELDS + _TERRAIN_STATE_FIELDS
+K2_JAX_STATE_SIZE: int = len(K2_JAX_STATE_FIELDS)  # 846
 
 # Index constants for core state (unchanged)
 _S_NOTCH_X1, _S_NOTCH_X2, _S_NOTCH_Y1, _S_NOTCH_Y2 = 0, 1, 2, 3
@@ -1601,6 +1607,8 @@ _S_HEADING_HY_INTEGRAL = 842
 # Anchor position integral + activity EMA state indices (843-844)
 _S_ANCHOR_INTEG_TAU = 843
 _S_ANCHOR_ACT_EMA = 844
+
+_S_TERRAIN_SPLIT_SLOW = 845
 
 
 def pack_state_k2(
@@ -2722,11 +2730,33 @@ def k2_jax_drift_controller(
         xc = jnp.clip(x, 0.0, 1.0)
         return xc * xc * (3.0 - 2.0 * xc)
 
+    # Straddle-roll allowance. A COMMANDED per-leg height split means the robot
+    # is knowingly standing across a lateral ground step, and the quasi-static
+    # torso roll the split cannot fully cancel is NOT loss of stability. Without
+    # this, the 1→5 deg roll term read the 2.5-3.7 deg straddle roll of a 20 cm
+    # one-wheel curb as a fall, held stability_gate at 0.00 for the whole
+    # crossing, and since heading_gate = stability_gate * height_gate_heading
+    # under teleop, the heading hold was switched off exactly while straddling.
+    # Nothing then damped the yaw disturbance from mounting the ramp; the error
+    # ran to the shaper's 0.30 rad leash and the elevated wheel walked off the
+    # 36 cm slab 1.26 m into a 2 m curb (measured).
+    # Reuses the terrain-asymmetry gate idiom of the wheel loop (same 3→10 cm
+    # thresholds): flat ground → split 0 → band 0 → bit-identical behavior.
+    _h_l = input_flat[_I_LEG_HEIGHT_LEFT]
+    _h_r = input_flat[_I_LEG_HEIGHT_RIGHT]
+    _split = jnp.where((_h_l > 0.0) & (_h_r > 0.0),
+                       jnp.abs(_h_l - _h_r), 0.0)
+    # Band caps at the roll term's own upper threshold, so on a curb the window
+    # shifts 1→5 deg up to 6→10 deg: the 3.7 deg straddle passes, the 14.9 deg
+    # roll-over still shuts the gate.
+    _roll_band = 0.087 * _smoothstep01((_split - 0.03) / (0.10 - 0.03))
+    _roll_excess = jnp.maximum(roll_abs - _roll_band, 0.0)
+
     # Stability gate: 1.0 = perfectly stable, 0.0 = falling
     stability_gate = (
         _smoothstep01((0.21 - pitch_abs) / (0.21 - 0.035))           # pitch 2→12 deg
         * _smoothstep01((0.262 - pitch_rate_abs) / (0.262 - 0.035))  # pitch_rate 2→15 deg/s
-        * _smoothstep01((0.087 - roll_abs) / (0.087 - 0.017))        # roll 1→5 deg
+        * _smoothstep01((0.087 - _roll_excess) / (0.087 - 0.017))    # roll 1→5 deg
         * contact_quality                                               # already 0→1
     )
 
@@ -3064,6 +3094,20 @@ def k2_jax_controller_step(
     # preventing the speed collapse that triggers surge/brake cycles.
     # Positive pitch_rate (nose-up→deceleration) increases forward wheel cmd.
     _pitch_wheel_ff = 1.5 * pitch_rate_eff * _terrain_gate  # rad/s wheel cmd adj
+    # Settled-terrain detector: is the robot CROSSING onto/off a step, or is it
+    # already standing astride one?  Measured on the 20 cm curb, |d(split)/dt|
+    # is 0.05-0.13 m/s while a wheel climbs and <=0.016 m/s (typically
+    # 0.006-0.010) once astride. Compared against an EMA of the split rather
+    # than a raw step difference so the per-step signal is smoothed; an EMA with
+    # tau ~= 0.2 s lags a ramp by rate*tau, i.e. ~0.020 m crossing vs ~0.002 m
+    # astride — 10x separation. Zero on flat ground and through every terrain
+    # transient, so it can only ever relax behaviour in the settled case.
+    _split_slow = (0.95 * state_flat[_S_TERRAIN_SPLIT_SLOW]
+                   + 0.05 * _terrain_asymmetry)
+    state_flat = state_flat.at[_S_TERRAIN_SPLIT_SLOW].set(_split_slow)
+    _terrain_moving = _jax_smoothstep01(
+        (jnp.abs(_terrain_asymmetry - _split_slow) - 0.004) / (0.012 - 0.004))
+    _terrain_settled = _terrain_gate * (1.0 - _terrain_moving)
     # Continuous max_position_tau scheduling — body-relative height.
     max_pos_tau = k2_jax_scheduled_k_position(
         pitch_schedule_h,
@@ -3593,7 +3637,22 @@ def k2_jax_controller_step(
     _pitch_abs = jnp.abs(effective_pitch_x)
     _pitch_rate_abs_drift = jnp.abs(pitch_rate_eff)
     _roll_abs = jnp.abs(roll_y)
-    _com_z_vel_abs_drift = jnp.abs(com_z - schedule_h) * 100.0  # cm/s → m/s
+    # Height-tracking error feeding the drift/heading height gates, in cm.
+    # While SETTLED astride a step the reference is the per-leg MEAN height, not
+    # the flat command: the terrain adapter deliberately shortens the uphill
+    # leg, so body height above mean ground legitimately sits ~7 cm below
+    # schedule_h. Measured against schedule_h that reads as a 9.5 cm tracking
+    # error and decays the heading gate to 0.09, throttling yaw hold to ~10%
+    # authority for the whole crossing. pitch_schedule_h is the same quantity
+    # the pitch stack already uses for this reason.
+    # Only while settled: during a crossing (climbing a curb, or driving off a
+    # ledge) these gates closing is protective — applying the corrected
+    # reference there keeps drift authority alive over an edge and drops the
+    # robot (measured: diag_off45 PASS -> fall@7.9 s).
+    # Flat ground is unchanged twice over: pitch_schedule_h equals schedule_h
+    # identically when no per-leg height is commanded, and _terrain_settled = 0.
+    _href_drift = schedule_h + _terrain_settled * (pitch_schedule_h - schedule_h)
+    _com_z_vel_abs_drift = jnp.abs(com_z - _href_drift) * 100.0
 
     _tau_drift_l, _tau_drift_r, state_flat, _drift_diag = k2_jax_drift_controller(
         state_flat, input_flat, params_flat,
@@ -3612,9 +3671,21 @@ def k2_jax_controller_step(
     # +11°→-85° in 0.2 s).  Gate out the antisymmetric component on
     # terrain so only symmetric velocity/position damping remains.
     # Flat/ramp (_terrain_gate=0): byte-identical.
+    #
+    # ...but that argument only holds while a wheel is CLIMBING. Once the
+    # robot is settled astride the step, both wheels sit on solid horizontal
+    # ground with normal traction and the differential is safe again — and
+    # necessary: with it suppressed for the whole crossing the robot had no
+    # heading authority at all (the hip-yaw stabiliser is ~0.02 Nm here and
+    # its twist gate closes as the yaw error grows), so the yaw disturbance
+    # from mounting a 20 cm ramp ran to the shaper's 0.30 rad leash and the
+    # elevated wheel walked off the slab 1.26 m into a 2 m curb.
+    # Discriminator is the settled-terrain detector computed with the height
+    # scheduling above (|d(split)/dt|: 0.05-0.13 m/s climbing vs <=0.016 m/s
+    # astride, measured on the 20 cm curb).
     _drift_sym = 0.5 * (_tau_drift_l + _tau_drift_r)
     _drift_anti = 0.5 * (_tau_drift_l - _tau_drift_r)
-    _drift_anti_gated = _drift_anti * (1.0 - _terrain_gate)
+    _drift_anti_gated = _drift_anti * (1.0 - _terrain_gate * _terrain_moving)
     _tau_drift_l_gated = _drift_sym + _drift_anti_gated
     _tau_drift_r_gated = _drift_sym - _drift_anti_gated
 

@@ -32,6 +32,32 @@ TOLERANCE = 5.0
 PROFILE = "K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR"
 
 
+# Video-only: hold the push arrow this long after the impulse ends. The impulse
+# is 7 control steps (70 ms) — invisible at any playback speed — so the arrow is
+# held the way the teleop viewer holds it, but drawn translucent once the force
+# is off so a held arrow is never mistaken for a sustained load.
+ARROW_HOLD_STEPS = int(2.0 / DT)
+
+
+def _draw_push_arrow(scene, torso_xpos, direction, force_N, live):
+    """Red arrow striking the torso, matching the teleop viewer overlay
+    (run_k2_jax_realtime._draw_push_arrow): length scales with force, the head
+    lands on the torso and the tail points back along the incoming force."""
+    if scene.ngeom >= scene.maxgeom:
+        return
+    g = scene.geoms[scene.ngeom]
+    length = float(np.clip(force_N * 0.006, 0.15, 0.6))
+    head = np.asarray(torso_xpos, dtype=np.float64)
+    tail = head - np.asarray(direction, dtype=np.float64) * length
+    rgba = np.array([1.0, 0.25, 0.1, 1.0 if live else 0.35], np.float32)
+    mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_ARROW,
+                        np.zeros(3), np.zeros(3), np.zeros(9), rgba)
+    # Shaft slightly fatter than the teleop viewer's 0.02: these clips are
+    # 640x480 at a 2.6 m camera distance, where 0.02 reads as a hairline.
+    mujoco.mjv_connector(g, mujoco.mjtGeom.mjGEOM_ARROW, 0.03, tail, head)
+    scene.ngeom += 1
+
+
 class PushSim:
     def __init__(self, profile=PROFILE):
         self.model = mujoco.MjModel.from_xml_path(str(P.get_model_path()))
@@ -81,13 +107,22 @@ class PushSim:
             for _ in range(SUBSTEPS):
                 mujoco.mj_step(self.model, self.data)
 
-    def run_push(self, force_N, angle_deg):
+    def run_push(self, force_N, angle_deg, frames=None, renderer=None,
+                 cam=None, stride=2, steps=None):
+        """Return True if the robot survived the push.
+
+        Pass `frames`/`renderer`/`cam` to also capture (rgb, t, force, pitch)
+        tuples for a video. Rendering does not touch the protocol, so a
+        recorded run is the same trial the sweep tables report. `steps` caps
+        the rollout for shorter clips; the sweep itself never sets it.
+        """
         angle_rad = np.deg2rad(angle_deg)
         force = np.array(
             [force_N*np.cos(angle_rad), force_N*np.sin(angle_rad), 0.0])
+        n = steps if steps is not None else POST_PUSH_STEPS + PUSH_DUR
 
         # Push at t=0 of this method (immediately after settle)
-        for step in range(POST_PUSH_STEPS + PUSH_DUR):
+        for step in range(n):
             r = compute_v3_torque_for_state(
                 self.data, self.model, self.v3["jax_step_fn"],
                 self.v3["jax_state"], self.v3["jax_params"],
@@ -105,6 +140,15 @@ class PushSim:
 
             quat = self.data.qpos[3:7].copy()
             pitch = np.arcsin(-2*(quat[1]*quat[3] - quat[0]*quat[2]))
+            if frames is not None and step % stride == 0:
+                renderer.update_scene(self.data, camera=cam)
+                if force_N > 0 and step < PUSH_DUR + ARROW_HOLD_STEPS:
+                    _draw_push_arrow(renderer.scene, self.data.xpos[self.torso],
+                                     force / force_N, force_N,
+                                     live=step < PUSH_DUR)
+                frames.append((renderer.render().copy(), step * DT,
+                               force_N if step < PUSH_DUR else 0.0,
+                               np.degrees(pitch)))
             if abs(pitch) > PITCH_LIMIT:
                 return False
             if self.data.subtree_com[0][2] < HEIGHT_LIMIT:

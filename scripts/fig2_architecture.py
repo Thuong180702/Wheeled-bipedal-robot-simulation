@@ -10,7 +10,7 @@ plt.rcParams.update({
     'font.family': 'serif', 'font.size': 6.5,
     'figure.dpi': 300, 'savefig.bbox': 'tight', 'savefig.pad_inches': 0.0,
 })
-OUT = '/Users/admin/Wheeled-bipedal-robot-simulation/paper/figures/acc_architecture.pdf'
+OUT = '/Users/admin/Wheeled-bipedal-robot-simulation/paper/figures/acc_architecture_bw.pdf'
 
 # ─── Layout ───
 XL, XR, XC = 2.0, 8.0, 5.0             # left col, right col, centre divider

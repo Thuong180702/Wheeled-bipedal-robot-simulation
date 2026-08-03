@@ -181,6 +181,8 @@ class TestStateFieldAudit:
             # Anchor position integral (V3_ANCHOR) — JAX-only, like drift/heading state
             "anchor_integ_tau": "k2_jax_controller.py Step 4a2 (anchor position integral, ki=0 for non-anchor profiles)",
             "anchor_activity_ema": "k2_jax_controller.py Step 4a2 (quiet-stance |sag_vel| EMA for the idle damping boost)",
+            # Settled-terrain detector — JAX-only, like drift/heading/anchor state
+            "terrain_split_slow": "k2_jax_controller.py Step 8 (EMA of the commanded per-leg height split; |split - EMA| separates climbing a step from standing astride one)",
         }
         for field in K2_JAX_STATE_FIELDS:
             # Generic check for prev_tau_N and abs_buf_N

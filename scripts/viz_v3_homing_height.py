@@ -143,7 +143,20 @@ def main():
         dr.text((10, 40), f"t={i*args.stride*0.01:4.1f}s", fill=(200, 200, 200))
         imgs.append(im)
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    imgs[0].save(args.out, save_all=True, append_images=imgs[1:], duration=40, loop=0)
+    if args.out.endswith(".mp4"):
+        # 25 fps == stride 4 at 100 Hz control, i.e. real time.
+        import subprocess
+        h_px, w_px = frames[0].shape[:2]
+        proc = subprocess.Popen(
+            ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt",
+             "rgb24", "-s", f"{w_px}x{h_px}", "-r", str(int(round(100 / args.stride))),
+             "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", args.out],
+            stdin=subprocess.PIPE)
+        for im in imgs:
+            proc.stdin.write(np.asarray(im, dtype=np.uint8).tobytes())
+        proc.stdin.close(); proc.wait()
+    else:
+        imgs[0].save(args.out, save_all=True, append_images=imgs[1:], duration=40, loop=0)
     print(f"WROTE {args.out} ({len(imgs)} frames, {os.path.getsize(args.out)/1e6:.1f}MB)")
 
 

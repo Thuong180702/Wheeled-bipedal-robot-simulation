@@ -34,6 +34,7 @@
 \renewcommand{\theadfont}{}
 \renewcommand{\cellalign}{cc}
 
+
 % ============================================================
 \title{Anchored Conditionally-Gated Control for Wheeled Bipedal Balance and Disturbance Recovery}
 
@@ -439,6 +440,24 @@ wound an \SI{8.6}{\degree} roll bias through a \SI{180}{\degree} turn; without
 the rate condition, the geometric transient of a curb climb is integrated as a
 leveling error and compresses the flat leg. Off-step, the trim decays to zero
 with a \SI{1}{s} time constant.
+
+The expected roll must also reach the \emph{gates}, not only the posture solver.
+Heading hold is a differential wheel torque scaled by a stability envelope whose
+roll factor decays over \SIrange{1}{5}{\degree}. The unspanned remainder of a
+\SI{20}{cm} step is a quasi-static \SIrange{2.5}{4.0}{\degree}, so the envelope
+read a legitimate straddle as an incipient fall and suppressed heading hold for
+the entire crossing---the mount transient then went undamped and the robot yawed
+off the slab. ACC therefore widens the roll band in proportion to the commanded
+split, over the same \SIrange{3}{10}{cm} interval the wheel loop already uses,
+and restores both the differential term and the mean-ground height reference once
+the straddle has \emph{settled}. Settling is decided by the rate of the commanded
+split against a \SI{0.2}{s} exponential average: $|\Delta \dot h|$ is
+\SIrange{0.05}{0.13}{m/s} while a wheel climbs and below \SI{0.016}{m/s} once
+astride, a tenfold separation. Restricting the relaxation to the settled phase is
+a requirement rather than conservatism---applying it while a wheel is still
+crossing an edge keeps drift authority alive over the drop and topples the robot
+on a \SI{45}{\degree} oblique exit. On flat ground $\Delta h \equiv 0$ and every
+term above vanishes identically.
 
 % Platform comparison table — qualitative, not binary
 \begin{table}[t]
@@ -926,7 +945,11 @@ protocols.}
 
 \emph{Single-bearing protocol.} Several auxiliary experiments---the robustness sweep (Table~\ref{tab:robustness}), the rate-limit sweep, the ringdown and gate-activation traces (Figs.~\ref{fig:gate_activation},~\ref{fig:ringdown}) and the compound-disturbance protocol (Table~\ref{tab:compound})---apply a single impulse along world $+x$ rather than repeating the full \num{8}-bearing sweep at eightfold cost. That bearing is \emph{lateral} and below median: the polar sweep places $\SI{0}{\degree}$ at $\SI{95.6}{N}$, third-weakest of the eight and \SI{11.1}{N} below $F_{\text{med}}$. Those experiments are therefore conservative probes of ACC's disturbance margin, and they are labelled lateral throughout rather than ``forward.'' The omnidirectional figures ($F_{\min}$, $F_{\text{med}}$) characterize the full envelope.
 
-\begin{table}[t]
+% [!tbp], not [t]: with its caption and note block this float is 648.5pt tall in
+% a 672pt column, so 1-\textfraction leaves no room and plain [t] can never place
+% it. Without a p fallback it stuck at the head of the deferred list and every
+% later table queued behind it, to be flushed after the bibliography.
+\begin{table}[!tbp]
 \centering
 \footnotesize
 \caption{Factorial ablation of ACC components: push-recovery and ringdown metrics. Clean sensors, all rows $N{=}10$, mean${\pm}$std. See the note below the table for definitions and significance tests.}
@@ -1060,39 +1083,50 @@ recovery; at the \SIrange{50}{100}{cm} scales reported here ACC's balance core
 alone suffices.
 
 \emph{Per-leg terrain adaptation.}
-Here the ablation is unambiguous. With per-leg adaptation, straddle roll on the
-one-wheel curb is $2.5{\pm}\SI{0.04}{\degree}$ (\SI{10}{cm}),
-$3.5{\pm}\SI{3.2}{\degree}$ (\SI{15}{cm}) and $14.9{\pm}\SI{0.1}{\degree}$
-(\SI{20}{cm}), all 10/10. Replacing \texttt{split()} with a symmetric posture
-(both legs commanded to the same height---the pre-adapter behaviour) causes a
-fall at \emph{every} tested curb height, \num{0}/\num{10} in all three cases:
-the torso rolls past \SI{60}{\degree} within \SI{0.8}{s} of curb entry and the
-robot is on the ground by \SI{2.3}{s}. The height split is thus load-bearing for
-this task in a way the flight override is not. The closed-loop leveling trim that
-rides on top of the split is a second-order refinement of the same mechanism:
-disabling it alone leaves the robot upright on the \SI{10}{cm} curb
-($3.2{\pm}\SI{0.08}{\degree}$, 10/10) but degrades the \SI{15}{cm} curb to
-$11.1{\pm}\SI{1.6}{\degree}$ roll with \num{6}/\num{10} settled---the trim
-corrects the residual error of the non-linear height$\rightarrow$leg-length
-table, which grows with step height.
-At \SI{20}{cm} the limit is one of joint authority, not of the split geometry.
-Evaluating~\eqref{eq:terrain_split} at $h^{\text{cmd}}{=}\SI{0.404}{m}$ gives
-commanded leg lengths of \SI{0.350}{m} (flat) and \SI{0.150}{m} (curb), i.e.\ a
-difference equal to the full \SI{20}{cm} step with \emph{zero} kinematic
-residual---the posture pair can span the curb exactly. What tightens is the
-joint budget: the compressed leg's commanded knee angle grows
-\SI{2.18}{rad}~(\SI{10}{cm}) $\rightarrow$ \SI{2.39}{rad}~(\SI{15}{cm})
-$\rightarrow$ \SI{2.58}{rad}~(\SI{20}{cm}) against a hard limit of
-\SI{2.70}{rad}, leaving only \SI{0.12}{rad} (\SI{6.6}{\degree}) of headroom, and
-the commanded CoM height of that leg, \SI{0.265}{m}, sits within \SI{1.1}{cm} of
-the extrapolation floor $z_{\text{lo}}{-}\SI{10}{cm}{=}\SI{0.254}{m}$.
-Because the commanded posture is exact, the measured \SI{14.9}{\degree} straddle roll
-is entirely \emph{tracking} error: in this deeply flexed configuration the leg
-carries its load at the shortest gravitational moment arm the PID gains were
-never re-tuned for, and it settles below its target. Adaptation therefore still
-prevents leg-fold (\num{10}/\num{10} survival), but the torso is left tilted; the
-tight $\pm\SI{0.1}{\degree}$ std reflects a deterministic, saturation-dominated
-equilibrium rather than genuinely low run-to-run variability.
+The success criterion here is traversal, not merely survival: a trial counts
+only if the elevated wheel stays on the \SI{36}{cm}-wide slab for the whole
+\SI{2}{m} straddle. A settling criterion alone cannot see this failure---a robot
+that yaws off the side of the curb halfway along still lands on flat ground,
+settles, and would score a pass on the tail criteria. Under the traversal
+criterion, and with the straddle gating of \S\ref{sec:terrain}, roll on the
+one-wheel curb is $2.4{\pm}\SI{0.1}{\degree}$ (\SI{10}{cm}),
+$2.9{\pm}\SI{0.2}{\degree}$ (\SI{15}{cm}) and $3.9{\pm}\SI{0.1}{\degree}$
+(\SI{20}{cm}), \num{10}/\num{10} at every height.
+The residual growth with step height is \emph{tracking} error, not a geometry
+failure. Measured mid-straddle at \SI{20}{cm}, \eqref{eq:terrain_split} commands
+a leg-length difference of \SI{0.193}{m} against the \SI{0.20}{m} step, leaving
+$\varepsilon{=}\SI{7}{mm}$ unspanned, i.e.\ a predicted
+$\arctan(\varepsilon/w_{\text{track}}){=}\SI{1.4}{\degree}$ of geometric roll, so
+the remaining \SI{2.5}{\degree} is
+servo error: in this deeply flexed configuration the compressed leg carries its
+load at the shortest gravitational moment arm the PID gains were tuned for and
+settles slightly below its target. The joint budget does tighten with height
+without being the binding constraint at \SI{20}{cm}: the compressed leg's
+commanded knee angle grows \SI{2.18}{rad}~(\SI{10}{cm}) $\rightarrow$
+\SI{2.39}{rad}~(\SI{15}{cm}) $\rightarrow$ \SI{2.58}{rad}~(\SI{20}{cm}) against
+a hard limit of \SI{2.70}{rad}, leaving \SI{0.12}{rad} (\SI{6.6}{\degree}) of
+headroom.
+Suppressing heading hold through the straddle instead---the behaviour before the
+stability envelope's roll band was made split-dependent (\S\ref{sec:terrain})---
+leaves the mount transient undamped and the yaw error runs to the
+\SI{0.30}{rad} command leash. Roll then measures $14.9{\pm}\SI{0.1}{\degree}$ at
+\SI{20}{cm} ($N{=}10$) and the elevated wheel leaves the slab \SI{1.3}{m} into
+the curb, verified at three seeds; the tight $\pm\SI{0.1}{\degree}$ std is a
+deterministic runaway rather than genuinely low run-to-run variability.
+
+The two component ablations are unambiguous. Replacing \texttt{split()} with a
+symmetric posture (both legs commanded to the same height---the pre-adapter
+behaviour) causes a fall at \emph{every} tested curb height, \num{0}/\num{10} in
+all three cases: the torso rolls past \SI{60}{\degree} within \SI{0.8}{s} of
+curb entry and the robot is on the ground by \SI{2.3}{s}. The straddle gating is
+inert in this ablation, as it must be, since it is driven by the commanded
+split. The height split is thus load-bearing for this task in a way the flight
+override is not. Disabling the closed-loop leveling trim alone leaves the robot
+upright on the \SI{10}{cm} curb ($4.5{\pm}\SI{2.3}{\degree}$, \num{10}/\num{10})
+but collapses the \SI{15}{cm} curb to \num{1}/\num{10} and the \SI{20}{cm} curb
+to \num{0}/\num{10} with five outright falls---the feedforward
+height$\rightarrow$leg-length table alone does not span a step this large, and
+the residual it leaves grows faster than the straddle allowance can absorb.
 
 \emph{Oblique ledge descent: a straddle regime, not a height threshold.}
 Driving off a ledge whose edge crosses the path at an angle $\phi$ releases the
@@ -1205,29 +1239,35 @@ $-$Flight override, drop \SI{150}{cm}\textsuperscript{b} & 5 & 53.6$\pm$35.0 & 2
 \midrule
 \multicolumn{4}{c}{\textbf{Per-Leg Terrain (One-Wheel Curb, \SI{0.15}{m/s})}} \\
 \midrule
-Configuration & $N$ & Straddle Roll ($^\circ$) & Settled \\
+Configuration & $N$ & Straddle Roll ($^\circ$) & Traversed \\
 \midrule
-Full adaptation, \SI{10}{cm}  & 10 & 2.5$\pm$0.04 & 10/10 \\
-Full adaptation, \SI{15}{cm}  & 10 & 3.5$\pm$3.2 & 10/10 \\
-Full adaptation, \SI{20}{cm}  & 10 & 14.9$\pm$0.1 & 10/10 \\
+Full adaptation, \SI{10}{cm}  & 10 & 2.4$\pm$0.1 & 10/10 \\
+Full adaptation, \SI{15}{cm}  & 10 & 2.9$\pm$0.2 & 10/10 \\
+Full adaptation, \SI{20}{cm}  & 10 & 3.9$\pm$0.1 & 10/10 \\
 \addlinespace[1pt]
-$-$Leveling trim, \SI{10}{cm}\textsuperscript{c} & 10 & 3.2$\pm$0.08 & 10/10 \\
-$-$Leveling trim, \SI{15}{cm}\textsuperscript{c} & 10 & 11.1$\pm$1.6 & 6/10 \\
+$-$Straddle gating, \SI{20}{cm}\textsuperscript{c} & 10 & 14.9$\pm$0.1 & 0/10 \\
 \addlinespace[1pt]
-$-$Height split, \SI{10}{cm}\textsuperscript{d} & 10 & \multicolumn{1}{c}{fall} & 0/10 \\
-$-$Height split, \SI{15}{cm}\textsuperscript{d} & 10 & \multicolumn{1}{c}{fall} & 0/10 \\
-$-$Height split, \SI{20}{cm}\textsuperscript{d} & 10 & \multicolumn{1}{c}{fall} & 0/10 \\
+$-$Leveling trim, \SI{10}{cm}\textsuperscript{d} & 10 & 4.5$\pm$2.3 & 10/10 \\
+$-$Leveling trim, \SI{15}{cm}\textsuperscript{d} & 10 & 10.7 & 1/10 \\
+$-$Leveling trim, \SI{20}{cm}\textsuperscript{d} & 10 & \multicolumn{1}{c}{fall} & 0/10 \\
+\addlinespace[1pt]
+$-$Height split, \SI{10}{cm}\textsuperscript{e} & 10 & \multicolumn{1}{c}{fall} & 0/10 \\
+$-$Height split, \SI{15}{cm}\textsuperscript{e} & 10 & \multicolumn{1}{c}{fall} & 0/10 \\
+$-$Height split, \SI{20}{cm}\textsuperscript{e} & 10 & \multicolumn{1}{c}{fall} & 0/10 \\
 \bottomrule
 \end{tabular}
 \vspace{2pt}\tabnote\noindent
 $\pm$std over $N$ trials with randomized ICs ($\pm\SI{0.003}{rad}$ joint,
 $\pm\SI{1.5}{mm}$ CoM). Drop metric: peak $|\theta|$ from touchdown onward;
 ledge metric: peak $|\theta|$ through landing; curb metric: max $|\phi|$ while
-straddling the curb top.
+straddling the curb top, over traversing trials only. ``Traversed'' requires the
+elevated wheel to stay on the \SI{36}{cm} slab for the whole \SI{2}{m} straddle,
+not merely to settle afterwards.
 \textsuperscript{a}Reaction-flywheel attitude PD zeroed; airborne spin-down damping retained.
 \textsuperscript{b}Entire airborne wheel-torque override bypassed---the ordinary WIP loop drives the wheels through flight.
-\textsuperscript{c}Closed-loop leveling integrator disabled; per-leg height split retained.
-\textsuperscript{d}\texttt{split()} forced to a symmetric posture (both legs at the same commanded height), i.e.\ pre-adapter behaviour; roll diverges past \SI{60}{\degree} within \SI{0.8}{s} of curb entry, so no straddle-roll statistic exists.
+\textsuperscript{c}Split-dependent straddle roll band and settled-terrain relaxation removed, i.e.\ heading hold suppressed for the whole crossing; the robot yaws off the slab \SI{1.3}{m} in but lands upright on flat ground and settles, which is why a settling-only criterion scored this configuration 10/10.
+\textsuperscript{d}Closed-loop leveling integrator disabled; per-leg height split retained. At \SI{15}{cm} the single traversing trial gives no std; at \SI{20}{cm} five of ten fall outright.
+\textsuperscript{e}\texttt{split()} forced to a symmetric posture (both legs at the same commanded height), i.e.\ pre-adapter behaviour; roll diverges past \SI{60}{\degree} within \SI{0.8}{s} of curb entry, so no straddle-roll statistic exists.
 \tabnote\noindent
 Produced by \path{scripts/collect_flight_terrain_n10.py}; raw output
 \path{outputs/flight_terrain_n10/results.json}.
@@ -1243,10 +1283,11 @@ the drop envelope.
 \begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth]{figures/curb_straddle.pdf}
-    \caption{One-wheel curb (\SI{20}{cm}). With the per-leg height split:
-    $14.9{\pm}0.1^\circ$ straddle roll, 10/10 settled. With a symmetric posture
-    (split removed): the curb-side leg cannot fold far enough, roll diverges
-    past \SI{60}{\degree} within \SI{0.8}{s} of curb entry, 0/10.}
+    \caption{One-wheel curb (\SI{20}{cm}). With the per-leg height split and the
+    straddle gating of \S\ref{sec:terrain}: $3.9{\pm}0.1^\circ$ straddle roll,
+    10/10 traversed. With a symmetric posture (split removed): the curb-side leg
+    cannot fold far enough, roll diverges past \SI{60}{\degree} within
+    \SI{0.8}{s} of curb entry, 0/10.}
     \label{fig:curb}
 \end{figure}
 

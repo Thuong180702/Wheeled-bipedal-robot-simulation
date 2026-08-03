@@ -138,7 +138,8 @@ def build_curb_xml(h: float, sign: int = -1) -> tuple[Path, dict]:
     xml = MODEL_XML.read_text()
     out = MODEL_XML.parent / f"_tmp_curb_{int(h*100)}_{os.getpid()}.xml"
     out.write_text(xml.replace("  </worldbody>", geoms + "  </worldbody>"))
-    return out, dict(y0=y0, y1=y1, y_end=y_end, h=h, sign=sign)
+    return out, dict(y0=y0, y1=y1, y_end=y_end, h=h, sign=sign,
+                     x_lo=x_c - hw, x_hi=x_c + hw)
 
 
 def run_curb(h: float, duration_s: float = 30.0, frames: list | None = None,
@@ -157,6 +158,11 @@ def run_curb(h: float, duration_s: float = 30.0, frames: list | None = None,
     settle_k = None
     roll_curb = 0.0        # max |roll| while straddling the curb top
     d_max = 0.0            # max ground split the adapter commanded
+    # Distance along the curb at which the elevated wheel left the slab, if it
+    # did. Without this the verdict is blind to the failure it is meant to
+    # catch: a robot that yaws off the side of the curb halfway along still
+    # lands on flat ground, settles, and scores PASS on the tail criteria alone.
+    off_curb_y = None
     n = int(duration_s / DT)
     for k in range(n):
         sy = float(0.5 * (sim.d.xpos[sim.lw][1] + sim.d.xpos[sim.rw][1]))
@@ -181,6 +187,9 @@ def run_curb(h: float, duration_s: float = 30.0, frames: list | None = None,
         if g["y1"] < eff_y < g["y_end"]:
             roll_curb = max(roll_curb, abs(r_deg))
             d_max = max(d_max, abs(sim.terrain.g[0] - sim.terrain.g[1]))
+            lx = float(sim.d.xpos[sim.lw][0])
+            if off_curb_y is None and not (g["x_lo"] <= lx <= g["x_hi"]):
+                off_curb_y = eff_y - g["y1"]
         if float(sim.d.qpos[2]) < 0.15 or abs(p_deg) > 75 or abs(r_deg) > 60:
             return dict(h_cm=h * 100, fell=True, fall_t=k * DT, verdict="FALL")
         if settle_k is None and released_k is not None and k > released_k + 100:
@@ -199,17 +208,19 @@ def run_curb(h: float, duration_s: float = 30.0, frames: list | None = None,
     tail = slice(-200, None)
     res = dict(
         h_cm=h * 100, fell=False,
-        roll_curb_max=roll_curb, d_max=d_max,
+        roll_curb_max=roll_curb, d_max=d_max, off_curb_y=off_curb_y,
         t_release=released_k * DT if released_k else None,
         settle_s=(settle_k - released_k) * DT if settle_k and released_k else None,
         pitch_tail=float(np.abs(L["pitch"][tail]).mean()),
         roll_tail=float(np.abs(L["roll"][tail]).mean()),
         still_vel=float(np.sqrt((L["vxy"][tail] ** 2).mean())),
     )
-    res["verdict"] = "PASS" if (
-        res["t_release"] is not None and res["settle_s"] is not None
-        and res["pitch_tail"] <= 4.0 and res["still_vel"] <= 0.05
-    ) else "FAIL"
+    res["verdict"] = (
+        "OFF_CURB" if off_curb_y is not None else
+        "PASS" if (
+            res["t_release"] is not None and res["settle_s"] is not None
+            and res["pitch_tail"] <= 4.0 and res["still_vel"] <= 0.05
+        ) else "FAIL")
     return res
 
 
@@ -416,7 +427,7 @@ def run_ramp_step(h: float, duration_s: float = 30.0, frames: list | None = None
     return res
 
 
-def _write_video(frames, path: Path, h: float):
+def _write_video(frames, path: Path, h: float, label: str = "step"):
     from PIL import Image, ImageDraw
     path.parent.mkdir(parents=True, exist_ok=True)
     proc = subprocess.Popen(
@@ -427,7 +438,7 @@ def _write_video(frames, path: Path, h: float):
     for arr, t, roll, z in frames:
         img = Image.fromarray(arr)
         ImageDraw.Draw(img).text(
-            (10, 10), f"buc {h*100:.0f} cm   t={t:5.2f}s   z={z:.2f}m   "
+            (10, 10), f"{label} {h*100:.0f} cm   t={t:5.2f}s   z={z:.2f}m   "
             f"roll={roll:+5.1f} deg", fill=(255, 255, 60))
         proc.stdin.write(np.asarray(img, dtype=np.uint8).tobytes())
     proc.stdin.close()
@@ -494,7 +505,8 @@ def main():
                       f"{r['d_max']*100:9.1f} {st:>8} {r['pitch_tail']:8.1f} "
                       f"{r['roll_tail']:8.1f} {r['still_vel']:6.3f} {seed:5d}")
             if frames:
-                _write_video(frames, Path(args.out_dir) / f"curb_{h*100:.0f}cm.mp4", h)
+                _write_video(frames, Path(args.out_dir) / f"curb_{h*100:.0f}cm.mp4",
+                             h, label="curb")
                 renderer.close()
             continue
         r = run_ramp_step(h, frames=frames, cam=cam, renderer=renderer,
@@ -526,7 +538,7 @@ def main():
             for arr, t, p_deg, relz in frames:
                 img = Image.fromarray(arr)
                 ImageDraw.Draw(img).text(
-                    (10, 10), f"buc {h*100:.0f} cm   t={t:5.2f}s   "
+                    (10, 10), f"step {h*100:.0f} cm   t={t:5.2f}s   "
                     f"h_rel={relz:.2f}m   pitch={p_deg:+5.1f} deg",
                     fill=(255, 255, 60))
                 proc.stdin.write(np.asarray(img, dtype=np.uint8).tobytes())

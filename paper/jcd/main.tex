@@ -270,7 +270,7 @@ platform is expressible in it.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\linewidth]{figures/acc_architecture.pdf}
+    \includegraphics[width=\linewidth]{figures/acc_architecture_bw.pdf}
     \caption{ACC two-channel torque assembly. Physical conditions gate each component via continuous smoothstep functions (dashed).}
     \label{fig:acc_arch}
 \end{figure}
@@ -434,33 +434,23 @@ step angle. ACC instead maintains an \emph{independent ground estimate per leg}
 and issues two height commands. The estimate is taken from the wheel
 contact-point height, which is exact at any body tilt for a rigid wheel, and is
 updated only while that wheel carries real load:
-\begin{equation}
-\begin{split}
-\hat{h}_{\text{gnd}}^{i} &\leftarrow \hat{h}_{\text{gnd}}^{i}
-+ \alpha_g\big(z_{\text{contact}}^{i} - \hat{h}_{\text{gnd}}^{i}\big),\\
-&\quad F_z^{i} \geq 0.2mg, \quad i \in \{L,R\},
-\end{split}
-\label{eq:terrain_est}
-\end{equation}
-with $\alpha_g = 0.35$ per control step to reject contact chatter. The $0.2mg$
+$\hat{h}_{\text{gnd}}^{i} \leftarrow \hat{h}_{\text{gnd}}^{i}
++ \alpha_g(z_{\text{contact}}^{i} - \hat{h}_{\text{gnd}}^{i})$ for
+$F_z^{i} \geq 0.2mg$, $i \in \{L,R\}$, with $\alpha_g = 0.35$ per control step
+to reject contact chatter. The $0.2mg$
 load test rather than mere geometric touching is deliberate: a lightly touching
 wheel in the act of unloading injected a \SI{+2.9}{cm} phantom ground step on
 the \SI{15}{cm} curb. An unloaded wheel freezes its estimate, the one exception
 being the unambiguous signal that its ground is gone---the wheel centre
-descending \emph{below} its own believed ground:
-\begin{equation}
-\delta^{i} > \SI{3}{mm}
-\;\Rightarrow\;
-\dot{\hat{h}}_{\text{gnd}}^{i} = -\big(v_0 + k_s \,\delta^{i}\big),
-\label{eq:terrain_seek}
-\end{equation}
-where $\delta^{i} = \hat{h}_{\text{gnd}}^{i} - z_{\text{contact}}^{i}$,
-$v_0 = \SI{0.5}{m/s}$ and $k_s = \SI{50}{\per\second}$. The proportional term
+descending \emph{below} its own believed ground. Writing
+$\delta^{i} = \hat{h}_{\text{gnd}}^{i} - z_{\text{contact}}^{i}$, a
+$\delta^{i} > \SI{3}{mm}$ drives the estimate down at
+$\dot{\hat{h}}_{\text{gnd}}^{i} = -(v_0 + k_s \delta^{i})$ with
+$v_0 = \SI{0.5}{m/s}$, $k_s = \SI{50}{\per\second}$. The proportional term
 matters: a fixed slew converged in \SI{0.30}{s}, by which time a \SI{20}{cm}
-dismount had already tipped the robot past recovery, whereas
-\eqref{eq:terrain_seek} converges within two control steps, so the leg extends
-\emph{during} the fall. When both wheels are airborne both estimates track the
-mean wheel height.
+dismount had already tipped the robot past recovery, whereas this law converges
+within two control steps, so the leg extends \emph{during} the fall. When both
+wheels are airborne both estimates track the mean wheel height.
 
 The step $\Delta h = \hat{h}_{\text{gnd}}^{L} - \hat{h}_{\text{gnd}}^{R}$ is
 then absorbed by the legs rather than the torso. The split is kinematic, not a
@@ -490,6 +480,18 @@ step is genuine ($|\Delta h| \geq \SI{2}{cm}$) and the estimate is settling
 (${<}\SI{0.15}{m/s}$); the first condition keeps a \SI{180}{\degree} turn from
 winding in an \SI{8.6}{\degree} bias, the second keeps the transient of a curb
 climb out of the levelling error.
+
+The expected roll must also reach the \emph{gates}. Heading hold is a
+differential wheel torque scaled by a stability envelope whose roll factor decays
+over \SIrange{1}{5}{\degree}, so the quasi-static \SIrange{2.5}{4.0}{\degree} of a
+\SI{20}{cm} straddle read as an incipient fall and suppressed heading hold for the
+whole crossing. ACC therefore scales the roll band with the commanded split and
+restores both the differential and the mean-ground height reference once the
+straddle has \emph{settled}, decided by the split rate against a \SI{0.2}{s}
+average ($|\Delta\dot{h}|$ is \SIrange{0.05}{0.13}{m/s} while a wheel climbs,
+below \SI{0.016}{m/s} astride). Relaxing any earlier keeps drift authority alive
+over an edge and topples the robot on a \SI{45}{\degree} oblique exit; on flat
+ground $\Delta h \equiv 0$ and every term vanishes identically.
 
 \subsection{Complete Numerical Parameter Set}
 \label{sec:parameters}
@@ -769,7 +771,7 @@ Produced by \path{scripts/replicate_ablation_n10.py}; raw output
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.80\linewidth]{figures/polar_push_envelope.pdf}
+    \includegraphics[width=0.80\linewidth]{figures/polar_push_envelope_bw.pdf}
     \caption{Omnidirectional push envelope of ACC---the \emph{same} run as row
     S1 of Table~\ref{tab:push_ablation}. Solid curve: per-bearing mean
     survivable push over $N{=}\num{10}$ repetitions; shaded band ${\pm}1$\,SD;
@@ -825,37 +827,32 @@ override holds peak pitch to $34.0{\pm}\SI{2.1}{\degree}$ against
 $53.6{\pm}\SI{35.0}{\degree}$, so it \textbf{bounds landing-attitude variance
 near the envelope limit} rather than enabling the recovery.
 
-\emph{Per-leg terrain adaptation.} Here the ablation is unambiguous. With
-per-leg adaptation, straddle roll on the one-wheel curb is
-$2.5{\pm}\SI{0.04}{\degree}$ (\SI{10}{cm}), $3.5{\pm}\SI{3.2}{\degree}$
-(\SI{15}{cm}) and $14.9{\pm}\SI{0.1}{\degree}$ (\SI{20}{cm}), all 10/10.
-Replacing the split with a symmetric posture---the pre-adapter behaviour---falls
-at \emph{every} tested curb height, \num{0}/\num{10} in all three cases, the
-torso rolling past \SI{60}{\degree} within \SI{0.8}{s} of curb entry. Disabling
-the closed-loop levelling trim alone leaves the robot upright on the \SI{10}{cm}
-curb but degrades the \SI{15}{cm} curb to $11.1{\pm}\SI{1.6}{\degree}$ roll with
-\num{6}/\num{10} settled. At \SI{20}{cm} the limit is joint authority, not split
-geometry: \eqref{eq:terrain_split} commands \SI{0.350}{m} and \SI{0.150}{m} leg
-lengths, spanning the full step with \emph{zero} kinematic residual, while the
-compressed leg's knee reaches \SI{2.58}{rad} against a \SI{2.70}{rad}
-limit---the measured \SI{14.9}{\degree} roll is therefore entirely
-\emph{tracking} error at the shortest gravitational moment arm the PID gains
-were tuned for.
-
-\emph{Oblique ledge descent: a straddle regime, not a height threshold.}
-Driving off a ledge whose edge crosses the path at an angle $\phi$ releases the
-two wheels a stagger interval $w_{\text{track}}\tan\phi/v$ apart, and only
-within that interval can the leg split absorb the step. Instrumenting a
-\SI{30}{\degree}, \SI{20}{cm} exit at \SI{0.7}{m/s} shows the window closing in
-\SI{0.18}{s} with \SI{99}{mm} of calibrated range still unused, so the failure
-is a race rather than a saturation and is consequently \emph{not} monotone in
-step height. A \num{192}-trial calibration resolves the boundary as a
-success-probability field: at \SI{30}{\degree} the shallow window runs to
-\SI{15}{cm} at \SI{100}{\percent}, closes completely over \SIrange{22}{27}{cm},
-and a deep regime---both wheels released together, the flight path of
-\S\ref{sec:flight} taking over---reopens from \SI{30}{cm}, peaking at
-\SI{75}{\percent}. Widening the straddle regime requires knee range rather than
-gains.
+\emph{Per-leg terrain adaptation.} The criterion is traversal, not merely
+survival: a trial counts only if the elevated wheel stays on the \SI{36}{cm}
+slab for the whole \SI{2}{m} straddle---a settling criterion cannot see a robot
+that yaws off the side halfway along, lands on flat ground and settles. Under
+it, with the straddle gating of \S\ref{sec:terrain}, roll on the one-wheel curb
+is $2.4{\pm}\SI{0.1}{\degree}$ (\SI{10}{cm}), $2.9{\pm}\SI{0.2}{\degree}$
+(\SI{15}{cm}) and $3.9{\pm}\SI{0.1}{\degree}$ (\SI{20}{cm}), \num{10}/\num{10}
+at every height ($N{=}10$). The growth is \emph{tracking}, not geometry:
+mid-straddle \eqref{eq:terrain_split} commands a leg-length difference of
+\SI{0.193}{m} against the \SI{0.20}{m} step, so $\varepsilon{=}\SI{7}{mm}$ goes
+unspanned---$\arctan(\varepsilon/w_{\text{track}}){=}\SI{1.4}{\degree}$---and the
+remaining \SI{2.5}{\degree} is servo error at the shortest gravitational moment
+arm the PID gains were tuned for. Suppressing heading hold through the straddle
+instead---the behaviour before the roll band was made split-dependent---leaves
+the mount transient undamped and the yaw error runs to the \SI{0.30}{rad} leash:
+roll then measures $14.9{\pm}\SI{0.1}{\degree}$ at \SI{20}{cm} and the elevated
+wheel leaves the slab \SI{1.3}{m} in (three seeds).
+The component ablations are unambiguous. Replacing the split with a symmetric
+posture---the pre-adapter behaviour---falls at \emph{every} curb height,
+\num{0}/\num{10}, the torso rolling past \SI{60}{\degree} within \SI{0.8}{s} of
+entry; the straddle gating is inert here, as it must be, being driven by the
+commanded split. Disabling the levelling trim alone holds the \SI{10}{cm} curb
+($4.5{\pm}\SI{2.3}{\degree}$, \num{10}/\num{10}) but collapses \SI{15}{cm} to
+\num{1}/\num{10} and \SI{20}{cm} to \num{0}/\num{10} with five outright falls:
+the feedforward table does not span a step this large, and its residual grows
+faster than the straddle allowance absorbs.
 
 \subsection{Comparison with Classical Baselines and a Preliminary RL Reference}
 \label{sec:baselines}
@@ -1146,7 +1143,7 @@ Welch's $t$-test at Bonferroni-adjusted $\alpha{=}0.007$ (7 comparisons) makes
 L0$\rightarrow$L1 and L2.5$\rightarrow$L3 significant ($p{<}0.001$; Cohen's
 $d{=}5.4$ and $4.1$). Flight and terrain results are $N{=}10$ with
 Clopper--Pearson 95\% CI $[0.69,1.00]$; push ablations resolve
-${\sim}\SI{2}{N}$, and no claim here rests on a smaller difference.
+${\sim}\SI{2}{N}$, and no claim rests on less.
 
 \textbf{Limitations.}
 (1)~\emph{Simulation only.} All results are MuJoCo; hardware validation remains
@@ -1155,70 +1152,62 @@ future work.
 \SI{100}{Hz} loop and an actuator latency clearing the \SIrange{6}{8}{ms}
 push-margin cliff of \S\ref{sec:analysis}. Rate independence is not
 claimed: at \SI{50}{Hz} with coefficients recomputed for the longer step the
-platform does not stand, and whether that is excitation of plant modes or phase
-lag from discretising the asymmetric envelope at $\Delta t{=}\SI{20}{ms}$ is
-unresolved.
-(3)~\emph{Two calibrated envelopes are non-uniform.} Oblique ledge descent has
-two survivable regimes separated by a dead band, and upward height commands
-issued during a push are restricted, a ${+}\SI{10}{cm}$ rise costing
-\SI{69}{\percent} of $F_{\max}$ while descent is free at every amplitude
-tested.
+platform does not stand, and the cause---plant-mode excitation or phase lag at
+$\Delta t{=}\SI{20}{ms}$---is unresolved.
+(3)~\emph{Two calibrated envelopes are non-uniform.} Oblique ledge descent
+succeeds only within the stagger $w_{\text{track}}\tan\phi/v$ that the leg
+split can absorb, giving two regimes split by a dead band (\num{192} trials at
+\SI{30}{\degree}: \SI{100}{\percent} to \SI{15}{cm}, closed over
+\SIrange{22}{27}{cm}, reopening past \SI{30}{cm}); and a ${+}\SI{10}{cm}$
+height command during a push costs \SI{69}{\percent} of $F_{\max}$, descent
+being free at every amplitude.
 (4)~\emph{The learning comparison is not resourced, and one classical family is
 untested.} The model-free PPO run (5.4M steps, one seed, no domain
 randomisation~\citep{tobin2017domainrand} or hyperparameter search) is a
 difficulty probe bounding nothing about RL here; the comparison this controller
 is built for is residual learning \emph{over} the prior. A tuned convex MPC over
-the linearisation of \S\ref{sec:full_state_lqr} is the natural next comparator,
-since a terminal cost addresses the slow drift divergence that limits the
-full-state LQR.
+the linearisation of \S\ref{sec:full_state_lqr} is the natural next
+comparator.
 (5)~\emph{Generality across morphologies is undemonstrated.} Every result is for
 one 10-DOF platform with one set of gains.
 
 \textbf{Deployment risks.}
-ACC uses raw torque, a \SI{400}{Nm/s} rate limit and standard sensing (IMU plus
-encoders). The binding figure is the \SIrange{6}{8}{ms} latency cliff in push
+ACC needs only raw torque, a \SI{400}{Nm/s} rate limit, an IMU and encoders. The binding figure is the \SIrange{6}{8}{ms} latency cliff in push
 margin (\S\ref{sec:analysis}); the stability threshold is roughly twice as far
-out (station held through \SI{14}{ms}), the ordering the architecture predicts,
-since the gates depend on physical state rather than timing precision.
-Commission against the \SI{6}{ms} cliff: an estimated non-RTOS worst-case budget
-(readout ${\sim}\SI{1}{ms}$, estimation ${\sim}\SI{2}{ms}$, computation
-${\sim}\SI{3}{ms}$, actuation ${\sim}\SI{3.5}{ms}$) totals
-${\approx}\SI{9.5}{ms}$ and sits past it, making real-time scheduling a
-requirement rather than an optimisation. Projected hardware degradation of the
-\SI{0.294}{mm} repeatability is \SIrange{1}{3}{mm} under encoder quantisation,
-backlash, stiction, tire compliance and IMU noise (cf.\
-Table~\ref{tab:robustness}).
+out (station held through \SI{14}{ms}), the ordering the architecture
+predicts.
+An estimated non-RTOS budget totals ${\approx}\SI{9.5}{ms}$, past the cliff, so
+real-time scheduling is a requirement rather than an optimisation; hardware
+repeatability is projected at \SIrange{1}{3}{mm} rather than \SI{0.294}{mm}.
 
 \textbf{Conclusion.}
 We presented ACC, a two-channel torque assembly in which a PD balance core is
 augmented by a proximity-gated anchor integral, achieving
 $0.294{\pm}0.015$\,mm idle repeatability on the sagittal axis---a $59{\times}$
-improvement over the proportional-only baseline under one unified protocol
+improvement over the proportional-only baseline
 ($N{=}10$, Table~\ref{tab:standing})---together with omnidirectional push
 survival from $F_{\min}{=}\SI{82}{N}$ to a $F_{\text{med}}{=}\SI{107}{N}$
 median. Absolute accuracy is reported separately and fully accounted for: the
 robot parks \SI{27.0}{mm} from commanded home and holds that standoff to
-\SI{0.009}{mm}, a closed-form model predicting the offset as the static price of
-a deliberately bounded integrator memory to within \SI{0.45}{\percent}. Six
+\SI{0.009}{mm}, which a closed-form model predicts as the static price of a
+deliberately bounded integrator memory to within \SI{0.45}{\percent}. Six
 classical baselines and a full-state LQR derived from the plant itself all fall,
-and adding integral action to LQR-optimal feedback does not prevent it. ACC
-tolerates moderate noise, is insensitive to the slew bound over an $8{\times}$
-span, and handles contact loss and terrain adaptation without training; its
-sharpest deployment constraint is actuator latency. The contribution is a
-\emph{structured classical prior}: an interpretable controller whose gating
-encodes the plant's measured failure modes, intended to supply the nominal base
-action of a residual-learning stack. Future work is hardware validation, a
-resourced learning comparison, and extending conditional activation to
-locomotion.
+and integral action does not prevent it. ACC tolerates moderate noise, is
+insensitive to the slew bound over an $8{\times}$ span, and handles contact loss
+and terrain adaptation without training; its sharpest deployment constraint is
+actuator latency. The contribution is a \emph{structured classical prior}: an
+interpretable controller whose gating encodes the plant's measured failure
+modes, intended to supply the nominal base action of a residual-learning stack.
+Future work is hardware validation, a resourced learning comparison, and
+conditional activation for locomotion.
 
 \section*{Code and Data Availability}
-The controller, the MuJoCo model, every evaluation script referenced above and
-the raw result files backing each table are available at
+The controller, the MuJoCo model, every evaluation script and the raw result
+files backing each table are at
 \url{https://github.com/thuong180702/Wheeled-bipedal-robot-simulation}
-(branch \texttt{main}); each results table names its producing script and raw
-result file in the note beneath it. The extended version of this paper, in the
-same repository, carries the full derivations, the whole-body-control
-implementation details and the closed-form parking-offset model.
+(branch \texttt{main}); each table's note names its producing script and result
+file. The extended version there carries the full derivations, whole-body-control
+details and closed-form parking-offset model.
 
 
 % ============================================================

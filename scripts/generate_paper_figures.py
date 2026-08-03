@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Generate clean publication-ready figures for ACC paper."""
+"""Generate the black-and-white figure variants for the JCD submission.
+
+Writes `*_bw.pdf` only. The colour figures used by paper/main.tex are the
+committed `*.pdf` files; their generator is this script at revision fd6f57e^.
+"""
 import json, numpy as np, sys, os
 import matplotlib
 matplotlib.use('Agg')
@@ -100,7 +104,7 @@ ax.text(np.deg2rad(angle_fmax + 26), 0.80 * F_max,
         fontsize=9, color='black', ha='center', va='center', fontweight='bold', zorder=9,
         bbox=dict(facecolor='white', edgecolor='none', alpha=0.85, pad=1.0))
 
-plt.savefig(OUT + 'polar_push_envelope.pdf', dpi=200)
+plt.savefig(OUT + 'polar_push_envelope_bw.pdf', dpi=200)
 plt.close()
 print("Fig.3 saved")
 
@@ -142,7 +146,7 @@ ax2.legend(fontsize=6.5, loc='upper right')
 ax2.tick_params(labelsize=7)
 
 plt.tight_layout(pad=0.3)
-plt.savefig(OUT + 'ringdown_time_series.pdf', dpi=200)
+plt.savefig(OUT + 'ringdown_time_series_bw.pdf', dpi=200)
 plt.close()
 print("Fig.4 saved")
 
@@ -158,7 +162,7 @@ ax.set_title('One-wheel curb (20 cm) — per-leg terrain adaptation',
              fontsize=9, fontweight='bold', pad=4)
 
 plt.tight_layout(pad=0.1)
-plt.savefig(OUT + 'curb_straddle.pdf', dpi=200)
+plt.savefig(OUT + 'curb_straddle_bw.pdf', dpi=200)
 plt.close()
 print("Fig.5 saved")
 

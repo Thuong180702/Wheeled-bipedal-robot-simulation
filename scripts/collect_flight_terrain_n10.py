@@ -53,11 +53,17 @@ def run_curb_n(h_m, n=N_TRIALS):
         if r.get("fell"):
             print(f"    [{i+1}/{n}] FALL at {r['fall_t']:.1f}s")
         else:
-            print(f"    [{i+1}/{n}] PASS  roll_max={r['roll_curb_max']:.1f}°  settle={r['settle_s']:.1f}s")
+            off = r.get("off_curb_y")
+            tail = f"  left the slab at {off:.2f} m" if off is not None else ""
+            print(f"    [{i+1}/{n}] {r['verdict']}  roll_max={r['roll_curb_max']:.1f}°"
+                  f"  settle={r['settle_s']:.1f}s{tail}")
     elapsed = time.time() - t0
     n_pass = sum(1 for r in results if r.get("verdict") == "PASS")
     n_fell = sum(1 for r in results if r.get("fell"))
-    rolls = [r["roll_curb_max"] for r in results if not r.get("fell")]
+    # Straddle roll is only defined for a trial that actually straddled the whole
+    # curb, so the statistic is taken over PASS trials — an OFF_CURB run stops
+    # accumulating roll the moment it leaves the slab and would bias it low.
+    rolls = [r["roll_curb_max"] for r in results if r.get("verdict") == "PASS"]
     print(f"    {n_pass}/{n} PASS ({n_fell} fell) in {elapsed:.0f}s")
     if rolls:
         print(f"    roll_curb_max: {np.mean(rolls):.1f}±{np.std(rolls, ddof=1):.1f}°")
