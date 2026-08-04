@@ -96,18 +96,12 @@ post-push ringdown. It is evaluated on a \num{10}-DOF, \SI{8.1}{kg} wheeled
 biped in MuJoCo (\SI{500}{Hz} physics, \SI{100}{Hz} control) through a factorial
 ablation, an eight-direction push sweep, and a delay screen resolved at
 \SI{2}{ms}. ACC holds $0.294{\pm}0.015$\,mm sagittal repeatability ($N{=}10$), a
-\num{59}-fold improvement over a proportional-only baseline, while recovering
-from omnidirectional pushes from \SI{82}{N} in the weakest direction to a
-\SI{107}{N} median. The ablation separates the mechanisms: gated damping
+\num{59}-fold improvement over a proportional-only baseline, while recovering from omnidirectional pushes with a \SI{107}{N} median and an \SI{82}{N} worst case. The ablation separates the mechanisms: gated damping
 produces the steadiness, the anchor integral produces the accuracy, and the gate
-itself is inert in quiet stance and decisive under disturbance. A closed-form
-model predicts the residual \SI{27.0}{mm} parking offset to within
-\SI{0.92}{\percent} across a fortyfold gain sweep. Six classical baselines and a
-full-state LQR all fall. Flight recovery from a \SI{100}{cm} drop and per-leg
+itself is inert in quiet stance and decisive under disturbance. A closed-form model predicts the \SI{27.0}{mm} standing offset to
+\SI{0.92}{\percent} across a fortyfold gain sweep. Six classical baselines and a full-state LQR all fall under the same protocol. Flight recovery from a \SI{100}{cm} drop and per-leg
 adaptation to a \SIrange{10}{20}{cm} curb are demonstrated at $N{=}10$.
-Conditional gating, not higher gain, buys precision and disturbance rejection
-together; actuator latency is the sharpest deployment constraint, the push
-envelope collapsing by \SI{45}{\percent} between \SI{6}{ms} and \SI{8}{ms}.
+Conditional gating, not higher gain, buys precision and disturbance rejection together; the delay screen prices deployment at an actuator-latency cliff between \SI{6}{ms} and \SI{8}{ms}.
 \end{abstract}
 
 \begin{highlights}
