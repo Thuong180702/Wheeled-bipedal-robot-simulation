@@ -1182,7 +1182,7 @@ is flat to within \SI{2.4}{\percent} out to \SI{6}{ms}
 (\SIrange{93.2}{95.5}{N}), then collapses \SI{45}{\percent} to \SI{51.0}{N} and
 declines monotonically to the \SI{10}{N} search floor by \SI{20}{ms}---a genuine
 loss of margin rather than a narrow phase-alignment notch, and the
-\SI{7.8}{ms} end-to-end budget estimated in \S\ref{sec:discussion} lands
+\SIrange{6.6}{8}{ms} end-to-end budget estimated in \S\ref{sec:discussion} lands
 inside the \SIrange{6}{8}{ms} bracket rather than clear of it. Losing the push margin and losing the platform are
 different thresholds: on quiet stance the standing threshold is
 \SIrange{14}{16}{ms}, station held through \SI{14}{ms} at \SI{10.84}{mm} idle
@@ -1409,24 +1409,37 @@ ACC needs only raw torque, a \SI{400}{Nm/s} rate limit, an IMU and encoders. The
 margin (\S\ref{sec:analysis}); the stability threshold is roughly twice as far
 out (station held through \SI{14}{ms}), the ordering the architecture
 predicts.
-An estimated non-RTOS budget totals ${\approx}\SI{7.8}{ms}$: sensor readout
+An estimated non-RTOS budget totals ${\approx}\SI{8}{ms}$: sensor readout
 ${\sim}\SI{1}{ms}$, state estimation ${\sim}\SI{2}{ms}$, actuation
-${\sim}\SI{3.5}{ms}$---all assumed---plus a \emph{measured} \SI{1.27}{ms} p99
-for the control step itself (\SI{1.11}{ms} mean over \num{5000} steps at the
-quiet-stance operating point, of which the compiled torque assembly is
-\SI{0.047}{ms}), reported on the same footing as the QP solve time of the
-discarded WBC baseline. The measurement is a JAX/XLA CPU build on a development
-host rather than the deployment target, but its direction is favourable: the
-gap between the compiled kernel and the full call is host-side dispatch that a C
-port removes. Replacing the ${\sim}\SI{3}{ms}$ previously assumed for this term
-moves the budget from \SI{9.5}{ms} to \SI{7.8}{ms}, which straddles the
-\SIrange{6}{8}{ms} cliff rather than clearly exceeding it. Two mitigations each
-clear it: a real-time OS recovers \SIrange{2}{4}{ms}, putting the loop at
-\SIrange{3.8}{5.8}{ms}, and doubling the sagittal velocity damping moves the
-knee to \SIrange{8}{10}{ms} without touching the schedule. They act on
-different quantities and compose. Real-time scheduling remains the
-recommendation; hardware repeatability is projected at \SIrange{1}{3}{mm}
-rather than \SI{0.294}{mm}.\footnote{Produced by
+${\sim}\SI{3.5}{ms}$---all assumed---plus a \emph{measured} ${\le}\SI{1.5}{ms}$
+for the control step, reported on the same footing as the discarded WBC
+baseline's QP solve time and replacing a ${\sim}\SI{3}{ms}$ assumption
+(\SIrange{1.27}{1.52}{ms} p99 across five repeats of \num{5000} steps at the
+quiet-stance operating point; the CoM estimate inside it is already charged to
+the state-estimation line, so that work is counted twice).
+
+Host wall-clock is nevertheless the wrong quantity to extrapolate to an
+embedded target, and the spread above is why. The reproducible quantity is the
+operation count: \num{27664} floating-point operations and \num{159}
+transcendentals per step over \num{1001} scalars, identical on every repeat,
+with no iterative solve, no matrix factorization and no data-dependent control
+flow---every gate of \S\ref{sec:anchor} is a branchless select---so worst-case
+execution time equals average-case, which a QP-based controller cannot offer. A
+\SI{480}{MHz} Cortex-M7 retires that in ${\sim}\SI{0.07}{ms}$ and a
+\SI{100}{MHz} Cortex-M4 in \SI{0.34}{ms}; compute reaches the \SI{1.5}{ms}
+budgeted above only below about \SI{23}{MHz}. It is thus the one budget line
+that shrinks on the target rather than growing, since ${\sim}\SI{95}{\percent}$
+of the measured \SI{1.2}{ms} sits outside the compiled kernel---CoM and
+support-polygon work plus Python dispatch, which a C port deletes or reduces to
+a few hundred operations of forward kinematics. Charged at \SI{0.1}{ms} the
+estimate is \SI{6.6}{ms}. Against the \SIrange{6}{8}{ms} cliff the instrumented figure sits
+at the top of the bracket and the projected one at its bottom, so what decides
+the matter is readout and actuation, not compute. Two mitigations move the loop
+clear and compose: a real-time OS recovers \SIrange{2}{4}{ms} (loop at
+\SIrange{2.6}{4.6}{ms} projected), and doubling the sagittal velocity damping
+moves the knee to \SIrange{8}{10}{ms} without touching the schedule. Real-time
+scheduling remains the recommendation; hardware repeatability is projected at
+\SIrange{1}{3}{mm} rather than \SI{0.294}{mm}.\footnote{Produced by
 \path{scripts/measure_control_step_cost.py}; raw output
 \path{outputs/paper_verification/control_step_cost.json}.}
 

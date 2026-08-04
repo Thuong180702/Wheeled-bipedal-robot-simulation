@@ -7,20 +7,26 @@
   },
   "control_period_ms": 10.0,
   "step_total": {
-    "mean_ms": 1.1094950274680742,
-    "median_ms": 1.1072709748987108,
-    "p99_ms": 1.271108381915838,
-    "max_ms": 1.7320000333711505,
-    "min_ms": 1.0311249643564224,
+    "mean_ms": 1.1900589211960324,
+    "median_ms": 1.1663544864859432,
+    "p99_ms": 1.4258413057541477,
+    "max_ms": 1.6439169994555414,
+    "min_ms": 1.058374997228384,
     "n": 5000
   },
   "jax_only": {
-    "mean_ms": 0.04727479111170396,
-    "median_ms": 0.0468750367872417,
-    "p99_ms": 0.06391826726030561,
-    "max_ms": 0.10120798833668232,
-    "min_ms": 0.030499999411404133,
+    "mean_ms": 0.04967110300203785,
+    "median_ms": 0.04875002196058631,
+    "p99_ms": 0.0758346688235179,
+    "max_ms": 0.11920800898224115,
+    "min_ms": 0.03200001083314419,
     "n": 5000
+  },
+  "kernel_cost": {
+    "flops": 27664.0,
+    "transcendentals": 159.0,
+    "bytes_accessed": 243608.0,
+    "working_set_floats": 1001
   },
   "note": "JAX/XLA CPU build on a development host, not an embedded target. step_total is the full per-control-step call including the CoM and support-polygon computation; jax_only is the compiled torque assembly alone."
 }

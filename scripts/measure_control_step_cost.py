@@ -123,6 +123,7 @@ def main():
     v3["jax_step_fn"] = orig
 
     jax_only = []
+    kernel_cost = None
     if args is not None:
         a, k = args
         for _ in range(N):
@@ -130,6 +131,20 @@ def main():
             out = orig(*a, **k)
             np.asarray(out[0] if isinstance(out, tuple) else out)
             jax_only.append(time.perf_counter() - t0)
+
+        # Host-independent cost of the same kernel. Wall-clock on a laptop does
+        # not answer "will this run on an embedded target"; an operation count
+        # does, because the step has no data-dependent control flow (every gate
+        # is a branchless select), so worst case equals average case.
+        ca = orig.lower(*a, **k).compile().cost_analysis()
+        if isinstance(ca, list):
+            ca = ca[0]
+        kernel_cost = {
+            "flops": float(ca.get("flops", 0.0)),
+            "transcendentals": float(ca.get("transcendentals", 0.0)),
+            "bytes_accessed": float(ca.get("bytes accessed", 0.0)),
+            "working_set_floats": int(sum(x.size for x in a)),
+        }
 
     out = {
         "profile": PROFILE,
@@ -141,6 +156,7 @@ def main():
         "control_period_ms": 10.0,
         "step_total": percentiles(total),
         "jax_only": percentiles(jax_only) if jax_only else None,
+        "kernel_cost": kernel_cost,
         "note": (
             "JAX/XLA CPU build on a development host, not an embedded target. "
             "step_total is the full per-control-step call including the CoM and "
