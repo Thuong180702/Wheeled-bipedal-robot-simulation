@@ -1,0 +1,26 @@
+{
+  "profile": "K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR",
+  "host": {
+    "platform": "macOS-26.6-arm64-arm-64bit",
+    "processor": "arm",
+    "python": "3.10.20"
+  },
+  "control_period_ms": 10.0,
+  "step_total": {
+    "mean_ms": 1.1094950274680742,
+    "median_ms": 1.1072709748987108,
+    "p99_ms": 1.271108381915838,
+    "max_ms": 1.7320000333711505,
+    "min_ms": 1.0311249643564224,
+    "n": 5000
+  },
+  "jax_only": {
+    "mean_ms": 0.04727479111170396,
+    "median_ms": 0.0468750367872417,
+    "p99_ms": 0.06391826726030561,
+    "max_ms": 0.10120798833668232,
+    "min_ms": 0.030499999411404133,
+    "n": 5000
+  },
+  "note": "JAX/XLA CPU build on a development host, not an embedded target. step_total is the full per-control-step call including the CoM and support-polygon computation; jax_only is the compiled torque assembly alone."
+}

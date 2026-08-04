@@ -172,7 +172,7 @@ We present the Anchored Conditionally-Gated Controller (ACC), which addresses bo
 
 A factorial ablation under a single protocol (Table~\ref{tab:standing}) separates three effects the architecture couples: quiet-stance \emph{steadiness} comes from the gated \emph{damping} terms rather than from the anchor integral, which buys \emph{accuracy} instead; the proximity gate and the asymmetric envelope are provably inert during quiet stance, so only a displacement experiment can measure them; and the pitch safety gate is load-bearing with no disturbance applied. The gates are enabling conditions that make an otherwise inadmissible damping and integral configuration safe, not the proximate source of the precision.
 
-The paper is positioned within \emph{structured classical priors} rather than learned control: the object of study is a hand-designed, interpretable torque assembly whose downstream role is to supply the nominal base action of a residual-learning stack~\citep{johannink2019residual,silver2018residual}. Classical controllers are therefore the comparison of record: six of them---four 4-state TWIP variants and two 6-state coupled variants---all fall, and a full-state LQR linearized from the plant itself survives two orders of magnitude longer and still falls, so platform complexity, not model order or servo lag, dominates the failure. A preliminary model-free PPO~\citep{schulman2017ppo} run is retained as a \emph{difficulty probe} and bounds nothing about what RL attains here.
+The paper is positioned within \emph{structured classical priors} rather than learned control: the object of study is a hand-designed, interpretable torque assembly. Supplying the nominal base action of a residual-learning stack~\citep{johannink2019residual,silver2018residual} is the downstream use it was designed for, and it is future work; no residual policy is trained here and no claim below depends on one. Classical controllers are therefore the comparison of record: six of them---four 4-state TWIP variants and two 6-state coupled variants---all fall, and a full-state LQR linearized from the plant itself survives two orders of magnitude longer and still falls, so platform complexity, not model order or servo lag, dominates the failure. A preliminary model-free PPO~\citep{schulman2017ppo} run is retained as a \emph{difficulty probe} and bounds nothing about what RL attains here.
 
 The main contributions are:
 \begin{enumerate}
@@ -995,8 +995,7 @@ insensitivity of the metric, and its mechanism is saturation---the roll channel
 is commanded against the $\pm\SI{0.7}{rad}$ hip-roll limit throughout the
 episode at every value tested. The preliminary PPO reference stands
 longer at a single height but falls in \SI{85}{\percent} of multi-height command
-transitions; read as a difficulty probe,
-that is the observation the structured prior is meant to address.
+transitions---the observation the structured prior is meant to address.
 
 \emph{What a \SI{100}{\percent} fall rate does and does not claim.} LQR balances
 wheeled bipeds on real hardware---Ascento~\citep{klemm2019ascento} and
@@ -1016,6 +1015,21 @@ wheeled-biped literature uses does not transfer to a 10-DOF articulated-leg
 plant \emph{as a single controller for all axes}. It is not a claim that LQR
 cannot balance a wheeled biped, and Section~\ref{sec:full_state_lqr} is the
 control experiment that keeps the distinction from resting on our tuning.
+
+The sharper form of the objection is internal to this paper: ACC's own ablation
+ladder contains a rung, L0, that is proportional-only on the wheel
+channel---no position term, no integral, no anchor---and it stands
+\num{10}/\num{10} (Table~\ref{tab:standing}). Why should a hand-tuned
+proportional law survive where an optimal one does not? Because L0 is not a
+linear controller for the whole robot: it is ACC with the anchor removed, and it
+retains the dedicated roll, yaw and posture channels that no row of
+Table~\ref{tab:lqr_baselines} has. The comparison in that table is therefore
+neither optimal-versus-hand-tuned nor linear-versus-nonlinear; it is one
+linearisation for all axes against per-axis structure. Remove the structure and
+add optimality, and the plant falls in \SI{0.32}{s}; keep the structure and
+strip everything else back to a proportional term, and it stands---at
+\SI{17.461}{mm} repeatability and a \SI{69.7}{mm} limit cycle, which is the gap
+the remaining terms buy.
 
 \subsubsection{A full-state LQR designed on the plant itself}
 \label{sec:full_state_lqr}
@@ -1167,9 +1181,9 @@ being deterministic. The knee lies between \SI{6}{ms} and \SI{8}{ms}: $F_{\max}$
 is flat to within \SI{2.4}{\percent} out to \SI{6}{ms}
 (\SIrange{93.2}{95.5}{N}), then collapses \SI{45}{\percent} to \SI{51.0}{N} and
 declines monotonically to the \SI{10}{N} search floor by \SI{20}{ms}---a genuine
-loss of margin rather than a narrow phase-alignment notch, and it sits
-\emph{below} the \SI{9.5}{ms} end-to-end budget estimated in
-\S\ref{sec:discussion}. Losing the push margin and losing the platform are
+loss of margin rather than a narrow phase-alignment notch, and the
+\SI{7.8}{ms} end-to-end budget estimated in \S\ref{sec:discussion} lands
+inside the \SIrange{6}{8}{ms} bracket rather than clear of it. Losing the push margin and losing the platform are
 different thresholds: on quiet stance the standing threshold is
 \SIrange{14}{16}{ms}, station held through \SI{14}{ms} at \SI{10.84}{mm} idle
 lateral RMS against \SI{0.43}{mm} undelayed.
@@ -1383,7 +1397,8 @@ being free at every amplitude.
 (4)~\emph{The learning comparison is preliminary, and one classical family remains untested.} The model-free PPO run (5.4M steps, one seed, no domain
 randomisation~\citep{tobin2017domainrand} or hyperparameter search) is a
 difficulty probe bounding nothing about RL here; the comparison this controller
-is built for is residual learning \emph{over} the prior. A tuned convex MPC over
+is built for is residual learning \emph{over} the prior rather than against it,
+and that comparison is not run here. A tuned convex MPC over
 the linearisation of \S\ref{sec:full_state_lqr} is the natural next
 comparator.
 (5)~\emph{Generality across morphologies is undemonstrated.} Every result is for
@@ -1394,9 +1409,26 @@ ACC needs only raw torque, a \SI{400}{Nm/s} rate limit, an IMU and encoders. The
 margin (\S\ref{sec:analysis}); the stability threshold is roughly twice as far
 out (station held through \SI{14}{ms}), the ordering the architecture
 predicts.
-An estimated non-RTOS budget totals ${\approx}\SI{9.5}{ms}$, past the cliff, so
-real-time scheduling is a requirement rather than an optimisation; hardware
-repeatability is projected at \SIrange{1}{3}{mm} rather than \SI{0.294}{mm}.
+An estimated non-RTOS budget totals ${\approx}\SI{7.8}{ms}$: sensor readout
+${\sim}\SI{1}{ms}$, state estimation ${\sim}\SI{2}{ms}$, actuation
+${\sim}\SI{3.5}{ms}$---all assumed---plus a \emph{measured} \SI{1.27}{ms} p99
+for the control step itself (\SI{1.11}{ms} mean over \num{5000} steps at the
+quiet-stance operating point, of which the compiled torque assembly is
+\SI{0.047}{ms}), reported on the same footing as the QP solve time of the
+discarded WBC baseline. The measurement is a JAX/XLA CPU build on a development
+host rather than the deployment target, but its direction is favourable: the
+gap between the compiled kernel and the full call is host-side dispatch that a C
+port removes. Replacing the ${\sim}\SI{3}{ms}$ previously assumed for this term
+moves the budget from \SI{9.5}{ms} to \SI{7.8}{ms}, which straddles the
+\SIrange{6}{8}{ms} cliff rather than clearly exceeding it. Two mitigations each
+clear it: a real-time OS recovers \SIrange{2}{4}{ms}, putting the loop at
+\SIrange{3.8}{5.8}{ms}, and doubling the sagittal velocity damping moves the
+knee to \SIrange{8}{10}{ms} without touching the schedule. They act on
+different quantities and compose. Real-time scheduling remains the
+recommendation; hardware repeatability is projected at \SIrange{1}{3}{mm}
+rather than \SI{0.294}{mm}.\footnote{Produced by
+\path{scripts/measure_control_step_cost.py}; raw output
+\path{outputs/paper_verification/control_step_cost.json}.}
 
 \textbf{Conclusion.}
 We presented ACC, a two-channel torque assembly in which a PD balance core is
@@ -1412,8 +1444,12 @@ insensitive to the slew bound over an $8{\times}$ span, and handles contact loss
 and terrain adaptation without training; its sharpest deployment constraint is
 actuator latency. The contribution is a \emph{structured classical prior}: an
 interpretable controller whose gating encodes the plant's measured failure
-modes, intended to supply the nominal base action of a residual-learning stack.
-Future work is hardware validation, a resourced learning comparison, and
+modes. Everything claimed for it is a directly measured property of the
+controller standing alone---the mechanism decomposition, the chirality of the
+push envelope, the closed-form parking offset and the stability certificate of
+Section~\ref{sec:stability}---so the results do not wait on the residual stack
+the prior was built to serve. That stack is one downstream use among the future
+work, alongside hardware validation, a resourced learning comparison, and
 conditional activation for locomotion.
 
 \section*{Code and Data Availability}
