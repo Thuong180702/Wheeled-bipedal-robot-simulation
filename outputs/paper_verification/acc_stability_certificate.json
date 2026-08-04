@@ -1,0 +1,2964 @@
+{
+  "protocol": {
+    "control_hz": 100,
+    "physics_hz": 500,
+    "settle_s": 60.0,
+    "profile": "K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR",
+    "frozen": "ABS adaptive-bias FIR trim",
+    "envelope_attack_alpha": 0.35,
+    "envelope_release_alpha": 0.0067
+  },
+  "variants": {
+    "nominal": {
+      "com_z_m": 0.4068693748386043,
+      "gates": [
+        {
+          "gate": "drift_stability_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_position_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_heading_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_vel",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_heading",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_pos",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_pitch_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_roll_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_contact_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_twist_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_height_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_twist_yield_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "twist_gate",
+          "min": 0.5263152652949555,
+          "max": 0.5271760728663101,
+          "saturated": false
+        },
+        {
+          "gate": "center_gate",
+          "min": 0.9861212166511931,
+          "max": 0.9862944647107873,
+          "saturated": false
+        },
+        {
+          "gate": "hy_div_guard_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "notch_height_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "abs_safety_pass",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "apcr1nd_safety_pass",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "apcr1nd_recenter_active",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        }
+      ],
+      "anchor_gate_margins": [
+        {
+          "gate": "anchor proximity  |sag_pos_err|",
+          "peak": 0.024758488991732747,
+          "low_edge": 0.05,
+          "unit": "m",
+          "flat": true,
+          "margin_ratio": 2.0195093495687804
+        },
+        {
+          "gate": "envelope quiet    act_ema",
+          "peak": 1.4572343255498257e-07,
+          "low_edge": 0.25,
+          "unit": "m/s",
+          "flat": true,
+          "margin_ratio": 1715578.583462705
+        }
+      ],
+      "n_gates": 21,
+      "n_gates_saturated": 19,
+      "jacobian": {
+        "n_states": 57,
+        "spectral_radius": 1.0000000091530425,
+        "n_unstable_strict": 0,
+        "n_centre": 2,
+        "centre_modes": [
+          {
+            "re": 1.0000000091530425,
+            "im": 0.0,
+            "mag": 1.0000000091530425,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_6",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.977
+              ],
+              [
+                "heading_hy_integral",
+                0.386
+              ],
+              [
+                "dq_rz",
+                0.386
+              ]
+            ]
+          },
+          {
+            "re": 1.0000000000001,
+            "im": 0.0,
+            "mag": 1.0000000000001,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "dq_x",
+                1.0
+              ],
+              [
+                "com_x",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ]
+            ]
+          }
+        ],
+        "rho_reduced": 0.9981816783093177,
+        "schur_modulo_centre": true,
+        "tau_slowest_s": 5.494575401586381,
+        "slowest": [
+          {
+            "re": 0.9981816783093177,
+            "im": 0.0,
+            "mag": 0.9981816783093177,
+            "tau_s": 5.494575401586381,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.901
+              ],
+              [
+                "prev_tau_3",
+                0.16
+              ],
+              [
+                "prev_tau_8",
+                0.139
+              ]
+            ]
+          },
+          {
+            "re": 0.9952952892353628,
+            "im": -0.0020450303220910784,
+            "mag": 0.9952973901920585,
+            "tau_s": 2.1214748588898455,
+            "f_hz": 0.03270147362542889,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9952952892353628,
+            "im": 0.0020450303220910784,
+            "mag": 0.9952973901920585,
+            "tau_s": 2.1214748588898455,
+            "f_hz": 0.03270147362542889,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9950000000001046,
+            "im": 0.0,
+            "mag": 0.9950000000001046,
+            "tau_s": 1.9949958229253946,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "heading_hy_integral",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ],
+              [
+                "prev_tau_8",
+                0.0
+              ],
+              [
+                "prev_tau_3",
+                0.0
+              ]
+            ]
+          },
+          {
+            "re": 0.9918064570547969,
+            "im": 0.0,
+            "mag": 0.9918064570547969,
+            "tau_s": 1.2154663954732865,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_8",
+                0.896
+              ],
+              [
+                "prev_tau_3",
+                0.793
+              ],
+              [
+                "prev_tau_7",
+                0.372
+              ]
+            ]
+          },
+          {
+            "re": 0.9777749589675713,
+            "im": -0.11243706054028144,
+            "mag": 0.9842184528685564,
+            "tau_s": 0.6286381797522274,
+            "f_hz": 1.822163364516253,
+            "dominant": [
+              [
+                "v_l_wheel",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.999
+              ],
+              [
+                "prev_tau_9",
+                0.139
+              ],
+              [
+                "prev_tau_4",
+                0.138
+              ]
+            ]
+          }
+        ]
+      },
+      "jacobian_h1e-5": {
+        "n_states": 57,
+        "spectral_radius": 1.0000000238237845,
+        "n_unstable_strict": 0,
+        "n_centre": 2,
+        "centre_modes": [
+          {
+            "re": 1.0000000238237845,
+            "im": 0.0,
+            "mag": 1.0000000238237845,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_6",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.977
+              ],
+              [
+                "heading_hy_integral",
+                0.386
+              ],
+              [
+                "dq_rz",
+                0.386
+              ]
+            ]
+          },
+          {
+            "re": 1.0000000000000218,
+            "im": 0.0,
+            "mag": 1.0000000000000218,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "com_x",
+                1.0
+              ],
+              [
+                "dq_x",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ]
+            ]
+          }
+        ],
+        "rho_reduced": 0.9981815383462133,
+        "schur_modulo_centre": true,
+        "tau_slowest_s": 5.494152110795805,
+        "slowest": [
+          {
+            "re": 0.9981815383462133,
+            "im": 0.0,
+            "mag": 0.9981815383462133,
+            "tau_s": 5.494152110795805,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.901
+              ],
+              [
+                "prev_tau_3",
+                0.16
+              ],
+              [
+                "prev_tau_8",
+                0.139
+              ]
+            ]
+          },
+          {
+            "re": 0.995295289126148,
+            "im": -0.0020450301336625153,
+            "mag": 0.9952973900824568,
+            "tau_s": 2.121474809328798,
+            "f_hz": 0.032701470615920436,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.995295289126148,
+            "im": 0.0020450301336625153,
+            "mag": 0.9952973900824568,
+            "tau_s": 2.121474809328798,
+            "f_hz": 0.032701470615920436,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9950000000006182,
+            "im": 0.0,
+            "mag": 0.9950000000006182,
+            "tau_s": 1.9949958231308305,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "heading_hy_integral",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ],
+              [
+                "prev_tau_6",
+                0.0
+              ],
+              [
+                "prev_tau_3",
+                0.0
+              ]
+            ]
+          },
+          {
+            "re": 0.991806359080648,
+            "im": 0.0,
+            "mag": 0.991806359080648,
+            "tau_s": 1.2154518017775469,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_8",
+                0.896
+              ],
+              [
+                "prev_tau_3",
+                0.793
+              ],
+              [
+                "prev_tau_7",
+                0.372
+              ]
+            ]
+          },
+          {
+            "re": 0.9777752169949112,
+            "im": -0.11243698301357054,
+            "mag": 0.9842187003499983,
+            "tau_s": 0.628648116847478,
+            "f_hz": 1.8221616423995584,
+            "dominant": [
+              [
+                "v_l_wheel",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.999
+              ],
+              [
+                "prev_tau_9",
+                0.139
+              ],
+              [
+                "prev_tau_4",
+                0.138
+              ]
+            ]
+          }
+        ]
+      },
+      "rho_reduced_step_size_sensitivity": 1.3996310443964433e-07,
+      "nonlinear_decay": [
+        {
+          "amplitude": 0.0001,
+          "rho_measured_mean": 0.9952100434208507,
+          "rho_measured_std": 0.00237066166705361,
+          "n_dirs": 3
+        },
+        {
+          "amplitude": 0.001,
+          "rho_measured_mean": 0.9951301574376288,
+          "rho_measured_std": 0.0011654810867465935,
+          "n_dirs": 3
+        },
+        {
+          "amplitude": 0.01,
+          "rho_measured_mean": 0.9954720800663267,
+          "rho_measured_std": 0.003546550876886848,
+          "n_dirs": 3
+        }
+      ],
+      "centre_probes": [
+        {
+          "coord": "dq_x",
+          "amp": 0.001,
+          "seconds": 300.0,
+          "final": 0.0009965520407496436,
+          "max_abs": 0.0010129878628010154,
+          "ratio_final_over_amp": 0.9965520407496437,
+          "late_rate_per_s": -1.0882815258836993e-08,
+          "growth_over_window": -0.0032648445776510973
+        },
+        {
+          "coord": "dq_rz",
+          "amp": 0.008727,
+          "seconds": 300.0,
+          "final": 0.009864979079846688,
+          "max_abs": 0.009864979079846688,
+          "ratio_final_over_amp": 1.1303975111546565,
+          "late_rate_per_s": 8.438142909856746e-07,
+          "growth_over_window": 0.02900702272209263
+        }
+      ]
+    },
+    "high_small": {
+      "com_z_m": 0.4163508605853504,
+      "gates": [
+        {
+          "gate": "drift_stability_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_position_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_heading_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_vel",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_heading",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_pos",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_pitch_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_roll_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_contact_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_twist_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_height_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_twist_yield_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "twist_gate",
+          "min": 0.49972942242917184,
+          "max": 0.49992612188378827,
+          "saturated": false
+        },
+        {
+          "gate": "center_gate",
+          "min": 0.9910957320206769,
+          "max": 0.9911277921299146,
+          "saturated": false
+        },
+        {
+          "gate": "hy_div_guard_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "notch_height_gate",
+          "min": 0.01273645958234448,
+          "max": 0.01273645958234448,
+          "saturated": false
+        },
+        {
+          "gate": "abs_safety_pass",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "apcr1nd_safety_pass",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "apcr1nd_recenter_active",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        }
+      ],
+      "anchor_gate_margins": [
+        {
+          "gate": "anchor proximity  |sag_pos_err|",
+          "peak": 0.021893351183838658,
+          "low_edge": 0.05,
+          "unit": "m",
+          "flat": true,
+          "margin_ratio": 2.2837983815337166
+        },
+        {
+          "gate": "envelope quiet    act_ema",
+          "peak": 9.494032358119564e-08,
+          "low_edge": 0.25,
+          "unit": "m/s",
+          "flat": true,
+          "margin_ratio": 2633233.072838571
+        }
+      ],
+      "n_gates": 21,
+      "n_gates_saturated": 18,
+      "jacobian": {
+        "n_states": 57,
+        "spectral_radius": 1.0000000143420633,
+        "n_unstable_strict": 0,
+        "n_centre": 2,
+        "centre_modes": [
+          {
+            "re": 1.0000000143420633,
+            "im": 0.0,
+            "mag": 1.0000000143420633,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_6",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.832
+              ],
+              [
+                "heading_hy_integral",
+                0.341
+              ],
+              [
+                "dq_rz",
+                0.341
+              ]
+            ]
+          },
+          {
+            "re": 0.9999999999993311,
+            "im": 0.0,
+            "mag": 0.9999999999993311,
+            "tau_s": 14949708306.619053,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "dq_x",
+                1.0
+              ],
+              [
+                "com_x",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.043
+              ],
+              [
+                "prev_tau_1",
+                0.036
+              ]
+            ]
+          }
+        ],
+        "rho_reduced": 0.9978731918136935,
+        "schur_modulo_centre": true,
+        "tau_slowest_s": 4.696879695096051,
+        "slowest": [
+          {
+            "re": 0.9978731918136935,
+            "im": 0.0,
+            "mag": 0.9978731918136935,
+            "tau_s": 4.696879695096051,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.765
+              ],
+              [
+                "prev_tau_8",
+                0.33
+              ],
+              [
+                "prev_tau_3",
+                0.317
+              ]
+            ]
+          },
+          {
+            "re": 0.9967012198320079,
+            "im": 0.0,
+            "mag": 0.9967012198320079,
+            "tau_s": 3.0264208305690428,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_8",
+                0.587
+              ],
+              [
+                "prev_tau_6",
+                0.58
+              ],
+              [
+                "prev_tau_3",
+                0.533
+              ]
+            ]
+          },
+          {
+            "re": 0.9952922796422918,
+            "im": -0.0020473302696717714,
+            "mag": 0.9952943853336977,
+            "tau_s": 2.120116953524873,
+            "f_hz": 0.03273835029625467,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.445
+              ],
+              [
+                "v_l_wheel",
+                0.445
+              ],
+              [
+                "prev_tau_1",
+                0.054
+              ]
+            ]
+          },
+          {
+            "re": 0.9952922796422918,
+            "im": 0.0020473302696717714,
+            "mag": 0.9952943853336977,
+            "tau_s": 2.120116953524873,
+            "f_hz": 0.03273835029625467,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.445
+              ],
+              [
+                "v_l_wheel",
+                0.445
+              ],
+              [
+                "prev_tau_1",
+                0.054
+              ]
+            ]
+          },
+          {
+            "re": 0.9950000000001943,
+            "im": 0.0,
+            "mag": 0.9950000000001943,
+            "tau_s": 1.9949958229612768,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "heading_hy_integral",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ],
+              [
+                "prev_tau_8",
+                0.0
+              ],
+              [
+                "prev_tau_3",
+                0.0
+              ]
+            ]
+          },
+          {
+            "re": 0.9769533876375576,
+            "im": 0.11262085806096729,
+            "mag": 0.9834232960871369,
+            "tau_s": 0.5982423059009283,
+            "f_hz": 1.8266373752068374,
+            "dominant": [
+              [
+                "v_l_wheel",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.999
+              ],
+              [
+                "prev_tau_9",
+                0.139
+              ],
+              [
+                "prev_tau_4",
+                0.137
+              ]
+            ]
+          }
+        ]
+      },
+      "jacobian_h1e-5": {
+        "n_states": 57,
+        "spectral_radius": 1.000000032521963,
+        "n_unstable_strict": 0,
+        "n_centre": 2,
+        "centre_modes": [
+          {
+            "re": 1.000000032521963,
+            "im": 0.0,
+            "mag": 1.000000032521963,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_6",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.832
+              ],
+              [
+                "heading_hy_integral",
+                0.341
+              ],
+              [
+                "dq_rz",
+                0.341
+              ]
+            ]
+          },
+          {
+            "re": 1.0000000000000744,
+            "im": 0.0,
+            "mag": 1.0000000000000744,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "dq_x",
+                1.0
+              ],
+              [
+                "com_x",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ]
+            ]
+          }
+        ],
+        "rho_reduced": 0.9978729620183531,
+        "schur_modulo_centre": true,
+        "tau_slowest_s": 4.6963717253887,
+        "slowest": [
+          {
+            "re": 0.9978729620183531,
+            "im": 0.0,
+            "mag": 0.9978729620183531,
+            "tau_s": 4.6963717253887,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.765
+              ],
+              [
+                "prev_tau_8",
+                0.33
+              ],
+              [
+                "prev_tau_3",
+                0.317
+              ]
+            ]
+          },
+          {
+            "re": 0.996701243397751,
+            "im": 0.0,
+            "mag": 0.996701243397751,
+            "tau_s": 3.0264424865513186,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_8",
+                0.587
+              ],
+              [
+                "prev_tau_6",
+                0.58
+              ],
+              [
+                "prev_tau_3",
+                0.533
+              ]
+            ]
+          },
+          {
+            "re": 0.9952922795414484,
+            "im": -0.0020473297662617243,
+            "mag": 0.995294385231819,
+            "tau_s": 2.1201169075149413,
+            "f_hz": 0.0327383422496893,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.445
+              ],
+              [
+                "v_l_wheel",
+                0.445
+              ],
+              [
+                "prev_tau_1",
+                0.054
+              ]
+            ]
+          },
+          {
+            "re": 0.9952922795414484,
+            "im": 0.0020473297662617243,
+            "mag": 0.995294385231819,
+            "tau_s": 2.1201169075149413,
+            "f_hz": 0.0327383422496893,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.445
+              ],
+              [
+                "v_l_wheel",
+                0.445
+              ],
+              [
+                "prev_tau_1",
+                0.054
+              ]
+            ]
+          },
+          {
+            "re": 0.9949999999998717,
+            "im": 0.0,
+            "mag": 0.9949999999998717,
+            "tau_s": 1.9949958228322242,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "heading_hy_integral",
+                1.0
+              ],
+              [
+                "prev_tau_3",
+                0.0
+              ],
+              [
+                "prev_tau_8",
+                0.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ]
+            ]
+          },
+          {
+            "re": 0.9769536738636329,
+            "im": -0.11262079344473472,
+            "mag": 0.9834235730303454,
+            "tau_s": 0.5982523847682144,
+            "f_hz": 1.8266358058752692,
+            "dominant": [
+              [
+                "v_l_wheel",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.999
+              ],
+              [
+                "prev_tau_9",
+                0.139
+              ],
+              [
+                "prev_tau_4",
+                0.137
+              ]
+            ]
+          }
+        ]
+      },
+      "rho_reduced_step_size_sensitivity": 2.2979534042288918e-07
+    },
+    "high_tiny": {
+      "com_z_m": 0.4127651306086858,
+      "gates": [
+        {
+          "gate": "drift_stability_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_position_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_heading_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_vel",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_heading",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_pos",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_pitch_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_roll_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_contact_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_twist_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_height_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_twist_yield_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "twist_gate",
+          "min": 0.5221650954649959,
+          "max": 0.5229032736242615,
+          "saturated": false
+        },
+        {
+          "gate": "center_gate",
+          "min": 0.9869708725096115,
+          "max": 0.9871150467071654,
+          "saturated": false
+        },
+        {
+          "gate": "hy_div_guard_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "notch_height_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "abs_safety_pass",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "apcr1nd_safety_pass",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "apcr1nd_recenter_active",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        }
+      ],
+      "anchor_gate_margins": [
+        {
+          "gate": "anchor proximity  |sag_pos_err|",
+          "peak": 0.01610070660080662,
+          "low_edge": 0.05,
+          "unit": "m",
+          "flat": true,
+          "margin_ratio": 3.1054537691839617
+        },
+        {
+          "gate": "envelope quiet    act_ema",
+          "peak": 1.8410583552770804e-07,
+          "low_edge": 0.25,
+          "unit": "m/s",
+          "flat": true,
+          "margin_ratio": 1357914.5890917447
+        }
+      ],
+      "n_gates": 21,
+      "n_gates_saturated": 19,
+      "jacobian": {
+        "n_states": 57,
+        "spectral_radius": 1.0000000147217365,
+        "n_unstable_strict": 0,
+        "n_centre": 2,
+        "centre_modes": [
+          {
+            "re": 1.0000000147217365,
+            "im": 0.0,
+            "mag": 1.0000000147217365,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_6",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.942
+              ],
+              [
+                "heading_hy_integral",
+                0.37
+              ],
+              [
+                "dq_rz",
+                0.37
+              ]
+            ]
+          },
+          {
+            "re": 0.9999999999999994,
+            "im": 0.0,
+            "mag": 0.9999999999999994,
+            "tau_s": 18014398509481.977,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "dq_x",
+                1.0
+              ],
+              [
+                "com_x",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ]
+            ]
+          }
+        ],
+        "rho_reduced": 0.9981692994089644,
+        "schur_modulo_centre": true,
+        "tau_slowest_s": 5.457388144473341,
+        "slowest": [
+          {
+            "re": 0.9981692994089644,
+            "im": 0.0,
+            "mag": 0.9981692994089644,
+            "tau_s": 5.457388144473341,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.872
+              ],
+              [
+                "prev_tau_3",
+                0.196
+              ],
+              [
+                "prev_tau_8",
+                0.181
+              ]
+            ]
+          },
+          {
+            "re": 0.9952928312478856,
+            "im": -0.0020460478624077906,
+            "mag": 0.9952949343010279,
+            "tau_s": 2.1203649041753536,
+            "f_hz": 0.03271782556507029,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.445
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9952928312478856,
+            "im": 0.0020460478624077906,
+            "mag": 0.9952949343010279,
+            "tau_s": 2.1203649041753536,
+            "f_hz": 0.03271782556507029,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.445
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9949999999958018,
+            "im": 0.0,
+            "mag": 0.9949999999958018,
+            "tau_s": 1.9949958212042787,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "heading_hy_integral",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ],
+              [
+                "prev_tau_8",
+                0.0
+              ],
+              [
+                "prev_tau_3",
+                0.0
+              ]
+            ]
+          },
+          {
+            "re": 0.993961637168254,
+            "im": 0.0,
+            "mag": 0.993961637168254,
+            "tau_s": 1.6510729790005143,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_8",
+                0.786
+              ],
+              [
+                "prev_tau_3",
+                0.703
+              ],
+              [
+                "prev_tau_6",
+                0.441
+              ]
+            ]
+          },
+          {
+            "re": 0.9779868401125331,
+            "im": -0.11241256751333766,
+            "mag": 0.9844261499819263,
+            "tau_s": 0.6370889040364706,
+            "f_hz": 1.8213786375789218,
+            "dominant": [
+              [
+                "v_l_wheel",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.999
+              ],
+              [
+                "prev_tau_9",
+                0.139
+              ],
+              [
+                "prev_tau_4",
+                0.137
+              ]
+            ]
+          }
+        ]
+      },
+      "jacobian_h1e-5": {
+        "n_states": 57,
+        "spectral_radius": 1.0000000310751571,
+        "n_unstable_strict": 0,
+        "n_centre": 2,
+        "centre_modes": [
+          {
+            "re": 1.0000000310751571,
+            "im": 0.0,
+            "mag": 1.0000000310751571,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_6",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.942
+              ],
+              [
+                "heading_hy_integral",
+                0.37
+              ],
+              [
+                "dq_rz",
+                0.37
+              ]
+            ]
+          },
+          {
+            "re": 1.000000000000114,
+            "im": 0.0,
+            "mag": 1.000000000000114,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "dq_x",
+                1.0
+              ],
+              [
+                "com_x",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.001
+              ],
+              [
+                "prev_tau_1",
+                0.001
+              ]
+            ]
+          }
+        ],
+        "rho_reduced": 0.9981691501247472,
+        "schur_modulo_centre": true,
+        "tau_slowest_s": 5.456942750885694,
+        "slowest": [
+          {
+            "re": 0.9981691501247472,
+            "im": 0.0,
+            "mag": 0.9981691501247472,
+            "tau_s": 5.456942750885694,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.872
+              ],
+              [
+                "prev_tau_3",
+                0.196
+              ],
+              [
+                "prev_tau_8",
+                0.181
+              ]
+            ]
+          },
+          {
+            "re": 0.9952928316091129,
+            "im": -0.0020460475662813834,
+            "mag": 0.9952949346616455,
+            "tau_s": 2.1203650670736076,
+            "f_hz": 0.032717820817927915,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.445
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9952928316091129,
+            "im": 0.0020460475662813834,
+            "mag": 0.9952949346616455,
+            "tau_s": 2.1203650670736076,
+            "f_hz": 0.032717820817927915,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.445
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9950000000002749,
+            "im": 0.0,
+            "mag": 0.9950000000002749,
+            "tau_s": 1.9949958229935179,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "heading_hy_integral",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ],
+              [
+                "prev_tau_8",
+                0.0
+              ],
+              [
+                "prev_tau_3",
+                0.0
+              ]
+            ]
+          },
+          {
+            "re": 0.9939615626235502,
+            "im": 0.0,
+            "mag": 0.9939615626235502,
+            "tau_s": 1.6510525346014557,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_8",
+                0.786
+              ],
+              [
+                "prev_tau_3",
+                0.703
+              ],
+              [
+                "prev_tau_6",
+                0.441
+              ]
+            ]
+          },
+          {
+            "re": 0.9779871220784488,
+            "im": -0.11241251280235733,
+            "mag": 0.9844264238559564,
+            "tau_s": 0.6371001961550573,
+            "f_hz": 1.8213772382839182,
+            "dominant": [
+              [
+                "v_l_wheel",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.999
+              ],
+              [
+                "prev_tau_9",
+                0.139
+              ],
+              [
+                "prev_tau_4",
+                0.137
+              ]
+            ]
+          }
+        ]
+      },
+      "rho_reduced_step_size_sensitivity": 1.4928421721016605e-07
+    },
+    "low_small": {
+      "com_z_m": 0.39734452935424114,
+      "gates": [
+        {
+          "gate": "drift_stability_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_position_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_heading_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_vel",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_heading",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_pos",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_pitch_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_roll_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_contact_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_twist_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_height_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_twist_yield_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "twist_gate",
+          "min": 0.5243142483330806,
+          "max": 0.5250178611649199,
+          "saturated": false
+        },
+        {
+          "gate": "center_gate",
+          "min": 0.9865536059972697,
+          "max": 0.9866931498666293,
+          "saturated": false
+        },
+        {
+          "gate": "hy_div_guard_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "notch_height_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "abs_safety_pass",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "apcr1nd_safety_pass",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "apcr1nd_recenter_active",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        }
+      ],
+      "anchor_gate_margins": [
+        {
+          "gate": "anchor proximity  |sag_pos_err|",
+          "peak": 0.027459948336300763,
+          "low_edge": 0.05,
+          "unit": "m",
+          "flat": true,
+          "margin_ratio": 1.8208337243629242
+        },
+        {
+          "gate": "envelope quiet    act_ema",
+          "peak": 1.020005043079039e-07,
+          "low_edge": 0.25,
+          "unit": "m/s",
+          "flat": true,
+          "margin_ratio": 2450968.2740914426
+        }
+      ],
+      "n_gates": 21,
+      "n_gates_saturated": 19,
+      "jacobian": {
+        "n_states": 57,
+        "spectral_radius": 1.0000000068633936,
+        "n_unstable_strict": 0,
+        "n_centre": 2,
+        "centre_modes": [
+          {
+            "re": 1.0000000068633936,
+            "im": 0.0,
+            "mag": 1.0000000068633936,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.983
+              ],
+              [
+                "heading_hy_integral",
+                0.403
+              ],
+              [
+                "dq_rz",
+                0.403
+              ]
+            ]
+          },
+          {
+            "re": 1.0000000000000269,
+            "im": 0.0,
+            "mag": 1.0000000000000269,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "dq_x",
+                1.0
+              ],
+              [
+                "com_x",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ],
+              [
+                "prev_tau_6",
+                0.0
+              ]
+            ]
+          }
+        ],
+        "rho_reduced": 0.9981295054745998,
+        "schur_modulo_centre": true,
+        "tau_slowest_s": 5.341178214290929,
+        "slowest": [
+          {
+            "re": 0.9981295054745998,
+            "im": 0.0,
+            "mag": 0.9981295054745998,
+            "tau_s": 5.341178214290929,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.932
+              ],
+              [
+                "prev_tau_3",
+                0.124
+              ],
+              [
+                "prev_tau_8",
+                0.092
+              ]
+            ]
+          },
+          {
+            "re": 0.9953011863543091,
+            "im": -0.0020442736056333058,
+            "mag": 0.9953032857440338,
+            "tau_s": 2.124144126959688,
+            "f_hz": 0.03268917954826251,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.443
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9953011863543091,
+            "im": 0.0020442736056333058,
+            "mag": 0.9953032857440338,
+            "tau_s": 2.124144126959688,
+            "f_hz": 0.03268917954826251,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.443
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9949999999991599,
+            "im": 0.0,
+            "mag": 0.9949999999991599,
+            "tau_s": 1.9949958225475184,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "heading_hy_integral",
+                1.0
+              ],
+              [
+                "prev_tau_8",
+                0.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ],
+              [
+                "prev_tau_6",
+                0.0
+              ]
+            ]
+          },
+          {
+            "re": 0.9864558797319835,
+            "im": 0.0,
+            "mag": 0.9864558797319835,
+            "tau_s": 0.73331639771236,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_8",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.966
+              ],
+              [
+                "prev_tau_3",
+                0.868
+              ],
+              [
+                "prev_tau_7",
+                0.428
+              ]
+            ]
+          },
+          {
+            "re": 0.9774414612113523,
+            "im": -0.1123568366338089,
+            "mag": 0.9838779745646001,
+            "tau_s": 0.6152559148828519,
+            "f_hz": 1.8214904320205965,
+            "dominant": [
+              [
+                "v_l_wheel",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                1.0
+              ],
+              [
+                "prev_tau_9",
+                0.14
+              ],
+              [
+                "prev_tau_4",
+                0.138
+              ]
+            ]
+          }
+        ]
+      },
+      "jacobian_h1e-5": {
+        "n_states": 57,
+        "spectral_radius": 1.0000000198979861,
+        "n_unstable_strict": 0,
+        "n_centre": 2,
+        "centre_modes": [
+          {
+            "re": 1.0000000198979861,
+            "im": 0.0,
+            "mag": 1.0000000198979861,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.983
+              ],
+              [
+                "heading_hy_integral",
+                0.403
+              ],
+              [
+                "dq_rz",
+                0.403
+              ]
+            ]
+          },
+          {
+            "re": 0.99999999999995,
+            "im": 0.0,
+            "mag": 0.99999999999995,
+            "tau_s": 200159983438.68372,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "dq_x",
+                1.0
+              ],
+              [
+                "com_x",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ],
+              [
+                "prev_tau_6",
+                0.0
+              ]
+            ]
+          }
+        ],
+        "rho_reduced": 0.998129373817468,
+        "schur_modulo_centre": true,
+        "tau_slowest_s": 5.340801943014961,
+        "slowest": [
+          {
+            "re": 0.998129373817468,
+            "im": 0.0,
+            "mag": 0.998129373817468,
+            "tau_s": 5.340801943014961,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.932
+              ],
+              [
+                "prev_tau_3",
+                0.124
+              ],
+              [
+                "prev_tau_8",
+                0.092
+              ]
+            ]
+          },
+          {
+            "re": 0.9953011862862395,
+            "im": -0.0020442732497749226,
+            "mag": 0.9953032856752335,
+            "tau_s": 2.124144095770588,
+            "f_hz": 0.03268917386012195,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.443
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9953011862862395,
+            "im": 0.0020442732497749226,
+            "mag": 0.9953032856752335,
+            "tau_s": 2.124144095770588,
+            "f_hz": 0.03268917386012195,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.443
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9950000000000448,
+            "im": 0.0,
+            "mag": 0.9950000000000448,
+            "tau_s": 1.9949958229015026,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "heading_hy_integral",
+                1.0
+              ],
+              [
+                "prev_tau_3",
+                0.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ],
+              [
+                "prev_tau_8",
+                0.0
+              ]
+            ]
+          },
+          {
+            "re": 0.9864556878440882,
+            "im": 0.0,
+            "mag": 0.9864556878440882,
+            "tau_s": 0.733305937354235,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_8",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.966
+              ],
+              [
+                "prev_tau_3",
+                0.868
+              ],
+              [
+                "prev_tau_7",
+                0.428
+              ]
+            ]
+          },
+          {
+            "re": 0.9774417688947263,
+            "im": -0.11235675704285825,
+            "mag": 0.9838782711459988,
+            "tau_s": 0.6152673258447405,
+            "f_hz": 1.8214885845745186,
+            "dominant": [
+              [
+                "v_l_wheel",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                1.0
+              ],
+              [
+                "prev_tau_9",
+                0.14
+              ],
+              [
+                "prev_tau_4",
+                0.138
+              ]
+            ]
+          }
+        ]
+      },
+      "rho_reduced_step_size_sensitivity": 1.3165713175222749e-07
+    },
+    "low_tiny": {
+      "com_z_m": 0.40093813032898507,
+      "gates": [
+        {
+          "gate": "drift_stability_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_position_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_heading_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_vel",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_heading",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "drift_height_gate_pos",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_pitch_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_roll_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_contact_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_twist_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_height_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "heading_twist_yield_gate",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "twist_gate",
+          "min": 0.5257922606460839,
+          "max": 0.5266314372723992,
+          "saturated": false
+        },
+        {
+          "gate": "center_gate",
+          "min": 0.9862309527963294,
+          "max": 0.9863992148069021,
+          "saturated": false
+        },
+        {
+          "gate": "hy_div_guard_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "notch_height_gate",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        },
+        {
+          "gate": "abs_safety_pass",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "apcr1nd_safety_pass",
+          "min": 1.0,
+          "max": 1.0,
+          "saturated": true
+        },
+        {
+          "gate": "apcr1nd_recenter_active",
+          "min": 0.0,
+          "max": 0.0,
+          "saturated": true
+        }
+      ],
+      "anchor_gate_margins": [
+        {
+          "gate": "anchor proximity  |sag_pos_err|",
+          "peak": 0.03323794254082171,
+          "low_edge": 0.05,
+          "unit": "m",
+          "flat": true,
+          "margin_ratio": 1.5043049051123336
+        },
+        {
+          "gate": "envelope quiet    act_ema",
+          "peak": 1.2736597178030425e-07,
+          "low_edge": 0.25,
+          "unit": "m/s",
+          "flat": true,
+          "margin_ratio": 1962847.6625705748
+        }
+      ],
+      "n_gates": 21,
+      "n_gates_saturated": 19,
+      "jacobian": {
+        "n_states": 57,
+        "spectral_radius": 1.0000000031893599,
+        "n_unstable_strict": 0,
+        "n_centre": 2,
+        "centre_modes": [
+          {
+            "re": 1.0000000031893599,
+            "im": 0.0,
+            "mag": 1.0000000031893599,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_6",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.998
+              ],
+              [
+                "heading_hy_integral",
+                0.4
+              ],
+              [
+                "dq_rz",
+                0.4
+              ]
+            ]
+          },
+          {
+            "re": 1.0000000000000115,
+            "im": 0.0,
+            "mag": 1.0000000000000115,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "dq_x",
+                1.0
+              ],
+              [
+                "com_x",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ]
+            ]
+          }
+        ],
+        "rho_reduced": 0.9981534276588203,
+        "schur_modulo_centre": true,
+        "tau_slowest_s": 5.4104375286810376,
+        "slowest": [
+          {
+            "re": 0.9981534276588203,
+            "im": 0.0,
+            "mag": 0.9981534276588203,
+            "tau_s": 5.4104375286810376,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.919
+              ],
+              [
+                "prev_tau_3",
+                0.138
+              ],
+              [
+                "prev_tau_8",
+                0.113
+              ]
+            ]
+          },
+          {
+            "re": 0.9952985039961544,
+            "im": -0.002044752728797677,
+            "mag": 0.9953006043757358,
+            "tau_s": 2.1229292812454448,
+            "f_hz": 0.03269692911648674,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9952985039961544,
+            "im": 0.002044752728797677,
+            "mag": 0.9953006043757358,
+            "tau_s": 2.1229292812454448,
+            "f_hz": 0.03269692911648674,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9949999999958713,
+            "im": 0.0,
+            "mag": 0.9949999999958713,
+            "tau_s": 1.9949958212320789,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "heading_hy_integral",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ],
+              [
+                "prev_tau_6",
+                0.0
+              ],
+              [
+                "prev_tau_8",
+                0.0
+              ]
+            ]
+          },
+          {
+            "re": 0.9894753929945524,
+            "im": 0.0,
+            "mag": 0.9894753929945524,
+            "tau_s": 0.9451454258284255,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_8",
+                0.995
+              ],
+              [
+                "prev_tau_3",
+                0.872
+              ],
+              [
+                "prev_tau_7",
+                0.415
+              ]
+            ]
+          },
+          {
+            "re": 0.9775391276031662,
+            "im": -0.11246660784278162,
+            "mag": 0.9839875425404639,
+            "tau_s": 0.619500307426518,
+            "f_hz": 1.8230739109132084,
+            "dominant": [
+              [
+                "v_l_wheel",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.999
+              ],
+              [
+                "prev_tau_9",
+                0.14
+              ],
+              [
+                "prev_tau_4",
+                0.138
+              ]
+            ]
+          }
+        ]
+      },
+      "jacobian_h1e-5": {
+        "n_states": 57,
+        "spectral_radius": 1.000000017601793,
+        "n_unstable_strict": 0,
+        "n_centre": 2,
+        "centre_modes": [
+          {
+            "re": 1.000000017601793,
+            "im": 0.0,
+            "mag": 1.000000017601793,
+            "tau_s": null,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_6",
+                1.0
+              ],
+              [
+                "prev_tau_1",
+                0.997
+              ],
+              [
+                "heading_hy_integral",
+                0.4
+              ],
+              [
+                "dq_rz",
+                0.4
+              ]
+            ]
+          },
+          {
+            "re": 0.9999999999999857,
+            "im": 0.0,
+            "mag": 0.9999999999999857,
+            "tau_s": 698232500367.5137,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "com_x",
+                1.0
+              ],
+              [
+                "dq_x",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ]
+            ]
+          }
+        ],
+        "rho_reduced": 0.9981532921205631,
+        "schur_modulo_centre": true,
+        "tau_slowest_s": 5.410040064961751,
+        "slowest": [
+          {
+            "re": 0.9981532921205631,
+            "im": 0.0,
+            "mag": 0.9981532921205631,
+            "tau_s": 5.410040064961751,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_6",
+                0.919
+              ],
+              [
+                "prev_tau_3",
+                0.138
+              ],
+              [
+                "prev_tau_8",
+                0.113
+              ]
+            ]
+          },
+          {
+            "re": 0.9952985041416361,
+            "im": -0.0020447525395986795,
+            "mag": 0.9953006045208285,
+            "tau_s": 2.1229293469449972,
+            "f_hz": 0.03269692608630068,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9952985041416361,
+            "im": 0.0020447525395986795,
+            "mag": 0.9953006045208285,
+            "tau_s": 2.1229293469449972,
+            "f_hz": 0.03269692608630068,
+            "dominant": [
+              [
+                "anchor_integ_tau",
+                1.0
+              ],
+              [
+                "v_l_wheel",
+                0.444
+              ],
+              [
+                "v_r_wheel",
+                0.444
+              ],
+              [
+                "com_y",
+                0.053
+              ]
+            ]
+          },
+          {
+            "re": 0.9949999999999232,
+            "im": 0.0,
+            "mag": 0.9949999999999232,
+            "tau_s": 1.9949958228528302,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "heading_hy_integral",
+                1.0
+              ],
+              [
+                "prev_tau_3",
+                0.0
+              ],
+              [
+                "prev_tau_8",
+                0.0
+              ],
+              [
+                "prev_tau_1",
+                0.0
+              ]
+            ]
+          },
+          {
+            "re": 0.9894752556985655,
+            "im": 0.0,
+            "mag": 0.9894752556985655,
+            "tau_s": 0.9451330308877296,
+            "f_hz": 0.0,
+            "dominant": [
+              [
+                "prev_tau_1",
+                1.0
+              ],
+              [
+                "prev_tau_8",
+                0.995
+              ],
+              [
+                "prev_tau_3",
+                0.872
+              ],
+              [
+                "prev_tau_7",
+                0.415
+              ]
+            ]
+          },
+          {
+            "re": 0.9775394207827279,
+            "im": -0.11246656244407904,
+            "mag": 0.983987828609795,
+            "tau_s": 0.6195114650707956,
+            "f_hz": 1.8230726394262884,
+            "dominant": [
+              [
+                "v_l_wheel",
+                1.0
+              ],
+              [
+                "v_r_wheel",
+                0.999
+              ],
+              [
+                "prev_tau_9",
+                0.14
+              ],
+              [
+                "prev_tau_4",
+                0.138
+              ]
+            ]
+          }
+        ]
+      },
+      "rho_reduced_step_size_sensitivity": 1.3553825717327328e-07
+    }
+  },
+  "summary": {
+    "rho_reduced_max": 0.9981816783093177,
+    "rho_reduced_min": 0.9978731918136935,
+    "n_centre": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "n_unstable_strict": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "schur_modulo_centre_all": true
+  }
+}

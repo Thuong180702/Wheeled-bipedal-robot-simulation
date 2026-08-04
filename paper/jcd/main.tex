@@ -156,7 +156,7 @@
 
 % ============================================================
 \begin{abstract}
-Wheeled bipedal robots face a trade-off: the stiffness that buys precise standing shrinks the push-recovery envelope, while the integral action that removes equilibrium bias winds up during disturbances. The Anchored Conditionally-Gated Controller (ACC) is a two-channel torque assembly whose core mechanism is a proximity-gated anchor: a position integral confined to a \SI{15}{cm} neighbourhood and enabled by an asymmetric envelope follower ($\tau_{\text{attack}}{\approx}\SI{23}{ms}$, $\tau_{\text{release}}{\approx}\SI{1.5}{s}$) that separates quiet stance from post-push ringdown. It is evaluated on a \num{10}-DOF, \SI{8.1}{kg} wheeled biped in MuJoCo (\SI{500}{Hz} physics, \SI{100}{Hz} control) through a factorial ablation, an eight-direction push sweep, and a delay screen resolved at \SI{2}{ms}. ACC holds $0.294{\pm}0.015$\,mm sagittal repeatability ($N{=}10$), a \num{59}-fold improvement over a proportional-only baseline, while recovering from omnidirectional pushes with a \SI{107}{N} median and an \SI{82}{N} worst case. The ablation separates the mechanisms: gated damping produces the steadiness, the anchor integral produces the accuracy, and the gate itself is inert in quiet stance and decisive under disturbance. A closed-form model predicts the \SI{27.0}{mm} standing offset to \SI{0.92}{\percent} across a fortyfold gain sweep. Six classical baselines and a full-state LQR all fall under the same protocol. Flight recovery from a \SI{100}{cm} drop and per-leg adaptation to a \SIrange{10}{20}{cm} curb are demonstrated at $N{=}10$. Conditional gating, not higher gain, buys precision and disturbance rejection together; the delay screen prices deployment at an actuator-latency cliff between \SI{6}{ms} and \SI{8}{ms}.
+Wheeled bipedal robots face a trade-off: the stiffness that buys precise standing shrinks the push-recovery envelope, while the integral action that removes equilibrium bias winds up during disturbances. The Anchored Conditionally-Gated Controller (ACC) answers both by \emph{conditional activation}---a position integral confined to a \SI{15}{cm} neighbourhood and enabled by an asymmetric envelope follower ($\tau_{\text{attack}}{\approx}\SI{23}{ms}$, $\tau_{\text{release}}{\approx}\SI{1.5}{s}$) that separates quiet stance from post-push ringdown. On a \num{10}-DOF, \SI{8.1}{kg} wheeled biped in MuJoCo (\SI{500}{Hz} physics, \SI{100}{Hz} control) the architecture is dissected, not only demonstrated. A factorial ablation separates three coupled effects: gated damping produces the steadiness, the anchor integral the accuracy at a $3{\times}$ cost in steadiness, and the gates are bit-identical to ACC in quiet stance yet decisive under disturbance. The push envelope is measurably chiral (\SI{-16.3}{N}), traced to the sign convention of the antisymmetric hip-roll/hip-yaw channels and closed by two control experiments: a mirror flips it, a sham mirror does not. A closed-form model predicts the \SI{27.0}{mm} standing offset to \SI{0.92}{\percent} across a fortyfold gain sweep, as the price of a bounded integrator memory. ACC holds $0.294{\pm}0.015$\,mm sagittal repeatability ($N{=}10$)---a \num{59}-fold improvement over this ablation's proportional-only rung---recovers omnidirectional pushes (\SI{107}{N} median, \SI{82}{N} worst case), stands \SI{30}{min} at \SI{0.0004}{mm/min} drift where six classical baselines and a full-state LQR all fall, and survives a \SI{100}{cm} drop and \SIrange{10}{20}{cm} curbs. A \SI{2}{ms}-resolved delay screen prices deployment at a \SIrange{6}{8}{ms} latency cliff that one retuned gain moves outward: a tuning artefact, not an architectural ceiling.
 \end{abstract}
 
 % ============================================================
@@ -649,6 +649,61 @@ steadiness: a $10{\times}$ smaller $\lambda$ cuts the offset to
 \SI{-16.31}{mm} but degrades window jitter twelvefold. Table~\ref{tab:standing}
 publishes a deliberately chosen point on that trade-off.
 
+\subsubsection{The measurement window is a protocol choice, not a stability
+horizon}
+\label{sec:longhorizon}
+
+Every row of Table~\ref{tab:standing} is measured over \SI{20}{s}, and
+Section~\ref{sec:full_state_lqr} declines to promote a competing design
+specifically because a \SI{20}{s} horizon flatters it. That standard has to cut
+both ways, so it is applied here. Re-running the ACC row---identical seeds,
+initial conditions, profile and metrics, with only the window
+lengthened---gives Table~\ref{tab:longhorizon}. The \SI{20}{s} column reproduces
+the published $0.294{\pm}\SI{0.015}{mm}$ exactly, which fixes the two runs as
+the same measurement rather than a re-tuned one.
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Quiet stance at three window lengths. Same seeds, initial conditions,
+profile (\texttt{V3\_ANCHOR}) and metric definitions as
+Table~\ref{tab:standing}; only the record length differs. $R_{\text{sag}}$ is
+over the full window; drift is a least-squares rate over the same span.}
+\label{tab:longhorizon}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccrr@{}}
+\toprule
+Window & $N$ & No fall & $R_{\text{sag}}$ (mm) & Drift$_{\text{sag}}$ (mm/min) \\
+\midrule
+\SI{20}{s} (Table~\ref{tab:standing}) & 10 & 10/10 & 0.294(15) & --- \\
+\SI{300}{s}  & 10 & 10/10 & 0.089(5) & $+0.0149$ \\
+\SI{1800}{s} & \phantom{0}4 & \phantom{0}4/4 & 0.037(2) & $+0.0004$ \\
+\bottomrule
+\end{tabular}
+\vspace{3pt}\tabnote\noindent
+\SI{100}{Hz} control, \SI{500}{Hz} physics, \SI{5}{s} settle before the window,
+clean sensors, \SI{0}{ms} delay, seeds $20260727{+}i$. Parenthesised digits are
+the SD in the last place. Produced by \path{scripts/idle_longhorizon.py}; raw
+output \path{outputs/paper_verification/idle_longhorizon_{300,1800}s.json}.
+\end{table}
+
+The \SI{20}{s} figure is therefore the \emph{conservative} one: that window
+still contains the tail of the settle, so lengthening it improves repeatability
+($3.3{\times}$ at \SI{300}{s}, $7.9{\times}$ at \SI{1800}{s}) rather than
+degrading it. What the settle terminates in is a fixed point, not a slow mode:
+after ${\approx}\SI{35}{s}$ the sagittal coordinate is constant to
+\SI{2e-6}{mm} per \SI{30}{s} block for the remaining twenty-nine minutes, the
+parking offset holds at \SI{-26.763}{mm}, CoM height holds \SI{0.4068}{m}, and
+the only motion left anywhere in the state is a lateral creep of
+\SI{0.14}{mm/hour} on the passively held axis. The separation from the
+full-state LQR of Section~\ref{sec:full_state_lqr} is thus qualitative rather
+than one of degree---that design accumulates \SIrange{0.43}{0.63}{m} of planar
+drift and falls---because ACC's position error is referenced to a latched home
+by two explicit terms, the clipped proportional $\tau_{\text{pos}}$ of
+Eq.~\eqref{eq:balance} and the anchor integral on $-\Delta x$ of
+Eq.~\eqref{eq:anchor}. What Table~\ref{tab:standing} reports is a window chosen
+to match the baselines, not the longest interval over which the claim holds.
+
 \subsubsection{Which mechanism produces the precision}
 \label{sec:idle_mechanism}
 
@@ -943,6 +998,25 @@ longer at a single height but falls in \SI{85}{\percent} of multi-height command
 transitions; read as a difficulty probe,
 that is the observation the structured prior is meant to address.
 
+\emph{What a \SI{100}{\percent} fall rate does and does not claim.} LQR balances
+wheeled bipeds on real hardware---Ascento~\citep{klemm2019ascento} and
+DIABLO~\citep{diablo2024} both do it---so a table in which every LQR variant
+falls invites the reading that the plant or the tuning is at fault rather than
+the method. The answer is in which axis ends the episodes. None of these
+controllers fails at the task LQR is credited with on those platforms: the servo
+variants hold pitch to \SI{0.006}{\degree} RMS, and the full-state design of
+Section~\ref{sec:full_state_lqr} holds \SI{0.12}{\degree} for the full
+\SI{20}{s}. What terminates every episode is \emph{roll}, on a morphology
+carrying two lateral degrees of freedom per leg that those platforms do not
+have---and the published designs do not ask a single LQR to close that axis
+either, DIABLO running separate yaw, split-angle, height and roll loops around
+its balance controller~\citep{diablo2024}. The claim these rows support is
+therefore narrow and morphological: reduced-order LQR of the form the
+wheeled-biped literature uses does not transfer to a 10-DOF articulated-leg
+plant \emph{as a single controller for all axes}. It is not a claim that LQR
+cannot balance a wheeled biped, and Section~\ref{sec:full_state_lqr} is the
+control experiment that keeps the distinction from resting on our tuning.
+
 \subsubsection{A full-state LQR designed on the plant itself}
 \label{sec:full_state_lqr}
 
@@ -974,7 +1048,11 @@ reverse, and under random height commands the fall rate runs
 \SIrange{10.0}{20.2}{N} against ACC's $F_{\min}{=}\SI{82}{N}$. Full-state
 optimal linear feedback about a single equilibrium therefore buys two orders of
 magnitude of survival over the reduced-order designs and still does not close
-the problem.
+the problem. That reading rests on a horizon argument, which only carries if the
+proposed controller is held to the same test; it was. Extending ACC's quiet-stance
+window by the same factors returns the opposite verdict---\num{10}/\num{10} at
+\SI{300}{s}, \num{4}/\num{4} at \SI{1800}{s}, residual drift \SI{0.0004}{mm/min}
+against this design's \SIrange{0.43}{0.63}{m} before falling (Section~\ref{sec:longhorizon}).
 
 \subsection{Whole-Body Control Baselines}
 \label{sec:wbc}
@@ -1143,6 +1221,135 @@ counter-directed impulse is survived \textbf{10/10} at episode peak pitch
 $11.89{\pm}\SI{0.51}{\degree}$, almost all of it from the first impulse---what
 $\tau_{\text{release}}{\approx}\SI{1.5}{s}$ is designed to produce, the damping
 boost still partly engaged when the second impulse arrives.
+
+
+% ------------------------------------------------------------
+\subsection{Local Stability Certificate at the Standing Fixed Point}
+\label{sec:stability}
+
+ACC's gates make it a switched system, of the kind partitioned by discrete
+switching surfaces in the hybrid-systems literature~\citep{liberzon2003switching}
+and softened by hysteresis in supervisory switching
+logic~\citep{hespanha2003hysteresis}. Everything reported so far is behavioral:
+the platform does not fall, for \SI{30}{min} (Section~\ref{sec:longhorizon}) and
+under every disturbance of Section~\ref{sec:push}. That is evidence, not a
+stability statement. This section supplies one, in three parts---where the
+switching is, what the one live switch does, and what the linearized closed loop
+is---and is explicit about what it does not cover.
+
+\emph{At quiet stance the switching is inactive, by a measured margin.} Over the
+last \SI{20}{s} of a \SI{60}{s} settle, \num{19} of the \num{21} gates the
+controller exports sit at exactly \num{0} or exactly \num{1} at every control
+step: bit-exact saturation, not approximate. Two anchor gates are not exported
+and are reconstructed from controller state. The proximity gate's argument
+$|e_{\text{sag}}|$ peaks at \SI{24.8}{mm} against its \SI{50}{mm} knee
+(\SIrange{16.1}{33.2}{mm} across the five height variants, a $1.5$--$3.1{\times}$
+margin), and the envelope gate's argument peaks at \SI{1.5e-7}{m/s} against its
+\SI{0.25}{m/s} knee, a margin of $1.7{\times}10^{6}$. Two gates do sit inside
+their bands---the anti-twist gate at ${\approx}\num{0.53}$ and the centering gate
+at ${\approx}\num{0.986}$---but a smoothstep is $C^\infty$ in the interior of its
+band, so those are ordinary smooth feedback rather than switching. In a
+neighbourhood of the fixed point every branch selection in the controller is
+therefore frozen, the closed loop is a single smooth map, and Lyapunov's indirect
+method applies. Chattering is not avoided here \emph{because} the gates are
+$C^1$; it is avoided because the operating point stands far from every switching
+surface, and the margins above are how far.
+
+\emph{The one switch that does fire is a contraction on both branches.} The
+asymmetric envelope of Eq.~\eqref{eq:asym_ema} selects
+$\alpha\in\{0.35,\,0.0067\}$ on the sign of $|v_{\text{sag}}|-\mathrm{EMA}_{t-1}$,
+and in quiet stance that sign flips at essentially every step, so the composition
+is only $C^0$ \emph{in time}. For a fixed input level the tracking error
+$e_t=\mathrm{EMA}_t-|v_{\text{sag}}|$ obeys $e_{t+1}=(1-\alpha_t)e_t$, so
+$|e_{t+1}|\leq 0.9933\,|e_t|$ under \emph{either} branch. Hence $V(e)=e^2$ is a
+common Lyapunov function for the switched pair, and the envelope is globally
+exponentially stable under arbitrary switching, worst-case rate set by the slow
+branch ($\tau{=}\SI{1.49}{s}$). The classical obstacle---that switching among
+individually stable subsystems can destabilize the
+whole~\citep{liberzon2003switching}---cannot arise, and no dwell-time or
+hysteresis condition is required~\citep{hespanha2003hysteresis}. The asymmetry
+buys the attack/release separation the design wants; it does not have to buy
+stability. The $C^0$ property is discharged twice over: the discontinuity lives
+in a provably contracting scalar subsystem, and it reaches the loop only through
+a gate that is flat ($\equiv 1$) across the entire quiet band, so its switching
+cannot modulate loop gain in the certified region.
+
+\emph{The linearized closed loop.} We central-difference the whole \SI{100}{Hz}
+control step---control law plus five physics substeps---about the settled state,
+over an augmented vector of \num{57} coordinates: \num{30} plant (\num{16}
+velocities and \num{14} configuration tangents; the two wheel angles are cyclic
+and removed, as in Section~\ref{sec:full_state_lqr}), \num{3} of estimator
+memory, and \num{24} of controller memory. The adaptive-bias trim is held at its
+converged value---it is an \num{800}-tap moving average, memory rather than
+dynamics, and freezing it makes the one-step map time-invariant instead of
+\num{300}-periodic. Table~\ref{tab:stability} reports the result: at all five
+heights the spectrum has exactly two eigenvalues on the unit circle, none outside
+it, and a reduced spectral radius of \numrange{0.99787}{0.99818}, i.e.\ a slowest
+stable mode of \SIrange{4.7}{5.5}{s}. The classification is not a threshold
+judgement---the gap from the unit circle down to the next mode is
+$1.8{\times}10^{-3}$, four orders of magnitude above the $10^{-7}$ sensitivity of
+the spectrum to the differencing step.
+
+\emph{Both centre directions are identified, and both are bounded by
+measurement.} The first is lateral translation: a differential-drive base
+produces no lateral force to first order, so this is a non-holonomic centre
+direction and appears at $|\lambda|{=}1$ to \num{e-12}. The second is body yaw,
+and it is deliberate: the heading channel carries an explicit deadband,
+$\operatorname{ss}(|e_{\text{yaw}}|;\SI{0.02}{rad},\SI{0.08}{rad})$, measured at
+exactly \num{0} here, so absolute yaw enters no control law while the error stays
+inside $\pm\SI{1.15}{\degree}$. Neither is left to the linearization. Perturbing
+each coordinate at the fixed point and running \SI{300}{s} of the full nonlinear
+simulator, a \SI{1.000}{mm} lateral offset returns \SI{0.997}{mm}---no growth,
+late rate $-1.1{\times}10^{-5}$\,mm/s---and a \SI{0.500}{\degree} yaw offset
+creeps to \SI{0.565}{\degree} at $+4.8{\times}10^{-5}$\,\SI{}{\degree/s}, which
+needs \SI{3.3}{h} to reach the deadband edge at which heading control re-engages.
+The lateral mode is the same one the \SI{30}{min} run of
+Section~\ref{sec:longhorizon} measures as \SI{0.14}{mm/hour} of creep; the
+certificate and the long run are measuring the same thing from two directions.
+
+\emph{Cross-validation, and scope.} The linearization is checked against the
+plant it was taken from. Random plant perturbations at \num{e-4}, \num{e-3} and
+\num{e-2} decay in the full nonlinear simulator---adaptive bias live, nothing
+frozen---at $\rho{=}0.99521{\pm}0.00237$, $0.99513{\pm}0.00117$ and
+$0.99547{\pm}0.00355$, against the \num{0.99530} predicted for the
+anchor-integral mode ($\tau{=}\SI{2.12}{s}$, \SI{0.033}{Hz}), which is the mode a
+generic perturbation excites: agreement to \num{2e-4} over two decades of
+amplitude. What this does \emph{not} establish is equally definite. The
+certificate is local and on the nominal model, at zero delay and clean sensing;
+it estimates no region of attraction, and the push results of
+Section~\ref{sec:push} lie outside it by construction, since a push is precisely
+what drives the gates off their flat regions---that is what the gates are for.
+What it does establish is that the point ACC parks at is exponentially attracting
+in \num{55} of \num{57} directions and neutral in the other two, with those two
+named, mechanistically explained, and separately bounded.
+
+\begin{table}[htbp]
+\centering
+\caption{Local stability certificate at the standing fixed point, across the five
+calibrated height variants. Central-difference linearization of the \SI{100}{Hz}
+closed-loop step after a \SI{60}{s} settle; ``Flat'' counts exported gates that
+are bit-exactly saturated over the last \SI{20}{s}. $\rho_{\text{red}}$ excludes
+the two centre directions (lateral translation and deadbanded yaw), which are
+bounded separately by \SI{300}{s} nonlinear probes.}
+\label{tab:stability}
+\setlength{\tabcolsep}{4pt}
+\footnotesize
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+Variant & CoM $z$ (m) & Flat & Ctr. & Unst. & $\rho_{\text{red}}$ & $\tau_{\text{slow}}$ (s) \\
+\midrule
+Nominal    & 0.4069 & 19/21 & 2 & 0 & 0.99818 & 5.49 \\
+High small & 0.4164 & 18/21 & 2 & 0 & 0.99787 & 4.70 \\
+High tiny  & 0.4128 & 19/21 & 2 & 0 & 0.99817 & 5.46 \\
+Low small  & 0.3973 & 19/21 & 2 & 0 & 0.99813 & 5.34 \\
+Low tiny   & 0.4009 & 19/21 & 2 & 0 & 0.99815 & 5.41 \\
+\bottomrule
+\end{tabular}
+\tabnote\noindent Produced by \path{scripts/acc_stability_certificate.py}; full
+spectra, gate traces and probe trajectories in
+\path{outputs/paper_verification/acc_stability_certificate.json}. Spectra are
+insensitive to the differencing step at the $10^{-7}$ level.
+\end{table}
 
 \section{Discussion and Conclusion}
 \label{sec:discussion}

@@ -45,6 +45,9 @@ outputs/paper_statistics/*
 !outputs/paper_verification/
 outputs/paper_verification/*
 !outputs/paper_verification/idle_ladder.json
+!outputs/paper_verification/idle_longhorizon_300s.json
+!outputs/paper_verification/idle_longhorizon_1800s.json
+!outputs/paper_verification/acc_stability_certificate.json
 !outputs/flight_terrain_n10/
 outputs/flight_terrain_n10/*
 !outputs/flight_terrain_n10/results.json
