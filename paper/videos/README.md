@@ -130,6 +130,7 @@ split-proportional roll band and the settled-terrain relaxation in
 | `ramp_step_50cm.mp4` | 50 | forward up, off the ledge | 28.2 | 6.51 |
 | `ramp_step_30cm_up_down.mp4` | 30 | up, anchor 2.5 s, reverse back down | 12.4 | 5.03 |
 | `ramp_step_30cm_back_off.mp4` | 30 | driven backward end to end, rear-first drop | 15.4 | 5.29 |
+| `ramp_step_50cm_back_off.mp4` | 50 | driven backward end to end, rear-first drop | 25.6 | 5.34 |
 | `ramp_step_30cm_diag_off45.mp4` | 30 | 45° oblique edge, wheels leave in sequence | 5.3 | 3.90 |
 
 The 50 cm peak of 28.2° sits inside the paper's 27.1±2.0° over N=10.
@@ -147,10 +148,13 @@ evidence of a reliable capability.
 |---|---|
 | `height_transition.mp4` | continuous cosine squat/extend cycle between the calibrated low and high postures, 20 s |
 | `height_standup_sitdown.mp4` | nominal → full extension → full squat, then hold |
+| `height_sitdown_standup.mp4` | nominal → full squat → full extension, then hold (reverse order of the row above) |
 
-Both update the CoM height command **and** the height-scheduled joint posture
+All three update the CoM height command **and** the height-scheduled joint posture
 `q_ref` each step. Commanding height alone does not move this robot — the
-posture reference has to move with it.
+posture reference has to move with it. `height_sitdown_standup.mp4` uses the same
+`standup_sitdown` mode with `--reverse`, which swaps which extreme is visited first;
+both directions settle without falling (`fell=False`).
 
 ---
 

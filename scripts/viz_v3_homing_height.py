@@ -44,6 +44,8 @@ def main():
     ap.add_argument("--dur-s", type=float, default=10.0, help="maneuver duration (up+down)")
     ap.add_argument("--amp", type=float, default=1.0,
                     help="height amplitude vs calibrated low/high (1.0=calibrated; >1 extrapolates)")
+    ap.add_argument("--reverse", action="store_true",
+                    help="standup_sitdown mode: go to lowest first, then highest, instead of highest then lowest")
     ap.add_argument("--stride", type=int, default=4)
     ap.add_argument("--out", type=str, default="outputs/visual/v3_homing_height.gif")
     ap.add_argument("--lo-setup", type=str, default=None,
@@ -89,15 +91,16 @@ def main():
             # hold nominal until start-s; then over dur-s: nominal -> highest ->
             # lowest; then hold lowest. amp extends beyond calibrated low/high.
             lo_s, hi_s, nom_s = 0.5 - 0.5 * args.amp, 0.5 + 0.5 * args.amp, 0.5
+            first_s, second_s = (lo_s, hi_s) if args.reverse else (hi_s, lo_s)
             t0, half = args.start_s, args.dur_s / 2.0
             if t < t0:
                 s = nom_s
-            elif t < t0 + half:            # stand up: nominal -> highest
-                s = nom_s + (hi_s - nom_s) * _cos((t - t0) / half)
-            elif t < t0 + args.dur_s:      # sit down: highest -> lowest
-                s = hi_s + (lo_s - hi_s) * _cos((t - t0 - half) / half)
+            elif t < t0 + half:            # nominal -> first extreme
+                s = nom_s + (first_s - nom_s) * _cos((t - t0) / half)
+            elif t < t0 + args.dur_s:      # first extreme -> second extreme
+                s = first_s + (second_s - first_s) * _cos((t - t0 - half) / half)
             else:
-                s = lo_s
+                s = second_s
             return s, z_lo + s * (z_hi - z_lo)
         # transition: smooth cosine cycle
         s = 0.5 - 0.5 * np.cos(2 * np.pi * t / 8.0)

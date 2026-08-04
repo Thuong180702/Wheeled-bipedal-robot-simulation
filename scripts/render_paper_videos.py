@@ -123,18 +123,20 @@ def _ledge_clips():
     for course, heights, extra in (
             ("up_off", "20,30,40,50", []),           # forward up ramp, off the ledge
             ("up_down", "30", []),                   # up, anchor, reverse back down
-            ("back_off", "30", []),                  # rear-first ledge drop
+            ("back_off", "30,50", []),                # rear-first ledge drop
             ("diag_off", "30", ["--angle", "45"])):  # oblique edge: staggered wheel exit
         _run([PY, "scripts/ramp_step_tests.py", "--course", course,
               "--heights", heights, "--render", "--out-dir", str(OUT)] + extra)
 
 
 def _height_clips():
-    for mode, name in (("transition", "height_transition"),
-                       ("standup_sitdown", "height_standup_sitdown")):
+    for mode, name, extra in (
+            ("transition", "height_transition", []),
+            ("standup_sitdown", "height_standup_sitdown", []),
+            ("standup_sitdown", "height_sitdown_standup", ["--reverse"])):
         _run([PY, "-m", "scripts.viz_v3_homing_height", "--mode", mode,
               "--seconds", "20", "--profile", "K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR",
-              "--out", str(OUT / f"{name}.mp4")])
+              "--out", str(OUT / f"{name}.mp4")] + extra)
 
 
 GROUPS = {
