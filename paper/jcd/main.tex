@@ -140,12 +140,12 @@
     Van Thuong Nguyen={a},
   },
   affiliations={
-    a={Independent Researcher, Viet Nam},
+    a={The University of Danang, Viet Nam},
   },
   short-author={V. T. Nguyen},
   contact-to={V. T. Nguyen},
   contact-email={nvthuong180702@gmail.com},
-  contact-address={Independent Researcher, Viet Nam.},
+  contact-address={The University of Danang, Viet Nam.},
 }
 
 \begin{document}
@@ -559,13 +559,12 @@ in the wheel-torque channel, so both act on the sagittal axis only.
 
 \subsubsection{Protocol}
 
-Every row of Table~\ref{tab:standing} was re-measured under one protocol: each
-trial runs \SI{25}{s} from the nominal standing pose with randomised initial
-conditions ($\sigma{=}\SI{0.005}{rad}$ per joint, clipped to limits;
-$\sigma{=}\SI{1}{mm}$ on root height), the first \SI{5}{s} discarded as settling
-(long enough to cover the EMA$_0{=}0$ transient to within \SI{1}{\percent}) and
-$A$, $R$ computed over the remaining \SI{20}{s} relative to each trial's own
-$t{=}0$ pose. A trial is a fall if $|\theta|{>}\SI{46}{\degree}$ or root height
+Every row of Table~\ref{tab:standing} was re-measured under one protocol: \SI{25}{s} from
+the nominal standing pose with randomised initial conditions
+($\sigma{=}\SI{0.005}{rad}$ per joint, clipped to limits; $\sigma{=}\SI{1}{mm}$
+on root height), with $A$, $R$ taken relative to each trial's own $t{=}0$ pose
+after a settle long enough to cover the EMA$_0{=}0$ transient to within
+\SI{1}{\percent}. A trial is a fall if $|\theta|{>}\SI{46}{\degree}$ or root height
 ${<}\SI{0.15}{m}$; confidence intervals are Student-$t$. The protocol measures
 the ability to \emph{stay} put; coming back is measured in
 Sec.~\ref{sec:push}.
@@ -626,12 +625,10 @@ ten randomised trials with no falls---the figure of merit for the platform,
 since sagittal is the actuated inverted-pendulum axis. Precision is assessed
 from the relative spread \emph{between} configurations under an identical
 protocol rather than against a simulator noise floor: removing a single
-mechanism (S2) moves $R_{\text{sag}}$ to \SI{4.772}{mm} with non-overlapping
-SDs. Against the P-only baseline L0, which sustains a \SI{69.7}{mm}
+mechanism (S2) moves $R_{\text{sag}}$ sixteenfold with non-overlapping SDs. Against the P-only baseline L0, which sustains a \SI{69.7}{mm}
 peak-to-peak sagittal limit cycle, the like-for-like improvements are
-$17.461 \rightarrow \SI{0.294}{mm}$ sagittal (a factor of \textbf{59.4}),
-$17.845 \rightarrow \SI{0.788}{mm}$ planar (\textbf{22.6}) and
-$3.675 \rightarrow \SI{0.730}{mm}$ lateral (\textbf{5.0})---the largest gain on
+\textbf{59.4}$\times$ sagittal, \textbf{22.6}$\times$ planar and
+\textbf{5.0}$\times$ lateral---the largest gain on
 the hard axis and the smallest on the easy one, the correct signature for a
 wheel-torque controller, since every term ACC adds beyond L0 produces ground
 force along the rolling direction and none can produce lateral force at all.
@@ -662,16 +659,15 @@ invites.
 \emph{(i) Idle steadiness comes from the damping ladder; the integral buys
 accuracy instead.} M1 disables the anchor integral ($K_i{=}0$) with every gate
 in place, and its \emph{repeatability} is slightly better than ACC's
-(\SI{0.089}{mm}) while its \emph{accuracy} is worse by \SI{4.2}{mm}; conversely
+while its \emph{accuracy} is worse by \SI{4.2}{mm}; conversely
 M2 keeps the integral and every gate but reverts the two velocity-damping
 coefficients to their L2 values, reproducing the L2/L2.5 limit cycle exactly.
 Steadiness is therefore attributable to the damping terms in two stages: raising
-the velocity-damping scale takes $R_{\text{sag}}$ from \SI{25.2}{mm} to
-\SI{3.97}{mm} (M3), and enabling the gated boost takes it to \SI{0.294}{mm}, a
-combined factor of \num{86}. \emph{(ii) The damping boost acts sagittally, as it
+the velocity-damping scale takes $R_{\text{sag}}$ from the L2 limit cycle to
+\SI{3.97}{mm} (M3) and the gated boost takes it the rest of the way, a combined
+factor of \num{86}. \emph{(ii) The damping boost acts sagittally, as it
 must.} S2 degrades sagittal repeatability sixteenfold while leaving lateral
-repeatability statistically unchanged (\SI{0.703}{mm} vs.\ \SI{0.730}{mm},
-overlapping CIs), the only outcome consistent with a boost inside the
+repeatability statistically unchanged (overlapping CIs), the only outcome consistent with a boost inside the
 wheel-torque channel.
 
 \emph{(iii) The proximity gate and the asymmetric envelope are inert during
@@ -780,13 +776,12 @@ Produced by \path{scripts/replicate_ablation_n10.py}; raw output
     \label{fig:push_polar}
 \end{figure}
 
-Table~\ref{tab:push_ablation} reports the factorial ablation. Additively, L1
-(homing) adds \SI{4.8}{N} over L0 ($p{<}\num{1e-9}$), L2 (global integral) adds
-nothing over L1, and L3 (full anchor) adds \SI{7.5}{N} over L2
-($p{<}\num{1e-6}$); the proximity gate contributes nothing to push \emph{margin}
-on its own (L2$\rightarrow$L2.5, n.s.), consistent with its role being windup
-prevention rather than capture-basin enlargement, while the full anchor is
-simultaneously the only configuration in the ladder that settles. Subtractively
+Table~\ref{tab:push_ablation} reports the factorial ablation. Additively, only
+homing (L1) and the full anchor (L3) add significant margin; the global integral
+and the proximity gate contribute nothing to push \emph{margin} on their own,
+consistent with the gate's role being windup prevention rather than
+capture-basin enlargement, and the full anchor is simultaneously the only
+configuration in the ladder that settles. Subtractively
 the striking result is how flat the ablation is: every single-mechanism removal
 except the pitch gate leaves $F_{\min}$ within \SI{1.8}{N} of ACC and none is
 significant, so capture basin is set by the anchor as a whole rather than by any
@@ -794,8 +789,8 @@ one of its four gates---including gain scheduling ($k_p{=}50$ fixed costs
 nothing measurable, S0) and the damping boost, which dominates idle precision
 yet leaves push margin indistinguishable from ACC's (S2). The one mechanism the
 push data \emph{do} isolate is the pitch gate: removing it (S5) leaves the robot
-unable to survive the \SI{10}{N} search floor in any of \num{80} trials.
-Post-push ringdown decays within \SI{9}{s} under ACC, whereas P-only oscillates
+unable to survive even the search floor. Post-push ringdown decays within
+\SI{9}{s} under ACC, whereas P-only oscillates
 indefinitely because the \SI{1.3}{Nm} equilibrium bias sustains the limit cycle;
 the symmetric-EMA ablation exhibits the bistable failure the asymmetry is
 designed to prevent, and the ungated integral winds up during the push and
@@ -805,54 +800,83 @@ prevents settling entirely.
 \label{sec:flight_terrain_results}
 
 Both extensions run at the same rate limit and control rate as the core with no
-re-tuning of the anchor; all cells are $N{=}10$ except the \SI{150}{cm} drop
-($N{=}5$).
+re-tuning of the anchor. Table~\ref{tab:flight_ext} reports both.
 
-\emph{Contact-loss recovery.} ACC recovers to a settled stand from a
-\SI{100}{cm} free drop (10/10, $24.0{\pm}1.2^\circ$ peak pitch after touchdown)
-and from a \SI{50}{cm} ledge drive-off (10/10, $27.1{\pm}2.0^\circ$), with the
-\SI{60}{cm} drop ($18.2{\pm}1.0^\circ$) and \SI{20}{cm} ledge
-($19.6{\pm}0.3^\circ$) correspondingly milder; throughout, survival is the
-\emph{strict settle} verdict (flat pitch/roll window, tail height error
-${\leq}\SI{12}{mm}$, residual speed ${\leq}\SI{0.05}{m/s}$), not merely staying
-upright. The two flight ablations are more nuanced than the design rationale
-suggests: removing the flight \emph{attitude} PD is a real but modest loss (peak
-pitch \SI{27.8}{\degree} on the \SI{100}{cm} drop, one fall in ten), while
-removing the airborne wheel-torque override entirely does not degrade either
-condition and in fact \emph{lowers} peak pitch to $13.0{\pm}\SI{0.5}{\degree}$
-at 10/10, because free wheels driven by the pitch-feedback loop are themselves
-an effective reaction flywheel. The override's benefit appears only at the upper
-end of the envelope: at \SI{150}{cm} both configurations settle 2/5, but the
-override holds peak pitch to $34.0{\pm}\SI{2.1}{\degree}$ against
-$53.6{\pm}\SI{35.0}{\degree}$, so it \textbf{bounds landing-attitude variance
-near the envelope limit} rather than enabling the recovery.
 
-\emph{Per-leg terrain adaptation.} The criterion is traversal, not merely
-survival: a trial counts only if the elevated wheel stays on the \SI{36}{cm}
-slab for the whole \SI{2}{m} straddle---a settling criterion cannot see a robot
-that yaws off the side halfway along, lands on flat ground and settles. Under
-it, with the straddle gating of \S\ref{sec:terrain}, roll on the one-wheel curb
-is $2.4{\pm}\SI{0.1}{\degree}$ (\SI{10}{cm}), $2.9{\pm}\SI{0.2}{\degree}$
-(\SI{15}{cm}) and $3.9{\pm}\SI{0.1}{\degree}$ (\SI{20}{cm}), \num{10}/\num{10}
-at every height ($N{=}10$). The growth is \emph{tracking}, not geometry:
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Flight recovery and per-leg terrain adaptation, as configuration
+$\times$ scenario ablation matrices. Cells are mean$\pm$std over $N{=}10$
+randomised-IC trials; a count in parentheses marks the trials that met the
+success criterion where it is not \num{10}/\num{10}.}
+\label{tab:flight_ext}
+\setlength{\tabcolsep}{2pt}
+\scriptsize
+\begin{tabular}{@{}l cccc@{}}
+\toprule
+\multicolumn{5}{@{}l}{\textbf{Contact-loss recovery} --- peak $|\theta|$ ($^\circ$)} \\
+\midrule
+& \multicolumn{2}{c}{Drop} & \multicolumn{2}{c}{Ledge} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Configuration & \SI{100}{cm} & \SI{60}{cm} & \SI{50}{cm} & \SI{20}{cm} \\
+\midrule
+ACC (full) & 24.0$\pm$1.2 & 18.2$\pm$1.0 & 27.1$\pm$2.0 & 19.6$\pm$0.3 \\
+$-$Attitude PD\textsuperscript{a} & 27.8$\pm$0.3 (9/10) & --- & 31.6$\pm$2.2 & --- \\
+$-$Override & 13.0$\pm$0.5 & --- & 10.2$\pm$0.4 & --- \\
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Per-leg terrain} --- straddle roll $|\phi|$ ($^\circ$), curb at \SI{0.15}{m/s}} \\
+\midrule
+Configuration & \SI{10}{cm} & \SI{15}{cm} & \SI{20}{cm} & \\
+\midrule
+ACC (full) & 2.4$\pm$0.1 & 2.9$\pm$0.2 & 3.9$\pm$0.1 & \\
+$-$Straddle gating & --- & --- & 14.9$\pm$0.1 (0/10) & \\
+$-$Levelling trim\textsuperscript{b} & 4.5$\pm$2.3 & 10.7 (1/10) & fall (0/10) & \\
+$-$Height split & fall (0/10) & fall (0/10) & fall (0/10) & \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}\tabnote\noindent
+Success is \emph{settled} for drops and ledges (flat pitch/roll window, tail
+height error ${\leq}\SI{12}{mm}$, residual speed ${\leq}\SI{0.05}{m/s}$) and
+\emph{traversed} for the curb---the elevated wheel stays on the \SI{36}{cm} slab
+for the whole \SI{2}{m}, which a survival criterion cannot distinguish from
+yawing off the side halfway along. Straddle roll is taken over traversing
+trials only. At the envelope edge---a drop of \SI{150}{cm}, $N{=}5$---peak pitch
+is 34.0$\pm$2.1 with the override against 53.6$\pm$35.0 without it, both
+settling 2/5. \textsuperscript{a}Attitude PD zeroed, airborne spin-down damping kept. \textsuperscript{b}Levelling integrator off,
+height split kept; the lone \SI{15}{cm} traversal gives no std.
+\end{table}
+
+
+\emph{Contact-loss recovery.} ACC settles from every drop and ledge condition
+tested. The two flight ablations are more nuanced than the design rationale
+suggests: removing the flight \emph{attitude} PD is a real but modest loss (one
+fall in ten), while removing the airborne wheel-torque override entirely does
+not degrade either condition and in fact \emph{lowers} peak pitch, because free
+wheels driven by the pitch-feedback loop are themselves an effective reaction
+flywheel. The override's benefit appears only at the envelope edge: at
+\SI{150}{cm} both configurations settle 2/5, but the override holds peak-pitch
+spread to $\pm\SI{2.1}{\degree}$ against $\pm\SI{35.0}{\degree}$, so it
+\textbf{bounds landing-attitude variance near the limit} rather than enabling
+the recovery.
+
+\emph{Per-leg terrain adaptation.} The criterion is traversal, not survival.
+Under it, with the straddle gating of \S\ref{sec:terrain}, the robot traverses
+\num{10}/\num{10} at every height at a straddle roll that grows from
+\SI{2.4}{\degree} to \SI{3.9}{\degree}. The growth is \emph{tracking}, not geometry:
 mid-straddle \eqref{eq:terrain_split} commands a leg-length difference of
 \SI{0.193}{m} against the \SI{0.20}{m} step, so $\varepsilon{=}\SI{7}{mm}$ goes
 unspanned---$\arctan(\varepsilon/w_{\text{track}}){=}\SI{1.4}{\degree}$---and the
 remaining \SI{2.5}{\degree} is servo error at the shortest gravitational moment
-arm the PID gains were tuned for. Suppressing heading hold through the straddle
-instead---the behaviour before the roll band was made split-dependent---leaves
-the mount transient undamped and the yaw error runs to the \SI{0.30}{rad} leash:
-roll then measures $14.9{\pm}\SI{0.1}{\degree}$ at \SI{20}{cm} and the elevated
-wheel leaves the slab \SI{1.3}{m} in (three seeds).
-The component ablations are unambiguous. Replacing the split with a symmetric
-posture---the pre-adapter behaviour---falls at \emph{every} curb height,
-\num{0}/\num{10}, the torso rolling past \SI{60}{\degree} within \SI{0.8}{s} of
-entry; the straddle gating is inert here, as it must be, being driven by the
-commanded split. Disabling the levelling trim alone holds the \SI{10}{cm} curb
-($4.5{\pm}\SI{2.3}{\degree}$, \num{10}/\num{10}) but collapses \SI{15}{cm} to
-\num{1}/\num{10} and \SI{20}{cm} to \num{0}/\num{10} with five outright falls:
-the feedforward table does not span a step this large, and its residual grows
-faster than the straddle allowance absorbs.
+arm the PID gains were tuned for. Suppressing heading hold through the straddle instead---the behaviour before the
+roll band was made split-dependent---leaves the mount transient undamped, the
+yaw error runs to the \SI{0.30}{rad} leash, and the elevated wheel leaves the
+slab \SI{1.3}{m} in.
+The component ablations are unambiguous. Replacing the split with a symmetric posture falls at \emph{every} curb height;
+the straddle gating is inert here, as it must be, being driven by the commanded
+split. Disabling the levelling trim alone holds the \SI{10}{cm} curb but
+collapses beyond it: the feedforward table does not span a step this large, and
+its residual grows faster than the straddle allowance absorbs.
 
 \subsection{Comparison with Classical Baselines and a Preliminary RL Reference}
 \label{sec:baselines}
@@ -902,9 +926,8 @@ $\{0,42,123\}$). Raw output
 \end{table}
 
 All six classical baselines fall within \SI{0.60}{s}. Removing the PID servo
-path cuts torque by \num{2.5}$\times$ and nearly doubles survival
-(\SI{0.32}{s}$\rightarrow$\SI{0.60}{s}) but \emph{worsens} roll
-($\phi_{\text{RMS}}{=}\SI{27.5}{\degree}$ vs.\ \SI{24.2}{\degree}): the
+path cuts torque \num{2.5}$\times$ and nearly doubles survival but
+\emph{worsens} roll: the
 recovered authority is spent in the sagittal plane the model describes, not in
 the lateral one that ends the episode. A negative result is only as strong as its
 tuning, so the family is swept rather than tuned once: a
@@ -915,9 +938,9 @@ value, with roll RMS spread \SI{0.06}{\percent}, even though the re-derived roll
 gain varies \num{32}$\times$. That is invariance to the parameter rather than
 insensitivity of the metric, and its mechanism is saturation---the roll channel
 is commanded against the $\pm\SI{0.7}{rad}$ hip-roll limit throughout the
-episode at every value tested. The preliminary PPO reference sustains
-single-height standing longer (\SI{3.20}{s}) but exhibits an \SI{85}{\percent}
-fall rate across multi-height command transitions; read as a difficulty probe,
+episode at every value tested. The preliminary PPO reference stands
+longer at a single height but falls in \SI{85}{\percent} of multi-height command
+transitions; read as a difficulty probe,
 that is the observation the structured prior is meant to address.
 
 \subsubsection{A full-state LQR designed on the plant itself}
@@ -1011,17 +1034,13 @@ p99 (OSQP~\citep{stellato2020osqp}).
 four noise levels and three delay levels ($N{=}20$ per cell, \num{240} trials)
 bounds ACC on both axes at once (Table~\ref{tab:robustness}). One control period
 of delay is benign for stability and expensive for performance: at \SI{10}{ms}
-there are zero falls on clean and low noise, but $F_{\max}$ bifurcates from
-\SI{95.7}{N} to \SI{50.5}{N} and idle RMS rises $5.6{\times}$. Three control
+there are zero falls on clean and low noise, but $F_{\max}$ nearly halves and idle RMS rises $5.6{\times}$. Three control
 periods is a different regime: at \SI{30}{ms} the platform falls in \num{20} of
 \num{20} trials on \emph{clean} sensing. Noise alone is survivable up to the
-medium level; what ACC does not tolerate is the \emph{conjunction}, medium noise
-with \SI{10}{ms} of delay costing \num{2} falls in \num{20}, the only
-sub-catastrophic falls anywhere in the grid. High noise is unrecoverable at
+medium level; what ACC does not tolerate is the \emph{conjunction}: medium noise with \SI{10}{ms} of delay produces the only sub-catastrophic falls anywhere in the grid. High noise is unrecoverable at
 every delay including zero, because the asymmetric envelope cannot distinguish
 noise from motion---the same mechanism that produces the sharpest single
-sensitivity in the design, idle repeatability degrading \num{71}-fold from
-\SI{0.43}{mm} clean to \SI{30.82}{mm} under medium noise at zero delay as the
+sensitivity in the design, idle repeatability degrading \num{71}-fold under medium noise at zero delay as the
 envelope gate releases and re-engages the integral. ACC is therefore specified
 against a filtered velocity estimate, a requirement on the state estimator
 rather than a limit on the controller.
