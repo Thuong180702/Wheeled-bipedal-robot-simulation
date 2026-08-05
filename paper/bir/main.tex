@@ -96,7 +96,7 @@ architecture is dissected, not only demonstrated. A factorial ablation separates
 three coupled effects: gated damping produces the steadiness, the anchor
 integral the accuracy at a $3{\times}$ cost in steadiness, and the gates are
 inert in quiet stance---bit-identical to ACC---yet decisive under disturbance.
-The push envelope is measurably chiral (\SI{-16.3}{N}), traced to the
+The push envelope is measurably chiral (\SI{-17.3}{N}), traced to the
 antisymmetric hip-roll/hip-yaw sign convention and closed by two controls: a
 mirror flips it, a sham mirror does not. A
 closed-form model predicts the \SI{27.0}{mm} standing offset to
@@ -116,7 +116,7 @@ tuning artefact, not an architectural ceiling.
 \item Push envelope is chiral; traced to a sign convention, closed by mirror controls.
 \item Closed-form model predicts the 27 mm standing offset to 0.92\% over a 40x sweep.
 \item 0.294 mm standing repeatability, held as a fixed point for 30 min without falling.
-\item Recovers 107 N median pushes, a 100 cm free fall, and 10-20 cm curbs per-leg.
+\item Recovers 108 N median pushes, a 100 cm free fall, and 10-20 cm curbs per-leg.
 \end{highlights}
 
 \begin{keywords}
@@ -1024,7 +1024,7 @@ Survival: torso pitch $<\SI{46}{\degree}$ for \SI{17}{s} post-push.
 
 \emph{The envelope is also chiral, and the chirality is in the controller.}
 Superposed on the structural anisotropy is a left--right asymmetry:
-$\SI{135}{\degree}$ survives \SI{40.3}{N} more than $-\SI{135}{\degree}$
+$\SI{135}{\degree}$ survives \SI{40.7}{N} more than $-\SI{135}{\degree}$
 (Fig.~\ref{fig:push_polar}). The plant cannot produce it. Mirroring the model
 about the sagittal plane reproduces its own mass, inertia and geometry to
 \SI{0.05}{mm} and \num{1e-7} respectively, so the open-loop system is
@@ -1033,7 +1033,7 @@ $F(\theta){=}a_0{+}a_1\cos\theta{+}b_1\sin\theta{+}a_2\cos2\theta{+}b_2\sin2\the
 localizes the violation: a mirror symmetry forbids $b_1$ and $b_2$, a
 \ang{180} rotation forbids $a_1$ and $b_1$. The measured envelope has
 $b_1{=}\SI{0.3}{N}$---rotational symmetry is intact---but
-$b_2{=}\SI{-16.3}{N}$, an order of magnitude above the between-episode
+$b_2{=}\SI{-17.3}{N}$, an order of magnitude above the between-episode
 dispersion. The closed loop is thus $C_2$-equivariant and mirror-broken, which
 is a signature of the control law, not of the geometry.
 Its source is the sign convention of the two differential channels. Feeding the
@@ -1058,10 +1058,10 @@ different track width.\footnote{Sweep:
 \path{scripts/sweep_push_chirality.py} ($N{=}5$ per bearing, four arms), raw
 output \path{outputs/push_chirality/}. The $b_2$ of that sweep's shipped arm
 (\SI{-16.2}{N}) and of row S1 of Table~\ref{tab:push_ablation}
-(\SI{-16.3}{N}) agree, although the two use different seeds and settle
-protocols.}
+(\SI{-17.3}{N}) agree to \SI{1.1}{N}, although the two use different seeds,
+repetition counts and settle protocols.}
 
-\emph{Single-bearing protocol.} Several auxiliary experiments---the robustness sweep (Table~\ref{tab:robustness}), the rate-limit sweep, the ringdown and gate-activation traces (Figs.~\ref{fig:gate_activation},~\ref{fig:ringdown}) and the compound-disturbance protocol (Table~\ref{tab:compound})---apply a single impulse along world $+x$ rather than repeating the full \num{8}-bearing sweep at eightfold cost. That bearing is \emph{lateral} and below median: the polar sweep places $\SI{0}{\degree}$ at $\SI{95.6}{N}$, third-weakest of the eight and \SI{11.1}{N} below $F_{\text{med}}$. Those experiments are therefore conservative probes of ACC's disturbance margin, and they are labelled lateral throughout rather than ``forward.'' The omnidirectional figures ($F_{\min}$, $F_{\text{med}}$) characterize the full envelope.
+\emph{Single-bearing protocol.} Several auxiliary experiments---the robustness sweep (Table~\ref{tab:robustness}), the rate-limit sweep, the ringdown and gate-activation traces (Figs.~\ref{fig:gate_activation},~\ref{fig:ringdown}) and the compound-disturbance protocol (Table~\ref{tab:compound})---apply a single impulse along world $+x$ rather than repeating the full \num{8}-bearing sweep at eightfold cost. That bearing is \emph{lateral} and below median: the polar sweep places $\SI{0}{\degree}$ at $\SI{95.5}{N}$, third-weakest of the eight and \SI{12.9}{N} below $F_{\text{med}}$. Those experiments are therefore conservative probes of ACC's disturbance margin, and they are labelled lateral throughout rather than ``forward.'' The omnidirectional figures ($F_{\min}$, $F_{\text{med}}$) characterize the full envelope.
 
 % [!tbp], not [t]: with its caption and note block this float is 648.5pt tall in
 % a 672pt column, so 1-\textfraction leaves no room and plain [t] can never place
@@ -1103,11 +1103,10 @@ $F_{\min}$ and $F_{\text{med}}$ are the minimum and median survivable push over 
 \textsuperscript{5}Left-censored at the search floor: in \num{231} of \num{240} trials (\num{8} bearings ${\times}$ \num{30} repetitions) the bisection never located a survivable magnitude within $[\SI{10}{N},\SI{160}{N}]$. The nine exceptions are scattered over six bearings and reach at most \SI{46.3}{N}, so every repetition's $F_{\min}$ and $F_{\text{med}}$ still fall at or below the floor and both entries are upper bounds rather than measurements. The robot does not survive the smallest push the protocol applies.
 \textsuperscript{6}S1 (fixed $k_p{=}50$) is the canonical ACC configuration. S0 (scheduled $k_p$, softened from 50 to 35 during pushes) was tested and rejected---it did not improve push survival.
 \textsuperscript{7}L2$\rightarrow$L3 = canonical ACC (S1, fixed $k_p{=}50$); bundles four mechanisms (prox.\ gate, asym.\ EMA, boost, pitch gate). S2--S5 isolates each subtractively.
-Welch's unpaired $t$-test (two-sided, $N{=}30$ per group, independent trials; uncorrected $p$, Bonferroni-adj.\ $\alpha{=}0.0056$ over the \num{9} comparisons below, see Section~\ref{sec:discussion}): L0$\rightarrow$L1 $+$\SI{5.1}{N} ($p{=}\num{2e-23}$, $d{=}4.3$); L1$\rightarrow$L2 $-$\SI{0.1}{N} ($p{=}0.69$, n.s.); L2$\rightarrow$L2.5 $-$\SI{0.0}{N} ($p{=}0.86$, n.s., gate alone adds nothing); L2.5$\rightarrow$L3 $+$\SI{7.2}{N} ($p{=}\num{1e-15}$, $d{=}3.6$). Every subtractive row lies within \SI{1.4}{N} of ACC and none is significant (S0 $p{=}0.069$; S2 $p{=}0.094$; S3 $p{=}0.45$; S4 $p{=}0.061$) except S5, which is the safety-critical one ($p{=}\num{2e-44}$, and \num{0}/\num{10} survival even at idle); S2 and S3 are required for ringdown. Idle metrics for every row are in Table~\ref{tab:standing}. With $N{=}30$, 95\%CI half-width ${\approx}0.37{\times}$std ($t_{0.025,29}{=}2.045$, single-group $\text{df}{=}29$), so on the push rows the resolution is ${\approx}\SI{1}{N}$; the four subtractive effect sizes are $|d|{\le}0.49$, bounding any single-mechanism effect on $F_{\min}$ below ${\approx}\SI{1.4}{N}$. The \num{10} repetitions plotted in Fig.~\ref{fig:push_polar} are the first \num{10} seeds of this set. Produced by \path{scripts/replicate_ablation_n30.py}.\tabnote\noindent
-\emph{Trial independence.} \path{compute_v3_torque_for_state} mutates the controller context it is passed---it carries \path{prev_com_pos} and the flight-mode latch (\path{airborne_mode}, \path{airborne_count}, \path{ground_count}) there---so every trial in this table is run from a freshly constructed context. Trials are therefore statistically independent, and in particular a trial that ends airborne cannot hand a latched flight mode to its successor in the bisection. Raw outputs, all rows: \path{outputs/paper_statistics/ablation_n30_results.json}, one harness, one protocol, seeds $\num{20260728}{\times}100+r$ for $r\in[0,30)$.
+Welch's unpaired $t$-test (two-sided, $N{=}30$ per group, independent trials; uncorrected $p$, Bonferroni-adj.\ $\alpha{=}0.0056$ over the \num{9} comparisons below, see Section~\ref{sec:discussion}): L0$\rightarrow$L1 $+$\SI{5.1}{N} ($p{=}\num{2e-23}$, $d{=}4.3$); L1$\rightarrow$L2 $-$\SI{0.1}{N} ($p{=}0.69$, n.s.); L2$\rightarrow$L2.5 $-$\SI{0.0}{N} ($p{=}0.86$, n.s., gate alone adds nothing); L2.5$\rightarrow$L3 $+$\SI{7.2}{N} ($p{=}\num{1e-15}$, $d{=}3.6$). Every subtractive row lies within \SI{1.4}{N} of ACC and none is significant (S0 $p{=}0.069$; S2 $p{=}0.094$; S3 $p{=}0.45$; S4 $p{=}0.061$) except S5, which is the safety-critical one ($p{=}\num{2e-44}$, and \num{0}/\num{10} survival even at idle); S2 and S3 are required for ringdown. Idle metrics for every row are in Table~\ref{tab:standing}. With $N{=}30$, 95\%CI half-width ${\approx}0.37{\times}$std ($t_{0.025,29}{=}2.045$, single-group $\text{df}{=}29$), so on the push rows the resolution is ${\approx}\SI{1}{N}$; the four subtractive effect sizes are $|d|{\le}0.49$, bounding any single-mechanism effect on $F_{\min}$ below ${\approx}\SI{1.4}{N}$. Fig.~\ref{fig:push_polar} plots the same \num{30} repetitions of row S1. Produced by \path{scripts/replicate_ablation_n30.py}.\tabnote\noindent
 \end{table}
 
-Table~\ref{tab:push_ablation} reports the factorial ablation.
+Table~\ref{tab:push_ablation} reports the factorial ablation.\footnote{\path{compute_v3_torque_for_state} mutates the controller context it is passed---it carries \path{prev_com_pos} and the flight-mode latch (\path{airborne_mode}, \path{airborne_count}, \path{ground_count}) there---so every trial in this table is run from a freshly constructed context. Trials are therefore statistically independent, and in particular a trial that ends airborne cannot hand a latched flight mode to its successor in the bisection. Raw outputs, all rows: \path{outputs/paper_statistics/ablation_n30_results.json}, one harness, one protocol, seeds $\num{20260728}{\times}100+r$ for $r\in[0,30)$.}
 Additively: L1 (homing) adds \SI{5.1}{N} over L0 ($p{=}\num{2e-23}$); L2 (global integral) adds nothing over L1 ($-\SI{0.1}{N}$, n.s.); L3 (full anchor) adds \SI{7.2}{N} over L2 ($p{=}\num{1e-15}$). The L2$\rightarrow$L3 step bundles four mechanisms at once, and the push metrics alone cannot separate them; Section~\ref{sec:idle_mechanism} performs that separation on the idle side. What the push data do show is that the proximity gate contributes nothing to push \emph{margin} on its own (L2$\rightarrow$L2.5, $-\SI{0.0}{N}$, n.s.), consistent with its role being windup prevention rather than capture-basin enlargement, and that the full anchor recovers a margin advantage over the ungated integral ($+\SI{7.2}{N}$) while simultaneously being the only configuration in the ladder that settles.
 Subtractively, the striking result is how flat the ablation is: every single-mechanism removal except the pitch gate leaves $F_{\min}$ within \SI{1.4}{N} of ACC, none of them significantly (\SIrange{0.061}{0.45}{} uncorrected $p$). At $N{=}30$ this is a bounded effect rather than an underpowered null: the four subtractive effect sizes are $|d|{\le}0.49$ and the \SI{95}{\percent} intervals put any single-mechanism contribution to $F_{\min}$ below ${\approx}\SI{1.4}{N}$, against the \SI{7.2}{N} the anchor adds as a whole. Capture basin is set by the anchor as a whole---the L2.5$\rightarrow$L3 step---and not by any one of its four gates. This includes S0: gain scheduling is unnecessary, since fixing $k_p{=}50$ costs nothing measurable ($-\SI{1.3}{N}$, n.s.). It also includes the damping boost, whose value lies elsewhere. S2 is the dominant idle-precision mechanism and acts sagittally: removing it degrades sagittal repeatability sixteen-fold (\SI{0.294}{mm}${\rightarrow}\SI{4.772}{mm}$) while leaving lateral repeatability statistically unchanged (\SI{0.703}{mm} vs.\ ACC's \SI{0.730}{mm}, Table~\ref{tab:standing}), and its push margin is indistinguishable from ACC's ($\SI{81.2}{N}$ vs.\ \SI{82.1}{N}, $p{=}0.094$). The boost therefore buys sagittal steadiness and settling, not capture basin. The one mechanism the push data \emph{do} isolate is the pitch gate: removing it (S5) leaves the robot unable to survive the \SI{10}{N} floor of the search in \num{231} of \num{240} trials, and additionally causes \num{10}/\num{10} falls at pure idle. S3 (asymmetric EMA) and S2 are each individually required for ringdown.
 
@@ -1118,31 +1117,31 @@ Subtractively, the striking result is how flat the ablation is: every single-mec
     as row S1 of Table~\ref{tab:push_ablation}, not a separate measurement:
     \num{8} bearings, threshold located by
     binary search over \SIrange{10}{160}{N} to a \SI{5}{N} tolerance, so the
-    plotted minimum is by construction the $F_{\min}$ of that row. It is drawn
-    at $N{=}\num{10}$, the first ten seeds of that row's \num{30}; extending to
-    all \num{30} moves each per-bearing mean by at most \SI{3.3}{N} and
-    $F_{\min}$ by \SI{0.2}{N}, so the envelope below is plotted on the smaller
-    set rather than re-rendered. Solid curve:
-    per-bearing mean survivable push magnitude; shaded band: ${\pm}1$ standard
-    deviation over the ten repetitions. The radial axis is linear in force and
+    plotted minimum is by construction the $F_{\min}$ of that row.
+    $F_{\text{med}}$ is not read off this figure: it is the per-repetition
+    median over the \num{8} bearings, averaged over repetitions
+    (\SI{108.4}{N}), which differs from the median of the per-bearing means
+    plotted here (\SI{105.6}{N}) because median and mean do not commute.
+    Solid curve: per-bearing mean survivable push magnitude; shaded band:
+    ${\pm}1$ standard deviation over the \num{30} repetitions. The radial axis is linear in force and
     originates at \SI{0}{N}, so radial distance is proportional to margin.
     The envelope is strongly anisotropic, spanning
-    \SIrange{82.3}{144.8}{N}---a $1.8{\times}$ ratio between the weakest and
+    \SIrange{82.1}{144.1}{N}---a $1.8{\times}$ ratio between the weakest and
     strongest bearing. The ordering is
-    $-\SI{90}{\degree}\,(\SI{144.8}{N}) >
-      \SI{135}{\degree}\,(\SI{132.2}{N}) >
-      \SI{90}{\degree}\,(\SI{117.8}{N}) >
-      -\SI{45}{\degree}\,(\SI{107.3}{N}) >
-      \SI{180}{\degree}\,(\SI{100.7}{N}) >
-      \SI{0}{\degree}\,(\SI{95.6}{N}) >
-      -\SI{135}{\degree}\,(\SI{91.9}{N}) >
-      \SI{45}{\degree}\,(\SI{82.3}{N})$.
+    $-\SI{90}{\degree}\,(\SI{144.1}{N}) >
+      \SI{135}{\degree}\,(\SI{132.5}{N}) >
+      \SI{90}{\degree}\,(\SI{115.8}{N}) >
+      -\SI{45}{\degree}\,(\SI{110.5}{N}) >
+      \SI{180}{\degree}\,(\SI{100.6}{N}) >
+      \SI{0}{\degree}\,(\SI{95.5}{N}) >
+      -\SI{135}{\degree}\,(\SI{91.8}{N}) >
+      \SI{45}{\degree}\,(\SI{82.1}{N})$.
     Two regularities are visible. First, the actuated axis is the strong one:
     bearings are applied in the world frame as
     $\mathbf{f}=F(\cos\theta,\sin\theta,0)$, so $\pm\SI{90}{\degree}$ are purely
     sagittal and $\SI{0}{\degree}/\SI{180}{\degree}$ purely lateral
-    (Section~\ref{sec:standing}). The two sagittal bearings average \SI{131.3}{N}
-    against \SI{98.2}{N} for the two lateral ones, a $1.34{\times}$ advantage.
+    (Section~\ref{sec:standing}). The two sagittal bearings average \SI{130.0}{N}
+    against \SI{98.0}{N} for the two lateral ones, a $1.33{\times}$ advantage.
     This is the expected asymmetry for a wheeled biped: sagittally the wheels
     accelerate the contact patch back under the CoM and convert the impulse into
     a controlled excursion, whereas laterally no actuator produces ground force
@@ -1150,8 +1149,8 @@ Subtractively, the striking result is how flat the ablation is: every single-mec
     $w_{\text{track}}={\SI{0.278}{m}}$ track width plus hip-roll PD. We compare
     axis \emph{means} rather than ranks because the raw ordering is contaminated
     by the second regularity. Second, the envelope is
-    measurably \emph{chiral}: $\SI{135}{\degree}$ survives \SI{40.3}{N} more than
-    $-\SI{135}{\degree}$, and $-\SI{90}{\degree}$ \SI{27.0}{N} more than
+    measurably \emph{chiral}: $\SI{135}{\degree}$ survives \SI{40.7}{N} more than
+    $-\SI{135}{\degree}$, and $-\SI{90}{\degree}$ \SI{28.3}{N} more than
     $\SI{90}{\degree}$. This is not sampling noise and not the plant, which is
     mirror-symmetric to numerical precision: it is the sign convention of the
     controller's antisymmetric hip-roll and hip-yaw channels, which leaves the
@@ -2672,6 +2671,17 @@ Robot. 4 (26) (2019) eaau5872.
 J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford, O.~Klimov, Proximal policy
 optimization algorithms, arXiv preprint arXiv:1707.06347 (2017).
 
+\bibitem{tobin2017domainrand}
+J.~Tobin, R.~Fong, A.~Ray, J.~Schneider, W.~Zaremba, P.~Abbeel, Domain
+randomization for transferring deep neural networks from simulation to the real
+world, in: Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS), 2017, pp.
+23--30.
+
+\bibitem{peng2018dynrand}
+X.B.~Peng, M.~Andrychowicz, W.~Zaremba, P.~Abbeel, Sim-to-real transfer of
+robotic control with dynamics randomization, in: Proc. IEEE Int. Conf. Robot.
+Autom. (ICRA), 2018, pp. 3803--3810.
+
 \bibitem{johannink2019residual}
 T.~Johannink, S.~Bahl, A.~Nair, J.~Luo, A.~Kumar, M.~Loskyll, J.A.~Ojea,
 E.~Solowjow, S.~Levine, Residual reinforcement learning for robot control, in:
@@ -2696,10 +2706,6 @@ J.~Zhang, S.~Wang, H.~Wang, J.~Lai, Z.~Bing, Y.~Jiang, Y.~Zheng, Z.~Zhang, An
 adaptive approach to whole-body balance control of wheel-bipedal robot Ollie,
 in: Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS), 2022, pp.
 12835--12842.
-
-\bibitem{rawlings2017mpc}
-J.B. Rawlings, D.Q. Mayne, M.M. Diehl, Model Predictive Control: Theory,
-Computation, and Design, 2nd ed., Nob Hill Publishing, Madison, WI, 2017.
 
 \bibitem{bjelonic2021mpc}
 M.~Bjelonic, R.~Grandia, O.~Harley, C.~Galliard, S.~Zimmermann, M.~Hutter,
@@ -2871,22 +2877,6 @@ K.~Pathak, J.~Franch, S.K.~Agrawal, Velocity and position control of a wheeled
 inverted pendulum by partial feedback linearization, IEEE Trans. Robot. 21 (3)
 (2005) 505--513.
 
-\bibitem{grimminger2020torque}
-F.~Grimminger, A.~Meduri, M.~Khadiv, J.~Viereck, M.~W\"{u}thrich,
-L.~Wellhausen, et al., An open torque-controlled modular robot architecture for
-legged locomotion research, IEEE Robot. Autom. Lett. 5 (2) (2020) 3650--3657.
-
-\bibitem{tobin2017domainrand}
-J.~Tobin, R.~Fong, A.~Ray, J.~Schneider, W.~Zaremba, P.~Abbeel, Domain
-randomization for transferring deep neural networks from simulation to the real
-world, in: Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS), 2017, pp.
-23--30.
-
-\bibitem{peng2018dynrand}
-X.B.~Peng, M.~Andrychowicz, W.~Zaremba, P.~Abbeel, Sim-to-real transfer of
-robotic control with dynamics randomization, in: Proc. IEEE Int. Conf. Robot.
-Autom. (ICRA), 2018, pp. 3803--3810.
-
 \bibitem{bryson1975optimal}
 A.E.~Bryson, Y.-C.~Ho, Applied Optimal Control: Optimization, Estimation and
 Control, revised ed., Hemisphere Publishing, 1975.
@@ -2895,6 +2885,15 @@ Control, revised ed., Hemisphere Publishing, 1975.
 B.~Stellato, G.~Banjac, P.~Goulart, A.~Bemporad, S.~Boyd, OSQP: an operator
 splitting solver for quadratic programs, Math. Program. Comput. 12 (4) (2020)
 637--672.
+
+\bibitem{grimminger2020torque}
+F.~Grimminger, A.~Meduri, M.~Khadiv, J.~Viereck, M.~W\"{u}thrich,
+L.~Wellhausen, et al., An open torque-controlled modular robot architecture for
+legged locomotion research, IEEE Robot. Autom. Lett. 5 (2) (2020) 3650--3657.
+
+\bibitem{rawlings2017mpc}
+J.B. Rawlings, D.Q. Mayne, M.M. Diehl, Model Predictive Control: Theory,
+Computation, and Design, 2nd ed., Nob Hill Publishing, Madison, WI, 2017.
 
 \end{thebibliography}
 

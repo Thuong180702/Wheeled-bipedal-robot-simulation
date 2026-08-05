@@ -156,7 +156,7 @@
 
 % ============================================================
 \begin{abstract}
-Wheeled bipedal robots face a trade-off: the stiffness that buys precise standing shrinks the push-recovery envelope, while the integral action that removes equilibrium bias winds up during disturbances. The Anchored Conditionally-Gated Controller (ACC) answers both by \emph{conditional activation}---a position integral confined to a \SI{15}{cm} neighbourhood and enabled by an asymmetric envelope follower ($\tau_{\text{attack}}{\approx}\SI{23}{ms}$, $\tau_{\text{release}}{\approx}\SI{1.5}{s}$) that separates quiet stance from post-push ringdown. On a \num{10}-DOF, \SI{8.1}{kg} wheeled biped in MuJoCo (\SI{500}{Hz} physics, \SI{100}{Hz} control) the architecture is dissected, not only demonstrated. A factorial ablation separates three coupled effects: gated damping produces the steadiness, the anchor integral the accuracy, and the gates are bit-identical to ACC in quiet stance yet decisive under disturbance. The push envelope is measurably chiral (\SI{-16.3}{N}), traced to the antisymmetric hip-roll/hip-yaw channels. A closed-form model predicts the \SI{27.0}{mm} standing offset to \SI{0.92}{\percent} across a fortyfold gain sweep, as the price of a bounded integrator memory. ACC holds $0.294{\pm}0.015$\,mm sagittal repeatability ($N{=}10$), \num{59}-fold over this ablation's proportional-only rung, recovers omnidirectional pushes (\SI{108}{N} median, \SI{82}{N} worst case), and stands \SI{30}{min} at \SI{0.0004}{mm/min} drift where six classical baselines and a full-state LQR all fall. A \SI{2}{ms}-resolved delay screen prices deployment at a \SIrange{6}{8}{ms} latency cliff that one retuned gain moves outward.
+Wheeled bipedal robots face a trade-off: the stiffness that buys precise standing shrinks the push-recovery envelope, while the integral action that removes equilibrium bias winds up during disturbances. The Anchored Conditionally-Gated Controller (ACC) answers both by \emph{conditional activation}---a position integral confined to a \SI{15}{cm} neighbourhood and enabled by an asymmetric envelope follower ($\tau_{\text{attack}}{\approx}\SI{23}{ms}$, $\tau_{\text{release}}{\approx}\SI{1.5}{s}$) that separates quiet stance from post-push ringdown. On a \num{10}-DOF, \SI{8.1}{kg} wheeled biped in MuJoCo (\SI{500}{Hz} physics, \SI{100}{Hz} control) the architecture is dissected, not only demonstrated. A factorial ablation separates three coupled effects: gated damping produces the steadiness, the anchor integral the accuracy, and the gates are bit-identical to ACC in quiet stance yet decisive under disturbance. The push envelope is measurably chiral (\SI{-17.3}{N}), traced to the antisymmetric hip-roll/hip-yaw channels. A closed-form model predicts the \SI{27.0}{mm} standing offset to \SI{0.92}{\percent} across a fortyfold gain sweep, as the price of a bounded integrator memory. ACC holds $0.294{\pm}0.015$\,mm sagittal repeatability ($N{=}10$), \num{59}-fold over this ablation's proportional-only rung, recovers omnidirectional pushes (\SI{108}{N} median, \SI{82}{N} worst case), and stands \SI{30}{min} at \SI{0.0004}{mm/min} drift where six classical baselines and a full-state LQR all fall. A \SI{2}{ms}-resolved delay screen prices deployment at a \SIrange{6}{8}{ms} latency cliff that one retuned gain moves outward.
 \end{abstract}
 
 % ============================================================
@@ -647,10 +647,10 @@ gain change.
 
 \emph{The envelope is also chiral, and the chirality is in the controller.}
 Superposed on the anisotropy is a left--right asymmetry: \SI{135}{\degree}
-survives \SI{40.3}{N} more than $-\SI{135}{\degree}$. The plant cannot produce
+survives \SI{40.7}{N} more than $-\SI{135}{\degree}$. The plant cannot produce
 it---mirroring the model about the sagittal plane reproduces its mass, inertia
 and geometry to \SI{0.05}{mm} and \num{1e-7}---and a harmonic fit localises the
-violation in the mirror-forbidden term ($b_2{=}\SI{-16.3}{N}$ against
+violation in the mirror-forbidden term ($b_2{=}\SI{-17.3}{N}$ against
 $b_1{=}\SI{0.3}{N}$). Under a mirrored state the commanded torque maps to its own
 mirror image exactly on hip-pitch, knee and wheel and fails only on hip-roll and
 hip-yaw, both assembled antisymmetrically; mirroring those two channels flips
@@ -658,7 +658,7 @@ $b_2$ to \SI{+15.6}{N} at unchanged magnitude while a sham mirror leaves it at
 \SI{-15.7}{N}. The effect is reported without adopting the correction, which
 redistributes the envelope without enlarging it ($F_{\min}$
 \SI{82.5}{}${\rightarrow}\SI{79.7}{N}$). Later protocols apply a single impulse
-along world $+x$, a lateral and below-median bearing (\SI{95.6}{N}), so those
+along world $+x$, a lateral and below-median bearing (\SI{95.5}{N}), so those
 experiments are conservative probes.
 
 \begin{table}[htbp]

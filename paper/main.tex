@@ -61,7 +61,7 @@ Email: Mailexample@gmail.com
 
 % ============================================================
 \begin{abstract}
-Wheeled bipedal robots face a trade-off: the stiffness that buys precise standing shrinks the push-recovery envelope, while the integral action that cancels equilibrium bias winds up during disturbances. We present the Anchored Conditionally-Gated Controller (ACC), which answers both by \emph{conditional activation}---a position integral confined to a \SI{15}{cm} neighborhood and enabled by an asymmetric envelope follower ($\tau_{\text{attack}}{\approx}\SI{23}{ms}$, $\tau_{\text{release}}{\approx}\SI{1.5}{s}$) that separates quiet stance from post-push ringdown. On a \num{10}-DOF, \SI{8.1}{kg} wheeled biped in MuJoCo (\SI{500}{Hz} physics, \SI{100}{Hz} control) the architecture is dissected, not only demonstrated. A factorial ablation separates three coupled effects: gated damping produces the steadiness, the anchor integral the accuracy at a $3{\times}$ cost in steadiness, and the gates are bit-identical to ACC in quiet stance yet decisive under disturbance. The push envelope is measurably chiral (\SI{-16.3}{N}), traced to the sign convention of the antisymmetric hip-roll/hip-yaw channels and closed by two control experiments: a mirror flips it, a sham mirror does not. A closed-form model predicts the \SI{27.0}{mm} standing offset---the static error a leaky integrator pays against a \SI{1.44}{\degree} calibration residual---to \SI{0.92}{\percent} across a $40{\times}$ gain sweep. ACC holds $0.294{\pm}0.015$\,mm sagittal repeatability ($N{=}10$), a \num{59}-fold improvement over this ablation's proportional-only rung, recovers omnidirectional pushes (\SI{108}{N} median, \SI{82}{N} worst case), stands \SI{30}{min} at \SI{0.0004}{mm/min} drift where six classical baselines and a full-state LQR all fall, and survives a \SI{100}{cm} drop and \SIrange{10}{20}{cm} curbs. A \SI{2}{ms}-resolved delay screen prices deployment at a \SIrange{6}{8}{ms} latency cliff that one retuned gain moves outward: a tuning artifact, not an architectural ceiling.
+Wheeled bipedal robots face a trade-off: the stiffness that buys precise standing shrinks the push-recovery envelope, while the integral action that cancels equilibrium bias winds up during disturbances. We present the Anchored Conditionally-Gated Controller (ACC), which answers both by \emph{conditional activation}---a position integral confined to a \SI{15}{cm} neighborhood and enabled by an asymmetric envelope follower ($\tau_{\text{attack}}{\approx}\SI{23}{ms}$, $\tau_{\text{release}}{\approx}\SI{1.5}{s}$) that separates quiet stance from post-push ringdown. On a \num{10}-DOF, \SI{8.1}{kg} wheeled biped in MuJoCo (\SI{500}{Hz} physics, \SI{100}{Hz} control) the architecture is dissected, not only demonstrated. A factorial ablation separates three coupled effects: gated damping produces the steadiness, the anchor integral the accuracy at a $3{\times}$ cost in steadiness, and the gates are bit-identical to ACC in quiet stance yet decisive under disturbance. The push envelope is measurably chiral (\SI{-17.3}{N}), traced to the sign convention of the antisymmetric hip-roll/hip-yaw channels and closed by two control experiments: a mirror flips it, a sham mirror does not. A closed-form model predicts the \SI{27.0}{mm} standing offset---the static error a leaky integrator pays against a \SI{1.44}{\degree} calibration residual---to \SI{0.92}{\percent} across a $40{\times}$ gain sweep. ACC holds $0.294{\pm}0.015$\,mm sagittal repeatability ($N{=}10$), a \num{59}-fold improvement over this ablation's proportional-only rung, recovers omnidirectional pushes (\SI{108}{N} median, \SI{82}{N} worst case), stands \SI{30}{min} at \SI{0.0004}{mm/min} drift where six classical baselines and a full-state LQR all fall, and survives a \SI{100}{cm} drop and \SIrange{10}{20}{cm} curbs. A \SI{2}{ms}-resolved delay screen prices deployment at a \SIrange{6}{8}{ms} latency cliff that one retuned gain moves outward: a tuning artifact, not an architectural ceiling.
 \end{abstract}
 \begin{IEEEkeywords}
 Wheeled biped robot, conditionally-gated control, anchored standing, proximity-gated integral, push recovery, flight recovery, terrain adaptation.
@@ -959,7 +959,7 @@ Survival: torso pitch $<\SI{46}{\degree}$ for \SI{17}{s} post-push.
 
 \emph{The envelope is also chiral, and the chirality is in the controller.}
 Superposed on the structural anisotropy is a left--right asymmetry:
-$\SI{135}{\degree}$ survives \SI{40.3}{N} more than $-\SI{135}{\degree}$
+$\SI{135}{\degree}$ survives \SI{40.7}{N} more than $-\SI{135}{\degree}$
 (Fig.~\ref{fig:push_polar}). The plant cannot produce it. Mirroring the model
 about the sagittal plane reproduces its own mass, inertia and geometry to
 \SI{0.05}{mm} and \num{1e-7} respectively, so the open-loop system is
@@ -968,7 +968,7 @@ $F(\theta){=}a_0{+}a_1\cos\theta{+}b_1\sin\theta{+}a_2\cos2\theta{+}b_2\sin2\the
 localizes the violation: a mirror symmetry forbids $b_1$ and $b_2$, a
 \ang{180} rotation forbids $a_1$ and $b_1$. The measured envelope has
 $b_1{=}\SI{0.3}{N}$---rotational symmetry is intact---but
-$b_2{=}\SI{-16.3}{N}$, an order of magnitude above the between-episode
+$b_2{=}\SI{-17.3}{N}$, an order of magnitude above the between-episode
 dispersion. The closed loop is thus $C_2$-equivariant and mirror-broken, which
 is a signature of the control law, not of the geometry.
 Its source is the sign convention of the two differential channels. Feeding the
@@ -993,10 +993,10 @@ different track width.\footnote{Sweep:
 \path{scripts/sweep_push_chirality.py} ($N{=}5$ per bearing, four arms), raw
 output \path{outputs/push_chirality/}. The $b_2$ of that sweep's shipped arm
 (\SI{-16.2}{N}) and of row S1 of Table~\ref{tab:push_ablation}
-(\SI{-16.3}{N}) agree, although the two use different seeds and settle
-protocols.}
+(\SI{-17.3}{N}) agree to \SI{1.1}{N}, although the two use different seeds,
+repetition counts and settle protocols.}
 
-\emph{Single-bearing protocol.} Several auxiliary experiments---the robustness sweep (Table~\ref{tab:robustness}), the rate-limit sweep, the ringdown and gate-activation traces (Figs.~\ref{fig:gate_activation},~\ref{fig:ringdown}) and the compound-disturbance protocol (Table~\ref{tab:compound})---apply a single impulse along world $+x$ rather than repeating the full \num{8}-bearing sweep at eightfold cost. That bearing is \emph{lateral} and below median: the polar sweep places $\SI{0}{\degree}$ at $\SI{95.6}{N}$, third-weakest of the eight and \SI{11.1}{N} below $F_{\text{med}}$. Those experiments are therefore conservative probes of ACC's disturbance margin, and they are labelled lateral throughout rather than ``forward.'' The omnidirectional figures ($F_{\min}$, $F_{\text{med}}$) characterize the full envelope.
+\emph{Single-bearing protocol.} Several auxiliary experiments---the robustness sweep (Table~\ref{tab:robustness}), the rate-limit sweep, the ringdown and gate-activation traces (Figs.~\ref{fig:gate_activation},~\ref{fig:ringdown}) and the compound-disturbance protocol (Table~\ref{tab:compound})---apply a single impulse along world $+x$ rather than repeating the full \num{8}-bearing sweep at eightfold cost. That bearing is \emph{lateral} and below median: the polar sweep places $\SI{0}{\degree}$ at $\SI{95.5}{N}$, third-weakest of the eight and \SI{12.9}{N} below $F_{\text{med}}$. Those experiments are therefore conservative probes of ACC's disturbance margin, and they are labelled lateral throughout rather than ``forward.'' The omnidirectional figures ($F_{\min}$, $F_{\text{med}}$) characterize the full envelope.
 
 % [!tbp], not [t]: with its caption and note block this float is 648.5pt tall in
 % a 672pt column, so 1-\textfraction leaves no room and plain [t] can never place
@@ -1038,7 +1038,7 @@ $F_{\min}$ and $F_{\text{med}}$ are the minimum and median survivable push over 
 \textsuperscript{5}Left-censored at the search floor: in \num{231} of \num{240} trials (\num{8} bearings ${\times}$ \num{30} repetitions) the bisection never located a survivable magnitude within $[\SI{10}{N},\SI{160}{N}]$. The nine exceptions are scattered over six bearings and reach at most \SI{46.3}{N}, so every repetition's $F_{\min}$ and $F_{\text{med}}$ still fall at or below the floor and both entries are upper bounds rather than measurements. The robot does not survive the smallest push the protocol applies.
 \textsuperscript{6}S1 (fixed $k_p{=}50$) is the canonical ACC configuration. S0 (scheduled $k_p$, softened from 50 to 35 during pushes) was tested and rejected---it did not improve push survival.
 \textsuperscript{7}L2$\rightarrow$L3 = canonical ACC (S1, fixed $k_p{=}50$); bundles four mechanisms (prox.\ gate, asym.\ EMA, boost, pitch gate). S2--S5 isolates each subtractively.
-Welch's unpaired $t$-test (two-sided, $N{=}30$ per group, independent trials; uncorrected $p$, Bonferroni-adj.\ $\alpha{=}0.0056$ over the \num{9} comparisons below, see \S\ref{sec:discussion}): L0$\rightarrow$L1 $+$\SI{5.1}{N} ($p{=}\num{2e-23}$, $d{=}4.3$); L1$\rightarrow$L2 $-$\SI{0.1}{N} ($p{=}0.69$, n.s.); L2$\rightarrow$L2.5 $-$\SI{0.0}{N} ($p{=}0.86$, n.s., gate alone adds nothing); L2.5$\rightarrow$L3 $+$\SI{7.2}{N} ($p{=}\num{1e-15}$, $d{=}3.6$). Every subtractive row lies within \SI{1.4}{N} of ACC and none is significant (S0 $p{=}0.069$; S2 $p{=}0.094$; S3 $p{=}0.45$; S4 $p{=}0.061$) except S5, which is the safety-critical one ($p{=}\num{2e-44}$, and \num{0}/\num{10} survival even at idle); S2 and S3 are required for ringdown. Idle metrics for every row are in Table~\ref{tab:standing}. With $N{=}30$, 95\%CI half-width ${\approx}0.37{\times}$std ($t_{0.025,29}{=}2.045$, single-group $\text{df}{=}29$), so on the push rows the resolution is ${\approx}\SI{1}{N}$; the four subtractive effect sizes are $|d|{\le}0.49$, bounding any single-mechanism effect on $F_{\min}$ below ${\approx}\SI{1.4}{N}$. The \num{10} repetitions plotted in Fig.~\ref{fig:push_polar} are the first \num{10} seeds of this set. Produced by \path{scripts/replicate_ablation_n30.py}.\tabnote\noindent
+Welch's unpaired $t$-test (two-sided, $N{=}30$ per group, independent trials; uncorrected $p$, Bonferroni-adj.\ $\alpha{=}0.0056$ over the \num{9} comparisons below, see \S\ref{sec:discussion}): L0$\rightarrow$L1 $+$\SI{5.1}{N} ($p{=}\num{2e-23}$, $d{=}4.3$); L1$\rightarrow$L2 $-$\SI{0.1}{N} ($p{=}0.69$, n.s.); L2$\rightarrow$L2.5 $-$\SI{0.0}{N} ($p{=}0.86$, n.s., gate alone adds nothing); L2.5$\rightarrow$L3 $+$\SI{7.2}{N} ($p{=}\num{1e-15}$, $d{=}3.6$). Every subtractive row lies within \SI{1.4}{N} of ACC and none is significant (S0 $p{=}0.069$; S2 $p{=}0.094$; S3 $p{=}0.45$; S4 $p{=}0.061$) except S5, which is the safety-critical one ($p{=}\num{2e-44}$, and \num{0}/\num{10} survival even at idle); S2 and S3 are required for ringdown. Idle metrics for every row are in Table~\ref{tab:standing}. With $N{=}30$, 95\%CI half-width ${\approx}0.37{\times}$std ($t_{0.025,29}{=}2.045$, single-group $\text{df}{=}29$), so on the push rows the resolution is ${\approx}\SI{1}{N}$; the four subtractive effect sizes are $|d|{\le}0.49$, bounding any single-mechanism effect on $F_{\min}$ below ${\approx}\SI{1.4}{N}$. Fig.~\ref{fig:push_polar} plots the same \num{30} repetitions of row S1. Produced by \path{scripts/replicate_ablation_n30.py}.\tabnote\noindent
 \emph{Trial independence.} \path{compute_v3_torque_for_state} mutates the controller context it is passed---it carries \path{prev_com_pos} and the flight-mode latch (\path{airborne_mode}, \path{airborne_count}, \path{ground_count}) there---so every trial in this table is run from a freshly constructed context. Trials are therefore statistically independent, and in particular a trial that ends airborne cannot hand a latched flight mode to its successor in the bisection. Raw outputs, all rows: \path{outputs/paper_statistics/ablation_n30_results.json}, one harness, one protocol, seeds $\num{20260728}{\times}100+r$ for $r\in[0,30)$.
 \end{table}
 
@@ -1053,31 +1053,31 @@ Subtractively, the striking result is how flat the ablation is: every single-mec
     as row S1 of Table~\ref{tab:push_ablation}, not a separate measurement:
     \num{8} bearings, threshold located by
     binary search over \SIrange{10}{160}{N} to a \SI{5}{N} tolerance, so the
-    plotted minimum is by construction the $F_{\min}$ of that row. It is drawn
-    at $N{=}\num{10}$, the first ten seeds of that row's \num{30}; extending to
-    all \num{30} moves each per-bearing mean by at most \SI{3.3}{N} and
-    $F_{\min}$ by \SI{0.2}{N}, so the envelope below is plotted on the smaller
-    set rather than re-rendered. Solid curve:
-    per-bearing mean survivable push magnitude; shaded band: ${\pm}1$ standard
-    deviation over the ten repetitions. The radial axis is linear in force and
+    plotted minimum is by construction the $F_{\min}$ of that row.
+    $F_{\text{med}}$ is not read off this figure: it is the per-repetition
+    median over the \num{8} bearings, averaged over repetitions
+    (\SI{108.4}{N}), which differs from the median of the per-bearing means
+    plotted here (\SI{105.6}{N}) because median and mean do not commute.
+    Solid curve: per-bearing mean survivable push magnitude; shaded band:
+    ${\pm}1$ standard deviation over the \num{30} repetitions. The radial axis is linear in force and
     originates at \SI{0}{N}, so radial distance is proportional to margin.
     The envelope is strongly anisotropic, spanning
-    \SIrange{82.3}{144.8}{N}---a $1.8{\times}$ ratio between the weakest and
+    \SIrange{82.1}{144.1}{N}---a $1.8{\times}$ ratio between the weakest and
     strongest bearing. The ordering is
-    $-\SI{90}{\degree}\,(\SI{144.8}{N}) >
-      \SI{135}{\degree}\,(\SI{132.2}{N}) >
-      \SI{90}{\degree}\,(\SI{117.8}{N}) >
-      -\SI{45}{\degree}\,(\SI{107.3}{N}) >
-      \SI{180}{\degree}\,(\SI{100.7}{N}) >
-      \SI{0}{\degree}\,(\SI{95.6}{N}) >
-      -\SI{135}{\degree}\,(\SI{91.9}{N}) >
-      \SI{45}{\degree}\,(\SI{82.3}{N})$.
+    $-\SI{90}{\degree}\,(\SI{144.1}{N}) >
+      \SI{135}{\degree}\,(\SI{132.5}{N}) >
+      \SI{90}{\degree}\,(\SI{115.8}{N}) >
+      -\SI{45}{\degree}\,(\SI{110.5}{N}) >
+      \SI{180}{\degree}\,(\SI{100.6}{N}) >
+      \SI{0}{\degree}\,(\SI{95.5}{N}) >
+      -\SI{135}{\degree}\,(\SI{91.8}{N}) >
+      \SI{45}{\degree}\,(\SI{82.1}{N})$.
     Two regularities are visible. First, the actuated axis is the strong one:
     bearings are applied in the world frame as
     $\mathbf{f}=F(\cos\theta,\sin\theta,0)$, so $\pm\SI{90}{\degree}$ are purely
     sagittal and $\SI{0}{\degree}/\SI{180}{\degree}$ purely lateral
-    (Sec.~\ref{sec:standing}). The two sagittal bearings average \SI{131.3}{N}
-    against \SI{98.2}{N} for the two lateral ones, a $1.34{\times}$ advantage.
+    (Sec.~\ref{sec:standing}). The two sagittal bearings average \SI{130.0}{N}
+    against \SI{98.0}{N} for the two lateral ones, a $1.33{\times}$ advantage.
     This is the expected asymmetry for a wheeled biped: sagittally the wheels
     accelerate the contact patch back under the CoM and convert the impulse into
     a controlled excursion, whereas laterally no actuator produces ground force
@@ -1085,8 +1085,8 @@ Subtractively, the striking result is how flat the ablation is: every single-mec
     $w_{\text{track}}={\SI{0.278}{m}}$ track width plus hip-roll PD. We compare
     axis \emph{means} rather than ranks because the raw ordering is contaminated
     by the second regularity. Second, the envelope is
-    measurably \emph{chiral}: $\SI{135}{\degree}$ survives \SI{40.3}{N} more than
-    $-\SI{135}{\degree}$, and $-\SI{90}{\degree}$ \SI{27.0}{N} more than
+    measurably \emph{chiral}: $\SI{135}{\degree}$ survives \SI{40.7}{N} more than
+    $-\SI{135}{\degree}$, and $-\SI{90}{\degree}$ \SI{28.3}{N} more than
     $\SI{90}{\degree}$. This is not sampling noise and not the plant, which is
     mirror-symmetric to numerical precision: it is the sign convention of the
     controller's antisymmetric hip-roll and hip-yaw channels, which leaves the
@@ -2553,6 +2553,16 @@ J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford, and O.~Klimov,
 ``Proximal Policy Optimization Algorithms,''
 \emph{arXiv preprint arXiv:1707.06347}, 2017.
 
+\bibitem{tobin2017domainrand}
+J.~Tobin, R.~Fong, A.~Ray, J.~Schneider, W.~Zaremba, and P.~Abbeel,
+``Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World,''
+in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 23--30, 2017.
+
+\bibitem{peng2018dynrand}
+X.~B.~Peng, M.~Andrychowicz, W.~Zaremba, and P.~Abbeel,
+``Sim-to-Real Transfer of Robotic Control with Dynamics Randomization,''
+in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, pp. 3803--3810, 2018.
+
 \bibitem{johannink2019residual}
 T.~Johannink, S.~Bahl, A.~Nair, J.~Luo, A.~Kumar, M.~Loskyll, J.~A.~Ojea, E.~Solowjow, and S.~Levine,
 ``Residual Reinforcement Learning for Robot Control,''
@@ -2577,11 +2587,6 @@ M.~Bjelonic, C.~D.~Bellicoso, Y.~de~Viragh, D.~Sako, F.~D.~Tresoldi, F.~Jenelten
 J.~Zhang, S.~Wang, H.~Wang, J.~Lai, Z.~Bing, Y.~Jiang, Y.~Zheng, and Z.~Zhang,
 ``An Adaptive Approach to Whole-Body Balance Control of Wheel-Bipedal Robot Ollie,''
 in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 12835--12842, 2022.
-
-\bibitem{rawlings2017mpc}
-J.~B.~Rawlings, D.~Q.~Mayne, and M.~M.~Diehl,
-\emph{Model Predictive Control: Theory, Computation, and Design}, 2nd ed.
-Madison, WI: Nob Hill Publishing, 2017.
 
 \bibitem{bjelonic2021mpc}
 M.~Bjelonic, R.~Grandia, O.~Harley, C.~Galliard, S.~Zimmermann, and M.~Hutter,
@@ -2765,21 +2770,6 @@ K.~Pathak, J.~Franch, and S.~K.~Agrawal,
 ``Velocity and Position Control of a Wheeled Inverted Pendulum by Partial Feedback Linearization,''
 \emph{IEEE Trans. Robotics}, vol.~21, no.~3, pp. 505--513, 2005.
 
-\bibitem{grimminger2020torque}
-F.~Grimminger, A.~Meduri, M.~Khadiv, J.~Viereck, M.~W\"{u}thrich, L.~Wellhausen, \emph{et al.},
-``An Open Torque-Controlled Modular Robot Architecture for Legged Locomotion Research,''
-\emph{IEEE Robotics and Automation Letters}, vol.~5, no.~2, pp. 3650--3657, 2020.
-
-\bibitem{tobin2017domainrand}
-J.~Tobin, R.~Fong, A.~Ray, J.~Schneider, W.~Zaremba, and P.~Abbeel,
-``Domain Randomization for Transferring Deep Neural Networks from Simulation to the Real World,''
-in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)}, pp. 23--30, 2017.
-
-\bibitem{peng2018dynrand}
-X.~B.~Peng, M.~Andrychowicz, W.~Zaremba, and P.~Abbeel,
-``Sim-to-Real Transfer of Robotic Control with Dynamics Randomization,''
-in \emph{Proc. IEEE Int. Conf. Robotics and Automation (ICRA)}, pp. 3803--3810, 2018.
-
 \bibitem{bryson1975optimal}
 A.~E.~Bryson and Y.-C.~Ho,
 \emph{Applied Optimal Control: Optimization, Estimation and Control}, rev.~ed.\ Hemisphere Publishing, 1975.
@@ -2788,6 +2778,16 @@ A.~E.~Bryson and Y.-C.~Ho,
 B.~Stellato, G.~Banjac, P.~Goulart, A.~Bemporad, and S.~Boyd,
 ``OSQP: An Operator Splitting Solver for Quadratic Programs,''
 \emph{Mathematical Programming Computation}, vol.~12, no.~4, pp. 637--672, 2020.
+
+\bibitem{grimminger2020torque}
+F.~Grimminger, A.~Meduri, M.~Khadiv, J.~Viereck, M.~W\"{u}thrich, L.~Wellhausen, \emph{et al.},
+``An Open Torque-Controlled Modular Robot Architecture for Legged Locomotion Research,''
+\emph{IEEE Robotics and Automation Letters}, vol.~5, no.~2, pp. 3650--3657, 2020.
+
+\bibitem{rawlings2017mpc}
+J.~B.~Rawlings, D.~Q.~Mayne, and M.~M.~Diehl,
+\emph{Model Predictive Control: Theory, Computation, and Design}, 2nd ed.
+Madison, WI: Nob Hill Publishing, 2017.
 
 \end{thebibliography}
 

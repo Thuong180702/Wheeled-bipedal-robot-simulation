@@ -28,85 +28,11 @@ with open(fig2_script) as f:
 print("Fig.2 saved (via fig2_architecture.py)")
 
 # ============================================================
-# Fig. 3: Polar Push Envelope
+# Fig. 3: Polar Push Envelope -- see fig3_polar_envelope.py
 # ============================================================
-# Literally the same run as the factorial ablation (Table IV): this reads the S1
-# row -- fixed k_p=50, i.e. canonical ACC = L3 -- straight out of the ablation
-# result file, so the figure and the table cannot drift apart. Do NOT plot
-# push_ci_all_ablations.json's "L3_S0_Full-ACC": that key was produced with empty
-# param_overrides, which is the S0 *scheduled*-k_p variant the paper rejects.
-_ST = '/Users/admin/Wheeled-bipedal-robot-simulation/outputs/paper_statistics/'
-_abl = [json.load(open(_ST + f)) for f in
-        ('ablation_n10_results_freshctx_S1.json',) if os.path.exists(_ST + f)]
-data = next(d['S1'] for d in _abl if 'S1' in d)   # whichever file the completed run landed in
-reps = {int(a): np.asarray(v) for a, v in data['all_reps'].items()}
-angles_deg = np.array(sorted(reps))
-r_mean = np.array([reps[a].mean() for a in angles_deg])
-r_sd = np.array([reps[a].std(ddof=1) for a in angles_deg])
-
-theta_pts = np.deg2rad(angles_deg)
-F_min = r_mean.min()
-F_max = r_mean.max()
-angle_fmin = angles_deg[np.argmin(r_mean)]
-angle_fmax = angles_deg[np.argmax(r_mean)]
-
-# close the loop
-theta = np.append(theta_pts, theta_pts[0])
-r = np.append(r_mean, r_mean[0])
-r_lo = np.append(r_mean - r_sd, r_mean[0] - r_sd[0])
-r_hi = np.append(r_mean + r_sd, r_mean[0] + r_sd[0])
-
-fig = plt.figure(figsize=(3.45, 3.15))
-ax = fig.add_subplot(111, projection='polar')
-
-# The journal prints in black and white, so nothing here may depend on hue:
-# the band is a grey fill, the envelope a black line, and F_min / F_max are told
-# apart by marker shape (circle vs. square) and by their own labels.
-ax.fill_between(theta, r_lo, r_hi, color='0.55', alpha=0.35, linewidth=0, zorder=3)
-ax.plot(theta, r, '-', color='black', linewidth=1.5, zorder=4)
-ax.fill(theta, r, alpha=0.10, color='0.4', zorder=1)
-ax.set_theta_zero_location('N')
-ax.set_theta_direction(-1)
-# Bearings are world-frame f = F*(cos T, sin T, 0). This robot's wheel axles lie
-# along world x, so world y is the sagittal (rolling/driving) axis and world x is
-# the lateral (track) axis -- see scripts/verify_body_axes.py. Hence +-90 deg are
-# the fore/aft bearings and 0/180 deg the lateral ones, NOT the other way round.
-ax.set_thetagrids(range(0, 360, 45),
-                  ['$+x$ lat', '45', '$+y$ sag', '135',
-                   '$-x$ lat', '-135', '$-y$ sag', '-45'], fontsize=7)
-# Radial ticks: coarse set on a spoke-free bearing (202.5 deg) so the numbers
-# neither run together nor collide with the angular tick labels.
-ax.set_rlim(0.0, 170.0)
-ax.autoscale(enable=False)   # the single-point F_min/F_max markers below would
-                             # otherwise re-autoscale r and shift the origin off 0
-ax.set_rticks([50, 100, 150])
-ax.set_yticklabels(['50', '100', '150 N'], fontsize=7)
-ax.set_rlabel_position(202.5)
-ax.tick_params(axis='y', pad=0)
-for lbl in ax.get_yticklabels():
-    lbl.set_bbox(dict(facecolor='white', edgecolor='none', alpha=0.75, pad=0.8))
-ax.set_title('Push Recovery Envelope ($N{=}10$)', pad=8, fontsize=9, fontweight='bold')
-
-# weakest and strongest bearing (means over the 10 reps)
-ax.axhline(y=F_min, color='black', linestyle='--', alpha=0.45, linewidth=0.6, zorder=2)
-ax.plot(np.deg2rad(angle_fmin), F_min, 'o', color='black', markersize=5, zorder=8)
-ax.text(np.deg2rad(angle_fmin - 18), 0.52 * F_min,
-        f'$F_{{\\mathrm{{min}}}}$={F_min:.0f} N',
-        fontsize=9, color='black', ha='center', va='center', fontweight='bold', zorder=9,
-        bbox=dict(facecolor='white', edgecolor='none', alpha=0.85, pad=1.0))
-
-ax.axhline(y=F_max, color='black', linestyle=':', alpha=0.45, linewidth=0.6, zorder=2)
-ax.plot(np.deg2rad(angle_fmax), F_max, 's', color='black', markersize=5, zorder=8)
-# Keep the label inside the rlim (170) and off the rim so it cannot collide with
-# the angular tick ring; the white bbox guards against the radial grid lines.
-ax.text(np.deg2rad(angle_fmax + 26), 0.80 * F_max,
-        f'$F_{{\\mathrm{{max}}}}$={F_max:.0f} N',
-        fontsize=9, color='black', ha='center', va='center', fontweight='bold', zorder=9,
-        bbox=dict(facecolor='white', edgecolor='none', alpha=0.85, pad=1.0))
-
-plt.savefig(OUT + 'polar_push_envelope_bw.pdf', dpi=200)
-plt.close()
-print("Fig.3 saved")
+fig3_script = os.path.join(os.path.dirname(__file__), 'fig3_polar_envelope.py')
+with open(fig3_script) as f:
+    exec(compile(f.read(), fig3_script, 'exec'), {'__name__': '__main__'})
 
 # ============================================================
 # Fig. 4: ACC Post-Push Recovery — REAL V3_ANCHOR data (90N push at 3s)
