@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Generate the black-and-white figure variants for the JCD submission.
+"""Generate the paper figures.
 
-Writes `*_bw.pdf` only. The colour figures used by paper/main.tex are the
-committed `*.pdf` files; their generator is this script at revision fd6f57e^.
+Figs. 2 and 3 emit both the colour and the `_bw` variant from a single source
+(`fig2_architecture.py`, `fig3_polar_envelope.py`); Figs. 4 and 5 here still
+write `*_bw.pdf` only, and their colour counterparts are the committed `*.pdf`
+files produced by this script at revision fd6f57e^.
 """
 import json, numpy as np, sys, os
 import matplotlib
