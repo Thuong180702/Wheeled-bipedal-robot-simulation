@@ -266,7 +266,9 @@ def parse_args():
     p.add_argument("--scripted-settle-s", type=float, default=5.0,
                    help="Settle duration after stop for scripted test (default: 5s)")
     p.add_argument("--record-video", type=str, default=None,
-                   help="Save offscreen-rendered MP4 video to this path (headless)")
+                   help="Save offscreen-rendered MP4 video to this path. Works "
+                        "headless and alongside --visual/--teleop; the file is "
+                        "finalised when the run ends (viewer closed)")
     p.add_argument("--teleop", action="store_true", default=False,
                    help="Interactive keyboard teleop (implies --visual; on macOS run "
                         "with mjpython). Keys: arrow Up/Down = velocity cruise, "
@@ -1568,11 +1570,12 @@ def main():
     last_sync_sim_time = -999.0
     sim_start_time = 0.0
 
-    # ── Video recording (headless offscreen render) ─────────────────────────
+    # ── Video recording (offscreen render; works alongside --visual/--teleop) ─
     _record_video_path = getattr(args, "record_video", None)
     _record_renderer = None
     _record_cam = None
     _record_frames = []
+    _record_proc = None
     if _record_video_path:
         _record_renderer = mujoco.Renderer(mj_model, height=360, width=640)
         _record_cam = mujoco.MjvCamera()
@@ -1582,6 +1585,16 @@ def main():
         _record_cam.azimuth = 155.0
         _record_cam.elevation = -12.0
         _record_frame_counter = 0
+        # An open-ended teleop session would buffer ~23 MB per simulated
+        # second, so stream straight into ffmpeg when it is available.
+        import shutil as _shutil, subprocess as _sp
+        if _shutil.which("ffmpeg"):
+            Path(_record_video_path).parent.mkdir(parents=True, exist_ok=True)
+            _record_proc = _sp.Popen(
+                ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo",
+                 "-pix_fmt", "rgb24", "-s", "640x360", "-r", "33", "-i", "-",
+                 "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast",
+                 "-crf", "23", str(_record_video_path)], stdin=_sp.PIPE)
 
     # ── Teleop init ─────────────────────────────────────────────────────
     _teleop = None
@@ -2335,7 +2348,12 @@ def main():
             sy_c = float(mj_data.subtree_com[0][1]) if hasattr(mj_data, 'subtree_com') else float(support_xy[1])
             _record_cam.lookat[:] = [sx_c, sy_c, 0.4]
             _record_renderer.update_scene(mj_data, camera=_record_cam)
-            _record_frames.append(_record_renderer.render().copy())
+            _rgb = _record_renderer.render()
+            if _record_proc is not None:
+                _record_proc.stdin.write(_rgb.tobytes())
+                _record_frame_counter += 1
+            else:
+                _record_frames.append(_rgb.copy())
 
         # ── Viewer sync ──────────────────────────────────────────────────
         if viewer is not None:
@@ -2358,28 +2376,20 @@ def main():
     # ══════════════════════════════════════════════════════════════════════
 
     # ── Write recorded video ─────────────────────────────────────────────
-    if _record_renderer is not None and _record_frames:
-        import shutil as _shutil, subprocess as _sp
+    if _record_renderer is not None:
         _record_renderer.close()
         _vpath = Path(_record_video_path)
-        _vpath.parent.mkdir(parents=True, exist_ok=True)
-        _h, _w = _record_frames[0].shape[:2]
-        if _shutil.which("ffmpeg"):
-            _cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo",
-                    "-pix_fmt", "rgb24", "-s", f"{_w}x{_h}", "-r", "33",
-                    "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                    "-preset", "fast", "-crf", "23", str(_vpath)]
-            _proc = _sp.Popen(_cmd, stdin=_sp.PIPE)
-            for _f in _record_frames:
-                _proc.stdin.write(_f.tobytes())
-            _proc.stdin.close()
-            _proc.wait(timeout=60)
-            print(f"\nVideo saved: {_vpath} ({len(_record_frames)} frames)")
-        else:
+        if _record_proc is not None:
+            _record_proc.stdin.close()
+            _record_proc.wait(timeout=120)
+            print(f"\nVideo saved: {_vpath} ({_record_frame_counter} frames)")
+        elif _record_frames:
             from PIL import Image as _PILImage
-            _record_frames[0].save(str(_vpath.with_suffix(".gif")), save_all=True,
-                           append_images=[_PILImage.fromarray(f) for f in _record_frames[1:]],
-                           duration=33, loop=0)
+            _vpath.parent.mkdir(parents=True, exist_ok=True)
+            _PILImage.fromarray(_record_frames[0]).save(
+                str(_vpath.with_suffix(".gif")), save_all=True,
+                append_images=[_PILImage.fromarray(f) for f in _record_frames[1:]],
+                duration=33, loop=0)
             print(f"\nVideo saved: {_vpath.with_suffix('.gif')} (GIF, {len(_record_frames)} frames)")
 
     # ── Post-simulation viewer hold ─────────────────────────────────────
