@@ -1,1 +1,0 @@
-Now let me examine the specific data tables and claims more carefully to find fresh angles the Round 8 review didn't fully exploit.

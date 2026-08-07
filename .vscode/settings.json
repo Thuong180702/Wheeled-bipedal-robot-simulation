@@ -5,7 +5,7 @@
     "latex-workshop.latex.tools": [
         {
             "name": "pdflatex",
-            "command": "pdflatex",
+            "command": "/Library/TeX/texbin/pdflatex",
             "args": [
                 "-synctex=1",
                 "-interaction=nonstopmode",
