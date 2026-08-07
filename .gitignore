@@ -144,3 +144,6 @@ outputs/parking_offset_evidence/**
 !outputs/parking_offset_evidence/**/*.json
 !outputs/parking_offset_evidence/**/*.py
 !outputs/parking_offset_evidence/README.md
+
+# ─── LaTeX intermediates ─────────────────────────────────────────────────────
+*.dvi
