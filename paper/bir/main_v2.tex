@@ -8,6 +8,7 @@
 \usepackage{tabularx}
 \usepackage{xurl}   % CAS columns are narrow; allow URL breaks anywhere
 \usepackage[protrusion=true,expansion=false]{microtype}
+\usepackage{inconsolata}
 
 % Figures live one level up, alongside the IEEEtran source.
 \graphicspath{{./}{../}}
@@ -74,7 +75,7 @@
 \let\WriteBookmarks\relax
 
 \shorttitle{Anchored Conditionally-Gated Control}
-\shortauthors{Author's name}
+\shortauthors{V. T. Nguyen and N. T. Vo}
 
 \title[mode = title]{Anchored Conditionally-Gated Control for Wheeled Bipedal
 Balance and Disturbance Recovery}
@@ -83,12 +84,16 @@ Balance and Disturbance Recovery}
 % \RenewDocumentCommand below; without one the class prints an empty
 % "ORCID(s):" footnote.
 \RenewDocumentCommand\printorcid{}{}
-\author[1]{Author's name}
+\author[1]{Van Thuong Nguyen}
+\ead{nvthuong180702@gmail.com}
+\credit{Conceptualization, Methodology, Software, Validation, Investigation,
+Data curation, Writing -- original draft, Visualization}
+
+\author[1]{Nhu Thanh Vo}
 \cormark[1]
-\ead{Mailexample@gmail.com}
-\credit{Conceptualization, Methodology, Software, Validation, Formal analysis,
-Investigation, Data curation, Writing -- original draft, Writing -- review and
-editing, Visualization}
+\ead{vnthanh@dut.udn.vn}
+\credit{Conceptualization, Methodology, Validation, Formal analysis,
+Investigation, Data curation, Writing -- review and editing, Visualization}
 
 \affiliation[1]{organization={The University of Danang},
             city={Da Nang},
@@ -2500,35 +2505,44 @@ validation, EMA settle-time characterization, a properly resourced learning
 comparison with multiple seeds, domain randomization and a tuned reward, and
 extending conditional activation to locomotion.
 
-\section*{Code and Data Availability}
-The controller, the MuJoCo model, every evaluation script referenced above, and the raw result files backing each table are available at \url{https://github.com/thuong180702/Wheeled-bipedal-robot-simulation} , on branch \texttt{main}, with a release tag to be minted at publication. Each main results table names its producing script and its raw result file in the note beneath it, and the remaining sweeps are cited inline where they are discussed. The raw per-step records behind the whole-body-control results of Section~\ref{sec:wbc} are collected under \path{outputs/wbc_postfix_evidence/} and those behind Appendix~\ref{sec:parking_supp} under \path{outputs/parking_offset_evidence/}, each directory's \path{README.md} mapping every file to the table it produces and the latter also giving the worktree recipe for reproducing a gain arm without disturbing the shipped profile. The \num{31} supplementary clips of Section~\ref{sec:videos} are under \path{paper/videos/}, regenerated in full by \path{scripts/render_paper_videos.py}; that directory's \path{README.md} gives the per-clip protocol and the measured outcome each one illustrates.
-
 % ============================================================
 % REFERENCES
 % ============================================================
 % ============================================================
 % ============================================================
 \section*{Declaration of competing interest}
-The author declares that he has no known competing financial interests or
-personal relationships that could have appeared to influence the work reported
-in this paper.
+No potential conflict of interest was reported by the author(s).
 
 \section*{Funding}
 This research did not receive any specific grant from funding agencies in the
 public, commercial, or not-for-profit sectors.
 
 \section*{Declaration of generative AI and AI-assisted technologies in the writing process}
-During the preparation of this work the author used Anthropic Claude in order to
+During the preparation of this work the authors used Anthropic Claude in order to
 edit language and typeset the manuscript. All controller design decisions,
 experimental protocols, numerical results, and scientific claims are the
-author's own. After using this tool the author reviewed and edited the content
-as needed and takes full responsibility for the content of the publication.
+authors' own. After using this tool the authors reviewed and edited the content
+as needed and take full responsibility for the content of the publication.
 
 \section*{Data availability}
-The controller, the MuJoCo model, every evaluation script, and the raw result
-files backing each table are publicly available at
-\url{https://github.com/thuong180702/Wheeled-bipedal-robot-simulation}
-(branch \texttt{main}).
+% TODO before submission: replace <ZENODO-DOI> with the DOI minted by the
+% GitHub-Zenodo integration for release v1.0.0.
+The controller, the MuJoCo model, every evaluation script referenced above, and
+the raw result files backing each table are publicly available at
+\url{https://github.com/Thuong180702/Wheeled-bipedal-robot-simulation} at
+release tag \texttt{v1.0.0}, archived at
+\url{https://doi.org/<ZENODO-DOI>}. Each main results table names its producing
+script and its raw result file in the note beneath it, and the remaining sweeps
+are cited inline where they are discussed. The raw per-step records behind the
+whole-body-control results of Section~\ref{sec:wbc} are collected under
+\path{outputs/wbc_postfix_evidence/} and those behind
+Appendix~\ref{sec:parking_supp} under \path{outputs/parking_offset_evidence/},
+each directory's \path{README.md} mapping every file to the table it produces
+and the latter also giving the worktree recipe for reproducing a gain arm
+without disturbing the shipped profile. The \num{31} supplementary clips of
+Section~\ref{sec:videos} are under \path{paper/videos/}, regenerated in full by
+\path{scripts/render_paper_videos.py}; that directory's \path{README.md} gives
+the per-clip protocol and the measured outcome each one illustrates.
 
 \appendix
 \section{Why Saturation-Triggered Anti-Windup Is Insufficient}
