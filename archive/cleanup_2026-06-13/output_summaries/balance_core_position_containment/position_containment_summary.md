@@ -199,4 +199,5 @@ The fundamental issue is that the balance controller has no inherent position aw
 - [E0b Failure Analysis](e0b_failure_analysis.md) - Complete analysis of direct torque approach
 - [E0c Failure Analysis](e0c_failure_analysis.md) - Complete analysis of reference shaping approach
 - [E0d Failure Analysis](e0d_phase_aware_report.md) - Complete analysis of phase-aware approach
-- [E0 Cleanup Audit](e0_cleanup_audit.md) - Comprehensive audit of all E0 code paths
+- `e0_cleanup_audit.md` — audit of all E0 code paths. Not shipped: it belongs to
+  the abandoned E0 line and was dropped in the 2026-08-10 cleanup.
