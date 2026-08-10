@@ -4,7 +4,7 @@ Controller, MuJoCo model, evaluation harnesses and raw result files for the pape
 
 > **Anchored Conditionally-Gated Control for Wheeled Bipedal Balance and Disturbance Recovery**
 > Van Thuong Nguyen, Nhu Thanh Vo — The University of Danang
-> *Submitted to Biomimetic Intelligence and Robotics.*
+> *Submitted to Robotics and Autonomous Systems.*
 
 ACC is a hand-designed, fully interpretable torque assembly for a 10-DOF, 8.1 kg
 wheeled biped. Its central mechanism is a **proximity-gated anchor**: a position
@@ -260,7 +260,7 @@ that work.
   title   = {Anchored Conditionally-Gated Control for Wheeled Bipedal Balance
              and Disturbance Recovery},
   author  = {Nguyen, Van Thuong and Vo, Nhu Thanh},
-  journal = {Biomimetic Intelligence and Robotics},
+  journal = {Robotics and Autonomous Systems},
   year    = {2026},
   note    = {Submitted}
 }

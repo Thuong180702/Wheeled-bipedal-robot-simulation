@@ -1,0 +1,40 @@
+{
+  "knob": "velocity_damping_scale",
+  "baseline_value": 1.5,
+  "delay_sub": 5,
+  "delay_ms": 10.0,
+  "noise": "clean",
+  "n_trials": 1,
+  "base_profile": "K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR",
+  "arms": [
+    {
+      "knob": "velocity_damping_scale",
+      "value": 1.5,
+      "is_baseline": true,
+      "falls": 0,
+      "n_trials": 1,
+      "idle_rms_mm_mean": 2.469560429032869,
+      "idle_rms_mm": [
+        2.469560429032869
+      ],
+      "survived_s": [
+        23.0
+      ]
+    },
+    {
+      "knob": "velocity_damping_scale",
+      "value": 3.0,
+      "is_baseline": false,
+      "falls": 0,
+      "n_trials": 1,
+      "idle_rms_mm_mean": 2.8890232982810167,
+      "idle_rms_mm": [
+        2.8890232982810167
+      ],
+      "survived_s": [
+        23.0
+      ]
+    }
+  ],
+  "elapsed_min": 0.1063840627670288
+}

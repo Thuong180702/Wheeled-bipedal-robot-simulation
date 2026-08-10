@@ -1,0 +1,72 @@
+{
+  "knob": "anchor_kp_pitch_soft",
+  "baseline_value": 35.0,
+  "delay_sub": 4,
+  "delay_ms": 8.0,
+  "noise": "clean",
+  "n_trials": 1,
+  "base_profile": "K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR",
+  "arms": [
+    {
+      "knob": "anchor_kp_pitch_soft",
+      "value": 20.0,
+      "is_baseline": false,
+      "f_max_N_mean": 85.0,
+      "f_max_N_std": 0.0,
+      "push_vals": [
+        85.0
+      ]
+    },
+    {
+      "knob": "anchor_kp_pitch_soft",
+      "value": 25.0,
+      "is_baseline": false,
+      "f_max_N_mean": 81.5,
+      "f_max_N_std": 0.0,
+      "push_vals": [
+        81.5
+      ]
+    },
+    {
+      "knob": "anchor_kp_pitch_soft",
+      "value": 30.0,
+      "is_baseline": false,
+      "f_max_N_mean": 85.0,
+      "f_max_N_std": 0.0,
+      "push_vals": [
+        85.0
+      ]
+    },
+    {
+      "knob": "anchor_kp_pitch_soft",
+      "value": 35.0,
+      "is_baseline": true,
+      "f_max_N_mean": 51.0,
+      "f_max_N_std": 0.0,
+      "push_vals": [
+        51.0
+      ]
+    },
+    {
+      "knob": "anchor_kp_pitch_soft",
+      "value": 45.0,
+      "is_baseline": false,
+      "f_max_N_mean": 78.0,
+      "f_max_N_std": 0.0,
+      "push_vals": [
+        78.0
+      ]
+    },
+    {
+      "knob": "anchor_kp_pitch_soft",
+      "value": 50.0,
+      "is_baseline": false,
+      "f_max_N_mean": 86.2,
+      "f_max_N_std": 0.0,
+      "push_vals": [
+        86.2
+      ]
+    }
+  ],
+  "elapsed_min": 0.9959511876106262
+}

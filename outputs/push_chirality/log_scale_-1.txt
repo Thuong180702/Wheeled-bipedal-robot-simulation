@@ -1,0 +1,8 @@
+support FF  shipped: [0.0, 0.0, 2.05, -7.75, 0.0, 0.0, 0.0, 1.6, -7.9, 0.0]
+support FF  scale=-1.0: [0.0, 0.0, 1.6, -7.9, 0.0, 0.0, 0.0, 2.05, -7.75, 0.0]
+  rep 1/5  1.9 min
+  rep 2/5  3.5 min
+  rep 3/5  5.4 min
+  rep 4/5  7.3 min
+  rep 5/5  9.1 min
+scale=-1.0  a1=-3.54  b2=-16.53  F_min=87.2  -> outputs/push_chirality/ff_scale_-1.json

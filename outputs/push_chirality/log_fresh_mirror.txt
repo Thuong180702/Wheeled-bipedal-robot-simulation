@@ -1,0 +1,9 @@
+support FF  shipped: [0.0, 0.0, 2.05, -7.75, 0.0, 0.0, 0.0, 1.6, -7.9, 0.0]
+support FF  scale=1.0: [0.0, 0.0, 2.05, -7.75, 0.0, 0.0, 0.0, 1.6, -7.9, 0.0]
+hip_roll_torque_sign: 1.0
+  rep 1/5  1.6 min
+  rep 2/5  3.3 min
+  rep 3/5  4.9 min
+  rep 4/5  6.5 min
+  rep 5/5  8.0 min
+scale=1.0  a1=-10.11  b2=+15.59  F_min=64.5  -> outputs/push_chirality/freshctx_mirror.json

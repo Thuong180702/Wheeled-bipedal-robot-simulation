@@ -1,0 +1,62 @@
+{
+  "knob": "drift_k_vel",
+  "baseline_value": 15.0,
+  "delay_sub": 4,
+  "delay_ms": 8.0,
+  "noise": "clean",
+  "n_trials": 1,
+  "base_profile": "K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR",
+  "arms": [
+    {
+      "knob": "drift_k_vel",
+      "value": 5.0,
+      "is_baseline": false,
+      "f_max_N_mean": 65.1,
+      "f_max_N_std": 0.0,
+      "push_vals": [
+        65.1
+      ]
+    },
+    {
+      "knob": "drift_k_vel",
+      "value": 10.0,
+      "is_baseline": false,
+      "f_max_N_mean": 92.0,
+      "f_max_N_std": 0.0,
+      "push_vals": [
+        92.0
+      ]
+    },
+    {
+      "knob": "drift_k_vel",
+      "value": 15.0,
+      "is_baseline": true,
+      "f_max_N_mean": 51.0,
+      "f_max_N_std": 0.0,
+      "push_vals": [
+        51.0
+      ]
+    },
+    {
+      "knob": "drift_k_vel",
+      "value": 25.0,
+      "is_baseline": false,
+      "f_max_N_mean": 90.9,
+      "f_max_N_std": 0.0,
+      "push_vals": [
+        90.9
+      ]
+    },
+    {
+      "knob": "drift_k_vel",
+      "value": 40.0,
+      "is_baseline": false,
+      "f_max_N_mean": 80.3,
+      "f_max_N_std": 0.0,
+      "push_vals": [
+        80.3
+      ]
+    }
+  ],
+  "elapsed_min": 0.9572460691134135
+}

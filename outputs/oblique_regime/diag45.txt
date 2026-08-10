@@ -1,0 +1,22 @@
+course: diag_off
+ h(cm)  verdict  top?  t_edge  pk_pitch settle_s pitch_tl  herr_mm  still  seed
+    15     FAIL     T     5.8      65.2    never     57.7    249.2  0.140     0
+    15     FAIL     T     5.7      72.2    never     57.7    249.3  0.139     1
+    15     FALL     T       —         —        —        —        — fall@6.8s     2
+    20     FALL     T       —         —        —        —        — fall@7.0s     0
+    20     FALL     T       —         —        —        —        — fall@6.7s     1
+    20     FALL     T       —         —        —        —        — fall@6.8s     2
+    25     FALL     T       —         —        —        —        — fall@7.1s     0
+    25     FALL     T       —         —        —        —        — fall@6.9s     1
+    25     FALL     T       —         —        —        —        — fall@7.0s     2
+    30     PASS     T     6.8       5.3     3.90      2.7      7.7  0.000     0
+    30     PASS     T     6.7      10.0     5.01      2.7      7.6  0.000     1
+    30     FALL     T       —         —        —        —        — fall@8.4s     2
+    35     PASS     T     7.2       7.6     4.87      2.7      7.9  0.000     0
+    35     FAIL     T     7.0       0.0    never     26.9     34.9  0.000     1
+    35     FAIL     T     7.1      28.8     1.78     24.5     33.1  0.000     2
+    40     FALL     T       —         —        —        —        — fall@7.8s     0
+    40     PASS     T     7.3      15.1     5.76      2.7      7.8  0.000     1
+    40     FALL     T       —         —        —        —        — fall@7.8s     2
+
+4/18 PASS

@@ -1,0 +1,15 @@
+{
+  "delay_sub": 3,
+  "delay_ms": 6.0,
+  "noise": "clean",
+  "n_trials": 3,
+  "f_max_N_mean": 93.2,
+  "f_max_N_std": 0.0,
+  "push_vals": [
+    93.2,
+    93.2,
+    93.2
+  ],
+  "profile": "K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR",
+  "elapsed_min": 0.633972720305125
+}

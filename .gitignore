@@ -148,6 +148,47 @@ outputs/parking_offset_evidence/**
 # ─── LaTeX intermediates ─────────────────────────────────────────────────────
 *.dvi
 
+# ─── Raw results the manuscripts cite but .gitignore was still masking ───────
+# Each path below is named in paper/main.tex, paper/bir/main_v2.tex or the
+# "Reproducing the paper" table in README.md, so a reader following the paper
+# must be able to fetch it. ~330 kB in total.
+
+# Table 3 — factorial push ablation, N = 30.
+!outputs/paper_statistics/ablation_n30_results.json
+
+# Push polar map and the chirality controls (mirror / sham mirror).
+!outputs/push_chirality/
+outputs/push_chirality/*
+!outputs/push_chirality/*.json
+!outputs/push_chirality/*.txt
+
+# Oblique curb/ledge regime boundary: the coarse and fine diagonal sweeps.
+!outputs/oblique_regime/
+outputs/oblique_regime/*
+!outputs/oblique_regime/*.txt
+
+# Full-state LQR control experiment.
+!outputs/fullstate_lqr_corrected/
+outputs/fullstate_lqr_corrected/*
+!outputs/fullstate_lqr_corrected/results.json
+!outputs/fullstate_lqr_corrected/README.md
+
+# Coupled-model roll-coupling sweep.
+!outputs/b_roll_hip_sweep/
+outputs/b_roll_hip_sweep/*
+!outputs/b_roll_hip_sweep/results_100hz.json
+
+# Actuator-delay cliff at 2 ms resolution, and the single-gain retune that
+# moves it outward.
+!outputs/robustness_sweep/
+outputs/robustness_sweep/*
+!outputs/robustness_sweep/*/
+!outputs/robustness_sweep/delay_cliff/*.json
+!outputs/robustness_sweep/delay_retune/*.json
+
+# Compound disturbance map, as shipped.
+!outputs/compound_disturbance/results_corrected_map_shipped.json
+
 # ─── Repo cleanup 2026-08-10 ─────────────────────────────────────────────────
 # Untracked with `git rm --cached`; the files remain on disk. The kept set was
 # verified by deleting exactly this list on a `git archive HEAD` copy and then
