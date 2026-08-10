@@ -1,6 +1,0 @@
-window,mean_signed_error,final_signed_error,outside_plus_minus_0.15_percent,zero_crossings,max_signed_error,min_signed_error
-steps_0_500,0.0620,-0.0713,12.6,5,0.1682,-0.0716
-steps_500_1000,0.0564,-0.0110,12.6,4,0.1601,-0.0710
-steps_1000_1500,0.0603,0.0772,0.0,5,0.1480,-0.0284
-steps_1500_2000,0.0654,0.1441,0.0,4,0.1452,-0.0316
-full_2000,0.0610,0.1441,6.3,18,0.1682,-0.0716

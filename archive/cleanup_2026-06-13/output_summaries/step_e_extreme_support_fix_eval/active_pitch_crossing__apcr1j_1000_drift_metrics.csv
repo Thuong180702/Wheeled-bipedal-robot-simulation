@@ -1,2 +1,0 @@
-profile,steps,survived,min_e_m,max_e_m,p2p_m,max_abs_e_m,mean_e_m,abs_mean_e_m,final_e_m,positive_pct,negative_pct,zero_crossings,outside_008_count,outside_008_pct,outside_010_count,outside_010_pct,outside_012_count,outside_012_pct,outside_015_count,outside_015_pct,positive_015_count,negative_015_count
-APCR1j_support_hysteresis_higher_authority,1000,True,-0.0688319919222212,0.1825662367631176,0.2513982286853388,0.1825662367631176,0.07905292887666232,0.09187832604616182,0.1244320241042049,79.0,20.9,8,531,53.1,468,46.800000000000004,403,40.300000000000004,258,25.8,258,0

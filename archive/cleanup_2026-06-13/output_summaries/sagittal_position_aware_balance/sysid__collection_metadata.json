@@ -1,6 +1,0 @@
-{
-  "collection_mode": "closed_loop",
-  "scenario": "nominal",
-  "duration_steps": 5000,
-  "controller_mode": "balance-core"
-}

@@ -1,7 +1,0 @@
-{
-  "interface": "target_offset_vmc_only_not_torque_wbc",
-  "jacobian_mapping": "diagnostic_jacobian_available",
-  "final_decision": "TORQUE_LEVEL_CONTROL_REQUIRED",
-  "current_best_controller": "outputs\\phase_b9_lqr_gain_strengthening\\best_lqr_config.yaml",
-  "step6_status": "BLOCKED"
-}

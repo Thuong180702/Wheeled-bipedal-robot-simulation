@@ -1,7 +1,0 @@
-{
-  "clone_function_tested": "_step511_clone_params_no_leak",
-  "mutation_leaked": false,
-  "controller_reset_verified": true,
-  "filter_state_reset_verified": true,
-  "variant_isolation_verified": true
-}

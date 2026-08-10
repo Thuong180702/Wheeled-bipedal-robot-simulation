@@ -1,7 +1,0 @@
-{
-  "nominal": [],
-  "low_1cm": [
-    "contact_invalid",
-    "wheel_velocity_runaway"
-  ]
-}
