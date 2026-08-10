@@ -11,11 +11,15 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import textwrap
 
+# Repository root, resolved from this file so the script runs from any checkout.
+from pathlib import Path as _Path
+_ROOT = _Path(__file__).resolve().parent.parent
+
 plt.rcParams.update({
     'font.family': 'serif', 'font.size': 6.5,
     'figure.dpi': 300, 'savefig.bbox': 'tight', 'savefig.pad_inches': 0.0,
 })
-OUT_DIR = '/Users/admin/Wheeled-bipedal-robot-simulation/paper/figures/'
+OUT_DIR = str(_ROOT / 'paper' / 'figures') + '/'
 
 PALETTES = {
     'acc_architecture': dict(

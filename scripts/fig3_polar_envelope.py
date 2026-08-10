@@ -18,6 +18,10 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+# Repository root, resolved from this file so the script runs from any checkout.
+from pathlib import Path as _Path
+_ROOT = _Path(__file__).resolve().parent.parent
+
 plt.rcParams.update({
     'font.family': 'serif', 'font.size': 8,
     'axes.labelsize': 8, 'axes.titlesize': 9,
@@ -25,7 +29,7 @@ plt.rcParams.update({
     'figure.dpi': 200, 'savefig.bbox': 'tight', 'savefig.pad_inches': 0.03,
 })
 
-ROOT = '/Users/admin/Wheeled-bipedal-robot-simulation/'
+ROOT = str(_ROOT) + '/'
 OUT = ROOT + 'paper/figures/'
 SRC = ROOT + 'outputs/paper_statistics/ablation_n30_results.json'
 

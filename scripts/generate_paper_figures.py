@@ -12,6 +12,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
+# Repository root, resolved from this file so the script runs from any checkout.
+from pathlib import Path as _Path
+_ROOT = _Path(__file__).resolve().parent.parent
+
 plt.rcParams.update({
     'font.family': 'serif', 'font.size': 8,
     'axes.labelsize': 8, 'axes.titlesize': 9,
@@ -19,7 +23,7 @@ plt.rcParams.update({
     'figure.dpi': 200, 'savefig.bbox': 'tight', 'savefig.pad_inches': 0.03,
 })
 
-OUT = '/Users/admin/Wheeled-bipedal-robot-simulation/paper/figures/'
+OUT = str(_ROOT / 'paper' / 'figures') + '/'
 
 # ============================================================
 # Fig. 2: ACC Two-Channel Architecture — see fig2_architecture.py
@@ -41,7 +45,7 @@ with open(fig3_script) as f:
 # Top: pitch/roll/yaw angles. Bottom: x/y position (anchor holds home).
 # ============================================================
 ringdown = json.load(open(
-    '/Users/admin/Wheeled-bipedal-robot-simulation/outputs/acc_ringdown_v3_anchor.json'))
+    str(_ROOT / 'outputs' / 'acc_ringdown_v3_anchor.json')))
 t = np.array(ringdown['time_s'])
 pitch = np.degrees(np.array(ringdown['pitch_rad']))
 roll = np.degrees(np.array(ringdown['roll_rad']))
@@ -83,7 +87,7 @@ print("Fig.4 saved")
 # ============================================================
 fig, ax = plt.subplots(figsize=(3.3, 2.5))
 
-img = plt.imread('/Users/admin/Wheeled-bipedal-robot-simulation/paper/figures/curb.png')
+img = plt.imread(str(_ROOT / 'paper' / 'figures' / 'curb.png'))
 ax.imshow(img)
 ax.axis('off')
 ax.set_title('One-wheel curb (20 cm) — per-leg terrain adaptation',

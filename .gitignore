@@ -440,7 +440,6 @@ scripts/calculate_torque_requirements.py
 scripts/check_g1_sg090.py
 scripts/check_yaw_mode_div_sign_alignment.py
 scripts/clean_outputs_bulk.py
-scripts/collect_acc_lqr_comparison.py
 scripts/collect_delay_stability_sweep.py
 scripts/collect_hip_yaw_baseline_telemetry.py
 scripts/collect_lqr_baselines.py
@@ -572,15 +571,12 @@ scripts/phase_b9_step5_21_dualrate_controller_debug.py
 scripts/phase_b9_step5_22_torque_first_wbc_evaluation.py
 scripts/phase_b9_step5_24_torque_first_stabilized_wbc_evaluation.py
 scripts/phase_b9_step5_25_hierarchical_torque_fusion_evaluation.py
-scripts/plot_gate_activation.py
 scripts/profile_step_timing.py
 scripts/push_ci.py
 scripts/quick_hip_yaw_damping_test.py
 scripts/record_acc_ringdown.py
-scripts/record_gate_activation.py
 scripts/record_ponly_fft.py
 scripts/regenerate_phase_c_corrected_report.py
-scripts/render_curb_straddle.py
 scripts/render_low_0p300_visual_replay.py
 scripts/replay_step_e_five_variant_baseline.py
 scripts/replicate_ablation_n5.py
@@ -685,7 +681,6 @@ scripts/verify_model.py
 scripts/verify_old_baseline_from_summary.py
 scripts/verify_paper_data.py
 scripts/verify_wbc_masking.py
-scripts/view_curb.py
 scripts/viz_v3_vs_assist_push.py
 
 # Modules from abandoned research lines.
@@ -762,3 +757,13 @@ docs/experiment_plan.md
 docs/paper_claims_checklist.md
 docs/results_todo_checklist.md
 docs/baseline_workflow.md
+
+# Figure and table generators recovered 2026-08-10: each is the only producer of
+# a committed paper artifact, and the first cleanup pass missed them because the
+# link runs through \includegraphics in the manuscript rather than through an
+# import. Listed here only as a reminder not to re-exclude them.
+!scripts/render_curb_straddle.py
+!scripts/view_curb.py
+!scripts/record_gate_activation.py
+!scripts/plot_gate_activation.py
+!scripts/collect_acc_lqr_comparison.py
