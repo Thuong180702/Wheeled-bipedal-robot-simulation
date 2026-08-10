@@ -1,14 +1,25 @@
 # ==============================================================
-# Wheeled Bipedal Robot Simulation - Requirements
-# Framework: MuJoCo MJX + JAX (GPU Training)
+# Anchored Conditionally-Gated Control (ACC)
+# Runtime requirements — MuJoCo + JAX, CPU by default.
+#
+# Every ACC evaluation reported in the paper runs on CPU. Only the PPO
+# reference of Section 5.4 needs a GPU; for that, install the CUDA wheels
+# before this file:
+#
+#     pip install "jax[cuda12]>=0.4.25"
+#     pip install -r requirements.txt
+#
+# Test and lint tooling is not here — it lives in the `dev` extra:
+#
+#     pip install -e ".[dev]"
 # ==============================================================
 
-# --- Physics Engine ---
+# --- Physics engine ---
 mujoco>=3.1.0
 mujoco-mjx>=3.1.0
 
-# --- JAX Ecosystem (CUDA 12) ---
-jax[cuda12]>=0.4.25
+# --- JAX ecosystem ---
+jax>=0.4.25
 jaxlib>=0.4.25
 flax>=0.8.0
 optax>=0.2.0
@@ -16,19 +27,28 @@ chex>=0.1.86
 distrax>=0.1.5
 jaxopt>=0.8.0,<0.9.0
 
-# --- Utilities ---
+# --- Numerics ---
+# scipy: linearization and Riccati solves in the classical baselines, and the
+#        flight/terrain collectors.
+# osqp:  QP backend for the offline whole-body-control baselines (Table 5).
 numpy>=1.26.0
+scipy>=1.11
+osqp>=0.6
+
+# --- Data handling and reporting ---
+pandas>=2.0
+tabulate>=0.9.0
 pyyaml>=6.0
 tqdm>=4.66.0
 typer>=0.9.0
 rich>=13.0.0
 
-# --- Logging & Visualization ---
-tensorboardX>=2.6
-wandb>=0.16.0
+# --- Figures and video ---
+# pillow: frame composition in the curb/ledge renderers.
 matplotlib>=3.8.0
+pillow>=10.0
 mediapy>=1.2.0
 
-# --- Dev (optional) ---
-# pytest>=7.4.0
-# ruff>=0.3.0
+# --- Training-run logging (PPO reference only) ---
+tensorboardX>=2.6
+wandb>=0.16.0

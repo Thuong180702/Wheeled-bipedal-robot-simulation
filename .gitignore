@@ -98,6 +98,13 @@ Thumbs.db
 *.avi
 *.gif
 
+# ...except the supplementary clips, which README.md, the licence table and
+# paper/videos/README.md all promise the reader. 33 files, ~16 MB: the paper's
+# 31-clip inventory plus the two teleop session recordings that are not part of
+# it. Each is a render of the evaluation itself, driven by the same harness that
+# produced the corresponding table, so a clip cannot drift from its number.
+!paper/videos/*.mp4
+
 # ─── LaTeX build artifacts ───────────────────────────────────────────────────
 *.aux
 *.abs
@@ -729,3 +736,19 @@ paper/main.tex.orig
 
 # Cleanup audit produced 2026-08-10.
 CLEANUP_CANDIDATES.txt
+
+# ─── Reviewer-readiness pass 2026-08-10 ──────────────────────────────────────
+# Personal editor settings; the tracked copy carried an absolute path from one
+# contributor's machine.
+.vscode/
+
+# Empty npm artifacts in a Python project.
+package.json
+package-lock.json
+
+# Terrain XML written at runtime by scripts/run_k2_jax_realtime.py, so the
+# committed copy was a stale by-product rather than an input.
+assets/robot/_tmp_curb_then_ledge.xml
+
+# Placeholder README for a campaign that was never run.
+outputs/mode_based_hip_yaw_divergence_ownership_fix/

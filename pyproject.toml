@@ -5,19 +5,33 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "wheeled-biped-sim"
 version = "0.1.0"
-description = "Mô phỏng và huấn luyện Wheeled Bipedal Robot bằng MuJoCo MJX + JAX"
+description = "Anchored Conditionally-Gated Control for a 10-DOF wheeled bipedal robot (MuJoCo / MJX)"
 readme = "README.md"
-license = {text = "MIT"}
+# The distributable package is `wheeled_biped*` and `scripts*` — software only,
+# which LICENSE-CODE puts under Apache-2.0. The paper materials under `paper/`
+# and the raw results under `outputs/` are CC BY-NC-ND 4.0 (LICENSE) and are not
+# part of the wheel. See the licence table in README.md.
+license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
-    {name = "2CHAN"}
+    {name = "Van Thuong Nguyen", email = "nvthuong180702@gmail.com"},
+    {name = "Nhu Thanh Vo", email = "vnthanh@dut.udn.vn"},
 ]
 
+# CPU by default: every ACC evaluation in the paper runs on CPU, and pinning the
+# CUDA variant here made `pip install -e .` fail on machines without CUDA.
+# For the GPU-only PPO reference of Section 5.4, install the CUDA wheels first:
+#   pip install "jax[cuda12]>=0.4.25"
 dependencies = [
     "mujoco>=3.1.0",
     "mujoco-mjx>=3.1.0",
-    "jax[cuda12]>=0.4.25",
+    "jax>=0.4.25",
     "jaxlib>=0.4.25",
+    "scipy>=1.11",
+    "osqp>=0.6",
+    "pandas>=2.0",
+    "pillow>=10.0",
+    "tabulate>=0.9.0",
     "flax>=0.8.0",
     "optax>=0.2.0",
     "chex>=0.1.86",
