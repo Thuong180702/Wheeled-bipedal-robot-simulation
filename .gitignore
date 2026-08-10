@@ -207,7 +207,13 @@ outputs/robustness_sweep/*
 # meshes from the latter. Only the unreferenced remainder is excluded here.
 
 # Fully removed directories.
-backup_checkpoints/
+# PPO checkpoints, except the 5.4M-step snapshot behind the paper's PPO
+# reference row. The other five are intermediate steps and a second run; they
+# back nothing in the manuscript.
+backup_checkpoints/*
+!backup_checkpoints/Day2/
+backup_checkpoints/Day2/*
+!backup_checkpoints/Day2/step_5390336/
 docs/repo_cleanup/
 docs/superpowers/
 .superpowers/

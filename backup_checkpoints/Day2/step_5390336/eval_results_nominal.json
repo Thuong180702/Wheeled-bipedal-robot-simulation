@@ -1,0 +1,20 @@
+{
+  "mode": "nominal",
+  "num_episodes": 100,
+  "reward_mean": 5031.9602954101565,
+  "reward_std": 495.1894036594572,
+  "reward_min": 3915.119384765625,
+  "reward_p5": 4153.663525390625,
+  "reward_p50": 5085.654052734375,
+  "reward_p95": 5824.784155273437,
+  "reward_max": 5997.42724609375,
+  "episode_length_mean": 804.22,
+  "episode_length_max": 977,
+  "success_rate": 0.0,
+  "fall_rate": 1.0,
+  "timeout_rate": 0.0,
+  "mode_metrics": {},
+  "checkpoint": "outputs/checkpoints/balance/step_5390336",
+  "stage": "balance",
+  "seed": 0
+}
