@@ -115,15 +115,24 @@ What the factorial ablation localizes:
 | Component | File |
 |---|---|
 | ACC profile (shipped default) | `wheeled_biped/controllers/sagittal_velocity_damped_balance_controller.py` → `K2_JAX_DEDICATED_DEFAULT_V3_ANCHOR` |
-| JAX control step | `wheeled_biped/controllers/k2_jax_controller.py` |
-| Posture / height IK | `wheeled_biped/controllers/height_ik.py`, `centered_posture_height_schedule.py` |
-| Yaw and lateral channels | `wheeled_biped/controllers/differential_wheel_yaw_stabilizer.py`, `lateral_roll_balance_controller.py` |
+| JAX control step | `wheeled_biped/controllers/k2_jax_controller.py` → `k2_jax_controller_step` |
+| Posture channel | same file, `k2_jax_shape_posture_compute` |
+| Yaw and lateral channels | same file, `k2_jax_yaw_compute`, `k2_jax_lateral_roll_compute`, `k2_jax_heading_hip_yaw_stabilizer` |
+| Height schedule behind those channels | `wheeled_biped/controllers/calibrated_outer_loop_functions_v2.py`, `physics_equilibrium_feedforward.py`, sampled onto interpolation grids at import time |
 | Classical baselines | `wheeled_biped/controllers/lqr_balance.py`, `coupled_lqr_3d.py`, `full_lqr.py`, `pi_aw_baseline.py` |
 | WBC baselines (offline QP) | `wheeled_biped/wbc/offline_task_stack.py`, `offline_qp_wbc.py` |
 | Teleop command shaper | `wheeled_biped/teleop_shaper.py` |
 
 `V3_ANCHOR` is the internal name of the profile the paper calls **ACC**. The two
 are the same controller.
+
+ACC's channels are assembled inside the JAX control step rather than composed
+from separate controller objects. Several standalone modules in
+`wheeled_biped/controllers/` carry names that suggest otherwise — `height_ik.py`,
+`centered_posture_height_schedule.py`, `differential_wheel_yaw_stabilizer.py`,
+`shape_posture_controller.py`, `lateral_roll_balance_controller.py` — but they
+predate the JAX rewrite and are **not** on ACC's path. Read
+`k2_jax_controller_step` for what actually runs.
 
 ---
 

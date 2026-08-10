@@ -94,12 +94,18 @@ never a discrete switch. At 100 Hz under a 400 Nm/s rate limit a hard threshold
 delivers the whole gated component to the plant as a ramp. Do not "simplify" a
 smoothstep into a threshold.
 
-Posture, yaw and the heading hip-yaw stabilizer are computed **inside**
-`k2_jax_controller.py` (`k2_jax_shape_posture_compute`, `k2_jax_yaw_compute`,
-`k2_jax_heading_hip_yaw_stabilizer`). The standalone `height_ik.py`,
-`centered_posture_height_schedule.py` and `differential_wheel_yaw_stabilizer.py`
-are legacy and are **not** on ACC's path, despite what README's "Where it lives"
-table says.
+Every channel is assembled **inside** `k2_jax_controller_step`:
+`k2_jax_shape_posture_compute`, `k2_jax_lateral_roll_compute`,
+`k2_jax_yaw_compute`, `k2_jax_heading_hip_yaw_stabilizer`. The height schedule
+behind them comes from `calibrated_outer_loop_functions_v2.py` and
+`physics_equilibrium_feedforward.py`, sampled onto interpolation grids at import
+time.
+
+Standalone modules whose names suggest they do this work — `height_ik.py`,
+`centered_posture_height_schedule.py`, `differential_wheel_yaw_stabilizer.py`,
+`shape_posture_controller.py`, `lateral_roll_balance_controller.py` — predate the
+JAX rewrite and are **not** on ACC's path. The last two are reachable only
+because `controllers/__init__.py` re-exports them.
 
 ---
 
