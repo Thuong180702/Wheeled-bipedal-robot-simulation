@@ -3,7 +3,9 @@
 Date: 2026-06-13  
 Profile: `T6I_phase_aware_release`  
 Scenario: `high_0p480` 5000-step staged validation  
-Telemetry: [telemetry_5000.csv](outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/t6i_high_0p480_5000/telemetry_5000.csv)
+Telemetry: `outputs/step_e_extreme_support_fix_eval/active_pitch_crossing/t6i_high_0p480_5000/telemetry_5000.csv`
+— a per-step CSV that is not shipped with this repository. The audit below
+quotes every figure it draws from that file, so the reasoning stands without it.
 
 ## 1. Drift column selection
 Per requested priority, the audit used:

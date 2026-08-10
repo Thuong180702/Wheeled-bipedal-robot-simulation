@@ -1,0 +1,50 @@
+cff-version: 1.2.0
+title: >-
+  Anchored Conditionally-Gated Control for Wheeled Bipedal Balance and
+  Disturbance Recovery
+message: >-
+  If you use this software or its results, please cite both the software
+  (this record) and the paper listed under preferred-citation.
+type: software
+authors:
+  - given-names: Van Thuong
+    family-names: Nguyen
+    email: nvthuong180702@gmail.com
+    affiliation: The University of Danang
+  - given-names: Nhu Thanh
+    family-names: Vo
+    email: vnthanh@dut.udn.vn
+    affiliation: The University of Danang
+repository-code: https://github.com/Thuong180702/Wheeled-bipedal-robot-simulation
+abstract: >-
+  Controller, MuJoCo model, evaluation harnesses and raw result files for the
+  Anchored Conditionally-Gated Controller (ACC): a hand-designed, fully
+  interpretable torque assembly for a 10-DOF, 8.1 kg wheeled biped, whose
+  central mechanism is a position integral confined to a 15 cm neighbourhood of
+  the commanded home and enabled by an asymmetric envelope follower. Simulation
+  only; no result has been validated on hardware.
+keywords:
+  - wheeled bipedal robot
+  - balance control
+  - push recovery
+  - gain scheduling
+  - MuJoCo
+  - JAX
+license: Apache-2.0
+version: 1.0.0
+doi: 10.5281/zenodo.21861316
+preferred-citation:
+  type: article
+  title: >-
+    Anchored Conditionally-Gated Control for Wheeled Bipedal Balance and
+    Disturbance Recovery
+  authors:
+    - given-names: Van Thuong
+      family-names: Nguyen
+      affiliation: The University of Danang
+    - given-names: Nhu Thanh
+      family-names: Vo
+      affiliation: The University of Danang
+  journal: Robotics and Autonomous Systems
+  year: 2026
+  notes: Submitted

@@ -1,6 +1,7 @@
 """Tests for balance-core controller components."""
 
 import jax.numpy as jnp
+import pytest
 
 from wheeled_biped.controllers.balance_core_types import ACTION_DIM, SUPPORT_SHAPE_INDICES
 from wheeled_biped.controllers.shape_posture_controller import ShapePostureController
@@ -530,8 +531,13 @@ def test_lateral_roll_balance_stance_regularization_is_clipped():
 
     assert diagnostics["stance_torque_left"] == 3.0
     assert diagnostics["stance_torque_right"] == 3.0
-    assert tau[0] == 0.4 * 3.0
-    assert tau[5] == 0.4 * 3.0
+    # The weighted torque is compared with a tolerance, not for exact equality:
+    # it comes back through a float32 intermediate, so it lands 4e-8 from the
+    # float64 product — one float32 epsilon. Exact equality here passed or failed
+    # purely on whether some earlier test in the session had already switched JAX
+    # to x64, which made this the only order-dependent test in the suite.
+    assert tau[0] == pytest.approx(0.4 * 3.0, rel=1e-6)
+    assert tau[5] == pytest.approx(0.4 * 3.0, rel=1e-6)
 
 
 def test_lateral_roll_balance_backward_compatibility_without_stance_inputs():

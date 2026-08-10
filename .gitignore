@@ -220,6 +220,8 @@ paper/archive/
 # evaluation harnesses read at runtime is re-admitted below.
 archive/**
 !archive/**/
+# The note explaining why this directory must survive at all.
+!archive/README.md
 !archive/cleanup_2026-06-13/output_summaries/balance_core_extended_height_range/STEP_B_EXTENDED_HEIGHT_RANGE_FINAL_REPORT.md
 !archive/cleanup_2026-06-13/output_summaries/balance_core_extended_height_range/dynamic_high_2cm__variant_setup.json
 !archive/cleanup_2026-06-13/output_summaries/balance_core_extended_height_range/dynamic_high_5cm__variant_setup.json
@@ -752,3 +754,11 @@ assets/robot/_tmp_curb_then_ledge.xml
 
 # Placeholder README for a campaign that was never run.
 outputs/mode_based_hip_yaw_divergence_ownership_fix/
+
+# Planning documents from the residual-PPO era and the T6J/benchmark process
+# notes. They describe a paper this repository no longer contains and point at
+# outputs that were never produced, so they misinform a reader.
+docs/experiment_plan.md
+docs/paper_claims_checklist.md
+docs/results_todo_checklist.md
+docs/baseline_workflow.md
