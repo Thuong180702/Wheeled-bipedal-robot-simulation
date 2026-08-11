@@ -776,3 +776,12 @@ docs/baseline_workflow.md
 !scripts/record_gate_activation.py
 !scripts/plot_gate_activation.py
 !scripts/collect_acc_lqr_comparison.py
+
+# ─── Manuscript sources withheld 2026-08-11 ──────────────────────────────────
+# The paper sources and their build script. paper/figures/ and paper/videos/
+# stay published: the reproduction table and the supplementary inventory both
+# point at them.
+paper/bir/
+paper/build.sh
+paper/main.pdf
+paper/main.tex
