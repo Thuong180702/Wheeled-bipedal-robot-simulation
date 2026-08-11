@@ -3,7 +3,7 @@
 
 Reads the merged three-arm JSONL written by scripts/merge_wbc_shards.py and
 emits the WBC-only vs ACC(V3) comparison in the same metric set as
-`tab:wbc_w1_full` in paper/main.tex: falls are summed over scenarios, physical
+`tab:wbc_w1_full` in the paper: falls are summed over scenarios, physical
 metrics are averaged over non-blocked scenarios, and angles are converted from
 radians to degrees.
 

@@ -1,7 +1,7 @@
 # Full-state LQR — corrected derivation
 
 Evidence for the full-state LQR paragraph of §Classical Baselines and for
-Limitation 4 in `paper/main.tex`. Every row lives in `results.json`.
+Limitation 4 in the paper. Every row lives in `results.json`.
 
 ## What was corrected
 

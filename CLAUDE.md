@@ -130,8 +130,9 @@ correction rounds, because static import analysis finds only the first of these:
    coverage. About thirty script paths in `tests/` are guarded this way.
 
 Also load-bearing: `docs/validation/V3_vs_V3_Assist_comparison_report.md`, which
-both manuscripts `\path{}`-cite, and `paper/bir/thumbnails/`, which
-`cas-common.sty` `\includegraphics` at load time.
+both manuscripts `\path{}`-cite, and — in the working tree, though no longer
+tracked — `paper/bir/thumbnails/`, which `cas-common.sty` `\includegraphics` at
+load time.
 
 **Never delete on the strength of a static scan.** Copy the tree with
 `git archive HEAD`, delete the candidates in the copy, then run the paper
@@ -188,6 +189,9 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt        # requirements-macos.txt on Apple silicon
 pip install -e ".[dev]"
 ```
+
+Build the manuscript. The sources are in the working tree but are not tracked,
+so this only works on a checkout that already has them:
 
 ```bash
 cd paper/bir && latexmk -pdf main_v2.tex

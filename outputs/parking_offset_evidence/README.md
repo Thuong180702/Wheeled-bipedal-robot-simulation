@@ -1,6 +1,6 @@
 # Sagittal parking offset — raw evidence
 
-Raw results backing Limitation 8 (§VI) and Appendix C of `paper/main.tex`: the
+Raw results backing Limitation 8 (§VI) and Appendix C of the paper: the
 static torque balance of the 27 mm sagittal parking offset.
 
 | File | Backs |

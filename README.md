@@ -218,7 +218,6 @@ assets/robot/           MJCF, URDF and STL meshes
 configs/                robot, controller and training configuration
 scripts/                evaluation harnesses, sweeps, figure and video renderers
 outputs/                raw result files backing the paper
-paper/bir/              manuscript (Elsevier CAS class)
 paper/figures/          generated figures
 paper/videos/           31 supplementary clips + protocol
 tests/                  pytest suite
@@ -303,7 +302,7 @@ different terms.
 | What | License | File |
 |---|---|---|
 | Software — everything under `wheeled_biped/`, `scripts/`, `tests/`, `configs/`, and the MJCF/URDF under `assets/` | [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) | [`LICENSE-CODE`](LICENSE-CODE) |
-| Paper materials — `paper/` (manuscript, figures, the 31 supplementary clips) and the raw result files under `outputs/` | [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) | [`LICENSE`](LICENSE) |
+| Paper materials — `paper/` (figures, the 31 supplementary clips) and the raw result files under `outputs/` | [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) | [`LICENSE`](LICENSE) |
 
 CC BY-NC-ND 4.0 matches the license the journal applies to the article itself.
 It is deliberately **not** applied to the software: its NoDerivatives clause

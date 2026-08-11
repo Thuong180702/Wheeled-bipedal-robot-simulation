@@ -1,6 +1,6 @@
 # WBC post-fix campaign — raw evidence
 
-Raw results backing §V-E and Appendix B of `paper/main.tex`. Every file here was
+Raw results backing §V-E and Appendix B of the paper. Every file here was
 produced *after* the F1–F4 audit repairs (commit `433160f`, 2026-07-20). No
 pre-repair artifact survives; see the Evidence Provenance subsection of
 Appendix B.
