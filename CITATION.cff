@@ -31,10 +31,10 @@ keywords:
   - MuJoCo
   - JAX
 license: Apache-2.0
-version: 1.0.0
+version: 3.0.1
 doi: 10.5281/zenodo.21861316
 preferred-citation:
-  type: article
+  type: unpublished
   title: >-
     Anchored Conditionally-Gated Control for Wheeled Bipedal Balance and
     Disturbance Recovery
@@ -45,6 +45,5 @@ preferred-citation:
     - given-names: Nhu Thanh
       family-names: Vo
       affiliation: The University of Danang
-  journal: Robotics and Autonomous Systems
   year: 2026
-  notes: Submitted
+  notes: Manuscript submitted for publication

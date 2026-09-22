@@ -4,7 +4,6 @@ Controller, MuJoCo model, evaluation harnesses and raw result files for the pape
 
 > **Anchored Conditionally-Gated Control for Wheeled Bipedal Balance and Disturbance Recovery**
 > Van Thuong Nguyen, Nhu Thanh Vo — The University of Danang
-> *Submitted to Robotics and Autonomous Systems.*
 
 ACC is a hand-designed, fully interpretable torque assembly for a 10-DOF, 8.1 kg
 wheeled biped. Its central mechanism is a **proximity-gated anchor**: a position
@@ -282,13 +281,12 @@ that work.
 ## Citation
 
 ```bibtex
-@article{nguyen2026acc,
+@unpublished{nguyen2026acc,
   title   = {Anchored Conditionally-Gated Control for Wheeled Bipedal Balance
              and Disturbance Recovery},
   author  = {Nguyen, Van Thuong and Vo, Nhu Thanh},
-  journal = {Robotics and Autonomous Systems},
   year    = {2026},
-  note    = {Submitted}
+  note    = {Manuscript submitted for publication}
 }
 ```
 
@@ -304,10 +302,9 @@ different terms.
 | Software — everything under `wheeled_biped/`, `scripts/`, `tests/`, `configs/`, and the MJCF/URDF under `assets/` | [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) | [`LICENSE-CODE`](LICENSE-CODE) |
 | Paper materials — `paper/` (figures, the 31 supplementary clips) and the raw result files under `outputs/` | [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/) | [`LICENSE`](LICENSE) |
 
-CC BY-NC-ND 4.0 matches the license the journal applies to the article itself.
-It is deliberately **not** applied to the software: its NoDerivatives clause
-would forbid the forking and modification that reproducing this work requires.
-Where the two overlap, the software terms govern the software.
+CC BY-NC-ND 4.0 is deliberately **not** applied to the software: its
+NoDerivatives clause would forbid the forking and modification that reproducing
+this work requires. Where the two overlap, the software terms govern the software.
 
 Previous releases of this repository were distributed under the MIT license;
 that grant is not revoked for copies already obtained under it.

@@ -6,7 +6,7 @@ The controller, MuJoCo model, evaluation harnesses and raw result files behind
 
 > **Anchored Conditionally-Gated Control for Wheeled Bipedal Balance and
 > Disturbance Recovery** — Van Thuong Nguyen, Nhu Thanh Vo, The University of
-> Danang. Submitted to *Robotics and Autonomous Systems*.
+> Danang.
 
 ACC is a **hand-designed, fully interpretable torque assembly** for a 10-DOF,
 8.1 kg wheeled biped. It contains no learned component. Its central mechanism is
@@ -39,10 +39,13 @@ file carries the working rules that do not belong in a public README.
   calls ACC — the same controller.** Keep both names findable when editing.
 - Locomotion, stair climbing and rough terrain are **configuration stubs**,
   neither trained nor evaluated.
-- Release `v1.0.0` is archived on Zenodo. The paper cites the **version DOI**
-  `10.5281/zenodo.21861318`; the concept DOI `10.5281/zenodo.21861316` resolves
-  to the latest version. **Do not rewrite git history** — it would change the
-  hash of the tag the minted DOI points at.
+- Every tagged release is archived on Zenodo with its own version DOI; the
+  concept DOI `10.5281/zenodo.21861316` resolves to the latest one. **Do not
+  rewrite git history** — it would change the hash of the tags the minted DOIs
+  point at.
+- **Name no publication venue** — not in tracked files, commit messages, tags or
+  release notes. The manuscript is cited as submitted for publication, so a
+  change of journal needs no change here.
 
 ---
 
